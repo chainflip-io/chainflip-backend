@@ -1272,11 +1272,7 @@ impl_runtime_apis! {
 				result.append( &mut BitcoinIngressEgress::boost_pool_account_balances(&account_id));
 				result.append( &mut ArbitrumIngressEgress::boost_pool_account_balances(&account_id));
 				result.append( &mut SolanaIngressEgress::boost_pool_account_balances(&account_id));
-				let mut map = AssetMap::from_fn(|_| 0);
-				for (asset, amount) in result {
-					map[asset] = amount;
-				}
-				map
+				result.into_iter().collect()
 			};
 			Ok(free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances))
 		}
