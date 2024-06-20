@@ -71,11 +71,7 @@ impl<
 	> AuctionPhaseApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
 {
 	async fn is_auction_phase(&self) -> Result<bool> {
-		self.base_rpc_client
-			.raw_rpc_client
-			.cf_is_auction_phase(None)
-			.await
-			.context("Error RPC query: is_auction_phase")
+		Ok(self.base_rpc_client.raw_rpc_client.cf_is_auction_phase(None).await?)
 	}
 }
 
@@ -170,22 +166,18 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 	async fn register_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_validator::Call::register_as_validator {})
 			.await
-			.context("Could not register as validator")
 	}
 	async fn deregister_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_validator::Call::deregister_as_validator {})
 			.await
-			.context("Could not de-register as validator")
 	}
 	async fn stop_bidding(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_validator::Call::stop_bidding {})
 			.await
-			.context("Could not stop bidding")
 	}
 	async fn start_bidding(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_validator::Call::start_bidding {})
 			.await
-			.context("Could not start bidding")
 	}
 }
 
@@ -238,19 +230,13 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			AccountRole::Unregistered => bail!("Cannot register account role {:?}", role),
 		};
 
-		let (tx_hash, ..) = self
-			.submit_signed_extrinsic_with_dry_run(call)
-			.await?
-			.until_in_block()
-			.await
-			.context("Could not register account role for account")?;
+		let (tx_hash, ..) =
+			self.submit_signed_extrinsic_with_dry_run(call).await?.until_in_block().await?;
 		Ok(tx_hash)
 	}
 
 	async fn rotate_session_keys(&self) -> Result<H256> {
-		let raw_keys = RotateSessionKeysApi::rotate_session_keys(self)
-			.await
-			.context("Could not rotate session keys.")?;
+		let raw_keys = RotateSessionKeysApi::rotate_session_keys(self).await?;
 
 		let aura_key: [u8; 32] = raw_keys[0..32].try_into().unwrap();
 		let grandpa_key: [u8; 32] = raw_keys[32..64].try_into().unwrap();
@@ -279,8 +265,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			})
 			.await
 			.until_in_block()
-			.await
-			.context("Could not set vanity name for your account")?;
+			.await?;
 		println!("Vanity name set at tx {tx_hash:#x}.");
 		Ok(())
 	}
@@ -296,8 +281,7 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 		})
 		.await
 		.until_in_block()
-		.await
-		.context("Failed to submit rotation governance proposal")?;
+		.await?;
 
 		println!("If you're the governance dictator, the rotation will begin soon.");
 
@@ -418,8 +402,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			}))
 			.await
 			.until_in_block()
-			.await
-			.context("Request to withdraw broker fee for ${asset} failed.")?;
+			.await?;
 
 		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
 			pallet_cf_swapping::Event::WithdrawalRequested {
@@ -451,12 +434,10 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	async fn register_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_as_broker {})
 			.await
-			.context("Could not register as broker")
 	}
 	async fn deregister_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
 			.await
-			.context("Could not de-register as broker")
 	}
 }
 
