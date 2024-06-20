@@ -52,6 +52,8 @@ npm install -g pnpm
 sh -c "$(curl -sSfL https://release.solana.com/v1.18.8/install)"
 ```
 
+> 💡 **_NOTE:_** Compiling for the very first time may take a while as it will download all the dependencies. You might hit some memory limitations and to overcome this, you can setup a swap file (20GB) on your system.
+
 ### Code style
 
 The best way to ensure that your code is easy to merge, is to copy the project's pre-commit hook into your local `.git/`
