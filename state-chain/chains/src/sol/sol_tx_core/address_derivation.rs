@@ -42,6 +42,13 @@ fn derive_address(
 	DerivedAddressBuilder::from_address(vault_program)?.chain_seed(seed)?.finish()
 }
 
+pub fn derive_fetch_account(
+	vault_program: SolAddress,
+	deposit_channel: SolAddress,
+) -> Result<DerivedAta, AddressDerivationError> {
+	derive_address(deposit_channel, vault_program)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -174,6 +181,20 @@ mod tests {
 					.unwrap(),
 				bump: 255u8
 			}
+		);
+	}
+
+	#[test]
+	fn test_sol_derive_fetch_account() {
+		let fetch_account = derive_fetch_account(
+			SolAddress::from_str("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf").unwrap(),
+			SolAddress::from_str("HAMxiXdEJxiBHabZAUm8PSLvWQM2GHi5PArVZvUCeDab").unwrap(),
+		)
+		.unwrap()
+		.address;
+		assert_eq!(
+			fetch_account,
+			SolAddress::from_str("HGgUaHpsmZpB3pcYt8PE89imca6BQBRqYtbVQQqsso3o").unwrap()
 		);
 	}
 }

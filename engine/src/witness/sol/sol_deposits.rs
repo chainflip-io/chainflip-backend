@@ -3,12 +3,14 @@ use anyhow::ensure;
 use base64::Engine;
 use cf_chains::{
 	instances::ChainInstanceFor,
-	sol::{SolAddress, SolAsset, SolHash},
+	sol::{
+		sol_tx_core::address_derivation::{derive_associated_token_account, derive_fetch_account},
+		SolAddress, SolAsset, SolHash,
+	},
 	Chain,
 };
 use cf_primitives::{chains::assets::sol::Asset, EpochIndex};
 use futures_core::Future;
-use sol_prim::pda::derive_associated_token_account;
 
 use crate::witness::common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses;
 
@@ -23,10 +25,7 @@ use crate::sol::{
 	},
 };
 use serde_json::Value;
-pub use sol_prim::{
-	consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
-	pda::derive_fetch_account,
-};
+pub use sol_prim::consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID};
 use std::str::FromStr;
 
 use crate::common::Mutex;
@@ -106,7 +105,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 										token_pubkey,
 									)
 									.expect("Failed to derive associated token account")
-									.0,
+									.address,
 									token_pubkey,
 									deposit_channel.deposit_channel.asset,
 								),
@@ -243,7 +242,8 @@ where
 			vec![
 				*address_to_witness,
 				derive_fetch_account(vault_address, *address_to_witness)
-					.expect("Failed to derive fetch account"),
+					.expect("Failed to derive fetch account")
+					.address,
 			]
 		})
 		.collect::<Vec<_>>();
