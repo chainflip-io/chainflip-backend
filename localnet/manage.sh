@@ -34,18 +34,6 @@ set -eo pipefail
 
 OS_TYPE=$(uname)
 
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-if command_exists docker-compose; then
-    DOCKER_COMPOSE_CMD="docker-compose"
-elif command_exists docker && $DOCKER_COMPOSE_CMD version >/dev/null 2>&1; then
-    DOCKER_COMPOSE_CMD="$DOCKER_COMPOSE_CMD"
-else
-    echo "❌ Error: Neither docker-compose nor $DOCKER_COMPOSE_CMD commands are available." >&2
-    exit 1
-fi
-
 if [[ $CI == true ]]; then
   set -x
   additional_docker_compose_up_args="--quiet-pull"
@@ -54,9 +42,28 @@ else
   additional_docker_compose_up_args=""
   additional_docker_compose_down_args="--volumes --remove-orphans"
 fi
+
 echo "👋 Welcome to Chainflip localnet manager"
 echo "🔧 Setting up..."
 echo "🕵🏻‍♂️  For full debug log, check $DEBUG_OUTPUT_DESTINATION"
+
+command_exists() {
+    command -v "$1" >>$DEBUG_OUTPUT_DESTINATION 2>&1
+}
+
+if command_exists docker-compose; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+elif command_exists docker && docker --version >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
+    if docker compose version >/dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="docker compose"
+    else
+        echo "Error: Docker is available but 'docker compose' command is not supported." >>$DEBUG_OUTPUT_DESTINATION 2>&1
+        exit 1
+    fi
+else
+    echo "Error: Neither docker-compose nor docker compose commands are available." >>$DEBUG_OUTPUT_DESTINATION 2>&1
+    exit 1
+fi
 
 get-workflow() {
   echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4, 5 or 6)"
