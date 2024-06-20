@@ -37,10 +37,16 @@ fn main() {
 		println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/../../old-engine-dylib");
 		// Tests run the binary from target/<profile>/deps, rather than just target/<profile>.
 		println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/../../../old-engine-dylib");
+		// The new dylib is in the same directory as the binary.
 		println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path");
 	} else {
-		// TODO: Use $ORIGIN for linux. I tried, but it doesn't seem to work like `@executable_path`
-		// does for mac.
+		// === For local testing on Linux ===
+		println!("cargo:rustc-link-arg=-Wl,-rpath=$ORIGIN/../../old-engine-dylib");
+		println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../../../old-engine-dylib");
+		// The new dylib is in the same directory as the binary.
+		println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
+
+		// === For releasing ===
 		// This path is where we store the libraries in the docker image, and as part of the apt
 		// installation.
 		println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/chainflip-engine");
