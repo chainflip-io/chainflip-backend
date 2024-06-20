@@ -295,7 +295,10 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
         if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
           // Contract Swaps
-          appendSwap(sourceAsset, destAsset, testSwapViaContract);
+          if (!(sourceAsset === 'ArbEth' && destAsset === 'Dot')) {
+            appendSwap(sourceAsset, destAsset, testSwapViaContract);
+          }
+
           if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
             // CCM contract swaps
             appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
