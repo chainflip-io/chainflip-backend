@@ -115,7 +115,7 @@ commit.
 We recommend at least 16GB of RAM and 4 CPU cores to handle all the containers and binaries running locally.
 
 #### Software and Tools
-You will need to download [Docker](https://docs.docker.com/get-docker/).
+You will need to download [Docker](https://docs.docker.com/get-docker/). Make sure you use a recent version that has `docker-compose` plugin included. Otherwise, you might need to modify the `./localnet/manage.sh` script to use `docker-compose` instead of `docker compose`.
 
 ### Creating a Localnet
 
