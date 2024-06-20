@@ -8,9 +8,8 @@ import { observeEvent, getChainflipApi } from '../shared/utils/substrate';
 
 async function queryUtxos(): Promise<{ amount: number; count: number }> {
   await using chainflip = await getChainflipApi();
-  const utxos: [{ amount: number }] = (
-    await chainflip.query.environment.bitcoinAvailableUtxos()
-  ).toJSON();
+  const utxos: [{ amount: number }] =
+    (await chainflip.query.environment.bitcoinAvailableUtxos()) as unknown as [{ amount: number }];
 
   return {
     amount: utxos.reduce((acc, utxo) => acc + utxo.amount, 0),

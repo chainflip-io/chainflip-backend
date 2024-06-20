@@ -12,14 +12,17 @@
 
 import { HexString } from '@polkadot/util/types';
 import { executeWithTimeout } from '../shared/utils';
-import { redeemFlip } from '../shared/redeem_flip';
+import { RedeemAmount, redeemFlip } from '../shared/redeem_flip';
 
 async function main(): Promise<void> {
   const flipSeed = process.argv[2];
   const ethAddress = process.argv[3] as HexString;
   const flipAmount = process.argv[4].trim();
 
-  await redeemFlip(flipSeed, ethAddress, flipAmount);
+  const cleanFlipAmount: RedeemAmount =
+    flipAmount === 'Max' ? 'Max' : { Exact: flipAmount.toString() };
+
+  await redeemFlip(flipSeed, ethAddress, cleanFlipAmount);
 }
 
 await executeWithTimeout(main(), 600);

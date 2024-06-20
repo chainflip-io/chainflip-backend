@@ -20,7 +20,9 @@ import { sendSolUsdc } from './send_solusdc';
 const cfTesterAbi = await getCFTesterAbi();
 
 export async function send(asset: Asset, address: string, amount?: string, log = true) {
-  switch (asset) {
+  // TODO: Remove this any when we have Sol assets in the Asset type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  switch (asset as any) {
     case 'Btc':
       await sendBtc(address, amount ?? defaultAssetAmounts(asset));
       break;

@@ -120,7 +120,8 @@ async function main(): Promise<void> {
       unsubscribe();
 
       for (const elem of witnessHash) {
-        const result = await api.rpc('cf_witness_count', elem);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result: any = await api.rpc('cf_witness_count', elem);
         if (result) {
           console.log(`Number of nodes who failed to witness: ${result.failing_count}`);
           console.log(`List of validators: ${result.validators}`);

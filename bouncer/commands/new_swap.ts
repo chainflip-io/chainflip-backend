@@ -11,6 +11,7 @@
 
 import { parseAssetString, executeWithTimeout } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
+import { InternalAsset } from '@chainflip/cli';
 
 async function newSwapCommand() {
   const sourceAsset = parseAssetString(process.argv[2]);
