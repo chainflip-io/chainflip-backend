@@ -6,8 +6,14 @@ use sp_std::vec::Vec;
 
 use sol_prim::{AccountBump, SlotNumber};
 
-use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
+use crate::{
+	address, assets,
+	sol::sol_tx_core::extra_types_for_testing::{Signer, SignerError},
+	DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
+use ed25519_dalek::Signer as DalekSigner;
+use rand::{rngs::OsRng, CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 
 use super::{Chain, ChainCrypto};
@@ -211,5 +217,66 @@ impl From<&DepositChannel<Solana>> for SolanaDepositFetchId {
 			address: from.address,
 			bump: from.state,
 		}
+	}
+}
+
+pub struct SigningKey(ed25519_dalek::SigningKey);
+
+impl SigningKey {
+	/// Constructs a new, random `Keypair` using a caller-provided RNG
+	pub fn generate<R>(csprng: &mut R) -> Self
+	where
+		R: CryptoRng + RngCore,
+	{
+		Self(ed25519_dalek::SigningKey::generate(csprng))
+	}
+
+	/// Constructs a new random `Keypair` using `OsRng`
+	pub fn new() -> Self {
+		let mut rng = OsRng;
+		Self::generate(&mut rng)
+	}
+
+	/// Recovers a `SigningKey` from a byte array
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
+		Ok(Self(ed25519_dalek::SigningKey::from_bytes(
+			<&[_; ed25519_dalek::SECRET_KEY_LENGTH]>::try_from(bytes).map_err(|_| {
+				ed25519_dalek::SignatureError::from_source(String::from(
+					"candidate keypair byte array is the wrong length",
+				))
+			})?,
+		)))
+	}
+
+	/// Returns this `SigningKey` as a byte array
+	pub fn to_bytes(&self) -> [u8; ed25519_dalek::SECRET_KEY_LENGTH] {
+		self.0.to_bytes()
+	}
+
+	/// Gets this `SigningKey`'s SecretKey
+	pub fn secret(&self) -> &ed25519_dalek::SigningKey {
+		&self.0
+	}
+}
+impl Signer for SigningKey {
+	#[inline]
+	fn pubkey(&self) -> SolPubkey {
+		SolPubkey::from(ed25519_dalek::VerifyingKey::from(&self.0).to_bytes())
+	}
+
+	fn try_pubkey(&self) -> Result<SolPubkey, SignerError> {
+		Ok(self.pubkey())
+	}
+
+	fn sign_message(&self, message: &[u8]) -> SolSignature {
+		SolSignature::from(self.0.sign(message).to_bytes())
+	}
+
+	fn try_sign_message(&self, message: &[u8]) -> Result<SolSignature, SignerError> {
+		Ok(self.sign_message(message))
+	}
+
+	fn is_interactive(&self) -> bool {
+		false
 	}
 }

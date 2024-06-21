@@ -84,12 +84,12 @@ sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chai
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 ed25519-dalek = "2.1.1"
+rand = { version = '0.8.4' }
+thiserror = "1.0.50"
 
 [dev-dependencies]
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 cf-test-utilities = { path = '../test-utilities' }
-rand = { version = '0.8.4' }
-thiserror = "1.0.50"
 
 [features]
 default = ['std']

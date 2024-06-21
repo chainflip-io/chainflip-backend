@@ -19,7 +19,6 @@ pub mod token_instructions;
 
 #[cfg(test)]
 use thiserror::Error;
-#[cfg(test)]
 pub mod extra_types_for_testing;
 #[cfg(test)]
 use extra_types_for_testing::{SignerError, Signers, TransactionError};
@@ -945,7 +944,7 @@ mod tests {
 			address_derivation::{derive_associated_token_account, derive_deposit_address},
 			bpf_loader_instructions::set_upgrade_authority,
 			compute_budget::ComputeBudgetInstruction,
-			extra_types_for_testing::{Signer, SigningKey},
+			extra_types_for_testing::Signer,
 			program_instructions::{
 				ProgramInstruction, SystemProgramInstruction, UpgradeManagerProgram, VaultProgram,
 			},
@@ -954,7 +953,7 @@ mod tests {
 			AccountMeta, BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey,
 			Transaction,
 		},
-		SolAddress,
+		SigningKey, SolAddress,
 	};
 	use core::str::FromStr;
 	use sol_prim::{
