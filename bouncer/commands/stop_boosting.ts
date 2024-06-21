@@ -9,7 +9,7 @@
 // Stops boosting for the specified boost pool, then waits for the `StoppedBoosting` event and prints it.
 // For example: ./commands/stop_boosting.ts Btc 5 "//LP_2"
 
-import { InternalAsset as Asset } from '@chainflip/cli/.';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { executeWithTimeout } from '../shared/utils';
 import { stopBoosting } from '../shared/boost';
 

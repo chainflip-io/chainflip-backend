@@ -30,6 +30,7 @@ import { hideBin } from 'yargs/helpers';
 
 import { upgradeNetworkGit, upgradeNetworkPrebuilt } from '../shared/upgrade_network';
 import { executeWithTimeout } from '../shared/utils';
+import { SemVerLevel } from '../shared/bump_release_version';
 
 async function main(): Promise<void> {
   await yargs(hideBin(process.argv))
@@ -54,14 +55,14 @@ async function main(): Promise<void> {
           })
           .option('nodes', {
             describe: 'The number of nodes running on your localnet. Defaults to 1.',
-            type: 'number',
+            choices: [1, 3],
             default: 1,
           });
       },
       async (argv) => {
         console.log('git subcommand with args: ' + argv.ref);
         try {
-          await upgradeNetworkGit(argv.ref, argv.bump, argv.nodes);
+          await upgradeNetworkGit(argv.ref, argv.bump as SemVerLevel, argv.nodes as 1 | 3);
         } catch (error) {
           console.error(`Error: ${error}`);
         }
@@ -93,8 +94,9 @@ async function main(): Promise<void> {
           })
           .option('nodes', {
             describe: 'The number of nodes running on your localnet. Defaults to 1.',
-            type: 'number',
+            choices: [1, 3],
             default: 1,
+            type: 'number',
           })
           .option('oldVersion', {
             describe: 'The version of the network you wish to upgrade *from*.',
@@ -105,12 +107,13 @@ async function main(): Promise<void> {
       },
       async (args) => {
         console.log('prebuilt subcommand with args: ' + args.bins + ' ' + args.runtime);
+
         await upgradeNetworkPrebuilt(
           args.bins,
           args.runtime,
           args.localnet_init,
           args.oldVersion,
-          args.nodes,
+          args.nodes as 1 | 3,
         );
       },
     )

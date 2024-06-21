@@ -21,7 +21,7 @@ export async function depositLiquidity(
   amount: number,
   waitForFinalization = false,
   lpKey?: string,
-): Promise<Event> {
+) {
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
 
@@ -76,6 +76,7 @@ export async function depositLiquidity(
       ),
     finalized: waitForFinalization,
   }).event;
+
   await send(ccy, ingressAddress, String(amount));
 
   return eventHandle;
