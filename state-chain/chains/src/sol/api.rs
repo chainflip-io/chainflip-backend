@@ -25,25 +25,28 @@ use cf_primitives::ForeignChain;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
-pub struct NonceAccount;
+pub struct DurableNonce;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct AllNonceAccounts;
 
 /// Super trait combining all Environment lookups required for the Solana chain.
 /// Also contains some calls for easy data retrieval.
+
+pub type DurableNonceAndAccount = (SolAddress, SolHash);
+
 pub trait SolanaEnvironment:
 	ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress>
 	+ ChainEnvironment<ComputePrice, SolAmount>
-	+ ChainEnvironment<NonceAccount, (SolAddress, SolHash)>
-	+ ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>>
+	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
+	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
 		<Self as ChainEnvironment<ComputePrice, SolAmount>>::lookup(ComputePrice)
 			.ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
 	}
 
-	fn nonce_account() -> Result<(SolAddress, SolHash), SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<NonceAccount, (SolAddress, SolHash)>>::lookup(NonceAccount)
+	fn nonce_account() -> Result<DurableNonceAndAccount, SolanaTransactionBuildingError> {
+		<Self as ChainEnvironment<DurableNonce, DurableNonceAndAccount>>::lookup(DurableNonce)
 			.ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
 	}
 
@@ -71,7 +74,7 @@ pub trait SolanaEnvironment:
 	}
 
 	fn all_nonce_accounts() -> Result<Vec<SolAddress>, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>>>::lookup(
+		<Self as ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>>::lookup(
 			AllNonceAccounts,
 		)
 		.map(|nonces| nonces.into_iter().map(|(addr, _hash)| addr).collect::<Vec<_>>())
