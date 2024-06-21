@@ -536,6 +536,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 	const ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 10;
 	const DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 20;
 	const BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 30;
+	const SOL_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK: CeremonyId = 40;
 	let block_hash = H256::default();
 
 	let test_block_streams = vec![
@@ -577,6 +578,16 @@ async fn test_get_ceremony_id_counters_with_events() {
 				signatories: Default::default(),
 				payload: Default::default(),
 			}),
+			CfeEvent::<Runtime>::SolThresholdSignatureRequest(ThresholdSignatureRequest::<
+				Runtime,
+				_,
+			> {
+				ceremony_id: SOL_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				key: Default::default(),
+				signatories: Default::default(),
+				payload: Default::default(),
+			}),
 		],
 		// Test 2: 1 keygen request for each chain
 		vec![
@@ -592,6 +603,11 @@ async fn test_get_ceremony_id_counters_with_events() {
 			}),
 			CfeEvent::<Runtime>::BtcKeygenRequest(KeygenRequest::<Runtime> {
 				ceremony_id: BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
+			CfeEvent::<Runtime>::SolKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: SOL_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
 				epoch_index: 1,
 				participants: Default::default(),
 			}),
@@ -618,6 +634,11 @@ async fn test_get_ceremony_id_counters_with_events() {
 				receiving_participants: Default::default(),
 				new_key: cf_chains::btc::AggKey::default(),
 			}),
+			CfeEvent::<Runtime>::SolKeygenRequest(KeygenRequest::<Runtime> {
+				ceremony_id: SOL_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK + 1,
+				epoch_index: 1,
+				participants: Default::default(),
+			}),
 		],
 	];
 
@@ -639,6 +660,7 @@ async fn test_get_ceremony_id_counters_with_events() {
 		assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
 		assert_eq!(ceremony_id_counters.polkadot, DOT_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
 		assert_eq!(ceremony_id_counters.bitcoin, BTC_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
+		assert_eq!(ceremony_id_counters.solana, SOL_CEREMONY_ID_COUNTER_BEFORE_INITIAL_BLOCK);
 	}
 }
 
@@ -647,6 +669,7 @@ async fn test_get_ceremony_id_counters_without_events() {
 	const ETH_CEREMONY_ID_COUNTER: CeremonyId = 10;
 	const DOT_CEREMONY_ID_COUNTER: CeremonyId = 20;
 	const BTC_CEREMONY_ID_COUNTER: CeremonyId = 30;
+	const SOL_CEREMONY_ID_COUNTER: CeremonyId = 40;
 	let block_hash = H256::default();
 	let mut state_chain_client = MockStateChainClient::new();
 
@@ -676,6 +699,14 @@ async fn test_get_ceremony_id_counters_without_events() {
 		.with(eq(block_hash))
 		.once()
 		.return_once(|_| Ok(BTC_CEREMONY_ID_COUNTER));
+	state_chain_client
+		.expect_storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::SolanaInstance,
+		>>()
+		.with(eq(block_hash))
+		.once()
+		.return_once(|_| Ok(SOL_CEREMONY_ID_COUNTER));
 
 	// No events in the stream that would change the ceremony id counters
 	state_chain_client
@@ -702,6 +733,7 @@ async fn test_get_ceremony_id_counters_without_events() {
 	assert_eq!(ceremony_id_counters.ethereum, ETH_CEREMONY_ID_COUNTER);
 	assert_eq!(ceremony_id_counters.polkadot, DOT_CEREMONY_ID_COUNTER);
 	assert_eq!(ceremony_id_counters.bitcoin, BTC_CEREMONY_ID_COUNTER);
+	assert_eq!(ceremony_id_counters.solana, SOL_CEREMONY_ID_COUNTER);
 }
 
 #[tokio::test]

@@ -3,6 +3,7 @@ use cf_chains::{
 	btc,
 	dot::{EncodedPolkadotPayload, PolkadotPair, PolkadotPublicKey, PolkadotSignature},
 	evm::{to_evm_address, AggKey, SchnorrVerificationComponents},
+	sol::{sol_tx_core::signer::Signer, SolAddress, SolMessage, SolSignature, SolSigningKey},
 };
 use cf_primitives::{EpochIndex, GENESIS_EPOCH};
 use libsecp256k1::{PublicKey, SecretKey};
@@ -229,6 +230,49 @@ impl KeyUtils for BtcKeyComponents {
 		let mut generated = Self::generate(self.seed + 1, self.epoch_index + 1);
 		generated.agg_key.previous = Some(prev_agg_key);
 		generated
+	}
+
+	fn agg_key(&self) -> Self::AggKey {
+		self.agg_key
+	}
+}
+
+pub type SolKeyComponents = KeyComponents<SolSigningKey, SolAddress>;
+
+pub type SolThresholdSigner = ThresholdSigner<SolKeyComponents, SolSignature>;
+
+impl Default for SolThresholdSigner {
+	fn default() -> Self {
+		Self {
+			previous_key_components: None,
+			key_components: SolKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH),
+			proposed_key_components: None,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl KeyUtils for SolKeyComponents {
+	type SigVerification = SolSignature;
+	type AggKey = SolAddress;
+	type Message = SolMessage;
+
+	fn sign(&self, message: &Self::Message) -> Self::SigVerification {
+		self.secret.sign_message(message.serialize().as_slice())
+	}
+
+	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {
+		let signing_key = SolSigningKey::generate(&mut rand::rngs::StdRng::seed_from_u64(seed));
+		KeyComponents {
+			seed,
+			agg_key: signing_key.pubkey().into(),
+			secret: signing_key,
+			epoch_index,
+		}
+	}
+
+	fn generate_next(&self) -> Self {
+		Self::generate(self.seed + 1, self.epoch_index + 1)
 	}
 
 	fn agg_key(&self) -> Self::AggKey {

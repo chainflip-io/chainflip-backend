@@ -1,6 +1,8 @@
 use super::*;
 
-use crate::threshold_signing::{BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner};
+use crate::threshold_signing::{
+	BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner, SolThresholdSigner,
+};
 
 use cf_chains::address::EncodedAddress;
 use cf_primitives::{AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
@@ -175,6 +177,7 @@ pub struct Engine {
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
+	pub sol_threshold_signer: Rc<RefCell<SolThresholdSigner>>,
 }
 
 impl Engine {
@@ -183,6 +186,7 @@ impl Engine {
 		eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 		dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 		btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
+		sol_threshold_signer: Rc<RefCell<SolThresholdSigner>>,
 	) -> Self {
 		Engine {
 			node_id,
@@ -190,6 +194,7 @@ impl Engine {
 			eth_threshold_signer,
 			dot_threshold_signer,
 			btc_threshold_signer,
+			sol_threshold_signer,
 			auto_submit_heartbeat: true,
 			last_heartbeat: Default::default(),
 		}
@@ -255,6 +260,7 @@ impl Engine {
 							self.eth_threshold_signer.borrow_mut().use_proposed_key();
 							self.dot_threshold_signer.borrow_mut().use_proposed_key();
 							self.btc_threshold_signer.borrow_mut().use_proposed_key();
+							self.sol_threshold_signer.borrow_mut().use_proposed_key();
 					}
 
 					RuntimeEvent::PolkadotVault(pallet_cf_vaults::Event::<_, PolkadotInstance>::AwaitingGovernanceActivation { .. }) => {
@@ -386,6 +392,27 @@ impl Engine {
 								RuntimeOrigin::none(),
 							);
 						},
+					CfeEvent::SolThresholdSignatureRequest(ThresholdSignatureRequest {
+						ceremony_id,
+						key,
+						signatories,
+						payload,
+						..
+					}) =>
+						if signatories.contains(&self.node_id) {
+							queue_dispatch_extrinsic(
+								RuntimeCall::SolanaThresholdSigner(
+									pallet_cf_threshold_signature::Call::signature_success {
+										ceremony_id: *ceremony_id,
+										signature: self
+											.sol_threshold_signer
+											.borrow()
+											.sign_with_key(*key, payload),
+									},
+								),
+								RuntimeOrigin::none(),
+							);
+						},
 					CfeEvent::EvmKeygenRequest(req) =>
 						if req.participants.contains(&self.node_id) {
 							queue_dispatch_extrinsic(
@@ -424,6 +451,21 @@ impl Engine {
 										ceremony_id: req.ceremony_id,
 										reported_outcome: Ok(self
 											.btc_threshold_signer
+											.borrow_mut()
+											.propose_new_key()),
+									},
+								),
+								RuntimeOrigin::signed(self.node_id.clone()),
+							);
+						},
+					CfeEvent::SolKeygenRequest(req) =>
+						if req.participants.contains(&self.node_id) {
+							queue_dispatch_extrinsic(
+								RuntimeCall::SolanaThresholdSigner(
+									pallet_cf_threshold_signature::Call::report_keygen_outcome {
+										ceremony_id: req.ceremony_id,
+										reported_outcome: Ok(self
+											.sol_threshold_signer
 											.borrow_mut()
 											.propose_new_key()),
 									},
@@ -507,6 +549,7 @@ pub struct Network {
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
+	pub sol_threshold_signer: Rc<RefCell<SolThresholdSigner>>,
 }
 
 thread_local! {
@@ -528,6 +571,7 @@ pub fn dispatch_all_pending_extrinsics() {
 				RuntimeCall::EvmThresholdSigner(..) |
 				RuntimeCall::PolkadotThresholdSigner(..) |
 				RuntimeCall::BitcoinThresholdSigner(..) |
+				RuntimeCall::SolanaThresholdSigner(..) |
 				RuntimeCall::Environment(..) => {
 					// These are allowed to fail, since it is possible to sign things
 					// that have already succeeded
@@ -553,6 +597,11 @@ pub fn dispatch_all_pending_extrinsics() {
 						"Validator status: {:?}\nVault Status: {:?}",
 						Validator::current_rotation_phase(),
 						BitcoinVault::pending_vault_rotations()
+					),
+					RuntimeCall::SolanaVault(..) => log::info!(
+						"Validator status: {:?}\nVault Status: {:?}",
+						Validator::current_rotation_phase(),
+						SolanaVault::pending_vault_rotations()
 					),
 					RuntimeCall::Validator(..) => log::info!(
 						"Validator status: {:?}\nAllVaults Status: {:?}",
@@ -626,6 +675,7 @@ impl Network {
 				self.eth_threshold_signer.clone(),
 				self.dot_threshold_signer.clone(),
 				self.btc_threshold_signer.clone(),
+				self.sol_threshold_signer.clone(),
 			),
 		);
 	}

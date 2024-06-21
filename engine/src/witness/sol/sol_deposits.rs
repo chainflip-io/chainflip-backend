@@ -304,7 +304,7 @@ where
 		}
 	}
 
-	ensure!(deposit_channels.len() <= ingresses.len());
+	ensure!(ingresses.len() <= deposit_channels.len());
 
 	Ok((ingresses, slot))
 }

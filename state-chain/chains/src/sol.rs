@@ -220,6 +220,8 @@ impl From<&DepositChannel<Solana>> for SolanaDepositFetchId {
 	}
 }
 
+#[cfg(feature = "std")]
+#[derive(Clone)]
 pub struct SolSigningKey(ed25519_dalek::SigningKey);
 
 impl SolSigningKey {
