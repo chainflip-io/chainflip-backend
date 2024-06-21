@@ -89,12 +89,31 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(vec![])
+		Ok(DepositChannelLookup::<T, I>::iter()
+			.map(|(k, v)| (k, v.boost_status))
+			.collect::<Vec<_>>()
+			.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		Ok(())
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let old_values: Vec<(TargetChainAccount<T, I>, old::BoostStatus)> =
+			Vec::decode(&mut &state[..]).map_err(|_| Error::<T, I>::DecodeError)?;
+
+		let new_boost_status = DepositChannelLookup::<T, I>::iter()
+			.map(|(k, v)| (k, v.boost_status))
+			.collect::<Vec<_>>();
+
+		for (old, new) in old_values.iter().zip(new_boost_status.iter()) {
+			assert!(
+				old.prewitnessed_deposit_id == new.prewitnessed_deposit_id &&
+					old.pools == new.pools,
+				"Boost status mismatch"
+			);
+			assert!(new.amount == Zero::zero(), "Amount should be zero");
+		}
+
+		Ok()
 	}
 }
 
@@ -145,7 +164,7 @@ mod migration_tests {
 					boost_fee: 8,
 					boost_status: old::BoostStatus::Boosted {
 						prewitnessed_deposit_id: 2,
-						pools: vec![5, 10],
+						pools: vec![5],
 					},
 				},
 			);
@@ -154,7 +173,11 @@ mod migration_tests {
 			assert_eq!(old::DepositChannelLookup::<Test, _>::iter_keys().count(), 1);
 
 			// Perform runtime migration.
+			#[cfg(feature = "try-runtime")]
+			let state = super::Migration::<Test, _>::pre_upgrade();
 			super::Migration::<Test, _>::on_runtime_upgrade();
+			#[cfg(feature = "try-runtime")]
+			super::Migration::<Test, _>::post_upgrade(state).unwrap();
 
 			// Test that we delete all entries as part of the migration:
 			assert_eq!(old::PrewitnessedDeposits::<Test, _>::iter_keys().count(), 0);
@@ -170,7 +193,7 @@ mod migration_tests {
 					boost_fee: 8,
 					boost_status: BoostStatus::Boosted {
 						prewitnessed_deposit_id: 2,
-						pools: vec![5, 10],
+						pools: vec![5],
 						amount: 0,
 					},
 				})
