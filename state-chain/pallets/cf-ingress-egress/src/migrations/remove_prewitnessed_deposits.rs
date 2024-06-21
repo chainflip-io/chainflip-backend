@@ -89,31 +89,41 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(DepositChannelLookup::<T, I>::iter()
-			.map(|(k, v)| (k, v.boost_status))
+		Ok(DepositChannelLookup::<T, I>::iter_values()
+			.map(|v| v.boost_status)
 			.collect::<Vec<_>>()
 			.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let old_values: Vec<(TargetChainAccount<T, I>, old::BoostStatus)> =
-			Vec::decode(&mut &state[..]).map_err(|_| Error::<T, I>::DecodeError)?;
+		let old_values: Vec<old::BoostStatus> =
+			Vec::decode(&mut &state[..]).map_err(|_| DispatchError::Other("decode error"))?;
 
-		let new_boost_status = DepositChannelLookup::<T, I>::iter()
-			.map(|(k, v)| (k, v.boost_status))
+		let new_boost_status = DepositChannelLookup::<T, I>::iter_values()
+			.map(|v| v.boost_status)
 			.collect::<Vec<_>>();
 
 		for (old, new) in old_values.iter().zip(new_boost_status.iter()) {
-			assert!(
-				old.prewitnessed_deposit_id == new.prewitnessed_deposit_id &&
-					old.pools == new.pools,
-				"Boost status mismatch"
-			);
-			assert!(new.amount == Zero::zero(), "Amount should be zero");
+			match (old, new) {
+				(old::BoostStatus::NotBoosted, BoostStatus::NotBoosted) => {},
+				(
+					old::BoostStatus::Boosted { prewitnessed_deposit_id, pools },
+					BoostStatus::Boosted {
+						prewitnessed_deposit_id: new_prewitnessed_deposit_id,
+						pools: new_pools,
+						amount,
+					},
+				) => {
+					assert_eq!(prewitnessed_deposit_id, new_prewitnessed_deposit_id);
+					assert_eq!(pools, new_pools);
+					assert_eq!(amount, &Zero::zero());
+				},
+				_ => panic!("Boost status mismatch"),
+			}
 		}
 
-		Ok()
+		Ok(())
 	}
 }
 
@@ -174,7 +184,7 @@ mod migration_tests {
 
 			// Perform runtime migration.
 			#[cfg(feature = "try-runtime")]
-			let state = super::Migration::<Test, _>::pre_upgrade();
+			let state = super::Migration::<Test, _>::pre_upgrade().unwrap();
 			super::Migration::<Test, _>::on_runtime_upgrade();
 			#[cfg(feature = "try-runtime")]
 			super::Migration::<Test, _>::post_upgrade(state).unwrap();
