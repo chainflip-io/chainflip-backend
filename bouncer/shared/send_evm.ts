@@ -79,6 +79,9 @@ export async function signAndSendTxEvm(
       console.log(`${chain} Retrying transaction`);
     }
   }
+  if (!receipt) {
+    throw new Error('Receipt not found');
+  }
 
   if (log) {
     console.log(

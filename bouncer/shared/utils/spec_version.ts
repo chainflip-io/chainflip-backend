@@ -81,7 +81,8 @@ export function specVersion(
 
     console.log(`Successfully updated spec_version to ${incrementedVersion}.`);
     return incrementedVersion;
-  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
     console.error(`An error occurred: ${error.message}`);
     return -1;
   }

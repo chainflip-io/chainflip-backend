@@ -132,10 +132,12 @@ async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortS
   signal?.addEventListener('abort', complete, { once: true });
 
   const sub = observer.subscribe({
-    error: (error) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    error: (error: any) => {
       reject?.(error);
     },
-    next: (value) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    next: (value: any) => {
       // if we haven't consumed the promise yet, resolve it and prepare the for
       // the next batch, otherwise begin buffering the events
       if (resolve) {

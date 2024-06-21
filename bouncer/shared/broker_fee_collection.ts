@@ -25,6 +25,8 @@ const swapAssetAmount = {
   [Assets.Btc]: 0.1,
   [Assets.Usdc]: 1000,
   [Assets.Usdt]: 1000,
+  [Assets.ArbEth]: 1,
+  [Assets.ArbUsdc]: 1000,
 };
 const commissionBps = 1000; // 10%
 
@@ -116,7 +118,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
   // Get values from the swap event
   const swapScheduledEvent = await observeSwapScheduledEvent.event;
-  const brokerCommission = BigInt(swapScheduledEvent.data.brokerCommission.replaceAll(',', ''));
+  const brokerCommission = BigInt(swapScheduledEvent.data.brokerCommission.replace(/,/g, ''));
   console.log('brokerCommission:', brokerCommission);
 
   // Check that the deposit amount is correct after deducting the deposit fee
@@ -204,7 +206,7 @@ export async function testBrokerFeeCollection(): Promise<void> {
   // Check account role
   const role = JSON.stringify(
     await chainflip.query.accountRoles.accountRoles(broker.address),
-  ).replaceAll('"', '');
+  ).replace(/"/g, '');
   console.log('Broker role:', role);
   console.log('Broker address:', broker.address);
   assert.strictEqual(role, 'Broker', `Broker has unexpected role: ${role}`);

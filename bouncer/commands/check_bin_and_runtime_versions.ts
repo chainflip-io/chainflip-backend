@@ -12,16 +12,17 @@ const network = process.argv[4];
 
 export function tomlVersion(cargoFilePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    fs.readFile(cargoFilePath, 'utf-8', (err, data) => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    fs.readFile(cargoFilePath, 'utf-8', (err: any, data) => {
       if (err) {
         reject(new Error('Error reading file: ' + err.message));
         return;
       }
 
       try {
-        const cargoToml = toml.parse(data);
+        const cargoToml: any = toml.parse(data);
         resolve(cargoToml.package.version);
-      } catch (error) {
+      } catch (error: any) {
         reject(new Error('Error parsing TOML: ' + error.message));
       }
     });
@@ -29,7 +30,10 @@ export function tomlVersion(cargoFilePath: string): Promise<string> {
 }
 
 const versionRegex = /\d+\.\d+\.\d+/;
-const releaseVersion = engineReleaseVersion.match(versionRegex)[0];
+const releaseVersion = engineReleaseVersion.match(versionRegex)?.[0];
+if (!releaseVersion) {
+  throw Error('Invalid release version');
+}
 
 // Ensure all the versions are the same
 const engineTomlVersion = await tomlVersion(`${projectRoot}/engine/Cargo.toml`);
@@ -88,7 +92,7 @@ switch (network) {
 }
 
 const releaseSpecVersion = Number(
-  (await jsonRpc('state_getRuntimeVersion', [], endpoint)).specVersion,
+  ((await jsonRpc('state_getRuntimeVersion', [], endpoint)) as any).specVersion,
 );
 console.log(`Release spec version: ${releaseSpecVersion}`);
 

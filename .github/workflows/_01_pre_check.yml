@@ -104,6 +104,10 @@ jobs:
         working-directory: bouncer
         run: pnpm eslint:check
 
+      - name: Run typescript check 📝
+        working-directory: bouncer
+        run: pnpm tsc --noEmit
+
   lint-ci-workflows:
     runs-on: ubuntu-22.04
     steps:

@@ -208,9 +208,9 @@ async function launchTornado() {
   const epoch = (
     await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch()
   ).toJSON()! as number;
-  const pubkey = (
-    (await chainflip.query.bitcoinThresholdSigner.keys(epoch)).toJSON()!.current as string
-  ).substring(2);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const thresholdKeys = (await chainflip.query.bitcoinThresholdSigner.keys(epoch)).toJSON() as any;
+  const pubkey = (thresholdKeys!.current as string).substring(2);
   const salt =
     ((await chainflip.query.bitcoinIngressEgress.channelIdCounter()).toJSON()! as number) + 1;
   const btcAddress = predictBtcAddress(pubkey, salt);

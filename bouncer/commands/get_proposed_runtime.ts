@@ -12,10 +12,11 @@ import { getChainflipApi } from '../shared/utils/substrate';
 
 const proposalId = process.argv[2];
 const api = await getChainflipApi();
-const proposal = await api.query.governance.proposals(proposalId);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const proposal: any = await api.query.governance.proposals(proposalId);
 const extrinsic = api.registry.createType('Call', proposal.unwrap().call);
 const raw = extrinsic.args[1].toU8a();
-const indicator = raw[0] && 3;
+const indicator: number = raw[0] && 3;
 let skip: number;
 switch (indicator) {
   case 0: {
@@ -36,10 +37,11 @@ switch (indicator) {
     break;
   }
   default: {
-    break;
+    throw new Error('Invalid indicator');
   }
 }
-await fs.writeFile('proposed_runtime.wasm', raw.slice(skip), (err) => {
+
+fs.writeFile('proposed_runtime.wasm', raw.slice(skip), (err) => {
   if (err) console.log('error!');
   else process.exit(0);
 });

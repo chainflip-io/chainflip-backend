@@ -91,8 +91,8 @@ importers:
         specifier: ^1.2.2
         version: 1.2.2
       '@types/node':
-        specifier: '18'
-        version: 18.16.15
+        specifier: '20'
+        version: 20.0.0
       '@typescript-eslint/eslint-plugin':
         specifier: ^7.7.0
         version: 7.7.0(@typescript-eslint/parser@7.7.0(eslint@8.57.0)(typescript@5.4.5))(eslint@8.57.0)(typescript@5.4.5)
@@ -568,9 +568,6 @@ packages:
     resolution: {integrity: sha512-cGZWo7K5eRRQCRl2LrcyCYsrc3lRbTlixZh3AzgU8uX4wASVGRlNWi/Hf4TtHNe1ExCDmxabJzdIsABIfrr7xw==}
     engines: {node: '>=18'}
 
-  '@scure/base@1.1.1':
-    resolution: {integrity: sha512-ZxOhsSyxYwLJj3pLZCefNitxsj093tb2vq90mp2txoYeBqbcjDjqFhyM8eUjq/uFm6zJ+mUuqxlS2FkuSY1MTA==}
-
   '@scure/base@1.1.6':
     resolution: {integrity: sha512-ok9AWwhcgYuGG3Zfhyqg+zwl+Wn5uE+dwC0NV/2qQkx4dABbb/bx96vWu8NSj+BNjjSjno+JRYRjle1jV08k3g==}
 
@@ -693,8 +690,8 @@ packages:
   '@types/node@18.15.13':
     resolution: {integrity: sha512-N+0kuo9KgrUQ1Sn/ifDXsvg0TTleP7rIy4zOBGECxAljqvqfqpTfzx0Q1NUedOixRMBfe2Whhb056a42cWs26Q==}
 
-  '@types/node@18.16.15':
-    resolution: {integrity: sha512-fv9H0101Lom0m76x5UekmudO0Vu611ElbTCLOeSbyX5WM6sme3gJ10PHP83pA1/eXbZpnDoTkeY40jykH38ptQ==}
+  '@types/node@20.0.0':
+    resolution: {integrity: sha512-cD2uPTDnQQCVpmRefonO98/PPijuOnnEy5oytWJFPY1N9aJCz2wJ5kSGWO+zJoed2cY2JxQh6yBuUq4vIn61hw==}
 
   '@types/pbkdf2@3.1.0':
     resolution: {integrity: sha512-Cf63Rv7jCQ0LaL8tNXmEyqTHuIJxRdlS5vMh1mj5voN4+QFhVZnlZruezqpWYDiJ8UTzhP0VmeLXCmBk66YrMQ==}
@@ -3406,9 +3403,9 @@ snapshots:
 
   '@polkadot-api/substrate-bindings@0.0.1':
     dependencies:
-      '@noble/hashes': 1.3.2
+      '@noble/hashes': 1.4.0
       '@polkadot-api/utils': 0.0.1
-      '@scure/base': 1.1.1
+      '@scure/base': 1.1.6
       scale-ts: 1.6.0
     optional: true
 
@@ -3695,9 +3692,6 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@scure/base@1.1.1':
-    optional: true
-
   '@scure/base@1.1.6': {}
 
   '@sindresorhus/is@4.6.0': {}
@@ -3856,22 +3850,22 @@ snapshots:
 
   '@types/bn.js@5.1.1':
     dependencies:
-      '@types/node': 18.16.15
+      '@types/node': 20.0.0
 
   '@types/bn.js@5.1.5':
     dependencies:
-      '@types/node': 18.16.15
+      '@types/node': 20.0.0
 
   '@types/cacheable-request@6.0.3':
     dependencies:
       '@types/http-cache-semantics': 4.0.1
       '@types/keyv': 3.1.4
-      '@types/node': 18.16.15
+      '@types/node': 20.0.0
       '@types/responselike': 1.0.0
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 18.16.15
+      '@types/node': 20.0.0
 
   '@types/http-cache-semantics@4.0.1': {}
 
@@ -3881,7 +3875,7 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 18.16.15
+      '@types/node': 20.0.0
 
   '@types/minimist@1.2.2': {}
 
@@ -3889,25 +3883,25 @@ snapshots:
 
   '@types/node@18.15.13': {}
 
-  '@types/node@18.16.15': {}
+  '@types/node@20.0.0': {}
 
   '@types/pbkdf2@3.1.0':
     dependencies:
-      '@types/node': 18.16.15
+      '@types/node': 20.0.0
 
   '@types/responselike@1.0.0':
     dependencies:
-      '@types/node': 18.16.15
+      '@types/node': 20.0.0
 
   '@types/secp256k1@4.0.3':
     dependencies:
-      '@types/node': 18.16.15
+      '@types/node': 20.0.0
 
   '@types/semver@7.5.8': {}
 
   '@types/ws@7.4.7':
     dependencies:
-      '@types/node': 18.16.15
+      '@types/node': 20.0.0
 
   '@types/yargs-parser@21.0.2': {}
 
@@ -4517,7 +4511,7 @@ snapshots:
   define-properties@1.2.1:
     dependencies:
       define-data-property: 1.1.4
-      has-property-descriptors: 1.0.2
+      has-property-descriptors: 1.0.0
       object-keys: 1.1.1
 
   delay@5.0.0: {}

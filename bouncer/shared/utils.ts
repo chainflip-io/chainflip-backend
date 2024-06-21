@@ -580,10 +580,15 @@ export async function observeEVMEvent(
   const stopObserve = stopObserveEvent ?? (() => false);
 
   // Gets all the event parameter as an array
-  const eventAbi = contractAbi.find((item) => item.type === 'event' && item.name === eventName)!;
+
+  const eventAbi = contractAbi.find(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (item: any) => item.type === 'event' && item.name === eventName,
+  )!;
 
   // Get the parameter names of the event
-  const parameterNames = eventAbi.inputs.map((input) => input.name);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parameterNames = eventAbi.inputs.map((input: any) => input.name);
 
   for (let i = 0; i < 1200; i++) {
     if (stopObserve()) return undefined;
@@ -801,7 +806,8 @@ export async function submitChainflipExtrinsic(
 ): Promise<any> {
   await using chainflipApi = await getChainflipApi();
 
-  let extrinsicResult;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let extrinsicResult: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await extrinsic.signAndSend(account, { nonce: -1 }, (arg: any) => {
     if (arg.blockNumber !== undefined || arg.dispatchError !== undefined) {
