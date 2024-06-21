@@ -9,9 +9,9 @@
 // Argument 4 (optional) is the max boost fee bps (default: 0 (no boosting))
 // For example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX
 
+import { InternalAsset } from '@chainflip/cli';
 import { parseAssetString, executeWithTimeout } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
-import { InternalAsset } from '@chainflip/cli';
 
 async function newSwapCommand() {
   const sourceAsset = parseAssetString(process.argv[2]);
@@ -22,8 +22,8 @@ async function newSwapCommand() {
   console.log(`Requesting swap ${sourceAsset} -> ${destAsset}`);
 
   await requestNewSwap(
-    sourceAsset,
-    destAsset,
+    sourceAsset as InternalAsset,
+    destAsset as InternalAsset,
     destAddress,
     undefined,
     undefined,
