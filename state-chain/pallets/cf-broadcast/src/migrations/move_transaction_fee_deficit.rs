@@ -27,16 +27,22 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(vec![])
+		let total_amount_of_recorded_fees =
+			old::TransactionFeeDeficit::<T, I>::iter().collect::<Vec<_>>().len() as u128;
+		Ok(total_amount_of_recorded_fees.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 		assert_eq!(
 			old::TransactionFeeDeficit::<T, I>::iter().collect::<Vec<_>>().len(),
 			0,
 			"TransactionFeeDeficit not empty - migration failed!"
 		);
+		let recorded_fees = <u128>::decode(&mut &state[..]).unwrap();
+		#[cfg(feature = "try-runtime")]
+		let migrated = T::Refunding::get_recorded_gas_fees(<T::TargetChain as Chain>::GAS_ASSET);
+		assert_eq!(recorded_fees, migrated, "Migrated fees do not match for asset!");
 		Ok(())
 	}
 }

@@ -6,10 +6,13 @@ use cf_chains::{
 	address::IntoForeignChainAddress, btc::ScriptPubkey, dot::PolkadotAccountId, Arbitrum, Bitcoin,
 	Ethereum, Polkadot, Solana,
 };
+use cf_primitives::AssetAmount;
 
-use crate::eth::Address as EvmAddress;
+use cf_chains::ForeignChain;
+use pallet_cf_refunding::{RecordedFees, WithheldTransactionFees};
+
+use crate::{eth::Address as EvmAddress, Runtime};
 use cf_chains::sol::SolAddress;
-
 
 macro_rules! impl_refunding {
 	($name:ident, $chain:ident, $account:ident) => {
@@ -30,6 +33,19 @@ macro_rules! impl_refunding {
 			}
 			fn with_held_transaction_fees(asset: T::ChainAsset, amount: T::ChainAmount) {
 				Refunding::withheld_transaction_fee(asset.into(), amount.into());
+			}
+			// Returns the amount of withheld transaction fees for a chain
+			fn get_withheld_transaction_fees(asset: T::ChainAsset) -> AssetAmount {
+				let chain: ForeignChain = asset.into();
+				WithheldTransactionFees::<Runtime>::get(chain).into()
+			}
+			// Returns the number of stored records for a chain
+			fn get_recorded_gas_fees(asset: T::ChainAsset) -> u128 {
+				let chain: ForeignChain = asset.into();
+				RecordedFees::<Runtime>::get(chain)
+					.expect("No recorded fees for chain")
+					.values()
+					.len() as u128
 			}
 		}
 	};

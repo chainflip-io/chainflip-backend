@@ -958,4 +958,12 @@ pub trait IngressEgressFeeApi<C: Chain> {
 pub trait Refunding<C: Chain> {
 	fn record_gas_fees(account_id: C::ChainAccount, asset: C::ChainAsset, amount: C::ChainAmount);
 	fn with_held_transaction_fees(asset: C::ChainAsset, amount: C::ChainAmount);
+	// TODO: Remove this after migration.
+	fn get_withheld_transaction_fees(_gas_asset: C::ChainAsset) -> AssetAmount {
+		AssetAmount::default()
+	}
+	// TODO: Remove this after migration.
+	fn get_recorded_gas_fees(_gas_asset: C::ChainAsset) -> u128 {
+		0
+	}
 }
