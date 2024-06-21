@@ -722,7 +722,7 @@ fn test_extra_call_data() {
 		)
 		.is_none(),);
 
-		// Can vote again, but not call data is inserted and result is unaffected.
+		// Can vote again, but call data is not inserted and result is unaffected.
 		assert_ok!(Witnesser::witness_at_epoch(
 			RuntimeOrigin::signed(CHARLEMAGNE),
 			call.clone(),
