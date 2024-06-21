@@ -32,13 +32,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
 	EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId,
-	ThresholdSignatureRequestId,
-	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
-	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
-	SECONDS_PER_BLOCK,
-	chains::assets::any::AssetMap, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier,
-	BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
-	PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
+	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
