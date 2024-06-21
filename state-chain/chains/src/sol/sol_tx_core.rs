@@ -7,21 +7,26 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
+#[cfg(test)]
+use crate::sol::sol_tx_core::{
+	signer::{signers::Signers, SignerError},
+	transaction::TransactionError,
+};
 use crate::sol::{SolAddress, SolHash, SolSignature};
 use sol_prim::consts::BPF_LOADER_UPGRADEABLE_ID;
 
 pub mod address_derivation;
 pub mod bpf_loader_instructions;
 pub mod compute_budget;
+pub mod program;
 pub mod program_instructions;
 pub mod short_vec;
+pub mod signer;
 pub mod token_instructions;
+pub mod transaction;
 
 #[cfg(test)]
 use thiserror::Error;
-pub mod extra_types_for_testing;
-#[cfg(test)]
-use extra_types_for_testing::{SignerError, Signers, TransactionError};
 
 pub const HASH_BYTES: usize = 32;
 
@@ -944,10 +949,10 @@ mod tests {
 			address_derivation::{derive_associated_token_account, derive_deposit_address},
 			bpf_loader_instructions::set_upgrade_authority,
 			compute_budget::ComputeBudgetInstruction,
-			extra_types_for_testing::Signer,
 			program_instructions::{
 				ProgramInstruction, SystemProgramInstruction, UpgradeManagerProgram, VaultProgram,
 			},
+			signer::Signer,
 			sol_test_values::*,
 			token_instructions::AssociatedTokenAccountInstruction,
 			AccountMeta, BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey,

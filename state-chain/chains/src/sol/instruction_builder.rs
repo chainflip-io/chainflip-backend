@@ -364,8 +364,7 @@ mod test {
 	use crate::{
 		sol::{
 			sol_tx_core::{
-				address_derivation::derive_deposit_address, extra_types_for_testing::Signer,
-				sol_test_values::*,
+				address_derivation::derive_deposit_address, signer::Signer, sol_test_values::*,
 			},
 			SolHash, SolMessage, SolSigningKey, SolTransaction, SolanaDepositFetchId,
 		},

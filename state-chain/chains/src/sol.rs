@@ -8,7 +8,7 @@ use sol_prim::{AccountBump, SlotNumber};
 
 use crate::{
 	address, assets,
-	sol::sol_tx_core::extra_types_for_testing::{Signer, SignerError},
+	sol::sol_tx_core::signer::{Signer, SignerError},
 	DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
