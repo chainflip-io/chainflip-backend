@@ -39,14 +39,14 @@ async function runAllConcurrentTests() {
     testBoostingSwap(),
   ];
 
-  // Test that only work if there is more than one node
+  // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
     console.log(`Also running multi-node tests (${numberOfNodes} nodes)`);
     const multiNodeTests = [testPolkadotRuntimeUpdate()];
     tests.push(...multiNodeTests);
   }
 
-  await Promise.all([...tests]);
+  await Promise.all(tests);
 
   await Promise.all([broadcastAborted.stop(), feeDeficitRefused.stop()]);
 }
@@ -57,8 +57,9 @@ runWithTimeout(runAllConcurrentTests(), 2000000)
     process.exit(0);
   })
   .catch((error) => {
-    console.error('All concurrent tests timed out. Exiting.');
     swapContext.print_report();
-    console.error(error);
+    const now = new Date();
+    const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+    console.error(`${timestamp} ${error}`);
     process.exit(-1);
   });

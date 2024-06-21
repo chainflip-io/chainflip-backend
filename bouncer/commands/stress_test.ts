@@ -7,7 +7,7 @@
 // For example: ./commands/stress_test.ts 3
 // will initiate a stress test generating 3 signatures
 
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
@@ -19,11 +19,6 @@ async function main(): Promise<void> {
   });
 
   console.log('Requesting ' + signaturesCount + ' ETH signatures');
-
-  process.exit(0);
 }
 
-runWithTimeout(main(), 10000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 10);
