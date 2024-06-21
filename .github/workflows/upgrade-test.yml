@@ -342,7 +342,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
-          name: chain-explorer
+          name: chain-explorer-upgrade-test
           path: /tmp/chainflip/explorer.txt
 
       - name: Upload Snapshots 💾
