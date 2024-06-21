@@ -329,8 +329,6 @@ impl RetryLimitReturn for NoRetryLimit {
 	}
 }
 
-pub struct SetRetryLimit {}
-
 impl RetryLimitReturn for u32 {
 	type ReturnType<T> = Result<T>;
 
