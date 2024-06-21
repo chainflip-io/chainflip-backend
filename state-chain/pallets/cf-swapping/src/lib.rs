@@ -942,32 +942,28 @@ pub mod pallet {
 							(None, None)
 						};
 
-						if swap.stable_amount.is_some() || pool_sell_price.is_some() {
+						let amount = swap.stable_amount.or_else(|| {
 							// If the swap into stable asset failed, fallback to estimating the
 							// amount via pool price.
-							let amount = swap.stable_amount.unwrap_or_else(|| {
+							Some(
 								output_amount_ceil(
 									cf_amm::common::Amount::from(swap.input_amount()),
-									sqrt_price_to_price(
-										pool_sell_price.expect("Safe because of check above"),
-									),
+									sqrt_price_to_price(pool_sell_price?),
 								)
-								.as_u128()
-							});
+								.as_u128(),
+							)
+						})?;
 
-							Some(SwapLegInfo {
-								swap_id: swap.swap_id(),
-								base_asset,
-								// All swaps to `base_asset` have to go through the stable asset:
-								quote_asset: STABLE_ASSET,
-								side: Side::Buy,
-								amount,
-								source_asset,
-								source_amount,
-							})
-						} else {
-							None
-						}
+						Some(SwapLegInfo {
+							swap_id: swap.swap_id(),
+							base_asset,
+							// All swaps to `base_asset` have to go through the stable asset:
+							quote_asset: STABLE_ASSET,
+							side: Side::Buy,
+							amount,
+							source_asset,
+							source_amount,
+						})
 					} else {
 						None
 					}
