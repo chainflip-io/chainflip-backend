@@ -1,5 +1,5 @@
 use super::SimpleSubmissionApi;
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
@@ -172,8 +172,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			))
 			.await
 			.until_in_block()
-			.await
-			.context("Registration for Liquidity Refund Address failed.")?;
+			.await?;
 		Ok(tx_hash)
 	}
 
@@ -273,8 +272,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			}))
 			.await
 			.until_in_block()
-			.await
-			.context("Unable to transfer asset.")?;
+			.await?;
 		Ok(tx_hash)
 	}
 
@@ -408,12 +406,10 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	async fn register_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_lp::Call::register_lp_account {})
 			.await
-			.context("Could not register liquidity provider")
 	}
 
 	async fn deregister_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_lp::Call::deregister_lp_account {})
 			.await
-			.context("Could not de-register liquidity provider")
 	}
 }
