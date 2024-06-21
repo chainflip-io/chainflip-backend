@@ -11,7 +11,7 @@
 // to 0xE16CCFc63368e8FC93f53ccE4e4f4b08c4C3E186
 
 import { HexString } from '@polkadot/util/types';
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 import { redeemFlip } from '../shared/redeem_flip';
 
 async function main(): Promise<void> {
@@ -20,10 +20,6 @@ async function main(): Promise<void> {
   const flipAmount = process.argv[4].trim();
 
   await redeemFlip(flipSeed, ethAddress, flipAmount);
-  process.exit(0);
 }
 
-runWithTimeout(main(), 600000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 600);

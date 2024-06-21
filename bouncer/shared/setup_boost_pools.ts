@@ -9,7 +9,7 @@ import {
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { addBoostFunds } from './boost';
-import { provideLiquidity } from './provide_liquidity';
+import { depositLiquidity } from './deposit_liquidity';
 
 export type BoostPoolId = {
   asset: Asset;
@@ -98,7 +98,7 @@ export async function setupBoostPools(): Promise<void> {
   // Add some boost funds for Btc to each boost tier
   console.log('Funding Boost Pools');
   const btcIngressFee = 0.0001; // Some small amount to cover the ingress fee
-  await provideLiquidity(
+  await depositLiquidity(
     Assets.Btc,
     fundBtcBoostPoolsAmount * boostPoolTiers.length + btcIngressFee,
     false,

@@ -8,16 +8,8 @@
 // All assets must be be from the same chain.
 // For example: ./commands/create_boost_pools.ts '[{"asset": "Eth","tier": 5}, {"asset": "Eth","tier": 10}, {"asset": "Eth","tier": 30}]'
 
-import { runWithTimeout } from '../shared/utils';
-import { createBoostPools, BoostPoolId } from '../shared/setup_boost_pools';
+import { executeWithTimeout } from '../shared/utils';
+import { BoostPoolId, createBoostPools } from '../shared/setup_boost_pools';
 
-async function main(): Promise<void> {
-  const newPools: BoostPoolId[] = JSON.parse(process.argv[2]);
-  await createBoostPools(newPools);
-  process.exit(0);
-}
-
-runWithTimeout(main(), 30000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+const newPools: BoostPoolId[] = JSON.parse(process.argv[2]);
+await executeWithTimeout(createBoostPools(newPools), 30);

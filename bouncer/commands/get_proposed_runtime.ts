@@ -8,7 +8,7 @@
 // For example: ./commands/get_proposed_runtime.ts 123
 
 import fs from 'fs';
-import { getChainflipApi } from '../shared/utils';
+import { getChainflipApi } from '../shared/utils/substrate';
 
 const proposalId = process.argv[2];
 const api = await getChainflipApi();

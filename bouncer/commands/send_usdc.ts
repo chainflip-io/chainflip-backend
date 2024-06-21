@@ -8,7 +8,7 @@
 // For example: ./commands/send_usdc.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6 1.2
 // will send 1.2 Usdc to account 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
-import { runWithTimeout, getContractAddress } from '../shared/utils';
+import { executeWithTimeout, getContractAddress } from '../shared/utils';
 import { sendErc20 } from '../shared/send_erc20';
 
 async function main(): Promise<void> {
@@ -17,11 +17,6 @@ async function main(): Promise<void> {
 
   const contractAddress = getContractAddress('Ethereum', 'Usdc');
   await sendErc20('Ethereum', ethereumAddress, contractAddress, usdcAmount);
-
-  process.exit(0);
 }
 
-runWithTimeout(main(), 20000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 20);

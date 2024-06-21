@@ -15,7 +15,7 @@ import {
   newAddress,
 } from './utils';
 import { send } from './send';
-import { provideLiquidity } from './provide_liquidity';
+import { depositLiquidity } from './deposit_liquidity';
 import { requestNewSwap } from './perform_swap';
 import { createBoostPools } from './setup_boost_pools';
 import { jsonRpc } from './json_rpc';
@@ -120,7 +120,7 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
   );
 
   // Add boost funds
-  await provideLiquidity(asset, amount * 1.01, false, lpUri);
+  await depositLiquidity(asset, amount * 1.01, false, lpUri);
   await addBoostFunds(asset, boostFee, amount, lpUri);
 
   // Do a swap

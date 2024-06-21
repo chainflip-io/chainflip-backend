@@ -2,8 +2,8 @@
 import assert from 'assert';
 
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { provideLiquidity } from '../shared/provide_liquidity';
-import { runWithTimeout } from '../shared/utils';
+import { depositLiquidity } from '../shared/deposit_liquidity';
+import { executeWithTimeout } from '../shared/utils';
 import { observeEvent, getChainflipApi } from '../shared/utils/substrate';
 
 async function queryUtxos(): Promise<{ amount: number; count: number }> {
@@ -43,8 +43,8 @@ async function test() {
   const consolidationThreshold = initialUtxos.count + 2;
 
   // Add 2 utxo which should later trigger consolidation as per the parameters above:
-  await provideLiquidity('Btc', 2);
-  await provideLiquidity('Btc', 3);
+  await depositLiquidity('Btc', 2);
+  await depositLiquidity('Btc', 3);
 
   const amountBeforeConsolidation = (await queryUtxos()).amount;
   console.log(`Total amount in BTC vault is: ${amountBeforeConsolidation}`);
@@ -101,11 +101,6 @@ async function test() {
   );
 
   console.log('=== BTC UTXO Consolidation test completed ===');
-
-  process.exit(0);
 }
 
-runWithTimeout(test(), 200000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(test(), 200);

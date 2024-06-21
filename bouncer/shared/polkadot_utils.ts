@@ -3,8 +3,6 @@ import { aliceKeyringPair } from '../shared/polkadot_keyring';
 import { Event, polkadotSigningMutex, sleep } from '../shared/utils';
 import { getPolkadotApi } from './utils/substrate';
 
-// TODO: Move getPolkadotApi and other stuff from utils to here
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function handleDispatchError(result: any) {
   await using polkadot = await getPolkadotApi();

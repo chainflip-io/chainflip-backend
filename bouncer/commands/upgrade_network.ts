@@ -29,7 +29,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
 import { upgradeNetworkGit, upgradeNetworkPrebuilt } from '../shared/upgrade_network';
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
   await yargs(hideBin(process.argv))
@@ -116,14 +116,7 @@ async function main(): Promise<void> {
     )
     .demandCommand(1)
     .help().argv;
-
-  process.exit(0);
 }
 
 // Quite a long timeout, as the sequence of try-runtime runs takes some time.
-runWithTimeout(main(), 30 * 60 * 1000).catch((error) => {
-  console.error('upgrade_network exiting due to error: ', error);
-  if (process.exitCode === 0) {
-    process.exitCode = -1;
-  }
-});
+await executeWithTimeout(main(), 30 * 60);

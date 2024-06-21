@@ -12,22 +12,20 @@
 
 import path from 'path';
 import { simpleRuntimeUpgrade } from '../shared/simple_runtime_upgrade';
-import { testAllSwaps } from '../shared/swapping';
-import { runWithTimeout } from '../shared/utils';
+import { SwapContext, testAllSwaps } from '../shared/swapping';
+import { executeWithTimeout } from '../shared/utils';
+
+const swapContext = new SwapContext();
 
 async function main(): Promise<void> {
   await simpleRuntimeUpgrade(path.dirname(process.cwd()));
 
   if (process.argv[2] === '-test') {
-    await testAllSwaps();
+    await testAllSwaps(swapContext);
+    swapContext.print_report();
   }
-
-  process.exit(0);
 }
 
-// 15 minutes. We need to wait for user input, compile, and potentially run tests. This is deliberatly quite long.
+// 15 minute timeout. We need to wait for user input, compile, and potentially run tests. This is deliberately quite long.
 // This won't be run on CI, so it's not a problem if it takes a while.
-runWithTimeout(main(), 15 * 60 * 1000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 15 * 60);

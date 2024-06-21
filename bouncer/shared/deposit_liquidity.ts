@@ -16,12 +16,12 @@ import {
 import { send } from '../shared/send';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 
-export async function provideLiquidity(
+export async function depositLiquidity(
   ccy: Asset,
   amount: number,
   waitForFinalization = false,
   lpKey?: string,
-) {
+): Promise<Event> {
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
 
@@ -69,6 +69,7 @@ export async function provideLiquidity(
   eventHandle = observeEvent('liquidityProvider:AccountCredited', {
     test: (event) =>
       event.data.asset === ccy &&
+      event.data.accountId === lp.address &&
       isWithinOnePercent(
         BigInt(event.data.amountCredited.replace(/,/g, '')),
         BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),

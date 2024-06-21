@@ -9,7 +9,7 @@ import {
   bumpAndBuildPolkadotRuntime,
   pushPolkadotRuntimeUpdate,
 } from '../shared/polkadot_runtime_update';
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 import { getNetworkRuntimeVersion } from '../shared/utils/spec_version';
 
 async function main(): Promise<void> {
@@ -26,11 +26,6 @@ async function main(): Promise<void> {
       `Polkadot runtime update failed. Currently at version ${postUpgradeSpecVersion.specVersion}, expected to be at ${expectedSpecVersion}`,
     );
   }
-
-  process.exit(0);
 }
 
-runWithTimeout(main(), 400000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 400);

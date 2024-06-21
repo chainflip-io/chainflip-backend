@@ -13,13 +13,13 @@ import {
   assetDecimals,
   chainFromAsset,
   stateChainAssetFromAsset,
-  getChainflipApi,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { testSwap } from '../shared/swapping';
 import { sendBtc } from '../shared/send_btc';
 import { createLpPool } from '../shared/create_lp_pool';
-import { provideLiquidity } from '../shared/provide_liquidity';
+import { depositLiquidity } from '../shared/deposit_liquidity';
+import { getChainflipApi } from '../shared/utils/substrate';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function call(method: string, params: any, id: string) {
@@ -281,14 +281,14 @@ async function bananas() {
   ]);
 
   await Promise.all([
-    provideLiquidity('Usdc', 8 * liquidityUsdc),
-    provideLiquidity('Eth', (2 * liquidityUsdc) / price.get('Eth')!),
-    provideLiquidity('Dot', (2 * liquidityUsdc) / price.get('Dot')!),
-    provideLiquidity('Btc', (2 * liquidityUsdc) / price.get('Btc')!),
-    provideLiquidity('Flip', (2 * liquidityUsdc) / price.get('Flip')!),
-    provideLiquidity('Usdt', (2 * liquidityUsdc) / price.get('Usdt')!),
-    provideLiquidity('ArbEth', (2 * liquidityUsdc) / price.get('ArbEth')!),
-    provideLiquidity('ArbUsdc', (2 * liquidityUsdc) / price.get('ArbUsdc')!),
+    depositLiquidity('Usdc', 8 * liquidityUsdc),
+    depositLiquidity('Eth', (2 * liquidityUsdc) / price.get('Eth')!),
+    depositLiquidity('Dot', (2 * liquidityUsdc) / price.get('Dot')!),
+    depositLiquidity('Btc', (2 * liquidityUsdc) / price.get('Btc')!),
+    depositLiquidity('Flip', (2 * liquidityUsdc) / price.get('Flip')!),
+    depositLiquidity('Usdt', (2 * liquidityUsdc) / price.get('Usdt')!),
+    depositLiquidity('ArbEth', (2 * liquidityUsdc) / price.get('ArbEth')!),
+    depositLiquidity('ArbUsdc', (2 * liquidityUsdc) / price.get('ArbUsdc')!),
   ]);
 
   await Promise.all([

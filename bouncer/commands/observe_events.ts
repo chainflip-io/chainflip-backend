@@ -14,7 +14,8 @@
 // For example: ./commands/observe_events.ts --succeed_on ethereumThresholdSigner:ThresholdSignatureSuccess --fail_on ethereumThresholdSigner:SignersUnavailable
 
 import minimist from 'minimist';
-import { runWithTimeout, getChainflipApi } from '../shared/utils';
+import { runWithTimeout } from '../shared/utils';
+import { getChainflipApi } from '../shared/utils/substrate';
 
 const args = minimist(process.argv.slice(2));
 

@@ -10,7 +10,7 @@
 // For example: ./commands/submit_runtime_upgrade.ts /path/to/state_chain_runtime.compact.compressed.wasm '{"major": 1, "minor": 2, "patch": 3}' 50
 
 import { submitRuntimeUpgradeWithRestrictions } from '../shared/submit_runtime_upgrade';
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 
 async function main() {
   const wasmPath = process.argv[2];
@@ -22,10 +22,6 @@ async function main() {
   const percentNodesUpgraded = arg4 ? Number(arg4) : undefined;
 
   await submitRuntimeUpgradeWithRestrictions(wasmPath, semverRestriction, percentNodesUpgraded);
-  process.exit(0);
 }
 
-runWithTimeout(main(), 20000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 20);

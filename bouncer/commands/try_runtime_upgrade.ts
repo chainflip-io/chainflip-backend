@@ -23,7 +23,7 @@ import {
   tryRuntimeUpgrade,
   tryRuntimeUpgradeWithCompileRuntime,
 } from '../shared/try_runtime_upgrade';
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 import { getChainflipApi } from '../shared/utils/substrate';
 
 async function main(): Promise<void> {
@@ -69,11 +69,6 @@ async function main(): Promise<void> {
     console.log('Try runtime using runtime at ' + args.runtime);
     await tryRuntimeUpgrade(args.block, chainflipApi, endpoint, args.runtime, args.lastN);
   }
-
-  process.exit(0);
 }
 
-runWithTimeout(main(), 1200000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 1200);

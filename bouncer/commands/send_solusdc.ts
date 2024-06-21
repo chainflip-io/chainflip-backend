@@ -11,7 +11,7 @@
 // It also accepts non-encoded bs58 address representations:
 // ./commands/send_solusdc.ts 0x2f3fcadf740018f6037513959bab60d0dbef26888d264d54fc4d3d36c8cf5c91 1.2
 
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 import { sendSolUsdc } from '../shared/send_solusdc';
 
 async function main() {
@@ -20,11 +20,6 @@ async function main() {
 
   console.log('Transferring ' + usdcAmount + ' SolUsdc to the ATA of ' + solanaAddress);
   await sendSolUsdc(solanaAddress, usdcAmount);
-
-  process.exit(0);
 }
 
-runWithTimeout(main(), 20000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 20);
