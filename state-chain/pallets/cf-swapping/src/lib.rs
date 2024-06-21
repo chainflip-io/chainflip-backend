@@ -917,6 +917,7 @@ pub mod pallet {
 		) -> Vec<SwapLegInfo> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
 
+			// Can ignore the result here because we use pool price fallback below
 			let _res = Self::swap_into_stable_taking_network_fee(&mut swaps);
 
 			swaps
