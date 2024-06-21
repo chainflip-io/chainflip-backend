@@ -9821,6 +9821,8 @@ dependencies = [
  "anyhow",
  "cf-test-utilities",
  "frame-remote-externalities",
+ "frame-support",
+ "hex",
  "log",
  "state-chain-runtime",
  "tokio",

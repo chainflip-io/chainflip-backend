@@ -10,11 +10,13 @@ cf-test-utilities = { path = "../test-utilities" }
 
 # Polkadot SDK dependencies
 frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
 
 tokio = { version = "1.38.0", features = ["full"] }
 anyhow = "1.0.86"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 log = "0.4.21"
+hex = "0.4.3"
 
 [lints]
 workspace = true
