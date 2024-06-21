@@ -7,7 +7,6 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
-use sp_std::vec::Vec;
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -158,6 +157,7 @@ pub enum SwapType {
 
 pub trait BoostApi {
 	type AccountId;
+	type AssetMap;
 
-	fn boost_pool_account_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)>;
+	fn boost_pool_account_balances(who: &Self::AccountId) -> Self::AssetMap;
 }

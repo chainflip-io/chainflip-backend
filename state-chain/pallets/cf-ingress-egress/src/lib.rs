@@ -24,6 +24,7 @@ use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
 	},
+	assets::any::GetChainAssetMap,
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall, DepositChannel,
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
@@ -61,7 +62,6 @@ use sp_std::{
 	vec,
 	vec::Vec,
 };
-use strum::IntoEnumIterator;
 pub use weights::WeightInfo;
 
 /// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
@@ -2044,32 +2044,27 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 
 impl<T: Config<I>, I: 'static> BoostApi for Pallet<T, I> {
 	type AccountId = T::AccountId;
-	fn boost_pool_account_balances(who: &Self::AccountId) -> Vec<(Asset, AssetAmount)> {
-		TargetChainAsset::<T, I>::iter()
-			.map(|chain_asset| {
-				(
-					chain_asset.into(),
-					BoostPools::<T, I>::iter_prefix(chain_asset).fold(0, |acc, (_tier, pool)| {
-						let active: AssetAmount = pool
-							.get_amounts()
-							.into_iter()
-							.filter(|(id, _amount)| id == who)
-							.map(|(_id, amount)| amount.into())
-							.sum();
+	type AssetMap = <<T as Config<I>>::TargetChain as Chain>::ChainAssetMap<AssetAmount>;
+	fn boost_pool_account_balances(who: &Self::AccountId) -> Self::AssetMap {
+		Self::AssetMap::from_fn(|chain_asset| {
+			BoostPools::<T, I>::iter_prefix(chain_asset).fold(0, |acc, (_tier, pool)| {
+				let active: AssetAmount = pool
+					.get_amounts()
+					.into_iter()
+					.filter(|(id, _amount)| id == who)
+					.map(|(_id, amount)| amount.into())
+					.sum();
 
-						let pending: AssetAmount = pool
-							.get_pending_boosts()
-							.into_values()
-							.map(|owed| {
-								owed.get(who)
-									.map_or(0u32.into(), |owed_amount| owed_amount.total.into())
-							})
-							.sum();
+				let pending: AssetAmount = pool
+					.get_pending_boosts()
+					.into_values()
+					.map(|owed| {
+						owed.get(who).map_or(0u32.into(), |owed_amount| owed_amount.total.into())
+					})
+					.sum();
 
-						acc + active + pending
-					}),
-				)
+				acc + active + pending
 			})
-			.collect()
+		})
 	}
 }
