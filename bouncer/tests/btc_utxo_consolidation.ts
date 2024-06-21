@@ -6,10 +6,17 @@ import { depositLiquidity } from '../shared/deposit_liquidity';
 import { executeWithTimeout } from '../shared/utils';
 import { observeEvent, getChainflipApi } from '../shared/utils/substrate';
 
+interface Utxo {
+  id: string;
+  amount: number;
+  depositAddress: string;
+}
+
 async function queryUtxos(): Promise<{ amount: number; count: number }> {
   await using chainflip = await getChainflipApi();
-  const utxos: [{ amount: number }] =
-    (await chainflip.query.environment.bitcoinAvailableUtxos()) as unknown as [{ amount: number }];
+  const utxos: Utxo[] = JSON.parse(
+    (await chainflip.query.environment.bitcoinAvailableUtxos()).toString(),
+  );
 
   return {
     amount: utxos.reduce((acc, utxo) => acc + utxo.amount, 0),
