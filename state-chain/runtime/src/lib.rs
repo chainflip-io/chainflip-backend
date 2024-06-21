@@ -1267,12 +1267,13 @@ impl_runtime_apis! {
 			let free_balances = LiquidityProvider::free_balances(&account_id)?;
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
 			let boost_pools_balances = {
-				let mut result = EthereumIngressEgress::boost_pool_account_balances(&account_id);
-				result.append( &mut PolkadotIngressEgress::boost_pool_account_balances(&account_id));
-				result.append( &mut BitcoinIngressEgress::boost_pool_account_balances(&account_id));
-				result.append( &mut ArbitrumIngressEgress::boost_pool_account_balances(&account_id));
-				result.append( &mut SolanaIngressEgress::boost_pool_account_balances(&account_id));
-				result.into_iter().collect()
+				AssetMap {
+					eth: EthereumIngressEgress::boost_pool_account_balances(&account_id),
+					arb: ArbitrumIngressEgress::boost_pool_account_balances(&account_id),
+					btc: BitcoinIngressEgress::boost_pool_account_balances(&account_id),
+					dot: PolkadotIngressEgress::boost_pool_account_balances(&account_id),
+					sol: SolanaIngressEgress::boost_pool_account_balances(&account_id)
+				}
 			};
 			Ok(free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances))
 		}
