@@ -953,7 +953,7 @@ mod tests {
 			AccountMeta, BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey,
 			Transaction,
 		},
-		SigningKey, SolAddress,
+		SolAddress, SolSigningKey,
 	};
 	use core::str::FromStr;
 	use sol_prim::{
@@ -973,7 +973,7 @@ mod tests {
 
 	#[test]
 	fn create_simple_tx() {
-		fn send_initialize_tx(program_id: Pubkey, payer: &SigningKey) -> Result<(), ()> {
+		fn send_initialize_tx(program_id: Pubkey, payer: &SolSigningKey) -> Result<(), ()> {
 			let bank_instruction = BankInstruction::Initialize;
 
 			let instruction = Instruction::new_with_borsh(program_id, &bank_instruction, vec![]);
@@ -985,14 +985,14 @@ mod tests {
 
 		// let client = RpcClient::new(String::new());
 		let program_id = Pubkey([0u8; 32]);
-		let payer = SigningKey::new();
+		let payer = SolSigningKey::new();
 		let _ = send_initialize_tx(program_id, &payer);
 	}
 
 	#[test]
 	fn create_transfer_native() {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
 		let instructions = [
@@ -1021,7 +1021,7 @@ mod tests {
 	#[test]
 	fn create_transfer_cu_priority_fees() {
 		let durable_nonce = Hash::from_str("2GGxiEHwtWPGNKH5czvxRGvQTayRvCT1PFsA9yK2iMnq").unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
 
@@ -1050,7 +1050,7 @@ mod tests {
 	#[test]
 	fn create_fetch_native() {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let deposit_channel = Pubkey::from_str(FETCH_FROM_ACCOUNT).unwrap();
 
@@ -1099,7 +1099,7 @@ mod tests {
 	#[test]
 	fn create_fetch_native_in_batch() {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
 
@@ -1167,7 +1167,7 @@ mod tests {
 	#[test]
 	fn create_fetch_tokens() {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
 		let token_mint_pubkey = SolAddress::from_str(MINT_PUB_KEY).unwrap();
@@ -1244,7 +1244,7 @@ mod tests {
 	#[test]
 	fn create_batch_fetch() {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
 		let token_mint_pubkey = SolAddress::from_str(MINT_PUB_KEY).unwrap();
@@ -1347,7 +1347,7 @@ mod tests {
 	#[test]
 	fn create_transfer_tokens() {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let token_mint_pubkey = SolAddress::from_str(MINT_PUB_KEY).unwrap();
 
@@ -1404,7 +1404,7 @@ mod tests {
 	#[test]
 	fn create_full_rotation() {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let new_agg_key_pubkey = Pubkey::from_str(NEW_AGG_KEY).unwrap();
 
@@ -1456,7 +1456,7 @@ mod tests {
 	#[test]
 	fn create_ccm_native_transfer() {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
 		let extra_accounts = ccm_accounts();
@@ -1516,7 +1516,7 @@ mod tests {
 	#[test]
 	fn create_ccm_token_transfer() {
 		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let amount = TRANSFER_AMOUNT;
 		let token_mint_pubkey = SolAddress::from_str(MINT_PUB_KEY).unwrap();
@@ -1607,7 +1607,7 @@ mod tests {
 	fn create_upgrade_vault_program() {
 		let durable_nonce = Hash::from_str("6Wj7BNUVAhoMpqeHATYqRs7waV5s8JKNosmMNkzfCJxy").unwrap();
 
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let govkey_pubkey = agg_key_keypair.pubkey();
 		let buffer_address =
@@ -1664,7 +1664,7 @@ mod tests {
 	#[test]
 	fn create_idempotent_associated_token_account() {
 		let durable_nonce = Hash::from_str("3GY33ibbFkTSdXeXuPAh2NxGTwm1TfEFNKKG9XjxFa67").unwrap();
-		let agg_key_keypair = SigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 
 		// This is needed to derive the pda_ata to create the
@@ -1767,7 +1767,7 @@ mod tests {
 	// Test taken from https://docs.rs/solana-sdk/latest/src/solana_sdk/transaction/mod.rs.html#1354
 	// using current serialization (bincode::serde::encode_to_vec) and ensure that it's correct
 	fn create_sample_transaction() -> Transaction {
-		let keypair = SigningKey::from_bytes(&[
+		let keypair = SolSigningKey::from_bytes(&[
 			255, 101, 36, 24, 124, 23, 167, 21, 132, 204, 155, 5, 185, 58, 121, 75, 156, 227, 116,
 			193, 215, 38, 142, 22, 8, 14, 229, 239, 119, 93, 5, 218,
 		])

@@ -220,9 +220,9 @@ impl From<&DepositChannel<Solana>> for SolanaDepositFetchId {
 	}
 }
 
-pub struct SigningKey(ed25519_dalek::SigningKey);
+pub struct SolSigningKey(ed25519_dalek::SigningKey);
 
-impl SigningKey {
+impl SolSigningKey {
 	/// Constructs a new, random `Keypair` using a caller-provided RNG
 	pub fn generate<R>(csprng: &mut R) -> Self
 	where
@@ -237,7 +237,7 @@ impl SigningKey {
 		Self::generate(&mut rng)
 	}
 
-	/// Recovers a `SigningKey` from a byte array
+	/// Recovers a `SolSigningKey` from a byte array
 	pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
 		Ok(Self(ed25519_dalek::SigningKey::from_bytes(
 			<&[_; ed25519_dalek::SECRET_KEY_LENGTH]>::try_from(bytes).map_err(|_| {
@@ -248,17 +248,17 @@ impl SigningKey {
 		)))
 	}
 
-	/// Returns this `SigningKey` as a byte array
+	/// Returns this `SolSigningKey` as a byte array
 	pub fn to_bytes(&self) -> [u8; ed25519_dalek::SECRET_KEY_LENGTH] {
 		self.0.to_bytes()
 	}
 
-	/// Gets this `SigningKey`'s SecretKey
+	/// Gets this `SolSigningKey`'s SecretKey
 	pub fn secret(&self) -> &ed25519_dalek::SigningKey {
 		&self.0
 	}
 }
-impl Signer for SigningKey {
+impl Signer for SolSigningKey {
 	#[inline]
 	fn pubkey(&self) -> SolPubkey {
 		SolPubkey::from(ed25519_dalek::VerifyingKey::from(&self.0).to_bytes())
