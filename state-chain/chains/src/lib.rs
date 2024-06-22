@@ -9,7 +9,7 @@ pub use address::ForeignChainAddress;
 use address::{
 	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
 };
-use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
+use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -484,8 +484,8 @@ pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<C>>,
-		transfer_params: Vec<TransferAssetParams<C>>,
-	) -> Result<Vec<Self>, AllBatchError>;
+		transfer_params: Vec<(TransferAssetParams<C>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError>;
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {

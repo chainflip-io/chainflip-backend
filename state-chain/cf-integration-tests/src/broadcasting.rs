@@ -1,7 +1,7 @@
 use super::*;
 use cf_chains::{
 	btc::{deposit_address::DepositAddress, ScriptPubkey},
-	AllBatch, Bitcoin, TransferAssetParams,
+	AllBatch, Bitcoin, ForeignChain, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::btc, AuthorityCount, BroadcastId};
 use cf_traits::{Broadcaster, EpochInfo};
@@ -25,6 +25,7 @@ fn bitcoin_broadcast_delay_works() {
 			assert_eq!(Validator::current_authorities().len(), 150);
 			let epoch = Validator::epoch_index();
 			let bitcoin_agg_key = BitcoinThresholdSigner::keys(epoch).unwrap().current;
+			let egress_id = (ForeignChain::Bitcoin, 1u64);
 			Environment::add_bitcoin_utxo_to_list(
 				1_000_000_000_000u64,
 				Default::default(),
@@ -32,18 +33,19 @@ fn bitcoin_broadcast_delay_works() {
 			);
 
 			// Cause bitcoin vault to rotate - but stop the broadcasting.
-			let bitcoin_call = AllBatch::<Bitcoin>::new_unsigned(
+			let (bitcoin_call, _egress_ids) = AllBatch::<Bitcoin>::new_unsigned(
 				vec![],
-				vec![TransferAssetParams::<Bitcoin> {
-					asset: btc::Asset::Btc,
-					amount: 1_000_000,
-					to: ScriptPubkey::P2PKH([0u8; 20]),
-				}],
+				vec![(
+					TransferAssetParams::<Bitcoin> {
+						asset: btc::Asset::Btc,
+						amount: 1_000_000,
+						to: ScriptPubkey::P2PKH([0u8; 20]),
+					},
+					egress_id,
+				)],
 			)
-			.unwrap()
-			.first()
-			.cloned()
-			.unwrap();
+			.unwrap()[0]
+				.clone();
 
 			let (broadcast_id, _) =
 				<BitcoinBroadcaster as Broadcaster<Bitcoin>>::threshold_sign_and_broadcast(

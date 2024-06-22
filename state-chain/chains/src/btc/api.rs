@@ -62,8 +62,11 @@ where
 {
 	fn new_unsigned(
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
-		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
-	) -> Result<Vec<Self>, AllBatchError> {
+		transfer_params: Vec<(TransferAssetParams<Bitcoin>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids): (Vec<TransferAssetParams<Bitcoin>>, Vec<EgressId>) =
+			transfer_params.into_iter().unzip();
+
 		let agg_key @ AggKey { current, .. } =
 			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(AllBatchError::AggKeyNotSet)?;
 		let bitcoin_change_script =
@@ -95,12 +98,15 @@ where
 			});
 		}
 
-		Ok(vec![Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
-			&agg_key,
-			agg_key.current,
-			selected_input_utxos,
-			btc_outputs,
-		))])
+		Ok(vec![(
+			Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
+				&agg_key,
+				agg_key.current,
+				selected_input_utxos,
+				btc_outputs,
+			)),
+			egress_ids,
+		)])
 	}
 }
 
