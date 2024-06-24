@@ -249,7 +249,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 						)
 						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 						Ok(SolanaInstructionBuilder::transfer_usdc_token(
-							ata.0,
+							ata.address,
 							transfer_param.amount,
 							transfer_param.to,
 							vault_program,
@@ -362,7 +362,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
 				Ok(SolanaInstructionBuilder::ccm_transfer_usdc_token(
-					ata.0,
+					ata.address,
 					transfer_param.amount,
 					transfer_param.to,
 					source_chain,

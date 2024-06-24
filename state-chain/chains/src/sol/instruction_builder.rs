@@ -10,7 +10,7 @@ use crate::sol::{
 };
 use codec::Encode;
 use core::str::FromStr;
-use sol_prim::AccountBump;
+use sol_prim::DerivedAta;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
@@ -31,7 +31,7 @@ use crate::{
 /// Internal enum type that contains SolAsset with derived ATA
 pub enum AssetWithDerivedAddress {
 	Sol,
-	Usdc((SolAddress, AccountBump)),
+	Usdc(DerivedAta),
 }
 
 impl AssetWithDerivedAddress {
@@ -51,7 +51,7 @@ impl AssetWithDerivedAddress {
 				Ok((
 					fetch_params.deposit_fetch_id,
 					AssetWithDerivedAddress::Sol,
-					historical_fetch_account.0,
+					historical_fetch_account.address,
 				))
 			},
 			SolAsset::SolUsdc => {
@@ -60,12 +60,12 @@ impl AssetWithDerivedAddress {
 					token_mint_pubkey,
 				)
 				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-				let historical_fetch_account = derive_fetch_account(ata.0, vault_program)
+				let historical_fetch_account = derive_fetch_account(ata.address, vault_program)
 					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 				Ok((
 					fetch_params.deposit_fetch_id,
 					AssetWithDerivedAddress::Usdc(ata),
-					historical_fetch_account.0,
+					historical_fetch_account.address,
 				))
 			},
 		}
@@ -138,8 +138,8 @@ impl SolanaInstructionBuilder {
 					deposit_historical_fetch_account,
 					system_program_id(),
 				),
-				AssetWithDerivedAddress::Usdc((ata, _bump)) => VaultProgram::with_id(vault_program)
-					.fetch_tokens(
+				AssetWithDerivedAddress::Usdc(DerivedAta { address: ata, bump: _ }) =>
+					VaultProgram::with_id(vault_program).fetch_tokens(
 						fetch_id.channel_id.to_le_bytes().to_vec(),
 						fetch_id.bump,
 						SOL_USDC_DECIMAL,
@@ -350,7 +350,8 @@ mod test {
 		asset: SolAsset,
 	) -> (SolanaDepositFetchId, AssetWithDerivedAddress, SolAddress) {
 		let channel_id = channel_id.unwrap_or(923_601_931u64);
-		let (address, bump) = derive_deposit_address(channel_id, vault_program()).unwrap();
+		let DerivedAta { address, bump } =
+			derive_deposit_address(channel_id, vault_program()).unwrap();
 
 		AssetWithDerivedAddress::decompose_fetch_params(
 			crate::FetchAssetParams {
@@ -559,7 +560,7 @@ mod test {
 			.unwrap();
 
 		let instruction_set = SolanaInstructionBuilder::transfer_usdc_token(
-			to_pubkey_ata.0,
+			to_pubkey_ata.address,
 			TRANSFER_AMOUNT,
 			to_pubkey,
 			vault_program(),
@@ -638,7 +639,7 @@ mod test {
 		.unwrap();
 
 		let instruction_set = SolanaInstructionBuilder::ccm_transfer_usdc_token(
-			to_ata.0,
+			to_ata.address,
 			TRANSFER_AMOUNT,
 			to,
 			ccm_param.source_chain,
