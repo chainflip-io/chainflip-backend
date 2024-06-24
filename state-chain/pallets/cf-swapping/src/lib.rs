@@ -239,6 +239,7 @@ pub mod pallet {
 		SwapDepositHandler,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
+	use sp_runtime::SaturatedConversion;
 
 	use super::*;
 
@@ -951,7 +952,7 @@ pub mod pallet {
 									cf_amm::common::Amount::from(swap.input_amount()),
 									sqrt_price_to_price(pool_sell_price?),
 								)
-								.as_u128(),
+								.saturated_into(),
 							)
 						})?;
 
