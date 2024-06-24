@@ -11,7 +11,11 @@ use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, EpochInfo,
 	EpochTransitionHandler, SafeMode, SetSafeMode,
 };
-use frame_support::{assert_noop, assert_ok, traits::Hooks, weights::Weight};
+use frame_support::{
+	assert_noop, assert_ok,
+	traits::{Hooks, Len},
+	weights::Weight,
+};
 use sp_std::collections::btree_set::BTreeSet;
 
 #[test]
@@ -675,4 +679,60 @@ fn can_punish_failed_witnesser_in_previous_epochs() {
 			// storage is cleaned up.
 			assert_eq!(WitnessDeadline::<Test>::decode_len(target), None);
 		});
+}
+
+#[test]
+fn test_extra_call_data() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::put_value { value: 1 }));
+		let current_epoch = MockEpochInfo::epoch_index();
+
+		// Witness a call
+		assert_ok!(Witnesser::witness_at_epoch(
+			RuntimeOrigin::signed(ALISSA),
+			call.clone(),
+			current_epoch
+		));
+		// Nothing inserted yet.
+		assert!(pallet_dummy::Something::<Test>::get().is_none());
+		// Extra call data is stored.
+		assert_eq!(
+			ExtraCallData::<Test>::get(
+				current_epoch,
+				Witnesser::split_calldata(&mut call.clone()).1
+			)
+			.len(),
+			1
+		);
+
+		// Vote again, we should reach the threshold and dispatch the call.
+		assert_ok!(Witnesser::witness_at_epoch(
+			RuntimeOrigin::signed(BOBSON),
+			call.clone(),
+			current_epoch
+		));
+
+		// The inserted value should be the sum of the call values.
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(2u32));
+
+		// Extra call data is empty.
+		assert!(ExtraCallData::<Test>::get(
+			current_epoch,
+			CallHash(frame_support::Hashable::blake2_256(&*call))
+		)
+		.is_none(),);
+
+		// Can vote again, but call data is not inserted and result is unaffected.
+		assert_ok!(Witnesser::witness_at_epoch(
+			RuntimeOrigin::signed(CHARLEMAGNE),
+			call.clone(),
+			current_epoch
+		));
+		assert_eq!(pallet_dummy::Something::<Test>::get(), Some(2u32));
+		assert!(ExtraCallData::<Test>::get(
+			current_epoch,
+			CallHash(frame_support::Hashable::blake2_256(&*call))
+		)
+		.is_none(),);
+	});
 }

@@ -97,11 +97,17 @@ impl dummy::Config for Test {
 
 impl WitnessDataExtraction for RuntimeCall {
 	fn extract(&mut self) -> Option<Vec<u8>> {
-		None
+		if let RuntimeCall::Dummy(dummy::Call::put_value { value }) = self {
+			Some(core::mem::take(value).encode())
+		} else {
+			None
+		}
 	}
 
-	fn combine_and_inject(&mut self, _data: &mut [Vec<u8>]) {
-		// Do nothing
+	fn combine_and_inject(&mut self, data: &mut [Vec<u8>]) {
+		if let RuntimeCall::Dummy(dummy::Call::put_value { value }) = self {
+			*value = data.iter_mut().map(|encoded| u32::decode(&mut &encoded[..]).unwrap()).sum();
+		}
 	}
 }
 

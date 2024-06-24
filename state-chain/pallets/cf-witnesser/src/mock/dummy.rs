@@ -65,5 +65,16 @@ pub mod pallet {
 			// Return a successful DispatchResultWithPostInfo
 			Ok(().into())
 		}
+
+		#[pallet::call_index(1)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().writes(1))]
+		pub fn put_value(origin: OriginFor<T>, value: u32) -> DispatchResultWithPostInfo {
+			let _who = T::EnsureWitnessed::ensure_origin(origin)?;
+
+			<Something<T>>::put(value);
+
+			// Return a successful DispatchResultWithPostInfo
+			Ok(().into())
+		}
 	}
 }
