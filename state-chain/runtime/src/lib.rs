@@ -44,7 +44,7 @@ use cf_chains::{
 	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
 	TransactionBuilder,
 };
-use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment};
+use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
 use codec::{alloc::string::ToString, Encode};
 use core::ops::Range;
@@ -1735,7 +1735,8 @@ impl_runtime_apis! {
 			all_prewitnessed_swaps
 		}
 
-		fn cf_scheduled_swaps(base_asset: Asset, _quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
+		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
+			assert_eq!(quote_asset, STABLE_ASSET, "Only USDC is supported as quote asset");
 
 			let current_block = System::block_number();
 
@@ -1745,7 +1746,9 @@ impl_runtime_apis! {
 				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
 
 				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
-				Swapping::get_scheduled_swap_legs(swaps, base_asset).unwrap().into_iter().map(move |swap| (swap, execute_at))
+
+				let pool_sell_price = LiquidityPools::pool_price(base_asset, quote_asset).expect("Pool should exist").sell;
+				Swapping::get_scheduled_swap_legs(swaps, base_asset, pool_sell_price).into_iter().map(move |swap| (swap, execute_at))
 			}).collect()
 		}
 

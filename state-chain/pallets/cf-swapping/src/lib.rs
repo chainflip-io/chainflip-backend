@@ -231,6 +231,7 @@ impl_pallet_safe_mode! {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
 	use cf_traits::{
@@ -238,6 +239,7 @@ pub mod pallet {
 		SwapDepositHandler,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
+	use sp_runtime::SaturatedConversion;
 
 	use super::*;
 
@@ -912,13 +914,14 @@ pub mod pallet {
 		pub fn get_scheduled_swap_legs(
 			swaps: Vec<Swap>,
 			base_asset: Asset,
-		) -> Result<Vec<SwapLegInfo>, ()> {
+			pool_sell_price: Option<SqrtPriceQ64F96>,
+		) -> Vec<SwapLegInfo> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
 
-			Self::swap_into_stable_taking_network_fee(&mut swaps)
-				.map_err(|_| log::error!("Failed to simulate swaps"))?;
+			// Can ignore the result here because we use pool price fallback below
+			let _res = Self::swap_into_stable_taking_network_fee(&mut swaps);
 
-			Ok(swaps
+			swaps
 				.into_iter()
 				.filter_map(|swap| {
 					if swap.input_asset() == base_asset {
@@ -941,15 +944,25 @@ pub mod pallet {
 							(None, None)
 						};
 
+						let amount = swap.stable_amount.or_else(|| {
+							// If the swap into stable asset failed, fallback to estimating the
+							// amount via pool price.
+							Some(
+								output_amount_ceil(
+									cf_amm::common::Amount::from(swap.input_amount()),
+									sqrt_price_to_price(pool_sell_price?),
+								)
+								.saturated_into(),
+							)
+						})?;
+
 						Some(SwapLegInfo {
 							swap_id: swap.swap_id(),
 							base_asset,
 							// All swaps to `base_asset` have to go through the stable asset:
 							quote_asset: STABLE_ASSET,
 							side: Side::Buy,
-							// Safe to unwrap as we have swapped everything into the stable asset at
-							// this point
-							amount: swap.stable_amount.unwrap(),
+							amount,
 							source_asset,
 							source_amount,
 						})
@@ -957,7 +970,7 @@ pub mod pallet {
 						None
 					}
 				})
-				.collect())
+				.collect()
 		}
 
 		fn swap_into_stable_taking_network_fee(
