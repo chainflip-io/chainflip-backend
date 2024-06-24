@@ -29,7 +29,7 @@ use cf_chains::{
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	chains::assets::any::AssetMap, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier,
 	BroadcastId, ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain,
 	PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK
 };
