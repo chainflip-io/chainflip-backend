@@ -7852,6 +7852,7 @@ dependencies = [
  "hex",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-core 21.0.0",
  "sp-io 23.0.0",
  "sp-runtime 24.0.0",

@@ -52,7 +52,7 @@ macro_rules! impl_runtime_safe_mode {
 			};
 			use scale_info::TypeInfo;
 
-			#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
+			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
 			pub struct $runtime_safe_mode {
 				$( pub $name: $pallet_safe_mode ),*
 			}
@@ -169,12 +169,34 @@ pub(crate) mod test {
 	pub type SafeModeStorage = StorageValue<Mock, TestRuntimeSafeMode, ValueQuery>;
 
 	// SafeMode struct can be defined manually
-	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Eq, Debug)]
+	#[derive(
+		serde::Serialize,
+		serde::Deserialize,
+		Encode,
+		Decode,
+		MaxEncodedLen,
+		TypeInfo,
+		Clone,
+		PartialEq,
+		Eq,
+		Debug,
+	)]
 	pub struct ExampleSafeModeA {
 		safe: bool,
 	}
 
-	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Eq, Debug)]
+	#[derive(
+		serde::Serialize,
+		serde::Deserialize,
+		Encode,
+		Decode,
+		MaxEncodedLen,
+		TypeInfo,
+		Clone,
+		PartialEq,
+		Eq,
+		Debug,
+	)]
 	pub enum ExampleSafeModeB {
 		Safe,
 		NotSafe,

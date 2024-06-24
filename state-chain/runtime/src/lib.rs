@@ -315,7 +315,6 @@ impl pallet_cf_vaults::Config<Instance5> for Runtime {
 	type CfeMultisigRequest = CfeInterface;
 }
 
-use crate::runtime_apis::SafeModeStatuses;
 use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
@@ -1876,12 +1875,12 @@ impl_runtime_apis! {
 
 		}
 
-		fn cf_safe_mode_statuses() -> SafeModeStatuses {
-			SafeModeStatuses {
+		fn cf_safe_mode_statuses() -> RuntimeSafeMode {
+			RuntimeSafeMode {
 				swapping: <Runtime as pallet_cf_swapping::Config>::SafeMode::get(),
 				emissions: <Runtime as pallet_cf_emissions::Config>::SafeMode::get(),
 				funding: <Runtime as pallet_cf_funding::Config>::SafeMode::get(),
-				lp: <Runtime as pallet_cf_lp::Config>::SafeMode::get(),
+				liquidity_provider: <Runtime as pallet_cf_lp::Config>::SafeMode::get(),
 				pools: <Runtime as pallet_cf_pools::Config>::SafeMode::get(),
 				reputation: <Runtime as pallet_cf_reputation::Config>::SafeMode::get(),
 				validator: <Runtime as pallet_cf_validator::Config>::SafeMode::get(),
@@ -1899,6 +1898,7 @@ impl_runtime_apis! {
 				threshold_signature_bitcoin: <Runtime as pallet_cf_threshold_signature::Config<BitcoinInstance>>::SafeMode::get(),
 				threshold_signature_polkadot: <Runtime as pallet_cf_threshold_signature::Config<PolkadotInstance>>::SafeMode::get(),
 				threshold_signature_solana: <Runtime as pallet_cf_threshold_signature::Config<SolanaInstance>>::SafeMode::get(),
+				witnesser: <Runtime as pallet_cf_witnesser::Config>::SafeMode::get(),
 			}
 		}
 	}
