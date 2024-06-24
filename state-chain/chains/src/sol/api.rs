@@ -1,4 +1,4 @@
-use core::{marker::PhantomData, str::FromStr};
+use core::marker::PhantomData;
 use std::collections::HashMap;
 
 use codec::{Decode, Encode};
@@ -11,7 +11,6 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	sol::{
-		consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
 		instruction_builder::{AssetWithDerivedAddress, SolanaInstructionBuilder},
 		SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolHash, SolMessage, SolTransaction,
 		SolanaCrypto,
@@ -40,9 +39,9 @@ pub struct NonceAccount;
 pub struct AllNonceAccounts;
 
 #[allow(clippy::result_unit_err)]
-pub fn get_token_decimals(asset: SolAsset) -> Result<u8, ()> {
+pub fn get_token_decimals(asset: SolAsset) -> Result<u8, SolanaTransactionBuildingError> {
 	match asset {
-		SolAsset::Sol => Err(()),
+		SolAsset::Sol => Err(SolanaTransactionBuildingError::CannotLookupTokenDecimals),
 		SolAsset::SolUsdc => Ok(SOL_USDC_DECIMAL),
 	}
 }
@@ -77,8 +76,6 @@ pub trait SolanaEnvironment:
 					SolanaTransactionBuildingError::CannotLookupVaultProgram,
 				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
 					SolanaTransactionBuildingError::CannotLookupVaultProgramDataAccount,
-				SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount =>
-					SolanaTransactionBuildingError::CannotLookupUpgradeManagerProgramDataAccount,
 			},
 		)
 	}
@@ -128,7 +125,6 @@ pub enum SolanaEnvAccountLookupKey {
 	AggKey,
 	VaultProgram,
 	VaultProgramDataAccount,
-	UpgradeManagerProgramDataAccount,
 }
 
 /// Errors that can arise when building Solana Transactions.
@@ -138,7 +134,10 @@ pub enum SolanaTransactionBuildingError {
 	CannotLookupVaultProgram,
 	CannotLookupVaultProgramDataAccount,
 	CannotLookupComputePrice,
-	CannotLookupUpgradeManagerProgramDataAccount,
+	CannotLookupTokenMintPubkey,
+	CannotLookupTokenVaultAssociatedTokenAccount,
+	CannotLookupTokenVaultPdaAccount,
+	CannotLookupTokenDecimals,
 	CannotLookupTokenEnvironment(SolAsset),
 	NoNonceAccountsSet,
 	NoAvailableNonceAccount,
@@ -195,17 +194,16 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let vault_program_data_account =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
-		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
-			.expect("Preset Solana System Program ID account must be valid.");
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
-
 		let mut token_environments = HashMap::new();
+
 		let decomposed_fetch_params = fetch_params
 			.into_iter()
 			.map(|param| {
 				AssetWithDerivedAddress::decompose_fetch_params::<Environment>(
 					param,
+					vault_program,
 					&mut token_environments,
 				)
 			})
@@ -217,7 +215,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			token_environments,
 			vault_program,
 			vault_program_data_account,
-			system_program_id,
 			agg_key,
 			nonce_account,
 			compute_price,
@@ -269,11 +266,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							&mut token_environments,
 							token_asset,
 						)?;
-						let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID)
-							.expect("Preset Solana Token program ID must be valid.");
-						let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
-							.expect("Preset Solana System Program ID account must be valid.");
-
 						let ata =
 						crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
 							transfer_param.to,
@@ -289,8 +281,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							token_environment.token_vault_pda_account,
 							token_environment.token_vault_ata,
 							token_environment.token_mint_pubkey,
-							token_program_id,
-							system_program_id,
 							agg_key,
 							nonce_account,
 							compute_price,
@@ -321,11 +311,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let vault_program_data_account =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
-		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
-			.expect("Preset System Program ID account must be valid.");
-		let upgrade_manager_program_data_account = Environment::lookup_account(
-			SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount,
-		)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
@@ -335,8 +320,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			nonce_accounts,
 			vault_program,
 			vault_program_data_account,
-			system_program_id,
-			upgrade_manager_program_data_account,
 			agg_key,
 			nonce_account,
 			compute_price,
@@ -368,10 +351,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let vault_program_data_account =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
-		let system_program_id = SolAddress::from_str(crate::sol::consts::SYSTEM_PROGRAM_ID)
-			.expect("Solana System program ID must be valid.");
-		let sys_var_instructions = SolAddress::from_str(crate::sol::consts::SYS_VAR_INSTRUCTIONS)
-			.expect("Solana System Var Instruction must be valid.");
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
@@ -387,20 +366,16 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				ccm_accounts,
 				vault_program,
 				vault_program_data_account,
-				system_program_id,
-				sys_var_instructions,
 				agg_key,
 				nonce_account,
 				compute_price,
 			)),
-			SolAsset::SolUsdc => {
+			token_asset => {
 				let token_environment = <Environment as ChainEnvironment<
 					SolAsset,
 					TokenEnvironment,
-				>>::lookup(SolAsset::SolUsdc)
-				.ok_or(SolanaTransactionBuildingError::CannotLookupTokenEnvironment(
-					SolAsset::SolUsdc,
-				))?;
+				>>::lookup(token_asset)
+				.ok_or(SolanaTransactionBuildingError::CannotLookupTokenEnvironment(token_asset))?;
 
 				let ata =
 					crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
@@ -419,17 +394,13 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					ccm_accounts,
 					vault_program,
 					vault_program_data_account,
-					system_program_id,
-					sys_var_instructions,
 					token_environment.token_vault_pda_account,
 					token_environment.token_vault_ata,
 					token_environment.token_mint_pubkey,
-					SolAddress::from_str(TOKEN_PROGRAM_ID)
-						.expect("Preset Solana Token program ID must be valid."),
 					agg_key,
 					nonce_account,
 					compute_price,
-					SOL_USDC_DECIMAL,
+					get_token_decimals(token_asset)?,
 				))
 			},
 		}?;
