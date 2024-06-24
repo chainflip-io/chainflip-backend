@@ -11,8 +11,9 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex,
-	ForeignChain, NetworkEnvironment, SemVer, SwapId,
+	chains::assets::any,
+	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, ForeignChain,
+	NetworkEnvironment, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use codec::Encode;
@@ -53,6 +54,7 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+
 pub mod monitoring;
 mod type_decoder;
 
@@ -623,6 +625,12 @@ pub trait CustomApi {
 	) -> RpcResult<any::AssetMap<U256>>;
 	#[method(name = "lp_total_balances", aliases = ["lp_total_balances"])]
 	fn cf_lp_total_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<any::AssetMap<U256>>;
+	#[method(name = "lp_boost_balances")]
+	fn cf_lp_boost_balances(
 		&self,
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
@@ -1768,6 +1776,18 @@ where
 				})
 				.map_err(to_rpc_error)
 		})
+	}
+
+	fn cf_lp_boost_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<any::AssetMap<U256>> {
+		self.client
+			.runtime_api()
+			.cf_lp_boost_balances(self.unwrap_or_best(at), account_id)
+			.map(|boost_balances| boost_balances.map(Into::into))
+			.map_err(to_rpc_error)
 	}
 }
 

@@ -1888,6 +1888,16 @@ impl_runtime_apis! {
 			}
 
 		}
+
+		fn cf_lp_boost_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
+			AssetMap {
+				eth: EthereumIngressEgress::boost_pool_account_balances(&account_id),
+				arb: ArbitrumIngressEgress::boost_pool_account_balances(&account_id),
+				btc: BitcoinIngressEgress::boost_pool_account_balances(&account_id),
+				dot: PolkadotIngressEgress::boost_pool_account_balances(&account_id),
+				sol: SolanaIngressEgress::boost_pool_account_balances(&account_id)
+			}
+		}
 	}
 
 	impl monitoring_apis::MonitoringRuntimeApi<Block> for Runtime {
