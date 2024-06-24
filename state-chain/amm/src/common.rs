@@ -351,7 +351,7 @@ pub fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 /// Converts from a `price` to a `sqrt_price`
 ///
 /// This function never panics.
-pub(super) fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
+pub fn price_to_sqrt_price(price: Price) -> SqrtPriceQ64F96 {
 	((U512::from(price) << PRICE_FRACTIONAL_BITS).integer_sqrt() >>
 		(PRICE_FRACTIONAL_BITS - SQRT_PRICE_FRACTIONAL_BITS))
 		.try_into()
