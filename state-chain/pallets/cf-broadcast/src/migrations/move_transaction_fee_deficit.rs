@@ -16,10 +16,13 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		for (signer_id, to_refund) in old::TransactionFeeDeficit::<T, I>::drain() {
+			let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
+				T::TargetChain,
+			>>::into_foreign_chain_address(signer_id);
 			T::Refunding::record_gas_fees(
-				signer_id.clone(),
-				<T::TargetChain as Chain>::GAS_ASSET,
-				to_refund,
+				address_to_refund,
+				<T::TargetChain as Chain>::GAS_ASSET.into(),
+				to_refund.into(),
 			);
 		}
 		Weight::zero()
@@ -40,7 +43,8 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			"TransactionFeeDeficit not empty - migration failed!"
 		);
 		let recorded_fees = <u128>::decode(&mut &state[..]).unwrap();
-		let migrated = T::Refunding::get_recorded_gas_fees(<T::TargetChain as Chain>::GAS_ASSET);
+		let migrated =
+			T::Refunding::get_recorded_gas_fees(<T::TargetChain as Chain>::GAS_ASSET.into());
 		assert_eq!(recorded_fees, migrated, "Migrated fees do not match for asset!");
 		Ok(())
 	}

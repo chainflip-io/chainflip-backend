@@ -5,7 +5,7 @@ use cf_traits::SetSafeMode;
 use cf_chains::AnyChain;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SafeMode};
 
-use crate::{mock::*, Event, RecordedFees, WithheldTransactionFees};
+use crate::{mock::*, RecordedFees, WithheldTransactionFees};
 
 fn payed_gas(chain: ForeignChain, amount: AssetAmount, account: ForeignChainAddress) {
 	Refunding::record_gas_fee(account, chain, amount);

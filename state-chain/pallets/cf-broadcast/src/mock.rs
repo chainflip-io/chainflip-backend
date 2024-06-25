@@ -9,12 +9,12 @@ use cf_chains::{
 	mocks::{MockApiCall, MockEthereum, MockEthereumChainCrypto, MockTransactionBuilder},
 	Chain, ChainCrypto, RetryPolicy,
 };
-use cf_primitives::AssetAmount;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface,
-		signer_nomination::MockNominator, threshold_signer::MockThresholdSigner,
+		refunding::MockRefunding, signer_nomination::MockNominator,
+		threshold_signer::MockThresholdSigner,
 	},
 	AccountRoleRegistry, OnBroadcastReady,
 };
@@ -82,28 +82,7 @@ pub type MockOffenceReporter =
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload>> = RefCell::new(vec![]);
 	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
-	pub static TRANSACTION_FEE_DEFICIT: RefCell<AssetAmount> = RefCell::new(0);
 	pub static VALID_METADATA: RefCell<bool> = RefCell::new(true);
-}
-
-pub struct MockRefunding<T> {
-	phantom: std::marker::PhantomData<T>,
-}
-
-impl<T> MockRefunding<T> {
-	pub fn get_transaction_fee_deficit() -> AssetAmount {
-		TRANSACTION_FEE_DEFICIT.with(|cell| *cell.borrow())
-	}
-}
-
-impl<T: Chain> cf_traits::Refunding<T> for MockRefunding<MockEthereum> {
-	fn record_gas_fees(_: T::ChainAccount, _: T::ChainAsset, amount: T::ChainAmount) {
-		TRANSACTION_FEE_DEFICIT.with(|cell| {
-			*cell.borrow_mut() += amount.into();
-		});
-	}
-
-	fn with_held_transaction_fees(_: T::ChainAsset, _: T::ChainAmount) {}
 }
 
 pub type EthMockThresholdSigner = MockThresholdSigner<EvmCrypto, crate::mock::RuntimeCall>;
@@ -171,7 +150,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SafeModeBlockMargin = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 	type RetryPolicy = MockRetryPolicy;
-	type Refunding = MockRefunding<MockEthereum>;
+	type Refunding = MockRefunding;
 	type CfeBroadcastRequest = MockCfeInterface;
 }
 

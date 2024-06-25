@@ -26,6 +26,7 @@ use cf_traits::{
 		ccm_handler::{CcmRequest, MockCcmHandler},
 		chain_tracking::ChainTracker,
 		funding_info::MockFundingInfo,
+		refunding::MockRefunding,
 		swap_queue_api::{MockSwap, MockSwapQueueApi},
 	},
 	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
@@ -1615,7 +1616,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(
 		assert!(MockSwapQueueApi::get_swap_queue().is_empty());
 
 		assert_eq!(
-			MockRefunding::<Ethereum>::get_withheld_transaction_fees(),
+			MockRefunding::get_withheld_transaction_fees(),
 			GAS_FEE,
 			"Expected ingress egress fee to be withheld for gas asset"
 		);

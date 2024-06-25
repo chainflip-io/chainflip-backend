@@ -21,7 +21,7 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		for (asset, fee) in old::WithheldTransactionFees::<T, I>::drain() {
-			T::Refunding::with_held_transaction_fees(asset, fee);
+			T::Refunding::with_held_transaction_fees(asset.into(), fee.into());
 		}
 		Weight::zero()
 	}
@@ -46,8 +46,9 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			"WithheldTransactionFees not empty - migration failed!"
 		);
 		let old_fees = <u128>::decode(&mut &state[..]).unwrap();
-		let migrated_fees =
-			T::Refunding::get_withheld_transaction_fees(<T::TargetChain as Chain>::GAS_ASSET);
+		let migrated_fees = T::Refunding::get_withheld_transaction_fees(
+			<T::TargetChain as Chain>::GAS_ASSET.into(),
+		);
 		assert_eq!(old_fees, migrated_fees, "Migrated fees do not match for asset!");
 		Ok(())
 	}

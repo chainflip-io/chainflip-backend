@@ -145,7 +145,7 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 			}
-			if failed_egress.len() > 0 {
+			if !failed_egress.is_empty() {
 				RecordedFees::<T>::insert(chain, failed_egress);
 			}
 			WithheldTransactionFees::<T>::insert(chain, available_funds);

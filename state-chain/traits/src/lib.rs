@@ -955,15 +955,15 @@ pub trait IngressEgressFeeApi<C: Chain> {
 	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
 }
 
-pub trait Refunding<C: Chain> {
-	fn record_gas_fees(account_id: C::ChainAccount, asset: C::ChainAsset, amount: C::ChainAmount);
-	fn with_held_transaction_fees(asset: C::ChainAsset, amount: C::ChainAmount);
+pub trait Refunding {
+	fn record_gas_fees(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
+	fn with_held_transaction_fees(asset: Asset, amount: AssetAmount);
 	// TODO: Remove this after migration.
-	fn get_withheld_transaction_fees(_gas_asset: C::ChainAsset) -> AssetAmount {
+	fn get_withheld_transaction_fees(_gas_asset: Asset) -> AssetAmount {
 		AssetAmount::default()
 	}
 	// TODO: Remove this after migration.
-	fn get_recorded_gas_fees(_gas_asset: C::ChainAsset) -> u128 {
+	fn get_recorded_gas_fees(_gas_asset: Asset) -> u128 {
 		0
 	}
 }

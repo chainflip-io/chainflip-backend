@@ -13,11 +13,12 @@ use cf_chains::{
 		MockEthereumChainCrypto, MockEthereumTransactionMetadata, MockThresholdSignature,
 		MockTransactionBuilder, ETH_TX_FEE, MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
-	ChainCrypto, Ethereum, FeeRefundCalculator,
+	ChainCrypto, FeeRefundCalculator,
 };
 use cf_traits::{
 	mocks::{
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
+		refunding::MockRefunding,
 		signer_nomination::MockNominator,
 		threshold_signer::MockThresholdSigner,
 	},
@@ -159,13 +160,13 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		let broadcast_data = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).unwrap();
 
-		assert_eq!(MockRefunding::<Ethereum>::get_transaction_fee_deficit(), 0);
+		assert_eq!(MockRefunding::get_transaction_fee_deficit(), 0);
 
 		witness_broadcast(tx_out_id);
 
 		let expected_refund = broadcast_data.transaction_payload.return_fee_refund(ETH_TX_FEE);
 
-		assert_eq!(MockRefunding::<Ethereum>::get_transaction_fee_deficit(), expected_refund);
+		assert_eq!(MockRefunding::get_transaction_fee_deficit(), expected_refund);
 
 		assert_eq!(
 			System::events().get(1).expect("an event").event,
@@ -520,7 +521,7 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 		let (tx_out_id, api_call) = api_call(1);
 		initiate_and_sign_broadcast(&api_call, TxType::Normal);
 
-		assert_eq!(MockRefunding::<Ethereum>::get_transaction_fee_deficit(), 0);
+		assert_eq!(MockRefunding::get_transaction_fee_deficit(), 0);
 
 		witness_broadcast(tx_out_id);
 
@@ -673,7 +674,7 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 			));
 
 			assert_eq!(
-				MockRefunding::<MockEthereum>::get_transaction_fee_deficit(),
+				MockRefunding::get_transaction_fee_deficit(),
 				broadcast_data.transaction_payload.return_fee_refund(ETH_TX_FEE)
 			);
 		});

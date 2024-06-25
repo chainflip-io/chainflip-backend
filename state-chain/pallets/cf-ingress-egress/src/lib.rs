@@ -435,7 +435,7 @@ pub mod pallet {
 
 		type SwapQueueApi: SwapQueueApi;
 
-		type Refunding: Refunding<Self::TargetChain>;
+		type Refunding: Refunding;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
@@ -1996,10 +1996,10 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 		fee: TargetChainAmount<T, I>,
 	) {
 		if !fee.is_zero() {
-			T::Refunding::with_held_transaction_fees(<T::TargetChain as Chain>::GAS_ASSET, fee);
-			// WithheldTransactionFees::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |fees|
-			// { 	fees.saturating_accrue(fee);
-			// });
+			T::Refunding::with_held_transaction_fees(
+				<T::TargetChain as Chain>::GAS_ASSET.into(),
+				fee.into(),
+			);
 			// Since we credit the fees to the withheld fees, we need to take these from somewhere,
 			// ie. we effectively have transferred them from the vault.
 			DepositBalances::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |tracker| {

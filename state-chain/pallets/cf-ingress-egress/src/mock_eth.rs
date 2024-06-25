@@ -7,11 +7,11 @@ pub use cf_chains::{
 	eth::Address as EthereumAddress,
 	CcmDepositMetadata, Chain,
 };
+use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset,
 };
-use cf_primitives::{AssetAmount, ChannelId};
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -29,6 +29,8 @@ use cf_traits::{
 	},
 	DepositApi, NetworkEnvironmentProvider, OnDeposit,
 };
+
+use cf_traits::mocks::refunding::MockRefunding;
 use frame_support::{derive_impl, traits::UnfilteredDispatchable};
 use frame_system as system;
 use sp_core::H256;
@@ -109,29 +111,27 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	}
 }
 
-thread_local! {
-	pub static WITHHELD_TRANSACTION_FEES: std::cell::RefCell<AssetAmount> = std::cell::RefCell::new(0);
-}
+// thread_local! {
+// 	pub static WITHHELD_TRANSACTION_FEES: std::cell::RefCell<AssetAmount> =
+// std::cell::RefCell::new(0); }
 
-pub struct MockRefunding<T> {
-	phantom: std::marker::PhantomData<T>,
-}
+// pub struct MockRefunding;
 
-impl<T> MockRefunding<T> {
-	pub fn get_withheld_transaction_fees() -> AssetAmount {
-		WITHHELD_TRANSACTION_FEES.with(|cell| *cell.borrow())
-	}
-}
+// impl<T> MockRefunding<T> {
+// 	pub fn get_withheld_transaction_fees() -> AssetAmount {
+// 		WITHHELD_TRANSACTION_FEES.with(|cell| *cell.borrow())
+// 	}
+// }
 
-impl<T: Chain> cf_traits::Refunding<T> for MockRefunding<Ethereum> {
-	fn record_gas_fees(_: T::ChainAccount, _: T::ChainAsset, _: T::ChainAmount) {}
+// impl cf_traits::Refunding for MockRefunding {
+// 	fn record_gas_fees(_: ForeignChainAddress, _: Asset, _: AssetAmount) {}
 
-	fn with_held_transaction_fees(_: T::ChainAsset, amount: T::ChainAmount) {
-		WITHHELD_TRANSACTION_FEES.with(|cell| {
-			*cell.borrow_mut() += amount.into();
-		});
-	}
-}
+// 	fn with_held_transaction_fees(_: Asset, amount: AssetAmount) {
+// 		WITHHELD_TRANSACTION_FEES.with(|cell| {
+// 			*cell.borrow_mut() += amount.into();
+// 		});
+// 	}
+// }
 
 impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<()> }
 
@@ -154,7 +154,7 @@ impl crate::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
-	type Refunding = MockRefunding<Ethereum>;
+	type Refunding = MockRefunding;
 	type SafeMode = MockRuntimeSafeMode;
 }
 

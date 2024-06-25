@@ -14,8 +14,8 @@ pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
 use cf_chains::{
-	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, RetryPolicy, TransactionBuilder,
-	TransactionMetadata as _,
+	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
+	RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
 use cf_traits::{
 	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
@@ -194,7 +194,7 @@ pub mod pallet {
 		type CfeBroadcastRequest: CfeBroadcastRequest<Self, Self::TargetChain>;
 
 		/// The chain specific refunding adapter.
-		type Refunding: Refunding<Self::TargetChain>;
+		type Refunding: Refunding;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -532,10 +532,14 @@ pub mod pallet {
 						let to_refund =
 							broadcast_data.transaction_payload.return_fee_refund(tx_fee);
 
+						let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
+							T::TargetChain,
+						>>::into_foreign_chain_address(signer_id.clone());
+
 						T::Refunding::record_gas_fees(
-							signer_id.clone(),
-							<T::TargetChain as Chain>::GAS_ASSET,
-							to_refund,
+							address_to_refund,
+							<T::TargetChain as Chain>::GAS_ASSET.into(),
+							to_refund.into(),
 						);
 
 						Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
