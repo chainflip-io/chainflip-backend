@@ -88,8 +88,6 @@ async fn call_rpc_raw(
 		"params": params.unwrap_or_else(|| json!([]))
 	});
 
-	println!("request_body: {:?}", request_body);
-
 	let response = client
 		.post(endpoint.as_ref())
 		.header(CONTENT_TYPE, "application/json")
@@ -103,7 +101,6 @@ async fn call_rpc_raw(
 	if json["error"].is_object() {
 		return Err(Error::Rpc(serde_json::from_value(json["error"].clone()).map_err(Error::Json)?));
 	}
-	println!("Request&Result\nrequest_body: {:?}\njson result: {:?}", request_body, json["result"]);
 
 	Ok(json["result"].take())
 }

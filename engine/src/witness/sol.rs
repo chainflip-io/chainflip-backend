@@ -3,11 +3,7 @@ mod nonce_witnessing;
 mod sol_deposits;
 mod source;
 
-use std::{
-	collections::{HashMap, HashSet},
-	str::FromStr,
-	sync::Arc,
-};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use cf_primitives::EpochIndex;
 use futures_core::Future;
@@ -47,7 +43,6 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	header: Header<u64, SolHash, ((), Vec<(SolSignature, u64)>)>,
 	process_call: ProcessCall,
 	sol_client: SolRetryRpcClient,
-	cached_witnessed_egresses: Arc<Mutex<HashSet<SolSignature>>>,
 ) where
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
@@ -62,27 +57,19 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 
 	let success_witnesses_result = success_witnesses(&sol_client, monitored_tx_signatures).await;
 
-	let mut cached_witnessed_egresses = cached_witnessed_egresses.lock().await;
-
 	for (tx_signature, _slot, tx_fee) in success_witnesses_result {
-		// Cache submitted signatures to not keep submitting the signatures until there is
-		// consensus on the State Chain, as the engine will keep polling the same transactions.
-		if !cached_witnessed_egresses.contains(&tx_signature) {
-			// TODO: Not submitting the slot?
-			process_call(
-				pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
-					tx_out_id: tx_signature,
-					signer_id: epoch.info.0,
-					tx_fee,
-					tx_metadata: (),
-					transaction_ref: tx_signature,
-				}
-				.into(),
-				epoch.index,
-			)
-			.await;
-			cached_witnessed_egresses.insert(tx_signature);
-		}
+		process_call(
+			pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
+				tx_out_id: tx_signature,
+				signer_id: epoch.info.0,
+				tx_fee,
+				tx_metadata: (),
+				transaction_ref: tx_signature,
+			}
+			.into(),
+			epoch.index,
+		)
+		.await;
 	}
 }
 
@@ -104,7 +91,8 @@ where
 		monitored_tx_signatures.iter().zip(signature_statuses.into_iter())
 	{
 		if let Some(status) = status_option {
-			// For now we don't check if the transaction have errored out, as CCM could fail.
+			// For now we don't check if the transaction have reverted, as we don't handle it in the
+			// SC.
 			if let Some(TransactionConfirmationStatus::Finalized) = status.confirmation_status {
 				finalized_transactions.push((*signature, status.slot));
 			}
@@ -113,9 +101,7 @@ where
 
 	let mut finalized_txs_info = Vec::new();
 
-	println!("Finalized transactions: {:?}", finalized_transactions);
-
-	// We could run this queries concurrently to make it faster but we'll have few txs anyway
+	// We could run this queries concurrently but we'll have few txs anyway
 	for (signature, slot) in finalized_transactions {
 		let transaction = sol_client
 			.get_transaction(
@@ -123,21 +109,19 @@ where
 				RpcTransactionConfig {
 					encoding: Some(UiTransactionEncoding::Json),
 					// Using finalized there could be a race condition where this doesn't get
-					// us the tx. But "Processed" is timing out so we better retry with finalized.
+					// the tx. But "Processed" is timing out so we better retry with finalized.
 					commitment: Some(CommitmentConfig::finalized()),
 					// Getting also type 0 even if we don't use them atm
 					max_supported_transaction_version: Some(0),
 				},
 			)
 			.await;
-		println!("Transaction: {:?}", transaction);
 
 		let fee = match transaction.transaction.meta {
 			Some(meta) => meta.fee,
 			// This shouldn't happen. Want to avoid Erroring. We either default to 5000 or return
 			// OK(()) so we don't submit transaction_succeeded and retry again later. Defaulting to
 			// avoid potentially getting stuck not witness something because no meta is returned.
-			// TODO: Check if this approach makes sense.
 			None => LAMPORTS_PER_SIGNATURE,
 		};
 
@@ -213,14 +197,11 @@ where
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await;
 
-	// TODO: Probably use DB instead.
-	// If in the new pallet the cumulative historical amount is tracked we could maybe get away with
-	// using cache but upon restart the engine would submit an extrinsic for each deposit address.
+	// In the new pallet we'll be submitting to cumulative historical balance of each deposit
+	// channel. We cache the balance of deposit channels to avoid submitting them on every query.
+	// Upon restarting the CFE all the balances will be resubmitted, as the cache is not persistent
+	// and the pallet will handle it correctly.
 	let cached_balances = Arc::new(Mutex::new(HashMap::new()));
-	// Similar when it comes to witness egresses. However, we could get away with a simple cache
-	// since egressed transactions have a shorter lifespan than deposits and there won't be many of
-	// simultaneously.
-	let cached_witnessed_egresses = Arc::new(Mutex::new(HashSet::new()));
 
 	sol_safe_vault_source_deposit_addresses
 		.clone()
@@ -236,11 +217,10 @@ where
 		.logging("SolanaDeposits")
 		.spawn(scope);
 
-	// Witnessing the state of the nonce accounts periodically. It could also be done
-	// only when a broadcast is witnessedd, which is the only time a nonce account
-	// might change. Doing it periocally is more reliable to ensure we don't miss a
-	// change in the value but will require an extra rpc call.
-	// TODO: Should we witness nonces through chunk_by_time and not chunk_by_vault?
+	// Witnessing the state of the nonce accounts periodically. It could also be done only when a
+	// broadcast is witnessed, which is the only time a nonce account should change. Doing it
+	// periocally is more reliable to ensure we don't miss a change in the value but will require an
+	// extra rpc call.
 	sol_safe_vault_source_deposit_addresses
 		.clone()
 		.witness_nonces(process_call.clone(), sol_client.clone(), nonces_accounts)
@@ -256,15 +236,8 @@ where
 		.then({
 			let process_call = process_call.clone();
 			let sol_client = sol_client.clone();
-			let cached_witnessed_egresses = cached_witnessed_egresses.clone();
 			move |epoch, header| {
-				process_egress(
-					epoch,
-					header,
-					process_call.clone(),
-					sol_client.clone(),
-					cached_witnessed_egresses.clone(),
-				)
+				process_egress(epoch, header, process_call.clone(), sol_client.clone())
 			}
 		})
 		.continuous("SolanaEgress".to_string(), db)

@@ -113,11 +113,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						})
 						.collect::<Vec<_>>();
 
-					println!(
-						"DEBUGDEPOSITS Processing Solana Deposits {:?}",
-						deposit_channels_info
-					);
-
 					if !deposit_channels_info.is_empty() {
 						let chunked_deposit_channels_info = deposit_channels_info
 							.chunks(MAX_MULTIPLE_ACCOUNTS_QUERY / 2)
@@ -143,13 +138,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 											.get(deposit_channel.address_to_witness())
 											.unwrap_or(&0);
 
-										println!(
-										"DEBUGDEPOSITS deposit_channel {:?}, cached_balance {:?}, amount {:?}, ",
-										deposit_channel,
-										*deposit_channel_cached_balance,
-										amount
-									);
-
 										if amount > *deposit_channel_cached_balance {
 											// TODO: This is a workaround for the current pallet.
 											// With the new pallet we could submit "amount" as is
@@ -167,11 +155,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 									.collect::<Vec<_>>();
 
 								if !new_ingresses.is_empty() {
-									println!(
-										"DEBUGDEPOSITS Submitting new_ingresses {:?}",
-										new_ingresses
-									);
-
 									process_call(
 										pallet_cf_ingress_egress::Call::<
 											_,
@@ -201,10 +184,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 									// Update hashmap
 									new_ingresses.into_iter().for_each(
 										|(deposit_channel, value)| {
-											println!(
-									"DEBUGDEPOSITS Updating cached_balances for {:?} to value {:?}",
-									deposit_channel, value
-								);
 											cached_balances.insert(
 												*deposit_channel.address_to_witness(),
 												value,
@@ -313,14 +292,10 @@ fn parse_account_amount_from_data(
 	deposit_channel_info: UiAccount,
 	deposit_channel: DepositChannelType,
 ) -> Result<u128, anyhow::Error> {
-	println!("Parsing deposit_channel_info {:?}", deposit_channel_info);
-
 	let owner_pub_key = SolAddress::from_str(deposit_channel_info.owner.as_str()).unwrap();
 
 	match deposit_channel {
 		DepositChannelType::NativeDepositChannel(_) => {
-			// Native deposit channel
-			println!("Native deposit channel found");
 			let system_program_pubkey = SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap();
 			ensure!(
 				owner_pub_key == system_program_pubkey,
@@ -334,9 +309,6 @@ fn parse_account_amount_from_data(
 			token_mint_pubkey,
 			_,
 		) => {
-			// Token deposit channel
-			println!("Token deposit channel found");
-
 			let associated_token_account_pubkey = SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap();
 			ensure!(
 				owner_pub_key == associated_token_account_pubkey,
@@ -385,10 +357,7 @@ fn parse_fetch_account_amount(
 	fetch_account_info: UiAccount,
 	vault_address: SolAddress,
 ) -> Result<u128, anyhow::Error> {
-	println!("Parsing fetch_account_info {:?}", fetch_account_info);
-
 	let owner_pub_key = SolAddress::from_str(fetch_account_info.owner.as_str()).unwrap();
-	println!("owner_pub_key {:?}", owner_pub_key);
 
 	ensure!(owner_pub_key == vault_address, "Unexpected owner for fetch account");
 	match fetch_account_info.data {

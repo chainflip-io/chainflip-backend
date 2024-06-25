@@ -55,36 +55,29 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					.into_iter()
 					.map(|(nonce_address, _)| nonce_address)
 					.collect();
-				println!("DEBUGNONCES Witnessing Nonce Accounts: {:?}", nonce_addresses);
 				let current_nonce_accounts = get_durable_nonces(&sol_rpc, nonce_addresses).await?;
 
-				// Create a vector of the nonce accounts that have changed
 				let nonce_differences: Vec<(SolAddress, SolHash, SolHash)> = nonce_accounts
 					.into_iter()
 					.zip(current_nonce_accounts.into_iter())
 					.filter_map(
 						|((nonce_address, current_durable_nonce), (_, new_durable_nonce))| {
-							println!("DEBUGNONCES Nonce address: {:?}", nonce_address);
-							println!(
-								"DEBUGNONCES current_durable_nonce: {:?}",
-								current_durable_nonce
-							);
-							println!("DEBUGNONCES new_durable_nonce: {:?}", new_durable_nonce);
-
 							if current_durable_nonce != new_durable_nonce {
 								Some((nonce_address, current_durable_nonce, new_durable_nonce))
 							} else {
-								println!("DEBUGNONCES Nonce haven't changed!");
 								None
 							}
 						},
 					)
 					.collect();
 
-				// check if nonce_differences is empty
+				// Check if nonce_differences is empty
 				if !nonce_differences.is_empty() {
 					// TODO: Submit an extrinsic with the new nonce hash
-					println!("DEBUGNONCES Nonce differences: {:?}", nonce_differences);
+					println!(
+						"Nonce differences found. To submit extrinsic: {:?}",
+						nonce_differences
+					);
 				}
 
 				Ok::<_, anyhow::Error>(())
