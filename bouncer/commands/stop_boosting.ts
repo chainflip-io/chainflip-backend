@@ -9,8 +9,8 @@
 // Stops boosting for the specified boost pool, then waits for the `StoppedBoosting` event and prints it.
 // For example: ./commands/stop_boosting.ts Btc 5 "//LP_2"
 
-import { InternalAsset as Asset } from '@chainflip/cli/.';
-import { runWithTimeout } from '../shared/utils';
+import { InternalAsset as Asset } from '@chainflip/cli';
+import { executeWithTimeout } from '../shared/utils';
 import { stopBoosting } from '../shared/boost';
 
 async function main(): Promise<void> {
@@ -21,10 +21,6 @@ async function main(): Promise<void> {
     true,
   );
   console.log(`Stopped boosting event: ${JSON.stringify(event)}`);
-  process.exit(0);
 }
 
-runWithTimeout(main(), 30000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 30);

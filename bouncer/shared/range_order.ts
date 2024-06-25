@@ -1,13 +1,7 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keyring } from '../polkadot/keyring';
-import {
-  getChainflipApi,
-  handleSubstrateError,
-  amountToFineAmount,
-  lpMutex,
-  assetDecimals,
-} from '../shared/utils';
-import { observeEvent } from './utils/substrate';
+import { handleSubstrateError, amountToFineAmount, lpMutex, assetDecimals } from '../shared/utils';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 export async function rangeOrder(ccy: Asset, amount: number) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
@@ -18,11 +12,13 @@ export async function rangeOrder(ccy: Asset, amount: number) {
   const lpUri = process.env.LP_URI || '//LP_1';
   const lp = keyring.createFromUri(lpUri);
 
-  const currentSqrtPrice = (
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const currentPools: any = (
     await chainflip.query.liquidityPools.pools({
       assets: { quote: 'usdc', base: ccy.toLowerCase() },
     })
-  ).toJSON()!.poolState.rangeOrders.currentSqrtPrice;
+  ).toJSON();
+  const currentSqrtPrice = currentPools!.poolState.rangeOrders.currentSqrtPrice;
   const liquidity = BigInt(Math.round((currentSqrtPrice / 2 ** 96) * Number(fineAmount)));
   console.log('Setting up ' + ccy + ' range order');
   const orderCreatedEvent = observeEvent('liquidityPools:RangeOrderUpdated', {

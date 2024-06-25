@@ -31,7 +31,6 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
 };
-
 type VanityName = Vec<u8>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
@@ -271,7 +270,10 @@ decl_runtime_apis!(
 		) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>;
 		fn cf_ingress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount>;
-		fn cf_witness_count(hash: CallHash) -> Option<FailingWitnessValidators>;
+		fn cf_witness_count(
+			hash: CallHash,
+			epoch_index: Option<EpochIndex>,
+		) -> Option<FailingWitnessValidators>;
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 		fn cf_get_events(filter: EventFilter) -> Vec<EventRecord<RuntimeEvent, Hash>>;

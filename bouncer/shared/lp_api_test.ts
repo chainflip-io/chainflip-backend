@@ -2,8 +2,6 @@ import { InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import Keyring from '../polkadot/keyring';
 import {
-  getChainflipApi,
-  observeEvent,
   isValidHexHash,
   isValidEthAddress,
   amountToFineAmount,
@@ -16,9 +14,10 @@ import {
   Chain,
 } from './utils';
 import { jsonRpc } from './json_rpc';
-import { provideLiquidity } from './provide_liquidity';
+import { depositLiquidity } from './deposit_liquidity';
 import { sendEvmNative } from './send_evm';
 import { getBalance } from './get_balance';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 type RpcAsset = {
   asset: string;
@@ -35,7 +34,6 @@ const testAssetAmount = parseInt(
   amountToFineAmount(testAmount.toString(), assetDecimals(testAsset)),
 );
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
-await using chainflip = await getChainflipApi();
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,7 +47,7 @@ async function provideLiquidityAndTestAssetBalances() {
     amountToFineAmount(amountToProvide.toString(), assetDecimals('Eth')),
   );
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
-  await provideLiquidity(testAsset, amountToProvide, true);
+  await depositLiquidity(testAsset, amountToProvide, true);
 
   // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
   let retryCount = 0;
@@ -70,10 +68,12 @@ async function provideLiquidityAndTestAssetBalances() {
 }
 
 async function testRegisterLiquidityRefundAddress() {
+  console.log('=== Starting testRegisterLiquidityRefundAddress ===');
   const observeRefundAddressRegisteredEvent = observeEvent(
     'liquidityProvider:LiquidityRefundAddressRegistered',
-    chainflip,
-    (event) => event.data.address.Eth === testAddress,
+    {
+      test: (event) => event.data.address.Eth === testAddress,
+    },
   );
 
   const registerRefundAddress = await lpApiRpc(`lp_register_liquidity_refund_address`, [
@@ -83,17 +83,20 @@ async function testRegisterLiquidityRefundAddress() {
   if (!isValidHexHash(await registerRefundAddress)) {
     throw new Error(`Unexpected lp_register_liquidity_refund_address result`);
   }
-  await observeRefundAddressRegisteredEvent;
+  await observeRefundAddressRegisteredEvent.event;
 
   // TODO: Check that the correct address is now set on the SC
+  console.log('=== testRegisterLiquidityRefundAddress complete ===');
 }
 
 async function testLiquidityDeposit() {
+  console.log('=== Starting testLiquidityDeposit ===');
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
-    chainflip,
-    (event) => event.data.depositAddress.Eth,
-  );
+    {
+      test: (event) => event.data.depositAddress.Eth,
+    },
+  ).event;
 
   const liquidityDepositAddress = (
     await lpApiRpc(`lp_liquidity_deposit`, [testRpcAsset, 'InBlock'])
@@ -111,18 +114,17 @@ async function testLiquidityDeposit() {
   );
 
   // Send funds to the deposit address and watch for deposit event
-  const observeAccountCreditedEvent = observeEvent(
-    'liquidityProvider:AccountCredited',
-    chainflip,
-    (event) =>
+  const observeAccountCreditedEvent = observeEvent('liquidityProvider:AccountCredited', {
+    test: (event) =>
       event.data.asset === testAsset &&
       isWithinOnePercent(
         BigInt(event.data.amountCredited.replace(/,/g, '')),
         BigInt(testAssetAmount),
       ),
-  );
+  }).event;
   await sendEvmNative(chainFromAsset(testAsset), liquidityDepositAddress, String(testAmount));
   await observeAccountCreditedEvent;
+  console.log('=== testLiquidityDeposit complete ===');
 }
 
 async function testWithdrawAsset() {
@@ -145,11 +147,13 @@ async function testWithdrawAsset() {
 }
 
 async function testTransferAsset() {
+  await using chainflip = await getChainflipApi();
   console.log('=== Starting testTransferAsset ===');
   const amountToTransfer = testAssetAmount.toString(16);
 
   const getLpBalance = async (account: string) =>
-    (await chainflip.query.liquidityProvider.freeBalances(account, testAsset))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((await chainflip.query.liquidityProvider.freeBalances(account, testAsset)) as any)
       .unwrapOrDefault()
       .toBigInt();
 
@@ -199,7 +203,7 @@ async function testTransferAsset() {
 }
 
 async function testRegisterWithExistingLpAccount() {
-  console.log('=== Starting testWithdrawAsset ===');
+  console.log('=== Starting testRegisterWithExistingLpAccount ===');
   try {
     await lpApiRpc(`lp_register_account`, []);
     throw new Error(`Unexpected lp_register_account result`);
@@ -215,7 +219,6 @@ async function testRegisterWithExistingLpAccount() {
 }
 
 /// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
-
 async function testRangeOrder() {
   console.log('=== Starting testRangeOrder ===');
   const range = { start: 1, end: 2 };

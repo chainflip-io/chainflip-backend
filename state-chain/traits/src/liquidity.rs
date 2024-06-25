@@ -1,4 +1,7 @@
-use cf_chains::{address::ForeignChainAddress, assets::any::AssetMap};
+use cf_chains::{
+	address::ForeignChainAddress, assets::any::AssetMap, ChannelRefundParameters,
+	SwapRefundParameters,
+};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, ChannelId, SwapId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
@@ -16,6 +19,7 @@ pub trait SwapDepositHandler {
 		amount: AssetAmount,
 		destination_address: ForeignChainAddress,
 		broker_commission: Beneficiaries<Self::AccountId>,
+		refund_params: Option<ChannelRefundParameters>,
 		channel_id: ChannelId,
 	) -> SwapId;
 }
@@ -118,6 +122,7 @@ pub trait SwapQueueApi {
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
+		refund_params: Option<SwapRefundParameters>,
 		swap_type: SwapType,
 	) -> (u64, Self::BlockNumber);
 }
@@ -129,6 +134,7 @@ impl<T: frame_system::Config> SwapQueueApi for T {
 		_from: Asset,
 		_to: Asset,
 		_amount: AssetAmount,
+		_refund_params: Option<SwapRefundParameters>,
 		_swap_type: SwapType,
 	) -> (u64, Self::BlockNumber) {
 		(0, Self::BlockNumber::default())

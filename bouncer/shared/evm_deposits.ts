@@ -4,10 +4,7 @@ import { doPerformSwap, requestNewSwap } from '../shared/perform_swap';
 import { prepareSwap, testSwap } from '../shared/swapping';
 import {
   observeFetch,
-  observeBadEvents,
   sleep,
-  observeEvent,
-  getChainflipApi,
   getContractAddress,
   decodeDotAddressForContract,
   defaultAssetAmounts,
@@ -22,6 +19,8 @@ import {
 import { signAndSendTxEvm } from './send_evm';
 import { getCFTesterAbi } from './contract_interfaces';
 import { send } from './send';
+
+import { observeEvent, observeBadEvent } from './utils/substrate';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -42,8 +41,6 @@ async function testSuccessiveDepositEvm(sourceAsset: Asset, destAsset: Asset) {
 }
 
 async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
-  let stopObserving = false;
-
   const swapParams = await testSwap(
     sourceAsset,
     destAsset,
@@ -54,10 +51,8 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
-  const observingSwapScheduled = observeBadEvents(
-    'swapping:SwapScheduled',
-    () => stopObserving,
-    (event) => {
+  const observingSwapScheduled = observeBadEvent('swapping:SwapScheduled', {
+    test: (event) => {
       if ('DepositChannel' in event.data.origin) {
         const channelMatches =
           Number(event.data.origin.DepositChannel.channelId) === swapParams.channelId;
@@ -66,7 +61,7 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
       }
       return false;
     },
-  );
+  });
 
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
@@ -74,8 +69,7 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
   // Trying to witness the fetch BroadcastSuccess is just unnecessarily complicated here.
   await sleep(100000);
 
-  stopObserving = true;
-  await observingSwapScheduled;
+  await observingSwapScheduled.stop();
 }
 
 // Not supporting Btc to avoid adding more unnecessary complexity with address encoding.
@@ -110,14 +104,8 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   );
 
   let eventCounter = 0;
-  let stopObserve = false;
-
-  await using chainflip = await getChainflipApi();
-
-  const observingEvent = observeEvent(
-    'swapping:SwapScheduled',
-    chainflip,
-    (event) => {
+  const observingEvent = observeEvent('swapping:SwapScheduled', {
+    test: (event) => {
       if (
         'Vault' in event.data.origin &&
         event.data.origin.Vault.txHash === receipt.transactionHash
@@ -128,8 +116,8 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
       }
       return false;
     },
-    () => stopObserve,
-  );
+    abortable: true,
+  });
 
   while (eventCounter === 0) {
     await sleep(2000);
@@ -139,8 +127,8 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   // Wait some more time after the first event to ensure another one is not emited
   await sleep(30000);
 
-  stopObserve = true;
-  await observingEvent;
+  observingEvent.stop();
+  await observingEvent.event;
 }
 
 async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {

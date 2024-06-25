@@ -22,6 +22,18 @@
         "ignoreRestSiblings": true
       }
     ],
+    "no-unused-expressions": "off",
+    "@typescript-eslint/no-unused-expressions": "error",
+    "no-misused-promises": "off",
+    "@typescript-eslint/no-misused-promises": [
+      "error",
+      {
+        "checksVoidReturn": false,
+        "checksConditionals": true
+      }
+    ],
+    "no-floating-promises": "off",
+    "@typescript-eslint/no-floating-promises": "error",
     "no-use-before-define": "off",
     "@typescript-eslint/no-use-before-define": "error",
     "no-shadow": "off",
@@ -38,6 +50,7 @@
     "import/extensions": "off",
     "import/prefer-default-export": "off",
     "import/no-unresolved": "off",
+    "import/named": "error",
     "no-await-in-loop": "off",
     "no-console": "off",
     "no-plusplus": "off",
