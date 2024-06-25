@@ -399,7 +399,7 @@ pub mod pallet {
 
 			use cf_traits::VaultKeyWitnessedHandler;
 
-			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
+			// Witness the agg_key rotation manually in the vaults pallet for Arbitrum
 			let dispatch_result =
 				T::ArbitrumVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
@@ -419,7 +419,7 @@ pub mod pallet {
 
 			use cf_traits::VaultKeyWitnessedHandler;
 
-			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
+			// Witness the agg_key rotation manually in the vaults pallet for Solana
 			let dispatch_result =
 				T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
