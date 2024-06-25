@@ -6,14 +6,8 @@ use sp_std::vec::Vec;
 
 use sol_prim::{AccountBump, SlotNumber};
 
-use crate::{
-	address, assets,
-	sol::sol_tx_core::signer::{Signer, SignerError},
-	DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo,
-};
+use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
 use codec::{Decode, Encode, MaxEncodedLen};
-use ed25519_dalek::Signer as DalekSigner;
-use rand::{rngs::OsRng, CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 
 use super::{Chain, ChainCrypto};
@@ -77,16 +71,14 @@ impl ChainCrypto for SolanaCrypto {
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool {
-		use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+		use sp_core::ed25519::{Public, Signature};
+		use sp_io::crypto::ed25519_verify;
 
-		let public_key = match VerifyingKey::from_bytes(&agg_key.0) {
-			Ok(pk) => pk,
-			Err(_) => return false,
-		};
-
-		public_key
-			.verify(payload.serialize().as_slice(), &Signature::from_bytes(&signature.0))
-			.is_ok()
+		ed25519_verify(
+			&Signature::from_raw(signature.0),
+			payload.serialize().as_slice(),
+			&Public::from_raw(agg_key.0),
+		)
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
@@ -220,65 +212,75 @@ impl From<&DepositChannel<Solana>> for SolanaDepositFetchId {
 	}
 }
 
-#[cfg(feature = "std")]
-#[derive(Clone)]
-pub struct SolSigningKey(ed25519_dalek::SigningKey);
+#[cfg(any(test, feature = "runtime-integration-tests"))]
+pub mod signing_key {
+	use crate::sol::{
+		sol_tx_core::signer::{Signer, SignerError},
+		SolPubkey, SolSignature,
+	};
+	use ed25519_dalek::Signer as DalekSigner;
+	use rand::{rngs::OsRng, CryptoRng, RngCore};
 
-impl SolSigningKey {
-	/// Constructs a new, random `Keypair` using a caller-provided RNG
-	pub fn generate<R>(csprng: &mut R) -> Self
-	where
-		R: CryptoRng + RngCore,
-	{
-		Self(ed25519_dalek::SigningKey::generate(csprng))
+	#[derive(Clone)]
+	pub struct SolSigningKey(ed25519_dalek::SigningKey);
+
+	impl SolSigningKey {
+		/// Constructs a new, random `Keypair` using a caller-provided RNG
+		pub fn generate<R>(csprng: &mut R) -> Self
+		where
+			R: CryptoRng + RngCore,
+		{
+			Self(ed25519_dalek::SigningKey::generate(csprng))
+		}
+
+		/// Constructs a new random `Keypair` using `OsRng`
+		pub fn new() -> Self {
+			let mut rng = OsRng;
+			Self::generate(&mut rng)
+		}
+
+		/// Recovers a `SolSigningKey` from a byte array
+		pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
+			Ok(Self(ed25519_dalek::SigningKey::from_bytes(
+				<&[_; ed25519_dalek::SECRET_KEY_LENGTH]>::try_from(bytes).map_err(|_| {
+					ed25519_dalek::SignatureError::from_source(String::from(
+						"candidate keypair byte array is the wrong length",
+					))
+				})?,
+			)))
+		}
+
+		/// Returns this `SolSigningKey` as a byte array
+		pub fn to_bytes(&self) -> [u8; ed25519_dalek::SECRET_KEY_LENGTH] {
+			self.0.to_bytes()
+		}
+
+		/// Gets this `SolSigningKey`'s SecretKey
+		pub fn secret(&self) -> &ed25519_dalek::SigningKey {
+			&self.0
+		}
 	}
 
-	/// Constructs a new random `Keypair` using `OsRng`
-	pub fn new() -> Self {
-		let mut rng = OsRng;
-		Self::generate(&mut rng)
-	}
+	impl Signer for SolSigningKey {
+		#[inline]
+		fn pubkey(&self) -> SolPubkey {
+			SolPubkey::from(ed25519_dalek::VerifyingKey::from(&self.0).to_bytes())
+		}
 
-	/// Recovers a `SolSigningKey` from a byte array
-	pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
-		Ok(Self(ed25519_dalek::SigningKey::from_bytes(
-			<&[_; ed25519_dalek::SECRET_KEY_LENGTH]>::try_from(bytes).map_err(|_| {
-				ed25519_dalek::SignatureError::from_source(String::from(
-					"candidate keypair byte array is the wrong length",
-				))
-			})?,
-		)))
-	}
+		fn try_pubkey(&self) -> Result<SolPubkey, SignerError> {
+			Ok(self.pubkey())
+		}
 
-	/// Returns this `SolSigningKey` as a byte array
-	pub fn to_bytes(&self) -> [u8; ed25519_dalek::SECRET_KEY_LENGTH] {
-		self.0.to_bytes()
-	}
+		fn sign_message(&self, message: &[u8]) -> SolSignature {
+			SolSignature::from(self.0.sign(message).to_bytes())
+		}
 
-	/// Gets this `SolSigningKey`'s SecretKey
-	pub fn secret(&self) -> &ed25519_dalek::SigningKey {
-		&self.0
-	}
-}
-impl Signer for SolSigningKey {
-	#[inline]
-	fn pubkey(&self) -> SolPubkey {
-		SolPubkey::from(ed25519_dalek::VerifyingKey::from(&self.0).to_bytes())
-	}
+		fn try_sign_message(&self, message: &[u8]) -> Result<SolSignature, SignerError> {
+			Ok(self.sign_message(message))
+		}
 
-	fn try_pubkey(&self) -> Result<SolPubkey, SignerError> {
-		Ok(self.pubkey())
-	}
-
-	fn sign_message(&self, message: &[u8]) -> SolSignature {
-		SolSignature::from(self.0.sign(message).to_bytes())
-	}
-
-	fn try_sign_message(&self, message: &[u8]) -> Result<SolSignature, SignerError> {
-		Ok(self.sign_message(message))
-	}
-
-	fn is_interactive(&self) -> bool {
-		false
+		fn is_interactive(&self) -> bool {
+			false
+		}
 	}
 }

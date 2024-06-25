@@ -21,6 +21,7 @@ pub mod compute_budget;
 pub mod program;
 pub mod program_instructions;
 pub mod short_vec;
+#[cfg(feature = "std")]
 pub mod signer;
 pub mod token_instructions;
 pub mod transaction;
@@ -947,6 +948,7 @@ mod tests {
 	use super::*;
 
 	use crate::sol::{
+		signing_key::SolSigningKey,
 		sol_tx_core::{
 			address_derivation::{
 				derive_associated_token_account, derive_deposit_address, derive_fetch_account,
@@ -959,7 +961,7 @@ mod tests {
 			AccountMeta, BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey,
 			Transaction,
 		},
-		SolAddress, SolSigningKey,
+		SolAddress,
 	};
 	use codec::Encode;
 	use core::str::FromStr;

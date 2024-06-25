@@ -341,10 +341,11 @@ mod test {
 	use super::*;
 	use crate::{
 		sol::{
+			signing_key::SolSigningKey,
 			sol_tx_core::{
 				address_derivation::derive_deposit_address, signer::Signer, sol_test_values::*,
 			},
-			SolHash, SolMessage, SolSigningKey, SolTransaction, SolanaDepositFetchId,
+			SolHash, SolMessage, SolTransaction, SolanaDepositFetchId,
 		},
 		TransferAssetParams,
 	};

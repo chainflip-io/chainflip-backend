@@ -3,7 +3,10 @@ use cf_chains::{
 	btc,
 	dot::{EncodedPolkadotPayload, PolkadotPair, PolkadotPublicKey, PolkadotSignature},
 	evm::{to_evm_address, AggKey, SchnorrVerificationComponents},
-	sol::{sol_tx_core::signer::Signer, SolAddress, SolMessage, SolSignature, SolSigningKey},
+	sol::{
+		signing_key::SolSigningKey, sol_tx_core::signer::Signer, SolAddress, SolMessage,
+		SolSignature,
+	},
 };
 use cf_primitives::{EpochIndex, GENESIS_EPOCH};
 use libsecp256k1::{PublicKey, SecretKey};
