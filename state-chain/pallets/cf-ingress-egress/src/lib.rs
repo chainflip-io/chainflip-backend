@@ -1996,7 +1996,7 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 		fee: TargetChainAmount<T, I>,
 	) {
 		if !fee.is_zero() {
-			T::Refunding::with_held_transaction_fees(
+			T::Refunding::withhold_transaction_fee(
 				<T::TargetChain as Chain>::GAS_ASSET.into(),
 				fee.into(),
 			);

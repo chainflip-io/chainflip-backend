@@ -9,7 +9,7 @@ use crate::{mock::*, RecordedFees, WithheldTransactionFees};
 
 fn payed_gas(chain: ForeignChain, amount: AssetAmount, account: ForeignChainAddress) {
 	Refunding::record_gas_fee(account, chain, amount);
-	Refunding::withheld_transaction_fee(chain, amount);
+	Refunding::withhold_transaction_fee(chain, amount);
 }
 
 #[test]

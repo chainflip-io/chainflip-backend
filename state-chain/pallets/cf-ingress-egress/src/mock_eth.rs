@@ -111,28 +111,6 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 	}
 }
 
-// thread_local! {
-// 	pub static WITHHELD_TRANSACTION_FEES: std::cell::RefCell<AssetAmount> =
-// std::cell::RefCell::new(0); }
-
-// pub struct MockRefunding;
-
-// impl<T> MockRefunding<T> {
-// 	pub fn get_withheld_transaction_fees() -> AssetAmount {
-// 		WITHHELD_TRANSACTION_FEES.with(|cell| *cell.borrow())
-// 	}
-// }
-
-// impl cf_traits::Refunding for MockRefunding {
-// 	fn record_gas_fees(_: ForeignChainAddress, _: Asset, _: AssetAmount) {}
-
-// 	fn with_held_transaction_fees(_: Asset, amount: AssetAmount) {
-// 		WITHHELD_TRANSACTION_FEES.with(|cell| {
-// 			*cell.borrow_mut() += amount.into();
-// 		});
-// 	}
-// }
-
 impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<()> }
 
 impl crate::Config for Test {

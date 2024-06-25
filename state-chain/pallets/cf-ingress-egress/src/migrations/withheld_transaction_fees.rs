@@ -21,7 +21,7 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		for (asset, fee) in old::WithheldTransactionFees::<T, I>::drain() {
-			T::Refunding::with_held_transaction_fees(asset.into(), fee.into());
+			T::Refunding::withhold_transaction_fee(asset.into(), fee.into());
 		}
 		Weight::zero()
 	}

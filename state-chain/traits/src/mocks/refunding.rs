@@ -26,7 +26,7 @@ impl Refunding for MockRefunding {
 		});
 	}
 
-	fn with_held_transaction_fees(_: Asset, amount: AssetAmount) {
+	fn withhold_transaction_fee(_: Asset, amount: AssetAmount) {
 		WITHHELD_TRANSACTION_FEES.with(|cell| {
 			*cell.borrow_mut() += amount;
 		});

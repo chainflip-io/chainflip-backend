@@ -145,7 +145,7 @@ fn epoch_rotates() {
 					ForeignChain::Ethereum,
 					100,
 				);
-				Refunding::withheld_transaction_fee(ForeignChain::Ethereum, 100);
+				Refunding::withhold_transaction_fee(ForeignChain::Ethereum, 100);
 				Refunding::record_gas_fee(
 					cf_chains::ForeignChainAddress::Dot(PolkadotAccountId::from_aliased(
 						DOT_AGG_KEY,
@@ -153,7 +153,7 @@ fn epoch_rotates() {
 					ForeignChain::Polkadot,
 					10,
 				);
-				Refunding::withheld_transaction_fee(ForeignChain::Polkadot, 10);
+				Refunding::withhold_transaction_fee(ForeignChain::Polkadot, 10);
 			}
 
 			// Add two nodes which don't have session keys

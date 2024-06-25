@@ -103,7 +103,7 @@ impl<T: Config> Pallet<T> {
 			}
 		});
 	}
-	pub fn withheld_transaction_fee(chain: ForeignChain, amount: AssetAmount) {
+	pub fn withhold_transaction_fee(chain: ForeignChain, amount: AssetAmount) {
 		WithheldTransactionFees::<T>::mutate(chain, |fees| *fees += amount);
 	}
 	pub fn on_distribute_withheld_fees(epoch: EpochIndex) {

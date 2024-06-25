@@ -10,54 +10,14 @@ use pallet_cf_refunding::{RecordedFees, WithheldTransactionFees};
 
 use crate::Runtime;
 
-// macro_rules! impl_refunding {
-// 	($name:ident, $chain:ident, $account:ident) => {
-// 		pub struct $name<Chain> {
-// 			phantom: sp_std::marker::PhantomData<Chain>,
-// 		}
-// 		impl<T: cf_chains::Chain<ChainAccount = $account>> RefundingTrait<T> for $name<$chain> {
-// 			fn record_gas_fees(
-// 				account_id: T::ChainAccount,
-// 				asset: T::ChainAsset,
-// 				amount: T::ChainAmount,
-// 			) {
-// 				let address =
-// 					<$account as IntoForeignChainAddress<$chain>>::into_foreign_chain_address(
-// 						account_id,
-// 					);
-// 				Refunding::record_gas_fee(address, asset.into(), amount.into());
-// 			}
-// 			fn with_held_transaction_fees(asset: T::ChainAsset, amount: T::ChainAmount) {
-// 				Refunding::withheld_transaction_fee(asset.into(), amount.into());
-// 			}
-// 			// Returns the amount of withheld transaction fees for a chain
-// 			fn get_withheld_transaction_fees(asset: T::ChainAsset) -> AssetAmount {
-// 				let chain: ForeignChain = asset.into();
-// 				WithheldTransactionFees::<Runtime>::get(chain).into()
-// 			}
-// 			// Returns the number of stored records for a chain
-// 			fn get_recorded_gas_fees(asset: T::ChainAsset) -> u128 {
-// 				let chain: ForeignChain = asset.into();
-// 				RecordedFees::<Runtime>::get(chain).unwrap_or_default().values().len() as u128
-// 			}
-// 		}
-// 	};
-// }
-
-// impl_refunding!(EthRefunding, Ethereum, EvmAddress);
-// impl_refunding!(BtcRefunding, Bitcoin, ScriptPubkey);
-// impl_refunding!(DotRefunding, Polkadot, PolkadotAccountId);
-// impl_refunding!(SolRefunding, Solana, SolAddress);
-// impl_refunding!(ArbRefunding, Arbitrum, EvmAddress);
-
 pub struct RefundingHandler;
 
 impl RefundingTrait for RefundingHandler {
 	fn record_gas_fees(address: ForeignChainAddress, asset: Asset, amount: AssetAmount) {
 		Refunding::record_gas_fee(address, asset.into(), amount);
 	}
-	fn with_held_transaction_fees(asset: Asset, amount: AssetAmount) {
-		Refunding::withheld_transaction_fee(asset.into(), amount);
+	fn withhold_transaction_fee(asset: Asset, amount: AssetAmount) {
+		Refunding::withhold_transaction_fee(asset.into(), amount);
 	}
 	fn get_withheld_transaction_fees(asset: Asset) -> AssetAmount {
 		let chain: ForeignChain = asset.into();
