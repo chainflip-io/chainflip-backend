@@ -241,7 +241,7 @@ where
 			let address_to_witness = deposit_channel.address_to_witness();
 			vec![
 				*address_to_witness,
-				derive_fetch_account(vault_address, *address_to_witness)
+				derive_fetch_account(*address_to_witness, vault_address)
 					.expect("Failed to derive fetch account")
 					.address,
 			]
