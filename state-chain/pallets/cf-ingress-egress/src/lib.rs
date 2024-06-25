@@ -27,12 +27,13 @@ use cf_chains::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
 	},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChannelLifecycleHooks, ConsolidateCall, DepositChannel, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	Chain, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall, DepositChannel,
+	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
 	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
+	SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -56,6 +57,9 @@ use sp_std::{
 	vec::Vec,
 };
 pub use weights::WeightInfo;
+
+/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
+pub const MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
@@ -137,7 +141,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 #[scale_info(skip_type_params(I))]
@@ -267,6 +271,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
+			refund_params: Option<ChannelRefundParameters>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -275,6 +280,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			channel_metadata: CcmChannelMetadata,
+			refund_params: Option<ChannelRefundParameters>,
 		},
 	}
 
@@ -555,6 +561,7 @@ pub mod pallet {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
+			block_height: TargetChainBlockNumber<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
 			// a non-gas asset.
@@ -638,6 +645,7 @@ pub mod pallet {
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 			prewitnessed_deposit_id: PrewitnessedDepositId,
 			channel_id: ChannelId,
+			block_height: TargetChainBlockNumber<T, I>,
 			// Ingress fee in the deposit asset. i.e. *NOT* the gas asset, if the deposit asset is
 			// a non-gas asset. The ingress fee is taken *after* the boost fee.
 			ingress_fee: TargetChainAmount<T, I>,
@@ -692,6 +700,8 @@ pub mod pallet {
 		SolanaAddressDerivationError,
 		/// Solana's Vault program cannot be loaded via the SolanaEnvironment.
 		MissingSolanaVaultProgram,
+		/// You cannot add 0 to a boost pool.
+		AddBoostAmountMustBeNonZero,
 		/// Adding boost funds is disabled due to safe mode.
 		AddBoostFundsDisabled,
 		/// Retrieving boost funds disabled due to safe mode.
@@ -1051,6 +1061,7 @@ pub mod pallet {
 				T::SafeMode::get().add_boost_funds_enabled,
 				Error::<T, I>::AddBoostFundsDisabled
 			);
+			ensure!(amount > Zero::zero(), Error::<T, I>::AddBoostAmountMustBeNonZero);
 
 			T::LpBalance::try_debit_account(&booster_id, asset.into(), amount.into())?;
 
@@ -1442,6 +1453,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							deposit_address: deposit_address.clone(),
 							asset,
 							amounts: used_pools,
+							block_height,
 							prewitnessed_deposit_id,
 							channel_id,
 							deposit_details: deposit_details.clone(),
@@ -1481,26 +1493,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				DepositAction::LiquidityProvision { lp_account }
 			},
-			ChannelAction::Swap { destination_address, destination_asset, broker_fees, .. } =>
-				DepositAction::Swap {
-					swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
-						<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
-							T::TargetChain,
-						>>::into_foreign_chain_address(deposit_address.clone()),
-						block_height.into(),
-						asset.into(),
-						destination_asset,
-						amount_after_fees.into(),
-						destination_address,
-						broker_fees,
-						channel_id,
-					),
-				},
+			ChannelAction::Swap {
+				destination_address,
+				destination_asset,
+				broker_fees,
+				refund_params,
+			} => DepositAction::Swap {
+				swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
+					<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
+						T::TargetChain,
+					>>::into_foreign_chain_address(deposit_address.clone()),
+					block_height.into(),
+					asset.into(),
+					destination_asset,
+					amount_after_fees.into(),
+					destination_address,
+					broker_fees,
+					refund_params,
+					channel_id,
+				),
+			},
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
 				channel_metadata,
-				..
+				refund_params,
 			} => {
 				if let Ok(CcmSwapIds { principal_swap_id, gas_swap_id }) =
 					T::CcmHandler::on_ccm_deposit(
@@ -1522,6 +1539,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							channel_id,
 							deposit_block_height: block_height.into(),
 						},
+						refund_params,
 					) {
 					DepositAction::CcmTransfer { principal_swap_id, gas_swap_id }
 				} else {
@@ -1643,6 +1661,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_address,
 				asset,
 				amount: deposit_amount,
+				block_height,
 				deposit_details,
 				ingress_fee: 0u32.into(),
 				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
@@ -1680,6 +1699,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					deposit_address,
 					asset,
 					amount: deposit_amount,
+					block_height,
 					deposit_details,
 					ingress_fee: fees_withheld,
 					action: deposit_action,
@@ -1825,6 +1845,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset.into(),
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
 					transaction_fee.into(),
+					None, /* refund params */
 					SwapType::IngressEgressFee,
 				);
 			}
@@ -1960,10 +1981,18 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
+		refund_params: Option<ChannelRefundParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
+		if let Some(refund_params) = &refund_params {
+			ensure!(
+				refund_params.retry_duration <= MAX_SWAP_RETRY_DURATION_BLOCKS,
+				DispatchError::Other("Retry duration too long")
+			);
+		}
+
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
 			&broker_id,
 			source_asset,
@@ -1972,8 +2001,14 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_asset,
 					destination_address,
 					channel_metadata: msg,
+					refund_params,
 				},
-				None => ChannelAction::Swap { destination_asset, destination_address, broker_fees },
+				None => ChannelAction::Swap {
+					destination_asset,
+					destination_address,
+					broker_fees,
+					refund_params,
+				},
 			},
 			boost_fee,
 		)?;

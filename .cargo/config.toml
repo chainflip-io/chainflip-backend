@@ -2,7 +2,7 @@
 CF_ETH_CONTRACT_ABI_ROOT = { value = "contract-interfaces/eth-contract-abis", relative = true }
 CF_ETH_CONTRACT_ABI_TAG = "v1.1.2"
 CF_SOL_PROGRAM_IDL_ROOT = { value = "contract-interfaces/sol-program-idls", relative = true }
-CF_SOL_PROGRAM_IDL_TAG = "v0.3.1"
+CF_SOL_PROGRAM_IDL_TAG = "v0.5.0"
 CF_ARB_CONTRACT_ABI_ROOT = { value = "contract-interfaces/arb-contract-abis", relative = true }
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
 
@@ -33,6 +33,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # The `cf-audit` command is configured to ignore the following advisories:
 # Vulnerabilities:
 # - RUSTSEC-2022-0093: This advisory is related to ed25519-dalek's public api design, which we don't expose.
+# - RUSTSEC-2024-0344: curve25519-dalek is a transitive dependency of `substrate`
 # Unsound:
 # - RUSTSEC-2021-0145: This advisory only affects the windows platform. It's a transitive dependency of `substrate`.
 # Unmaintained:
@@ -50,4 +51,5 @@ audit -D unmaintained -D unsound
     --ignore RUSTSEC-2021-0145
     --ignore RUSTSEC-2024-0320
     --ignore RUSTSEC-2024-0336
+    --ignore RUSTSEC-2024-0344
 '''

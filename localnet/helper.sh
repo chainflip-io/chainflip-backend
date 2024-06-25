@@ -1,10 +1,9 @@
 function check_endpoint_health() {
-  retries=30   # Number of retries
-  delay=10     # Delay between retries in seconds
+  retries=30
+  delay=10
 
   while [ $retries -gt 0 ]; do
     if curl -s "$@"; then
-      # Curl command succeeded, exit the loop
       break
     else
       sleep $delay
@@ -30,7 +29,5 @@ function print_success() {
 👮‍ To run the bouncer: ./localnet/manage.sh -> (6)
 EOM
 )
-
-  # Print the logs
   printf "%s\n" "$logs"
 }

@@ -8,8 +8,10 @@ on:
         default: false
       timeout-minutes:
         type: number
-        required: false
         default: 120
+      ngrok:
+        type: boolean
+        default: false
 
 env:
   FORCE_COLOR: 1
@@ -24,6 +26,14 @@ jobs:
     runs-on: digitalocean
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
+      - name: Setup ngrok ✨
+        if: inputs.ngrok
+        run: |
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update
+          sudo apt install ngrok
+
       - name: Checkout chainflip-backend 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
@@ -80,12 +90,27 @@ jobs:
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
           touch /tmp/chainflip/debug.log
-          sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
-          sudo cp ./old-engine-dylib/libchainflip_engine_v*.so /usr/lib/
+
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
+
+      - name: Expose endpoints for Polkadot and Chainflip 🤿
+        if: inputs.ngrok
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
+        continue-on-error: true
+        run: |
+          ngrok http http://localhost:9944 --log-format=logfmt --log=/tmp/ngrok-chainflip-node.log &
+          ngrok http http://localhost:9945 --log-format=logfmt --log=/tmp/ngrok-polkadot.log &
+          sleep 10
+
+      - name: Get ngrok URLs 🔗
+        if: inputs.ngrok
+        continue-on-error: true
+        id: ngrok-urls
+        run: python3 ./ci/scripts/get_ngrok_urls.py
 
       - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
         if: inputs.full_bouncer
@@ -98,6 +123,26 @@ jobs:
         working-directory: bouncer
         run: |
           ./run.sh
+
+      - name: Write chain explorer to file 📝
+        if: failure()
+        continue-on-error: true
+        working-directory: bouncer
+        run: |
+          BLOCK_HEIGHT=$(curl -s -H "Content-Type: application/json" \
+          -d '{"jsonrpc":"2.0","method":"chain_getHeader","params":[],"id":1}' \
+          http://localhost:9944 \
+          | jq -r '.result.number' \
+          | xargs printf "%d\n")
+          ./commands/explorer.ts 0 $BLOCK_HEIGHT > /tmp/chainflip/explorer.txt
+
+      - name: Upload chain explorer 📤
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        with:
+          name: chain-explorer
+          path: /tmp/chainflip/explorer.txt
 
       - name: Print chainflip-engine logs 🚗
         if: always()
@@ -167,7 +212,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
 
       - name: Notify on failed bouncer 📢
         if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main' || failure() && contains(github.ref_name, 'release/') || cancelled() && contains(github.ref_name, 'release/')

@@ -1,4 +1,4 @@
-import { InternalAsset as Asset, Asset as SCAsset, broker } from '@chainflip/cli';
+import { InternalAsset as Asset, Chain, Asset as SCAsset, broker } from '@chainflip/cli';
 import { decodeDotAddressForContract, chainFromAsset, stateChainAssetFromAsset } from './utils';
 
 const defaultCommissionBps = 100; // 1%
@@ -30,9 +30,9 @@ export async function newSwap(
         {
           srcAsset: stateChainAssetFromAsset(sourceAsset) as SCAsset,
           destAsset: stateChainAssetFromAsset(destAsset) as SCAsset,
-          srcChain: chainFromAsset(sourceAsset),
+          srcChain: chainFromAsset(sourceAsset) as Chain,
           destAddress: destinationAddress,
-          destChain: chainFromAsset(destAsset),
+          destChain: chainFromAsset(destAsset) as Chain,
           ccmMetadata: messageMetadata && {
             message: messageMetadata.message as `0x${string}`,
             gasBudget: messageMetadata.gasBudget.toString(),

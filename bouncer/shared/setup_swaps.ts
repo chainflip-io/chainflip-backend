@@ -1,19 +1,19 @@
 import { createLpPool } from '../shared/create_lp_pool';
-import { provideLiquidity } from '../shared/provide_liquidity';
+import { depositLiquidity } from './deposit_liquidity';
 import { rangeOrder } from '../shared/range_order';
 import { Asset } from './utils';
 
 const deposits = new Map<Asset, number>([
-  ['Dot', 10000],
-  ['Eth', 100],
-  ['ArbEth', 100],
-  ['Btc', 10],
-  ['Usdc', 1000000],
-  ['ArbUsdc', 100000],
-  ['Usdt', 100000],
-  ['Flip', 10000],
-  ['Sol', 100],
-  ['SolUsdc', 100000],
+  ['Dot', 100000],
+  ['Eth', 1000],
+  ['ArbEth', 1000],
+  ['Btc', 100],
+  ['Usdc', 10000000],
+  ['ArbUsdc', 1000000],
+  ['Usdt', 1000000],
+  ['Flip', 100000],
+  ['Sol', 1000],
+  ['SolUsdc', 1000000],
 ]);
 
 const price = new Map<Asset, number>([
@@ -47,14 +47,14 @@ export async function setupSwaps(): Promise<void> {
   console.log('LP Pools created');
 
   await Promise.all([
-    provideLiquidity('Usdc', deposits.get('Usdc')!),
-    provideLiquidity('Eth', deposits.get('Eth')!),
-    provideLiquidity('Dot', deposits.get('Dot')!),
-    provideLiquidity('Btc', deposits.get('Btc')!),
-    provideLiquidity('Flip', deposits.get('Flip')!),
-    provideLiquidity('Usdt', deposits.get('Usdt')!),
-    provideLiquidity('ArbEth', deposits.get('ArbEth')!),
-    provideLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
+    depositLiquidity('Usdc', deposits.get('Usdc')!),
+    depositLiquidity('Eth', deposits.get('Eth')!),
+    depositLiquidity('Dot', deposits.get('Dot')!),
+    depositLiquidity('Btc', deposits.get('Btc')!),
+    depositLiquidity('Flip', deposits.get('Flip')!),
+    depositLiquidity('Usdt', deposits.get('Usdt')!),
+    depositLiquidity('ArbEth', deposits.get('ArbEth')!),
+    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
     // provideLiquidity('Sol', deposits.get('Sol')!),
     // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!),
   ]);

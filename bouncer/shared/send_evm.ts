@@ -79,6 +79,9 @@ export async function signAndSendTxEvm(
       console.log(`${chain} Retrying transaction`);
     }
   }
+  if (!receipt) {
+    throw new Error('Receipt not found');
+  }
 
   if (log) {
     console.log(
@@ -107,6 +110,7 @@ export async function spamEvm(chain: Chain, periodMilisec: number, spam?: () => 
   const continueSpam = spam ?? (() => true);
 
   while (continueSpam()) {
+    /* eslint-disable @typescript-eslint/no-floating-promises */
     signAndSendTxEvm(
       chain,
       '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',

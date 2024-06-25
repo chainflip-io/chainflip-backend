@@ -1,8 +1,7 @@
 import { BN } from '@polkadot/util';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
-import { Event, getPolkadotApi, polkadotSigningMutex, sleep } from '../shared/utils';
-
-// TODO: Move getPolkadotApi and other stuff from utils to here
+import { Event, polkadotSigningMutex, sleep } from '../shared/utils';
+import { getPolkadotApi } from './utils/substrate';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function handleDispatchError(result: any) {

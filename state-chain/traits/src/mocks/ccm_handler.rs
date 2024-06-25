@@ -1,5 +1,7 @@
 use crate::{CcmHandler, CcmSwapIds};
-use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, SwapOrigin};
+use cf_chains::{
+	address::ForeignChainAddress, CcmDepositMetadata, ChannelRefundParameters, SwapOrigin,
+};
 
 use cf_primitives::{Asset, AssetAmount};
 use codec::{Decode, Encode};
@@ -37,6 +39,7 @@ impl CcmHandler for MockCcmHandler {
 		destination_address: ForeignChainAddress,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
+		_refund_params: Option<ChannelRefundParameters>,
 	) -> Result<CcmSwapIds, ()> {
 		<Self as MockPalletStorage>::mutate_value(CCM_HANDLER_PREFIX, |ccm_requests| {
 			if ccm_requests.is_none() {

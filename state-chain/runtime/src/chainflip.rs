@@ -51,8 +51,9 @@ use cf_chains::{
 		SolAddress, SolAmount, SolHash,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
-	ChainEnvironment, ChainState, DepositChannel, ForeignChain, ReplayProtectionProvider,
-	SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana, TransactionBuilder,
+	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
+	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
+	TransactionBuilder,
 };
 use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId};
 use cf_traits::{
@@ -614,7 +615,8 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_commission: Beneficiaries<Self::AccountId>,
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
-				boost_fee: BasisPoints
+				boost_fee: BasisPoints,
+				refund_parameters: Option<ChannelRefundParameters>,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -625,7 +627,8 @@ macro_rules! impl_deposit_api_for_anychain {
 							broker_commission,
 							broker_id,
 							channel_metadata,
-							boost_fee
+							boost_fee,
+							refund_parameters,
 						).map(|(channel, address, block_number, channel_opening_fee)| (channel, address, block_number.into(), channel_opening_fee)),
 					)+
 				}
