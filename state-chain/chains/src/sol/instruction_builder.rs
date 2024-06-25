@@ -4,7 +4,7 @@
 //! Instructions and Instruction sets with some level of abstraction.
 //! This avoids the need to deal with low level Solana core types.
 
-use std::collections::HashMap;
+use sp_std::collections::btree_map::BTreeMap;
 
 use codec::Encode;
 use sol_prim::DerivedAta;
@@ -38,7 +38,7 @@ impl AssetWithDerivedAddress {
 	pub fn decompose_fetch_params<Environment: SolanaEnvironment>(
 		fetch_params: FetchAssetParams<Solana>,
 		vault_program: SolAddress,
-		token_environments: &mut HashMap<SolAsset, TokenEnvironment>,
+		token_environments: &mut BTreeMap<SolAsset, TokenEnvironment>,
 	) -> Result<
 		(SolanaDepositFetchId, AssetWithDerivedAddress, SolAddress),
 		SolanaTransactionBuildingError,
@@ -120,7 +120,7 @@ impl SolanaInstructionBuilder {
 	/// Used to batch fetch from multiple deposit channels in a single transaction.
 	pub fn fetch_from(
 		decomposed_fetch_params: Vec<(SolanaDepositFetchId, AssetWithDerivedAddress, SolAddress)>,
-		token_environments: HashMap<SolAsset, TokenEnvironment>,
+		token_environments: BTreeMap<SolAsset, TokenEnvironment>,
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
 		agg_key: SolAddress,
@@ -454,8 +454,8 @@ mod test {
 		SolAddress::from_str(MINT_PUB_KEY).unwrap()
 	}
 
-	fn token_environments() -> HashMap<SolAsset, TokenEnvironment> {
-		let mut token_environments = HashMap::new();
+	fn token_environments() -> BTreeMap<SolAsset, TokenEnvironment> {
+		let mut token_environments = BTreeMap::new();
 		token_environments.insert(
 			SolAsset::SolUsdc,
 			TokenEnvironment {

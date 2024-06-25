@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use std::collections::HashMap;
+use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode};
 use frame_support::{
@@ -82,7 +82,7 @@ pub trait SolanaEnvironment:
 
 	fn lookup_account_retain(
 		key: SolanaEnvAccountLookupKey,
-		sol_environment: &mut HashMap<SolanaEnvAccountLookupKey, SolAddress>,
+		sol_environment: &mut BTreeMap<SolanaEnvAccountLookupKey, SolAddress>,
 	) -> Result<SolAddress, SolanaTransactionBuildingError> {
 		match sol_environment.get(&key) {
 			Some(address) => Ok(*address),
@@ -102,7 +102,7 @@ pub trait SolanaEnvironment:
 	}
 
 	fn get_token_environment(
-		token_environments: &mut HashMap<SolAsset, TokenEnvironment>,
+		token_environments: &mut BTreeMap<SolAsset, TokenEnvironment>,
 		asset: SolAsset,
 	) -> Result<TokenEnvironment, SolanaTransactionBuildingError> {
 		match token_environments.get(&asset) {
@@ -120,7 +120,9 @@ pub trait SolanaEnvironment:
 }
 
 /// For looking up different accounts from the Solana Environment.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo, Hash)]
+#[derive(
+	Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo, Hash, PartialOrd, Ord,
+)]
 pub enum SolanaEnvAccountLookupKey {
 	AggKey,
 	VaultProgram,
@@ -196,7 +198,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
-		let mut token_environments = HashMap::new();
+		let mut token_environments = BTreeMap::new();
 
 		let decomposed_fetch_params = fetch_params
 			.into_iter()
@@ -240,8 +242,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
-		let mut sol_environment = HashMap::new();
-		let mut token_environments = HashMap::new();
+		let mut sol_environment = BTreeMap::new();
+		let mut token_environments = BTreeMap::new();
 		transfer_params
 			.into_iter()
 			.map(|(transfer_param, egress_id)| {
