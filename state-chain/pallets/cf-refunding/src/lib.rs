@@ -27,6 +27,7 @@ impl_pallet_safe_mode!(PalletSafeMode; do_refund);
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::ForeignChain;
+	use cf_primitives::EgressId;
 
 	use super::*;
 	#[pallet::config]
@@ -54,6 +55,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		RefundScheduled {
 			account_id: ForeignChainAddress,
+			egress_id: EgressId,
 			chain: ForeignChain,
 			amount: AssetAmount,
 			epoch: EpochIndex,
@@ -114,38 +116,37 @@ impl<T: Config> Pallet<T> {
 
 		for chain in chains {
 			let mut available_funds = WithheldTransactionFees::<T>::get(chain);
-			// Integrity check before we start refunding
-			if available_funds < RecordedFees::<T>::get(chain).unwrap().values().sum() {
-				log::warn!(
-                    "Integrity check for refunding failed for asset {:?}. Refunding will be skipped.", chain);
-				Self::deposit_event(Event::RefundIntegrityCheckFailed { epoch, chain });
-				continue;
-			}
-			let recorded_fees = RecordedFees::<T>::take(chain).unwrap();
-			for (validator, fee) in recorded_fees {
-				if let Some(remaining_funds) = available_funds.checked_sub(fee) {
-					available_funds = remaining_funds;
-					let _ = T::EgressHandler::schedule_egress(
-						chain.gas_asset(),
-						fee,
-						validator.clone(),
-						None,
-					);
-					Self::deposit_event(Event::RefundScheduled {
-						account_id: validator,
-						chain,
-						amount: fee,
-						epoch,
-					});
-				} else {
-					// TODO: This actually can never happen, still better to remember the data in a
-					// seperate storage item?
-					log::warn!(
-                        "Insufficient funds to refund validator {:?} for asset {:?}. Refunding not possible!",
-                        validator,
-                        chain,
-                    );
+			let mut failed_egress: BTreeMap<ForeignChainAddress, AssetAmount> = BTreeMap::new();
+			if let Some(recorded_fees) = RecordedFees::<T>::take(chain) {
+				for (validator, fee) in recorded_fees {
+					if let Some(remaining_funds) = available_funds.checked_sub(fee) {
+						if let Ok(egress_details) = T::EgressHandler::schedule_egress(
+							chain.gas_asset(),
+							fee,
+							validator.clone(),
+							None,
+						) {
+							available_funds = remaining_funds;
+							Self::deposit_event(Event::RefundScheduled {
+								account_id: validator,
+								egress_id: egress_details.egress_id,
+								chain,
+								amount: fee,
+								epoch,
+							});
+						} else {
+							failed_egress.insert(validator.clone(), fee);
+							log::error!(
+								"Failed to schedule egress for validator: {:?} on chain: {:?}",
+								validator,
+								chain
+							);
+						}
+					}
 				}
+			}
+			if failed_egress.len() > 0 {
+				RecordedFees::<T>::insert(chain, failed_egress);
 			}
 			WithheldTransactionFees::<T>::insert(chain, available_funds);
 		}

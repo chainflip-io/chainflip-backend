@@ -1,6 +1,5 @@
 use cf_chains::{ForeignChain, ForeignChainAddress};
 use cf_primitives::AssetAmount;
-use cf_test_utilities::assert_event_sequence;
 use cf_traits::SetSafeMode;
 
 use cf_chains::AnyChain;
@@ -52,35 +51,6 @@ fn refund_validators_on_epoch_transition() {
 
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 0);
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Polkadot), 0);
-	});
-}
-
-#[test]
-fn skips_refund_if_integrity_checks_fails() {
-	new_test_ext().execute_with(|| {
-		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
-		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_2.clone());
-		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_3.clone());
-
-		WithheldTransactionFees::<Test>::insert(ForeignChain::Ethereum, 299);
-
-		Refunding::on_distribute_withheld_fees(1);
-
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 299);
-
-		let recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
-
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_2), Some(&100));
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_3), Some(&100));
-
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::Refunding(Event::RefundIntegrityCheckFailed {
-				epoch: 1,
-				chain: ForeignChain::Ethereum
-			})
-		);
 	});
 }
 
