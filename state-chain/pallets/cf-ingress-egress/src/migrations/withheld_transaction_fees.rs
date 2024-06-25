@@ -3,6 +3,8 @@ use frame_support::traits::OnRuntimeUpgrade;
 
 use frame_support::pallet_prelude::{ValueQuery, Weight};
 
+use cf_chains::Solana;
+
 mod old {
 	use super::*;
 
@@ -33,7 +35,9 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			1,
 			"Chain can only have one gas asset!"
 		);
-		Ok(old::WithheldTransactionFees::<T, I>::get(<T::TargetChain as Chain>::GAS_ASSET).encode())
+		let old_fees: u128 =
+			old::WithheldTransactionFees::<T, I>::get(<T::TargetChain as Chain>::GAS_ASSET).into();
+		Ok(old_fees.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]

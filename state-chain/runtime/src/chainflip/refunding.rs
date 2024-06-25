@@ -42,10 +42,7 @@ macro_rules! impl_refunding {
 			// Returns the number of stored records for a chain
 			fn get_recorded_gas_fees(asset: T::ChainAsset) -> u128 {
 				let chain: ForeignChain = asset.into();
-				RecordedFees::<Runtime>::get(chain)
-					.expect("No recorded fees for chain")
-					.values()
-					.len() as u128
+				RecordedFees::<Runtime>::get(chain).unwrap_or_default().values().len() as u128
 			}
 		}
 	};

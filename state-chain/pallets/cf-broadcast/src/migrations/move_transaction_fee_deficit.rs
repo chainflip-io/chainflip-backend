@@ -40,7 +40,6 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			"TransactionFeeDeficit not empty - migration failed!"
 		);
 		let recorded_fees = <u128>::decode(&mut &state[..]).unwrap();
-		#[cfg(feature = "try-runtime")]
 		let migrated = T::Refunding::get_recorded_gas_fees(<T::TargetChain as Chain>::GAS_ASSET);
 		assert_eq!(recorded_fees, migrated, "Migrated fees do not match for asset!");
 		Ok(())
