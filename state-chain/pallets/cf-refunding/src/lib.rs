@@ -53,16 +53,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// Refund scheduled for a validator.
 		RefundScheduled {
 			account_id: ForeignChainAddress,
 			egress_id: EgressId,
 			chain: ForeignChain,
 			amount: AssetAmount,
 			epoch: EpochIndex,
-		},
-		RefundIntegrityCheckFailed {
-			epoch: EpochIndex,
-			chain: ForeignChain,
 		},
 	}
 
