@@ -1,4 +1,4 @@
-use core::{marker::PhantomData, str::FromStr};
+use core::marker::PhantomData;
 
 use codec::{Decode, Encode};
 use frame_support::{
@@ -157,14 +157,12 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let vault_program_data_account =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
-		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
-			.expect("Preset Solana System Program ID account must be valid.");
+		let system_program_id = SYSTEM_PROGRAM_ID;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 		let token_mint_pubkey =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
-		let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID)
-			.expect("Preset Solana Token program ID must be valid.");
+		let token_program_id = TOKEN_PROGRAM_ID;
 		let token_vault_ata = Environment::lookup_account(
 			SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
 		)?;
@@ -240,13 +238,11 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenVaultPdaAccount)?;
 				let token_mint_pubkey =
 					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
-				let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID)
-					.expect("Preset Solana Token program ID must be valid.");
+				let token_program_id = TOKEN_PROGRAM_ID;
 				let token_vault_ata = Environment::lookup_account(
 					SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
 				)?;
-				let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
-					.expect("Preset Solana System Program ID account must be valid.");
+				let system_program_id = SYSTEM_PROGRAM_ID;
 
 				// Build the Transfer instruction set for Token transfers.
 				token
@@ -298,8 +294,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let vault_program_data_account =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
-		let system_program_id = SolAddress::from_str(SYSTEM_PROGRAM_ID)
-			.expect("Preset System Program ID account must be valid.");
+		let system_program_id = SYSTEM_PROGRAM_ID;
 		let upgrade_manager_program_data_account = Environment::lookup_account(
 			SolanaEnvAccountLookupKey::UpgradeManagerProgramDataAccount,
 		)?;
@@ -345,10 +340,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let vault_program_data_account =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
-		let system_program_id = SolAddress::from_str(crate::sol::consts::SYSTEM_PROGRAM_ID)
-			.expect("Solana System program ID must be valid.");
-		let sys_var_instructions = SolAddress::from_str(crate::sol::consts::SYS_VAR_INSTRUCTIONS)
-			.expect("Solana System Var Instruction must be valid.");
+		let system_program_id = crate::sol::consts::SYSTEM_PROGRAM_ID;
+		let sys_var_instructions = crate::sol::consts::SYS_VAR_INSTRUCTIONS;
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
@@ -375,8 +368,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenVaultPdaAccount)?;
 				let token_mint_pubkey =
 					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
-				let token_program_id = SolAddress::from_str(TOKEN_PROGRAM_ID)
-					.expect("Preset Solana Token program ID must be valid.");
+				let token_program_id = TOKEN_PROGRAM_ID;
 				let token_vault_ata = Environment::lookup_account(
 					SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
 				)?;

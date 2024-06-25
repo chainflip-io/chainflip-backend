@@ -5,7 +5,6 @@ use super::{
 };
 use crate::vec;
 use borsh::{BorshDeserialize, BorshSerialize};
-use core::str::FromStr;
 
 // https://docs.rs/spl-associated-token-account/2.3.0/src/spl_associated_token_account/instruction.rs.html#1-161
 
@@ -76,12 +75,12 @@ impl AssociatedTokenAccountInstruction {
 			AccountMeta::new(*associated_account_address, false),
 			AccountMeta::new_readonly(*wallet_address, false),
 			AccountMeta::new_readonly(*token_mint_address, false),
-			AccountMeta::new_readonly(Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(), false),
-			AccountMeta::new_readonly(Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(), false),
+			AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
+			AccountMeta::new_readonly(TOKEN_PROGRAM_ID.into(), false),
 		];
 		Instruction::new_with_borsh(
 			// program id of the system program
-			Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM_ID).unwrap(),
+			ASSOCIATED_TOKEN_PROGRAM_ID.into(),
 			&Self::CreateIdempotent,
 			account_metas,
 		)

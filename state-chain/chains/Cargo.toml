@@ -50,7 +50,7 @@ generic-array = { version = "0.14.7", default-features = false, features = [
   "serde",
   "more_lengths",
 ] }
-bs58 = { version = "0.4.0", default-features = false, features = ["alloc"] }
+bs58 = { version = "^0.5", default-features = false, features = ["alloc"] }
 bincode = { version = "2.0.0-rc.3", default-features = false, features = [
   "alloc",
   "serde",

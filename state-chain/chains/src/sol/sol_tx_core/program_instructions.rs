@@ -200,7 +200,7 @@ impl SystemProgramInstruction {
 		];
 		Instruction::new_with_bincode(
 			// program id of the system program
-			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			SYSTEM_PROGRAM_ID.into(),
 			&Self::AdvanceNonceAccount,
 			account_metas,
 		)
@@ -217,7 +217,7 @@ impl SystemProgramInstruction {
 		];
 		Instruction::new_with_bincode(
 			// program id of the system program
-			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			SYSTEM_PROGRAM_ID.into(),
 			&Self::AuthorizeNonceAccount { new_authorized_pubkey: *new_authorized_pubkey },
 			account_metas,
 		)
@@ -227,7 +227,7 @@ impl SystemProgramInstruction {
 		let account_metas =
 			vec![AccountMeta::new(*from_pubkey, true), AccountMeta::new(*to_pubkey, false)];
 		Instruction::new_with_bincode(
-			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			SYSTEM_PROGRAM_ID.into(),
 			&Self::Transfer { lamports },
 			account_metas,
 		)
