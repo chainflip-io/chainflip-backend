@@ -5,7 +5,7 @@ use cf_chains::{
 	ChainCrypto, ChainEnvironment, ConsolidationError, Ethereum, ExecutexSwapAndCall,
 	FetchAssetParams, ForeignChainAddress, TransferAssetParams, TransferFallback,
 };
-use cf_primitives::{chains::assets, ForeignChain};
+use cf_primitives::{chains::assets, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
@@ -82,15 +82,19 @@ thread_local! {
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
-		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Result<Self, AllBatchError> {
+		transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids) = transfer_params.into_iter().unzip();
 		if ALL_BATCH_SUCCESS.with(|cell| *cell.borrow()) {
-			Ok(Self::AllBatch(MockEthAllBatch {
-				nonce: Default::default(),
-				fetch_params,
-				transfer_params,
-				_phantom: PhantomData,
-			}))
+			Ok(vec![(
+				Self::AllBatch(MockEthAllBatch {
+					nonce: Default::default(),
+					fetch_params,
+					transfer_params,
+					_phantom: PhantomData,
+				}),
+				egress_ids,
+			)])
 		} else {
 			Err(AllBatchError::UnsupportedToken)
 		}
@@ -289,14 +293,18 @@ impl MockBtcAllBatch<MockBtcEnvironment> {
 impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Bitcoin>>,
-		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
-	) -> Result<Self, AllBatchError> {
+		transfer_params: Vec<(TransferAssetParams<Bitcoin>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids) = transfer_params.into_iter().unzip();
 		if ALL_BATCH_SUCCESS.with(|cell| *cell.borrow()) {
-			Ok(Self::AllBatch(MockBtcAllBatch {
-				fetch_params,
-				transfer_params,
-				_phantom: PhantomData,
-			}))
+			Ok(vec![(
+				Self::AllBatch(MockBtcAllBatch {
+					fetch_params,
+					transfer_params,
+					_phantom: PhantomData,
+				}),
+				egress_ids,
+			)])
 		} else {
 			Err(AllBatchError::UnsupportedToken)
 		}
