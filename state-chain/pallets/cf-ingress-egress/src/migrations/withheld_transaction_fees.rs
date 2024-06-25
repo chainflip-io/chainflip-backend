@@ -3,8 +3,6 @@ use frame_support::traits::OnRuntimeUpgrade;
 
 use frame_support::pallet_prelude::{ValueQuery, Weight};
 
-use cf_chains::Solana;
-
 mod old {
 	use super::*;
 
