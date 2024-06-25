@@ -20,4 +20,4 @@ if (!bitcoinAddress) {
   process.exit(-1);
 }
 
-getBtcBalanceCommand(bitcoinAddress);
+await getBtcBalanceCommand(bitcoinAddress);

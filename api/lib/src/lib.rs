@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
 	address::EncodedAddress, dot::PolkadotAccountId, evm::to_evm_address, sol::SolAddress,
-	AnyChain, CcmChannelMetadata, ForeignChain,
+	AnyChain, CcmChannelMetadata, ChannelRefundParameters, ForeignChain,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use futures::FutureExt;
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
+use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256, U256};
 pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
@@ -25,7 +25,7 @@ pub mod primitives {
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
-		CcmChannelMetadata, CcmDepositMetadata,
+		CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters,
 	};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
@@ -71,11 +71,7 @@ impl<
 	> AuctionPhaseApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
 {
 	async fn is_auction_phase(&self) -> Result<bool> {
-		self.base_rpc_client
-			.raw_rpc_client
-			.cf_is_auction_phase(None)
-			.await
-			.context("Error RPC query: is_auction_phase")
+		Ok(self.base_rpc_client.raw_rpc_client.cf_is_auction_phase(None).await?)
 	}
 }
 
@@ -170,22 +166,18 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 	async fn register_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_validator::Call::register_as_validator {})
 			.await
-			.context("Could not register as validator")
 	}
 	async fn deregister_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_validator::Call::deregister_as_validator {})
 			.await
-			.context("Could not de-register as validator")
 	}
 	async fn stop_bidding(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_validator::Call::stop_bidding {})
 			.await
-			.context("Could not stop bidding")
 	}
 	async fn start_bidding(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_validator::Call::start_bidding {})
 			.await
-			.context("Could not start bidding")
 	}
 }
 
@@ -238,19 +230,13 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			AccountRole::Unregistered => bail!("Cannot register account role {:?}", role),
 		};
 
-		let (tx_hash, ..) = self
-			.submit_signed_extrinsic_with_dry_run(call)
-			.await?
-			.until_in_block()
-			.await
-			.context("Could not register account role for account")?;
+		let (tx_hash, ..) =
+			self.submit_signed_extrinsic_with_dry_run(call).await?.until_in_block().await?;
 		Ok(tx_hash)
 	}
 
 	async fn rotate_session_keys(&self) -> Result<H256> {
-		let raw_keys = RotateSessionKeysApi::rotate_session_keys(self)
-			.await
-			.context("Could not rotate session keys.")?;
+		let raw_keys = RotateSessionKeysApi::rotate_session_keys(self).await?;
 
 		let aura_key: [u8; 32] = raw_keys[0..32].try_into().unwrap();
 		let grandpa_key: [u8; 32] = raw_keys[32..64].try_into().unwrap();
@@ -279,8 +265,7 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 			})
 			.await
 			.until_in_block()
-			.await
-			.context("Could not set vanity name for your account")?;
+			.await?;
 		println!("Vanity name set at tx {tx_hash:#x}.");
 		Ok(())
 	}
@@ -296,8 +281,7 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 		})
 		.await
 		.until_in_block()
-		.await
-		.context("Failed to submit rotation governance proposal")?;
+		.await?;
 
 		println!("If you're the governance dictator, the rotation will begin soon.");
 
@@ -310,15 +294,15 @@ pub struct SwapDepositAddress {
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
-	pub channel_opening_fee: u128,
+	pub channel_opening_fee: U256,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WithdrawFeesDetail {
 	pub tx_hash: H256,
 	pub egress_id: (ForeignChain, u64),
-	pub egress_amount: u128,
-	pub egress_fee: u128,
+	pub egress_amount: U256,
+	pub egress_fee: U256,
 	pub destination_address: String,
 }
 
@@ -353,6 +337,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Affiliates<AccountId32>,
+		refund_parameters: Option<ChannelRefundParameters>,
 	) -> Result<SwapDepositAddress> {
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic_with_dry_run(if affiliate_fees.is_empty() {
@@ -373,6 +358,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees,
+					refund_parameters,
 				}
 			})
 			.await?
@@ -400,7 +386,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				issued_block: header.number,
 				channel_id: *channel_id,
 				source_chain_expiry_block: *source_chain_expiry_block,
-				channel_opening_fee: *channel_opening_fee,
+				channel_opening_fee: (*channel_opening_fee).into(),
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");
@@ -418,8 +404,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			}))
 			.await
 			.until_in_block()
-			.await
-			.context("Request to withdraw broker fee for ${asset} failed.")?;
+			.await?;
 
 		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
 			pallet_cf_swapping::Event::WithdrawalRequested {
@@ -440,8 +425,8 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			Ok(WithdrawFeesDetail {
 				tx_hash,
 				egress_id: *egress_id,
-				egress_amount: *egress_amount,
-				egress_fee: *egress_fee,
+				egress_amount: (*egress_amount).into(),
+				egress_fee: (*egress_fee).into(),
 				destination_address: destination_address.to_string(),
 			})
 		} else {
@@ -451,12 +436,10 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	async fn register_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_as_broker {})
 			.await
-			.context("Could not register as broker")
 	}
 	async fn deregister_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
 			.await
-			.context("Could not de-register as broker")
 	}
 }
 

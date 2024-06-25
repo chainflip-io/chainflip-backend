@@ -9,7 +9,9 @@ pub use address::ForeignChainAddress;
 use address::{
 	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
 };
-use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, TransactionHash};
+use cf_primitives::{
+	AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TransactionHash,
+};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -484,8 +486,8 @@ pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<C>>,
-		transfer_params: Vec<TransferAssetParams<C>>,
-	) -> Result<Self, AllBatchError>;
+		transfer_params: Vec<(TransferAssetParams<C>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError>;
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -633,4 +635,22 @@ impl RetryPolicy for DefaultRetryPolicy {
 	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
 		Some(10u32)
 	}
+}
+
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
+)]
+pub struct SwapRefundParameters {
+	pub refund_block: cf_primitives::BlockNumber,
+	pub refund_address: ForeignChainAddress,
+	pub min_output: cf_primitives::AssetAmount,
+}
+
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
+)]
+pub struct ChannelRefundParameters {
+	pub retry_duration: cf_primitives::BlockNumber,
+	pub refund_address: ForeignChainAddress,
+	pub min_price: Price,
 }
