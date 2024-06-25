@@ -10,7 +10,7 @@ pub mod build_helpers;
 // rest of the places the version needs changing on build using the build scripts in each of the
 // relevant crates.
 // Should also check that the compatibility function below `args_compatible_with_old` is correct.
-pub const OLD_VERSION: &str = "1.4.2";
+pub const OLD_VERSION: &str = "1.4.3";
 pub const NEW_VERSION: &str = "1.5.0";
 
 pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
@@ -18,18 +18,9 @@ pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 
 // Sometimes we need to remove arguments that are valid for the new version but not for the old
 // version.
-// The args that are required for 1.4 but *not* 1.3 are:
-// #[derive(Parser, Debug, Clone, Default)]
-// pub struct ArbOptions {
-// 	#[clap(long = "arb.rpc.ws_endpoint")]
-// 	pub arb_ws_endpoint: Option<String>,
-// 	#[clap(long = "arb.rpc.http_endpoint")]
-// 	pub arb_http_endpoint: Option<String>,
-// 	#[clap(long = "arb.private_key_file")]
-// 	pub arb_private_key_file: Option<PathBuf>,
-// }
+// There are no settings currently on main branch that are not already in the old version.
 pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
-	args.into_iter().filter(|arg| !arg.starts_with("--arb.")).collect()
+	args
 }
 
 pub use std::ffi::c_char;

@@ -16,7 +16,7 @@ pub use async_result::AsyncResult;
 
 use cf_chains::{
 	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, DepositChannel, Ethereum, SwapOrigin,
+	ChainCrypto, ChannelRefundParameters, DepositChannel, Ethereum, SwapOrigin,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BroadcastId,
@@ -699,6 +699,7 @@ pub trait DepositApi<C: Chain> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
+		refund_params: Option<ChannelRefundParameters>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
 
@@ -880,6 +881,7 @@ pub trait CcmHandler {
 		destination_address: ForeignChainAddress,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
+		refund_params: Option<ChannelRefundParameters>,
 	) -> Result<CcmSwapIds, ()>;
 }
 
@@ -891,6 +893,7 @@ impl CcmHandler for () {
 		_destination_address: ForeignChainAddress,
 		_deposit_metadata: CcmDepositMetadata,
 		_origin: SwapOrigin,
+		_refund_params: Option<ChannelRefundParameters>,
 	) -> Result<CcmSwapIds, ()> {
 		Err(())
 	}
@@ -936,12 +939,6 @@ impl<RuntimeCall> CallDispatchFilter<RuntimeCall> for () {
 }
 
 pub trait AssetConverter {
-	fn estimate_swap_input_for_desired_output<C: Chain>(
-		input_asset: C::ChainAsset,
-		output_asset: C::ChainAsset,
-		desired_output_amount: C::ChainAmount,
-	) -> Option<C::ChainAmount>;
-
 	/// Calculate the amount of an asset that is required to pay for a given amount of gas.
 	///
 	/// Use this for transaction fees only.

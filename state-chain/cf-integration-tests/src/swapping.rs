@@ -40,7 +40,7 @@ use pallet_cf_broadcast::{
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_lp::HistoricalEarnedFees;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
-use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS};
+use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS, SWAP_RETRY_DELAY_BLOCKS};
 use sp_core::U256;
 use state_chain_runtime::{
 	chainflip::{
@@ -268,6 +268,7 @@ fn basic_pool_setup_provision_and_swap() {
 			None,
 			0u16,
 			Default::default(),
+			None,
 		));
 
 		let deposit_address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
@@ -377,6 +378,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Some(message),
 			0u16,
 			Default::default(),
+			None,
 		));
 
 		// Deposit funds for the ccm.
@@ -640,7 +642,7 @@ fn failed_swaps_are_rolled_back() {
 
 		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
 		// shouldn't be drained.
-		Swapping::on_finalize(swaps_scheduled_at + 1);
+		Swapping::on_finalize(swaps_scheduled_at + SWAP_RETRY_DELAY_BLOCKS);
 		assert_eq!(
 			Some(eth_price),
 			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
@@ -656,7 +658,7 @@ fn failed_swaps_are_rolled_back() {
 		setup_pool_and_accounts(vec![Asset::Flip], OrderType::RangeOrder);
 		System::reset_events();
 
-		Swapping::on_finalize(swaps_scheduled_at + 2);
+		Swapping::on_finalize(swaps_scheduled_at + 2 * SWAP_RETRY_DELAY_BLOCKS);
 
 		assert_ne!(
 			Some(eth_price),

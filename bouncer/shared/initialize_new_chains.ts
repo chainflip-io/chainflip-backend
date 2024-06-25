@@ -95,7 +95,9 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   );
   const dataAccount = new PublicKey(getContractAddress('Solana', 'DATA_ACCOUNT'));
   const whaleKeypair = getSolWhaleKeyPair();
-  const vaultIdl = await getSolanaVaultIdl();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const vaultIdl: any = await getSolanaVaultIdl();
 
   const discriminatorString = vaultIdl.instructions.find(
     (instruction: { name: string }) => instruction.name === 'initialize',

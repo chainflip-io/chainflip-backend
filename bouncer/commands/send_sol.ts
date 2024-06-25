@@ -10,7 +10,7 @@
 // It also accepts non-encoded bs58 address representations:
 // ./commands/send_sol.ts 0x2f3fcadf740018f6037513959bab60d0dbef26888d264d54fc4d3d36c8cf5c91 1.2
 
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 import { sendSol } from '../shared/send_sol';
 
 async function main() {
@@ -19,11 +19,6 @@ async function main() {
 
   console.log('Transferring ' + solAmount + ' Sol to ' + solanaAddress);
   await sendSol(solanaAddress, solAmount);
-
-  process.exit(0);
 }
 
-runWithTimeout(main(), 20000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 20);

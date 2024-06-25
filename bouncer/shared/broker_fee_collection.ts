@@ -4,7 +4,6 @@ import { randomBytes } from 'crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import Keyring from '../polkadot/keyring';
 import {
-  EgressId,
   brokerMutex,
   decodeDotAddressForContract,
   handleSubstrateError,
@@ -12,13 +11,12 @@ import {
   observeBalanceIncrease,
   shortChainFromAsset,
   hexStringToBytesArray,
-  getChainflipApi,
   calculateFeeWithBps,
   amountToFineAmountBigInt,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { doPerformSwap } from '../shared/perform_swap';
-import { observeEvent } from './utils/substrate';
+import { getChainflipApi, observeEvent } from './utils/substrate';
 
 const swapAssetAmount = {
   [Assets.Eth]: 1,
@@ -27,6 +25,8 @@ const swapAssetAmount = {
   [Assets.Btc]: 0.1,
   [Assets.Usdc]: 1000,
   [Assets.Usdt]: 1000,
+  [Assets.ArbEth]: 1,
+  [Assets.ArbUsdc]: 1000,
 };
 const commissionBps = 1000; // 10%
 
@@ -118,7 +118,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
   // Get values from the swap event
   const swapScheduledEvent = await observeSwapScheduledEvent.event;
-  const brokerCommission = BigInt(swapScheduledEvent.data.brokerCommission.replaceAll(',', ''));
+  const brokerCommission = BigInt(swapScheduledEvent.data.brokerCommission.replace(/,/g, ''));
   console.log('brokerCommission:', brokerCommission);
 
   // Check that the deposit amount is correct after deducting the deposit fee
@@ -174,19 +174,10 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     [chain]: observeWithdrawalAddress,
   });
   console.log(`Submitted withdrawal for ${asset}`);
+
   const withdrawalRequestedEvent = await observeWithdrawalRequested.event;
+
   console.log(`Withdrawal requested, egressId: ${withdrawalRequestedEvent.data.egressId}`);
-  const BatchBroadcastRequestedEvent = await observeEvent(':BatchBroadcastRequested', {
-    test: (event) =>
-      event.data.egressIds.some(
-        (egressId: EgressId) =>
-          egressId[0] === withdrawalRequestedEvent.data.egressId[0] &&
-          egressId[1] === withdrawalRequestedEvent.data.egressId[1],
-      ),
-  }).event;
-  console.log(
-    `Batch broadcast requested, broadcastId: ${BatchBroadcastRequestedEvent.data.broadcastId}`,
-  );
 
   await observeBalanceIncrease(asset, withdrawalAddress, balanceBeforeWithdrawal);
 
@@ -215,7 +206,7 @@ export async function testBrokerFeeCollection(): Promise<void> {
   // Check account role
   const role = JSON.stringify(
     await chainflip.query.accountRoles.accountRoles(broker.address),
-  ).replaceAll('"', '');
+  ).replace(/"/g, '');
   console.log('Broker role:', role);
   console.log('Broker address:', broker.address);
   assert.strictEqual(role, 'Broker', `Broker has unexpected role: ${role}`);

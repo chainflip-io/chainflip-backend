@@ -5,6 +5,8 @@ import {
   approveVault,
   Asset as SCAsset,
   Chains,
+  InternalAsset,
+  Chain,
 } from '@chainflip/cli';
 import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
 import {
@@ -97,7 +99,7 @@ export async function performSwapViaContract(
 
   try {
     // Fund new key with native asset and asset to swap.
-    await send(chainGasAsset(srcChain), wallet.address);
+    await send(chainGasAsset(srcChain) as InternalAsset, wallet.address);
     await send(sourceAsset, wallet.address);
 
     if (erc20Assets.includes(sourceAsset)) {
@@ -175,7 +177,7 @@ export async function approveTokenVault(srcAsset: Asset, amount: string, wallet:
   await approveVault(
     {
       amount,
-      srcChain: chain,
+      srcChain: chain as Chain,
       srcAsset: stateChainAssetFromAsset(srcAsset) as SCAsset,
     },
     {

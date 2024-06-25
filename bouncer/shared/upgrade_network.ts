@@ -247,10 +247,7 @@ async function incompatibleUpgrade(
   nextVersionWorkspacePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  await bumpSpecVersionAgainstNetwork(
-    `${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`,
-    9944,
-  );
+  await bumpSpecVersionAgainstNetwork(`${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`);
 
   await compileBinaries('all', nextVersionWorkspacePath);
 
@@ -342,13 +339,13 @@ export async function upgradeNetworkPrebuilt(
 
   let cleanOldVersion = oldVersion;
   if (versionRegex.test(cleanOldVersion)) {
-    cleanOldVersion = oldVersion.match(versionRegex)[0];
+    cleanOldVersion = oldVersion.match(versionRegex)?.[0] ?? '';
   }
 
   console.log("Version we're upgrading from: " + cleanOldVersion);
 
   const nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
-  const nodeVersion = nodeBinaryVersion.match(versionRegex)[0];
+  const nodeVersion = nodeBinaryVersion.match(versionRegex)?.[0] ?? '';
   console.log("Node version we're upgrading to: " + nodeVersion);
 
   // We use nodeVersion as a proxy for the cfe version since they are updated together.

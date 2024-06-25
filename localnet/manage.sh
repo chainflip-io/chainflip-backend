@@ -42,9 +42,28 @@ else
   additional_docker_compose_up_args=""
   additional_docker_compose_down_args="--volumes --remove-orphans"
 fi
+
 echo "👋 Welcome to Chainflip localnet manager"
 echo "🔧 Setting up..."
 echo "🕵🏻‍♂️  For full debug log, check $DEBUG_OUTPUT_DESTINATION"
+
+command_exists() {
+    command -v "$1" >>$DEBUG_OUTPUT_DESTINATION 2>&1
+}
+
+if command_exists docker-compose; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+elif command_exists docker && docker --version >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
+    if docker compose version >/dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="docker compose"
+    else
+        echo "Error: Docker is available but 'docker compose' command is not supported." >>$DEBUG_OUTPUT_DESTINATION 2>&1
+        exit 1
+    fi
+else
+    echo "Error: Neither docker-compose nor docker compose commands are available." >>$DEBUG_OUTPUT_DESTINATION 2>&1
+    exit 1
+fi
 
 get-workflow() {
   echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4, 5 or 6)"
@@ -97,25 +116,16 @@ build-localnet() {
   mkdir -p $CHAINFLIP_BASE_PATH
   touch $DEBUG_OUTPUT_DESTINATION
 
-  if [ "$OS_TYPE" == "Linux" ]; then
-    echo "🕵🏻‍♂️  Detected OS: $OS_TYPE. Copying .so files..."
-    echo "ℹ️ Note: The .so files in 'old-engine-dylib' are built for Ubuntu 22.04."
-    sudo cp $BINARY_ROOT_PATH/libchainflip_engine_v*.so /usr/lib/
-    sudo cp ./old-engine-dylib/libchainflip_engine_v*.so /usr/lib/
-  else
-    echo "🕵🏻‍♂️  Detected OS: $OS_TYPE. Skipping .so file copy."
-  fi
-
   echo "🪢 Pulling Docker Images"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" pull --quiet >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" pull --quiet >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🔮 Initializing Network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $INIT_CONTAINERS $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up $INIT_CONTAINERS $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
   tar -xzf $SOLANA_BASE_PATH/solana-ledger.tar.gz -C $SOLANA_BASE_PATH
   rm -rf $SOLANA_BASE_PATH/solana-ledger.tar.gz
 
   echo "🏗 Building network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up $CORE_CONTAINERS $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
   echo "🪙 Waiting for Bitcoin node to start"
   check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 >>$DEBUG_OUTPUT_DESTINATION
@@ -142,9 +152,9 @@ build-localnet() {
 
 
   echo "🦑 Waiting for Arbitrum nodes to start"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🪄 Deploying L2 Contracts"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up arb-init -d $additional_docker_compose_up_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up arb-init $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
   INIT_RPC_PORT=9944
 
@@ -211,18 +221,12 @@ build-localnet() {
 
 destroy() {
   echo "💣 Destroying network..."
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args >>$DEBUG_OUTPUT_DESTINATION 2>&1
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   for pid in $(ps -ef | grep solana | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf "/tmp/chainflip"
   rm -rf $SOLANA_BASE_PATH
 
-  if [ "$OS_TYPE" == "Linux" ]; then
-    echo "🧹  Detected OS: $OS_TYPE. removing chainflip .so files..."
-    sudo rm -rf /usr/lib/libchainflip_engine_v*.so
-  else
-    echo "🧹  Detected OS: $OS_TYPE. Skipping chainflip .so file deletion."
-  fi
   unset DOT_GENESIS_HASH
 
   echo "✅ Done"
@@ -275,29 +279,29 @@ logs() {
   echo "🤖 Which service would you like to tail?"
   select SERVICE in node engine broker lp polkadot geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker; do
     if [[ $SERVICE == "all" ]]; then
-      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f $CHAINFLIP_BASE_PATH/*/chainflip-*.log
     fi
     if [[ $SERVICE == "polkadot" ]]; then
-      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot
     fi
     if [[ $SERVICE == "geth" ]]; then
-      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow geth
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow geth
     fi
     if [[ $SERVICE == "bitcoin" ]]; then
-      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow bitcoin
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow bitcoin
     fi
     if [[ $SERVICE == "poster" ]]; then
-      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow poster
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow poster
     fi
     if [[ $SERVICE == "redis" ]]; then
-      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow redis
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow redis
     fi
     if [[ $SERVICE == "sequencer" ]]; then
-      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow sequencer
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow sequencer
     fi
     if [[ $SERVICE == "staker" ]]; then
-      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow staker-unsafe
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow staker-unsafe
     fi
     if [[ $SERVICE == "node" ]] || [[ $SERVICE == "engine" ]]; then
       select NODE in bashful doc dopey; do

@@ -1,5 +1,5 @@
 import { createLpPool } from '../shared/create_lp_pool';
-import { provideLiquidity } from '../shared/provide_liquidity';
+import { depositLiquidity } from './deposit_liquidity';
 import { rangeOrder } from '../shared/range_order';
 import { Asset } from './utils';
 
@@ -47,14 +47,14 @@ export async function setupSwaps(): Promise<void> {
   console.log('LP Pools created');
 
   await Promise.all([
-    provideLiquidity('Usdc', deposits.get('Usdc')!),
-    provideLiquidity('Eth', deposits.get('Eth')!),
-    provideLiquidity('Dot', deposits.get('Dot')!),
-    provideLiquidity('Btc', deposits.get('Btc')!),
-    provideLiquidity('Flip', deposits.get('Flip')!),
-    provideLiquidity('Usdt', deposits.get('Usdt')!),
-    provideLiquidity('ArbEth', deposits.get('ArbEth')!),
-    provideLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
+    depositLiquidity('Usdc', deposits.get('Usdc')!),
+    depositLiquidity('Eth', deposits.get('Eth')!),
+    depositLiquidity('Dot', deposits.get('Dot')!),
+    depositLiquidity('Btc', deposits.get('Btc')!),
+    depositLiquidity('Flip', deposits.get('Flip')!),
+    depositLiquidity('Usdt', deposits.get('Usdt')!),
+    depositLiquidity('ArbEth', deposits.get('ArbEth')!),
+    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
     // provideLiquidity('Sol', deposits.get('Sol')!),
     // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!),
   ]);

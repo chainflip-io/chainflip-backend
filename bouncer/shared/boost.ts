@@ -3,7 +3,6 @@ import Keyring from '@polkadot/keyring';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
-  getChainflipApi,
   lpMutex,
   chainFromAsset,
   shortChainFromAsset,
@@ -16,11 +15,11 @@ import {
   newAddress,
 } from './utils';
 import { send } from './send';
-import { provideLiquidity } from './provide_liquidity';
+import { depositLiquidity } from './deposit_liquidity';
 import { requestNewSwap } from './perform_swap';
 import { createBoostPools } from './setup_boost_pools';
 import { jsonRpc } from './json_rpc';
-import { observeEvent, Event } from './utils/substrate';
+import { observeEvent, Event, getChainflipApi } from './utils/substrate';
 
 const keyring = new Keyring({ type: 'sr25519' });
 keyring.setSS58Format(2112);
@@ -49,14 +48,14 @@ export async function stopBoosting<T = any>(
     },
   ).event;
 
-  const extrinsicResult = await extrinsicSubmitter.submit(
+  const extrinsicResult: any = await extrinsicSubmitter.submit(
     chainflip.tx[ingressEgressPalletForChain(chainFromAsset(asset))].stopBoosting(
       shortChainFromAsset(asset).toUpperCase(),
       boostTier,
     ),
     errorOnFail,
   );
-  if (!extrinsicResult.dispatchError) {
+  if (!extrinsicResult?.dispatchError) {
     console.log('waiting for stop boosting event');
     return observeStoppedBoosting;
   }
@@ -112,7 +111,9 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
     'Stopped boosting but, the test cannot start with pending boosts.',
   );
 
-  const boostPoolDetails = (await jsonRpc('cf_boost_pool_details', [Assets.Btc.toUpperCase()]))[0];
+  const boostPoolDetails = (
+    (await jsonRpc('cf_boost_pool_details', [Assets.Btc.toUpperCase()])) as any
+  )[0];
   assert.strictEqual(boostPoolDetails.fee_tier, boostFee, 'Unexpected lowest fee tier');
   assert.strictEqual(
     boostPoolDetails.available_amounts.length,
@@ -121,7 +122,7 @@ async function testBoostingForAsset(asset: Asset, boostFee: number, lpUri: strin
   );
 
   // Add boost funds
-  await provideLiquidity(asset, amount * 1.01, false, lpUri);
+  await depositLiquidity(asset, amount * 1.01, false, lpUri);
   await addBoostFunds(asset, boostFee, amount, lpUri);
 
   // Do a swap
@@ -194,7 +195,8 @@ export async function testBoostingSwap() {
 
   // To make the test easier, we use a new boost pool tier that is lower than the ones that already exist so we are the only booster.
   const boostPoolTier = 4;
-  const boostPool = (
+
+  const boostPool: any = (
     await chainflip.query.bitcoinIngressEgress.boostPools(Assets.Btc, boostPoolTier)
   ).toJSON();
 
