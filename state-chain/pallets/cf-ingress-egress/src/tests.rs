@@ -365,7 +365,6 @@ fn addresses_are_getting_reused() {
 			_ => None,
 		})
 		.then_execute_at_next_block(|(channels, broadcast_ids)| {
-			assert!(broadcast_ids.len() == 1);
 			// This would normally be triggered on broadcast success, should finalise the ingress.
 			for id in broadcast_ids {
 				MockEgressBroadcaster::dispatch_success_callback(id);

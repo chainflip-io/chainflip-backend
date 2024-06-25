@@ -19,7 +19,7 @@ use crate::{
 	SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
 };
 
-use cf_primitives::ForeignChain;
+use cf_primitives::{EgressId, ForeignChain};
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
@@ -196,29 +196,35 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	}
 
 	pub fn transfer(
-		transfer_param: Vec<TransferAssetParams<Solana>>,
-	) -> Result<Vec<Self>, SolanaTransactionBuildingError> {
+		transfer_param: Vec<(TransferAssetParams<Solana>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, SolanaTransactionBuildingError> {
 		// Lookup the current Aggkey
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
 		// split the transfer params into Native and Token assets
-		let (native, token) = transfer_param
-			.into_iter()
-			.partition::<Vec<TransferAssetParams<Solana>>, _>(|param| param.asset == SolAsset::Sol);
+		let (native, token) =
+			transfer_param
+				.into_iter()
+				.partition::<Vec<(TransferAssetParams<Solana>, EgressId)>, _>(|(param, ..)| {
+					param.asset == SolAsset::Sol
+				});
 
 		Ok(vec![
 			// Create native transfer instruction sets
 			native
 				.into_iter()
-				.map(|transfer_param| {
-					SolanaInstructionBuilder::transfer_native(
-						transfer_param.amount,
-						transfer_param.to,
-						agg_key,
-						nonce_account,
-						compute_price,
+				.map(|(transfer_param, egress_id)| {
+					(
+						SolanaInstructionBuilder::transfer_native(
+							transfer_param.amount,
+							transfer_param.to,
+							agg_key,
+							nonce_account,
+							compute_price,
+						),
+						egress_id,
 					)
 				})
 				.collect::<Vec<_>>(),
@@ -241,25 +247,28 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				// Build the Transfer instruction set for Token transfers.
 				token
 					.into_iter()
-					.map(|transfer_param| {
+					.map(|(transfer_param, egress_id)| {
 						let ata =
 						crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
 							transfer_param.to,
 							token_mint_pubkey,
 						)
 						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-						Ok(SolanaInstructionBuilder::transfer_usdc_token(
-							ata.address,
-							transfer_param.amount,
-							transfer_param.to,
-							vault_program,
-							vault_program_data_account,
-							token_vault_pda_account,
-							token_vault_ata,
-							token_mint_pubkey,
-							agg_key,
-							nonce_account,
-							compute_price,
+						Ok((
+							SolanaInstructionBuilder::transfer_usdc_token(
+								ata.address,
+								transfer_param.amount,
+								transfer_param.to,
+								vault_program,
+								vault_program_data_account,
+								token_vault_pda_account,
+								token_vault_ata,
+								token_mint_pubkey,
+								agg_key,
+								nonce_account,
+								compute_price,
+							),
+							egress_id,
 						))
 					})
 					.collect::<Result<Vec<_>, _>>()?
@@ -267,14 +276,19 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		]
 		.into_iter()
 		.flatten()
-		.map(|instruction_set| Self {
-			call_type: SolanaTransactionType::Transfer,
-			transaction: SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
-				&instruction_set,
-				Some(&agg_key.into()),
-				&durable_nonce.into(),
-			)),
-			_phantom: Default::default(),
+		.map(|(instruction_set, egress_id)| {
+			(
+				Self {
+					call_type: SolanaTransactionType::Transfer,
+					transaction: SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
+						&instruction_set,
+						Some(&agg_key.into()),
+						&durable_nonce.into(),
+					)),
+					_phantom: Default::default(),
+				},
+				vec![egress_id],
+			)
 		})
 		.collect::<Vec<_>>())
 	}
@@ -456,12 +470,12 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Solana>>,
-		transfer_params: Vec<TransferAssetParams<Solana>>,
-	) -> Result<Self, AllBatchError> {
-		let _fetch_tx = Self::batch_fetch(fetch_params)?;
-		let _transfer_txs = Self::transfer(transfer_params)?;
+		transfer_params: Vec<(TransferAssetParams<Solana>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let mut txs = Self::transfer(transfer_params)?;
+		txs.push((Self::batch_fetch(fetch_params)?, vec![]));
 
-		Err(AllBatchError::DispatchError(DispatchError::Other("PRO-1348 This should be implemented after allowing Multiple transactions to be returned by this trait.")))
+		Ok(txs)
 	}
 }
 
