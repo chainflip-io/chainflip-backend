@@ -16,7 +16,7 @@
 //
 // For example: ./commands/safe_mode.ts amber swapping_swapsEnabled,swapping_withdrawalsEnabled
 
-import { runWithTimeout } from '../shared/utils';
+import { executeWithTimeout } from '../shared/utils';
 import { setSafeModeToGreen, setSafeModeToAmber, setSafeModeToRed } from '../shared/safe_mode';
 
 async function main() {
@@ -36,14 +36,9 @@ async function main() {
       break;
     }
     default: {
-      console.log('Invalid safe mode. Valid values are RED AMBER and GREEN.');
-      process.exit(1);
+      throw new Error('Invalid safe mode. Valid values are RED, AMBER and GREEN.');
     }
   }
-  process.exit(0);
 }
 
-runWithTimeout(main(), 120000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await executeWithTimeout(main(), 120);

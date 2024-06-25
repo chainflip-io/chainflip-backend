@@ -30,6 +30,29 @@ cargo cf-test-ci
 > **_NOTE:_**  cf-test-ci is an alias for cargo test with additional flags. These aliases are defined in [.cargo/config.toml](.cargo/config.toml).
 
 ## Contributing
+### Setup
+Make sure you have the following packages and tools installed. The following is for debian-like systems (e.g. Ubuntu). You may need to adjust for your system.
+
+```bash
+# Update package lists
+sudo apt update
+
+# Install essential build tools and libraries
+sudo apt install -y build-essential pkg-config libssl-dev protobuf-compiler clang cmake jq
+
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install Node.js and pnpm
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs
+npm install -g pnpm
+
+# Install Solana
+sh -c "$(curl -sSfL https://release.solana.com/v1.18.8/install)"
+```
+
+> 💡 **_NOTE:_** Compiling for the very first time may take a while as it will download all the dependencies. You might hit some memory limitations and to overcome this, you can setup a swap file (20GB) on your system.
 
 ### Code style
 
@@ -90,26 +113,11 @@ commit.
 
 ### Prerequisites
 
-You will need to download [Docker](https://docs.docker.com/get-docker/), docker-compose and
-the [1Password CLI 2](https://developer.1password.com/docs/cli/get-started/).
+#### Hardware
+We recommend at least 16GB of RAM and 4 CPU cores to handle all the containers and binaries running locally.
 
-#### Login to 1Password
-
-The simplest way to login is to go via the [1Password app](https://developer.1password.com/docs/cli/get-started#step-1-connect-1password-cli-with-the-1password-app). Make sure you have v8 of 1Password installed.
-
-Verify you can connect to 1Password with:
-
-```shell
-op vault ls
-```
-
-#### Login to Docker
-
-The script will ask you to log in to our Docker container registry. You will need to create a [Classic PAT](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-personal-access-token-classic) for this.
-
-You only need to enable the `packages:read` permission.
-
-When creating a new PAT, you need to delete the `.setup_complete` file under `localnet`, which will cause the manage.sh to ask you again for the PAT you created.
+#### Software and Tools
+You will need to download [Docker](https://docs.docker.com/get-docker/). Make sure you use a recent version that has `docker-compose` plugin included. Otherwise, you might need to modify the `./localnet/manage.sh` script to use `docker-compose` instead of `docker compose`.
 
 ### Creating a Localnet
 
@@ -121,10 +129,7 @@ From the repo root, run the following:
 cargo build
 ./localnet/manage.sh
 ```
-
-If this is your first Localnet, the script will ask you to authenticate to Docker and 1Password. The script might fail if you haven't done this yet.
-
-After set up completion, you will see the following:
+You'll be prompted with the following:
 
 ```shell
 ❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4 or 5)
@@ -136,7 +141,7 @@ After set up completion, you will see the following:
 6) bouncer
 ```
 
-> **Note:** All chain data and signing DBs will be under`/tmp/chainflip`
+> **Note:** All chain data and signing DBs as well as log files will be under`/tmp/chainflip`
 
 - **build** - Create a new testnet using a path to the binaries you provide.
 - **recreate** - This will simply run destroy, followed by build. You have the option to change the path to the binaries.

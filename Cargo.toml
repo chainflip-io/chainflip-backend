@@ -108,10 +108,13 @@ x25519-dalek = { opt-level = 3 }
 yamux = { opt-level = 3 }
 zeroize = { opt-level = 3 }
 
+[profile.dev]
+rpath = true
 
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+rpath = true
 
 [profile.production]
 inherits = "release"

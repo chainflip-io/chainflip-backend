@@ -229,7 +229,8 @@ export class SwapContext {
       }
       case SwapStatus.Success: {
         assert(
-          currentStatus === SwapStatus.SwapScheduled,
+          currentStatus === SwapStatus.SwapScheduled ||
+            currentStatus === SwapStatus.ContractExecuted,
           `Unexpected status transition for ${tag}`,
         );
         break;
