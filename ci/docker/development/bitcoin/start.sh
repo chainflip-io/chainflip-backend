@@ -1,7 +1,7 @@
 #!/bin/bash
 set -x
 btc_version=$(bitcoind --version)
-btc_block_time=15
+btc_block_time=5
 
 PRUNE=$1
 
@@ -16,6 +16,8 @@ else
   done
 
   electrs --conf electrs.conf &
+
+  btc_block_time=15
 fi
 
 echo "Bitcoin version: $btc_version"
