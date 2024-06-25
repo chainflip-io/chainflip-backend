@@ -209,7 +209,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn sol_genesis_hash)]
-	pub type SolanaGenesisHash<T> = StorageValue<_, Option<SolHash>, ValueQuery>;
+	pub type SolanaGenesisHash<T> = StorageValue<_, SolHash, OptionQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn supported_sol_assets)]

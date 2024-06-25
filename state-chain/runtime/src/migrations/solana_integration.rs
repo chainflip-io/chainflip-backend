@@ -146,7 +146,7 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			};
 
 		pallet_cf_environment::SolanaVaultAddress::<Runtime>::put(vault_address);
-		pallet_cf_environment::SolanaGenesisHash::<Runtime>::put(genesis_hash);
+		pallet_cf_environment::SolanaGenesisHash::<Runtime>::set(genesis_hash);
 		pallet_cf_environment::SolanaSupportedAssets::<Runtime>::insert(SolUsdc, usdc_address);
 
 		Weight::zero()
