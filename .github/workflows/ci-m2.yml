@@ -24,7 +24,7 @@ jobs:
   #     test_features: runtime-benchmarks
   #   secrets: inherit
   build:
-    uses: ./.github/workflows/_20_build.yml
+    uses: ./.github/workflows/_21_build_m2.yml
     secrets: inherit
     with:
       profile: "release"
