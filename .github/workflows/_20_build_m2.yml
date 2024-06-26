@@ -1,0 +1,66 @@
+on:
+  workflow_call:
+    inputs:
+      profile:
+        default: release
+        description: Profile to build
+        type: string
+      upload-name:
+        default: chainflip-backend-bin
+        description: Name of the folder to upload the binaries to
+        type: string
+      binary-subdir:
+        default: release
+        type: string
+        description: Subdirectory of the target folder to upload
+
+env:
+  FORCE_COLOR: 1
+  COMMIT_HASH: ${{ github.sha }}
+
+jobs:
+  compile:
+    runs-on: namespace-profile-rust-builder-m2
+
+    steps:
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Setup Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
+
+      # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
+      - name: Configure Git 🛠️
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Build chainflip binaries 🏗️
+        run: |
+          cargo cf-build-${{ inputs.profile }} --locked
+
+      - name: ls directory
+        run: |
+          ls -la ./target/${{ inputs.binary-subdir }}
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        with:
+          name: ${{ inputs.upload-name }}
+          path: |
+            ./target/${{ inputs.binary-subdir }}/chainflip-node
+            ./target/${{ inputs.binary-subdir }}/chainflip-cli
+            ./target/${{ inputs.binary-subdir }}/generate-genesis-keys
+            ./target/${{ inputs.binary-subdir }}/chainflip-broker-api
+            ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
+            ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
+            ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v*.so
+            ./target/${{ inputs.binary-subdir }}/engine-runner
+
+
+      - name: Upload runtime artifacts
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        with:
+          name: chainflip-node-runtime-${{ inputs.profile }}
+          path: |
+            ./target/${{ inputs.binary-subdir }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm
