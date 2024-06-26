@@ -238,7 +238,7 @@ struct ClientSelector<Client: Clone + Send + Sync + 'static> {
 	prefer: PrimaryOrSecondary,
 	// The time we last tried the primary. If we haven't tried the primary in some time, then we
 	// should try it as it could be back online.
-	last_tried_primary: Option<tokio::time::Instant>,
+	last_failed_primary: Option<tokio::time::Instant>,
 }
 
 impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
@@ -274,7 +274,7 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 			primary_signal,
 			secondary_signal,
 			prefer: PrimaryOrSecondary::Primary,
-			last_tried_primary: None,
+			last_failed_primary: None,
 		}
 	}
 
@@ -287,11 +287,11 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 					// If we have two clients, then we should bias the requested one, but if it's
 					// not ready, request from the other one.
 					match self.prefer {
-						PrimaryOrSecondary::Secondary => match self.last_tried_primary {
+						PrimaryOrSecondary::Secondary => match self.last_failed_primary {
 							// If we haven't tried the primary in some time, then we should try it
 							// as it could be back online
-							Some(last_tried_primary)
-								if last_tried_primary.elapsed() > TRY_PRIMARY_AFTER =>
+							Some(last_failed_primary)
+								if last_failed_primary.elapsed() > TRY_PRIMARY_AFTER =>
 								[&self.primary_signal, secondary_signal],
 
 							_ => [secondary_signal, &self.primary_signal],
@@ -316,7 +316,7 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 		}
 
 		self.prefer = if failed_client == PrimaryOrSecondary::Primary {
-			self.last_tried_primary = Some(tokio::time::Instant::now());
+			self.last_failed_primary = Some(tokio::time::Instant::now());
 			PrimaryOrSecondary::Secondary
 		} else {
 			PrimaryOrSecondary::Primary
