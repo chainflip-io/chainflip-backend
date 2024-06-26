@@ -310,17 +310,15 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 	}
 
 	pub fn request_failed(&mut self, failed_client: PrimaryOrSecondary) {
-		// If we don't have a second endpoint, then we can only try the primary.
-		if self.secondary_signal.is_none() {
-			return;
+		// If we have a second endpoint, then we should switch to the other one.
+		if self.secondary_signal.is_some() {
+			self.prefer = if failed_client == PrimaryOrSecondary::Primary {
+				self.last_failed_primary = Some(tokio::time::Instant::now());
+				PrimaryOrSecondary::Secondary
+			} else {
+				PrimaryOrSecondary::Primary
+			};
 		}
-
-		self.prefer = if failed_client == PrimaryOrSecondary::Primary {
-			self.last_failed_primary = Some(tokio::time::Instant::now());
-			PrimaryOrSecondary::Secondary
-		} else {
-			PrimaryOrSecondary::Primary
-		};
 	}
 }
 
