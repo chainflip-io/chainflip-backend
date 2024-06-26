@@ -1,11 +1,11 @@
 use super::{AccountMeta, Instruction, Pubkey};
 
-use crate::sol::consts::SYSTEM_PROGRAM_ID;
 use borsh::BorshSerialize;
 use cf_utilities::SliceToArray;
 use core::str::FromStr;
 use scale_info::prelude::string::String;
 use serde::{Deserialize, Serialize};
+use sol_prim::consts::SYSTEM_PROGRAM_ID;
 use sp_std::{vec, vec::Vec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

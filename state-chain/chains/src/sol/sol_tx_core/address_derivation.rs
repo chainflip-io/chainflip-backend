@@ -4,8 +4,9 @@
 use cf_primitives::ChannelId;
 use sol_prim::DerivedAta;
 
-use crate::sol::{consts::*, AddressDerivationError, DerivedAddressBuilder, SolAddress};
+use crate::sol::{AddressDerivationError, DerivedAddressBuilder, SolAddress};
 use core::str::FromStr;
+use sol_prim::consts::{ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID};
 
 /// Derive address for a given channel ID
 pub fn derive_deposit_address(
@@ -183,6 +184,21 @@ mod tests {
 			}
 		);
 	}
+
+	#[test]
+	fn test_sol_derive_fetch_account() {
+		let fetch_account = derive_fetch_account(
+			SolAddress::from_str("HAMxiXdEJxiBHabZAUm8PSLvWQM2GHi5PArVZvUCeDab").unwrap(),
+			SolAddress::from_str("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf").unwrap(),
+		)
+		.unwrap()
+		.address;
+		assert_eq!(
+			fetch_account,
+			SolAddress::from_str("HGgUaHpsmZpB3pcYt8PE89imca6BQBRqYtbVQQqsso3o").unwrap()
+		);
+	}
+
 	#[test]
 	fn can_derive_fetch_account_native() {
 		let vault_program = SolAddress::from_str(sol_test_values::VAULT_PROGRAM).unwrap();

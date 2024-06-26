@@ -14,7 +14,6 @@ use super::{Chain, ChainCrypto};
 
 pub mod api;
 pub mod benchmarking;
-pub mod consts;
 pub mod instruction_builder;
 pub mod sol_tx_core;
 
@@ -49,7 +48,7 @@ impl Chain for Solana {
 	type TransactionMetadata = (); //todo
 	type ReplayProtectionParams = (); //todo
 	type ReplayProtection = (); //todo
-	type TransactionRef = SolHash;
+	type TransactionRef = SolSignature;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,7 +59,7 @@ impl ChainCrypto for SolanaCrypto {
 	type KeyHandoverIsRequired = ConstBool<false>;
 
 	type AggKey = SolAddress;
-	type Payload = SolMessage; //todo
+	type Payload = SolMessage;
 	type ThresholdSignature = SolSignature;
 	type TransactionInId = SolHash;
 	type TransactionOutId = Self::ThresholdSignature;
@@ -68,23 +67,22 @@ impl ChainCrypto for SolanaCrypto {
 	type GovKey = SolAddress;
 
 	fn verify_threshold_signature(
-		_agg_key: &Self::AggKey,
-		_payload: &Self::Payload,
-		_signature: &Self::ThresholdSignature,
+		agg_key: &Self::AggKey,
+		payload: &Self::Payload,
+		signature: &Self::ThresholdSignature,
 	) -> bool {
-		todo!()
+		use sp_core::ed25519::{Public, Signature};
+		use sp_io::crypto::ed25519_verify;
+
+		ed25519_verify(
+			&Signature::from_raw(signature.0),
+			payload.serialize().as_slice(),
+			&Public::from_raw(agg_key.0),
+		)
 	}
 
-	fn agg_key_to_payload(_agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
-		todo!()
-	}
-
-	fn handover_key_matches(_current_key: &Self::AggKey, _new_key: &Self::AggKey) -> bool {
-		todo!()
-	}
-
-	fn key_handover_is_required() -> bool {
-		todo!()
+	fn agg_key_to_payload(agg_key: Self::AggKey, _for_handover: bool) -> Self::Payload {
+		SolMessage::new(&[], Some(&SolPubkey::from(agg_key)))
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(
@@ -210,6 +208,79 @@ impl From<&DepositChannel<Solana>> for SolanaDepositFetchId {
 			channel_id: from.channel_id,
 			address: from.address,
 			bump: from.state,
+		}
+	}
+}
+
+#[cfg(any(test, feature = "runtime-integration-tests"))]
+pub mod signing_key {
+	use crate::sol::{
+		sol_tx_core::signer::{Signer, SignerError},
+		SolPubkey, SolSignature,
+	};
+	use ed25519_dalek::Signer as DalekSigner;
+	use rand::{rngs::OsRng, CryptoRng, RngCore};
+
+	#[derive(Clone)]
+	pub struct SolSigningKey(ed25519_dalek::SigningKey);
+
+	impl SolSigningKey {
+		/// Constructs a new, random `Keypair` using a caller-provided RNG
+		pub fn generate<R>(csprng: &mut R) -> Self
+		where
+			R: CryptoRng + RngCore,
+		{
+			Self(ed25519_dalek::SigningKey::generate(csprng))
+		}
+
+		/// Constructs a new random `Keypair` using `OsRng`
+		pub fn new() -> Self {
+			let mut rng = OsRng;
+			Self::generate(&mut rng)
+		}
+
+		/// Recovers a `SolSigningKey` from a byte array
+		pub fn from_bytes(bytes: &[u8]) -> Result<Self, ed25519_dalek::SignatureError> {
+			Ok(Self(ed25519_dalek::SigningKey::from_bytes(
+				<&[_; ed25519_dalek::SECRET_KEY_LENGTH]>::try_from(bytes).map_err(|_| {
+					ed25519_dalek::SignatureError::from_source(String::from(
+						"candidate keypair byte array is the wrong length",
+					))
+				})?,
+			)))
+		}
+
+		/// Returns this `SolSigningKey` as a byte array
+		pub fn to_bytes(&self) -> [u8; ed25519_dalek::SECRET_KEY_LENGTH] {
+			self.0.to_bytes()
+		}
+
+		/// Gets this `SolSigningKey`'s SecretKey
+		pub fn secret(&self) -> &ed25519_dalek::SigningKey {
+			&self.0
+		}
+	}
+
+	impl Signer for SolSigningKey {
+		#[inline]
+		fn pubkey(&self) -> SolPubkey {
+			SolPubkey::from(ed25519_dalek::VerifyingKey::from(&self.0).to_bytes())
+		}
+
+		fn try_pubkey(&self) -> Result<SolPubkey, SignerError> {
+			Ok(self.pubkey())
+		}
+
+		fn sign_message(&self, message: &[u8]) -> SolSignature {
+			SolSignature::from(self.0.sign(message).to_bytes())
+		}
+
+		fn try_sign_message(&self, message: &[u8]) -> Result<SolSignature, SignerError> {
+			Ok(self.sign_message(message))
+		}
+
+		fn is_interactive(&self) -> bool {
+			false
 		}
 	}
 }
