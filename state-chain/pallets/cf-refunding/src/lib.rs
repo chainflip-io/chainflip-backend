@@ -13,8 +13,6 @@ use cf_chains::ForeignChain;
 use frame_support::pallet_prelude::*;
 pub use pallet::*;
 
-mod benchmarking;
-
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
