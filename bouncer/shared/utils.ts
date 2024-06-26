@@ -247,7 +247,7 @@ export const deferredPromise = <T>(): {
   return { promise, resolve: resolve!, reject: reject! };
 };
 
-export { sleep, getChainflipApi };
+export { sleep };
 
 export const polkadotSigningMutex = new Mutex();
 
