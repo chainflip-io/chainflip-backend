@@ -30,9 +30,11 @@ jobs:
       #   uses: namespacelabs/nscloud-cache-action@v1
       #   with:
       #     cache: rust
+
       - name: Install Rust Requirements 💿
         run: |
           brew install protobuf
+
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
       - name: Configure Git 🛠️
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
@@ -48,7 +50,7 @@ jobs:
       - name: Upload binary artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
-          name: ${{ inputs.upload-name }}
+          name: ${{ inputs.upload-name }}-mac-m2
           path: |
             ./target/${{ inputs.binary-subdir }}/chainflip-node
             ./target/${{ inputs.binary-subdir }}/chainflip-cli
@@ -56,13 +58,12 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/chainflip-broker-api
             ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
-            ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v*.so
+            ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v*.dylib
             ./target/${{ inputs.binary-subdir }}/engine-runner
-
 
       - name: Upload runtime artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
-          name: chainflip-node-runtime-${{ inputs.profile }}
+          name: chainflip-node-runtime-${{ inputs.profile }}-mac-m2
           path: |
             ./target/${{ inputs.binary-subdir }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm
