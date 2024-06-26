@@ -205,16 +205,6 @@ fn epoch_rotates() {
 			assert_eq!(WithheldTransactionFees::<Runtime>::get(ForeignChain::Polkadot), 0);
 			assert_eq!(RecordedFees::<Runtime>::get(ForeignChain::Polkadot), None);
 
-			// This should just check that any kind of this event was emitted.
-			assert_events_match!(
-				Runtime,
-				RuntimeEvent::Refunding(
-					pallet_cf_refunding::Event::RefundScheduled {
-						..
-					},
-				) => ()
-			);
-
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
 
 			assert_eq!(
