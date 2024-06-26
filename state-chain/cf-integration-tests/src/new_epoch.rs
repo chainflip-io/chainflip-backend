@@ -11,6 +11,7 @@ use cf_chains::{
 	ForeignChain,
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
+use cf_test_utilities::assert_events_match;
 use cf_traits::{EpochInfo, KeyProvider};
 use frame_support::traits::UnfilteredDispatchable;
 use pallet_cf_environment::BitcoinAvailableUtxos;
@@ -194,6 +195,8 @@ fn epoch_rotates() {
 				RotationPhase::KeygensInProgress(..)
 			));
 
+			System::reset_events();
+
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
 			assert_eq!(WithheldTransactionFees::<Runtime>::get(ForeignChain::Ethereum), 0);
@@ -201,6 +204,16 @@ fn epoch_rotates() {
 
 			assert_eq!(WithheldTransactionFees::<Runtime>::get(ForeignChain::Polkadot), 0);
 			assert_eq!(RecordedFees::<Runtime>::get(ForeignChain::Polkadot), None);
+
+			// This should just check that any kind of this event was emitted.
+			assert_events_match!(
+				Runtime,
+				RuntimeEvent::Refunding(
+					pallet_cf_refunding::Event::RefundScheduled {
+						..
+					},
+				) => ()
+			);
 
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
 
