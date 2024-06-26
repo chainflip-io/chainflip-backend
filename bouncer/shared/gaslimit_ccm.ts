@@ -111,10 +111,10 @@ async function testGasLimitSwap(
   }
 
   // SwapExecuted is emitted at the same time as swapScheduled so we can't wait for swapId to be known.
-  const swapIdToEgressAmount: { [key: string]: string } = {};
+  const swapIdToSwapAmount: { [key: string]: string } = {};
   const swapExecutedHandle = observeEvent('swapping:SwapExecuted', {
     test: (event) => {
-      swapIdToEgressAmount[event.data.swapId] = event.data.egressAmount;
+      swapIdToSwapAmount[event.data.swapId] = event.data.swapAmount;
       return false;
     },
     abortable: true,
@@ -159,7 +159,7 @@ async function testGasLimitSwap(
 
   while (
     !(
-      swapId in swapIdToEgressAmount &&
+      swapId in swapIdToSwapAmount &&
       swapId in swapIdToEgressId &&
       swapIdToEgressId[swapId] in egressIdToBroadcastId &&
       egressIdToBroadcastId[swapIdToEgressId[swapId]] in broadcastIdToTxPayload
@@ -192,7 +192,7 @@ async function testGasLimitSwap(
     const {
       data: { swapId: gasSwapId },
     } = await gasSwapScheduledHandle!;
-    egressBudgetAmount = Number(swapIdToEgressAmount[gasSwapId].replace(/,/g, ''));
+    egressBudgetAmount = Number(swapIdToSwapAmount[gasSwapId].replace(/,/g, ''));
   }
 
   console.log(`${tag} Egress budget amount: ${egressBudgetAmount}`);
