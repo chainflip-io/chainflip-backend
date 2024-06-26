@@ -164,7 +164,7 @@ mod tests {
 		// There should be no error reading settings error - it will likely error due to no
 		// connection, but settings should be ok since all args are provided in command line args.
 		assert_ne!(
-			old::cfe_entrypoint(
+			new::cfe_entrypoint(
 				CStrArray::from_rust_strings(&rust_args).unwrap(),
 				engine_upgrade_utils::NO_START_FROM,
 			)
