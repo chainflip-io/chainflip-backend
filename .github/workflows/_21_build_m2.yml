@@ -32,7 +32,7 @@ jobs:
       #     cache: rust
       - name: Install Rust Requirements 💿
         run: |
-          brew install protoc
+          brew install protobuf
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
       - name: Configure Git 🛠️
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
