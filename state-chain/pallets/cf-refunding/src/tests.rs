@@ -74,3 +74,22 @@ fn skip_refunding_if_safe_mode_is_disabled() {
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
 	});
 }
+
+#[test]
+pub fn keep_fees_in_storage_if_egress_fails() {
+	new_test_ext().execute_with(|| {
+		MockEgressHandler::<AnyChain>::return_failure(true);
+
+		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
+
+		let recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
+
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
+		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
+
+		Refunding::on_distribute_withheld_fees(1);
+
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
+		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
+	});
+}
