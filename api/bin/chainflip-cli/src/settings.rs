@@ -1,5 +1,5 @@
 use chainflip_api::{
-	primitives::{state_chain_runtime, AccountRole, Asset, ForeignChain},
+	primitives::{state_chain_runtime, AccountRole, Asset, EpochIndex, ForeignChain},
 	BasisPoints,
 };
 pub use chainflip_engine::settings::StateChain;
@@ -218,6 +218,8 @@ pub enum CliCommand {
 	CountWitnesses {
 		#[clap(help = "The hash representing the call to check")]
 		hash: state_chain_runtime::Hash,
+		#[clap(help = "The epoch to check, default to the current one")]
+		epoch_index: Option<EpochIndex>,
 	},
 }
 

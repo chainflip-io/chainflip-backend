@@ -5,17 +5,11 @@ import { execSync } from 'child_process';
 
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { blake2AsU8a } from '../polkadot/util-crypto';
-import {
-  getPolkadotApi,
-  observeEvent,
-  amountToFineAmount,
-  sleep,
-  observeBadEvents,
-  assetDecimals,
-} from '../shared/utils';
+import { amountToFineAmount, sleep, assetDecimals } from '../shared/utils';
 import { specVersion, getNetworkRuntimeVersion } from './utils/spec_version';
 import { handleDispatchError, submitAndGetEvent } from '../shared/polkadot_utils';
 import { testSwap } from './swapping';
+import { observeEvent, observeBadEvent, getPolkadotApi } from './utils/substrate';
 
 const POLKADOT_REPO_URL = `https://github.com/chainflip-io/polkadot.git`;
 const PROPOSAL_AMOUNT = '100';
@@ -72,7 +66,9 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
   }
 
   // Submit the proposal
-  const observeDemocracyStarted = observeEvent('democracy:Started', polkadot);
+  const observeDemocracyStarted = observeEvent('democracy:Started', {
+    chain: 'polkadot',
+  }).event;
   const amount = amountToFineAmount(PROPOSAL_AMOUNT, assetDecimals('Dot'));
   console.log(`Submitting proposal with amount: ${PROPOSAL_AMOUNT}`);
   const democracyStartedEvent = await submitAndGetEvent(
@@ -87,10 +83,18 @@ export async function pushPolkadotRuntimeUpdate(wasmPath: string): Promise<void>
   await observeDemocracyStarted;
 
   // Vote for the proposal
-  const observeDemocracyPassed = observeEvent('democracy:Passed', polkadot);
-  const observeDemocracyNotPassed = observeEvent('democracy:NotPassed', polkadot);
-  const observeSchedulerDispatched = observeEvent('scheduler:Dispatched', polkadot);
-  const observeCodeUpdated = observeEvent('system:CodeUpdated', polkadot);
+  const observeDemocracyPassed = observeEvent('democracy:Passed', {
+    chain: 'polkadot',
+  }).event;
+  const observeDemocracyNotPassed = observeEvent('democracy:NotPassed', {
+    chain: 'polkadot',
+  }).event;
+  const observeSchedulerDispatched = observeEvent('scheduler:Dispatched', {
+    chain: 'polkadot',
+  }).event;
+  const observeCodeUpdated = observeEvent('system:CodeUpdated', {
+    chain: 'polkadot',
+  }).event;
   const vote = { Standard: { vote: true, balance: amount } };
   await submitAndGetEvent(
     polkadot.tx.democracy.vote(proposalIndex, vote),
@@ -224,6 +228,7 @@ async function doPolkadotSwaps(): Promise<void> {
   const startSwapInterval = 2000;
   console.log(`Running polkadot swaps, new random swap every ${startSwapInterval}ms`);
   while (!runtimeUpdatePushed) {
+    /* eslint-disable @typescript-eslint/no-floating-promises */
     randomPolkadotSwap();
     swapsStarted++;
     await sleep(startSwapInterval);
@@ -242,13 +247,9 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
   const [wasmPath, expectedSpecVersion] = await bumpAndBuildPolkadotRuntime();
 
   // Monitor for the broadcast aborted event to help catch failed swaps
-  let stopObserving = false;
-  const broadcastAborted = observeBadEvents(
-    ':BroadcastAborted',
-    () => stopObserving,
-    undefined,
-    'Polkadot runtime upgrade',
-  );
+  const broadcastAborted = observeBadEvent(':BroadcastAborted', {
+    label: 'Polkadot runtime upgrade',
+  });
 
   // Start some swaps
   const swapping = doPolkadotSwaps();
@@ -271,8 +272,7 @@ export async function testPolkadotRuntimeUpdate(): Promise<void> {
   // Wait for all of the swaps to complete
   console.log('Waiting for swaps to complete...');
   await swapping;
-  stopObserving = true;
-  await broadcastAborted;
+  await broadcastAborted.stop();
 
   process.exit(0);
 }

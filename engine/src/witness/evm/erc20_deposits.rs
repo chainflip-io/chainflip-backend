@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use cf_chains::{instances::ChainInstanceFor, Chain};
+use cf_chains::{evm::DepositDetails, instances::ChainInstanceFor, Chain};
 use cf_primitives::EpochIndex;
 use ethers::types::{Bloom, H160};
 use futures_core::Future;
@@ -70,8 +70,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		asset_contract_address: H160,
 	) -> Result<ChunkedByVaultBuilder<impl ChunkedByVault>, anyhow::Error>
 	where
-		Inner::Chain:
-			cf_chains::Chain<ChainAmount = u128, DepositDetails = (), ChainAccount = H160>,
+		Inner::Chain: cf_chains::Chain<
+			ChainAmount = u128,
+			DepositDetails = DepositDetails,
+			ChainAccount = H160,
+		>,
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = (Bloom, Addresses<Inner>)>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
@@ -125,7 +128,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 									"Any ERC20 tokens we support should have amounts that fit into a u128",
 								),
 								asset,
-								deposit_details: (),
+								deposit_details: DepositDetails {
+									tx_hashes: Some(vec![event.tx_hash]),
+								},
 							}),
 						_ => None,
 				}

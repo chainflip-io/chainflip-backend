@@ -446,7 +446,13 @@ pub mod pallet {
 					*vote = true;
 
 					if let Some(extra_data) = extra_data {
-						ExtraCallData::<T>::append(epoch_index, call_hash, extra_data);
+						// Extra data is no longer needed if we have reached the threshold since it
+						// has already been consumed.
+						if vote_count <=
+							success_threshold_from_share_count(num_authorities) as usize
+						{
+							ExtraCallData::<T>::append(epoch_index, call_hash, extra_data);
+						}
 					}
 
 					Ok(vote_count)
@@ -461,7 +467,7 @@ pub mod pallet {
 				(last_expired_epoch..=current_epoch)
 					.all(|epoch| CallHashExecuted::<T>::get(epoch, call_hash).is_none())
 			{
-				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
+				if let Some(mut extra_data) = ExtraCallData::<T>::take(epoch_index, call_hash) {
 					call.combine_and_inject(&mut extra_data)
 				}
 				if T::SafeMode::get().should_dispatch(&call) {

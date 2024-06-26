@@ -1,7 +1,8 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
 import type { ApiPromise } from '@polkadot/api';
 import Keyring from '../polkadot/keyring';
-import { getChainflipApi, handleSubstrateError, snowWhiteMutex } from './utils';
+import { handleSubstrateError, snowWhiteMutex } from './utils';
+import { getChainflipApi } from './utils/substrate';
 
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??

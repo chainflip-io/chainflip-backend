@@ -6,6 +6,7 @@ use chainflip_api::{
 	self, clean_foreign_chain_address,
 	primitives::{
 		AccountRole, Affiliates, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId,
+		ChannelRefundParameters,
 	},
 	settings::StateChain,
 	AccountId32, BrokerApi, OperatorApi, StateChainApi, WithdrawFeesDetail,
@@ -41,7 +42,7 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 			issued_block: value.issued_block,
 			channel_id: value.channel_id,
 			source_chain_expiry_block: NumberOrHex::from(value.source_chain_expiry_block),
-			channel_opening_fee: U256::from(value.channel_opening_fee),
+			channel_opening_fee: value.channel_opening_fee,
 		}
 	}
 }
@@ -61,6 +62,7 @@ pub trait Rpc {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
+		refund_parameters: Option<ChannelRefundParameters>,
 	) -> RpcResult<BrokerSwapDepositAddress>;
 
 	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
@@ -107,6 +109,7 @@ impl RpcServer for RpcServerImpl {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
+		refund_parameters: Option<ChannelRefundParameters>,
 	) -> RpcResult<BrokerSwapDepositAddress> {
 		Ok(self
 			.api
@@ -119,6 +122,7 @@ impl RpcServer for RpcServerImpl {
 				channel_metadata,
 				boost_fee,
 				affiliate_fees.unwrap_or_default(),
+				refund_parameters,
 			)
 			.await
 			.map(BrokerSwapDepositAddress::from)?)

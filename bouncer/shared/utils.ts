@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
-import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
+import { ApiPromise, Keyring } from '@polkadot/api';
 // eslint-disable-next-line no-restricted-imports
 import { KeyringPair } from '@polkadot/keyring/types';
 import { Mutex } from 'async-mutex';
@@ -25,6 +25,7 @@ import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
+import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -88,13 +89,9 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'VAULT':
           return '8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf';
         case 'TOKEN_VAULT_PDA':
-          return '9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6';
+          return 'CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d';
         case 'DATA_ACCOUNT':
-          return '623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a';
-        case 'UPGRADE_MANAGER':
-          return '274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC';
-        case 'UPGRADE_MANAGER_SIGNER':
-          return '2SAhe89c1umM2JvCnmqCEnY8UCQtNPEKGe7UXA8KSQqH';
+          return 'wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc';
         case 'SolUsdc':
           return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':
@@ -215,6 +212,26 @@ export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Pr
     }),
   ]);
 
+/// Runs the given promise with a timeout and handles exiting the process. Used for running commands & tests.
+export async function executeWithTimeout<T>(promise: Promise<T>, seconds: number): Promise<void> {
+  const start = Date.now();
+  await runWithTimeout(promise, seconds * 1000).catch((error) => {
+    console.error(error);
+    process.exit(-1);
+  });
+  const executionTime = (Date.now() - start) / 1000;
+
+  if (executionTime > seconds * 0.9) {
+    console.warn(
+      `\x1b[33m%s\x1b[0m`,
+      `Warning: Execution time was close to the timeout: ${executionTime}/${seconds}s`,
+    );
+  } else {
+    console.log(`Execution time: ${executionTime}/${seconds}s`);
+  }
+  process.exit(0);
+}
+
 export const sha256 = (data: string): Buffer => crypto.createHash('sha256').update(data).digest();
 
 export const deferredPromise = <T>(): {
@@ -234,77 +251,6 @@ export const deferredPromise = <T>(): {
 };
 
 export { sleep };
-
-// @ts-expect-error polyfilling
-Symbol.asyncDispose ??= Symbol('asyncDispose');
-// @ts-expect-error polyfilling
-Symbol.dispose ??= Symbol('dispose');
-
-type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
-
-// It is important to cache WS connections because nodes seem to have a
-// limit on how many can be opened at the same time (from the same IP presumably)
-function getCachedSubstrateApi(defaultEndpoint: string) {
-  let api: DisposableApiPromise | undefined;
-  let connections = 0;
-
-  return async (providedEndpoint?: string): Promise<DisposableApiPromise> => {
-    if (!api) {
-      const endpoint = providedEndpoint ?? defaultEndpoint;
-
-      const apiPromise = await ApiPromise.create({
-        provider: new WsProvider(endpoint),
-        noInitWarn: true,
-        types: {
-          EncodedAddress: {
-            _enum: {
-              Eth: '[u8; 20]',
-              Arb: '[u8; 20]',
-              Dot: '[u8; 32]',
-              Btc: 'Vec<u8>',
-            },
-          },
-        },
-      });
-
-      api = new Proxy(apiPromise as unknown as DisposableApiPromise, {
-        get(target, prop, receiver) {
-          if (prop === Symbol.asyncDispose) {
-            return async () => {
-              connections -= 1;
-              if (connections === 0) {
-                setTimeout(() => {
-                  if (connections === 0) {
-                    api = undefined;
-                    Reflect.get(target, 'disconnect', receiver).call(target);
-                  }
-                }, 5_000).unref();
-              }
-            };
-          }
-          if (prop === 'disconnect') {
-            return async () => {
-              // noop
-            };
-          }
-
-          return Reflect.get(target, prop, receiver);
-        },
-      });
-    }
-
-    connections += 1;
-
-    return api;
-  };
-}
-
-export const getChainflipApi = getCachedSubstrateApi(
-  process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944',
-);
-export const getPolkadotApi = getCachedSubstrateApi(
-  process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9947',
-);
 
 export const polkadotSigningMutex = new Mutex();
 
@@ -335,59 +281,7 @@ export function getBtcClient(): Client {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type EventQuery = (data: any) => boolean;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Event = { name: any; data: any; block: number; event_index: number };
-/** @deprecated there is a new one in the substrate utils */
-export async function observeEvent(
-  eventName: string,
-  api: ApiPromise,
-  eventQuery?: EventQuery,
-  stopObserveEvent?: () => boolean,
-  finalized = false,
-): Promise<Event> {
-  let result: Event | undefined;
-  let eventFound = false;
-
-  const query = eventQuery ?? (() => true);
-  const stopObserve = stopObserveEvent ?? (() => false);
-
-  const [expectedSection, expectedMethod] = eventName.split(':');
-
-  const subscribeMethod = finalized
-    ? api.rpc.chain.subscribeFinalizedHeads
-    : api.rpc.chain.subscribeNewHeads;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unsubscribe: any = await subscribeMethod(async (header) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events: any[] = await api.query.system.events.at(header.hash);
-    events.forEach((record, index) => {
-      const { event } = record;
-      if (
-        !eventFound &&
-        event.section.includes(expectedSection) &&
-        event.method.includes(expectedMethod)
-      ) {
-        const expectedEvent = {
-          name: { section: event.section, method: event.method },
-          data: event.toHuman().data,
-          block: header.number.toNumber(),
-          event_index: index,
-        };
-        if (query(expectedEvent)) {
-          result = expectedEvent;
-          eventFound = true;
-          unsubscribe();
-        }
-      }
-    });
-  });
-  while (!eventFound && !stopObserve()) {
-    await sleep(1000);
-  }
-  return result as Event;
-}
 
 export type EgressId = [Chain, number];
 type BroadcastId = [Chain, number];
@@ -476,6 +370,9 @@ export async function observeSwapEvents(
     });
   });
   while (!eventFound) {
+    if (!api.isConnected) {
+      throw new Error('API is not connected');
+    }
     await sleep(1000);
   }
   return broadcastId;
@@ -486,6 +383,8 @@ export enum SwapType {
   Swap = 'Swap',
   CcmPrincipal = 'CcmPrincipal',
   CcmGas = 'CcmGas',
+  NetworkFee = 'NetworkFee',
+  IngressEgressFee = 'IngressEgressFee',
 }
 
 export async function observeSwapScheduled(
@@ -494,64 +393,36 @@ export async function observeSwapScheduled(
   channelId: number,
   swapType?: SwapType,
 ) {
-  await using chainflipApi = await getChainflipApi();
-
   // need to await this to prevent the chainflip api from being disposed prematurely
-  const result = await observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
-    if ('DepositChannel' in event.data.origin) {
-      const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
-      const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
-      const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
-      const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
-      return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
-    }
-    // Otherwise it was a swap scheduled by interacting with the Eth smart contract
-    return false;
-  });
-
-  return result;
-}
-
-// Make sure the stopObserveEvent returns true before the end of the test
-export async function observeBadEvents(
-  eventName: string,
-  stopObserveEvent: () => boolean,
-  eventQuery?: EventQuery,
-  testTag?: string,
-) {
-  await using chainflipApi = await getChainflipApi();
-  const event = await observeEvent(eventName, chainflipApi, eventQuery, stopObserveEvent);
-  if (event) {
-    const testMessage = testTag ? `Test: ${testTag}: ` : '';
-    throw new Error(
-      `${testMessage}Unexpected event emitted ${event.name.section}: ${event.name.method} in block ${event.block} `,
-    );
-  }
+  return observeEvent('swapping:SwapScheduled', {
+    test: (event) => {
+      if ('DepositChannel' in event.data.origin) {
+        const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
+        const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
+        const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
+        const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
+        return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
+      }
+      // Otherwise it was a swap scheduled by interacting with the Eth smart contract
+      return false;
+    },
+  }).event;
 }
 
 export async function observeBroadcastSuccess(broadcastId: BroadcastId, testTag?: string) {
-  await using chainflipApi = await getChainflipApi();
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
-  let stopObserving = false;
-  const observeBroadcastFailure = observeBadEvents(
-    broadcaster + ':BroadcastAborted',
-    () => stopObserving,
-    (event) => {
-      if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
-      return false;
-    },
-    testTag ? `observe BroadcastSuccess test tag: ${testTag}` : 'observe BroadcastSuccess',
-  );
-
-  await observeEvent(broadcaster + ':BroadcastSuccess', chainflipApi, (event) => {
-    if (broadcastIdNumber === Number(event.data.broadcastId)) return true;
-    return false;
+  const observeBroadcastFailure = observeBadEvent(`${broadcaster}:BroadcastAborted`, {
+    test: (event) => broadcastIdNumber === Number(event.data.broadcastId),
+    label: testTag ? `observe BroadcastSuccess test tag: ${testTag}` : 'observe BroadcastSuccess',
   });
 
-  stopObserving = true;
-  await observeBroadcastFailure;
+  await observeEvent(`${broadcaster}:BroadcastSuccess`, {
+    test: (event) => broadcastIdNumber === Number(event.data.broadcastId),
+  }).event;
+
+  await observeBroadcastFailure.stop();
 }
 
 export async function newAddress(
@@ -705,10 +576,15 @@ export async function observeEVMEvent(
   const stopObserve = stopObserveEvent ?? (() => false);
 
   // Gets all the event parameter as an array
-  const eventAbi = contractAbi.find((item) => item.type === 'event' && item.name === eventName)!;
+
+  const eventAbi = contractAbi.find(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (item: any) => item.type === 'event' && item.name === eventName,
+  )!;
 
   // Get the parameter names of the event
-  const parameterNames = eventAbi.inputs.map((input) => input.name);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parameterNames = eventAbi.inputs.map((input: any) => input.name);
 
   for (let i = 0; i < 1200; i++) {
     if (stopObserve()) return undefined;
@@ -829,7 +705,6 @@ export function handleSubstrateError(api: any) {
         error = dispatchError.toString();
       }
       console.log('Dispatch error:' + error);
-      console.log('Extrinsic failed: ' + error);
       process.exit(1);
     }
   };
@@ -927,7 +802,8 @@ export async function submitChainflipExtrinsic(
 ): Promise<any> {
   await using chainflipApi = await getChainflipApi();
 
-  let extrinsicResult;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let extrinsicResult: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await extrinsic.signAndSend(account, { nonce: -1 }, (arg: any) => {
     if (arg.blockNumber !== undefined || arg.dispatchError !== undefined) {
@@ -977,4 +853,20 @@ export function calculateFeeWithBps(fineAmount: bigint, bps: number): bigint {
   // Using some strange math here because the SC rounds down on 0.5 instead of up.
   const divisor = BigInt(10000 / bps);
   return fineAmount / divisor + (fineAmount % divisor > divisor / 2n ? 1n : 0n);
+}
+
+// Throws error if unsuccessful.
+export async function tryUntilSuccess(
+  closure: () => Promise<boolean>,
+  pollTime: number,
+  maxAttempts: number,
+  logTag?: string,
+) {
+  for (let i = 0; i < maxAttempts; i++) {
+    if (await closure()) {
+      return;
+    }
+    await sleep(pollTime);
+  }
+  throw new Error('tryUntilSuccess failed: ' + logTag);
 }

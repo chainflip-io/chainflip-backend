@@ -332,6 +332,12 @@ impl AccountMeta {
 	}
 }
 
+impl<P: Into<Pubkey>> From<P> for AccountMeta {
+	fn from(pubkey: P) -> Self {
+		AccountMeta { pubkey: pubkey.into(), is_signer: false, is_writable: false }
+	}
+}
+
 /// Describes the organization of a `Message`'s account keys.
 ///
 /// Every [`Instruction`] specifies which accounts it may reference, or
@@ -646,20 +652,9 @@ pub struct CompiledInstruction {
 	Ord,
 	PartialOrd,
 	Copy,
+	BorshSerialize,
 )]
 pub struct Pubkey(pub [u8; 32]);
-
-impl AsRef<[u8]> for Pubkey {
-	fn as_ref(&self) -> &[u8] {
-		&self.0[..]
-	}
-}
-
-impl AsRef<[u8; 32]> for Pubkey {
-	fn as_ref(&self) -> &[u8; 32] {
-		&self.0
-	}
-}
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub enum ParsePubkeyError {
@@ -873,35 +868,26 @@ pub mod sol_test_values {
 		sol::{
 			consts::{const_address, const_hash},
 			SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolCcmAddress, SolComputeLimit,
-			SolHash, SolPubkey,
+			SolHash,
 		},
 		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
 	};
-	use core::str::FromStr;
 
 	pub const VAULT_PROGRAM: SolAddress =
 		const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf");
 	pub const VAULT_PROGRAM_DATA_ADDRESS: SolAddress =
 		const_address("3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57");
 	pub const VAULT_PROGRAM_DATA_ACCOUNT: SolAddress =
-		const_address("623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a");
+		const_address("wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc");
 	// MIN_PUB_KEY per supported spl-token
 	pub const MINT_PUB_KEY: SolAddress =
 		const_address("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p");
 	pub const TOKEN_VAULT_PDA_ACCOUNT: SolAddress =
-		const_address("9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6");
+		const_address("CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d");
 	// This can be derived from the TOKEN_VAULT_PDA_ACCOUNT and the mintPubKey but we can have it
 	// stored There will be a different one per each supported spl-token
 	pub const TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: SolAddress =
-		const_address("DUjCLckPi4g7QAwBEwuFL1whpgY6L9fxwXnqbWvS2pcW");
-	pub const UPGRADE_MANAGER_PROGRAM: SolAddress =
-		const_address("274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC");
-	pub const UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT: SolAddress =
-		const_address("CAGADTb6bdpm4L4esntbLQovDyg6Wutiot2DNkMR8wZa");
-	pub const UPGRADE_MANAGER_PDA_SIGNER_SEED: [u8; 6] = [115u8, 105u8, 103u8, 110u8, 101u8, 114u8];
-	pub const UPGRADE_MANAGER_PDA_SIGNER_BUMP: u8 = 255;
-	pub const UPGRADE_MANAGER_PDA_SIGNER: SolAddress =
-		const_address("2SAhe89c1umM2JvCnmqCEnY8UCQtNPEKGe7UXA8KSQqH");
+		const_address("GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd");
 	pub const NONCE_ACCOUNTS: [SolAddress; 10] = [
 		const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
 		const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
@@ -939,12 +925,11 @@ pub mod sol_test_values {
 	pub fn ccm_accounts() -> SolCcmAccounts {
 		SolCcmAccounts {
 			cf_receiver: SolCcmAddress {
-				pubkey: SolPubkey::from_str("NJusJ7itnSsh4jSi43i9MMKB9sF4VbNvdSwUA45gPE6").unwrap(),
+				pubkey: const_address("8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH").into(),
 				is_writable: true,
 			},
 			remaining_accounts: vec![SolCcmAddress {
-				pubkey: SolPubkey::from_str("CFp37nEY6E9byYHiuxQZg6vMCnzwNrgiF9nFGT6Zwcnx")
-					.unwrap(),
+				pubkey: const_address("CFp37nEY6E9byYHiuxQZg6vMCnzwNrgiF9nFGT6Zwcnx").into(),
 				is_writable: false,
 			}],
 		}
@@ -970,13 +955,12 @@ mod tests {
 	use crate::sol::{
 		consts::*,
 		sol_tx_core::{
-			address_derivation::{derive_associated_token_account, derive_deposit_address},
-			bpf_loader_instructions::set_upgrade_authority,
+			address_derivation::{
+				derive_associated_token_account, derive_deposit_address, derive_fetch_account,
+			},
 			compute_budget::ComputeBudgetInstruction,
 			extra_types_for_testing::{Keypair, Signer},
-			program_instructions::{
-				ProgramInstruction, SystemProgramInstruction, UpgradeManagerProgram, VaultProgram,
-			},
+			program_instructions::{InstructionExt, SystemProgramInstruction, VaultProgram},
 			sol_test_values::*,
 			token_instructions::AssociatedTokenAccountInstruction,
 			AccountMeta, BorshDeserialize, BorshSerialize, Hash, Instruction, Message, Pubkey,
@@ -984,6 +968,7 @@ mod tests {
 		},
 		SolAddress,
 	};
+	use codec::Encode;
 	use core::str::FromStr;
 	use sol_prim::DerivedAta;
 
@@ -1075,7 +1060,12 @@ mod tests {
 		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let deposit_channel = FETCH_FROM_ACCOUNT.into();
+		let vault_program_id = VAULT_PROGRAM;
+		let deposit_channel: Pubkey = FETCH_FROM_ACCOUNT.into();
+		let deposit_channel_historical_fetch =
+			derive_fetch_account(SolAddress::from(deposit_channel), vault_program_id)
+				.unwrap()
+				.address;
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
@@ -1084,18 +1074,14 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchNative {
-					seed: vec![11u8, 12u8, 13u8, 55u8, 0u8, 0u8, 0u8, 0u8],
-					bump: 255,
-				},
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(VAULT_PROGRAM_DATA_ACCOUNT.into(), false),
-					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel, false),
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-				],
+			VaultProgram::with_id(VAULT_PROGRAM).fetch_native(
+				vec![11u8, 12u8, 13u8, 55u8, 0u8, 0u8, 0u8, 0u8],
+				255,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				deposit_channel,
+				deposit_channel_historical_fetch,
+				SYSTEM_PROGRAM_ID,
 			),
 		];
 		let message =
@@ -1108,7 +1094,7 @@ mod tests {
 			tx.finalize_and_serialize().expect("Transaction serialization should succeed");
 
 		// With compute unit price and limit
-		let expected_serialized_tx = hex_literal::hex!("0106c23d5531cfd1d8d543eb8f88dc346a540224a50930bb1c4509c0a5ad9da77a5fb097530c0d9fa9e35f65ce9445c02bdabef979967ee0d60ed0cc8cc0c7370001000508f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19233306d43f017cdb7b1a324afdc62c79317d5b93e2e63b870143344134db9c60000000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502e0930400070406000203158e24658f6c59298c080000000b0c0d3700000000ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01bc4310ab1e81ef7f80ee1df5d2dedb76e59d0d34a356e4682e6fa86019619cbc25a752fa9260e743b7fb382fc1790e91c651b6fe0fe7bdb3f8e37477788f2c0001000509f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19233306d43f017cdb7b1a324afdc62c79317d5b93e2e63b870143344134db9c600606b9a783a1a2f182b11e9663561cde6ebc2a7d83e97922c214e25284519a68800000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004040301060004040000000500090340420f000000000005000502e093040008050700020304158e24658f6c59298c080000000b0c0d3700000000ff").to_vec();
 
 		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
@@ -1126,6 +1112,13 @@ mod tests {
 		let deposit_channel_0 = derive_deposit_address(0u64, vault_program_id).unwrap();
 		let deposit_channel_1 = derive_deposit_address(1u64, vault_program_id).unwrap();
 
+		let deposit_channel_historical_fetch_0 =
+			derive_fetch_account(deposit_channel_0.address, vault_program_id).unwrap();
+		let deposit_channel_historical_fetch_1 =
+			derive_fetch_account(deposit_channel_1.address, vault_program_id).unwrap();
+
+		let vault_program = VaultProgram::with_id(VAULT_PROGRAM);
+
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&NONCE_ACCOUNTS[0].into(),
@@ -1133,31 +1126,23 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchNative {
-					seed: 0u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_0.bump,
-				},
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(VAULT_PROGRAM_DATA_ACCOUNT.into(), false),
-					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel_0.address.into(), false),
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-				],
+			vault_program.fetch_native(
+				0u64.to_le_bytes().to_vec(),
+				deposit_channel_0.bump,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				deposit_channel_0.address,
+				deposit_channel_historical_fetch_0.address,
+				SYSTEM_PROGRAM_ID,
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchNative {
-					seed: 1u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_1.bump,
-				},
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(VAULT_PROGRAM_DATA_ACCOUNT.into(), false),
-					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel_1.address.into(), false),
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-				],
+			vault_program.fetch_native(
+				1u64.to_le_bytes().to_vec(),
+				deposit_channel_1.bump,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				deposit_channel_1.address,
+				deposit_channel_historical_fetch_1.address,
+				SYSTEM_PROGRAM_ID,
 			),
 		];
 		let message =
@@ -1170,7 +1155,7 @@ mod tests {
 			tx.finalize_and_serialize().expect("Transaction serialization should succeed");
 
 		// With compute unit price and limit
-		let expected_serialized_tx = hex_literal::hex!("010824d160477d5184765ad3ad95be7a17f20684fed88857acfde4c7f71e751177b741f6d25465e5530db686b2138e14fe9a6afca798c8349080f71f6621fb730701000509f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec4ffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588be00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301060004040000000500090340420f000000000005000502e0930400080407000304158e24658f6c59298c080000000000000000000000fe080407000204158e24658f6c59298c080000000100000000000000ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01ccc4ac6b89b9f73dc3842397bd950c9ad3236cbb053a67d88682a8477388fb1b957236441bc313b51f3470935110a47b916acf23b7018e65aabccd48b1b9640f0100050bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec457965dbc726e7fe35896f2bf0b9c965ebeb488cb0534aed3a6bb35f6343f503c8c21729498a6919298e0c953bd5fc297329663d413cbaac7799a79bd75f7df47ffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588be00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005060301080004040000000700090340420f000000000007000502e09304000a050900050406158e24658f6c59298c080000000000000000000000fe0a050900020306158e24658f6c59298c080000000100000000000000ff").to_vec();
 
 		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
@@ -1190,6 +1175,8 @@ mod tests {
 		let deposit_channel = derive_deposit_address(seed, vault_program_id).unwrap();
 		let deposit_channel_ata =
 			derive_associated_token_account(deposit_channel.address, token_mint_pubkey).unwrap();
+		let deposit_channel_historical_fetch =
+			derive_fetch_account(deposit_channel_ata.address, vault_program_id).unwrap();
 
 		// Deposit channel derived from the Vault address from the seed and the bump
 		assert_eq!(
@@ -1208,7 +1195,15 @@ mod tests {
 				bump: 254u8
 			},
 		);
-
+		// Historical fetch account derived from the Vault address using the ATA as the seed
+		assert_eq!(
+			deposit_channel_historical_fetch,
+			DerivedAta {
+				address: SolAddress::from_str("FuNSXye89kBJQXp3rqkcz7oCUd5C5rVUDo7o5CRQ6T2o")
+					.unwrap(),
+				bump: 252u8
+			},
+		);
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
 				&NONCE_ACCOUNTS[0].into(),
@@ -1216,23 +1211,19 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchTokens {
-					seed: seed.to_le_bytes().to_vec(),
-					bump: deposit_channel.bump,
-					decimals: 6,
-				},
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(VAULT_PROGRAM_DATA_ACCOUNT.into(), false),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(deposit_channel.address.into(), false),
-					AccountMeta::new(deposit_channel_ata.address.into(), false),
-					AccountMeta::new(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT.into(), false),
-					AccountMeta::new_readonly(MINT_PUB_KEY.into(), false),
-					AccountMeta::new_readonly(TOKEN_PROGRAM_ID.into(), false),
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-				],
+			VaultProgram::with_id(VAULT_PROGRAM).fetch_tokens(
+				seed.to_le_bytes().to_vec(),
+				deposit_channel.bump,
+				6,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				deposit_channel.address,
+				deposit_channel_ata.address,
+				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				MINT_PUB_KEY,
+				TOKEN_PROGRAM_ID,
+				deposit_channel_historical_fetch.address,
+				SYSTEM_PROGRAM_ID,
 			),
 		];
 		let message =
@@ -1241,7 +1232,7 @@ mod tests {
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("01c2deaa4b670a3b7e1a661f106e3c63b0247aa3d30e44779c7024528636d643b2a2a167c2823643a38cf2bcb4ce77797cadb3bed6b1934d9380140555afa0520f0100080cf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee874a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004040301060004040000000500090340420f000000000005000502e09304000a0809000b020308070416494710642cb0c646080000000000000000000000fe06").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01907513e65d06e24f79271d06e201ff07785c517b24ca2f90ec9405716411bbd6fa53db355d3d233b8efd438aad241380e2c27bae161b81230061486fe99abd080100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871dd6e0fc50e3b853cb77f36ec4fff9c847d1b12f83ae2535aa98f2bd1d627ad08e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8772b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004050301070004040000000600090340420f000000000006000502e09304000b0909000c02040a08030516494710642cb0c646080000000000000000000000fe06").to_vec();
 
 		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
@@ -1260,12 +1251,18 @@ mod tests {
 		let deposit_channel_0 = derive_deposit_address(0u64, vault_program_id).unwrap();
 		let deposit_channel_ata_0 =
 			derive_associated_token_account(deposit_channel_0.address, token_mint_pubkey).unwrap();
+		let deposit_channel_historical_fetch_0 =
+			derive_fetch_account(deposit_channel_ata_0.address, vault_program_id).unwrap();
 
 		let deposit_channel_1 = derive_deposit_address(1u64, vault_program_id).unwrap();
 		let deposit_channel_ata_1 =
 			derive_associated_token_account(deposit_channel_1.address, token_mint_pubkey).unwrap();
+		let deposit_channel_historical_fetch_1 =
+			derive_fetch_account(deposit_channel_ata_1.address, vault_program_id).unwrap();
 
 		let deposit_channel_2 = derive_deposit_address(2u64, vault_program_id).unwrap();
+		let deposit_channel_historical_fetch_2 =
+			derive_fetch_account(deposit_channel_2.address, vault_program_id).unwrap();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
@@ -1274,54 +1271,42 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchTokens {
-					seed: 0u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_0.bump,
-					decimals: 6,
-				},
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(VAULT_PROGRAM_DATA_ACCOUNT.into(), false),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(deposit_channel_0.address.into(), false),
-					AccountMeta::new(deposit_channel_ata_0.address.into(), false),
-					AccountMeta::new(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT.into(), false),
-					AccountMeta::new_readonly(MINT_PUB_KEY.into(), false),
-					AccountMeta::new_readonly(TOKEN_PROGRAM_ID.into(), false),
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-				],
+			VaultProgram::with_id(VAULT_PROGRAM).fetch_tokens(
+				0u64.to_le_bytes().to_vec(),
+				deposit_channel_0.bump,
+				6,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				deposit_channel_0.address,
+				deposit_channel_ata_0.address,
+				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				MINT_PUB_KEY,
+				TOKEN_PROGRAM_ID,
+				deposit_channel_historical_fetch_0.address,
+				SYSTEM_PROGRAM_ID,
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchTokens {
-					seed: 1u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_1.bump,
-					decimals: 6,
-				},
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(VAULT_PROGRAM_DATA_ACCOUNT.into(), false),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(deposit_channel_1.address.into(), false),
-					AccountMeta::new(deposit_channel_ata_1.address.into(), false),
-					AccountMeta::new(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT.into(), false),
-					AccountMeta::new_readonly(MINT_PUB_KEY.into(), false),
-					AccountMeta::new_readonly(TOKEN_PROGRAM_ID.into(), false),
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-				],
+			VaultProgram::with_id(VAULT_PROGRAM).fetch_tokens(
+				1u64.to_le_bytes().to_vec(),
+				deposit_channel_1.bump,
+				6,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				deposit_channel_1.address,
+				deposit_channel_ata_1.address,
+				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				MINT_PUB_KEY,
+				TOKEN_PROGRAM_ID,
+				deposit_channel_historical_fetch_1.address,
+				SYSTEM_PROGRAM_ID,
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::FetchNative {
-					seed: 2u64.to_le_bytes().to_vec(),
-					bump: deposit_channel_2.bump,
-				},
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(VAULT_PROGRAM_DATA_ACCOUNT.into(), false),
-					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(deposit_channel_2.address.into(), false),
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-				],
+			VaultProgram::with_id(VAULT_PROGRAM).fetch_native(
+				2u64.to_le_bytes().to_vec(),
+				deposit_channel_2.bump,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				deposit_channel_2.address,
+				deposit_channel_historical_fetch_2.address,
+				SYSTEM_PROGRAM_ID,
 			),
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
@@ -1329,7 +1314,7 @@ mod tests {
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("015980d922d0a6ed11c1d64c9a6ceba7a5d4e2eb1127bcdae1f4fb9343b3679b3ed09ba6cf10bb5c0cab6886afa7aee09f1b4ed3d1025ba60697428e81c246a40e0100090ff79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19255268e2506656a8aafc4689443bad81d0ca129f134075303ca77eefefc1b3b395f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871839f5b31e9ce2282c92310f62fa5e69302a0ae2e28ba1b99b0e7d57c10ab84c6b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee871e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec44a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890006060301080004040000000700090340420f000000000007000502e09304000d080c000e03050a090616494710642cb0c646080000000000000000000000fe060d080c000b04050a090616494710642cb0c646080000000100000000000000ff060d040c000206158e24658f6c59298c080000000200000000000000ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("0119dcae48dbdc663efcc8be9fe79d4207d606afd050f8fb62a82775764257124f24fc08a56351a5ae1259029a1525e0e14b6c20abf187187aadf0157af34a200401000912f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19234ba473530acb5fe214bcf1637a95dd9586131636adc3a27365264e64025a91c55268e2506656a8aafc4689443bad81d0ca129f134075303ca77eefefc1b3b395f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871839f5b31e9ce2282c92310f62fa5e69302a0ae2e28ba1b99b0e7d57c10ab84c6bd306154bf886039adbb6f2126a02d730889b6d320507c74f5c0240c8c406454dd6e0fc50e3b853cb77f36ec4fff9c847d1b12f83ae2535aa98f2bd1d627ad08e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee871e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060903010b0004040000000a00090340420f00000000000a000502e093040010090d001104080e0c070916494710642cb0c646080000000000000000000000fe0610090d000f05080e0c020916494710642cb0c646080000000100000000000000ff0610050d00030609158e24658f6c59298c080000000200000000000000ff").to_vec();
 
 		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
@@ -1360,22 +1345,16 @@ mod tests {
 				&MINT_PUB_KEY.into(),
 				&to_pubkey_ata.address.into(),
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::TransferTokens { amount: TRANSFER_AMOUNT, decimals: SOL_USDC_DECIMAL },
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(
-						VAULT_PROGRAM_DATA_ACCOUNT.into(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(TOKEN_VAULT_PDA_ACCOUNT.into(), false),
-					AccountMeta::new(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT.into(), false),
-					AccountMeta::new(to_pubkey_ata.address.into(), false),
-					AccountMeta::new_readonly(MINT_PUB_KEY.into(), false),
-					AccountMeta::new_readonly(TOKEN_PROGRAM_ID.into(), false),
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-				],
+			VaultProgram::with_id(VAULT_PROGRAM).transfer_tokens(
+				TRANSFER_AMOUNT,
+				SOL_USDC_DECIMAL,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				TOKEN_VAULT_PDA_ACCOUNT,
+				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				to_pubkey_ata.address,
+				MINT_PUB_KEY,
+				TOKEN_PROGRAM_ID,
 			),
 		];
 		let message =
@@ -1384,7 +1363,7 @@ mod tests {
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("019df37a2382451b6663aebcba5cd4c8b220fa22fd10c1a32af8d26a4bca2403c06e5d449428e850aab2480a78c41393020761b558feded014ac0d158770a9c20c01000a0ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd44a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c81a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec84458805218c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301060004040000000500090340420f000000000005000502e09304000d0600020908040701010b080a000c03020807041136b4eeaf4a557ebc00ca9a3b0000000006").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("014b3dcc9d694f8f0175546e0c8b0cedbe4c1a371cac7108d5029b625ced6dee9d38a97458a3dfa3efbc0d26545fec4f7fa199b41317b219b6ff6c93070d8dd10501000a0ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859ab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301060004040000000500090340420f000000000005000502e09304000c0600020a09040701010b0708000d030209071136b4eeaf4a557ebc00ca9a3b0000000006").to_vec();
 
 		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
@@ -1408,20 +1387,12 @@ mod tests {
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::RotateAggKey { skip_transfer_funds: false },
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new(VAULT_PROGRAM_DATA_ACCOUNT.into(), false),
-					AccountMeta::new(agg_key_pubkey, true),
-					AccountMeta::new(new_agg_key_pubkey, false),
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-				],
-			),
-			set_upgrade_authority(
-				UPGRADE_MANAGER_PROGRAM_DATA_ACCOUNT.into(),
-				&agg_key_pubkey,
-				Some(&new_agg_key_pubkey),
+			VaultProgram::with_id(VAULT_PROGRAM).rotate_agg_key(
+				false,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				new_agg_key_pubkey,
+				SYSTEM_PROGRAM_ID,
 			),
 		];
 		instructions.extend(NONCE_ACCOUNTS.into_iter().map(|nonce_account| {
@@ -1438,9 +1409,9 @@ mod tests {
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("01bc10cb686da3b32ce8c910bfafeca7fccf81d729bcd5bcb06e01ea72ee9db7f16c1c0893f86bb04f931da2ac1f80cc9be4d5d6a64167126b676be1808de3cb0f01000513f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1924a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b6744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900448541f57201f277c5f3ffb631d0212e26e7f47749c26c4808718174a0ab2a09a18cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adba5cfec75730f8780ded36a7c8ae1dcc60d84e1a830765fc6108e7b40402e4951cd644e45426a41a7cb8369b8a0c1c89bb3f86cf278fdd9cc38b0f69784ad5667e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864e5e1869817a4fd88ddf7ab7a5f7252d7c345b39721769888608592912e8ca9acf0f13460b3fd04b7d53d7421fc874ec00eec769cf36480895e1a407bf1249475f2b2e24122be016983be9369965246cc45e1f621d40fba300c56c7ac50c3874df4f83bd213a59c9785110cf83c718f9486c3484f918593bce20c61dc6a96036afecc89e3b031824af6363174d19bbec12d3a13c4a173e5aeb349b63042bc138f000000000000000000000000000000000000000000000000000000000000000002a8f6914e88a1b0e210153ef763ae2b00c2b93d16c124d2c0537a10048000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000f0e0301110004040000001000090340420f000000000010000502e093040012040200030e094e518fabdda5d68b000f0306000304040000000e02010024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020c0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020a0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020b0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02080024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02070024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02040024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e020d0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02090024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440e02050024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("017663fd8be6c54a3ce492a4aac1f50ed8a1589f8aa091d04b52e6fa8a43f22d359906e21630ca3dd93179e989bc1fdccbae8f9a30f6470ef9d5c17a7625f0050a01000411f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0917eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1926744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900448541f57201f277c5f3ffb631d0212e26e7f47749c26c4808718174a0ab2a09a18cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adbcd644e45426a41a7cb8369b8a0c1c89bb3f86cf278fdd9cc38b0f69784ad5667e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864e5e1869817a4fd88ddf7ab7a5f7252d7c345b39721769888608592912e8ca9acf0f13460b3fd04b7d53d7421fc874ec00eec769cf36480895e1a407bf1249475f2b2e24122be016983be9369965246cc45e1f621d40fba300c56c7ac50c3874df4f83bd213a59c9785110cf83c718f9486c3484f918593bce20c61dc6a96036afecc89e3b031824af6363174d19bbec12d3a13c4a173e5aeb349b63042bc138f00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000e0d03020f0004040000000e00090340420f00000000000e000502e093040010040100030d094e518fabdda5d68b000d02020024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020b0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02090024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020a0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02070024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02060024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02040024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020c0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02080024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02050024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
 
-		// println!("tx:{:?}", hex::encode(serialized_tx.clone()));
+		println!("tx:{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1454,9 +1425,6 @@ mod tests {
 		let to_pubkey = TRANSFER_TO_ACCOUNT.into();
 		let extra_accounts = ccm_accounts();
 
-		// Test ccm only contains 2 accounts - 1 cf_receiver and 1 ccm_account.
-		let cf_receiver: AccountMeta = extra_accounts.cf_receiver.clone().into();
-		let ccm_account = extra_accounts.remaining_account_metas()[0].clone();
 		let ccm_parameter = ccm_parameter();
 
 		let instructions = [
@@ -1467,25 +1435,20 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, TRANSFER_AMOUNT),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::ExecuteCcmNativeCall {
-					source_chain: ccm_parameter.source_chain as u32,
-					source_address: codec::Encode::encode(&ccm_parameter.source_address),
-					message: ccm_parameter.channel_metadata.message.to_vec(),
-					amount: TRANSFER_AMOUNT,
-				},
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(VAULT_PROGRAM_DATA_ACCOUNT.into(), false),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new(to_pubkey, false),
-					cf_receiver, /* cf receiver
-					              * account */
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-					AccountMeta::new_readonly(SYS_VAR_INSTRUCTIONS.into(), false),
-					ccm_account,
-				],
-			),
+			VaultProgram::with_id(VAULT_PROGRAM)
+				.execute_ccm_native_call(
+					ccm_parameter.source_chain as u32,
+					ccm_parameter.source_address.encode(), // TODO: check this (scale encoded?)
+					ccm_parameter.channel_metadata.message.to_vec(),
+					TRANSFER_AMOUNT,
+					VAULT_PROGRAM_DATA_ACCOUNT,
+					agg_key_pubkey,
+					to_pubkey,
+					extra_accounts.clone().cf_receiver,
+					SYSTEM_PROGRAM_ID,
+					SYS_VAR_INSTRUCTIONS,
+				)
+				.with_remaining_accounts(extra_accounts.remaining_account_metas()),
 		];
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
@@ -1493,7 +1456,7 @@ mod tests {
 		tx.sign(&[&agg_key_keypair], durable_nonce);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("019e8ac555f753d59579063aa9339e3c434b31aa4d26f4999e2bcad27812a70812a5c0aac063d036359f91c81d9fd67a0d309b471e9f1ff40de1fc9a7a39bbc2090100070bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310717eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000004a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040302070004040000000500090340420f000000000005000502e0930400040200030c0200000000ca9a3b0000000009070800030104060a367d050be38042e0b201000000160000000100ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("014883f2c34f354cb7d99ba52325f27eeb0975cea6c36220f92a82e193cf2f31a954e82e976d02a4411d90ae3a751621de2b180a1779c891d92ee866d8a4c5f0010100070bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd47417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed4800000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301070004040000000500090340420f000000000005000502e0930400040200020c0200000000ca9a3b0000000009070800020304060a367d050be38042e0b201000000160000000100ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
 		// println!("{:?}", hex::encode(serialized_tx.clone()));
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
@@ -1526,54 +1489,30 @@ mod tests {
 				&token_mint_pubkey.into(),
 				&to_pubkey_ata.address.into(),
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::TransferTokens { amount, decimals: SOL_USDC_DECIMAL },
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(
-						VAULT_PROGRAM_DATA_ACCOUNT.into(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new_readonly(
-						TOKEN_VAULT_PDA_ACCOUNT.into(),
-						false,
-					),
-					AccountMeta::new(
-						TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT.into(),
-						false,
-					),
-					AccountMeta::new(to_pubkey_ata.address.into(), false),
-					AccountMeta::new_readonly(MINT_PUB_KEY.into(), false),
-					AccountMeta::new_readonly(TOKEN_PROGRAM_ID.into(), false),
-					AccountMeta::new_readonly(SYSTEM_PROGRAM_ID.into(), false),
-				],
+			VaultProgram::with_id(VAULT_PROGRAM).transfer_tokens(
+				amount,
+				SOL_USDC_DECIMAL,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				TOKEN_VAULT_PDA_ACCOUNT,
+				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				to_pubkey_ata.address,
+				MINT_PUB_KEY,
+				TOKEN_PROGRAM_ID,
 			),
-			ProgramInstruction::get_instruction(
-				&VaultProgram::ExecuteCcmTokenCall {
-					source_chain: ccm_parameter.source_chain as u32,
-					source_address: codec::Encode::encode(&ccm_parameter.source_address),
-					message: ccm_parameter.channel_metadata.message.into(),
-					amount,
-				},
-				VAULT_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(
-						VAULT_PROGRAM_DATA_ACCOUNT.into(),
-						false,
-					),
-					AccountMeta::new_readonly(agg_key_pubkey, true),
-					AccountMeta::new(to_pubkey_ata.address.into(), false),
-					extra_accounts.cf_receiver.into(),
-					AccountMeta::new_readonly(TOKEN_PROGRAM_ID.into(), false),
-					AccountMeta::new_readonly(MINT_PUB_KEY.into(), false),
-					AccountMeta::new_readonly(
-						SYS_VAR_INSTRUCTIONS.into(),
-						false,
-					),
-					extra_accounts.remaining_accounts[0].clone().into(),
-				],
-			),
+			VaultProgram::with_id(VAULT_PROGRAM).execute_ccm_token_call(
+				ccm_parameter.source_chain as u32,
+				ccm_parameter.source_address.encode(), // TODO: check this (scale encoded?)
+				ccm_parameter.channel_metadata.message.to_vec(),
+				amount,
+				VAULT_PROGRAM_DATA_ACCOUNT,
+				agg_key_pubkey,
+				to_pubkey_ata.address,
+				extra_accounts.clone().cf_receiver,
+				TOKEN_PROGRAM_ID,
+				MINT_PUB_KEY,
+				SYS_VAR_INSTRUCTIONS,
+			).with_remaining_accounts(extra_accounts.remaining_account_metas()),
 		];
 		let message =
 			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
@@ -1582,58 +1521,9 @@ mod tests {
 		// println!("{:?}", tx);
 
 		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("01105b6646cf4b5b42cd489b2123d18d253e8cb488f889078ada016a2daae5a7bcbef8f4cd5f603142f62fbb42965a49306535239617c13ba1fbca72cc571d7c0f01000c11f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0575731869899efe0bd5d9161ad9f1db7c582c48c0b4ea7cff6a637c55c7310717eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616b966a2b36557938f49cc5d00f8f12d86f16f48e03b63c8422967dba621ab60bf00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd44a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c81a0052237ad76cb6e88fe505dc3d96bba6d8889f098b1eaa342ec84458805218c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890006050302080004040000000600090340420f000000000006000502e09304000f0600030b0a050901010d080c000e04030a09051136b4eeaf4a557ebc00ca9a3b00000000060d080c000301090a0710366cb8a27b9fdeaa2301000000160000000100ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01926f75817ef621f9bbeccc8e08ff55215f8ca412d1f5d8ef3b6b0887d33cbee6c7d01d216a4b68eacc540df25fb88380b6a1bce25d56e832ea1efed6550ef70e01000c11f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec46167417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed48e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5ab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890006050301080004040000000600090340420f000000000006000502e09304000e0600020c0b050901010d070a001004020b091136b4eeaf4a557ebc00ca9a3b00000000060d080a000203090b070f366cb8a27b9fdeaa2301000000160000000100ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
 
 		// println!("{:?}", hex::encode(serialized_tx.clone()));
-
-		assert_eq!(serialized_tx, expected_serialized_tx);
-		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
-	}
-
-	#[test]
-	fn create_upgrade_vault_program() {
-		let durable_nonce = Hash::from_str("6Wj7BNUVAhoMpqeHATYqRs7waV5s8JKNosmMNkzfCJxy").unwrap();
-
-		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
-		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let govkey_pubkey = agg_key_keypair.pubkey();
-		let buffer_address =
-			Pubkey::from_str("3Cj5FNvkm8eGz64t8TFPw2PTuFHUheqtmHhhozm8RsuT").unwrap();
-		let spill_address =
-			Pubkey::from_str("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp").unwrap();
-
-		let instructions = [
-			SystemProgramInstruction::advance_nonce_account(
-				&NONCE_ACCOUNTS[0].into(),
-				&agg_key_pubkey,
-			),
-			ProgramInstruction::get_instruction(
-				&UpgradeManagerProgram::UpgradeVaultProgram {
-					seed: UPGRADE_MANAGER_PDA_SIGNER_SEED.to_vec(),
-					bump: UPGRADE_MANAGER_PDA_SIGNER_BUMP,
-				},
-				UPGRADE_MANAGER_PROGRAM.into(),
-				vec![
-					AccountMeta::new_readonly(VAULT_PROGRAM_DATA_ACCOUNT.into(), false),
-					AccountMeta::new_readonly(govkey_pubkey, true),
-					AccountMeta::new(VAULT_PROGRAM_DATA_ADDRESS.into(), false),
-					AccountMeta::new(VAULT_PROGRAM.into(), false),
-					AccountMeta::new(buffer_address, false),
-					AccountMeta::new(spill_address, false),
-					AccountMeta::new_readonly(SYS_VAR_RENT.into(), false),
-					AccountMeta::new_readonly(SYS_VAR_CLOCK.into(), false),
-					AccountMeta::new_readonly(UPGRADE_MANAGER_PDA_SIGNER.into(), false),
-					AccountMeta::new_readonly(BPF_LOADER_UPGRADEABLE_ID.into(), false),
-				],
-			),
-		];
-		let message =
-			Message::new_with_blockhash(&instructions, Some(&agg_key_pubkey), &durable_nonce);
-		let mut tx = Transaction::new_unsigned(message);
-		tx.sign(&[&agg_key_keypair], durable_nonce);
-
-		let serialized_tx = tx.finalize_and_serialize().unwrap();
-		let expected_serialized_tx = hex_literal::hex!("01ab10abaa3ebb93f14f783053d9b9e23c95fc1c76b6b72ebb285c8f1d61acebc0b7ad323c9d370c00b8867f6b1f4aa92a974a879ecc9f3e63ae63fb9062bf0d0f0100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19220b855ca2d3763c4f0f055c8ec3523199c684abe93655a9cde1bc843da5ef2da298f27f13ce155954657f0238e63932beb510964abd44e20e9603e6b6f2b424a72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c000000000000000000000000000000000000000000000000000000000000000002a8f6914e88a1b0e210153ef763ae2b00c2b93d16c124d2c0537a100480000006a7d51718c774c928566398691d5eb68b5eb8a39b4b6d5c73555b210000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006a7d517192c5c51218cc94c3d4af17f58daee089ba1fd44e3dbd98a000000001068c72f83398081684c491910b66f8d8cca0edc00cbcf11c89f86c5c39d80f7154e2cfe8c12c99db54b553ffeae05145bcafaab8b11ea3d1a8c45f98764bfd44a8f28a600d49f666140b8b7456aedd064455f0aa5b8008894baf6ff84ed723b51e7e35a9b795b74ca6d292d9949701179cf2a5a20621893d50b6e4dadfcca0a02050301080004040000000a0a0c000304020009070b061348d34cbd54b03e65060000007369676e6572ff").to_vec();
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
@@ -1674,72 +1564,6 @@ mod tests {
 
 		assert_eq!(serialized_tx, expected_serialized_tx);
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH)
-	}
-
-	// TODO: Pull and compare discriminators and function from the contracts-interfaces
-	#[test]
-	fn test_function_discriminators() {
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::RotateAggKey {
-				skip_transfer_funds: false
-			}),
-			vec![78u8, 81u8, 143u8, 171u8, 221u8, 165u8, 214u8, 139u8]
-		);
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::FetchTokens {
-				seed: vec![34u8, 27u8, 77u8],
-				bump: 2,
-				decimals: 6
-			}),
-			vec![73u8, 71u8, 16u8, 100u8, 44u8, 176u8, 198u8, 70u8]
-		);
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::TransferTokens {
-				amount: 6,
-				decimals: 6
-			}),
-			vec![54u8, 180u8, 238u8, 175u8, 74u8, 85u8, 126u8, 188u8]
-		);
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::FetchNative {
-				seed: vec![1u8, 2u8, 3u8],
-				bump: 13
-			}),
-			vec![142u8, 36u8, 101u8, 143u8, 108u8, 89u8, 41u8, 140u8]
-		);
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::ExecuteCcmNativeCall {
-				source_chain: 1,
-				source_address: vec![2u8, 2u8, 67u8],
-				message: vec![2u8],
-				amount: 4
-			}),
-			vec![125u8, 5u8, 11u8, 227u8, 128u8, 66u8, 224u8, 178u8]
-		);
-		assert_eq!(
-			VaultProgram::function_discriminator(&VaultProgram::ExecuteCcmTokenCall {
-				source_chain: 1,
-				source_address: vec![2u8, 2u8, 67u8],
-				message: vec![3u8],
-				amount: 1
-			}),
-			vec![108u8, 184u8, 162u8, 123u8, 159u8, 222u8, 170u8, 35u8]
-		);
-		assert_eq!(
-			UpgradeManagerProgram::function_discriminator(
-				&UpgradeManagerProgram::UpgradeVaultProgram { seed: vec![31u8, 1u8, 5u8], bump: 3 }
-			),
-			vec![72u8, 211u8, 76u8, 189u8, 84u8, 176u8, 62u8, 101u8]
-		);
-		assert_eq!(
-			UpgradeManagerProgram::function_discriminator(
-				&UpgradeManagerProgram::TransferVaultUpgradeAuthority {
-					seed: vec![1u8, 5u8, 7u8],
-					bump: 3,
-				}
-			),
-			vec![114u8, 247u8, 72u8, 110u8, 145u8, 65u8, 236u8, 153u8]
-		);
 	}
 
 	// Test taken from https://docs.rs/solana-sdk/latest/src/solana_sdk/transaction/mod.rs.html#1354

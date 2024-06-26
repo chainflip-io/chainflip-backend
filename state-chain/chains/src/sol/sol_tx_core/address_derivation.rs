@@ -27,6 +27,14 @@ pub fn derive_associated_token_account(
 		.finish()
 }
 
+/// Derive a fetch account from the vault program key and a deposit channel address used as a seed.
+pub fn derive_fetch_account(
+	deposit_channel_address: SolAddress,
+	vault_program: SolAddress,
+) -> Result<DerivedAta, AddressDerivationError> {
+	derive_address(deposit_channel_address, vault_program)
+}
+
 /// Derive an address from our Vault program key. Produces an Address and a bump.
 fn derive_address(
 	seed: impl AsRef<[u8]>,
@@ -167,6 +175,38 @@ mod tests {
 				address: SolAddress::from_str("9roLwm8U86pj24Hwwzx71AF8axYnSc6U542Bdx5w7FUZ")
 					.unwrap(),
 				bump: 255u8
+			}
+		);
+	}
+	#[test]
+	fn can_derive_fetch_account_native() {
+		let vault_program = sol_test_values::VAULT_PROGRAM;
+		let deposit_channel = derive_deposit_address(0u64, vault_program).unwrap().address;
+		assert_eq!(
+			derive_fetch_account(deposit_channel, vault_program).unwrap(),
+			DerivedAta {
+				address: SolAddress::from_str("AS1fDXUeL6dYHKxvyMGyFoqrsN5zPcUsanPDqmvVvFUA")
+					.unwrap(),
+				bump: 255u8
+			},
+		);
+	}
+	#[test]
+	fn can_derive_fetch_account_token() {
+		let vault_program = sol_test_values::VAULT_PROGRAM;
+		let token_mint_pubkey = sol_test_values::MINT_PUB_KEY;
+		let deposit_channel = derive_deposit_address(0u64, vault_program).unwrap().address;
+		let deposit_channel_ata =
+			derive_associated_token_account(deposit_channel, token_mint_pubkey)
+				.unwrap()
+				.address;
+
+		assert_eq!(
+			derive_fetch_account(deposit_channel_ata, vault_program).unwrap(),
+			DerivedAta {
+				address: SolAddress::from_str("FuNSXye89kBJQXp3rqkcz7oCUd5C5rVUDo7o5CRQ6T2o")
+					.unwrap(),
+				bump: 252u8
 			}
 		);
 	}
