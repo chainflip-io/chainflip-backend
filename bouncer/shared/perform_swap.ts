@@ -10,6 +10,7 @@ import {
   observeSwapScheduled,
   observeSwapEvents,
   observeBroadcastSuccess,
+  getEncodedSolAddress,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swapping';
@@ -20,6 +21,8 @@ function encodeDestinationAddress(address: string, destAsset: Asset): string {
 
   if (destAddress && destAsset === 'Dot') {
     destAddress = encodeAddress(destAddress);
+  } else if (shortChainFromAsset(destAsset) === 'Sol') {
+    destAddress = getEncodedSolAddress(destAddress);
   }
 
   return destAddress;

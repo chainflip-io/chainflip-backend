@@ -1726,6 +1726,7 @@ dependencies = [
  "frame-support",
  "futures",
  "hex",
+ "hex-literal",
  "hmac-sha512",
  "lazy_static",
  "libp2p-identity 0.2.8",

@@ -447,10 +447,10 @@ pub mod pallet {
 		pub arb_vault_address: EvmAddress,
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
-		pub network_environment: NetworkEnvironment,
 		pub sol_vault_address: SolAddress,
 		pub sol_genesis_hash: Option<SolHash>,
 		pub sol_usdc_address: SolAddress,
+		pub network_environment: NetworkEnvironment,
 		pub _config: PhantomData<T>,
 	}
 

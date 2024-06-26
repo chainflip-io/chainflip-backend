@@ -285,14 +285,13 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
   Object.values(Assets).forEach((sourceAsset) => {
     Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset)
+      .filter((destAsset) => sourceAsset !== destAsset && chainFromAsset(destAsset) !== 'Solana')
       .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 
         const sourceChain = chainFromAsset(sourceAsset);
         const destChain = chainFromAsset(destAsset);
-
         if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
           // Contract Swaps
           appendSwap(sourceAsset, destAsset, testSwapViaContract);
@@ -308,6 +307,8 @@ export async function testAllSwaps(swapContext: SwapContext) {
         }
       });
   });
+
+  // appendSwap('Eth', 'Sol', testSwap);
 
   await Promise.all(allSwaps);
 

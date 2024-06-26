@@ -37,7 +37,7 @@ export async function newSwap(
             message: messageMetadata.message as `0x${string}`,
             gasBudget: messageMetadata.gasBudget.toString(),
           },
-          boostFeeBps,
+          maxBoostFeeBps: boostFeeBps,
         },
         {
           url: brokerUrl,
