@@ -5,7 +5,11 @@ use core::ops::Range;
 use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
-	mocks::{cfe_interface_mock::{MockCfeEvent, MockCfeInterface}, key_rotator::MockKeyRotatorA, reputation_resetter::MockReputationResetter},
+	mocks::{
+		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
+		key_rotator::MockKeyRotatorA,
+		reputation_resetter::MockReputationResetter,
+	},
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
@@ -372,7 +376,6 @@ fn register_peer_id() {
 			}],
 			"should emit event on register peer id"
 		);
-		
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(ValidatorPallet::node_peer_id(&BOB), Some((bob_peer_public_key, 40043, 11)));
 
@@ -411,7 +414,6 @@ fn register_peer_id() {
 			}],
 			"should emit event on register peer id"
 		);
-			
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(ValidatorPallet::node_peer_id(&BOB), Some((bob_peer_public_key, 40043, 11)));
 
@@ -423,7 +425,6 @@ fn register_peer_id() {
 			12,
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
-			
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(ValidatorPallet::node_peer_id(&BOB), Some((bob_peer_public_key, 40043, 12)));
 	});
