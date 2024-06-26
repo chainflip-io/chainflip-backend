@@ -419,7 +419,6 @@ fn can_swap_using_witness_origin() {
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
-			broker_commission: None,
 			broker_fee: None,
 			execute_at: 3,
 		}));
@@ -985,7 +984,6 @@ fn swap_by_witnesser_happy_path() {
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
-			broker_commission: None,
 			broker_fee: None,
 			execute_at,
 		}));
@@ -1040,7 +1038,6 @@ fn swap_by_deposit_happy_path() {
 				deposit_block_height: Default::default(),
 			},
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
-			broker_commission: Some(0),
 			broker_fee: Some(0),
 			execute_at,
 		}));
@@ -1451,8 +1448,6 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					swap_id: 1,
 					source_asset: Asset::Usdc,
 					destination_asset: Asset::Eth,
-					deposit_amount: 99_000,
-					egress_amount: 9,
 					swap_input: 99_000,
 					swap_output: 9,
 					intermediate_amount: None,
@@ -1461,9 +1456,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 2,
 					source_asset: Asset::Usdc,
-					deposit_amount: 1_000,
 					destination_asset: Asset::Eth,
-					egress_amount: 0,
 					swap_input: 1_000,
 					swap_output: 0,
 					intermediate_amount: None,
@@ -1874,8 +1867,6 @@ fn swap_input_excludes_network_fee() {
 				swap_id: 1,
 				source_asset: FROM_ASSET,
 				destination_asset: TO_ASSET,
-				deposit_amount: expected_swap_input,
-				egress_amount: expected_swap_input,
 				swap_input: expected_swap_input,
 				swap_output: expected_swap_input,
 				intermediate_amount: None,
@@ -2024,7 +2015,6 @@ fn assert_swap_scheduled_event_emitted(
 			deposit_block_height: Default::default(),
 		},
 		swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20].into())),
-		broker_commission: Some(broker_commission),
 		broker_fee: Some(broker_commission),
 		execute_at,
 	}));
