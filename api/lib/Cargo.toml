@@ -53,6 +53,3 @@ sp-consensus-aura = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', 
 sp-core = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
 sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
 codec = { package = "parity-scale-codec", version = "3.6.1" }
-
-[dev-dependencies]
-hex-literal = "0.4.1"
