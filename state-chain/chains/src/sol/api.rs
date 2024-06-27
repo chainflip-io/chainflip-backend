@@ -188,6 +188,7 @@ pub struct SolanaApi<Environment: 'static> {
 impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 	pub fn batch_fetch(
 		fetch_params: Vec<FetchAssetParams<Solana>>,
+		token_environments: &mut BTreeMap<SolAsset, TokenEnvironment>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Lookup the current Aggkey
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
@@ -197,11 +198,10 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
-		let mut token_environments = BTreeMap::new();
 		// Build the instruction_set
 		let instruction_set = SolanaInstructionBuilder::fetch_from::<Environment>(
 			fetch_params,
-			&mut token_environments,
+			token_environments,
 			vault_program,
 			vault_program_data_account,
 			agg_key,
@@ -223,6 +223,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 	pub fn transfer(
 		transfer_params: Vec<(TransferAssetParams<Solana>, EgressId)>,
+		token_environments: &mut BTreeMap<SolAsset, TokenEnvironment>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, SolanaTransactionBuildingError> {
 		// Lookup the current Aggkey
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
@@ -230,7 +231,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 
 		let mut sol_environment = BTreeMap::new();
-		let mut token_environments = BTreeMap::new();
 		transfer_params
 			.into_iter()
 			.map(|(transfer_param, egress_id)| {
@@ -251,10 +251,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							SolanaEnvAccountLookupKey::VaultProgramDataAccount,
 							&mut sol_environment,
 						)?;
-						let token_environment = Environment::get_token_environment(
-							&mut token_environments,
-							token_asset,
-						)?;
+						let token_environment =
+							Environment::get_token_environment(token_environments, token_asset)?;
 						let ata =
 						crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
 							transfer_param.to,
@@ -474,8 +472,9 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 		fetch_params: Vec<FetchAssetParams<Solana>>,
 		transfer_params: Vec<(TransferAssetParams<Solana>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
-		let mut txs = Self::transfer(transfer_params)?;
-		txs.push((Self::batch_fetch(fetch_params)?, vec![]));
+		let mut token_environments = BTreeMap::new();
+		let mut txs = Self::transfer(transfer_params, &mut token_environments)?;
+		txs.push((Self::batch_fetch(fetch_params, &mut token_environments)?, vec![]));
 
 		Ok(txs)
 	}
