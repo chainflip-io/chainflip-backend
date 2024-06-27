@@ -12,9 +12,8 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	sol::{
-		instruction_builder::{AssetWithDerivedAddress, SolanaInstructionBuilder},
-		SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolHash, SolMessage, SolTransaction,
-		SolanaCrypto,
+		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolAsset,
+		SolCcmAccounts, SolHash, SolMessage, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
 	ConsolidationError, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
@@ -197,29 +196,18 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
+
 		let mut token_environments = BTreeMap::new();
-
-		let decomposed_fetch_params = fetch_params
-			.into_iter()
-			.map(|param| {
-				AssetWithDerivedAddress::decompose_fetch_params::<Environment>(
-					param,
-					vault_program,
-					&mut token_environments,
-				)
-			})
-			.collect::<Result<Vec<_>, _>>()?;
-
 		// Build the instruction_set
-		let instruction_set = SolanaInstructionBuilder::fetch_from(
-			decomposed_fetch_params,
-			token_environments,
+		let instruction_set = SolanaInstructionBuilder::fetch_from::<Environment>(
+			fetch_params,
+			&mut token_environments,
 			vault_program,
 			vault_program_data_account,
 			agg_key,
 			nonce_account,
 			compute_price,
-		);
+		)?;
 		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
 			&instruction_set,
 			Some(&agg_key.into()),
