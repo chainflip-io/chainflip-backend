@@ -5,7 +5,7 @@ All notable changes included in each Chainflip release will be documented in thi
 ## [1.5.0]
 
 - Remove some deprecated fields from Swapping events
-  - `egress_amount` in `SwapExecuted` event - use `swap_amount` instead
+  - `egress_amount` in `SwapExecuted` event - use `swap_output` instead
   - `deposit_amount` in `SwapExecuted` event - use `swap_input` instead
   - `broker_commission` field in `SwapScheduled` event - use `broker_fee` instead
 
