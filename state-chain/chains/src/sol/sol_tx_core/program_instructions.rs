@@ -1,11 +1,11 @@
 use super::{AccountMeta, Instruction, Pubkey};
 
-use crate::sol::consts::SYSTEM_PROGRAM_ID;
 use borsh::BorshSerialize;
 use cf_utilities::SliceToArray;
 use core::str::FromStr;
 use scale_info::prelude::string::String;
 use serde::{Deserialize, Serialize};
+use sol_prim::consts::SYSTEM_PROGRAM_ID;
 use sp_std::{vec, vec::Vec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -200,7 +200,7 @@ impl SystemProgramInstruction {
 		];
 		Instruction::new_with_bincode(
 			// program id of the system program
-			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			SYSTEM_PROGRAM_ID.into(),
 			&Self::AdvanceNonceAccount,
 			account_metas,
 		)
@@ -217,7 +217,7 @@ impl SystemProgramInstruction {
 		];
 		Instruction::new_with_bincode(
 			// program id of the system program
-			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			SYSTEM_PROGRAM_ID.into(),
 			&Self::AuthorizeNonceAccount { new_authorized_pubkey: *new_authorized_pubkey },
 			account_metas,
 		)
@@ -227,7 +227,7 @@ impl SystemProgramInstruction {
 		let account_metas =
 			vec![AccountMeta::new(*from_pubkey, true), AccountMeta::new(*to_pubkey, false)];
 		Instruction::new_with_bincode(
-			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			SYSTEM_PROGRAM_ID.into(),
 			&Self::Transfer { lamports },
 			account_metas,
 		)

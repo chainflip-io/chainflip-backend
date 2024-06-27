@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use sol_prim::consts::SOL_USDC_DECIMAL;
 use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode};
@@ -21,8 +22,6 @@ use crate::{
 };
 
 use cf_primitives::{EgressId, ForeignChain};
-
-use super::consts::SOL_USDC_DECIMAL;
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct TokenEnvironment {

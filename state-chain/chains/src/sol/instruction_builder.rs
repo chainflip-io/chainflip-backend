@@ -7,15 +7,16 @@
 use sp_std::collections::btree_map::BTreeMap;
 
 use codec::Encode;
-use sol_prim::DerivedAta;
-use sp_std::{str::FromStr, vec, vec::Vec};
+use sol_prim::{
+	consts::{SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID},
+	DerivedAta,
+};
+
+use sp_std::{vec, vec::Vec};
 
 use crate::{
 	sol::{
-		api::{
-			get_token_decimals, SolanaEnvironment, SolanaTransactionBuildingError, TokenEnvironment,
-		},
-		consts::{SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID},
+		api::SolanaTransactionBuildingError,
 		sol_tx_core::{
 			address_derivation::{derive_associated_token_account, derive_fetch_account},
 			compute_budget::ComputeBudgetInstruction,
@@ -27,6 +28,8 @@ use crate::{
 	},
 	FetchAssetParams, ForeignChainAddress,
 };
+
+use super::api::{get_token_decimals, SolanaEnvironment, TokenEnvironment};
 
 /// Internal enum type that contains SolAsset with derived ATA
 pub struct AssetWithDerivedAddress {
@@ -75,15 +78,15 @@ impl AssetWithDerivedAddress {
 }
 
 fn system_program_id() -> SolAddress {
-	SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap()
+	SYSTEM_PROGRAM_ID
 }
 
 fn sys_var_instructions() -> SolAddress {
-	SolAddress::from_str(SYS_VAR_INSTRUCTIONS).unwrap()
+	SYS_VAR_INSTRUCTIONS
 }
 
 fn token_program_id() -> SolAddress {
-	SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap()
+	TOKEN_PROGRAM_ID
 }
 pub struct SolanaInstructionBuilder;
 
@@ -105,11 +108,15 @@ impl SolanaInstructionBuilder {
 		// TODO: implement compute limit calculation
 		let compute_limit = COMPUTE_LIMIT;
 
-		let mut final_instructions = vec![
-			SystemProgramInstruction::advance_nonce_account(&nonce_account, &agg_key),
-			ComputeBudgetInstruction::set_compute_unit_price(compute_price),
-			ComputeBudgetInstruction::set_compute_unit_limit(compute_limit),
-		];
+		let mut final_instructions =
+			vec![SystemProgramInstruction::advance_nonce_account(&nonce_account, &agg_key)];
+
+		if compute_price > 0 {
+			final_instructions
+				.push(ComputeBudgetInstruction::set_compute_unit_price(compute_price));
+		}
+
+		final_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(compute_limit));
 
 		final_instructions.append(&mut instructions);
 
@@ -348,16 +355,15 @@ mod test {
 	use crate::{
 		sol::{
 			api::{AllNonceAccounts, ComputePrice, NonceAccount, SolanaEnvAccountLookupKey},
-			consts::MAX_TRANSACTION_LENGTH,
+			signing_key::SolSigningKey,
 			sol_tx_core::{
-				address_derivation::derive_deposit_address,
-				extra_types_for_testing::{Keypair, Signer},
-				sol_test_values::*,
+				address_derivation::derive_deposit_address, signer::Signer, sol_test_values::*,
 			},
 			SolHash, SolMessage, SolTransaction, SolanaDepositFetchId,
 		},
 		ChainEnvironment, TransferAssetParams,
 	};
+	use sol_prim::consts::{MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL};
 
 	pub struct MockSolEnv;
 	impl SolanaEnvironment for MockSolEnv {}
@@ -409,37 +415,37 @@ mod test {
 				deposit_fetch_id: SolanaDepositFetchId { channel_id, address, bump },
 				asset,
 			},
-			SolAddress::from_str(VAULT_PROGRAM).unwrap(),
+			token_mint_pubkey(),
 			&mut token_environments(),
 		)
 		.unwrap()
 	}
 
 	fn agg_key() -> SolAddress {
-		Keypair::from_bytes(&RAW_KEYPAIR)
+		SolSigningKey::from_bytes(&RAW_KEYPAIR)
 			.expect("Key pair generation must succeed")
 			.pubkey()
 			.into()
 	}
 
 	fn nonce_account() -> SolAddress {
-		SolAddress::from_str(NONCE_ACCOUNTS[0]).unwrap()
+		NONCE_ACCOUNTS[0]
 	}
 
 	fn durable_nonce() -> SolHash {
-		SolHash::from_str(TEST_DURABLE_NONCE).unwrap()
+		TEST_DURABLE_NONCE
 	}
 
 	fn vault_program() -> SolAddress {
-		SolAddress::from_str(VAULT_PROGRAM).unwrap()
+		VAULT_PROGRAM
 	}
 
 	fn vault_program_data_account() -> SolAddress {
-		SolAddress::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap()
+		VAULT_PROGRAM_DATA_ACCOUNT
 	}
 
 	fn token_vault_pda_account() -> SolAddress {
-		SolAddress::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap()
+		TOKEN_VAULT_PDA_ACCOUNT
 	}
 
 	fn compute_price() -> SolAmount {
@@ -447,11 +453,11 @@ mod test {
 	}
 
 	fn token_vault_ata() -> SolAddress {
-		SolAddress::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap()
+		TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT
 	}
 
 	fn token_mint_pubkey() -> SolAddress {
-		SolAddress::from_str(MINT_PUB_KEY).unwrap()
+		MINT_PUB_KEY
 	}
 
 	fn token_environments() -> BTreeMap<SolAsset, TokenEnvironment> {
@@ -459,20 +465,16 @@ mod test {
 		token_environments.insert(
 			SolAsset::SolUsdc,
 			TokenEnvironment {
-				token_mint_pubkey: SolAddress::from_str(MINT_PUB_KEY).unwrap(),
-				token_vault_ata: SolAddress::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT)
-					.unwrap(),
-				token_vault_pda_account: SolAddress::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap(),
+				token_mint_pubkey: MINT_PUB_KEY,
+				token_vault_ata: TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				token_vault_pda_account: TOKEN_VAULT_PDA_ACCOUNT,
 			},
 		);
 		token_environments
 	}
 
 	fn nonce_accounts() -> Vec<SolAddress> {
-		NONCE_ACCOUNTS
-			.into_iter()
-			.map(|key| SolAddress::from_str(key).unwrap())
-			.collect::<Vec<_>>()
+		NONCE_ACCOUNTS.to_vec()
 	}
 
 	#[track_caller]
@@ -482,7 +484,7 @@ mod test {
 	) {
 		// Obtain required info from Chain Environment
 		let durable_nonce = durable_nonce().into();
-		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 
 		// Construct the Transaction and sign it
@@ -598,7 +600,7 @@ mod test {
 	fn can_create_transfer_native_instruction_set() {
 		let instruction_set = SolanaInstructionBuilder::transfer_native(
 			TRANSFER_AMOUNT,
-			SolAddress::from_str(TRANSFER_TO_ACCOUNT).unwrap(),
+			TRANSFER_TO_ACCOUNT,
 			agg_key(),
 			nonce_account(),
 			compute_price(),
@@ -612,7 +614,7 @@ mod test {
 
 	#[test]
 	fn can_create_transfer_usdc_token_instruction_set() {
-		let to_pubkey = SolAddress::from_str(TRANSFER_TO_ACCOUNT).unwrap();
+		let to_pubkey = TRANSFER_TO_ACCOUNT;
 		let to_pubkey_ata =
 			crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
 				to_pubkey,
@@ -632,7 +634,7 @@ mod test {
 			agg_key(),
 			nonce_account(),
 			compute_price(),
-			crate::sol::consts::SOL_USDC_DECIMAL,
+			SOL_USDC_DECIMAL,
 		);
 
 		// Serialized tx built in `create_transfer_token` test
@@ -643,7 +645,7 @@ mod test {
 
 	#[test]
 	fn can_rotate_agg_key() {
-		let new_agg_key = SolAddress::from_str(NEW_AGG_KEY).unwrap();
+		let new_agg_key = NEW_AGG_KEY;
 
 		let instruction_set = SolanaInstructionBuilder::rotate_agg_key(
 			new_agg_key,
@@ -667,7 +669,7 @@ mod test {
 		let transfer_param = TransferAssetParams::<Solana> {
 			asset: SOL,
 			amount: TRANSFER_AMOUNT,
-			to: SolPubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap().into(),
+			to: TRANSFER_TO_ACCOUNT,
 		};
 
 		let instruction_set = SolanaInstructionBuilder::ccm_transfer_native(
@@ -693,7 +695,7 @@ mod test {
 	#[test]
 	fn can_create_ccm_usdc_token_instruction_set() {
 		let ccm_param = ccm_parameter();
-		let to = SolAddress::from_str(TRANSFER_TO_ACCOUNT).unwrap();
+		let to = TRANSFER_TO_ACCOUNT;
 		let to_ata = crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
 			to,
 			token_mint_pubkey(),
@@ -716,7 +718,7 @@ mod test {
 			agg_key(),
 			nonce_account(),
 			compute_price(),
-			crate::sol::consts::SOL_USDC_DECIMAL,
+			SOL_USDC_DECIMAL,
 		);
 
 		// Serialized tx built in `create_ccm_token_transfer` test
