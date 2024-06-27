@@ -9,13 +9,16 @@ use crate::sol::{
 	Solana,
 };
 use codec::Encode;
-use sol_prim::DerivedAta;
+use sol_prim::{
+	consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID},
+	DerivedAta,
+};
+
 use sp_std::{vec, vec::Vec};
 
 use crate::{
 	sol::{
 		api::SolanaTransactionBuildingError,
-		consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID},
 		sol_tx_core::{
 			compute_budget::ComputeBudgetInstruction,
 			program_instructions::{InstructionExt, SystemProgramInstruction, VaultProgram},
@@ -102,11 +105,15 @@ impl SolanaInstructionBuilder {
 		// TODO: implement compute limit calculation
 		let compute_limit = COMPUTE_LIMIT;
 
-		let mut final_instructions = vec![
-			SystemProgramInstruction::advance_nonce_account(&nonce_account, &agg_key),
-			ComputeBudgetInstruction::set_compute_unit_price(compute_price),
-			ComputeBudgetInstruction::set_compute_unit_limit(compute_limit),
-		];
+		let mut final_instructions =
+			vec![SystemProgramInstruction::advance_nonce_account(&nonce_account, &agg_key)];
+
+		if compute_price > 0 {
+			final_instructions
+				.push(ComputeBudgetInstruction::set_compute_unit_price(compute_price));
+		}
+
+		final_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(compute_limit));
 
 		final_instructions.append(&mut instructions);
 
@@ -333,16 +340,15 @@ mod test {
 	use super::*;
 	use crate::{
 		sol::{
-			consts::MAX_TRANSACTION_LENGTH,
+			signing_key::SolSigningKey,
 			sol_tx_core::{
-				address_derivation::derive_deposit_address,
-				extra_types_for_testing::{Keypair, Signer},
-				sol_test_values::*,
+				address_derivation::derive_deposit_address, signer::Signer, sol_test_values::*,
 			},
 			SolHash, SolMessage, SolTransaction, SolanaDepositFetchId,
 		},
 		TransferAssetParams,
 	};
+	use sol_prim::consts::MAX_TRANSACTION_LENGTH;
 
 	fn get_decomposed_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -364,7 +370,7 @@ mod test {
 	}
 
 	fn agg_key() -> SolAddress {
-		Keypair::from_bytes(&RAW_KEYPAIR)
+		SolSigningKey::from_bytes(&RAW_KEYPAIR)
 			.expect("Key pair generation must succeed")
 			.pubkey()
 			.into()
@@ -413,7 +419,7 @@ mod test {
 	) {
 		// Obtain required info from Chain Environment
 		let durable_nonce = durable_nonce().into();
-		let agg_key_keypair = Keypair::from_bytes(&RAW_KEYPAIR).unwrap();
+		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 
 		// Construct the Transaction and sign it

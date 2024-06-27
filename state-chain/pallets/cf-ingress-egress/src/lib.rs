@@ -1200,7 +1200,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let mut fetch_params = vec![];
 		let mut transfer_params = vec![];
-		let mut egress_ids = vec![];
 		let mut addresses = vec![];
 
 		for request in batch_to_send {
@@ -1226,12 +1225,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					destination_address,
 					egress_id,
 				} => {
-					egress_ids.push(egress_id);
-					transfer_params.push(TransferAssetParams {
-						asset,
-						amount,
-						to: destination_address,
-					});
+					transfer_params.push((
+						TransferAssetParams { asset, amount, to: destination_address },
+						egress_id,
+					));
 				},
 			}
 		}
@@ -1241,15 +1238,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			fetch_params,
 			transfer_params,
 		) {
-			Ok(egress_transaction) => {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-					egress_transaction,
-					Some(Call::finalise_ingress { addresses }.into()),
-					|_| None,
-				);
-				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
-					broadcast_id,
-					egress_ids,
+			Ok(egress_transactions) => {
+				egress_transactions.into_iter().for_each(|(egress_transaction, egress_ids)| {
+					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+						egress_transaction,
+						Some(Call::finalise_ingress { addresses: addresses.clone() }.into()),
+						|_| None,
+					);
+					Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
+						broadcast_id,
+						egress_ids,
+					});
 				});
 				Ok(())
 			},

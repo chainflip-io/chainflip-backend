@@ -1,8 +1,9 @@
-use super::{Instruction, COMPUTE_BUDGET_PROGRAM};
+use super::Instruction;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::vec;
+use sol_prim::consts::COMPUTE_BUDGET_PROGRAM;
 
 /// Compute Budget Instructions
 #[derive(BorshDeserialize, BorshSerialize, Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
