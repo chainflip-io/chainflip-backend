@@ -1,4 +1,4 @@
-use crate::{mock::*, Error, FreeBalances, LiquidityRefundAddress};
+use crate::{mock::*, Error, FreeBalances, HistoricalEarnedFees, LiquidityRefundAddress};
 
 use cf_chains::{address::EncodedAddress, ForeignChainAddress};
 use cf_primitives::{AccountId, Asset, AssetAmount, ForeignChain};
@@ -369,5 +369,15 @@ fn account_registration_and_deregistration() {
 			.unwrap()
 			.iter()
 			.all(|(_, amount)| *amount == 0));
+	});
+}
+
+#[test]
+fn record_fees() {
+	new_test_ext().execute_with(|| {
+		const LP_ACCOUNT_ID: AccountId = AccountId32::new(LP_ACCOUNT);
+		const AMOUNT: AssetAmount = 1_000;
+		LiquidityProvider::record_fees(&LP_ACCOUNT_ID, AMOUNT, Asset::Eth);
+		assert_eq!(HistoricalEarnedFees::<Test>::get(&LP_ACCOUNT_ID, Asset::Eth), AMOUNT);
 	});
 }
