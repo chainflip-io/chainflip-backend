@@ -1,4 +1,5 @@
 use crate::{Address, Digest};
+use cf_utilities::bs58_array;
 
 pub const SOLANA_SIGNATURE_LEN: usize = 64;
 pub const SOLANA_ADDRESS_LEN: usize = 32;
@@ -10,11 +11,11 @@ pub const SOLANA_PDA_MAX_SEED_LEN: usize = 32;
 pub const SOLANA_PDA_MARKER: &[u8; 21] = b"ProgramDerivedAddress";
 
 pub const fn const_address(s: &'static str) -> Address {
-	Address(bs58::decode(s.as_bytes()).into_array_const_unwrap())
+	Address(bs58_array(s))
 }
 
 pub const fn const_hash(s: &'static str) -> Digest {
-	Digest(bs58::decode(s.as_bytes()).into_array_const_unwrap())
+	Digest(bs58_array(s))
 }
 
 // Solana native programs
