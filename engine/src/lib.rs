@@ -21,9 +21,12 @@ pub mod witness;
 pub mod btc;
 pub mod dot;
 pub mod evm;
+pub mod sol;
 
 use crate::state_chain_observer::client::CreateStateChainClientError;
-use ::multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+use ::multisig::{
+	bitcoin::BtcSigning, ed25519::SolSigning, eth::EthSigning, polkadot::PolkadotSigning,
+};
 use cf_primitives::CfeCompatibility;
 use state_chain_observer::client::{
 	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
@@ -36,6 +39,7 @@ use self::{
 	dot::retry_rpc::DotRetryRpcClient,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
+	sol::retry_rpc::SolRetryRpcClient,
 };
 use anyhow::Context;
 use cf_chains::{dot::PolkadotHash, Chain};
@@ -65,7 +69,7 @@ pub fn settings_and_run_main(
 	{
 		Ok(settings) => settings,
 		Err(e) => {
-			eprintln!("Error reading settings: {}", e);
+			eprintln!("{:#}", e);
 			return ExitStatus { status_code: ERROR_READING_SETTINGS, at_block: NO_START_FROM };
 		},
 	};
@@ -159,6 +163,8 @@ async fn run_main(
 				dot_incoming_receiver,
 				btc_outgoing_sender,
 				btc_incoming_receiver,
+				sol_outgoing_sender,
+				sol_incoming_receiver,
 				p2p_ready_receiver,
 				p2p_fut,
 			) = p2p::start(
@@ -212,6 +218,17 @@ async fn run_main(
 				);
 
 			scope.spawn(btc_multisig_client_backend_future);
+
+			let (sol_multisig_client, sol_multisig_client_backend_future) =
+				multisig::start_client::<SolSigning>(
+					state_chain_client.account_id(),
+					KeyStore::new(db.clone()),
+					sol_incoming_receiver,
+					sol_outgoing_sender,
+					ceremony_id_counters.solana,
+				);
+
+			scope.spawn(sol_multisig_client_backend_future);
 
 			// Create all the clients
 			let eth_client = {
@@ -278,12 +295,30 @@ async fn run_main(
 				DotRetryRpcClient::new(scope, settings.dot.nodes, expected_dot_genesis_hash)?
 			};
 
+			let sol_client = {
+				let expected_sol_genesis_hash = state_chain_client
+					.storage_value::<pallet_cf_environment::SolanaGenesisHash<state_chain_runtime::Runtime>>(
+						state_chain_client.latest_finalized_block().hash,
+					)
+					.await
+					.expect(STATE_CHAIN_CONNECTION);
+
+				SolRetryRpcClient::new(
+					scope,
+					settings.sol.nodes,
+					expected_sol_genesis_hash,
+					cf_chains::Solana::WITNESS_PERIOD,
+				)
+				.await?
+			};
+
 			witness::start::start(
 				scope,
 				eth_client.clone(),
 				arb_client.clone(),
 				btc_client.clone(),
 				dot_client.clone(),
+				sol_client.clone(),
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
 				unfinalised_state_chain_stream.clone(),
@@ -298,9 +333,11 @@ async fn run_main(
 				arb_client,
 				dot_client,
 				btc_client,
+				sol_client,
 				eth_multisig_client,
 				dot_multisig_client,
 				btc_multisig_client,
+				sol_multisig_client,
 			));
 
 			p2p_ready_receiver.await.unwrap();

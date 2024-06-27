@@ -44,7 +44,7 @@ impl Chain for Ethereum {
 	type ChainAsset = assets::eth::Asset;
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
-	type DepositDetails = ();
+	type DepositDetails = evm::DepositDetails;
 	type Transaction = Transaction;
 	type TransactionMetadata = EvmTransactionMetadata;
 	type ReplayProtectionParams = Self::ChainAccount;

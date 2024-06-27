@@ -2,6 +2,109 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.4.2] - 2024-06-03
+
+### Features
+
+- Add arbitrum support (([PRO-1154](https://linear.app/chainflip/issue/PRO-1154))) ([#4486](https://github.com/chainflip-io/chainflip-backend/issues/4486))
+- Per chain safe mode to restrict deposits ([#4819](https://github.com/chainflip-io/chainflip-backend/issues/4819))
+- Limit the number of utxos selected for egress ([#4559](https://github.com/chainflip-io/chainflip-backend/issues/4559))
+- Rpc endpoint for json-encoded events ([#4610](https://github.com/chainflip-io/chainflip-backend/issues/4610))
+- Update sisyphos and perseverance chainspecs ([#4621](https://github.com/chainflip-io/chainflip-backend/issues/4621)) ([#4635](https://github.com/chainflip-io/chainflip-backend/issues/4635))
+- Move broker_fee_collection_test inside all_concurrent_test ([#4622](https://github.com/chainflip-io/chainflip-backend/issues/4622))
+- Add broker api connection limit option ([#4643](https://github.com/chainflip-io/chainflip-backend/issues/4643))
+- RPC for returning scale-encoded System events ([#4638](https://github.com/chainflip-io/chainflip-backend/issues/4638))
+- Support account deletion ([#4314](https://github.com/chainflip-io/chainflip-backend/issues/4314))
+- Lock `bitcoin` and `polkadot` images to a specific commit 🔒 ([#4686](https://github.com/chainflip-io/chainflip-backend/issues/4686))
+- Add chainspecs of all network to docker 📜🐳 ([#4702](https://github.com/chainflip-io/chainflip-backend/issues/4702))
+- Update metric's buckets values ([#4708](https://github.com/chainflip-io/chainflip-backend/issues/4708))
+- Gas swaps use swapping queue ([#4697](https://github.com/chainflip-io/chainflip-backend/issues/4697))
+- Continuous transfer of old utxos ([#4680](https://github.com/chainflip-io/chainflip-backend/issues/4680))
+- Handle prewitness deposits ([#4698](https://github.com/chainflip-io/chainflip-backend/issues/4698))
+- Emit event to help diagnose failed witnessing reports ([#4741](https://github.com/chainflip-io/chainflip-backend/issues/4741))
+- Add prewitness deposit events ([#4745](https://github.com/chainflip-io/chainflip-backend/issues/4745))
+- Make price impact limit configurable per pool ([#4750](https://github.com/chainflip-io/chainflip-backend/issues/4750))
+- Write snapshot if try runtime check fails ([#4657](https://github.com/chainflip-io/chainflip-backend/issues/4657))
+- Add pool created events ([#4761](https://github.com/chainflip-io/chainflip-backend/issues/4761))
+- Authorities should be sorted pseudo-randomly ([#4752](https://github.com/chainflip-io/chainflip-backend/issues/4752))
+- Cf_boost_pools_depth rpc ([#4771](https://github.com/chainflip-io/chainflip-backend/issues/4771))
+- Added safe mode for ingress egress pallet ([#4779](https://github.com/chainflip-io/chainflip-backend/issues/4779))
+- Cf_boost_pool_details rpc ([#4780](https://github.com/chainflip-io/chainflip-backend/issues/4780))
+- Allow for single binary CFE upgrades ([#4634](https://github.com/chainflip-io/chainflip-backend/issues/4634))
+- Optimistic build, streamlined ci-main ([#4806](https://github.com/chainflip-io/chainflip-backend/issues/4806))
+- Try-runtime build step on dev ci ([#4807](https://github.com/chainflip-io/chainflip-backend/issues/4807))
+- Better diagnostics for bouncer swaps ([#4812](https://github.com/chainflip-io/chainflip-backend/issues/4812))
+- Governance extrinsic to create boost pools ([#4816](https://github.com/chainflip-io/chainflip-backend/issues/4816))
+- Store boost fees explicitly + rpc ([#4818](https://github.com/chainflip-io/chainflip-backend/issues/4818))
+- LP Asset rebalancing (([PRO-1259](https://linear.app/chainflip/issue/PRO-1259))) ([#4784](https://github.com/chainflip-io/chainflip-backend/issues/4784))
+- Efficient Arbitrum witnessing (([PRO-1098](https://linear.app/chainflip/issue/PRO-1098))) ([#4811](https://github.com/chainflip-io/chainflip-backend/issues/4811))
+- Affiliate Brokers ([#4777](https://github.com/chainflip-io/chainflip-backend/issues/4777))
+
+### Fixes
+
+- Start localnet using correct commit ([#4623](https://github.com/chainflip-io/chainflip-backend/issues/4623))
+- Allow OldAsset to support unambiguously encoding Arb USDC and Eth USDC, while maintaining backcompat (([PRO-1237](https://linear.app/chainflip/issue/PRO-1237))) ([#4614](https://github.com/chainflip-io/chainflip-backend/issues/4614))
+- Usdt should use new encoding not legacy ([#4633](https://github.com/chainflip-io/chainflip-backend/issues/4633))
+- Missing feature flags ([#4639](https://github.com/chainflip-io/chainflip-backend/issues/4639))
+- Change pallet ordering to prevent breakage ([#4640](https://github.com/chainflip-io/chainflip-backend/issues/4640))
+- Revert changes to sisyphos chainspec ([#4641](https://github.com/chainflip-io/chainflip-backend/issues/4641))
+- Return rpc error ([#4637](https://github.com/chainflip-io/chainflip-backend/issues/4637))
+- More try-runtime unwraps. ([#4648](https://github.com/chainflip-io/chainflip-backend/issues/4648))
+- Publish `chainflip-engine1.3` to debian packages 🐞 ([#4653](https://github.com/chainflip-io/chainflip-backend/issues/4653))
+- Correct cfe-events pallet version ([#4658](https://github.com/chainflip-io/chainflip-backend/issues/4658))
+- Remove unused cli command line options ([#4644](https://github.com/chainflip-io/chainflip-backend/issues/4644))
+- Replace u128 with U256 ([#4656](https://github.com/chainflip-io/chainflip-backend/issues/4656))
+- Remove cfe events migration ([#4671](https://github.com/chainflip-io/chainflip-backend/issues/4671))
+- Update confusing runtime spec version check 🤦‍♂️ ([#4672](https://github.com/chainflip-io/chainflip-backend/issues/4672))
+- Submission watcher could confuse/lose track of submissions ([#4667](https://github.com/chainflip-io/chainflip-backend/issues/4667))
+- Cf_pools_environment rpc encoding ([#4674](https://github.com/chainflip-io/chainflip-backend/issues/4674))
+- Rename slippage -> price impact ([#4679](https://github.com/chainflip-io/chainflip-backend/issues/4679))
+- Replace sepolia usdt address ([#4683](https://github.com/chainflip-io/chainflip-backend/issues/4683))
+- Add dummy benchmark for account roles pallet ([#4684](https://github.com/chainflip-io/chainflip-backend/issues/4684))
+- Typo in the error message ([#4694](https://github.com/chainflip-io/chainflip-backend/issues/4694))
+- Correct perseverance chainspec on main ([#4704](https://github.com/chainflip-io/chainflip-backend/issues/4704))
+- Continuous adapter ([#4707](https://github.com/chainflip-io/chainflip-backend/issues/4707))
+- Make benchmarks work again ([#4716](https://github.com/chainflip-io/chainflip-backend/issues/4716))
+- Uncomment pools pallet migration ([#4725](https://github.com/chainflip-io/chainflip-backend/issues/4725))
+- Remove misleading error ([#4726](https://github.com/chainflip-io/chainflip-backend/issues/4726))
+- Migration for earned fees ([#4733](https://github.com/chainflip-io/chainflip-backend/issues/4733))
+- Broker flakiness on bouncer CI ([#4736](https://github.com/chainflip-io/chainflip-backend/issues/4736))
+- Update some obvious gaps / inaccuracies in the main readmes ([#4738](https://github.com/chainflip-io/chainflip-backend/issues/4738))
+- Use new perseverance genesis hash ([#4748](https://github.com/chainflip-io/chainflip-backend/issues/4748))
+- Set initial arb block ([#4753](https://github.com/chainflip-io/chainflip-backend/issues/4753))
+- Initialise ingress egress pallet values for arbitrum ([#4762](https://github.com/chainflip-io/chainflip-backend/issues/4762))
+- ([PRO-1330](https://linear.app/chainflip/issue/PRO-1330)) - Move Location::panic() to inside the function, so it outputs the caller of the fn and not of the async block poll fn. ([#4769](https://github.com/chainflip-io/chainflip-backend/issues/4769))
+- Arb vault rotation migration ([#4770](https://github.com/chainflip-io/chainflip-backend/issues/4770))
+- Use `ubuntu-22.04` for benchmark runner provisioning workflow 🐛 ([#4773](https://github.com/chainflip-io/chainflip-backend/issues/4773))
+- Extend upgrade timeout ([#4774](https://github.com/chainflip-io/chainflip-backend/issues/4774))
+- Increase concurrent timeout ([#4775](https://github.com/chainflip-io/chainflip-backend/issues/4775))
+- Git fetch all before checkout ([#4776](https://github.com/chainflip-io/chainflip-backend/issues/4776))
+- Dry run gets fresh runtime version (([PRO-1249](https://linear.app/chainflip/issue/PRO-1249))) ([#4669](https://github.com/chainflip-io/chainflip-backend/issues/4669))
+- Dot metadata update ([#4786](https://github.com/chainflip-io/chainflip-backend/issues/4786))
+- Take fee on to usdc ([#4801](https://github.com/chainflip-io/chainflip-backend/issues/4801)) ([#4804](https://github.com/chainflip-io/chainflip-backend/issues/4804))
+- Sign tx with correct key during rotation ([#4794](https://github.com/chainflip-io/chainflip-backend/issues/4794))
+- Don't set code red on "agg-key set by gov-key" ([#4813](https://github.com/chainflip-io/chainflip-backend/issues/4813))
+- Improve container pull times ⌚️ ([#4827](https://github.com/chainflip-io/chainflip-backend/issues/4827))
+- Dont delete `/sbin` dirs 😵‍💫 ([#4828](https://github.com/chainflip-io/chainflip-backend/issues/4828))
+- Upgrade test permissions ([#4838](https://github.com/chainflip-io/chainflip-backend/issues/4838))
+- Upgrade test to kill node correctly ([#4865](https://github.com/chainflip-io/chainflip-backend/issues/4865))
+- Add `ca-certificates` to docker images 🐛 ([#4867](https://github.com/chainflip-io/chainflip-backend/issues/4867))
+- Increase localnet chainflip-node request and response size 1.4 ([#4880](https://github.com/chainflip-io/chainflip-backend/issues/4880))
+- Prevent liquidity saturation during fee estimation ([#4834](https://github.com/chainflip-io/chainflip-backend/issues/4834)) ([#4883](https://github.com/chainflip-io/chainflip-backend/issues/4883))
+- Increase javascript memory limit for bouncer all_concurrent_tests ([#4904](https://github.com/chainflip-io/chainflip-backend/issues/4904))
+
+### Refactor
+
+- Move vanity names to account roles pallet ([#4719](https://github.com/chainflip-io/chainflip-backend/issues/4719))
+- Autodisconnect dot clients ([#4772](https://github.com/chainflip-io/chainflip-backend/issues/4772))
+- Minor cleanup of retrier code and vault pallet ([#4803](https://github.com/chainflip-io/chainflip-backend/issues/4803))
+- Auto-disconnect client ([#4820](https://github.com/chainflip-io/chainflip-backend/issues/4820))
+- Refactor setup ([#4825](https://github.com/chainflip-io/chainflip-backend/issues/4825))
+
+### Documentation
+
+- Fix a typo and minor grammar issue in PRACTICES.md ([#4695](https://github.com/chainflip-io/chainflip-backend/issues/4695))
+
 ## [1.3.2] - 2024-03-27
 
 ### Features
@@ -18,7 +121,7 @@ All notable changes included in each Chainflip release will be documented in thi
 ## [1.3.1] - 2024-03-22
 
 - Logging: LP-API panic reported in submission watcher ([#4664](https://github.com/chainflip-io/chainflip-backend/issues/4664))
-- Remove unused CLI command line options ([#4644] (https://github.com/chainflip-io/chainflip-backend/issues/4644))
+- Remove unused CLI command line options ([#4644] (<https://github.com/chainflip-io/chainflip-backend/issues/4644>))
 - Add USDT to banana mode and update code to reflect storage changes ([#4685](https://github.com/chainflip-io/chainflip-backend/issues/4685))
 - Add broker api connection limit option ([#4643](https://github.com/chainflip-io/chainflip-backend/issues/4643))
 - Update sisyphos and perseverance chainspecs ([#4621](https://github.com/chainflip-io/chainflip-backend/issues/4621)) ([#4635](https://github.com/chainflip-io/chainflip-backend/issues/4635))
@@ -27,7 +130,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Fix: cf_pools_environment rpc encoding ([#4674](https://github.com/chainflip-io/chainflip-backend/issues/4674))
 - Revert changes to sisyphos chainspec ([#4641](https://github.com/chainflip-io/chainflip-backend/issues/4641))
 - Allow OldAsset to support unambiguously encoding Arb USDC and Eth USDC, while maintaining backcompat (([PRO-1237](https://linear.app/chainflip/issue/PRO-1237))) ([#4614](https://github.com/chainflip-io/chainflip-backend/issues/4614))
-- Remove aptly check from publish workflow ([#4650] (https://github.com/chainflip-io/chainflip-backend/issues/4650))
+- Remove aptly check from publish workflow ([#4650] (<https://github.com/chainflip-io/chainflip-backend/issues/4650>))
 - Run CI on `nscloud` runners ([#4505](https://github.com/chainflip-io/chainflip-backend/issues/4505))
 - Usdt should use new encoding not legacy ([#4633](https://github.com/chainflip-io/chainflip-backend/issues/4633))
 - Publish `chainflip-engine1.3` to debian packages ([#4653](https://github.com/chainflip-io/chainflip-backend/issues/4653)) ([#4654](https://github.com/chainflip-io/chainflip-backend/issues/4654))

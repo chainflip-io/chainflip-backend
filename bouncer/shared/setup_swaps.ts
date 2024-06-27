@@ -1,19 +1,19 @@
 import { createLpPool } from '../shared/create_lp_pool';
-import { provideLiquidity } from '../shared/provide_liquidity';
+import { depositLiquidity } from './deposit_liquidity';
 import { rangeOrder } from '../shared/range_order';
 import { Asset } from './utils';
 
 const deposits = new Map<Asset, number>([
-  ['Dot', 10000],
-  ['Eth', 100],
-  ['ArbEth', 100],
-  ['Btc', 10],
-  ['Usdc', 1000000],
-  ['ArbUsdc', 100000],
-  ['Usdt', 100000],
-  ['Flip', 10000],
-  ['Sol', 100],
-  ['SolUsdc', 100000],
+  ['Dot', 100000],
+  ['Eth', 1000],
+  ['ArbEth', 1000],
+  ['Btc', 100],
+  ['Usdc', 10000000],
+  ['ArbUsdc', 1000000],
+  ['Usdt', 1000000],
+  ['Flip', 100000],
+  ['Sol', 1000],
+  ['SolUsdc', 1000000],
 ]);
 
 const price = new Map<Asset, number>([
@@ -40,23 +40,23 @@ export async function setupSwaps(): Promise<void> {
     createLpPool('Usdt', price.get('Usdt')!),
     createLpPool('ArbEth', price.get('ArbEth')!),
     createLpPool('ArbUsdc', price.get('ArbUsdc')!),
-    // createLpPool('Sol', price.get('Sol')!),
-    // createLpPool('SolUsdc', price.get('SolUsdc')!),
+    createLpPool('Sol', price.get('Sol')!),
+    createLpPool('SolUsdc', price.get('SolUsdc')!),
   ]);
 
   console.log('LP Pools created');
 
   await Promise.all([
-    provideLiquidity('Usdc', deposits.get('Usdc')!),
-    provideLiquidity('Eth', deposits.get('Eth')!),
-    provideLiquidity('Dot', deposits.get('Dot')!),
-    provideLiquidity('Btc', deposits.get('Btc')!),
-    provideLiquidity('Flip', deposits.get('Flip')!),
-    provideLiquidity('Usdt', deposits.get('Usdt')!),
-    provideLiquidity('ArbEth', deposits.get('ArbEth')!),
-    provideLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
-    // provideLiquidity('Sol', deposits.get('Sol')!),
-    // provideLiquidity('SolUsdc', deposits.get('SolUsdc')!),
+    depositLiquidity('Usdc', deposits.get('Usdc')!),
+    depositLiquidity('Eth', deposits.get('Eth')!),
+    depositLiquidity('Dot', deposits.get('Dot')!),
+    depositLiquidity('Btc', deposits.get('Btc')!),
+    depositLiquidity('Flip', deposits.get('Flip')!),
+    depositLiquidity('Usdt', deposits.get('Usdt')!),
+    depositLiquidity('ArbEth', deposits.get('ArbEth')!),
+    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
+    depositLiquidity('Sol', deposits.get('Sol')!),
+    depositLiquidity('SolUsdc', deposits.get('SolUsdc')!),
   ]);
 
   console.log('Liquidity provided');
@@ -69,8 +69,8 @@ export async function setupSwaps(): Promise<void> {
     rangeOrder('Usdt', deposits.get('Usdt')! * 0.9999),
     rangeOrder('ArbEth', deposits.get('ArbEth')! * 0.9999),
     rangeOrder('ArbUsdc', deposits.get('ArbUsdc')! * 0.9999),
-    // rangeOrder('Sol', deposits.get('Sol')! * 0.9999),
-    // rangeOrder('SolUsdc', deposits.get('SolUsdc')! * 0.9999),
+    rangeOrder('Sol', deposits.get('Sol')! * 0.9999),
+    rangeOrder('SolUsdc', deposits.get('SolUsdc')! * 0.9999),
   ]);
 
   console.log('Range orders placed');

@@ -4,6 +4,7 @@ use cf_chains::{dot::RuntimeVersion, sol::SolAddress};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::{sr25519, H256};
+use utilities::bs58_array;
 
 pub struct Config;
 
@@ -45,6 +46,8 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 	sol_vault_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
+	sol_genesis_hash: None,
+	sol_usdc_address: SolAddress(bs58_array("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p")),
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;

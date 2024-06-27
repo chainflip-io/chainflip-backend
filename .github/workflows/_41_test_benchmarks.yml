@@ -1,0 +1,25 @@
+on:
+  workflow_call:
+
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  test-benchmarks:
+    runs-on: digitalocean
+    steps:
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Download binaries 📥
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        with:
+          name: chainflip-backend-bin-benchmarks
+      - name: Update permissions on chainflip-node 🚓
+        run: chmod +x ./chainflip-node
+      - name: Run benchmarks 📏
+        run: >
+          ./state-chain/scripts/benchmark-all.sh
+          --binary ./chainflip-node
+          --steps 2
+          --repetitions 1

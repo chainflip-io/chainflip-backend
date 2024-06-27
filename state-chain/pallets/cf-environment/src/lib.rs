@@ -12,7 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::{api::DurableNonceAndAccount, SolAddress, SolHash},
+	sol::{api::DurableNonceAndAccount, SolAddress, SolAsset, SolHash, Solana},
 	Chain,
 };
 use cf_primitives::{
@@ -80,6 +80,8 @@ pub mod pallet {
 		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
 		/// On new key witnessed handler for Arbitrum
 		type ArbitrumVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Arbitrum>;
+		/// On new key witnessed handler for Solana
+		type SolanaVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Solana>;
 
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
@@ -217,6 +219,16 @@ pub mod pallet {
 	pub type SolanaUnAvailableNonceAccounts<T> =
 		StorageMap<_, Blake2_128Concat, SolAddress, SolHash>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn sol_genesis_hash)]
+	pub type SolanaGenesisHash<T> = StorageValue<_, SolHash, OptionQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn supported_sol_assets)]
+	/// Map of supported assets for Sol
+	pub type SolanaSupportedAssets<T: Config> =
+		StorageMap<_, Blake2_128Concat, SolAsset, SolAddress>;
+
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
@@ -255,6 +267,8 @@ pub mod pallet {
 		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
+		/// Solana Initialized: contract addresses have been set, first key activated
+		SolanaInitialized,
 		/// Some unspendable Utxos are discarded from storage.
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
@@ -399,11 +413,32 @@ pub mod pallet {
 
 			use cf_traits::VaultKeyWitnessedHandler;
 
-			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
+			// Witness the agg_key rotation manually in the vaults pallet for Arbitrum
 			let dispatch_result =
 				T::ArbitrumVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::ArbitrumInitialized);
+
+			Ok(dispatch_result)
+		}
+
+		#[pallet::call_index(6)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
+		pub fn witness_initialize_solana_vault(
+			origin: OriginFor<T>,
+			block_number: u64,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for Solana
+			let dispatch_result =
+				T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+
+			Self::deposit_event(Event::<T>::SolanaInitialized);
 
 			Ok(dispatch_result)
 		}
@@ -419,7 +454,7 @@ pub mod pallet {
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [NonceAccountNotBeingUsedOrDoesntExist](Error::NonceAccountNotBeingUsedOrDoesntExist)
-		#[pallet::call_index(6)]
+		#[pallet::call_index(7)]
 		// Todo
 		#[pallet::weight(Weight::zero())]
 		pub fn update_sol_nonce(
@@ -462,6 +497,8 @@ pub mod pallet {
 		pub arbitrum_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
 		pub sol_vault_address: SolAddress,
+		pub sol_genesis_hash: Option<SolHash>,
+		pub sol_usdc_address: SolAddress,
 		pub _config: PhantomData<T>,
 	}
 
@@ -493,6 +530,9 @@ pub mod pallet {
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
 			SolanaVaultAddress::<T>::set(self.sol_vault_address);
+
+			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
+			SolanaSupportedAssets::<T>::insert(SolAsset::SolUsdc, self.sol_usdc_address);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 

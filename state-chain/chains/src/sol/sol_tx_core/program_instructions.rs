@@ -1,11 +1,11 @@
 use super::{AccountMeta, Instruction, Pubkey};
 
-use crate::sol::consts::SYSTEM_PROGRAM_ID;
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshSerialize;
+use cf_utilities::SliceToArray;
 use core::str::FromStr;
 use scale_info::prelude::string::String;
 use serde::{Deserialize, Serialize};
-use sp_io::hashing::sha2_256;
+use sol_prim::consts::SYSTEM_PROGRAM_ID;
 use sp_std::{vec, vec::Vec};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -200,7 +200,7 @@ impl SystemProgramInstruction {
 		];
 		Instruction::new_with_bincode(
 			// program id of the system program
-			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			SYSTEM_PROGRAM_ID.into(),
 			&Self::AdvanceNonceAccount,
 			account_metas,
 		)
@@ -217,7 +217,7 @@ impl SystemProgramInstruction {
 		];
 		Instruction::new_with_bincode(
 			// program id of the system program
-			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			SYSTEM_PROGRAM_ID.into(),
 			&Self::AuthorizeNonceAccount { new_authorized_pubkey: *new_authorized_pubkey },
 			account_metas,
 		)
@@ -227,97 +227,494 @@ impl SystemProgramInstruction {
 		let account_metas =
 			vec![AccountMeta::new(*from_pubkey, true), AccountMeta::new(*to_pubkey, false)];
 		Instruction::new_with_bincode(
-			Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+			SYSTEM_PROGRAM_ID.into(),
 			&Self::Transfer { lamports },
 			account_metas,
 		)
 	}
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
-pub enum VaultProgram {
-	FetchNative {
-		seed: Vec<u8>,
-		bump: u8,
-	},
-	RotateAggKey {
-		skip_transfer_funds: bool,
-	},
-	FetchTokens {
-		seed: Vec<u8>,
-		bump: u8,
-		decimals: u8,
-	},
-	TransferTokens {
-		amount: u64,
-		decimals: u8,
-	},
-	ExecuteCcmNativeCall {
-		source_chain: u32,
-		source_address: Vec<u8>,
-		message: Vec<u8>,
-		amount: u64,
-	},
-	ExecuteCcmTokenCall {
-		source_chain: u32,
-		source_address: Vec<u8>,
-		message: Vec<u8>,
-		amount: u64,
-	},
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, PartialEq, Eq)]
-pub enum UpgradeManagerProgram {
-	UpgradeVaultProgram { seed: Vec<u8>, bump: u8 },
-	TransferVaultUpgradeAuthority { seed: Vec<u8>, bump: u8 },
-}
-
 pub trait ProgramInstruction: BorshSerialize {
+	const CALL_NAME: &'static str;
+	const FN_DISCRIMINATOR_HASH: [u8; 32] = sha2_const::Sha256::new()
+		.update(b"global:")
+		.update(Self::CALL_NAME.as_bytes())
+		.finalize();
+
 	fn get_instruction(&self, program_id: Pubkey, accounts: Vec<AccountMeta>) -> Instruction {
-		let mut instruction = Instruction::new_with_borsh(program_id, &self, accounts);
-		instruction.data.remove(0);
-		let mut data = self.function_discriminator();
-		data.append(&mut instruction.data);
-		instruction.data = data;
-		instruction
+		Instruction::new_with_borsh(program_id, &(Self::function_discriminator(), self), accounts)
 	}
 
-	fn function_discriminator(&self) -> Vec<u8> {
-		sha2_256((String::from_str("global:").unwrap() + self.call_name()).as_bytes())[..8].to_vec()
+	fn function_discriminator() -> [u8; 8] {
+		Self::FN_DISCRIMINATOR_HASH[..8].as_array::<8>()
 	}
-
-	fn call_name(&self) -> &str;
 }
 
-impl ProgramInstruction for VaultProgram {
-	fn call_name(&self) -> &str {
-		match self {
-			Self::FetchNative { seed: _, bump: _ } => "fetch_native",
-			Self::RotateAggKey { skip_transfer_funds: _ } => "rotate_agg_key",
-			Self::FetchTokens { seed: _, bump: _, decimals: _ } => "fetch_tokens",
-			Self::TransferTokens { amount: _, decimals: _ } => "transfer_tokens",
-			Self::ExecuteCcmNativeCall {
-				source_chain: _,
-				source_address: _,
-				message: _,
-				amount: _,
-			} => "execute_ccm_native_call",
-			Self::ExecuteCcmTokenCall {
-				source_chain: _,
-				source_address: _,
-				message: _,
-				amount: _,
-			} => "execute_ccm_token_call",
+pub trait InstructionExt {
+	fn with_remaining_accounts(self, accounts: Vec<AccountMeta>) -> Self;
+}
+
+impl InstructionExt for Instruction {
+	fn with_remaining_accounts(mut self, accounts: Vec<AccountMeta>) -> Self {
+		self.accounts.extend(accounts);
+		self
+	}
+}
+
+// TODO: Derive this from ABI JSON instead. (or at least generate tests to ensure it matches)
+macro_rules! solana_program {
+	(
+		idl_path: $idl_path:expr,
+		$program:ident {
+			$(
+				$call_name:ident => $call:ident {
+					args: [
+						$(
+							$call_arg:ident: $arg_type:ty
+						),*
+						$(,)?
+					],
+					account_metas: [
+						$(
+							$account:ident: { signer: $is_signer:expr, writable: $is_writable:expr }
+						),*
+						$(,)?
+					]
+					$(,)?
+				}
+			),+ $(,)?
+		}
+	) => {
+		pub struct $program {
+			program_id: Pubkey,
+		}
+
+		impl $program {
+			pub fn with_id(program_id: impl Into<Pubkey>) -> Self {
+				Self { program_id: program_id.into() }
+			}
+
+			$(
+				pub fn $call_name(
+					&self,
+					$( $call_arg: $arg_type, )*
+					$( $account: impl Into<AccountMeta>, )*
+				) -> Instruction {
+					$call {
+						$(
+							$call_arg,
+						)*
+					}.get_instruction(
+						self.program_id,
+						vec![
+							$(
+								{
+									let mut account = $account.into();
+									account.is_signer |= $is_signer;
+									account.is_writable |= $is_writable;
+									account
+								},
+							)*
+						]
+					)
+				}
+			)+
+		}
+
+		$(
+			#[derive(BorshSerialize, Debug, Clone, PartialEq, Eq)]
+			pub struct $call {
+				$(
+					$call_arg: $arg_type,
+				)*
+			}
+
+			impl ProgramInstruction for $call {
+				const CALL_NAME: &'static str = stringify!($call_name);
+			}
+		)+
+
+		#[cfg(test)]
+		mod test {
+			use super::*;
+			use std::collections::BTreeSet;
+			use $crate::sol::sol_tx_core::program_instructions::idl::Idl;
+
+			const IDL_RAW: &str = include_str!($idl_path);
+
+			thread_local! {
+				static IDL: Idl = serde_json::from_str(IDL_RAW).unwrap();
+			}
+
+			fn test(f: impl FnOnce(&Idl)) {
+				IDL.with(|idl| {
+					f(idl);
+				});
+			}
+
+			#[test]
+			fn instructions_exist_in_idl() {
+				test(|idl| {
+					let defined_in_idl = idl.instructions.iter().map(|instr| instr.name.clone()).collect::<BTreeSet<_>>();
+					let defined_in_code = [
+						$(
+							stringify!($call_name).to_owned(),
+						)*
+					].into_iter().collect::<BTreeSet<_>>();
+					assert!(defined_in_code.is_subset(&defined_in_idl), "Some instructions are not defined in the IDL");
+				});
+			}
+
+			$(
+				#[cfg(test)]
+				mod $call_name {
+					use super::*;
+					use heck::{ToSnakeCase, ToUpperCamelCase};
+
+					#[test]
+					fn program_name() {
+						test(|idl| {
+							assert_eq!(
+								format!("{}_program", idl.metadata.name).to_upper_camel_case(),
+								stringify!($program)
+							);
+						});
+					}
+
+					#[test]
+					fn discriminator() {
+						test(|idl| {
+							assert_eq!(
+								<$call as ProgramInstruction>::function_discriminator(),
+								idl.instruction(stringify!($call_name)).discriminator
+							);
+						});
+					}
+
+					#[test]
+					fn $call_name() {
+						test(|idl| {
+								let instruction = idl.instruction(stringify!($call_name));
+								assert_eq!(
+									instruction
+										.args
+										.iter()
+										.map(|arg| arg.name.as_str().to_snake_case())
+										.collect::<Vec<String>>(),
+										[
+											$(
+												stringify!($call_arg).to_owned(),
+											)*
+										].into_iter().collect::<Vec<String>>(),
+									"Arguments don't match for instruction {}",
+									stringify!($call_name),
+								);
+								assert_eq!(
+									instruction
+										.accounts
+										.iter()
+										.map(|account| account.name.as_str().to_snake_case())
+										.collect::<Vec<String>>(),
+									[
+										$(
+											stringify!($account).to_owned(),
+										)*
+									].into_iter().collect::<Vec<String>>(),
+									"Accounts don't match for instruction {}",
+									stringify!($call_name),
+								);
+						});
+					}
+
+					$(
+						#[test]
+						fn $call_arg() {
+							test(|idl| {
+								let idl_arg = idl.instruction(stringify!($call_name)).args
+									.iter()
+									.find(|arg| arg.name.to_snake_case() == stringify!($call_arg))
+									.expect("arg not found in idl");
+
+								assert_eq!(idl_arg.ty.to_string(), stringify!($arg_type));
+							});
+						}
+					)*
+
+					$(
+						#[test]
+						fn $account() {
+							test(|idl| {
+								let idl_account = idl.instruction(stringify!($call_name)).accounts
+									.iter()
+									.find(|account| account.name.to_snake_case() == stringify!($account))
+									.expect("account not found in idl");
+
+								assert_eq!(
+									idl_account.signer,
+									$is_signer,
+									"is_signer doesn't match for {}", stringify!($account)
+								);
+								assert_eq!(
+									idl_account.writable,
+									$is_writable,
+									"is_writable doesn't match for {}", stringify!($account)
+								);
+							});
+						}
+					)*
+				}
+			)+
+		}
+	};
+}
+
+solana_program!(
+	idl_path: concat!(
+		env!("CF_SOL_PROGRAM_IDL_ROOT"), "/",
+		env!("CF_SOL_PROGRAM_IDL_TAG"), "/" ,
+		"vault.json"
+	),
+	VaultProgram {
+		fetch_native => FetchNative {
+			args: [
+				seed: Vec<u8>,
+				bump: u8,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				agg_key: { signer: true, writable: true },
+				deposit_channel_pda: { signer: false, writable: true },
+				deposit_channel_historical_fetch: { signer: false, writable: true },
+				system_program: { signer: false, writable: false },
+			]
+		},
+		rotate_agg_key => RotateAggKey {
+			args: [
+				skip_transfer_funds: bool,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				agg_key: { signer: true, writable: true },
+				new_agg_key: { signer: false, writable: true },
+				system_program: { signer: false, writable: false },
+			]
+		},
+		fetch_tokens => FetchTokens {
+			args: [
+				seed: Vec<u8>,
+				bump: u8,
+				decimals: u8,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				agg_key: { signer: true, writable: true },
+				deposit_channel_pda: { signer: false, writable: false },
+				deposit_channel_associated_token_account: { signer: false, writable: true },
+				token_vault_associated_token_account: { signer: false, writable: true },
+				mint: { signer: false, writable: false },
+				token_program: { signer: false, writable: false },
+				deposit_channel_historical_fetch: { signer: false, writable: true },
+				system_program: { signer: false, writable: false },
+			]
+		},
+		transfer_tokens => TransferTokens {
+			args: [
+				amount: u64,
+				decimals: u8,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				agg_key: { signer: true, writable: false },
+				token_vault_pda: { signer: false, writable: false },
+				token_vault_associated_token_account: { signer: false, writable: true },
+				to_token_account: { signer: false, writable: true },
+				mint: { signer: false, writable: false },
+				token_program: { signer: false, writable: false },
+			]
+		},
+		execute_ccm_token_call => ExecuteCcmTokenCall {
+			args: [
+				source_chain: u32,
+				source_address: Vec<u8>,
+				message: Vec<u8>,
+				amount: u64,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				agg_key: { signer: true, writable: false },
+				receiver_token_account: { signer: false, writable: true },
+				cf_receiver: { signer: false, writable: false },
+				token_program: { signer: false, writable: false },
+				mint: { signer: false, writable: false },
+				instruction_sysvar: { signer: false, writable: false },
+			]
+		},
+		execute_ccm_native_call => ExecuteCcmNativeCall {
+			args: [
+				source_chain: u32,
+				source_address: Vec<u8>,
+				message: Vec<u8>,
+				amount: u64,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				agg_key: { signer: true, writable: false },
+				receiver_native: { signer: false, writable: true },
+				cf_receiver: { signer: false, writable: false },
+				system_program: { signer: false, writable: false },
+				instruction_sysvar: { signer: false, writable: false },
+			]
+		},
+
+		set_gov_key_with_agg_key => SetGovKeyWithAggKey {
+			args: [
+				new_gov_key: Pubkey,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				agg_key: { signer: true, writable: false },
+			]
+		},
+
+		set_gov_key_with_gov_key => SetGovKeyWithGovKey {
+			args: [
+				new_gov_key: Pubkey,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				gov_key: { signer: true, writable: false },
+			]
+		},
+
+		set_suspended_state => SetSuspendedState {
+			args: [
+				suspend: bool,
+			],
+			account_metas: [
+				data_account: { signer: false, writable: true },
+				gov_key: { signer: true, writable: false },
+			]
+		},
+
+		transfer_vault_upgrade_authority => TransferVaultUpgradeAuthority {
+			args: [],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				agg_key: { signer: true, writable: false },
+				program_data_address: { signer: false, writable: true },
+				program_address: { signer: false, writable: false },
+				new_authority: { signer: false, writable: false },
+				signer_pda: { signer: false, writable: false },
+				bpf_loader_upgradeable: { signer: false, writable: false },
+			]
+		},
+
+		upgrade_vault_program => UpgradeVaultProgram {
+			args: [],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				gov_key: { signer: true, writable: false },
+				program_data_address: { signer: false, writable: true },
+				program_address: { signer: false, writable: true },
+				buffer_address: { signer: false, writable: true },
+				spill_address: { signer: false, writable: true },
+				sysvar_rent: { signer: false, writable: false },
+				sysvar_clock: { signer: false, writable: false },
+				signer_pda: { signer: false, writable: false },
+				bpf_loader_upgradeable: { signer: false, writable: false },
+			]
+		},
+	}
+);
+
+#[cfg(test)]
+mod idl {
+	use serde::{Deserialize, Serialize};
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub struct IdlInstruction {
+		pub name: String,
+		pub args: Vec<IdlArg>,
+		pub accounts: Vec<IdlAccountMeta>,
+		pub discriminator: [u8; 8],
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	pub struct IdlArg {
+		pub name: String,
+		#[serde(rename = "type")]
+		pub ty: IdlType,
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub enum IdlType {
+		Bytes,
+		U8,
+		U64,
+		U32,
+		Bool,
+		Pubkey,
+		Defined { name: String },
+		Option(Box<IdlType>),
+	}
+
+	impl std::fmt::Display for IdlType {
+		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			match self {
+				IdlType::Bytes => write!(f, "Vec<u8>"),
+				IdlType::U8 => write!(f, "u8"),
+				IdlType::U64 => write!(f, "u64"),
+				IdlType::U32 => write!(f, "u32"),
+				IdlType::Bool => write!(f, "bool"),
+				IdlType::Pubkey => write!(f, "Pubkey"),
+				IdlType::Defined { name } => write!(f, "{}", name),
+				IdlType::Option(ty) => write!(f, "Option<{}>", ty),
+			}
 		}
 	}
-}
 
-impl ProgramInstruction for UpgradeManagerProgram {
-	fn call_name(&self) -> &str {
-		match self {
-			Self::UpgradeVaultProgram { seed: _, bump: _ } => "upgrade_vault_program",
-			Self::TransferVaultUpgradeAuthority { seed: _, bump: _ } =>
-				"transfer_vault_upgrade_authority",
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	pub struct IdlError {
+		pub code: u32,
+		pub name: String,
+		pub msg: String,
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub struct IdlAccountMeta {
+		pub name: String,
+		#[serde(default)]
+		pub signer: bool,
+		#[serde(default)]
+		pub writable: bool,
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub struct IdlMetadata {
+		pub name: String,
+		pub version: String,
+		pub spec: String,
+		pub description: String,
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	pub struct Idl {
+		pub address: String,
+		pub metadata: IdlMetadata,
+		pub instructions: Vec<IdlInstruction>,
+		pub errors: Vec<IdlError>,
+	}
+
+	impl Idl {
+		pub fn instruction(&self, name: &str) -> &IdlInstruction {
+			self.instructions
+				.iter()
+				.find(|instr| instr.name == name)
+				.expect("instruction not found")
 		}
 	}
 }
