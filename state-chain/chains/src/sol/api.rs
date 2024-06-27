@@ -55,14 +55,8 @@ pub trait SolanaEnvironment:
 					SolanaTransactionBuildingError::CannotLookupAggKey,
 				SolanaEnvAccountLookupKey::VaultProgram =>
 					SolanaTransactionBuildingError::CannotLookupVaultProgram,
-				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
-					SolanaTransactionBuildingError::CannotLookupVaultProgramDataAccount,
 				SolanaEnvAccountLookupKey::TokenMintPubkey =>
 					SolanaTransactionBuildingError::CannotLookupTokenMintPubkey,
-				SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount =>
-					SolanaTransactionBuildingError::CannotLookupTokenVaultAssociatedTokenAccount,
-				SolanaEnvAccountLookupKey::TokenVaultPdaAccount =>
-					SolanaTransactionBuildingError::CannotLookupTokenVaultPdaAccount,
 			},
 		)
 	}
@@ -81,10 +75,7 @@ pub trait SolanaEnvironment:
 pub enum SolanaEnvAccountLookupKey {
 	AggKey,
 	VaultProgram,
-	VaultProgramDataAccount,
 	TokenMintPubkey,
-	TokenVaultAssociatedTokenAccount,
-	TokenVaultPdaAccount,
 }
 
 /// Errors that can arise when building Solana Transactions.
@@ -92,11 +83,8 @@ pub enum SolanaEnvAccountLookupKey {
 pub enum SolanaTransactionBuildingError {
 	CannotLookupAggKey,
 	CannotLookupVaultProgram,
-	CannotLookupVaultProgramDataAccount,
 	CannotLookupComputePrice,
 	CannotLookupTokenMintPubkey,
-	CannotLookupTokenVaultAssociatedTokenAccount,
-	CannotLookupTokenVaultPdaAccount,
 	NoNonceAccountsSet,
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),
@@ -151,14 +139,21 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let vault_program_data_account =
-			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
+			crate::sol::sol_tx_core::address_derivation::derive_vault_data_account(vault_program)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 		let token_mint_pubkey =
 			Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
-		let token_vault_ata = Environment::lookup_account(
-			SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
-		)?;
+		let token_vault_pda_account =
+			crate::sol::sol_tx_core::address_derivation::derive_token_vault_account(vault_program)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+		let token_vault_ata =
+			crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+				token_vault_pda_account.address,
+				token_mint_pubkey,
+			)
+			.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
 		let decomposed_fetch_params = fetch_params
 			.into_iter()
@@ -175,9 +170,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let instruction_set = SolanaInstructionBuilder::fetch_from(
 			decomposed_fetch_params,
 			token_mint_pubkey,
-			token_vault_ata,
+			token_vault_ata.address,
 			vault_program,
-			vault_program_data_account,
+			vault_program_data_account.address,
 			agg_key,
 			nonce_account,
 			compute_price,
@@ -234,16 +229,25 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				// Only do environment lookup if needed
 				let vault_program =
 					Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
-				let vault_program_data_account = Environment::lookup_account(
-					SolanaEnvAccountLookupKey::VaultProgramDataAccount,
-				)?;
+				let vault_program_data_account =
+					crate::sol::sol_tx_core::address_derivation::derive_vault_data_account(
+						vault_program,
+					)
+					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 				let token_vault_pda_account =
-					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenVaultPdaAccount)?;
+					crate::sol::sol_tx_core::address_derivation::derive_token_vault_account(
+						vault_program,
+					)
+					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 				let token_mint_pubkey =
 					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
-				let token_vault_ata = Environment::lookup_account(
-					SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
-				)?;
+				let token_vault_ata =
+					crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+						token_vault_pda_account.address,
+						token_mint_pubkey,
+					)
+					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
 				// Build the Transfer instruction set for Token transfers.
 				token
 					.into_iter()
@@ -260,9 +264,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 								transfer_param.amount,
 								transfer_param.to,
 								vault_program,
-								vault_program_data_account,
-								token_vault_pda_account,
-								token_vault_ata,
+								vault_program_data_account.address,
+								token_vault_pda_account.address,
+								token_vault_ata.address,
 								token_mint_pubkey,
 								agg_key,
 								nonce_account,
@@ -299,7 +303,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let nonce_accounts = Environment::all_nonce_accounts()?;
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let vault_program_data_account =
-			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
+			crate::sol::sol_tx_core::address_derivation::derive_vault_data_account(vault_program)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
@@ -308,7 +313,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			new_agg_key,
 			nonce_accounts,
 			vault_program,
-			vault_program_data_account,
+			vault_program_data_account.address,
 			agg_key,
 			nonce_account,
 			compute_price,
@@ -339,44 +344,16 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		let vault_program = Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)?;
 		let vault_program_data_account =
-			Environment::lookup_account(SolanaEnvAccountLookupKey::VaultProgramDataAccount)?;
+			crate::sol::sol_tx_core::address_derivation::derive_vault_data_account(vault_program)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 		let agg_key = Environment::lookup_account(SolanaEnvAccountLookupKey::AggKey)?;
 		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
 		// Build the instruction_set
-		let instruction_set = match transfer_param.asset {
-			SolAsset::Sol => Ok(SolanaInstructionBuilder::ccm_transfer_native(
-				transfer_param.amount,
-				transfer_param.to,
-				source_chain,
-				source_address,
-				message,
-				ccm_accounts,
-				vault_program,
-				vault_program_data_account,
-				agg_key,
-				nonce_account,
-				compute_price,
-			)),
-			SolAsset::SolUsdc => {
-				let token_vault_pda_account =
-					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenVaultPdaAccount)?;
-				let token_mint_pubkey =
-					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
-				let token_vault_ata = Environment::lookup_account(
-					SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount,
-				)?;
-
-				let ata =
-					crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
-						transfer_param.to,
-						token_mint_pubkey,
-					)
-					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-
-				Ok(SolanaInstructionBuilder::ccm_transfer_usdc_token(
-					ata.address,
+		let instruction_set =
+			match transfer_param.asset {
+				SolAsset::Sol => Ok(SolanaInstructionBuilder::ccm_transfer_native(
 					transfer_param.amount,
 					transfer_param.to,
 					source_chain,
@@ -384,16 +361,50 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					message,
 					ccm_accounts,
 					vault_program,
-					vault_program_data_account,
-					token_vault_pda_account,
-					token_vault_ata,
-					token_mint_pubkey,
+					vault_program_data_account.address,
 					agg_key,
 					nonce_account,
 					compute_price,
-				))
-			},
-		}?;
+				)),
+				SolAsset::SolUsdc => {
+					let token_vault_pda_account =
+						crate::sol::sol_tx_core::address_derivation::derive_token_vault_account(
+							vault_program,
+						)
+						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+					let token_mint_pubkey =
+						Environment::lookup_account(SolanaEnvAccountLookupKey::TokenMintPubkey)?;
+					let token_vault_ata = crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+						token_vault_pda_account.address,
+						token_mint_pubkey,
+					)		.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
+					let ata =
+					crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+						transfer_param.to,
+						token_mint_pubkey,
+					)
+					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
+					Ok(SolanaInstructionBuilder::ccm_transfer_usdc_token(
+						ata.address,
+						transfer_param.amount,
+						transfer_param.to,
+						source_chain,
+						source_address,
+						message,
+						ccm_accounts,
+						vault_program,
+						vault_program_data_account.address,
+						token_vault_pda_account.address,
+						token_vault_ata.address,
+						token_mint_pubkey,
+						agg_key,
+						nonce_account,
+						compute_price,
+					))
+				},
+			}?;
 
 		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
 			&instruction_set,

@@ -388,20 +388,8 @@ mod test {
 		VAULT_PROGRAM
 	}
 
-	fn vault_program_data_account() -> SolAddress {
-		VAULT_PROGRAM_DATA_ACCOUNT
-	}
-
-	fn token_vault_pda_account() -> SolAddress {
-		TOKEN_VAULT_PDA_ACCOUNT
-	}
-
 	fn compute_price() -> SolAmount {
 		COMPUTE_UNIT_PRICE
-	}
-
-	fn token_vault_ata() -> SolAddress {
-		TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT
 	}
 
 	fn token_mint_pubkey() -> SolAddress {

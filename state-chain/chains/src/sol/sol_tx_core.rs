@@ -871,6 +871,10 @@ impl FromStr for Hash {
 pub mod sol_test_values {
 	use crate::{
 		sol::{
+			sol_tx_core::address_derivation::{
+				derive_associated_token_account, derive_token_vault_account,
+				derive_vault_data_account,
+			},
 			SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolCcmAddress, SolComputeLimit,
 			SolHash,
 		},
@@ -880,19 +884,9 @@ pub mod sol_test_values {
 
 	pub const VAULT_PROGRAM: SolAddress =
 		const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf");
-	pub const VAULT_PROGRAM_DATA_ADDRESS: SolAddress =
-		const_address("3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57");
-	pub const VAULT_PROGRAM_DATA_ACCOUNT: SolAddress =
-		const_address("wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc");
 	// MIN_PUB_KEY per supported spl-token
 	pub const MINT_PUB_KEY: SolAddress =
 		const_address("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p");
-	pub const TOKEN_VAULT_PDA_ACCOUNT: SolAddress =
-		const_address("CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d");
-	// This can be derived from the TOKEN_VAULT_PDA_ACCOUNT and the mintPubKey but we can have it
-	// stored There will be a different one per each supported spl-token
-	pub const TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: SolAddress =
-		const_address("GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd");
 	pub const NONCE_ACCOUNTS: [SolAddress; 10] = [
 		const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
 		const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
@@ -924,6 +918,21 @@ pub mod sol_test_values {
 	pub const NEXT_NONCE: SolAddress = NONCE_ACCOUNTS[0];
 	pub const SOL: SolAsset = SolAsset::Sol;
 	pub const USDC: SolAsset = SolAsset::SolUsdc;
+
+	pub fn vault_program_data_account() -> SolAddress {
+		derive_vault_data_account(VAULT_PROGRAM).unwrap().address
+	}
+
+	pub fn token_vault_pda_account() -> SolAddress {
+		derive_token_vault_account(VAULT_PROGRAM).unwrap().address
+	}
+
+	pub fn token_vault_ata() -> SolAddress {
+		let token_vault_account = token_vault_pda_account();
+		derive_associated_token_account(token_vault_account, MINT_PUB_KEY)
+			.unwrap()
+			.address
+	}
 
 	pub fn ccm_accounts() -> SolCcmAccounts {
 		SolCcmAccounts {
@@ -1088,7 +1097,7 @@ mod tests {
 			VaultProgram::with_id(VAULT_PROGRAM).fetch_native(
 				vec![11u8, 12u8, 13u8, 55u8, 0u8, 0u8, 0u8, 0u8],
 				255,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
 				deposit_channel,
 				deposit_channel_historical_fetch,
@@ -1140,7 +1149,7 @@ mod tests {
 			vault_program.fetch_native(
 				0u64.to_le_bytes().to_vec(),
 				deposit_channel_0.bump,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
 				deposit_channel_0.address,
 				deposit_channel_historical_fetch_0.address,
@@ -1149,7 +1158,7 @@ mod tests {
 			vault_program.fetch_native(
 				1u64.to_le_bytes().to_vec(),
 				deposit_channel_1.bump,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
 				deposit_channel_1.address,
 				deposit_channel_historical_fetch_1.address,
@@ -1226,11 +1235,11 @@ mod tests {
 				seed.to_le_bytes().to_vec(),
 				deposit_channel.bump,
 				6,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
 				deposit_channel.address,
 				deposit_channel_ata.address,
-				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				token_vault_ata(),
 				MINT_PUB_KEY,
 				TOKEN_PROGRAM_ID,
 				deposit_channel_historical_fetch.address,
@@ -1286,11 +1295,11 @@ mod tests {
 				0u64.to_le_bytes().to_vec(),
 				deposit_channel_0.bump,
 				6,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
 				deposit_channel_0.address,
 				deposit_channel_ata_0.address,
-				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				token_vault_ata(),
 				MINT_PUB_KEY,
 				TOKEN_PROGRAM_ID,
 				deposit_channel_historical_fetch_0.address,
@@ -1300,11 +1309,11 @@ mod tests {
 				1u64.to_le_bytes().to_vec(),
 				deposit_channel_1.bump,
 				6,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
 				deposit_channel_1.address,
 				deposit_channel_ata_1.address,
-				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				token_vault_ata(),
 				MINT_PUB_KEY,
 				TOKEN_PROGRAM_ID,
 				deposit_channel_historical_fetch_1.address,
@@ -1313,7 +1322,7 @@ mod tests {
 			VaultProgram::with_id(VAULT_PROGRAM).fetch_native(
 				2u64.to_le_bytes().to_vec(),
 				deposit_channel_2.bump,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
 				deposit_channel_2.address,
 				deposit_channel_historical_fetch_2.address,
@@ -1359,10 +1368,10 @@ mod tests {
 			VaultProgram::with_id(VAULT_PROGRAM).transfer_tokens(
 				TRANSFER_AMOUNT,
 				SOL_USDC_DECIMAL,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
-				TOKEN_VAULT_PDA_ACCOUNT,
-				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				token_vault_pda_account(),
+				token_vault_ata(),
 				to_pubkey_ata.address,
 				MINT_PUB_KEY,
 				TOKEN_PROGRAM_ID,
@@ -1400,7 +1409,7 @@ mod tests {
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			VaultProgram::with_id(VAULT_PROGRAM).rotate_agg_key(
 				false,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
 				new_agg_key_pubkey,
 				SYSTEM_PROGRAM_ID,
@@ -1452,7 +1461,7 @@ mod tests {
 					ccm_parameter.source_address.encode(), // TODO: check this (scale encoded?)
 					ccm_parameter.channel_metadata.message.to_vec(),
 					TRANSFER_AMOUNT,
-					VAULT_PROGRAM_DATA_ACCOUNT,
+					vault_program_data_account(),
 					agg_key_pubkey,
 					to_pubkey,
 					extra_accounts.clone().cf_receiver,
@@ -1503,10 +1512,10 @@ mod tests {
 			VaultProgram::with_id(VAULT_PROGRAM).transfer_tokens(
 				amount,
 				SOL_USDC_DECIMAL,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
-				TOKEN_VAULT_PDA_ACCOUNT,
-				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				token_vault_pda_account(),
+				token_vault_ata(),
 				to_pubkey_ata.address,
 				MINT_PUB_KEY,
 				TOKEN_PROGRAM_ID,
@@ -1516,7 +1525,7 @@ mod tests {
 				ccm_parameter.source_address.encode(), // TODO: check this (scale encoded?)
 				ccm_parameter.channel_metadata.message.to_vec(),
 				amount,
-				VAULT_PROGRAM_DATA_ACCOUNT,
+				vault_program_data_account(),
 				agg_key_pubkey,
 				to_pubkey_ata.address,
 				extra_accounts.clone().cf_receiver,

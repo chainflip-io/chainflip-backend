@@ -7,6 +7,10 @@ use sol_prim::DerivedAta;
 use crate::sol::{AddressDerivationError, DerivedAddressBuilder, SolAddress};
 use sol_prim::consts::{ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID};
 
+// These values must match the seeds in the Vault's program
+const DATA_ACCOUNT_SEED: [u8; 20] = [u8::MAX; 20];
+const TOKEN_VAULT_SEED: &[u8] = &[];
+
 /// Derive address for a given channel ID
 pub fn derive_deposit_address(
 	channel_id: ChannelId,
@@ -42,6 +46,22 @@ fn derive_address(
 	vault_program: SolAddress,
 ) -> Result<DerivedAta, AddressDerivationError> {
 	DerivedAddressBuilder::from_address(vault_program)?.chain_seed(seed)?.finish()
+}
+
+pub fn derive_vault_data_account(
+	vault_program: SolAddress,
+) -> Result<DerivedAta, AddressDerivationError> {
+	DerivedAddressBuilder::from_address(vault_program)?
+		.chain_seed(DATA_ACCOUNT_SEED)?
+		.finish()
+}
+
+pub fn derive_token_vault_account(
+	vault_program: SolAddress,
+) -> Result<DerivedAta, AddressDerivationError> {
+	DerivedAddressBuilder::from_address(vault_program)?
+		.chain_seed(TOKEN_VAULT_SEED)?
+		.finish()
 }
 
 #[cfg(test)]
@@ -224,6 +244,43 @@ mod tests {
 					.unwrap(),
 				bump: 252u8
 			}
+		);
+	}
+	#[test]
+	fn can_derive_data_account() {
+		let vault_program = sol_test_values::VAULT_PROGRAM;
+		assert_eq!(
+			derive_vault_data_account(vault_program).unwrap(),
+			DerivedAta {
+				address: SolAddress::from_str("wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc")
+					.unwrap(),
+				bump: 255u8
+			}
+		);
+	}
+
+	#[test]
+	fn can_derive_token_vault_account() {
+		let vault_program = sol_test_values::VAULT_PROGRAM;
+		assert_eq!(
+			derive_token_vault_account(vault_program).unwrap(),
+			DerivedAta {
+				address: SolAddress::from_str("CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d")
+					.unwrap(),
+				bump: 253u8
+			}
+		);
+	}
+	#[test]
+	fn can_derive_token_vault_ata() {
+		let vault_program = sol_test_values::VAULT_PROGRAM;
+		let token_vault_account = derive_token_vault_account(vault_program).unwrap().address;
+		let token_mint_pubkey = sol_test_values::MINT_PUB_KEY;
+		assert_eq!(
+			derive_associated_token_account(token_vault_account, token_mint_pubkey)
+				.unwrap()
+				.address,
+			SolAddress::from_str("GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd").unwrap()
 		);
 	}
 }
