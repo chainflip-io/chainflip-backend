@@ -312,7 +312,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
-          name: localnet-logs
+          name: localnet-logs-upgrade-test
           path: |
             /tmp/chainflip/*/chainflip-*.*log
 
@@ -321,7 +321,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-logs
+          name: chainflip-logs-upgrade-test
           path: |
             /tmp/chainflip/logs/*.log
 
