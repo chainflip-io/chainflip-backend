@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{AnyChain, ForeignChainAddress};
+use cf_chains::{dot::api::PolkadotEnvironment, AnyChain, ForeignChainAddress};
 use cf_primitives::{AssetAmount, EpochIndex};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, EgressApi};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
@@ -38,6 +38,9 @@ pub mod pallet {
 		/// Handles egress for all chains.
 		type EgressHandler: EgressApi<AnyChain>;
 
+		/// Polkadot environment.
+		type PolkadotEnvironment: PolkadotEnvironment;
+
 		/// Safe mode configuration.
 		type SafeMode: Get<PalletSafeMode>;
 	}
@@ -58,6 +61,13 @@ pub mod pallet {
 			chain: ForeignChain,
 			amount: AssetAmount,
 			epoch: EpochIndex,
+		},
+		/// Witheld fees smaller than recorded fees.
+		NotEnoughFunds { chain: ForeignChain, withheld: AssetAmount, available: AssetAmount },
+		RefundedMoreThanWithheld {
+			chain: ForeignChain,
+			refunded: AssetAmount,
+			withhold: AssetAmount,
 		},
 	}
 
@@ -83,6 +93,49 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	fn do_egress(
+		chain: ForeignChain,
+		fee: AssetAmount,
+		validator: ForeignChainAddress,
+		epoch: EpochIndex,
+		remaining_funds: AssetAmount,
+	) -> Result<(), ()> {
+		let amount = if remaining_funds < fee {
+			log::error!(
+				"Insufficient funds to schedule egress for validator: {:?} on chain: {:?}",
+				validator,
+				chain
+			);
+			Self::deposit_event(Event::RefundedMoreThanWithheld {
+				chain,
+				refunded: fee,
+				withhold: remaining_funds,
+			});
+			fee
+		} else {
+			fee
+		};
+		if let Ok(egress_details) =
+			T::EgressHandler::schedule_egress(chain.gas_asset(), amount, validator.clone(), None)
+		{
+			Self::deposit_event(Event::RefundScheduled {
+				account_id: validator,
+				egress_id: egress_details.egress_id,
+				chain,
+				amount,
+				epoch,
+			});
+			Ok(())
+		} else {
+			log::error!(
+				"Failed to schedule egress for validator: {:?} on chain: {:?}",
+				validator,
+				chain
+			);
+			Err(())
+		}
+	}
+
 	pub fn record_gas_fee(
 		account_id: ForeignChainAddress,
 		chain: ForeignChain,
@@ -111,39 +164,65 @@ impl<T: Config> Pallet<T> {
 
 		for chain in chains {
 			let mut available_funds = WithheldTransactionFees::<T>::get(chain);
-			let mut failed_egress: BTreeMap<ForeignChainAddress, AssetAmount> = BTreeMap::new();
-			if let Some(recorded_fees) = RecordedFees::<T>::take(chain) {
-				for (validator, fee) in recorded_fees {
-					if let Some(remaining_funds) = available_funds.checked_sub(fee) {
-						if let Ok(egress_details) = T::EgressHandler::schedule_egress(
-							chain.gas_asset(),
-							fee,
-							validator.clone(),
-							None,
-						) {
-							available_funds = remaining_funds;
-							Self::deposit_event(Event::RefundScheduled {
-								account_id: validator,
-								egress_id: egress_details.egress_id,
+			match chain {
+				ForeignChain::Ethereum | ForeignChain::Arbitrum => {
+					let mut failed_egress: BTreeMap<ForeignChainAddress, AssetAmount> =
+						BTreeMap::new();
+					if let Some(recorded_fees) = RecordedFees::<T>::take(chain) {
+						for (validator, fee) in recorded_fees {
+							if Self::do_egress(
 								chain,
-								amount: fee,
+								fee,
+								validator.clone(),
 								epoch,
-							});
-						} else {
-							failed_egress.insert(validator.clone(), fee);
-							log::error!(
-								"Failed to schedule egress for validator: {:?} on chain: {:?}",
-								validator,
-								chain
-							);
+								available_funds,
+							)
+							.is_ok()
+							{
+								available_funds = available_funds.saturating_sub(fee);
+							} else {
+								failed_egress.insert(validator.clone(), fee);
+							}
 						}
 					}
-				}
+					if !failed_egress.is_empty() {
+						RecordedFees::<T>::insert(chain, failed_egress);
+					}
+					WithheldTransactionFees::<T>::insert(chain, available_funds);
+				},
+				ForeignChain::Bitcoin | ForeignChain::Solana => {
+					let fees: AssetAmount =
+						RecordedFees::<T>::take(chain).unwrap_or_default().values().sum();
+					if available_funds < fees {
+						Self::deposit_event(Event::NotEnoughFunds {
+							chain,
+							withheld: available_funds,
+							available: available_funds,
+						});
+					} else {
+						available_funds = available_funds.saturating_sub(fees);
+						WithheldTransactionFees::<T>::insert(chain, available_funds);
+					}
+				},
+				ForeignChain::Polkadot => {
+					let fees: AssetAmount =
+						RecordedFees::<T>::take(chain).unwrap_or_default().values().sum();
+					if let Some(vault_address) = T::PolkadotEnvironment::try_vault_account() {
+						if Self::do_egress(
+							chain,
+							fees,
+							cf_chains::ForeignChainAddress::Dot(vault_address),
+							epoch,
+							available_funds,
+						)
+						.is_ok()
+						{
+							available_funds = available_funds.saturating_sub(fees);
+						}
+					}
+					WithheldTransactionFees::<T>::insert(chain, available_funds);
+				},
 			}
-			if !failed_egress.is_empty() {
-				RecordedFees::<T>::insert(chain, failed_egress);
-			}
-			WithheldTransactionFees::<T>::insert(chain, available_funds);
 		}
 	}
 }

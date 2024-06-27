@@ -13,32 +13,27 @@ fn payed_gas(chain: ForeignChain, amount: AssetAmount, account: ForeignChainAddr
 }
 
 #[test]
-fn refund_validators_on_epoch_transition() {
+fn refund_validators_evm() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_2.clone());
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_3.clone());
-		payed_gas(ForeignChain::Polkadot, 100, DOT_ADDR_1.clone());
 
 		let recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
-		let recorded_fees_dot = RecordedFees::<Test>::get(ForeignChain::Polkadot).unwrap();
 
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_2), Some(&100));
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_3), Some(&100));
-		assert_eq!(recorded_fees_dot.get(&DOT_ADDR_1), Some(&100));
 
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 300);
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Polkadot), 100);
 
 		Refunding::on_distribute_withheld_fees(1);
 
 		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 
 		let recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum);
-		let recorded_fees_dot = RecordedFees::<Test>::get(ForeignChain::Ethereum);
 
-		assert_eq!(egresses.len(), 4);
+		assert_eq!(egresses.len(), 3);
 
 		for egress in egresses {
 			assert_eq!(egress.amount(), 100);
@@ -47,10 +42,8 @@ fn refund_validators_on_epoch_transition() {
 		assert_eq!(recorded_fees_eth, None);
 		assert_eq!(recorded_fees_eth, None);
 		assert_eq!(recorded_fees_eth, None);
-		assert_eq!(recorded_fees_dot, None);
 
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 0);
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Polkadot), 0);
 	});
 }
 

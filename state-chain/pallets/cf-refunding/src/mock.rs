@@ -14,6 +14,8 @@ use sp_runtime::{
 	Permill,
 };
 
+use cf_chains::dot::api::PolkadotEnvironment;
+
 use cf_chains::ForeignChainAddress;
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -71,11 +73,24 @@ pub const ETH_ADDR_3: ForeignChainAddress = ForeignChainAddress::Eth(H160([2; 20
 pub const DOT_ADDR_1: ForeignChainAddress =
 	ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([1; 32]));
 
+pub struct DotEnvironmentMock;
+
+impl PolkadotEnvironment for DotEnvironmentMock {
+	fn try_vault_account() -> Option<PolkadotAccountId> {
+		todo!()
+	}
+
+	fn runtime_version() -> cf_chains::dot::RuntimeVersion {
+		todo!()
+	}
+}
+
 impl_mock_runtime_safe_mode!(refunding: PalletSafeMode);
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = MockEgressHandler<AnyChain>;
+	type PolkadotEnvironment = DotEnvironmentMock;
 	type SafeMode = MockRuntimeSafeMode;
 }
 
