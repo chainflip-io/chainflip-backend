@@ -870,32 +870,40 @@ impl FromStr for Hash {
 #[cfg(test)]
 pub mod sol_test_values {
 	use crate::{
-		sol::{SolAmount, SolAsset, SolCcmAccounts, SolCcmAddress, SolComputeLimit, SolPubkey},
+		sol::{
+			SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolCcmAddress, SolComputeLimit,
+			SolHash,
+		},
 		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
 	};
-	use core::str::FromStr;
+	use sol_prim::consts::{const_address, const_hash};
 
-	pub const VAULT_PROGRAM: &str = "8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf";
-	pub const VAULT_PROGRAM_DATA_ADDRESS: &str = "3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57";
-	pub const VAULT_PROGRAM_DATA_ACCOUNT: &str = "wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc";
+	pub const VAULT_PROGRAM: SolAddress =
+		const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf");
+	pub const VAULT_PROGRAM_DATA_ADDRESS: SolAddress =
+		const_address("3oEKmL4nsw6RDZWhkYTdCUmjxDrzVkm1cWayPsvn3p57");
+	pub const VAULT_PROGRAM_DATA_ACCOUNT: SolAddress =
+		const_address("wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc");
 	// MIN_PUB_KEY per supported spl-token
-	pub const MINT_PUB_KEY: &str = "24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p";
-	pub const TOKEN_VAULT_PDA_ACCOUNT: &str = "CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d";
+	pub const MINT_PUB_KEY: SolAddress =
+		const_address("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p");
+	pub const TOKEN_VAULT_PDA_ACCOUNT: SolAddress =
+		const_address("CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d");
 	// This can be derived from the TOKEN_VAULT_PDA_ACCOUNT and the mintPubKey but we can have it
 	// stored There will be a different one per each supported spl-token
-	pub const TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: &str =
-		"GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd";
-	pub const NONCE_ACCOUNTS: [&str; 10] = [
-		"2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw",
-		"HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo",
-		"HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p",
-		"HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2",
-		"GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM",
-		"EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn",
-		"9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa",
-		"J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna",
-		"GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55",
-		"AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv",
+	pub const TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: SolAddress =
+		const_address("GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd");
+	pub const NONCE_ACCOUNTS: [SolAddress; 10] = [
+		const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
+		const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
+		const_address("HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p"),
+		const_address("HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2"),
+		const_address("GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM"),
+		const_address("EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn"),
+		const_address("9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa"),
+		const_address("J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna"),
+		const_address("GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55"),
+		const_address("AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv"),
 	];
 	pub const RAW_KEYPAIR: [u8; 32] = [
 		6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81, 213,
@@ -904,25 +912,27 @@ pub mod sol_test_values {
 	pub const TRANSFER_AMOUNT: SolAmount = 1_000_000_000u64;
 	pub const COMPUTE_UNIT_PRICE: SolAmount = 1_000_000u64;
 	pub const COMPUTE_UNIT_LIMIT: SolComputeLimit = 300_000u32;
-	pub const TEST_DURABLE_NONCE: &str = "E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm";
-	pub const FETCH_FROM_ACCOUNT: &str = "4Spd3kst7XsA9pdp5ArfdXxEK4xfW88eRKbyQBmMvwQj";
-	pub const TRANSFER_TO_ACCOUNT: &str = "4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V";
-	pub const NEW_AGG_KEY: &str = "7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM";
+	pub const TEST_DURABLE_NONCE: SolHash =
+		const_hash("E6E2bNxGcgFyqeVRT3FSjw7YFbbMAZVQC21ZLVwrztRm");
+	pub const FETCH_FROM_ACCOUNT: SolAddress =
+		const_address("4Spd3kst7XsA9pdp5ArfdXxEK4xfW88eRKbyQBmMvwQj");
+	pub const TRANSFER_TO_ACCOUNT: SolAddress =
+		const_address("4MqL4qy2W1yXzuF3PiuSMehMbJzMuZEcBwVvrgtuhx7V");
+	pub const NEW_AGG_KEY: SolAddress =
+		const_address("7x7wY9yfXjRmusDEfPPCreU4bP49kmH4mqjYUXNAXJoM");
 
-	pub const NEXT_NONCE: &str = NONCE_ACCOUNTS[0];
+	pub const NEXT_NONCE: SolAddress = NONCE_ACCOUNTS[0];
 	pub const SOL: SolAsset = SolAsset::Sol;
 	pub const USDC: SolAsset = SolAsset::SolUsdc;
 
 	pub fn ccm_accounts() -> SolCcmAccounts {
 		SolCcmAccounts {
 			cf_receiver: SolCcmAddress {
-				pubkey: SolPubkey::from_str("8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH")
-					.unwrap(),
+				pubkey: const_address("8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH").into(),
 				is_writable: true,
 			},
 			remaining_accounts: vec![SolCcmAddress {
-				pubkey: SolPubkey::from_str("CFp37nEY6E9byYHiuxQZg6vMCnzwNrgiF9nFGT6Zwcnx")
-					.unwrap(),
+				pubkey: const_address("CFp37nEY6E9byYHiuxQZg6vMCnzwNrgiF9nFGT6Zwcnx").into(),
 				is_writable: false,
 			}],
 		}
@@ -1000,13 +1010,13 @@ mod tests {
 
 	#[test]
 	fn create_transfer_native() {
-		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
+		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
+		let to_pubkey = TRANSFER_TO_ACCOUNT.into();
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
@@ -1032,12 +1042,12 @@ mod tests {
 		let durable_nonce = Hash::from_str("2GGxiEHwtWPGNKH5czvxRGvQTayRvCT1PFsA9yK2iMnq").unwrap();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
+		let to_pubkey = TRANSFER_TO_ACCOUNT.into();
 
 		let lamports = 1_000_000;
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
@@ -1058,11 +1068,11 @@ mod tests {
 
 	#[test]
 	fn create_fetch_native() {
-		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
+		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
-		let deposit_channel: Pubkey = Pubkey::from_str(FETCH_FROM_ACCOUNT).unwrap();
+		let vault_program_id = VAULT_PROGRAM;
+		let deposit_channel: Pubkey = FETCH_FROM_ACCOUNT.into();
 		let deposit_channel_historical_fetch =
 			derive_fetch_account(SolAddress::from(deposit_channel), vault_program_id)
 				.unwrap()
@@ -1070,19 +1080,19 @@ mod tests {
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_native(
+			VaultProgram::with_id(VAULT_PROGRAM).fetch_native(
 				vec![11u8, 12u8, 13u8, 55u8, 0u8, 0u8, 0u8, 0u8],
 				255,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				deposit_channel,
 				deposit_channel_historical_fetch,
-				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+				SYSTEM_PROGRAM_ID,
 			),
 		];
 		let message =
@@ -1105,10 +1115,10 @@ mod tests {
 
 	#[test]
 	fn create_fetch_native_in_batch() {
-		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
+		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
+		let vault_program_id = VAULT_PROGRAM;
 
 		let deposit_channel_0 = derive_deposit_address(0u64, vault_program_id).unwrap();
 		let deposit_channel_1 = derive_deposit_address(1u64, vault_program_id).unwrap();
@@ -1118,11 +1128,11 @@ mod tests {
 		let deposit_channel_historical_fetch_1 =
 			derive_fetch_account(deposit_channel_1.address, vault_program_id).unwrap();
 
-		let vault_program = VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap());
+		let vault_program = VaultProgram::with_id(VAULT_PROGRAM);
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
@@ -1130,20 +1140,20 @@ mod tests {
 			vault_program.fetch_native(
 				0u64.to_le_bytes().to_vec(),
 				deposit_channel_0.bump,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				deposit_channel_0.address,
 				deposit_channel_historical_fetch_0.address,
-				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+				SYSTEM_PROGRAM_ID,
 			),
 			vault_program.fetch_native(
 				1u64.to_le_bytes().to_vec(),
 				deposit_channel_1.bump,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				deposit_channel_1.address,
 				deposit_channel_historical_fetch_1.address,
-				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+				SYSTEM_PROGRAM_ID,
 			),
 		];
 		let message =
@@ -1166,11 +1176,11 @@ mod tests {
 
 	#[test]
 	fn create_fetch_tokens() {
-		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
+		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
-		let token_mint_pubkey = SolAddress::from_str(MINT_PUB_KEY).unwrap();
+		let vault_program_id = VAULT_PROGRAM;
+		let token_mint_pubkey = MINT_PUB_KEY;
 
 		let seed = 0u64;
 		let deposit_channel = derive_deposit_address(seed, vault_program_id).unwrap();
@@ -1207,24 +1217,24 @@ mod tests {
 		);
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_tokens(
+			VaultProgram::with_id(VAULT_PROGRAM).fetch_tokens(
 				seed.to_le_bytes().to_vec(),
 				deposit_channel.bump,
 				6,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				deposit_channel.address,
 				deposit_channel_ata.address,
-				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
-				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
-				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				MINT_PUB_KEY,
+				TOKEN_PROGRAM_ID,
 				deposit_channel_historical_fetch.address,
-				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+				SYSTEM_PROGRAM_ID,
 			),
 		];
 		let message =
@@ -1243,11 +1253,11 @@ mod tests {
 
 	#[test]
 	fn create_batch_fetch() {
-		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
+		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let vault_program_id = SolAddress::from_str(VAULT_PROGRAM).unwrap();
-		let token_mint_pubkey = SolAddress::from_str(MINT_PUB_KEY).unwrap();
+		let vault_program_id = VAULT_PROGRAM;
+		let token_mint_pubkey = MINT_PUB_KEY;
 
 		let deposit_channel_0 = derive_deposit_address(0u64, vault_program_id).unwrap();
 		let deposit_channel_ata_0 =
@@ -1267,47 +1277,47 @@ mod tests {
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_tokens(
+			VaultProgram::with_id(VAULT_PROGRAM).fetch_tokens(
 				0u64.to_le_bytes().to_vec(),
 				deposit_channel_0.bump,
 				6,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				deposit_channel_0.address,
 				deposit_channel_ata_0.address,
-				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
-				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
-				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				MINT_PUB_KEY,
+				TOKEN_PROGRAM_ID,
 				deposit_channel_historical_fetch_0.address,
-				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+				SYSTEM_PROGRAM_ID,
 			),
-			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_tokens(
+			VaultProgram::with_id(VAULT_PROGRAM).fetch_tokens(
 				1u64.to_le_bytes().to_vec(),
 				deposit_channel_1.bump,
 				6,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				deposit_channel_1.address,
 				deposit_channel_ata_1.address,
-				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
-				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
-				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				MINT_PUB_KEY,
+				TOKEN_PROGRAM_ID,
 				deposit_channel_historical_fetch_1.address,
-				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+				SYSTEM_PROGRAM_ID,
 			),
-			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).fetch_native(
+			VaultProgram::with_id(VAULT_PROGRAM).fetch_native(
 				2u64.to_le_bytes().to_vec(),
 				deposit_channel_2.bump,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				deposit_channel_2.address,
 				deposit_channel_historical_fetch_2.address,
-				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+				SYSTEM_PROGRAM_ID,
 			),
 		];
 		let message = Message::new(&instructions, Some(&agg_key_pubkey));
@@ -1325,17 +1335,17 @@ mod tests {
 
 	#[test]
 	fn create_transfer_tokens() {
-		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
+		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let token_mint_pubkey = SolAddress::from_str(MINT_PUB_KEY).unwrap();
+		let token_mint_pubkey = MINT_PUB_KEY;
 
-		let to_pubkey = SolAddress::from_str(TRANSFER_TO_ACCOUNT).unwrap();
+		let to_pubkey = TRANSFER_TO_ACCOUNT;
 		let to_pubkey_ata = derive_associated_token_account(to_pubkey, token_mint_pubkey).unwrap();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
@@ -1343,19 +1353,19 @@ mod tests {
 			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
 				&agg_key_pubkey,
 				&to_pubkey.into(),
-				&Pubkey::from_str(MINT_PUB_KEY).unwrap(),
+				&MINT_PUB_KEY.into(),
 				&to_pubkey_ata.address.into(),
 			),
-			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).transfer_tokens(
+			VaultProgram::with_id(VAULT_PROGRAM).transfer_tokens(
 				TRANSFER_AMOUNT,
 				SOL_USDC_DECIMAL,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
-				Pubkey::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap(),
-				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
+				TOKEN_VAULT_PDA_ACCOUNT,
+				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 				to_pubkey_ata.address,
-				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
-				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				MINT_PUB_KEY,
+				TOKEN_PROGRAM_ID,
 			),
 		];
 		let message =
@@ -1376,29 +1386,29 @@ mod tests {
 	// manager's upgrade authority
 	#[test]
 	fn create_full_rotation() {
-		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
+		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let new_agg_key_pubkey = Pubkey::from_str(NEW_AGG_KEY).unwrap();
+		let new_agg_key_pubkey = NEW_AGG_KEY.into();
 
 		let mut instructions = vec![
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
-			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).rotate_agg_key(
+			VaultProgram::with_id(VAULT_PROGRAM).rotate_agg_key(
 				false,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				new_agg_key_pubkey,
-				Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
+				SYSTEM_PROGRAM_ID,
 			),
 		];
-		instructions.extend(NONCE_ACCOUNTS.iter().map(|nonce_account| {
+		instructions.extend(NONCE_ACCOUNTS.into_iter().map(|nonce_account| {
 			SystemProgramInstruction::nonce_authorize(
-				&Pubkey::from_str(nonce_account).unwrap(),
+				&nonce_account.into(),
 				&agg_key_pubkey,
 				&new_agg_key_pubkey,
 			)
@@ -1420,34 +1430,34 @@ mod tests {
 
 	#[test]
 	fn create_ccm_native_transfer() {
-		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
+		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let to_pubkey = Pubkey::from_str(TRANSFER_TO_ACCOUNT).unwrap();
+		let to_pubkey = TRANSFER_TO_ACCOUNT.into();
 		let extra_accounts = ccm_accounts();
 
 		let ccm_parameter = ccm_parameter();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
 			ComputeBudgetInstruction::set_compute_unit_limit(COMPUTE_UNIT_LIMIT),
 			SystemProgramInstruction::transfer(&agg_key_pubkey, &to_pubkey, TRANSFER_AMOUNT),
-			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap())
+			VaultProgram::with_id(VAULT_PROGRAM)
 				.execute_ccm_native_call(
 					ccm_parameter.source_chain as u32,
 					ccm_parameter.source_address.encode(), // TODO: check this (scale encoded?)
 					ccm_parameter.channel_metadata.message.to_vec(),
 					TRANSFER_AMOUNT,
-					Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+					VAULT_PROGRAM_DATA_ACCOUNT,
 					agg_key_pubkey,
 					to_pubkey,
 					extra_accounts.clone().cf_receiver,
-					Pubkey::from_str(SYSTEM_PROGRAM_ID).unwrap(),
-					Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
+					SYSTEM_PROGRAM_ID,
+					SYS_VAR_INSTRUCTIONS,
 				)
 				.with_remaining_accounts(extra_accounts.remaining_account_metas()),
 		];
@@ -1466,20 +1476,20 @@ mod tests {
 
 	#[test]
 	fn create_ccm_token_transfer() {
-		let durable_nonce = Hash::from_str(TEST_DURABLE_NONCE).unwrap();
+		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let amount = TRANSFER_AMOUNT;
-		let token_mint_pubkey = SolAddress::from_str(MINT_PUB_KEY).unwrap();
+		let token_mint_pubkey = MINT_PUB_KEY;
 		let extra_accounts = ccm_accounts();
 		let ccm_parameter = ccm_parameter();
 
-		let to_pubkey = SolAddress::from_str(TRANSFER_TO_ACCOUNT).unwrap();
+		let to_pubkey = TRANSFER_TO_ACCOUNT;
 		let to_pubkey_ata = derive_associated_token_account(to_pubkey, token_mint_pubkey).unwrap();
 
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			ComputeBudgetInstruction::set_compute_unit_price(COMPUTE_UNIT_PRICE),
@@ -1490,29 +1500,29 @@ mod tests {
 				&token_mint_pubkey.into(),
 				&to_pubkey_ata.address.into(),
 			),
-			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).transfer_tokens(
+			VaultProgram::with_id(VAULT_PROGRAM).transfer_tokens(
 				amount,
 				SOL_USDC_DECIMAL,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
-				Pubkey::from_str(TOKEN_VAULT_PDA_ACCOUNT).unwrap(),
-				Pubkey::from_str(TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT).unwrap(),
+				TOKEN_VAULT_PDA_ACCOUNT,
+				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 				to_pubkey_ata.address,
-				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
-				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
+				MINT_PUB_KEY,
+				TOKEN_PROGRAM_ID,
 			),
-			VaultProgram::with_id(Pubkey::from_str(VAULT_PROGRAM).unwrap()).execute_ccm_token_call(
+			VaultProgram::with_id(VAULT_PROGRAM).execute_ccm_token_call(
 				ccm_parameter.source_chain as u32,
 				ccm_parameter.source_address.encode(), // TODO: check this (scale encoded?)
 				ccm_parameter.channel_metadata.message.to_vec(),
 				amount,
-				Pubkey::from_str(VAULT_PROGRAM_DATA_ACCOUNT).unwrap(),
+				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				to_pubkey_ata.address,
 				extra_accounts.clone().cf_receiver,
-				Pubkey::from_str(TOKEN_PROGRAM_ID).unwrap(),
-				Pubkey::from_str(MINT_PUB_KEY).unwrap(),
-				Pubkey::from_str(SYS_VAR_INSTRUCTIONS).unwrap(),
+				TOKEN_PROGRAM_ID,
+				MINT_PUB_KEY,
+				SYS_VAR_INSTRUCTIONS,
 			).with_remaining_accounts(extra_accounts.remaining_account_metas()),
 		];
 		let message =
@@ -1545,7 +1555,7 @@ mod tests {
 		// This would lack the idempotent account creating but that's fine for the test
 		let instructions = [
 			SystemProgramInstruction::advance_nonce_account(
-				&Pubkey::from_str(NONCE_ACCOUNTS[0]).unwrap(),
+				&NONCE_ACCOUNTS[0].into(),
 				&agg_key_pubkey,
 			),
 			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(

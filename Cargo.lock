@@ -1431,7 +1431,7 @@ dependencies = [
  "bech32",
  "bincode 2.0.0-rc.3",
  "borsh",
- "bs58 0.4.0",
+ "bs58 0.5.1",
  "cf-primitives",
  "cf-test-utilities",
  "curve25519-dalek 3.2.1",
