@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.4.4] - 2024-06-28
+
+### Fixes
+
+- Eager pruning of Chain Tracking witness data. ([#4994](https://github.com/chainflip-io/chainflip-backend/issues/4994))
+- Ensure broker fees are credited correctly. ([#5011](https://github.com/chainflip-io/chainflip-backend/issues/5011))
+
 ## [1.4.3] - 2024-06-18
 
 ### Fixes
