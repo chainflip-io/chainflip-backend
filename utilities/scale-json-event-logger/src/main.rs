@@ -129,7 +129,7 @@ async fn decode_events_at_hash(
 		.at(hash)
 		.fetch_raw(EVENTS_STORAGE_KEY)
 		.await?
-		.expect("No events in block");
+		.expect("Events storage always returns a Vec.");
 
 	// NOTE: It's possible that the metadata used here is incompatible with the events data,
 	// since the metadata updates in another thread.
