@@ -96,20 +96,31 @@ impl Chain for MockEthereum {
 
 	type ChainCrypto = MockEthereumChainCrypto;
 
-	type DepositFetchId = MockEthereumChannelId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
-	type TrackedData = MockTrackedData;
 	type TransactionFee = TransactionFee;
-	type ChainAccount = u64;
+	type TrackedData = MockTrackedData;
 	type ChainAsset = assets::eth::Asset;
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+			+ Default,
+	> = assets::eth::AssetMap<T>;
+	type ChainAccount = u64;
+	type DepositFetchId = MockEthereumChannelId;
 	type DepositChannelState = MockLifecycleHooks;
 	type DepositDetails = [u8; 4];
 	type Transaction = MockTransaction;
 	type TransactionMetadata = MockEthereumTransactionMetadata;
+	type TransactionRef = u32;
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
-	type TransactionRef = u32;
 }
 
 impl ToHumanreadableAddress for u64 {

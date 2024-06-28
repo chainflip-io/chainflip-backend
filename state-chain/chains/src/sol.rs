@@ -7,8 +7,10 @@ use sp_std::vec;
 use sol_prim::SlotNumber;
 
 use crate::{address, assets, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use frame_support::Parameter;
 use serde::{Deserialize, Serialize};
+use sp_runtime::traits::{MaybeSerializeDeserialize, Member};
 
 use super::{Chain, ChainCrypto};
 
@@ -24,6 +26,7 @@ pub mod api;
 pub mod benchmarking;
 pub mod consts;
 
+use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Digest as SolHash, Signature as SolSignature,
@@ -40,15 +43,28 @@ impl Chain for Solana {
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+			+ Default,
+	> = assets::sol::AssetMap<T>;
 	type ChainAccount = SolAddress;
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = (); //todo
-	type DepositDetails = (); //todo
+	type DepositDetails = ();
+	//todo
 	type Transaction = SolTransaction;
 	type TransactionMetadata = (); //todo
-	type ReplayProtectionParams = (); //todo
-	type ReplayProtection = (); //todo
-	type TransactionRef = SolHash;
+	type TransactionRef = SolHash; //todo
+	type ReplayProtectionParams = ();
+	//todo
+	type ReplayProtection = ();
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

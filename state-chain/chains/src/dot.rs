@@ -325,18 +325,29 @@ impl Chain for Polkadot {
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
-	type TrackedData = PolkadotTrackedData;
-	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
+	type TrackedData = PolkadotTrackedData;
 	type ChainAsset = assets::dot::Asset;
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+			+ Default,
+	> = assets::dot::AssetMap<T>;
+	type ChainAccount = PolkadotAccountId;
 	type DepositFetchId = PolkadotChannelId;
 	type DepositChannelState = PolkadotChannelState;
 	type DepositDetails = PolkadotExtrinsicIndex;
 	type Transaction = PolkadotTransactionData;
 	type TransactionMetadata = ();
+	type TransactionRef = PolkadotTransactionId;
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
-	type TransactionRef = PolkadotTransactionId;
 }
 
 pub type ResetProxyAccountNonce = bool;

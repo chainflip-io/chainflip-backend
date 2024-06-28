@@ -84,9 +84,9 @@ frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag 
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 
 [dev-dependencies]
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 cf-test-utilities = { path = '../test-utilities' }
 rand = { version = '0.8.4' }
 rand0-7 = { package = "rand", version = "0.7" }
@@ -119,6 +119,7 @@ std = [
   'dep:anyhow',
   'strum/std',
   'curve25519-dalek/std',
+  'sp-runtime/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
