@@ -26,7 +26,9 @@ pub use self::{
 	muxer::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 use anyhow::Context;
-use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, ChainCrypto};
+use cf_chains::{
+	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto, ChainCrypto,
+};
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt, StreamExt};
 use multisig::p2p::OutgoingMultisigStageMessages;
@@ -99,6 +101,8 @@ pub async fn start<StateChainClient, BlockStream: StreamApi<FINALIZED>>(
 	MultisigMessageReceiver<PolkadotCrypto>,
 	MultisigMessageSender<BitcoinCrypto>,
 	MultisigMessageReceiver<BitcoinCrypto>,
+	MultisigMessageSender<SolanaCrypto>,
+	MultisigMessageReceiver<SolanaCrypto>,
 	oneshot::Receiver<()>,
 	impl Future<Output = anyhow::Result<()>>,
 )>
@@ -147,6 +151,8 @@ where
 		dot_incoming_receiver,
 		btc_outgoing_sender,
 		btc_incoming_receiver,
+		sol_outgoing_sender,
+		sol_incoming_receiver,
 		muxer_future,
 	) = P2PMuxer::start(incoming_message_receiver, outgoing_message_sender);
 
@@ -209,6 +215,8 @@ where
 		dot_incoming_receiver,
 		btc_outgoing_sender,
 		btc_incoming_receiver,
+		sol_outgoing_sender,
+		sol_incoming_receiver,
 		p2p_ready_receiver,
 		fut,
 	))

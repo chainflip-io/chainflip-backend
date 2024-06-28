@@ -7,6 +7,7 @@ use crate::{
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
+	sol::retry_rpc::SolRetryRpcClient,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi,
 		storage_api::StorageApi,
@@ -31,6 +32,7 @@ pub async fn start<StateChainClient>(
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	btc_client: BtcRetryRpcClient,
 	dot_client: DotRetryRpcClient,
+	sol_client: SolRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
 	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
@@ -115,6 +117,16 @@ where
 	let start_arb = super::arb::start(
 		scope,
 		arb_client,
+		witness_call.clone(),
+		state_chain_client.clone(),
+		state_chain_stream.clone(),
+		epoch_source.clone(),
+		db.clone(),
+	);
+
+	let start_sol = super::sol::start(
+		scope,
+		sol_client,
 		witness_call,
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
@@ -122,7 +134,7 @@ where
 		db.clone(),
 	);
 
-	futures::future::try_join4(start_eth, start_btc, start_dot, start_arb).await?;
+	futures::future::try_join5(start_eth, start_btc, start_dot, start_arb, start_sol).await?;
 
 	Ok(())
 }

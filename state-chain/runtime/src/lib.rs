@@ -201,8 +201,12 @@ impl pallet_cf_validator::Config for Runtime {
 	type Offence = chainflip::Offence;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
-	type KeyRotator =
-		cons_key_rotator!(EvmThresholdSigner, PolkadotThresholdSigner, BitcoinThresholdSigner);
+	type KeyRotator = cons_key_rotator!(
+		EvmThresholdSigner,
+		PolkadotThresholdSigner,
+		BitcoinThresholdSigner,
+		SolanaThresholdSigner
+	);
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type KeygenQualification = (
 		Reputation,
@@ -240,6 +244,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
+	type SolanaVaultKeyWitnessedHandler = SolanaVault;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type BitcoinKeyProvider = BitcoinThresholdSigner;
 	type RuntimeSafeMode = RuntimeSafeMode;
@@ -1143,9 +1148,6 @@ type PalletMigrations = (
 	// pallet_cf_broadcast::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
-	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, EthereumInstance>,
-	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
-	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
@@ -1433,7 +1435,7 @@ impl_runtime_apis! {
 							fees_withheld,
 						} = pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::withhold_ingress_or_egress_fee(ingress_or_egress, asset, amount.unique_saturated_into());
 
-						(amount_after_fees, fees_withheld)
+						(amount_after_fees.into(), fees_withheld.into())
 					},
 				}
 			}
@@ -1517,7 +1519,7 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Polkadot(asset) => MinimumDeposit::<Runtime, PolkadotInstance>::get(asset),
 				ForeignChainAndAsset::Bitcoin(asset) => MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
 				ForeignChainAndAsset::Arbitrum(asset) => MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
-				ForeignChainAndAsset::Solana(asset) => MinimumDeposit::<Runtime, SolanaInstance>::get(asset),
+				ForeignChainAndAsset::Solana(asset) => MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
 			}
 		}
 
@@ -1550,7 +1552,7 @@ impl_runtime_apis! {
 					)
 				},
 				ForeignChainAndAsset::Solana(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::
-				estimate_ingress_fee(asset)),
+				estimate_ingress_fee(asset).into()),
 			}
 		}
 
@@ -1571,7 +1573,7 @@ impl_runtime_apis! {
 					)
 				},
 				ForeignChainAndAsset::Solana(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::
-				estimate_egress_fee(asset)),
+				estimate_egress_fee(asset).into()),
 			}
 		}
 

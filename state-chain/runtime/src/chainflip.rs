@@ -43,7 +43,13 @@ use cf_chains::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
-	sol::api::SolanaApi,
+	sol::{
+		api::{
+			AllNonceAccounts, ComputePrice, NonceAccount, SolanaApi, SolanaEnvAccountLookupKey,
+			SolanaEnvironment,
+		},
+		SolAddress, SolAmount, SolHash,
+	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
@@ -481,6 +487,40 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct SolEnvironment;
+
+/// TODO: Implement this in PRO-1362
+impl ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress> for SolEnvironment {
+	fn lookup(key: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
+		match key {
+			SolanaEnvAccountLookupKey::VaultProgram => Some(Environment::sol_vault_address()),
+			// TODO
+			_ => None,
+		}
+	}
+}
+
+impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
+	fn lookup(_s: ComputePrice) -> Option<u64> {
+		// TODO
+		None
+	}
+}
+
+impl ChainEnvironment<NonceAccount, (SolAddress, SolHash)> for SolEnvironment {
+	fn lookup(_s: NonceAccount) -> Option<(SolAddress, SolHash)> {
+		// TODO
+		None
+	}
+}
+
+impl ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>> for SolEnvironment {
+	fn lookup(_s: AllNonceAccounts) -> Option<Vec<(SolAddress, SolHash)>> {
+		// TODO
+		None
+	}
+}
+
+impl SolanaEnvironment for SolEnvironment {}
 
 pub struct TokenholderGovernanceBroadcaster;
 

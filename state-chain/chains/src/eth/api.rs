@@ -210,14 +210,19 @@ where
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
-		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Result<Self, AllBatchError> {
-		Ok(Self::AllBatch(evm_all_batch_builder(
-			fetch_params,
-			transfer_params,
-			E::token_address,
-			E::replay_protection(E::vault_address()),
-		)?))
+		transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids) = transfer_params.into_iter().unzip();
+
+		Ok(vec![(
+			Self::AllBatch(evm_all_batch_builder(
+				fetch_params,
+				transfer_params,
+				E::token_address,
+				E::replay_protection(E::vault_address()),
+			)?),
+			egress_ids,
+		)])
 	}
 }
 
@@ -231,6 +236,7 @@ where
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
+		_cf_parameters: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		let transfer_param = EncodableTransferAssetParams {
 			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,

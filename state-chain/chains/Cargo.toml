@@ -35,7 +35,6 @@ rlp = { default-features = false, version = '0.5' }
 
 # Bitcoin
 bech32 = { default-features = false, version = '0.9.1' }
-base58 = '0.2.0'
 
 # Solana
 borsh = { version = "1.2.1", default_features = false, features = [
@@ -50,13 +49,14 @@ generic-array = { version = "0.14.7", default-features = false, features = [
   "serde",
   "more_lengths",
 ] }
-bs58 = { version = "0.4.0", default-features = false, features = ["alloc"] }
+bs58 = { version = "0.5.1", default-features = false, features = ["alloc"] }
 bincode = { version = "2.0.0-rc.3", default-features = false, features = [
   "alloc",
   "serde",
 ] }
 curve25519-dalek = { git = "https://github.com/solana-labs/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464", optional = true }
-
+sha2-const = { version = "0.1.2", default-features = false }
+ed25519-dalek = { version = "2.1.1", optional = true }
 
 # Other
 anyhow = { version = '1.0', default-features = false, optional = true }
@@ -71,6 +71,8 @@ log = { version = '0.4.16', default-features = false }
 itertools = { version = '0.11.0', default-features = false }
 arrayref = '0.3.6'
 strum = { default-features = false, version = '0.24' }
+thiserror = { version = "1.0.50", optional = true }
+rand = { version = "0.8.4", optional = true }
 
 # Substrate packages
 ss58-registry = { version = '1.41', optional = true }
@@ -88,10 +90,10 @@ sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chain
 [dev-dependencies]
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 cf-test-utilities = { path = '../test-utilities' }
-rand = { version = '0.8.4' }
-rand0-7 = { package = "rand", version = "0.7" }
-ed25519-dalek = { version = "1.0.1" }
-thiserror = "1.0.50"
+serde_json = "1.0"
+heck = "0.5.0"
+rand = "0.8.4"
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 
 [features]
 default = ['std']
@@ -116,6 +118,7 @@ std = [
   'sp-core/full_crypto',
   'sp-io/std',
   'dep:ss58-registry',
+  'dep:thiserror',
   'dep:anyhow',
   'strum/std',
   'curve25519-dalek/std',
@@ -125,4 +128,4 @@ runtime-benchmarks = [
   'frame-support/runtime-benchmarks',
 ]
 
-runtime-integration-tests = ['std']
+runtime-integration-tests = ['std', 'dep:rand', 'ed25519-dalek/rand_core']

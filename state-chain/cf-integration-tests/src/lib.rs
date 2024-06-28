@@ -27,7 +27,7 @@ use sp_core::crypto::Pair;
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, BitcoinVault, Emissions, EthereumVault,
 	Flip, Funding, Governance, PolkadotVault, Reputation, Runtime, RuntimeCall, RuntimeOrigin,
-	System, Validator, Witnesser,
+	SolanaVault, System, Validator, Witnesser,
 };
 
 type NodeId = AccountId32;

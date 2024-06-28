@@ -1,6 +1,5 @@
-use super::sol_tx_building_blocks::{AccountMeta, Instruction, Pubkey, BPF_LOADER_UPGRADEABLE_ID};
+use super::{AccountMeta, Instruction, Pubkey, BPF_LOADER_UPGRADEABLE_ID};
 use crate::vec;
-use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -162,7 +161,7 @@ pub fn set_upgrade_authority(
 		metas.push(AccountMeta::new_readonly(*address, false));
 	}
 	Instruction::new_with_bincode(
-		Pubkey::from_str(BPF_LOADER_UPGRADEABLE_ID).unwrap(),
+		BPF_LOADER_UPGRADEABLE_ID.into(),
 		&UpgradeableLoaderInstruction::SetAuthority,
 		metas,
 	)

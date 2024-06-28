@@ -13,7 +13,8 @@ use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
 	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip, PolkadotInstance,
-	PolkadotThresholdSigner, Runtime, RuntimeOrigin, Validator,
+	PolkadotThresholdSigner, Runtime, RuntimeOrigin, SolanaInstance, SolanaThresholdSigner,
+	Validator,
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
@@ -400,6 +401,11 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 					BitcoinThresholdSigner::ceremony_id_counter(),
 					Err(BTreeSet::default()),
 				));
+				assert_ok!(SolanaThresholdSigner::report_keygen_outcome(
+					RuntimeOrigin::signed(validator.clone()),
+					SolanaThresholdSigner::ceremony_id_counter(),
+					Err(BTreeSet::default()),
+				));
 			});
 
 			// Authority rotation can recover and succeed.
@@ -454,6 +460,14 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 						Err(BTreeSet::default()),
 					),
 					pallet_cf_threshold_signature::Error::<Runtime, PolkadotInstance>::InvalidRotationStatus
+				);
+				assert_err!(
+					SolanaThresholdSigner::report_key_handover_outcome(
+						RuntimeOrigin::signed(validator.clone()),
+						SolanaThresholdSigner::ceremony_id_counter(),
+						Err(BTreeSet::default()),
+					),
+					pallet_cf_threshold_signature::Error::<Runtime, SolanaInstance>::InvalidRotationStatus
 				);
 			});
 

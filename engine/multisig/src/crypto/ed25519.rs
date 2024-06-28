@@ -1,13 +1,15 @@
+use anyhow::Result;
+
 use super::{
-	curve25519::edwards::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme, CryptoTag,
-	ECPoint,
+	curve25519::edwards::Point, ChainSigning, ChainTag, CryptoScheme, CryptoTag, ECPoint,
+	SignatureToThresholdSignature,
 };
-use cf_chains::Chain;
-use ed25519_consensus::VerificationKeyBytes;
+use cf_chains::{sol::SolSignature, Chain, ChainCrypto, Solana};
+use ed25519_dalek::{Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Ed25519Signing {}
+pub struct SolSigning {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Signature {
@@ -24,9 +26,14 @@ impl Signature {
 	}
 }
 
-impl CanonicalEncoding for VerificationKeyBytes {
-	fn encode_key(&self) -> Vec<u8> {
-		self.to_bytes().to_vec()
+impl SignatureToThresholdSignature<<Solana as Chain>::ChainCrypto> for Vec<Signature> {
+	fn to_threshold_signature(
+		&self,
+	) -> <<Solana as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature {
+		self.iter()
+			.map(|s| SolSignature(s.clone().to_bytes()))
+			.next()
+			.expect("Exactly one signature for Solana")
 	}
 }
 
@@ -44,34 +51,44 @@ impl AsRef<[u8]> for SigningPayload {
 		self.0.as_ref()
 	}
 }
+
+impl SigningPayload {
+	pub fn new(payload: Vec<u8>) -> Result<Self> {
+		if payload.is_empty() {
+			anyhow::bail!("Invalid payload size");
+		}
+		Ok(SigningPayload(payload))
+	}
+}
+
 #[derive(Clone, Debug, PartialEq)]
-pub struct Ed25519CryptoScheme;
+pub struct SolCryptoScheme;
 
-impl ChainSigning for Ed25519Signing {
-	type CryptoScheme = Ed25519CryptoScheme;
+impl ChainSigning for SolSigning {
+	type CryptoScheme = SolCryptoScheme;
 	// This scheme isn't implemented on the state chain.
-	type ChainCrypto = <cf_chains::none::NoneChain as Chain>::ChainCrypto;
+	type ChainCrypto = <Solana as Chain>::ChainCrypto;
 
-	const NAME: &'static str = "Ed25519";
+	const NAME: &'static str = "Solana";
 
 	// TODO: Technically the same "scheme" can be used by
 	// multiple chains, so we might want to decouple
 	// "scheme" from "chain".
-	const CHAIN_TAG: ChainTag = ChainTag::Ed25519;
+	const CHAIN_TAG: ChainTag = ChainTag::Solana;
 }
 
-impl CryptoScheme for Ed25519CryptoScheme {
+impl CryptoScheme for SolCryptoScheme {
 	type Point = super::curve25519::edwards::Point;
 
 	type Signature = Signature;
 
-	type PublicKey = VerificationKeyBytes;
+	type PublicKey = VerifyingKey;
 
 	type SigningPayload = SigningPayload;
 
-	const CRYPTO_TAG: CryptoTag = CryptoTag::Ed25519;
+	const CRYPTO_TAG: CryptoTag = CryptoTag::Solana;
 
-	const NAME: &'static str = "Ed25519 Crypto";
+	const NAME: &'static str = "Solana Crypto";
 
 	fn build_signature(
 		z: <Self::Point as super::ECPoint>::Scalar,
@@ -125,21 +142,52 @@ impl CryptoScheme for Ed25519CryptoScheme {
 		public_key: &Self::PublicKey,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
-		use ed25519_consensus::VerificationKey;
+		let signature = ed25519_dalek::Signature::from_bytes(&signature.to_bytes());
 
-		let signature = ed25519_consensus::Signature::from(signature.to_bytes());
-
-		Ok(VerificationKey::try_from(*public_key)
-			.and_then(|vk| vk.verify(&signature, &payload.0))?)
+		Ok(public_key.verify(&payload.0, &signature)?)
 	}
 
 	fn pubkey_from_point(pubkey_point: &Self::Point) -> Self::PublicKey {
 		let bytes: [u8; 32] = pubkey_point.as_bytes().into();
-		VerificationKeyBytes::from(bytes)
+		VerifyingKey::from_bytes(&bytes).expect("Invalid public key")
 	}
 
 	#[cfg(feature = "test")]
 	fn signing_payload_for_test() -> Self::SigningPayload {
 		SigningPayload([0u8; 32].to_vec())
 	}
+}
+
+#[test]
+fn test_signature_verification() {
+	use crate::crypto::{curve25519::edwards::Point, ECScalar};
+	use rand::{thread_rng, Rng};
+
+	type Scalar = <Point as ECPoint>::Scalar;
+
+	let message = b"payload";
+
+	let secret_key = Scalar::from_bytes_mod_order(&thread_rng().gen());
+	let public_key = Point::from_scalar(&secret_key);
+
+	let payload = SigningPayload(message.to_vec());
+
+	// Build a signature using the same primitives/operations as used in multisig ceremonies:
+	let signature = {
+		let nonce = Scalar::from_bytes_mod_order(&thread_rng().gen::<[u8; 32]>());
+		let nonce_commitment = Point::from_scalar(&nonce);
+		let challenge = SolCryptoScheme::build_challenge(public_key, nonce_commitment, &payload);
+
+		let response =
+			SolCryptoScheme::build_response(nonce, nonce_commitment, &secret_key, challenge);
+
+		SolCryptoScheme::build_signature(response, nonce_commitment)
+	};
+
+	let verifying_key =
+		ed25519_dalek::VerifyingKey::from_bytes(&public_key.as_bytes().into()).unwrap();
+
+	// Verify the signature using the "reference" implementation (which in this case is
+	// ed25519_dalek used by Solana):
+	SolCryptoScheme::verify_signature(&signature, &verifying_key, &payload).unwrap();
 }

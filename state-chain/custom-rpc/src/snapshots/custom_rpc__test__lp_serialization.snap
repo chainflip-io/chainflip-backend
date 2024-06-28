@@ -1,6 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/lib.rs
-assertion_line: 1352
 expression: "serde_json::to_value(lp).unwrap()"
 ---
-{"balances":{"Arbitrum":{"ETH":"0x1","USDC":"0x2"},"Bitcoin":{"BTC":"0x0"},"Ethereum":{"ETH":"0xffffffffffffffffffffffffffffffff","FLIP":"0x7fffffffffffffffffffffffffffffff","USDC":"0x0","USDT":"0x0"},"Polkadot":{"DOT":"0x0"},"Solana":{"SOL":"0x3"}},"earned_fees":{"Arbitrum":{"ETH":1,"USDC":2},"Bitcoin":{"BTC":0},"Ethereum":{"ETH":0,"FLIP":18446744073709551615,"USDC":9223372036854775806,"USDT":0},"Polkadot":{"DOT":0},"Solana":{"SOL":2}},"flip_balance":"0x0","refund_addresses":{"Arbitrum":"0x0202020202020202020202020202020202020202","Bitcoin":null,"Ethereum":"0x0101010101010101010101010101010101010101","Polkadot":"111111111111111111111111111111111HC1","Solana":null},"role":"liquidity_provider"}
+{"balances":{"Arbitrum":{"ETH":"0x1","USDC":"0x2"},"Bitcoin":{"BTC":"0x0"},"Ethereum":{"ETH":"0xffffffffffffffffffffffffffffffff","FLIP":"0x7fffffffffffffffffffffffffffffff","USDC":"0x0","USDT":"0x0"},"Polkadot":{"DOT":"0x0"},"Solana":{"SOL":"0x3","USDC":"0x4"}},"earned_fees":{"Arbitrum":{"ETH":1,"USDC":2},"Bitcoin":{"BTC":0},"Ethereum":{"ETH":0,"FLIP":18446744073709551615,"USDC":9223372036854775806,"USDT":0},"Polkadot":{"DOT":0},"Solana":{"SOL":2,"USDC":4}},"flip_balance":"0x0","refund_addresses":{"Arbitrum":"0x0202020202020202020202020202020202020202","Bitcoin":null,"Ethereum":"0x0101010101010101010101010101010101010101","Polkadot":"111111111111111111111111111111111HC1","Solana":null},"role":"liquidity_provider"}

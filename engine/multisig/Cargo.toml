@@ -45,7 +45,6 @@ typenum = "1.15"
 schnorrkel = "0.11.4"
 rayon = "1.7.0"
 rand = "0.8.4"
-ed25519-consensus = "2.0"
 tracing = "0.1"
 strum = { default-features = false, version = '0.24' }
 strum_macros = { default-features = false, version = '0.24' }
@@ -60,6 +59,7 @@ utilities = { package = "utilities", path = "../../utilities" }
 # substrate deps
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+ed25519-dalek = "2.1.1"
 
 [dev-dependencies]
 mockall = "0.11.0"

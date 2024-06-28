@@ -10,7 +10,6 @@ use crate::{
 };
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
-use base58::{FromBase58, ToBase58};
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
@@ -611,7 +610,7 @@ impl ScriptPubkey {
 			let checksum =
 				sha2_256(&sha2_256(&buf))[..CHECKSUM_LENGTH].as_array::<CHECKSUM_LENGTH>();
 			buf.extend(checksum);
-			buf.to_base58()
+			bs58::encode(buf).with_alphabet(bs58::Alphabet::BITCOIN).into_string()
 		}
 	}
 
@@ -621,8 +620,12 @@ impl ScriptPubkey {
 			const CHECKSUM_LENGTH: usize = 4;
 			const PAYLOAD_LENGTH: usize = 21;
 
-			let data: [u8; PAYLOAD_LENGTH + CHECKSUM_LENGTH] =
-				address.from_base58().ok()?.try_into().ok()?;
+			let data: [u8; PAYLOAD_LENGTH + CHECKSUM_LENGTH] = bs58::decode(address)
+				.with_alphabet(bs58::Alphabet::BITCOIN)
+				.into_vec()
+				.ok()?
+				.try_into()
+				.ok()?;
 
 			let (payload, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
 
