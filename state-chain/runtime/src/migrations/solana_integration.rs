@@ -11,6 +11,7 @@ use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::{vec, vec::Vec};
+use sol_prim::consts::{const_address, const_hash};
 
 pub mod old {
 	use super::*;
@@ -162,21 +163,39 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			_ => {
 				// Assume testnet
 				(
-					SolAddress(hex_literal::hex!(
-						"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
-					)),
+					const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf"),
 					None,
-					SolAddress(hex_literal::hex!(
-						"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
-					)),
-					vec![(
-						SolAddress(hex_literal::hex!(
-							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)),
-						SolHash(hex_literal::hex!(
-							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)),
-					)],
+					const_address("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p"),
+					vec![
+						(
+							const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
+							const_hash("8PUq9wFfALkRq4G4f2SNWERhN93pA2GfFzZpvMAFL43Y"),
+						),
+						(
+							const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
+							const_hash("5P3UrY376M2wVe7PuTSFpqnbHQSqpVsyqS2VogUqQZJ"),
+						),
+						(
+							const_address("HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p"),
+							const_hash("2jUwmSErAu7DR6Hd3MJgDWrTEvbbbcmqh8cNwu8qxe8X"),
+						),
+						(
+							const_address("HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2"),
+							const_hash("GhzGACyEghEb1Pb8JMhKmGn7fmXoH8BKC8156P13XiCt"),
+						),
+						(
+							const_address("GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM"),
+							const_hash("HTZzc4YWgD9vxj3a1xsBtC9xaLxrUYEH7qr6fygoqbbc"),
+						),
+						(
+							const_address("EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn"),
+							const_hash("4DNnxKKdUkVpaZiAB7bqFA2SPkaGcTE9bvgD3zYiHiu3"),
+						),
+						(
+							const_address("9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa"),
+							const_hash("GgjtavVDxo4t5DywJPENe5aNb8U9LjHDU2qKEd3FQBRv"),
+						),
+					],
 				)
 			},
 		};
