@@ -2740,8 +2740,6 @@ dependencies = [
  "parity-scale-codec",
  "sc-client-api",
  "sc-rpc-api",
- "scale-info",
- "scale-value 0.14.1",
  "serde",
  "serde_json",
  "sp-api",
@@ -5131,7 +5129,7 @@ dependencies = [
  "http",
  "hyper",
  "log",
- "rustls 0.21.10",
+ "rustls 0.21.12",
  "rustls-native-certs",
  "tokio",
  "tokio-rustls",
@@ -9204,7 +9202,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite 0.2.13",
- "rustls 0.21.10",
+ "rustls 0.21.12",
  "rustls-pemfile",
  "serde",
  "serde_json",
@@ -9477,9 +9475,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.21.10"
+version = "0.21.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9d5a6813c0759e4609cd494e8e725babae6a2ca7b62a5536a13daaec6fcb7ba"
+checksum = "3f56a14d1f48b391359b22f731fd4bd7e43c97f3c50eee276f3aa09c94784d3e"
 dependencies = [
  "log",
  "ring 0.17.7",
@@ -10546,24 +10544,12 @@ dependencies = [
 
 [[package]]
 name = "scale-bits"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "662d10dcd57b1c2a3c41c9cf68f71fb09747ada1ea932ad961aca7e2ca28315f"
-dependencies = [
- "parity-scale-codec",
- "scale-info",
- "scale-type-resolver 0.1.1",
- "serde",
-]
-
-[[package]]
-name = "scale-bits"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57b1e7f6b65ed1f04e79a85a57d755ad56d76fdf1e9bddcc9ae14f71fcdcf54"
 dependencies = [
  "parity-scale-codec",
- "scale-type-resolver 0.2.0",
+ "scale-type-resolver",
 ]
 
 [[package]]
@@ -10583,19 +10569,6 @@ dependencies = [
 
 [[package]]
 name = "scale-decode"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afc79ba56a1c742f5aeeed1f1801f3edf51f7e818f0a54582cac6f131364ea7b"
-dependencies = [
- "derive_more",
- "parity-scale-codec",
- "scale-bits 0.5.0",
- "scale-type-resolver 0.1.1",
- "smallvec",
-]
-
-[[package]]
-name = "scale-decode"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b12ebca36cec2a3f983c46295b282b35e5f8496346fb859a8776dad5389e5389"
@@ -10605,7 +10578,7 @@ dependencies = [
  "primitive-types",
  "scale-bits 0.6.0",
  "scale-decode-derive 0.13.0",
- "scale-type-resolver 0.2.0",
+ "scale-type-resolver",
  "smallvec",
 ]
 
@@ -10646,19 +10619,6 @@ dependencies = [
  "scale-bits 0.4.0",
  "scale-encode-derive",
  "scale-info",
- "smallvec",
-]
-
-[[package]]
-name = "scale-encode"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "628800925a33794fb5387781b883b5e14d130fece9af5a63613867b8de07c5c7"
-dependencies = [
- "derive_more",
- "parity-scale-codec",
- "scale-bits 0.5.0",
- "scale-type-resolver 0.1.1",
  "smallvec",
 ]
 
@@ -10710,7 +10670,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-decode 0.13.0",
  "scale-info",
- "scale-type-resolver 0.2.0",
+ "scale-type-resolver",
  "serde",
  "serde_json",
 ]
@@ -10728,16 +10688,6 @@ dependencies = [
  "subxt",
  "tokio",
  "utilities",
-]
-
-[[package]]
-name = "scale-type-resolver"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10b800069bfd43374e0f96f653e0d46882a2cb16d6d961ac43bea80f26c76843"
-dependencies = [
- "scale-info",
- "smallvec",
 ]
 
 [[package]]
@@ -10764,29 +10714,8 @@ dependencies = [
  "parity-scale-codec",
  "scale-bits 0.4.0",
  "scale-decode 0.10.0",
- "scale-encode 0.5.0",
+ "scale-encode",
  "scale-info",
- "serde",
- "yap",
-]
-
-[[package]]
-name = "scale-value"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c07ccfee963104335c971aaf8b7b0e749be8569116322df23f1f75c4ca9e4a28"
-dependencies = [
- "base58",
- "blake2 0.10.6",
- "derive_more",
- "either",
- "frame-metadata 15.1.0",
- "parity-scale-codec",
- "scale-bits 0.5.0",
- "scale-decode 0.11.1",
- "scale-encode 0.6.0",
- "scale-info",
- "scale-type-resolver 0.1.1",
  "serde",
  "yap",
 ]
@@ -12991,9 +12920,9 @@ dependencies = [
  "primitive-types",
  "scale-bits 0.4.0",
  "scale-decode 0.10.0",
- "scale-encode 0.5.0",
+ "scale-encode",
  "scale-info",
- "scale-value 0.13.0",
+ "scale-value",
  "serde",
  "serde_json",
  "sp-core 26.0.0",
@@ -13414,7 +13343,7 @@ version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
 dependencies = [
- "rustls 0.21.10",
+ "rustls 0.21.12",
  "tokio",
 ]
 
@@ -13438,7 +13367,7 @@ checksum = "212d5dcb2a1ce06d81107c3d0ffa3121fe974b73f068c8282cb1c32328113b6c"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.21.10",
+ "rustls 0.21.12",
  "tokio",
  "tokio-rustls",
  "tungstenite",
@@ -13881,7 +13810,7 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.8.5",
- "rustls 0.21.10",
+ "rustls 0.21.12",
  "sha1",
  "thiserror",
  "url",

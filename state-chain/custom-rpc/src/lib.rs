@@ -15,7 +15,6 @@ use cf_primitives::{
 	ForeignChain, NetworkEnvironment, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
-use codec::Encode;
 use core::ops::Range;
 use jsonrpsee::{
 	core::{error::SubscriptionClosed, RpcResult},
@@ -44,7 +43,7 @@ use state_chain_runtime::{
 	},
 	runtime_apis::{
 		BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage,
-		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
+		FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
 	},
 	safe_mode::RuntimeSafeMode,
 	NetworkFee,
@@ -55,7 +54,6 @@ use std::{
 	sync::Arc,
 };
 pub mod monitoring;
-mod type_decoder;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcEpochState {
@@ -804,18 +802,6 @@ pub trait CustomApi {
 		epoch_index: Option<EpochIndex>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>>;
-
-	#[method(name = "get_events")]
-	fn cf_get_events(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<scale_value::Value>>;
-
-	#[method(name = "get_system_events_encoded")]
-	fn cf_get_system_events_encoded(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<sp_core::Bytes>>;
 
 	#[method(name = "boost_pools_depth")]
 	fn cf_boost_pools_depth(
@@ -1682,39 +1668,6 @@ where
 				epoch_index,
 			)
 			.map_err(to_rpc_error)
-	}
-
-	fn cf_get_events(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<scale_value::Value>> {
-		let event_decoder = type_decoder::TypeDecoder::new::<
-			frame_system::EventRecord<state_chain_runtime::RuntimeEvent, state_chain_runtime::Hash>,
-		>();
-		let events = self
-			.client
-			.runtime_api()
-			.cf_get_events(self.unwrap_or_best(at), EventFilter::AllEvents)
-			.map_err(to_rpc_error)?;
-
-		Ok(events
-			.into_iter()
-			.map(|event_record| event_decoder.decode_data(event_record.encode()))
-			.collect::<Vec<_>>())
-	}
-
-	fn cf_get_system_events_encoded(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<sp_core::Bytes>> {
-		Ok(self
-			.client
-			.runtime_api()
-			.cf_get_events(self.unwrap_or_best(at), EventFilter::SystemOnly)
-			.map_err(to_rpc_error)?
-			.into_iter()
-			.map(|event| event.encode().into())
-			.collect::<Vec<_>>())
 	}
 
 	fn cf_boost_pool_details(
