@@ -37,7 +37,6 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 			participants: candidates.clone(),
 		});
 
-		// TODO: consider deleting this
 		Pallet::<T, I>::deposit_event(Event::KeygenRequest {
 			ceremony_id,
 			participants: candidates,
@@ -90,7 +89,6 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 							new_key: new_public_key,
 						});
 
-						// TODO: consider removing this
 						Self::deposit_event(Event::KeyHandoverRequest {
 							ceremony_id,
 							// The key we want to share is the key from the *previous/current*

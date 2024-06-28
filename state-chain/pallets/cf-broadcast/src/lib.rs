@@ -804,7 +804,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				payload: broadcast_data.transaction_payload.clone(),
 			});
 
-			// TODO: consider removing this
 			Self::deposit_event(Event::<T, I>::TransactionBroadcastRequest {
 				broadcast_id,
 				nominee: nominated_signer,

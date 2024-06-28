@@ -316,11 +316,6 @@ pub mod pallet {
 			old_version: Version,
 			new_version: Version,
 		},
-		/// An authority has register her current PeerId \[account_id, public_key, port,
-		/// ip_address\]
-		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
-		/// A authority has unregistered her current PeerId \[account_id, public_key\]
-		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
 		/// An auction has a set of winners \[winners, bond\]
 		AuctionCompleted(Vec<ValidatorIdOf<T>>, T::Amount),
 		/// Some pallet configuration has been updated.
@@ -614,10 +609,6 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this function must be signed.
 		///
-		/// ## Events
-		///
-		/// - [PeerIdRegistered](Event::PeerIdRegistered)
-		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_system::error::BadOrigin)
@@ -691,8 +682,6 @@ pub mod pallet {
 				ip_address,
 			);
 
-			// TODO: Consider removing this
-			Self::deposit_event(Event::PeerIdRegistered(account_id, peer_id, port, ip_address));
 			Ok(().into())
 		}
 
