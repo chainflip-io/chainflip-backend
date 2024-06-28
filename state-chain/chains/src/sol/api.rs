@@ -26,7 +26,6 @@ use cf_primitives::{EgressId, ForeignChain};
 pub struct TokenEnvironment {
 	pub token_mint_pubkey: SolAddress,
 	pub token_vault_ata: SolAddress,
-	pub token_vault_pda_account: SolAddress,
 }
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
@@ -74,6 +73,8 @@ pub trait SolanaEnvironment:
 					SolanaTransactionBuildingError::CannotLookupVaultProgram,
 				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
 					SolanaTransactionBuildingError::CannotLookupVaultProgramDataAccount,
+				SolanaEnvAccountLookupKey::TokenVaultPdaAccount =>
+					SolanaTransactionBuildingError::CannotLookupTokenVaultPdaAccount,
 			},
 		)
 	}
@@ -125,6 +126,7 @@ pub enum SolanaEnvAccountLookupKey {
 	AggKey,
 	VaultProgram,
 	VaultProgramDataAccount,
+	TokenVaultPdaAccount,
 }
 
 /// Errors that can arise when building Solana Transactions.
@@ -134,8 +136,6 @@ pub enum SolanaTransactionBuildingError {
 	CannotLookupVaultProgram,
 	CannotLookupVaultProgramDataAccount,
 	CannotLookupComputePrice,
-	CannotLookupTokenMintPubkey,
-	CannotLookupTokenVaultAssociatedTokenAccount,
 	CannotLookupTokenVaultPdaAccount,
 	CannotLookupTokenDecimals,
 	CannotLookupTokenEnvironment(SolAsset),
@@ -251,6 +251,10 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							SolanaEnvAccountLookupKey::VaultProgramDataAccount,
 							&mut sol_environment,
 						)?;
+						let token_vault_pda_account = Environment::lookup_account_retain(
+							SolanaEnvAccountLookupKey::TokenVaultPdaAccount,
+							&mut sol_environment,
+						)?;
 						let token_environment =
 							Environment::get_token_environment(token_environments, token_asset)?;
 						let ata =
@@ -265,7 +269,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							transfer_param.to,
 							vault_program,
 							vault_program_data_account,
-							token_environment.token_vault_pda_account,
+							token_vault_pda_account,
 							token_environment.token_vault_ata,
 							token_environment.token_mint_pubkey,
 							agg_key,
@@ -384,7 +388,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					ccm_accounts,
 					vault_program,
 					vault_program_data_account,
-					token_environment.token_vault_pda_account,
+					Environment::lookup_account(SolanaEnvAccountLookupKey::TokenVaultPdaAccount)?,
 					token_environment.token_vault_ata,
 					token_environment.token_mint_pubkey,
 					agg_key,

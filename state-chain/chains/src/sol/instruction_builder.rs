@@ -426,7 +426,6 @@ mod test {
 			TokenEnvironment {
 				token_mint_pubkey: MINT_PUB_KEY,
 				token_vault_ata: TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
-				token_vault_pda_account: TOKEN_VAULT_PDA_ACCOUNT,
 			},
 		);
 		token_environments
