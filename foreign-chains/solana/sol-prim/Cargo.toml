@@ -12,6 +12,7 @@ serde = ["dep:serde", "str"]
 str = ["dep:bs58"]
 scale = ["dep:codec", "dep:scale-info"]
 std-error = ["dep:thiserror", "bs58/std"]
+runtime-benchmarks = []
 
 
 [dependencies]

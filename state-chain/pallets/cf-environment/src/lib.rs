@@ -499,6 +499,7 @@ pub mod pallet {
 		pub sol_vault_address: SolAddress,
 		pub sol_genesis_hash: Option<SolHash>,
 		pub sol_usdc_address: SolAddress,
+		pub sol_durable_nonces_and_accounts: Vec<DurableNonceAndAccount>,
 		pub _config: PhantomData<T>,
 	}
 
@@ -533,6 +534,7 @@ pub mod pallet {
 
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
 			SolanaSupportedAssets::<T>::insert(SolAsset::SolUsdc, self.sol_usdc_address);
+			SolanaAvailableNonceAccounts::<T>::set(self.sol_durable_nonces_and_accounts.clone());
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 

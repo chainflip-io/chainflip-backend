@@ -28,11 +28,10 @@ pub struct DurableNonce;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct AllNonceAccounts;
 
-/// Super trait combining all Environment lookups required for the Solana chain.
-/// Also contains some calls for easy data retrieval.
-
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
 
+/// Super trait combining all Environment lookups required for the Solana chain.
+/// Also contains some calls for easy data retrieval.
 pub trait SolanaEnvironment:
 	ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress>
 	+ ChainEnvironment<ComputePrice, SolAmount>

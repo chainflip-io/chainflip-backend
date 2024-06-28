@@ -1991,6 +1991,7 @@ dependencies = [
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "serde_json",
+ "sol-prim",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
