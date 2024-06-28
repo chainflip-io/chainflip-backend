@@ -23,6 +23,12 @@ jobs:
     with:
       profile: "production"
       binary-subdir: "production"
+  build-m2:
+    uses: ./.github/workflows/_21_build_m2.yml
+    secrets: inherit
+    with:
+      profile: "production"
+      binary-subdir: "production"
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml

@@ -20,16 +20,22 @@ env:
 
 jobs:
   compile:
-    runs-on: namespace-profile-rust-builder
-    container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: namespace-profile-rust-builder-m2
 
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      # TODO: Uncomment this when the cache is available for M2 builders
+      # - name: Setup Rust cache 🦀💰
+      #   if: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
+      #   uses: namespacelabs/nscloud-cache-action@v1
+      #   with:
+      #     cache: rust
+
+      - name: Install Rust Requirements 💿
+        run: |
+          brew install protobuf
 
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
       - name: Configure Git 🛠️
@@ -46,7 +52,7 @@ jobs:
       - name: Upload binary artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
-          name: ${{ inputs.upload-name }}
+          name: ${{ inputs.upload-name }}-mac-m2
           path: |
             ./target/${{ inputs.binary-subdir }}/chainflip-node
             ./target/${{ inputs.binary-subdir }}/chainflip-cli
@@ -54,13 +60,12 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/chainflip-broker-api
             ./target/${{ inputs.binary-subdir }}/chainflip-lp-api
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
-            ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v*.so
+            ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v*.dylib
             ./target/${{ inputs.binary-subdir }}/engine-runner
-
 
       - name: Upload runtime artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
         with:
-          name: chainflip-node-runtime-${{ inputs.profile }}
+          name: chainflip-node-runtime-${{ inputs.profile }}-mac-m2
           path: |
             ./target/${{ inputs.binary-subdir }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm
