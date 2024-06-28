@@ -688,7 +688,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn get_sol_nonce_and_account() -> Option<DurableNonceAndAccount> {
-		SolanaAvailableNonceAccounts::<T>::mutate(|nonce_and_accounts| nonce_and_accounts.pop())
+		let nonce_and_account = SolanaAvailableNonceAccounts::<T>::mutate(|nonce_and_accounts| {
+			nonce_and_accounts.pop()
+		});
+		nonce_and_account.map(|(account, nonce)| {
+			SolanaUnAvailableNonceAccounts::<T>::insert(account, nonce);
+			(account, nonce)
+		})
 	}
 
 	pub fn get_all_sol_nonce_accounts() -> Vec<DurableNonceAndAccount> {

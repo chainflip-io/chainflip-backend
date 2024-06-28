@@ -1,14 +1,18 @@
 #![cfg(test)]
 
-use cf_chains::btc::{
-	api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
-	BitcoinFeeInfo, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
+use cf_chains::{
+	btc::{
+		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
+		BitcoinFeeInfo, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
+	},
+	sol::{SolAddress, SolHash},
 };
 use cf_traits::SafeMode;
 use frame_support::{assert_ok, traits::OriginTrait};
 
 use crate::{
 	mock::*, BitcoinAvailableUtxos, ConsolidationParameters, RuntimeSafeMode, SafeModeUpdate,
+	SolanaAvailableNonceAccounts, SolanaUnAvailableNonceAccounts,
 };
 
 fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
@@ -351,4 +355,115 @@ fn test_consolidation_change_amount() {
 		&BitcoinFeeInfo::new(100_000),
 	)
 	.is_none());
+}
+
+#[test]
+fn test_sol_nonces_and_accounts_usage() {
+	new_test_ext().execute_with(|| {
+		SolanaAvailableNonceAccounts::<Test>::set(vec![
+			(SolAddress([1; 32]), SolHash([10; 32])),
+			(SolAddress([2; 32]), SolHash([20; 32])),
+			(SolAddress([3; 32]), SolHash([30; 32])),
+			(SolAddress([4; 32]), SolHash([40; 32])),
+			(SolAddress([5; 32]), SolHash([50; 32])),
+		]);
+
+		// Use one nonce
+		let (account1, nonce1) = Environment::get_sol_nonce_and_account().unwrap();
+		assert_eq!((account1, nonce1), (SolAddress([5; 32]), SolHash([50; 32])));
+		assert_eq!(SolanaUnAvailableNonceAccounts::<Test>::get(account1).unwrap(), nonce1);
+		assert_eq!(
+			SolanaUnAvailableNonceAccounts::<Test>::iter_keys().collect::<Vec<_>>().len(),
+			1
+		);
+
+		// use second nonce
+		let (account2, nonce2) = Environment::get_sol_nonce_and_account().unwrap();
+		assert_eq!((account2, nonce2), (SolAddress([4; 32]), SolHash([40; 32])));
+		assert_eq!(SolanaUnAvailableNonceAccounts::<Test>::get(account2).unwrap(), nonce2);
+		assert_eq!(
+			SolanaUnAvailableNonceAccounts::<Test>::iter_keys().collect::<Vec<_>>().len(),
+			2
+		);
+
+		// put back the first nonce
+		Environment::update_sol_nonce(RuntimeOrigin::root(), account1, nonce1).unwrap();
+		assert_eq!(SolanaUnAvailableNonceAccounts::<Test>::get(account1), None);
+		assert_eq!(
+			SolanaUnAvailableNonceAccounts::<Test>::iter_keys().collect::<Vec<_>>().len(),
+			1
+		);
+		assert_eq!(
+			SolanaAvailableNonceAccounts::<Test>::get(),
+			vec![
+				(SolAddress([1; 32]), SolHash([10; 32])),
+				(SolAddress([2; 32]), SolHash([20; 32])),
+				(SolAddress([3; 32]), SolHash([30; 32])),
+				(SolAddress([5; 32]), SolHash([50; 32])),
+			]
+		);
+
+		// put back the second nonce
+		Environment::update_sol_nonce(RuntimeOrigin::root(), account2, nonce2).unwrap();
+		assert_eq!(SolanaUnAvailableNonceAccounts::<Test>::get(account2), None);
+		assert_eq!(
+			SolanaUnAvailableNonceAccounts::<Test>::iter_keys().collect::<Vec<_>>().len(),
+			0
+		);
+		assert_eq!(
+			SolanaAvailableNonceAccounts::<Test>::get(),
+			vec![
+				(SolAddress([1; 32]), SolHash([10; 32])),
+				(SolAddress([2; 32]), SolHash([20; 32])),
+				(SolAddress([3; 32]), SolHash([30; 32])),
+				(SolAddress([5; 32]), SolHash([50; 32])),
+				(SolAddress([4; 32]), SolHash([40; 32])),
+			]
+		);
+	});
+}
+
+#[test]
+fn test_get_all_nonce_accounts() {
+	new_test_ext().execute_with(|| {
+		// insert some available nonces
+		SolanaAvailableNonceAccounts::<Test>::set(vec![
+			(SolAddress([1; 32]), SolHash([10; 32])),
+			(SolAddress([2; 32]), SolHash([20; 32])),
+		]);
+
+		// insert some unavailable nonces
+		SolanaUnAvailableNonceAccounts::<Test>::insert(SolAddress([7; 32]), SolHash([70; 32]));
+		SolanaUnAvailableNonceAccounts::<Test>::insert(SolAddress([8; 32]), SolHash([80; 32]));
+
+		// get_all_sol_nonce_accounts should get all available and unavailable nonce accounts
+		let mut nonces_and_accounts = Environment::get_all_sol_nonce_accounts();
+		nonces_and_accounts.sort_by_key(|(a, _)| a.0[0]);
+		assert_eq!(
+			nonces_and_accounts,
+			vec![
+				(SolAddress([1; 32]), SolHash([10; 32])),
+				(SolAddress([2; 32]), SolHash([20; 32])),
+				(SolAddress([7; 32]), SolHash([70; 32])),
+				(SolAddress([8; 32]), SolHash([80; 32])),
+			]
+		);
+
+		// assert that getting all nonce accounts dont modify the storages
+		assert_eq!(
+			SolanaAvailableNonceAccounts::<Test>::get(),
+			vec![
+				(SolAddress([1; 32]), SolHash([10; 32])),
+				(SolAddress([2; 32]), SolHash([20; 32])),
+			]
+		);
+		assert_eq!(
+			SolanaUnAvailableNonceAccounts::<Test>::get(SolAddress([7; 32])).unwrap(),
+			SolHash([70; 32])
+		);
+		assert_eq!(
+			SolanaUnAvailableNonceAccounts::<Test>::get(SolAddress([8; 32])).unwrap(),
+			SolHash([80; 32])
+		);
+	});
 }
