@@ -7,11 +7,11 @@ use cf_chains::{
 };
 use cf_traits::SafeMode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use sol_prim::consts::{const_address, const_hash};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::{vec, vec::Vec};
-use sol_prim::consts::{const_address, const_hash};
 
 pub mod old {
 	use super::*;
