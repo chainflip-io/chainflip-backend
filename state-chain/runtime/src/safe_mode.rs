@@ -37,6 +37,8 @@ impl_runtime_safe_mode! {
 /// This is done through the SafeMode::CodeAmber of the Witnesser pallet.
 /// Only calls allowed here can be dispatched with Witnesser origin.
 #[derive(
+	serde::Serialize,
+	serde::Deserialize,
 	Encode,
 	Decode,
 	MaxEncodedLen,

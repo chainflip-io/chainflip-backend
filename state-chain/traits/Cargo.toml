@@ -31,6 +31,10 @@ frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag =
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+serde = { default_features = false, version = '1.0.126', features = [
+  'alloc',
+  'derive',
+] }
 
 [features]
 default = ['std']
@@ -46,6 +50,7 @@ std = [
   'sp-io/std',
   'sp-runtime/std',
   'sp-std/std',
+  'serde/std',
 ]
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',

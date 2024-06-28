@@ -143,7 +143,19 @@ impl<C: Chain> CrossChainMessage<C> {
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(
+	serde::Serialize,
+	serde::Deserialize,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+)]
 #[scale_info(skip_type_params(I))]
 pub struct PalletSafeMode<I: 'static> {
 	pub boost_deposits_enabled: bool,
@@ -152,6 +164,7 @@ pub struct PalletSafeMode<I: 'static> {
 	pub deposits_enabled: bool,
 	#[doc(hidden)]
 	#[codec(skip)]
+	#[serde(skip_serializing)]
 	_phantom: PhantomData<I>,
 }
 
