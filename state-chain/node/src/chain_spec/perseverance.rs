@@ -48,15 +48,27 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
-	sol_vault_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
 	// encodes to "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
 	sol_genesis_hash: Some(SolHash(hex_literal::hex![
 		"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
 	])),
+	// TODO: PRO-1465 Configure these variables correctly.
+	sol_vault_address: SolAddress(hex_literal::hex!(
+		"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
+	)),
+	sol_vault_data_account_address: SolAddress(hex_literal::hex!(
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	)),
 	// encodes to "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
-	sol_usdc_address: SolAddress(hex_literal::hex![
+	sol_usdc_address: SolAddress(hex_literal::hex!(
 		"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
-	]),
+	)),
+	sol_token_vault_address: SolAddress(hex_literal::hex!(
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	)),
+	sol_token_vault_ata: SolAddress(hex_literal::hex!(
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	)),
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;

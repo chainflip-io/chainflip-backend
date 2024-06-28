@@ -150,24 +150,12 @@ where
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	let vault_address = state_chain_client
-		.storage_value::<pallet_cf_environment::SolanaVaultAddress<state_chain_runtime::Runtime>>(
+	let sol_env = state_chain_client
+		.storage_value::<pallet_cf_environment::SolanaApiEnvironment<state_chain_runtime::Runtime>>(
 			state_chain_client.latest_finalized_block().hash,
 		)
 		.await
-		.context("Failed to get Vault contract address from SC")?;
-
-	let supported_sol_token_assets: HashMap<cf_primitives::chains::assets::sol::Asset, SolAddress> =
-		state_chain_client
-			.storage_map::<pallet_cf_environment::SolanaSupportedAssets<state_chain_runtime::Runtime>, _>(
-				state_chain_client.latest_finalized_block().hash,
-			)
-			.await
-			.context("Failed to fetch Solana supported assets")?;
-
-	let usdc_address = *supported_sol_token_assets
-		.get(&cf_primitives::chains::assets::sol::Asset::SolUsdc)
-		.context("SolanaSupportedAssets does not include USDC")?;
+		.context("Failed to get Solana Environment from SC")?;
 
 	// TODO: Get this from the environment once implemented
 	let nonces_accounts: Vec<(SolAddress, SolHash)> = vec![(
@@ -208,9 +196,9 @@ where
 		.sol_deposits(
 			process_call.clone(),
 			sol_client.clone(),
-			vault_address,
+			sol_env.sol_vault_address,
 			cached_balances.clone(),
-			usdc_address,
+			sol_env.sol_usdc_address,
 		)
 		.await
 		.continuous("SolanaDeposits".to_string(), db.clone())

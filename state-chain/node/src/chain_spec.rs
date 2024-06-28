@@ -4,7 +4,7 @@ use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData, BITCOIN_DUST_LIMIT},
 	dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	sol::{SolAddress, SolHash, SolTrackedData},
+	sol::{SolAddress, SolApiEnvironment, SolHash, SolTrackedData},
 	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
 };
 use cf_primitives::{
@@ -94,9 +94,13 @@ pub struct StateChainEnvironment {
 	dot_genesis_hash: PolkadotHash,
 	dot_vault_account_id: Option<PolkadotAccountId>,
 	dot_runtime_version: RuntimeVersion,
-	sol_vault_address: SolAddress,
+	// Solana related
 	sol_genesis_hash: Option<SolHash>,
+	sol_vault_address: SolAddress,
+	sol_vault_data_account_address: SolAddress,
 	sol_usdc_address: SolAddress,
+	sol_token_vault_address: SolAddress,
+	sol_token_vault_ata: SolAddress,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -134,7 +138,14 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
 	from_env_var!(FromStr::from_str, SOL_VAULT_ADDRESS, sol_vault_address);
+	from_env_var!(
+		FromStr::from_str,
+		SOL_VAULT_DATA_ACCOUNT_ADDRESS,
+		sol_vault_data_account_address
+	);
 	from_env_var!(FromStr::from_str, SOL_USDC_ADDRESS, sol_usdc_address);
+	from_env_var!(FromStr::from_str, SOL_TOKEN_VAULT_ADDRESS, sol_token_vault_address);
+	from_env_var!(FromStr::from_str, SOL_TOKEN_VAULT_ATA, sol_token_vault_ata);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
 		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
@@ -183,9 +194,12 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			spec_version: dot_spec_version,
 			transaction_version: dot_transaction_version,
 		},
-		sol_vault_address,
 		sol_genesis_hash,
+		sol_vault_address,
+		sol_vault_data_account_address,
 		sol_usdc_address,
+		sol_token_vault_address,
+		sol_token_vault_ata,
 	}
 }
 
@@ -246,9 +260,12 @@ pub fn inner_cf_development_config(
 		dot_genesis_hash,
 		dot_vault_account_id,
 		dot_runtime_version,
-		sol_vault_address,
 		sol_genesis_hash,
+		sol_vault_address,
+		sol_vault_data_account_address,
 		sol_usdc_address,
+		sol_token_vault_address,
+		sol_token_vault_ata,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, None)
 		.with_name("CF Develop")
@@ -279,9 +296,14 @@ pub fn inner_cf_development_config(
 				arbitrum_chain_id,
 				polkadot_genesis_hash: dot_genesis_hash,
 				polkadot_vault_account_id: dot_vault_account_id,
-				sol_vault_address,
 				sol_genesis_hash,
-				sol_usdc_address,
+				sol_api_env: SolApiEnvironment {
+					sol_vault_address,
+					sol_vault_data_account_address,
+					sol_usdc_address,
+					sol_token_vault_address,
+					sol_token_vault_ata,
+				},
 				network_environment: NetworkEnvironment::Development,
 				..Default::default()
 			},
@@ -355,9 +377,12 @@ macro_rules! network_spec {
 					dot_genesis_hash,
 					dot_vault_account_id,
 					dot_runtime_version,
-					sol_vault_address,
 					sol_genesis_hash,
+					sol_vault_address,
+					sol_vault_data_account_address,
 					sol_usdc_address,
+					sol_token_vault_address,
+					sol_token_vault_ata,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -418,9 +443,14 @@ macro_rules! network_spec {
 							arbitrum_chain_id,
 							polkadot_genesis_hash: dot_genesis_hash,
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
-							sol_vault_address,
 							sol_genesis_hash,
-							sol_usdc_address: sol_usdc_address.into(),
+							sol_api_env: SolApiEnvironment {
+								sol_vault_address,
+								sol_vault_data_account_address,
+								sol_usdc_address,
+								sol_token_vault_address,
+								sol_token_vault_ata,
+							},
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()
 						},
