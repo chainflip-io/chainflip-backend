@@ -120,7 +120,7 @@ impl<R: TypeResolver> scale_decode::Visitor for JsonDecodingVisitor<R> {
 	}
 }
 
-/// A [Visitor](scale_decode::Visitor) that decodes scale encoded data into raw a raw JSON
+/// A [Visitor](scale_decode::Visitor) that decodes scale encoded data into a raw JSON
 /// [Value](serde_json::Value).
 ///
 /// See the documentation of [ScaleDecodedToJson](crate::ScaleDecodedToJson) for more information.
