@@ -3433,6 +3433,7 @@ dependencies = [
  "engine-proc-macros",
  "engine-upgrade-utils",
  "predicates 3.1.0",
+ "tempfile",
 ]
 
 [[package]]
