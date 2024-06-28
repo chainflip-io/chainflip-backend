@@ -247,6 +247,10 @@ impl pallet_cf_environment::Config for Runtime {
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
+parameter_types! {
+	pub const NetworkFee: Permill = Permill::from_perthousand(1);
+}
+
 impl pallet_cf_swapping::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = chainflip::AnyChainIngressEgressHandler;
@@ -258,6 +262,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
+	type NetworkFee = NetworkFee;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -332,7 +337,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
-	type AssetConverter = LiquidityPools;
+	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
@@ -353,7 +358,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type ChainTracking = PolkadotChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
-	type AssetConverter = LiquidityPools;
+	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
@@ -374,7 +379,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type ChainTracking = BitcoinChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
-	type AssetConverter = LiquidityPools;
+	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
@@ -395,7 +400,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type ChainTracking = ArbitrumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
-	type AssetConverter = LiquidityPools;
+	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
@@ -416,21 +421,16 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type ChainTracking = SolanaChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
-	type AssetConverter = LiquidityPools;
+	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
-}
-
-parameter_types! {
-	pub const NetworkFee: Permill = Permill::from_perthousand(1);
 }
 
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = LiquidityProvider;
 	type SwapQueueApi = Swapping;
-	type NetworkFee = NetworkFee;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = ();
 }
@@ -1165,6 +1165,96 @@ type PalletMigrations = (
 type MigrationsForV1_5 =
 	(migrations::housekeeping::Migration, migrations::reap_old_accounts::Migration);
 
+pub struct NetworkFeesMigration;
+
+impl frame_support::traits::OnRuntimeUpgrade for NetworkFeesMigration {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		use frame_support::traits::{GetStorageVersion, StorageVersion};
+
+		if <pallet_cf_swapping::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
+			4 && <pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() ==
+			4
+		{
+			log::info!("⏫ Applying network fees migration.");
+			// Moving the FlipBuyInterval & CollectedNetworkFee storage items from the pools
+			// pallet to the swapping pallet.
+			cf_runtime_upgrade_utilities::move_pallet_storage::<
+				pallet_cf_swapping::Pallet<Runtime>,
+				pallet_cf_pools::Pallet<Runtime>,
+			>(b"FlipBuyInterval");
+
+			cf_runtime_upgrade_utilities::move_pallet_storage::<
+				pallet_cf_swapping::Pallet<Runtime>,
+				pallet_cf_pools::Pallet<Runtime>,
+			>(b"CollectedNetworkFee");
+
+			// Bump the version of both pallets
+			StorageVersion::new(5).put::<pallet_cf_swapping::Pallet<Runtime>>();
+			StorageVersion::new(5).put::<pallet_cf_pools::Pallet<Runtime>>();
+		} else {
+			log::info!(
+					"⏭ Skipping network fees migration. {:?}, {:?}",
+					<pallet_cf_swapping::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version(),
+					<pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version()
+				);
+		}
+		Default::default()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
+		use frame_support::{migrations::VersionedPostUpgradeData, traits::GetStorageVersion};
+
+		if <pallet_cf_pools::Pallet<Runtime> as GetStorageVersion>::on_chain_storage_version() == 4
+		{
+			// The new CollectedNetworkFee item should be empty before the migration.
+			frame_support::ensure!(
+				pallet_cf_swapping::CollectedNetworkFee::<Runtime>::get() == Default::default(),
+				"Incorrect pre-upgrade state for pallet swapping CollectedNetworkFee."
+			);
+			Ok(VersionedPostUpgradeData::MigrationExecuted(
+				(
+					pallet_cf_pools::migrations::old::FlipBuyInterval::<Runtime>::get(),
+					pallet_cf_pools::migrations::old::CollectedNetworkFee::<Runtime>::get(),
+				)
+					.encode(),
+			)
+			.encode())
+		} else {
+			Ok(VersionedPostUpgradeData::Noop.encode())
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), frame_support::sp_runtime::TryRuntimeError> {
+		use codec::Decode;
+		use frame_support::migrations::VersionedPostUpgradeData;
+
+		if let VersionedPostUpgradeData::MigrationExecuted(pre_upgrade_data) =
+			<VersionedPostUpgradeData>::decode(&mut &state[..])
+				.map_err(|_| "Failed to decode pre-upgrade state.")?
+		{
+			let (pre_upgrade_flip_buy_interval, pre_upgrade_collected_network_fee) =
+				<(frame_system::pallet_prelude::BlockNumberFor<Runtime>, AssetAmount)>::decode(
+					&mut &pre_upgrade_data[..],
+				)
+				.map_err(|_| "Failed to decode network fees data from pre-upgrade state.")?;
+
+			frame_support::ensure!(
+				pre_upgrade_flip_buy_interval ==
+					pallet_cf_swapping::FlipBuyInterval::<Runtime>::get(),
+				"Pre-upgrade state does not match post-upgrade state for FlipBuyInterval."
+			);
+			frame_support::ensure!(
+				pre_upgrade_collected_network_fee ==
+					pallet_cf_swapping::CollectedNetworkFee::<Runtime>::get(),
+				"Pre-upgrade state does not match post-upgrade state for CollectedNetworkFee."
+			);
+		}
+		Ok(())
+	}
+}
+
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
@@ -1440,7 +1530,7 @@ impl_runtime_apis! {
 
 			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, from, amount);
 
-			let swap_output = LiquidityPools::swap_with_network_fee(
+			let swap_output = Swapping::swap_with_network_fee(
 				from,
 				to,
 				amount_to_swap,
@@ -1536,7 +1626,7 @@ impl_runtime_apis! {
 		fn cf_ingress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				ForeignChainAndAsset::Ethereum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
+					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_ingress_fee(asset)
 					)
@@ -1544,7 +1634,7 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_ingress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_ingress_fee(asset).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
+					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_ingress_fee(asset)
 					)
@@ -1557,7 +1647,7 @@ impl_runtime_apis! {
 		fn cf_egress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				ForeignChainAndAsset::Ethereum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
+					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_egress_fee(asset)
 					)
@@ -1565,7 +1655,7 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_egress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_egress_fee(asset).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
+					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_egress_fee(asset)
 					)

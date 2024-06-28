@@ -24,7 +24,7 @@ use cf_traits::{
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
-	AccountRoleRegistry, CcmHandler, Chainflip, SetSafeMode, SwapDepositHandler, SwappingApi,
+	AccountRoleRegistry, AssetConverter, CcmHandler, Chainflip, SetSafeMode, SwapDepositHandler,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -34,7 +34,6 @@ use frame_support::{
 use itertools::Itertools;
 use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
-use sp_runtime::Percent;
 use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
@@ -1189,7 +1188,7 @@ fn process_all_into_stable_swaps_first() {
 
 		// Network fee should only be taken once.
 		let total_amount_after_network_fee =
-			MockSwappingApi::take_network_fee(amount * 4).remaining_amount;
+			Swapping::take_network_fee(amount * 4).remaining_amount;
 		let output_amount = total_amount_after_network_fee / 4;
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(
@@ -1848,7 +1847,7 @@ fn swap_input_excludes_network_fee() {
 	const FROM_ASSET: Asset = Asset::Usdc;
 	const TO_ASSET: Asset = Asset::Flip;
 	let destination_address: ForeignChainAddress = ForeignChainAddress::Eth(Default::default());
-	const NETWORK_FEE: Percent = Percent::from_percent(1);
+	const NETWORK_FEE: Permill = Permill::from_percent(1);
 
 	NetworkFee::set(NETWORK_FEE);
 
@@ -2468,7 +2467,7 @@ fn swap_output_amounts_correctly_account_for_fees() {
 		new_test_ext().execute_with(|| {
 			const SWAPPED_AMOUNT: AssetAmount = 1000;
 
-			let network_fee = Percent::from_percent(1);
+			let network_fee = Permill::from_percent(1);
 			NetworkFee::set(network_fee);
 
 			let expected_output: AssetAmount =
@@ -2496,5 +2495,126 @@ fn swap_output_amounts_correctly_account_for_fees() {
 				);
 			}
 		});
+	}
+}
+
+#[test]
+fn test_buy_back_flip() {
+	new_test_ext().execute_with(|| {
+		const INTERVAL: BlockNumberFor<Test> = 5;
+		const SWAP_AMOUNT: AssetAmount = 1000;
+		const NETWORK_FEE: Permill = Permill::from_percent(2);
+
+		NetworkFee::set(NETWORK_FEE);
+
+		// The default buy interval is zero, and this means we don't buy back.
+		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
+
+		// Set a non-zero buy interval
+		FlipBuyInterval::<Test>::set(INTERVAL);
+
+		// We are at the interval, but we don't have any network fees.
+		assert_eq!(0, CollectedNetworkFee::<Test>::get());
+		Swapping::on_initialize(INTERVAL * 2);
+		assert!(SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS))
+			.is_empty());
+
+		// Get some network fees, just like we did a swap.
+		let NetworkFeeTaken { remaining_amount, network_fee } =
+			Swapping::take_network_fee(SWAP_AMOUNT);
+
+		// Sanity check the network fee.
+		assert_eq!(network_fee, 20);
+		assert_eq!(remaining_amount + network_fee, SWAP_AMOUNT);
+
+		// Nothing is bought if we're not at the interval.
+		Swapping::on_initialize(INTERVAL * 3 - 1);
+		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
+
+		// If we're at an interval, we should buy flip.
+		Swapping::on_initialize(INTERVAL * 3);
+		assert_eq!(0, CollectedNetworkFee::<Test>::get());
+		assert_eq!(
+			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS))
+				.first()
+				.expect("Should have scheduled a swap usdc -> flip"),
+			&Swap::new(1, STABLE_ASSET, Asset::Flip, network_fee, None, SwapType::NetworkFee)
+		);
+	});
+}
+
+#[test]
+fn test_network_fee_calculation() {
+	new_test_ext().execute_with(|| {
+		// Show we can never overflow and panic
+		utilities::calculate_network_fee(Permill::from_percent(100), AssetAmount::MAX);
+		// 200 bps (2%) of 100 = 2
+		assert_eq!(utilities::calculate_network_fee(Permill::from_percent(2u32), 100), (98, 2));
+		// 2220 bps = 22 % of 199 = 43,78
+		assert_eq!(
+			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 199),
+			(155, 44)
+		);
+		// 2220 bps = 22 % of 234 = 51,26
+		assert_eq!(
+			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 233),
+			(181, 52)
+		);
+		// 10 bps = 0,1% of 3000 = 3
+		assert_eq!(
+			utilities::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
+			(2997, 3)
+		);
+	});
+}
+
+#[test]
+fn test_calculate_input_for_gas_output() {
+	use cf_chains::assets::eth::Asset as EthereumAsset;
+	const FLIP: EthereumAsset = EthereumAsset::Flip;
+
+	new_test_ext().execute_with(|| {
+		// If swap simulation fails -> no conversion.
+		MockSwappingApi::set_swaps_should_fail(true);
+		assert!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 1000).is_none());
+
+		// Set swap rate to 2 and turn swaps back on.
+		SwapRate::set(2_f64);
+		MockSwappingApi::set_swaps_should_fail(false);
+
+		// Desired output is zero -> trivially ok.
+		assert_eq!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 0), Some(0));
+
+		// Desired output requires 2 swap legs, each with a swap rate of 2. So output should be
+		// 1/4th of input.
+		assert_eq!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 1000), Some(250));
+
+		// Desired output is gas asset, requires 1 swap leg. So output should be 1/2 of input.
+		assert_eq!(
+			Swapping::calculate_input_for_gas_output::<Ethereum>(EthereumAsset::Usdc, 1000),
+			Some(500)
+		);
+
+		// Input is gas asset -> trivially ok.
+		assert_eq!(
+			Swapping::calculate_input_for_gas_output::<Ethereum>(
+				cf_chains::assets::eth::GAS_ASSET,
+				1000
+			),
+			Some(1000)
+		);
+	});
+}
+
+#[test]
+fn test_fee_estimation_basis() {
+	for asset in Asset::all() {
+		if !asset.is_gas_asset() {
+			assert!(
+				utilities::fee_estimation_basis(asset).is_some(),
+	             "No fee estimation cap defined for {:?}. Add one to the fee_estimation_basis function definition.",
+	             asset,
+	         );
+		}
 	}
 }
