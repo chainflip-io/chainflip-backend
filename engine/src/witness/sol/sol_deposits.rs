@@ -296,9 +296,8 @@ fn parse_account_amount_from_data(
 
 	match deposit_channel {
 		DepositChannelType::NativeDepositChannel(_) => {
-			let system_program_pubkey = SolAddress::from_str(SYSTEM_PROGRAM_ID).unwrap();
 			ensure!(
-				owner_pub_key == system_program_pubkey,
+				owner_pub_key == SYSTEM_PROGRAM_ID,
 				"Unexpected owner for native deposit channel",
 			);
 			Ok(deposit_channel_info.lamports as u128)
@@ -309,9 +308,8 @@ fn parse_account_amount_from_data(
 			token_mint_pubkey,
 			_,
 		) => {
-			let associated_token_account_pubkey = SolAddress::from_str(TOKEN_PROGRAM_ID).unwrap();
 			ensure!(
-				owner_pub_key == associated_token_account_pubkey,
+				owner_pub_key == TOKEN_PROGRAM_ID,
 				"Unexpected owner for token deposit channel"
 			);
 

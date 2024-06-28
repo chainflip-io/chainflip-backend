@@ -1431,7 +1431,7 @@ dependencies = [
  "bech32",
  "bincode 2.0.0-rc.3",
  "borsh",
- "bs58 0.4.0",
+ "bs58 0.5.1",
  "cf-primitives",
  "cf-test-utilities",
  "curve25519-dalek 3.2.1",
@@ -11345,6 +11345,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.8",
  "thiserror",
+ "utilities",
 ]
 
 [[package]]
@@ -13889,6 +13890,7 @@ dependencies = [
  "anyhow",
  "async-broadcast 0.5.1",
  "async-channel 1.9.0",
+ "bs58 0.5.1",
  "futures",
  "hex",
  "itertools 0.11.0",
