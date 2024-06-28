@@ -118,8 +118,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
 
   // Get values from the swap event
   const swapScheduledEvent = await observeSwapScheduledEvent.event;
-  const brokerCommission = BigInt(swapScheduledEvent.data.brokerCommission.replace(/,/g, ''));
-  console.log('brokerCommission:', brokerCommission);
+  const brokerFee = BigInt(swapScheduledEvent.data.brokerFee.replace(/,/g, ''));
+  console.log('brokerFee:', brokerFee);
 
   // Check that the deposit amount is correct after deducting the deposit fee
   const depositAmountAfterIngressFee = BigInt(
@@ -143,8 +143,8 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log('increase:', increase);
   assert.strictEqual(
     increase,
-    brokerCommission,
-    `Mismatch between brokerCommission from the swap event and the detected increase. Did some other ${asset} swap happen at the same time as this test?`,
+    brokerFee,
+    `Mismatch between brokerFee from the swap event and the detected increase. Did some other ${asset} swap happen at the same time as this test?`,
   );
 
   const expectedIncrease = calculateFeeWithBps(depositAmountAfterIngressFee, commissionBps);

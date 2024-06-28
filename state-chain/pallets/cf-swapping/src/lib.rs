@@ -354,8 +354,6 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
 			swap_type: SwapType,
-			#[deprecated(note = "Use broker_fee instead")]
-			broker_commission: Option<AssetAmount>,
 			broker_fee: Option<AssetAmount>,
 			execute_at: BlockNumberFor<T>,
 		},
@@ -368,12 +366,8 @@ pub mod pallet {
 		SwapExecuted {
 			swap_id: SwapId,
 			source_asset: Asset,
-			#[deprecated(note = "Use swap_input instead")]
-			deposit_amount: AssetAmount,
 			swap_input: AssetAmount,
 			destination_asset: Asset,
-			#[deprecated(note = "Use swap_output instead")]
-			egress_amount: AssetAmount,
 			swap_output: AssetAmount,
 			intermediate_amount: Option<AssetAmount>,
 			swap_type: SwapType,
@@ -723,7 +717,6 @@ pub mod pallet {
 				destination_address,
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address_internal),
-				broker_commission: None,
 				broker_fee: None,
 				execute_at,
 			});
@@ -1061,9 +1054,7 @@ pub mod pallet {
 						swap_id: swap.swap_id(),
 						source_asset: swap.input_asset(),
 						destination_asset: swap.output_asset(),
-						deposit_amount: swap_input,
 						swap_input,
-						egress_amount: swap_output,
 						swap_output,
 						intermediate_amount: swap.intermediate_amount(),
 						swap_type: swap.swap_type().clone(),
@@ -1393,7 +1384,6 @@ pub mod pallet {
 				destination_address: encoded_destination_address,
 				origin: swap_origin,
 				swap_type: SwapType::Swap(destination_address),
-				broker_commission: Some(fee),
 				broker_fee: Some(fee),
 				execute_at,
 			});
@@ -1469,7 +1459,6 @@ pub mod pallet {
 						destination_address: encoded_destination_address.clone(),
 						origin: origin.clone(),
 						swap_type: SwapType::CcmPrincipal(ccm_id),
-						broker_commission: None,
 						broker_fee: None,
 						execute_at,
 					});
@@ -1492,7 +1481,6 @@ pub mod pallet {
 					destination_address: encoded_destination_address.clone(),
 					origin,
 					swap_type: SwapType::CcmGas(ccm_id),
-					broker_commission: None,
 					broker_fee: None,
 					execute_at,
 				});
