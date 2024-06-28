@@ -58,11 +58,15 @@ pub fn run_all(ext: RemoteExternalities<StateChainBlock>) -> anyhow::Result<()> 
 		};
 
 		println!(
-			"{:<64}: num_items: {:>7} / total_size: {}{:>3}Mb",
+			"{:<64}: num_items: {:>7} / total_size: ~{:>3}{}",
 			decription,
 			count,
-			if size < 1_000_000 { "<" } else { "~" },
-			size / 1_000_000,
+			if size < 1_000_000 {
+				size / 1_000
+			} else {
+				size / 1_000_000
+			},
+			if size < 1_000_000 { "Kb" } else { "Mb" },
 		);
 	}
 	println!("========================");
