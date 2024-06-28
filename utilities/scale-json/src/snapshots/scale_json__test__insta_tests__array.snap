@@ -1,0 +1,13 @@
+---
+source: utilities/scale-json/src/test.rs
+expression: decoded_json
+---
+{
+  "Other": {
+    "Array": [
+      1,
+      2,
+      3
+    ]
+  }
+}

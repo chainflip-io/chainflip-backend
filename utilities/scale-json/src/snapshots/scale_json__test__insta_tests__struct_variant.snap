@@ -1,0 +1,20 @@
+---
+source: utilities/scale-json/src/test.rs
+expression: decoded_json
+---
+{
+  "Other": {
+    "Struct": {
+      "num_i128": "0xfffffffffffffffffffffffffffffffb",
+      "num_i16": -2,
+      "num_i32": -3,
+      "num_i64": "0xfffffffffffffffc",
+      "num_i8": -1,
+      "num_u128": "0x5",
+      "num_u16": 2,
+      "num_u32": 3,
+      "num_u64": "0x4",
+      "num_u8": 1
+    }
+  }
+}
