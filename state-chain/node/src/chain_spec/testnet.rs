@@ -49,7 +49,6 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_vault_address: const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf"),
 	sol_genesis_hash: None,
 	sol_usdc_address: SolAddress(bs58_array("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p")),
-	// todo: put correct values for nonces and accounts
 	sol_durable_nonces_and_accounts: [
 		(
 			const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
