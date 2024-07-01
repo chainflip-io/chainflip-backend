@@ -1,9 +1,6 @@
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
-	sol::{
-		api::{SolanaEnvAccountLookupKey, SolanaEnvironment},
-		sol_tx_core::address_derivation::derive_deposit_address,
-	},
+	sol::{api::SolanaEnvironment, sol_tx_core::address_derivation::derive_deposit_address},
 	Solana,
 };
 
@@ -29,10 +26,10 @@ impl AddressDerivationApi<Solana> for AddressDerivation {
 		),
 		AddressDerivationError,
 	> {
-		let vault_address = SolEnvironment::lookup_account(SolanaEnvAccountLookupKey::VaultProgram)
-			.map_err(|_| AddressDerivationError::MissingSolanaVaultProgram)?;
+		let api_env = SolEnvironment::api_environment()
+			.map_err(|_| AddressDerivationError::MissingSolanaApiEnvironment)?;
 
-		derive_deposit_address(channel_id, vault_address)
+		derive_deposit_address(channel_id, api_env.vault_program)
 			.map(|derived_ata| (derived_ata.address, derived_ata.bump))
 			.map_err(AddressDerivationError::SolanaDerivationError)
 	}

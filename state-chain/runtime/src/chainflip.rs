@@ -15,7 +15,7 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	SolanaIngressEgress, System, Validator, YEAR,
+	SolanaIngressEgress, SolanaThresholdSigner, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -45,10 +45,10 @@ use cf_chains::{
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ComputePrice, NonceAccount, SolanaApi, SolanaEnvAccountLookupKey,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, NonceAccount, SolanaApi,
 			SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolHash,
+		SolAddress, SolAmount, SolApiEnvironment, SolHash,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
@@ -488,15 +488,16 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct SolEnvironment;
 
-/// TODO: Implement this in PRO-1362
-impl ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress> for SolEnvironment {
-	fn lookup(_key: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
-		// match key {
-		// 	SolanaEnvAccountLookupKey::VaultProgram => Some(Environment::vault_program()),
-		// 	// TODO
-		// 	_ => None,
-		// }
-		None
+impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for SolEnvironment {
+	fn lookup(_s: ApiEnvironment) -> Option<SolApiEnvironment> {
+		Some(Environment::solana_api_environment())
+	}
+}
+
+impl ChainEnvironment<CurrentAggKey, SolAddress> for SolEnvironment {
+	fn lookup(_s: CurrentAggKey) -> Option<SolAddress> {
+		let epoch = SolanaThresholdSigner::current_key_epoch()?;
+		SolanaThresholdSigner::keys(epoch)
 	}
 }
 
