@@ -58,6 +58,10 @@ impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
 		unimplemented!()
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
 }
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Default, Eq, Encode, Decode, TypeInfo)]
@@ -210,6 +214,10 @@ impl ApiCall<BitcoinCrypto> for MockBitcoinApiCall<MockBtcEnvironment> {
 	}
 
 	fn transaction_out_id(&self) -> <BitcoinCrypto as ChainCrypto>::TransactionOutId {
+		unimplemented!()
+	}
+
+	fn refresh_replay_protection(&mut self) {
 		unimplemented!()
 	}
 }

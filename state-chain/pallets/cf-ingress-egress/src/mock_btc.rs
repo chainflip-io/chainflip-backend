@@ -10,7 +10,7 @@ pub use cf_primitives::chains::{assets, Bitcoin};
 use cf_primitives::ChannelId;
 use cf_test_utilities::impl_test_helpers;
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter,
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
@@ -25,7 +25,7 @@ use cf_traits::{
 	},
 	NetworkEnvironmentProvider, OnDeposit,
 };
-use frame_support::{derive_impl, traits::UnfilteredDispatchable};
+use frame_support::derive_impl;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
@@ -67,7 +67,6 @@ impl frame_system::Config for Test {
 }
 
 impl_mock_chainflip!(Test);
-impl_mock_callback!(RuntimeOrigin);
 
 pub struct MockDepositHandler;
 impl OnDeposit<Bitcoin> for MockDepositHandler {}

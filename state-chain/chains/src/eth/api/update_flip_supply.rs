@@ -39,7 +39,7 @@ impl EvmCall for UpdateFlipSupply {
 #[cfg(test)]
 mod test_update_flip_supply {
 	use crate::{
-		eth::api::{abi::load_abi, ApiCall, EvmReplayProtection, EvmTransactionBuilder},
+		eth::api::{abi::load_abi, EvmReplayProtection, EvmTransactionBuilder},
 		evm::SchnorrVerificationComponents,
 	};
 

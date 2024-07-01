@@ -25,13 +25,10 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 			nominee,
 		},
 	);
-	ThresholdSignatureData::<T, I>::insert(
+	PendingApiCalls::<T, I>::insert(
 		broadcast_id,
-		(
-			ApiCallFor::<T, I>::benchmark_value()
-				.signed(&ThresholdSignatureFor::<T, I>::benchmark_value()),
-			ThresholdSignatureFor::<T, I>::benchmark_value(),
-		),
+		ApiCallFor::<T, I>::benchmark_value()
+			.signed(&ThresholdSignatureFor::<T, I>::benchmark_value()),
 	);
 	PendingBroadcasts::<T, I>::append(broadcast_id);
 }

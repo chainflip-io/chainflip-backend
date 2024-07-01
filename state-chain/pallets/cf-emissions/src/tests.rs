@@ -97,12 +97,15 @@ fn should_mint_but_not_broadcast() {
 fn should_mint_and_initiate_broadcast() {
 	new_test_ext().execute_with(|| {
 		let before = Flip::<Test>::total_issuance();
-		assert!(MockBroadcast::get_called().is_none());
+		assert!(MockEmissionsBroadcaster::get_pending_api_calls().is_empty());
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		let after = Flip::<Test>::total_issuance();
 		assert!(after > before - FLIP_TO_BURN, "Expected {after:?} > {before:?}");
 		assert_eq!(
-			MockBroadcast::get_called().unwrap().new_total_supply,
+			MockEmissionsBroadcaster::get_pending_api_calls()
+				.first()
+				.unwrap()
+				.new_total_supply,
 			Flip::<Test>::total_issuance()
 		);
 	});
@@ -116,14 +119,17 @@ fn no_update_of_update_total_supply_during_safe_mode_code_red() {
 		// Try send a broadcast to update the total supply
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		// Expect nothing to be sent
-		assert!(MockBroadcast::get_called().is_none());
+		assert!(MockEmissionsBroadcaster::get_pending_api_calls().is_empty());
 		// Deactivate code red
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 		// Try send a broadcast to update the total supply
 		Emissions::on_initialize((SUPPLY_UPDATE_INTERVAL * 2).into());
 		// Expect the broadcast to be sent
 		assert_eq!(
-			MockBroadcast::get_called().unwrap().new_total_supply,
+			MockEmissionsBroadcaster::get_pending_api_calls()
+				.first()
+				.unwrap()
+				.new_total_supply,
 			Flip::<Test>::total_issuance()
 		);
 	});
@@ -172,7 +178,10 @@ fn burn_flip() {
 	new_test_ext().execute_with(|| {
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		assert_eq!(
-			MockBroadcast::get_called().unwrap().new_total_supply,
+			MockEmissionsBroadcaster::get_pending_api_calls()
+				.first()
+				.unwrap()
+				.new_total_supply,
 			Flip::<Test>::total_issuance()
 		);
 		let egresses = MockEgressHandler::<Ethereum>::get_scheduled_egresses();
