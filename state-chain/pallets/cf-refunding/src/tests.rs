@@ -1,8 +1,10 @@
 use cf_chains::{ForeignChain, ForeignChainAddress};
 use cf_primitives::AssetAmount;
+use cf_test_utilities::assert_events_eq;
 use cf_traits::SetSafeMode;
 
 use cf_chains::AnyChain;
+use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SafeMode};
 
 use crate::{mock::*, RecordedFees, WithheldTransactionFees};
@@ -84,5 +86,76 @@ pub fn keep_fees_in_storage_if_egress_fails() {
 
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
+	});
+}
+
+#[test]
+pub fn refund_validators_btc() {
+	new_test_ext().execute_with(|| {
+		payed_gas(ForeignChain::Bitcoin, 100, ETH_ADDR_1.clone());
+		payed_gas(ForeignChain::Bitcoin, 100, ETH_ADDR_2.clone());
+		payed_gas(ForeignChain::Bitcoin, 100, ETH_ADDR_3.clone());
+
+		let recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin).unwrap();
+
+		assert_eq!(recorded_fees_btc.get(&ETH_ADDR_1), Some(&100));
+		assert_eq!(recorded_fees_btc.get(&ETH_ADDR_2), Some(&100));
+		assert_eq!(recorded_fees_btc.get(&ETH_ADDR_3), Some(&100));
+
+		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Bitcoin), 300);
+
+		Refunding::on_distribute_withheld_fees(1);
+
+		let recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin);
+
+		assert_eq!(recorded_fees_btc, None);
+		assert_eq!(recorded_fees_btc, None);
+		assert_eq!(recorded_fees_btc, None);
+
+		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Bitcoin), 0);
+	});
+}
+
+#[test]
+pub fn btc_to_low_withheld_fees() {
+	new_test_ext().execute_with(|| {
+		payed_gas(ForeignChain::Bitcoin, 100, ETH_ADDR_1.clone());
+
+		WithheldTransactionFees::<Test>::insert(ForeignChain::Bitcoin, 99);
+
+		Refunding::on_distribute_withheld_fees(1);
+
+		System::assert_last_event(RuntimeEvent::Refunding(crate::Event::NotEnoughFunds {
+			chain: ForeignChain::Bitcoin,
+			withheld: 99,
+			available: 100,
+		}));
+
+		let recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin);
+
+		assert_eq!(recorded_fees_btc, None);
+
+		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Bitcoin), 99);
+	});
+}
+
+#[test]
+pub fn refund_validators_polkadot() {
+	new_test_ext().execute_with(|| {
+		payed_gas(ForeignChain::Polkadot, 100, DOT_ADDR_1.clone());
+
+		let recorded_fees_dot = RecordedFees::<Test>::get(ForeignChain::Polkadot).unwrap();
+
+		assert_eq!(recorded_fees_dot.get(&DOT_ADDR_1), Some(&100));
+
+		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Polkadot), 100);
+
+		Refunding::on_distribute_withheld_fees(1);
+
+		let recorded_fees_dot = RecordedFees::<Test>::get(ForeignChain::Polkadot);
+
+		assert_eq!(recorded_fees_dot, None);
+
+		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Polkadot), 0);
 	});
 }

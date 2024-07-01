@@ -77,7 +77,7 @@ pub struct DotEnvironmentMock;
 
 impl PolkadotEnvironment for DotEnvironmentMock {
 	fn try_vault_account() -> Option<PolkadotAccountId> {
-		todo!()
+		Some(PolkadotAccountId::from_aliased([2; 32]))
 	}
 
 	fn runtime_version() -> cf_chains::dot::RuntimeVersion {

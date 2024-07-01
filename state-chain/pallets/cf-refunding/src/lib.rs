@@ -197,7 +197,7 @@ impl<T: Config> Pallet<T> {
 						Self::deposit_event(Event::NotEnoughFunds {
 							chain,
 							withheld: available_funds,
-							available: available_funds,
+							available: fees,
 						});
 					} else {
 						available_funds = available_funds.saturating_sub(fees);
