@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.4.5] - 2024-07-01
+
+### Fixes
+
+- Fix Polkadot transaction encoding by adding the new CheckMetadataHash field to SignedExtra.
+
 ## [1.4.4] - 2024-06-28
 
 ### Fixes
