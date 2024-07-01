@@ -432,7 +432,7 @@ build_counter_vec!(
 	RPC_RETRIER_TOTAL_REQUESTS,
 	"cfe_rpc_requests_total",
 	"Count all the rpc calls made by the retrier, it counts every single call even if it is the same made multiple times",
-	["client","rpc_method"]
+	["client", "rpc_method", "endpoint"]
 );
 build_counter_vec!(
 	P2P_MONITOR_EVENT,
