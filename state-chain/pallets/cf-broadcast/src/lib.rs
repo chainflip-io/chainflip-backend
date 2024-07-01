@@ -686,7 +686,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Signs a API call, use `Call::on_signature_ready` as the callback, and returns the signature
 	/// request ID.
-	fn threshold_sign(
+	// NOTE: Function made Temporarily public - do not merge this to main.
+	pub fn threshold_sign(
 		api_call: <T as Config<I>>::ApiCall,
 		broadcast_id: BroadcastId,
 		should_broadcast: bool,
