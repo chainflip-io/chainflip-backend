@@ -53,30 +53,25 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<SolAsset, TokenEnvironment>
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<ComputePrice, SolAmount>>::lookup(ComputePrice)
-			.ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
+		Self::lookup(ComputePrice).ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
 	}
 
 	fn nonce_account() -> Result<(SolAddress, SolHash), SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<NonceAccount, (SolAddress, SolHash)>>::lookup(NonceAccount)
-			.ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
+		Self::lookup(NonceAccount).ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
 	}
 
 	fn lookup_account(
 		key: SolanaEnvAccountLookupKey,
 	) -> Result<SolAddress, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress>>::lookup(key).ok_or(
-			match key {
-				SolanaEnvAccountLookupKey::AggKey =>
-					SolanaTransactionBuildingError::CannotLookupAggKey,
-				SolanaEnvAccountLookupKey::VaultProgram =>
-					SolanaTransactionBuildingError::CannotLookupVaultProgram,
-				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
-					SolanaTransactionBuildingError::CannotLookupVaultProgramDataAccount,
-				SolanaEnvAccountLookupKey::TokenVaultPdaAccount =>
-					SolanaTransactionBuildingError::CannotLookupTokenVaultPdaAccount,
-			},
-		)
+		Self::lookup(key).ok_or(match key {
+			SolanaEnvAccountLookupKey::AggKey => SolanaTransactionBuildingError::CannotLookupAggKey,
+			SolanaEnvAccountLookupKey::VaultProgram =>
+				SolanaTransactionBuildingError::CannotLookupVaultProgram,
+			SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
+				SolanaTransactionBuildingError::CannotLookupVaultProgramDataAccount,
+			SolanaEnvAccountLookupKey::TokenVaultPdaAccount =>
+				SolanaTransactionBuildingError::CannotLookupTokenVaultPdaAccount,
+		})
 	}
 
 	fn lookup_account_retain(
@@ -93,11 +88,9 @@ pub trait SolanaEnvironment:
 	}
 
 	fn all_nonce_accounts() -> Result<Vec<SolAddress>, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>>>::lookup(
-			AllNonceAccounts,
-		)
-		.map(|nonces| nonces.into_iter().map(|(addr, _hash)| addr).collect::<Vec<_>>())
-		.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
+		Self::lookup(AllNonceAccounts)
+			.map(|nonces| nonces.into_iter().map(|(addr, _hash)| addr).collect::<Vec<_>>())
+			.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
 	}
 
 	fn get_token_environment(
