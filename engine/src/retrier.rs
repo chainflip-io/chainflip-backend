@@ -387,7 +387,7 @@ where
 					request_holder.insert(request_id, (response_sender, closure));
 				},
 				let (request_id, request_log, retry_limit, primary_or_secondary, result) = submission_holder.next_or_pending() => {
-					RPC_RETRIER_TOTAL_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
+					RPC_RETRIER_TOTAL_REQUESTS.inc(&[name, request_log.rpc_method.as_str(), format!("{:?}", primary_or_secondary).as_str()]);
 					match result {
 						Ok(value) => {
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
