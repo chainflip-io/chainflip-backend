@@ -431,7 +431,9 @@ macro_rules! assets {
 					Hash,
 					Serialize,
 					Deserialize,
-					EnumIter
+					EnumIter,
+					Ord,
+					PartialOrd
 				)]
 				pub enum Asset {
 					$(
