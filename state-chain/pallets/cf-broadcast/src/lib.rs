@@ -66,7 +66,6 @@ pub mod pallet {
 	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_traits::{AccountRoleRegistry, BroadcastNomination, OnBroadcastReady};
 	use frame_support::{pallet_prelude::*, traits::EnsureOrigin};
-	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured Transaction.
 	pub type TransactionFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::Transaction;
@@ -600,13 +599,26 @@ pub mod pallet {
 
 		#[pallet::weight(Weight::zero())]
 		#[pallet::call_index(3)]
-		pub fn stress_test(origin: OriginFor<T>, how_many: u32) -> DispatchResult {
-			ensure_root(origin)?;
+		pub fn re_sign_aborted_broadcasts(
+			origin: OriginFor<T>,
+			// Keep this for backwards compatibility.
+			_unused: u32,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let payload = PayloadFor::<T, I>::decode(&mut &[0xcf; 32][..])
-				.map_err(|_| Error::<T, I>::InvalidPayload)?;
-			for _ in 0..how_many {
-				T::ThresholdSigner::request_signature(payload.clone());
+			for broadcast_id in AbortedBroadcasts::<T, I>::take() {
+				if let Some((api_call, ..)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
+					Pallet::<T, I>::clean_up_broadcast_storage(broadcast_id);
+					PendingBroadcasts::<T, I>::try_mutate(|pending_broadcasts| {
+						if pending_broadcasts.contains(&broadcast_id) {
+							Err(Error::<T, I>::InvalidBroadcastId)
+						} else {
+							pending_broadcasts.insert(broadcast_id);
+							Ok(())
+						}
+					})?;
+					Pallet::<T, I>::threshold_sign(api_call, broadcast_id, true);
+				}
 			}
 
 			Ok(())
