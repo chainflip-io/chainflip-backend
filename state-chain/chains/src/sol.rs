@@ -291,11 +291,13 @@ pub mod signing_key {
 )]
 pub struct SolApiEnvironment {
 	// For native Sol API calls.
-	pub sol_vault_address: SolAddress,
-	pub sol_vault_data_account_address: SolAddress,
+	pub vault_program: SolAddress,
+	pub vault_program_data_account: SolAddress,
 
 	// For token API calls.
-	pub sol_usdc_address: SolAddress,
-	pub sol_token_vault_address: SolAddress,
-	pub sol_token_vault_ata: SolAddress,
+	pub token_vault_pda_account: SolAddress,
+
+	// For Usdc token
+	pub usdc_token_mint_pubkey: SolAddress,
+	pub usdc_token_vault_ata: SolAddress,
 }

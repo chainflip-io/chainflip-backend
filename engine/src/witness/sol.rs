@@ -196,9 +196,9 @@ where
 		.sol_deposits(
 			process_call.clone(),
 			sol_client.clone(),
-			sol_env.sol_vault_address,
+			sol_env.vault_program,
 			cached_balances.clone(),
-			sol_env.sol_usdc_address,
+			sol_env.usdc_token_mint_pubkey,
 		)
 		.await
 		.continuous("SolanaDeposits".to_string(), db.clone())

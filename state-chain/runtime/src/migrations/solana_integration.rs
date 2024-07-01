@@ -92,19 +92,19 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => (
 					SolApiEnvironment {
-						sol_vault_address: SolAddress(hex_literal::hex!(
+						vault_program: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_vault_data_account_address: SolAddress(hex_literal::hex!(
+						vault_program_data_account: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_usdc_address: SolAddress(hex_literal::hex!(
+						usdc_token_mint_pubkey: SolAddress(hex_literal::hex!(
 							"c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61"
 						)),
-						sol_token_vault_address: SolAddress(hex_literal::hex!(
+						token_vault_pda_account: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_token_vault_ata: SolAddress(hex_literal::hex!(
+						usdc_token_vault_ata: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
 					},
@@ -114,19 +114,19 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 				),
 				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => (
 					SolApiEnvironment {
-						sol_vault_address: SolAddress(hex_literal::hex!(
+						vault_program: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_vault_data_account_address: SolAddress(hex_literal::hex!(
+						vault_program_data_account: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_usdc_address: SolAddress(hex_literal::hex!(
+						usdc_token_mint_pubkey: SolAddress(hex_literal::hex!(
 							"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
 						)),
-						sol_token_vault_address: SolAddress(hex_literal::hex!(
+						token_vault_pda_account: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_token_vault_ata: SolAddress(hex_literal::hex!(
+						usdc_token_vault_ata: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
 					},
@@ -136,19 +136,19 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 				),
 				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => (
 					SolApiEnvironment {
-						sol_vault_address: SolAddress(hex_literal::hex!(
+						vault_program: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_vault_data_account_address: SolAddress(hex_literal::hex!(
+						vault_program_data_account: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_usdc_address: SolAddress(hex_literal::hex!(
+						usdc_token_mint_pubkey: SolAddress(hex_literal::hex!(
 							"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
 						)),
-						sol_token_vault_address: SolAddress(hex_literal::hex!(
+						token_vault_pda_account: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_token_vault_ata: SolAddress(hex_literal::hex!(
+						usdc_token_vault_ata: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
 					},
@@ -159,19 +159,19 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 				_ => (
 					// Assume testnet
 					SolApiEnvironment {
-						sol_vault_address: SolAddress(hex_literal::hex!(
+						vault_program: SolAddress(hex_literal::hex!(
 							"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
 						)),
-						sol_vault_data_account_address: SolAddress(hex_literal::hex!(
+						vault_program_data_account: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_usdc_address: SolAddress(hex_literal::hex!(
+						usdc_token_mint_pubkey: SolAddress(hex_literal::hex!(
 							"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
 						)),
-						sol_token_vault_address: SolAddress(hex_literal::hex!(
+						token_vault_pda_account: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						sol_token_vault_ata: SolAddress(hex_literal::hex!(
+						usdc_token_vault_ata: SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
 					},

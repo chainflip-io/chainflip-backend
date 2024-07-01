@@ -492,7 +492,7 @@ pub struct SolEnvironment;
 impl ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress> for SolEnvironment {
 	fn lookup(_key: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
 		// match key {
-		// 	SolanaEnvAccountLookupKey::VaultProgram => Some(Environment::sol_vault_address()),
+		// 	SolanaEnvAccountLookupKey::VaultProgram => Some(Environment::vault_program()),
 		// 	// TODO
 		// 	_ => None,
 		// }

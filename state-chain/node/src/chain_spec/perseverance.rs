@@ -53,20 +53,20 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
 	])),
 	// TODO: PRO-1465 Configure these variables correctly.
-	sol_vault_address: SolAddress(hex_literal::hex!(
+	sol_vault_program: SolAddress(hex_literal::hex!(
 		"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
 	)),
-	sol_vault_data_account_address: SolAddress(hex_literal::hex!(
+	sol_vault_program_data_account: SolAddress(hex_literal::hex!(
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	)),
 	// encodes to "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
-	sol_usdc_address: SolAddress(hex_literal::hex!(
+	sol_usdc_token_mint_pubkey: SolAddress(hex_literal::hex!(
 		"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
 	)),
-	sol_token_vault_address: SolAddress(hex_literal::hex!(
+	sol_token_vault_pda_account: SolAddress(hex_literal::hex!(
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	)),
-	sol_token_vault_ata: SolAddress(hex_literal::hex!(
+	sol_usdc_token_vault_ata: SolAddress(hex_literal::hex!(
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	)),
 };

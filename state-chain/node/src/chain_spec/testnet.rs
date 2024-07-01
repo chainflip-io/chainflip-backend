@@ -46,20 +46,20 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 	sol_genesis_hash: None,
 	// TODO: PRO-1465 Configure these variables correctly.
-	sol_vault_address: SolAddress(hex_literal::hex!(
+	sol_vault_program: SolAddress(hex_literal::hex!(
 		"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
 	)),
-	sol_vault_data_account_address: SolAddress(hex_literal::hex!(
+	sol_vault_program_data_account: SolAddress(hex_literal::hex!(
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	)),
 	// encodes to "24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p"
-	sol_usdc_address: SolAddress(hex_literal::hex!(
+	sol_usdc_token_mint_pubkey: SolAddress(hex_literal::hex!(
 		"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
 	)),
-	sol_token_vault_address: SolAddress(hex_literal::hex!(
+	sol_token_vault_pda_account: SolAddress(hex_literal::hex!(
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	)),
-	sol_token_vault_ata: SolAddress(hex_literal::hex!(
+	sol_usdc_token_vault_ata: SolAddress(hex_literal::hex!(
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	)),
 };
