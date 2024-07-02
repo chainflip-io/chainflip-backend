@@ -62,8 +62,6 @@ pub mod pallet {
 			amount: AssetAmount,
 			epoch: EpochIndex,
 		},
-		/// Witheld fees smaller than recorded fees.
-		NotEnoughFunds { chain: ForeignChain, withheld: AssetAmount, available: AssetAmount },
 		RefundedMoreThanWithheld {
 			chain: ForeignChain,
 			refunded: AssetAmount,
@@ -163,23 +161,27 @@ impl<T: Config> Pallet<T> {
 		let chains = WithheldTransactionFees::<T>::iter_keys().collect::<Vec<_>>();
 
 		for chain in chains {
-			let mut available_funds = WithheldTransactionFees::<T>::get(chain);
+			let mut withheld_fees = WithheldTransactionFees::<T>::get(chain);
+			let recorded_fees = RecordedFees::<T>::take(chain);
+			let sum_recorded_fees: AssetAmount =
+				recorded_fees.clone().unwrap_or_default().values().sum();
+			if withheld_fees < sum_recorded_fees {
+				Self::deposit_event(Event::RefundedMoreThanWithheld {
+					chain,
+					refunded: sum_recorded_fees,
+					withhold: withheld_fees,
+				});
+			}
 			match chain {
 				ForeignChain::Ethereum | ForeignChain::Arbitrum => {
 					let mut failed_egress: BTreeMap<ForeignChainAddress, AssetAmount> =
 						BTreeMap::new();
-					if let Some(recorded_fees) = RecordedFees::<T>::take(chain) {
+					if let Some(recorded_fees) = recorded_fees {
 						for (validator, fee) in recorded_fees {
-							if Self::do_egress(
-								chain,
-								fee,
-								validator.clone(),
-								epoch,
-								available_funds,
-							)
-							.is_ok()
+							if Self::do_egress(chain, fee, validator.clone(), epoch, withheld_fees)
+								.is_ok()
 							{
-								available_funds = available_funds.saturating_sub(fee);
+								withheld_fees = withheld_fees.saturating_sub(fee);
 							} else {
 								failed_egress.insert(validator.clone(), fee);
 							}
@@ -188,39 +190,28 @@ impl<T: Config> Pallet<T> {
 					if !failed_egress.is_empty() {
 						RecordedFees::<T>::insert(chain, failed_egress);
 					}
-					WithheldTransactionFees::<T>::insert(chain, available_funds);
+					WithheldTransactionFees::<T>::insert(chain, withheld_fees);
 				},
-				ForeignChain::Bitcoin | ForeignChain::Solana => {
-					let fees: AssetAmount =
-						RecordedFees::<T>::take(chain).unwrap_or_default().values().sum();
-					if available_funds < fees {
-						Self::deposit_event(Event::NotEnoughFunds {
-							chain,
-							withheld: available_funds,
-							available: fees,
-						});
-					} else {
-						available_funds = available_funds.saturating_sub(fees);
-						WithheldTransactionFees::<T>::insert(chain, available_funds);
-					}
-				},
+				ForeignChain::Bitcoin | ForeignChain::Solana =>
+					if withheld_fees >= sum_recorded_fees {
+						withheld_fees = withheld_fees.saturating_sub(sum_recorded_fees);
+						WithheldTransactionFees::<T>::insert(chain, withheld_fees);
+					},
 				ForeignChain::Polkadot => {
-					let fees: AssetAmount =
-						RecordedFees::<T>::take(chain).unwrap_or_default().values().sum();
 					if let Some(vault_address) = T::PolkadotEnvironment::try_vault_account() {
 						if Self::do_egress(
 							chain,
-							fees,
+							sum_recorded_fees,
 							cf_chains::ForeignChainAddress::Dot(vault_address),
 							epoch,
-							available_funds,
+							withheld_fees,
 						)
 						.is_ok()
 						{
-							available_funds = available_funds.saturating_sub(fees);
+							withheld_fees = withheld_fees.saturating_sub(sum_recorded_fees);
 						}
 					}
-					WithheldTransactionFees::<T>::insert(chain, available_funds);
+					WithheldTransactionFees::<T>::insert(chain, withheld_fees);
 				},
 			}
 		}

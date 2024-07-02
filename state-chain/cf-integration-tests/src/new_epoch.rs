@@ -11,7 +11,6 @@ use cf_chains::{
 	ForeignChain,
 };
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use cf_test_utilities::assert_events_match;
 use cf_traits::{EpochInfo, KeyProvider};
 use frame_support::traits::UnfilteredDispatchable;
 use pallet_cf_environment::BitcoinAvailableUtxos;

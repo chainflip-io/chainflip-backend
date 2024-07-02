@@ -1,6 +1,6 @@
 use crate as pallet_cf_refunding;
 use crate::PalletSafeMode;
-use cf_chains::{dot::PolkadotAccountId, AnyChain};
+use cf_chains::{btc::ScriptPubkey, dot::PolkadotAccountId, AnyChain};
 use cf_primitives::AccountId;
 
 use cf_traits::{
@@ -68,10 +68,13 @@ parameter_types! {
 
 pub const ETH_ADDR_1: ForeignChainAddress = ForeignChainAddress::Eth(H160([0; 20]));
 pub const ETH_ADDR_2: ForeignChainAddress = ForeignChainAddress::Eth(H160([1; 20]));
-pub const ETH_ADDR_3: ForeignChainAddress = ForeignChainAddress::Eth(H160([2; 20]));
+pub const ARB_ADDR_1: ForeignChainAddress = ForeignChainAddress::Arb(H160([2; 20]));
 
 pub const DOT_ADDR_1: ForeignChainAddress =
 	ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([1; 32]));
+
+pub const BTC_ADDR_1: ForeignChainAddress =
+	ForeignChainAddress::Btc(ScriptPubkey::Taproot([1u8; 32]));
 
 pub struct DotEnvironmentMock;
 

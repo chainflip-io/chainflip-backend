@@ -58,8 +58,6 @@ use cf_traits::{
 	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
-use cf_chains::dot::api::PolkadotEnvironment;
-
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
