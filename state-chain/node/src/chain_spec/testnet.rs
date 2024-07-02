@@ -46,21 +46,18 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
 	sol_genesis_hash: None,
-	// TODO: PRO-1465 Configure these variables correctly.
-	sol_vault_program: SolAddress(hex_literal::hex!(
-		"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
-	)),
-	sol_vault_program_data_account: SolAddress(hex_literal::hex!(
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	sol_vault_program: SolAddress(bs58_array("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf")),
+	sol_vault_program_data_account: SolAddress(bs58_array(
+		"wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc",
 	)),
 	sol_usdc_token_mint_pubkey: SolAddress(bs58_array(
 		"24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p",
 	)),
-	sol_token_vault_pda_account: SolAddress(hex_literal::hex!(
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	sol_token_vault_pda_account: SolAddress(bs58_array(
+		"CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d",
 	)),
-	sol_usdc_token_vault_ata: SolAddress(hex_literal::hex!(
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	sol_usdc_token_vault_ata: SolAddress(bs58_array(
+		"GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd",
 	)),
 };
 

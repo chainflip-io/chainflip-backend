@@ -51,21 +51,13 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 },
 	sol_genesis_hash: Some(SolHash(bs58_array("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"))),
 	// TODO: PRO-1465 Configure these variables correctly.
-	sol_vault_program: SolAddress(hex_literal::hex!(
-		"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
-	)),
-	sol_vault_program_data_account: SolAddress(hex_literal::hex!(
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	)),
+	sol_vault_program: SolAddress(bs58_array("11111111111111111111111111111111")),
+	sol_vault_program_data_account: SolAddress(bs58_array("11111111111111111111111111111111")),
 	sol_usdc_token_mint_pubkey: SolAddress(bs58_array(
 		"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 	)),
-	sol_token_vault_pda_account: SolAddress(hex_literal::hex!(
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	)),
-	sol_usdc_token_vault_ata: SolAddress(hex_literal::hex!(
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	)),
+	sol_token_vault_pda_account: SolAddress(bs58_array("11111111111111111111111111111111")),
+	sol_usdc_token_vault_ata: SolAddress(bs58_array("11111111111111111111111111111111")),
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
