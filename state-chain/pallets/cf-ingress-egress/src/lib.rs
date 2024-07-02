@@ -698,8 +698,8 @@ pub mod pallet {
 		BelowEgressDustLimit,
 		/// Solana address derivation error.
 		SolanaAddressDerivationError,
-		/// Solana's Vault program cannot be loaded via the SolanaEnvironment.
-		MissingSolanaVaultProgram,
+		/// Solana's Environment variables cannot be loaded via the SolanaEnvironment.
+		MissingSolanaApiEnvironment,
 		/// You cannot add 0 to a boost pool.
 		AddBoostAmountMustBeNonZero,
 		/// Adding boost funds is disabled due to safe mode.
@@ -1774,8 +1774,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							Error::<T, I>::BitcoinChannelIdTooLarge,
 						AddressDerivationError::SolanaDerivationError { .. } =>
 							Error::<T, I>::SolanaAddressDerivationError,
-						AddressDerivationError::MissingSolanaVaultProgram =>
-							Error::<T, I>::MissingSolanaVaultProgram,
+						AddressDerivationError::MissingSolanaApiEnvironment =>
+							Error::<T, I>::MissingSolanaApiEnvironment,
 					})?,
 				next_channel_id,
 			)

@@ -284,3 +284,20 @@ pub mod signing_key {
 		}
 	}
 }
+
+/// Solana Environment variables used when building the base API call.
+#[derive(
+	Encode, Decode, TypeInfo, Default, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize,
+)]
+pub struct SolApiEnvironment {
+	// For native Sol API calls.
+	pub vault_program: SolAddress,
+	pub vault_program_data_account: SolAddress,
+
+	// For token API calls.
+	pub token_vault_pda_account: SolAddress,
+
+	// For Usdc token
+	pub usdc_token_mint_pubkey: SolAddress,
+	pub usdc_token_vault_ata: SolAddress,
+}
