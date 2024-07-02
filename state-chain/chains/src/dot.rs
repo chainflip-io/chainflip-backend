@@ -1033,6 +1033,7 @@ mod test_polkadot_extrinsics {
 	#[test]
 	fn decode_into_unchecked_extrinsic() {
 		// These extrinsic bytes were taken from real polkadot extrinsics
+		#[allow(clippy::single_element_loop)]
 		for mut bytes in [
 			// Single fetch.
 			&hex_literal::hex!(
