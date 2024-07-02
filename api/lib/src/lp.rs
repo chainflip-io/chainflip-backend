@@ -20,6 +20,7 @@ use sp_core::{H256, U256};
 use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
 use types::LimitOrRangeOrder;
+use utilities::dynamic_events::{DynamicRuntimeEvent, JsonExt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -176,15 +177,15 @@ impl LpApi for StateChainClient {}
 
 fn into_api_wait_for_result<T>(
 	from: WaitForResult,
-	map_events: impl FnOnce(Vec<state_chain_runtime::RuntimeEvent>) -> T,
-) -> ApiWaitForResult<T> {
-	match from {
+	map_events: impl FnOnce(Vec<DynamicRuntimeEvent>) -> Result<T>,
+) -> Result<ApiWaitForResult<T>> {
+	Ok(match from {
 		WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 		WaitForResult::Details(details) => {
 			let (tx_hash, events, ..) = details;
-			ApiWaitForResult::TxDetails { tx_hash, response: map_events(events) }
+			ApiWaitForResult::TxDetails { tx_hash, response: map_events(events)? }
 		},
-	}
+	})
 }
 
 #[async_trait]
@@ -228,18 +229,13 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				let (tx_hash, events, ..) = details;
 				let encoded_address = events
 					.into_iter()
-					.find_map(|event| match event {
-						state_chain_runtime::RuntimeEvent::LiquidityProvider(
-							pallet_cf_lp::Event::LiquidityDepositAddressReady {
-								deposit_address,
-								..
-							},
-						) => Some(deposit_address),
-						_ => None,
+					.find_map(|e| {
+						e.pallet_event("LiquidityProvider", "LiquidityDepositAddressReady")
 					})
 					.ok_or_else(|| {
 						anyhow::anyhow!("No LiquidityDepositAddressReady event was found")
-					})?;
+					})
+					.and_then(|e| e["deposit_address"].try_deserialize_into())?;
 
 				ApiWaitForResult::TxDetails { tx_hash, response: encoded_address }
 			},
@@ -275,15 +271,9 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				let (tx_hash, events, ..) = details;
 				let egress_id = events
 					.into_iter()
-					.find_map(|event| match event {
-						state_chain_runtime::RuntimeEvent::LiquidityProvider(
-							pallet_cf_lp::Event::WithdrawalEgressScheduled { egress_id, .. },
-						) => Some(egress_id),
-						_ => None,
-					})
-					.ok_or_else(|| {
-						anyhow::anyhow!("No WithdrawalEgressScheduled event was found")
-					})?;
+					.find_map(|e| e.pallet_event("LiquidityProvider", "WithdrawalEgressScheduled"))
+					.ok_or_else(|| anyhow::anyhow!("No WithdrawalEgressScheduled event was found"))
+					.and_then(|e| e["egress_id"].try_deserialize_into())?;
 
 				ApiWaitForResult::TxDetails { tx_hash, response: egress_id }
 			},
@@ -334,7 +324,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			)
 			.await?,
 			collect_range_order_returns,
-		))
+		)?)
 	}
 
 	async fn set_range_order(
@@ -360,7 +350,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			)
 			.await?,
 			collect_range_order_returns,
-		))
+		)?)
 	}
 
 	async fn update_limit_order(
@@ -435,7 +425,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				self.submit_signed_extrinsic_wait_for(call, wait_for).await?
 			},
 			collect_limit_order_returns,
-		))
+		)?)
 	}
 
 	async fn register_account(&self) -> Result<H256> {

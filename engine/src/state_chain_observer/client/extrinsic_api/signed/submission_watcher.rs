@@ -20,7 +20,7 @@ use tokio::sync::oneshot;
 use tracing::{debug, error, info, warn};
 use utilities::{
 	dynamic_events::{
-		DynamicDispatchError, DynamicEvent, DynamicEventRecord, ResolvedDispatchError,
+		DynamicDispatchError, DynamicEventRecord, DynamicRuntimeEvent, ResolvedDispatchError,
 	},
 	future_map::FutureMap,
 	task_scope::{self, Scope},
@@ -61,7 +61,7 @@ pub enum DryRunError {
 	Dispatch(#[from] ResolvedDispatchError<sp_runtime::DispatchError>),
 }
 
-pub type ExtrinsicDetails = (H256, Vec<serde_json::Value>, state_chain_runtime::Header);
+pub type ExtrinsicDetails = (H256, Vec<DynamicRuntimeEvent>, state_chain_runtime::Header);
 
 pub type ExtrinsicResult<OtherError> = Result<ExtrinsicDetails, ExtrinsicError<OtherError>>;
 
@@ -368,7 +368,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 	fn decide_extrinsic_success(
 		&self,
-		extrinsic_events: &[DynamicEvent],
+		extrinsic_events: &[DynamicRuntimeEvent],
 	) -> Result<(), DynamicDispatchError> {
 		extrinsic_events
 			.iter()
@@ -443,16 +443,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					let until_in_block_sender = request.until_in_block_sender.take().unwrap();
 					let _result = until_in_block_sender.send(
 						self.decide_extrinsic_success(&extrinsic_events[..])
-							.map(|_| {
-								(
-									tx_hash,
-									extrinsic_events
-										.into_iter()
-										.map(|event| event.to_json().take())
-										.collect(),
-									header.clone(),
-								)
-							})
+							.map(|()| (tx_hash, extrinsic_events, header.clone()))
 							.map_err(ExtrinsicError::Dispatch),
 					);
 				}
@@ -542,17 +533,9 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 									(optional_extrinsic_events.take().unwrap(), request)
 								}) {
 							let extrinsic_events = extrinsic_events.collect::<Vec<_>>();
-							let result =
-								self.decide_extrinsic_success(&extrinsic_events[..]).map(|_| {
-									(
-										tx_hash,
-										extrinsic_events
-											.into_iter()
-											.map(|event| event.to_json().take())
-											.collect(),
-										block.header.clone(),
-									)
-								});
+							let result = self
+								.decide_extrinsic_success(&extrinsic_events[..])
+								.map(|_| (tx_hash, extrinsic_events, block.header.clone()));
 							info!(target: "state_chain_client", request_id = matching_request.id, submission_id = submission.id, "Request found in finalized block with hash {block_hash:?}, tx_hash {tx_hash:?}, and extrinsic index {extrinsic_index}.");
 							if let Some(until_in_block_sender) =
 								matching_request.until_in_block_sender

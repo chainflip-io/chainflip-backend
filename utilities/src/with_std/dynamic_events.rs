@@ -5,7 +5,8 @@
 //!
 //! In addition to the [EventDecoder] itself, some wrapper types are provided to make working with
 //! the decoded events easier. See for example [DynamicEventRecord] and [DynamicEvent].
-use core::ops::Deref;
+use anyhow::{anyhow, Context};
+use core::{ops::Deref, str::FromStr};
 use itertools::Itertools;
 use scale_info::{
 	scale::{Compact, Decode},
@@ -60,32 +61,66 @@ impl ResolvedDispatchError<JsonValue> {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-/// A wrapper around a JSON value that represents a substrate EventRecord.
-pub struct DynamicEventRecord(JsonValue);
-
-impl Deref for DynamicEventRecord {
-	type Target = JsonValue;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
+pub trait WrappedJsonValue: Clone + AsRef<JsonValue> + Into<JsonValue> {
+	fn as_json(&self) -> &JsonValue {
+		self.as_ref()
+	}
+	fn try_deserialize_into<T: serde::de::DeserializeOwned>(self) -> Result<T, serde_json::Error> {
+		serde_json::from_value(self.into())
 	}
 }
 
-#[derive(Debug)]
-pub struct DynamicEvent(JsonValue);
+impl<T: Clone + AsRef<JsonValue> + Into<JsonValue>> WrappedJsonValue for T {}
 
-impl Deref for DynamicEvent {
-	type Target = JsonValue;
+macro_rules! impl_wrapped_json_value {
+	( $name:ident ) => {
+		#[derive(Debug, Clone, Serialize, Deserialize)]
+		pub struct $name(JsonValue);
 
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+		impl AsRef<JsonValue> for $name {
+			fn as_ref(&self) -> &JsonValue {
+				&self.0
+			}
+		}
+
+		impl Deref for $name {
+			type Target = JsonValue;
+
+			fn deref(&self) -> &Self::Target {
+				&self.0
+			}
+		}
+
+		impl $name {
+			pub fn try_deserialize_into<T: serde::de::DeserializeOwned>(
+				self,
+			) -> Result<T, EventDeserializationError<'static>> {
+				serde_json::from_value(self.0).map_err(Into::into)
+			}
+
+			pub fn try_deserialize_item_into<'a, T: serde::de::DeserializeOwned>(
+				&self,
+				pointer: &'a str,
+			) -> Result<T, EventDeserializationError<'a>> {
+				serde_json::from_value(
+					self.0
+						.pointer(pointer)
+						.ok_or_else(|| EventDeserializationError::PathError(pointer))?
+						.clone(),
+				)
+				.map_err(Into::into)
+			}
+		}
+	};
 }
+
+impl_wrapped_json_value!(DynamicEventRecord);
+impl_wrapped_json_value!(DynamicRuntimeEvent);
+impl_wrapped_json_value!(DynamicPalletEvent);
 
 impl DynamicEventRecord {
 	/// Wrap a JSON value that represents a substrate EventRecord.
-	pub fn new(json: JsonValue) -> Option<Self> {
+	fn new(json: JsonValue) -> Option<Self> {
 		if json.as_object().map_or(false, |obj| {
 			obj.contains_key("event") && obj.contains_key("phase") && obj.contains_key("topics")
 		}) {
@@ -96,7 +131,7 @@ impl DynamicEventRecord {
 	}
 
 	/// Returns the inner event if it matches the given extrinsic index.
-	pub fn extrinsic_event(&self, extrinsic_index: u64) -> Option<DynamicEvent> {
+	pub fn extrinsic_event(&self, extrinsic_index: u64) -> Option<DynamicRuntimeEvent> {
 		self.0
 			.pointer("/phase/ApplyExtrinsic")
 			.and_then(|index| index.as_u64())
@@ -106,7 +141,7 @@ impl DynamicEventRecord {
 
 	/// Returns the inner event and it's extrinsic index if the event was triggered during the
 	/// ApplyExtrinsic phase.
-	pub fn indexed_extrinsic_event(&self) -> Option<(u64, DynamicEvent)> {
+	pub fn indexed_extrinsic_event(&self) -> Option<(u64, DynamicRuntimeEvent)> {
 		self.0
 			.pointer("/phase/ApplyExtrinsic")
 			.and_then(|index| index.as_u64())
@@ -114,22 +149,25 @@ impl DynamicEventRecord {
 	}
 
 	/// Return a clone of the inner event.
-	pub fn event(&self) -> DynamicEvent {
-		DynamicEvent(
+	pub fn event(&self) -> DynamicRuntimeEvent {
+		DynamicRuntimeEvent(
 			self.0
 				.pointer("/event")
 				.expect("existence of /event is ensured by constructor")
 				.clone(),
 		)
 	}
-
-	/// Unwrap the inner JSON value.
-	pub fn into_inner(self) -> JsonValue {
-		self.0
-	}
 }
 
-impl DynamicEvent {
+#[derive(Error, Debug)]
+pub enum EventDeserializationError<'a> {
+	#[error("JSON error: {0}")]
+	JsonError(#[from] serde_json::Error),
+	#[error("Unknown path: {0}")]
+	PathError(&'a str),
+}
+
+impl DynamicRuntimeEvent {
 	/// If this event represents the outcome of an extrinsic, return the result.
 	pub fn extrinsic_outcome(&self) -> Option<Result<(), ResolvedDispatchError<JsonValue>>> {
 		if self.0.pointer("/System/ExtrinsicSuccess/dispatch_info").is_some() {
@@ -143,8 +181,28 @@ impl DynamicEvent {
 		}
 	}
 
-	pub fn to_json(self) -> JsonValue {
-		self.0.clone()
+	/// If this event's pallet and event name match those provided, return the [DynamicPalletEvent].
+	///
+	/// Example:
+	///
+	/// ```
+	/// let event = DynamicRuntimeEvent(serde_json::json!({
+	///   "System": {
+	///     "ExtrinsicSuccess": {
+	///       "dispatch_info": {
+	///         "class": "Normal",
+	///         "pays_fee": "Yes"
+	///       }
+	///     }
+	///   }
+	/// }));
+	/// assert!(event.pallet_event("System", "ExtrinsicSuccess").is_some());
+	/// ```
+	pub fn pallet_event(&self, pallet: &str, event: &str) -> Option<DynamicPalletEvent> {
+		self.0
+			.pointer(format!("/{}/{}", pallet, event).as_str())
+			.cloned()
+			.map(DynamicPalletEvent)
 	}
 }
 
@@ -487,5 +545,53 @@ mod test {
 				error
 			} if pallet == ERROR_PALLET && name == ERROR_NAME && error == ERROR
 		));
+	}
+}
+
+/// Extension trait for [JsonValue].
+///
+/// Allows decoding encoding/decoding values of type [JsonValue] without having to import
+/// serde_json.
+pub trait JsonExt: Sized + _seal::Sealed {
+	fn from_json_str(json_str: &str) -> anyhow::Result<Self>;
+	fn try_deserialize_into<T: serde::de::DeserializeOwned>(&self) -> anyhow::Result<T>;
+	fn try_from_hex<E, T>(&self) -> anyhow::Result<T>
+	where
+		E: std::error::Error + Send + Sync + 'static,
+		T: TryFrom<Vec<u8>, Error = E>;
+	fn try_parse_from_str<T, E>(&self) -> anyhow::Result<T>
+	where
+		E: std::error::Error + Send + Sync + 'static,
+		T: FromStr<Err = E>;
+}
+
+mod _seal {
+	pub trait Sealed {}
+}
+
+impl _seal::Sealed for JsonValue {}
+impl JsonExt for JsonValue {
+	fn from_json_str(json_str: &str) -> anyhow::Result<Self> {
+		serde_json::from_str(json_str).map_err(Into::into)
+	}
+	fn try_deserialize_into<T: serde::de::DeserializeOwned>(&self) -> anyhow::Result<T> {
+		serde_json::from_value(self.clone()).map_err(Into::into)
+	}
+	fn try_from_hex<E, T>(&self) -> anyhow::Result<T>
+	where
+		E: std::error::Error + Send + Sync + 'static,
+		T: TryFrom<Vec<u8>, Error = E>,
+	{
+		let str = self.as_str().ok_or_else(|| anyhow!("Expected a JSON string"))?;
+		let bytes =
+			hex::decode(str.trim_start_matches("0x")).context("Failed to decode hex string")?;
+		Ok(T::try_from(bytes)?)
+	}
+	fn try_parse_from_str<T, E>(&self) -> anyhow::Result<T>
+	where
+		E: std::error::Error + Send + Sync + 'static,
+		T: FromStr<Err = E>,
+	{
+		Ok(str::parse(self.as_str().ok_or_else(|| anyhow!("Expected a JSON string"))?)?)
 	}
 }
