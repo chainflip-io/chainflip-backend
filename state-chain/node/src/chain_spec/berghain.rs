@@ -8,6 +8,7 @@ use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnv
 use sc_service::ChainType;
 use sp_core::H256;
 use state_chain_runtime::SetSizeParameters;
+use utilities::bs58_array;
 
 pub struct Config;
 
@@ -48,10 +49,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 },
-	// encodes to "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
-	sol_genesis_hash: Some(SolHash(hex_literal::hex![
-		"45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
-	])),
+	sol_genesis_hash: Some(SolHash(bs58_array("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"))),
 	// TODO: PRO-1465 Configure these variables correctly.
 	sol_vault_program: SolAddress(hex_literal::hex!(
 		"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
@@ -59,9 +57,8 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_vault_program_data_account: SolAddress(hex_literal::hex!(
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	)),
-	// encodes to "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-	sol_usdc_token_mint_pubkey: SolAddress(hex_literal::hex!(
-		"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
+	sol_usdc_token_mint_pubkey: SolAddress(bs58_array(
+		"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 	)),
 	sol_token_vault_pda_account: SolAddress(hex_literal::hex!(
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

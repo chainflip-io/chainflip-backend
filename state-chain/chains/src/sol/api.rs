@@ -42,8 +42,7 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>>
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<ComputePrice, SolAmount>>::lookup(ComputePrice)
-			.ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
+		Self::lookup(ComputePrice).ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
 	}
 
 	fn api_environment() -> Result<SolApiEnvironment, SolanaTransactionBuildingError> {
@@ -51,22 +50,19 @@ pub trait SolanaEnvironment:
 			.ok_or(SolanaTransactionBuildingError::CannotLookupApiEnvironment)
 	}
 
+	fn nonce_account() -> Result<(SolAddress, SolHash), SolanaTransactionBuildingError> {
+		Self::lookup(NonceAccount).ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
+	}
+
 	fn current_agg_key() -> Result<SolAddress, SolanaTransactionBuildingError> {
 		<Self as ChainEnvironment<CurrentAggKey, SolAddress>>::lookup(CurrentAggKey)
 			.ok_or(SolanaTransactionBuildingError::CannotLookupCurrentAggKey)
 	}
 
-	fn nonce_account() -> Result<(SolAddress, SolHash), SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<NonceAccount, (SolAddress, SolHash)>>::lookup(NonceAccount)
-			.ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
-	}
-
 	fn all_nonce_accounts() -> Result<Vec<SolAddress>, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>>>::lookup(
-			AllNonceAccounts,
-		)
-		.map(|nonces| nonces.into_iter().map(|(addr, _hash)| addr).collect::<Vec<_>>())
-		.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
+		Self::lookup(AllNonceAccounts)
+			.map(|nonces| nonces.into_iter().map(|(addr, _hash)| addr).collect::<Vec<_>>())
+			.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
 	}
 }
 

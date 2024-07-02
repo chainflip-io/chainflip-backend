@@ -4,6 +4,7 @@ use cf_chains::{dot::RuntimeVersion, sol::SolAddress};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
 use sp_core::{sr25519, H256};
+use utilities::bs58_array;
 
 pub struct Config;
 
@@ -52,9 +53,8 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_vault_program_data_account: SolAddress(hex_literal::hex!(
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	)),
-	// encodes to "24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p"
-	sol_usdc_token_mint_pubkey: SolAddress(hex_literal::hex!(
-		"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
+	sol_usdc_token_mint_pubkey: SolAddress(bs58_array(
+		"24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p",
 	)),
 	sol_token_vault_pda_account: SolAddress(hex_literal::hex!(
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
