@@ -4,7 +4,7 @@ use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData, BITCOIN_DUST_LIMIT},
 	dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	sol::{SolAddress, SolHash, SolTrackedData},
+	sol::{api::DurableNonceAndAccount, SolAddress, SolHash, SolTrackedData},
 	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
 };
 use cf_primitives::{
@@ -97,6 +97,8 @@ pub struct StateChainEnvironment {
 	sol_vault_address: SolAddress,
 	sol_genesis_hash: Option<SolHash>,
 	sol_usdc_address: SolAddress,
+	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 7], /* we inject 7 nonce accounts
+	                                                               * at genesis */
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -159,6 +161,11 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.sol_genesis_hash,
 	};
 
+	let sol_durable_nonces_and_accounts = match env::var("SOL_NONCES_AND_ACCOUNTS") {
+		Ok(_) => unimplemented!("Solana nonces and nonce accounts should not be supplied via environment variables since its a complex type"),
+		Err(_) => defaults.sol_durable_nonces_and_accounts,
+	};
+
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -186,6 +193,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		sol_vault_address,
 		sol_genesis_hash,
 		sol_usdc_address,
+		sol_durable_nonces_and_accounts,
 	}
 }
 
@@ -249,6 +257,7 @@ pub fn inner_cf_development_config(
 		sol_vault_address,
 		sol_genesis_hash,
 		sol_usdc_address,
+		sol_durable_nonces_and_accounts,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, None)
 		.with_name("CF Develop")
@@ -282,6 +291,7 @@ pub fn inner_cf_development_config(
 				sol_vault_address,
 				sol_genesis_hash,
 				sol_usdc_address,
+				sol_durable_nonces_and_accounts: sol_durable_nonces_and_accounts.to_vec(),
 				network_environment: NetworkEnvironment::Development,
 				..Default::default()
 			},
@@ -358,6 +368,7 @@ macro_rules! network_spec {
 					sol_vault_address,
 					sol_genesis_hash,
 					sol_usdc_address,
+					sol_durable_nonces_and_accounts,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -420,6 +431,8 @@ macro_rules! network_spec {
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
 							sol_vault_address,
 							sol_genesis_hash,
+							sol_durable_nonces_and_accounts: sol_durable_nonces_and_accounts
+								.to_vec(),
 							sol_usdc_address: sol_usdc_address.into(),
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()

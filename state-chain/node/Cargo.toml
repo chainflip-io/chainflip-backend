@@ -29,6 +29,7 @@ cf-chains = { path = "../chains" }
 cf-primitives = { path = "../primitives" }
 custom-rpc = { path = "../custom-rpc" }
 utilities = { package = "utilities", path = "../../utilities" }
+sol-prim = { path = "../../foreign-chains/solana/sol-prim" }
 
 # Added by Chainflip
 hex = "0.4"
@@ -98,6 +99,7 @@ runtime-benchmarks = [
   "frame-system/runtime-benchmarks",
   "sc-service/runtime-benchmarks",
   "sp-runtime/runtime-benchmarks",
+  "sol-prim/runtime-benchmarks",
 ]
 try-runtime = [
   "state-chain-runtime/try-runtime",
