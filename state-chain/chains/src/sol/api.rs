@@ -39,42 +39,35 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<ComputePrice, SolAmount>>::lookup(ComputePrice)
-			.ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
+		Self::lookup(ComputePrice).ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
 	}
 
-	fn nonce_account() -> Result<DurableNonceAndAccount, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<DurableNonce, DurableNonceAndAccount>>::lookup(DurableNonce)
-			.ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
+	fn nonce_account() -> Result<(SolAddress, SolHash), SolanaTransactionBuildingError> {
+		Self::lookup(DurableNonce).ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
 	}
 
 	fn lookup_account(
 		key: SolanaEnvAccountLookupKey,
 	) -> Result<SolAddress, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress>>::lookup(key).ok_or(
-			match key {
-				SolanaEnvAccountLookupKey::AggKey =>
-					SolanaTransactionBuildingError::CannotLookupAggKey,
-				SolanaEnvAccountLookupKey::VaultProgram =>
-					SolanaTransactionBuildingError::CannotLookupVaultProgram,
-				SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
-					SolanaTransactionBuildingError::CannotLookupVaultProgramDataAccount,
-				SolanaEnvAccountLookupKey::TokenMintPubkey =>
-					SolanaTransactionBuildingError::CannotLookupTokenMintPubkey,
-				SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount =>
-					SolanaTransactionBuildingError::CannotLookupTokenVaultAssociatedTokenAccount,
-				SolanaEnvAccountLookupKey::TokenVaultPdaAccount =>
-					SolanaTransactionBuildingError::CannotLookupTokenVaultPdaAccount,
-			},
-		)
+		Self::lookup(key).ok_or(match key {
+			SolanaEnvAccountLookupKey::AggKey => SolanaTransactionBuildingError::CannotLookupAggKey,
+			SolanaEnvAccountLookupKey::VaultProgram =>
+				SolanaTransactionBuildingError::CannotLookupVaultProgram,
+			SolanaEnvAccountLookupKey::VaultProgramDataAccount =>
+				SolanaTransactionBuildingError::CannotLookupVaultProgramDataAccount,
+			SolanaEnvAccountLookupKey::TokenMintPubkey =>
+				SolanaTransactionBuildingError::CannotLookupTokenMintPubkey,
+			SolanaEnvAccountLookupKey::TokenVaultAssociatedTokenAccount =>
+				SolanaTransactionBuildingError::CannotLookupTokenVaultAssociatedTokenAccount,
+			SolanaEnvAccountLookupKey::TokenVaultPdaAccount =>
+				SolanaTransactionBuildingError::CannotLookupTokenVaultPdaAccount,
+		})
 	}
 
 	fn all_nonce_accounts() -> Result<Vec<SolAddress>, SolanaTransactionBuildingError> {
-		<Self as ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>>::lookup(
-			AllNonceAccounts,
-		)
-		.map(|nonces| nonces.into_iter().map(|(addr, _hash)| addr).collect::<Vec<_>>())
-		.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
+		Self::lookup(AllNonceAccounts)
+			.map(|nonces| nonces.into_iter().map(|(addr, _hash)| addr).collect::<Vec<_>>())
+			.ok_or(SolanaTransactionBuildingError::NoNonceAccountsSet)
 	}
 }
 
