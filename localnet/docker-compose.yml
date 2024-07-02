@@ -97,7 +97,7 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: docker.io/parity/polkadot:v1.12.0
+    image: docker.io/parity/polkadot:v1.10.0
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -108,7 +108,7 @@ services:
     command:
       - --alice
       - --blocks-pruning=archive
-      - --chain=/chainspecs/chainspec.dev.v1.12.0.json
+      - --chain=/chainspecs/polkadot-dev.chainspec.v1.2.4.json
       - --force-authoring
       - --name=PolkaDocker
       - --rpc-cors=all

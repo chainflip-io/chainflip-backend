@@ -164,3 +164,14 @@ To start a multi node testnet you can use the [chainflip-testnet-tools](https://
 ## Chainflip Engine Runner
 
 This is the root binary that kicks off the Chainflip Engine. It is responsible for loading the shared libraries and running each of the shared libraries. See the [Chainflip Engine Runner README](./engine-runner-bin/README.md) for more information.
+
+## Updating Polkadot Runtimes
+
+- Check out the [polkadot fellows](https://github.com/polkadot-fellows/runtimes.git) repo.
+- Switch to the desired tag.
+- `cargo build --release --features=fast-runtime`
+- This will build the runtime wasm. It will also build the `chain-spec-generator`. The latter can be used to build a chainspec for launching a localnet:
+  `./target/release/chain-spec-generator polkadot-dev > polkadot-dev.chainspec.${VERSION}.json`
+- The Chainspec can be copied to ci/docker/development
+- The same Chainspec can be referenced in the localnet docker compose file. This will launch a localnet with polkadot at the compiled runtime version.
+- If there are any incompatibilities, you might need to update the polkadot node version used in the localnet/docker-compose.yml
