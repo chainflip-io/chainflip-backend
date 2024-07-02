@@ -11,14 +11,14 @@ use cf_traits::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler, ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
-	AccountRoleRegistry, NetworkFeeTaken, SwappingApi,
+	AccountRoleRegistry, SwappingApi,
 };
 use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	Percent,
+	Permill,
 };
 
 type AccountId = u64;
@@ -68,7 +68,7 @@ impl_mock_chainflip!(Test);
 impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }
 
 parameter_types! {
-	pub static NetworkFee: Percent = Percent::from_percent(0);
+	pub static NetworkFee: Permill = Permill::from_perthousand(0);
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
 	pub static SwapRate: f64 = 1f64;
 }
@@ -90,11 +90,6 @@ impl MockSwappingApi {
 }
 
 impl SwappingApi for MockSwappingApi {
-	fn take_network_fee(input_amount: AssetAmount) -> NetworkFeeTaken {
-		let network_fee = NetworkFee::get() * input_amount;
-		NetworkFeeTaken { remaining_amount: input_amount - network_fee, network_fee }
-	}
-
 	fn swap_single_leg(
 		from: Asset,
 		to: Asset,
@@ -114,6 +109,9 @@ impl SwappingApi for MockSwappingApi {
 pub struct MockWeightInfo;
 
 impl WeightInfo for MockWeightInfo {
+	fn update_buy_interval() -> Weight {
+		Weight::from_parts(100, 0)
+	}
 	fn request_swap_deposit_address() -> Weight {
 		Weight::from_parts(100, 0)
 	}
@@ -154,15 +152,14 @@ impl pallet_cf_swapping::Config for Test {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
+	type NetworkFee = NetworkFee;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
-	RuntimeGenesisConfig {
-		system: Default::default(),
-	},
+	RuntimeGenesisConfig::default(),
 	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE).unwrap();
 	},

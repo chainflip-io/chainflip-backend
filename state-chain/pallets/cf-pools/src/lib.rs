@@ -7,24 +7,20 @@ use cf_amm::{
 	range_orders::{self, Liquidity},
 	PoolState,
 };
-use cf_chains::Chain;
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_traits::{
-	impl_pallet_safe_mode, Chainflip, LpBalanceApi, NetworkFeeTaken, PoolApi, SwapQueueApi,
-	SwapType, SwappingApi,
+	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwappingApi,
 };
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
-	sp_runtime::{Permill, Saturating, TransactionOutcome},
-	storage::{with_storage_layer, with_transaction_unchecked},
-	traits::{Defensive, OriginTrait, StorageVersion, UnfilteredDispatchable},
+	storage::with_storage_layer,
+	traits::{OriginTrait, StorageVersion, UnfilteredDispatchable},
 	transactional,
 };
 
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::traits::{UniqueSaturatedInto, Zero};
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -121,7 +117,7 @@ impl<T> AskBidMap<T> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -259,9 +255,6 @@ pub mod pallet {
 
 		type SwapQueueApi: SwapQueueApi;
 
-		#[pallet::constant]
-		type NetworkFee: Get<Permill>;
-
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
 
@@ -278,14 +271,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Pools<T: Config> = StorageMap<_, Twox64Concat, AssetPair, Pool<T>, OptionQuery>;
 
-	/// Interval at which we buy FLIP in order to burn it.
-	#[pallet::storage]
-	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
-
-	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
-	#[pallet::storage]
-	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
-
 	/// Queue of limit orders, indexed by block number waiting to get minted or burned.
 	#[pallet::storage]
 	pub(super) type ScheduledLimitOrderUpdates<T: Config> =
@@ -297,54 +282,10 @@ pub mod pallet {
 	pub(super) type MaximumPriceImpact<T: Config> =
 		StorageMap<_, Twox64Concat, AssetPair, u32, OptionQuery>;
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub flip_buy_interval: BlockNumberFor<T>,
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
-		fn build(&self) {
-			FlipBuyInterval::<T>::set(self.flip_buy_interval);
-		}
-	}
-
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
-		}
-	}
-
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight_used: Weight = T::DbWeight::get().reads(1);
-			let interval = FlipBuyInterval::<T>::get();
-			if interval.is_zero() {
-				log::debug!("Flip buy interval is zero, skipping.")
-			} else {
-				weight_used.saturating_accrue(T::DbWeight::get().reads(1));
-				if (current_block % interval).is_zero() &&
-					!CollectedNetworkFee::<T>::get().is_zero()
-				{
-					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
-						T::SwapQueueApi::schedule_swap(
-							any::Asset::Usdc,
-							any::Asset::Flip,
-							*collected_fee,
-							None, /* refund parameters */
-							SwapType::NetworkFee,
-						);
-						collected_fee.set_zero();
-						Ok::<_, DispatchError>(())
-					}) {
-						log::warn!("Unable to swap Network Fee to Flip: {e:?}");
-					}
-				}
-			}
-
-			weight_used.saturating_accrue(T::DbWeight::get().reads(1));
 			for LimitOrderUpdate { ref lp, id, call } in
 				ScheduledLimitOrderUpdates::<T>::take(current_block)
 			{
@@ -373,8 +314,6 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Setting the buy interval to zero is not allowed.
-		ZeroBuyIntervalNotAllowed,
 		/// The specified exchange pool already exists.
 		PoolAlreadyExists,
 		/// The specified exchange pool does not exist.
@@ -419,9 +358,6 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		UpdatedBuyInterval {
-			buy_interval: BlockNumberFor<T>,
-		},
 		NewPoolCreated {
 			base_asset: Asset,
 			quote_asset: Asset,
@@ -493,29 +429,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Updates the buy interval.
-		///
-		/// ## Events
-		///
-		/// - [UpdatedBuyInterval](Event::UpdatedBuyInterval)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [ZeroBuyIntervalNotAllowed](pallet_cf_pools::Error::ZeroBuyIntervalNotAllowed)
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::update_buy_interval())]
-		pub fn update_buy_interval(
-			origin: OriginFor<T>,
-			new_buy_interval: BlockNumberFor<T>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);
-			FlipBuyInterval::<T>::set(new_buy_interval);
-			Self::deposit_event(Event::<T>::UpdatedBuyInterval { buy_interval: new_buy_interval });
-			Ok(())
-		}
-
 		/// Create a new pool.
 		/// Requires Governance.
 		///
@@ -1006,17 +919,6 @@ pub mod pallet {
 }
 
 impl<T: Config> SwappingApi for Pallet<T> {
-	fn take_network_fee(input: AssetAmount) -> NetworkFeeTaken {
-		if input.is_zero() {
-			return NetworkFeeTaken { remaining_amount: 0, network_fee: 0 };
-		}
-		let (remaining, fee) = utilities::calculate_network_fee(T::NetworkFee::get(), input);
-		CollectedNetworkFee::<T>::mutate(|total| {
-			total.saturating_accrue(fee);
-		});
-		NetworkFeeTaken { remaining_amount: remaining, network_fee: fee }
-	}
-
 	#[transactional]
 	fn swap_single_leg(
 		from: any::Asset,
@@ -1573,47 +1475,6 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	#[allow(clippy::type_complexity)]
-	#[transactional]
-	pub fn swap_with_network_fee(
-		from: any::Asset,
-		to: any::Asset,
-		input_amount: AssetAmount,
-	) -> Result<SwapOutput, DispatchError> {
-		Ok(match (from, to) {
-			(_, STABLE_ASSET) => {
-				let NetworkFeeTaken { remaining_amount: output, network_fee } =
-					Self::take_network_fee(Self::swap_single_leg(from, to, input_amount)?);
-
-				SwapOutput { intermediary: None, output, network_fee }
-			},
-			(STABLE_ASSET, _) => {
-				let NetworkFeeTaken { remaining_amount: input_amount, network_fee } =
-					Self::take_network_fee(input_amount);
-
-				SwapOutput {
-					intermediary: None,
-					output: Self::swap_single_leg(from, to, input_amount)?,
-					network_fee,
-				}
-			},
-			_ => {
-				let NetworkFeeTaken { remaining_amount: intermediary, network_fee } =
-					Self::take_network_fee(Self::swap_single_leg(
-						from,
-						STABLE_ASSET,
-						input_amount,
-					)?);
-
-				SwapOutput {
-					intermediary: Some(intermediary),
-					output: Self::swap_single_leg(STABLE_ASSET, to, intermediary)?,
-					network_fee,
-				}
-			},
-		})
-	}
-
 	fn try_mutate_pool<
 		R,
 		E: From<pallet::Error<T>>,
@@ -2027,98 +1888,5 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 		Ok(())
-	}
-}
-
-impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
-	fn calculate_input_for_gas_output<C: Chain>(
-		input_asset: C::ChainAsset,
-		required_gas: C::ChainAmount,
-	) -> Option<C::ChainAmount> {
-		use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
-
-		if required_gas.is_zero() {
-			return Some(Zero::zero())
-		}
-
-		let output_asset = C::GAS_ASSET.into();
-		let input_asset = input_asset.into();
-		if input_asset == output_asset {
-			return Some(required_gas)
-		}
-
-		let estimation_input = utilities::fee_estimation_basis(input_asset).defensive_proof(
-			"Fee estimation cap not available. Please report this to Chainflip Labs.",
-		)?;
-
-		let estimation_output = with_transaction_unchecked(|| {
-			TransactionOutcome::Rollback(
-				Self::swap_with_network_fee(input_asset, output_asset, estimation_input).ok(),
-			)
-		})?
-		.output;
-
-		if estimation_output == 0 {
-			None
-		} else {
-			let input_amount_to_convert = multiply_by_rational_with_rounding(
-				required_gas.into(),
-				estimation_input,
-				estimation_output,
-				sp_arithmetic::Rounding::Down,
-			)
-			.defensive_proof(
-				"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
-			)?;
-
-			Some(input_amount_to_convert.unique_saturated_into())
-		}
-	}
-}
-
-pub mod utilities {
-	use super::*;
-
-	pub fn calculate_network_fee(
-		fee_percentage: Permill,
-		input: AssetAmount,
-	) -> (AssetAmount, AssetAmount) {
-		let fee = fee_percentage * input;
-		(input - fee, fee)
-	}
-
-	/// The amount of a non-gas asset to be used for transaction fee estimation.
-	///
-	/// This should be of a similar order of magnitude to expected fees to get an accurate result.
-	///
-	/// The value should be large enough to allow a good estimation of the fee, but small enough
-	/// to not exhaust the pool liquidity.
-	///
-	/// ```
-	/// use pallet_cf_pools::utilities::fee_estimation_basis;
-	/// use cf_primitives::Asset;
-	///
-	/// for asset in Asset::all() {
-	///     if !asset.is_gas_asset() {
-	///         assert!(
-	///             fee_estimation_basis(asset).is_some(),
-	///             "No fee estimation cap defined for {:?}. Add one to the fee_estimation_basis function definition.",
-	///             asset,
-	///         );
-	///     }
-	/// }
-	/// ```
-	pub fn fee_estimation_basis(asset: Asset) -> Option<u128> {
-		use cf_primitives::FLIPPERINOS_PER_FLIP;
-		/// 20 Dollars.
-		const USD_ESTIMATION_CAP: u128 = 20_000_000;
-
-		match asset {
-			Asset::Flip => Some(10 * FLIPPERINOS_PER_FLIP),
-			Asset::Usdc => Some(USD_ESTIMATION_CAP),
-			Asset::Usdt => Some(USD_ESTIMATION_CAP),
-			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
-			_ => None,
-		}
 	}
 }

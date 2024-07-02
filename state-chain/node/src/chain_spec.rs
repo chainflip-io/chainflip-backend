@@ -753,7 +753,7 @@ fn testnet_genesis(
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.
-		liquidity_pools: Default::default(),
+		swapping: Default::default(),
 		bitcoin_vault: Default::default(),
 		polkadot_vault: Default::default(),
 		system: Default::default(),
