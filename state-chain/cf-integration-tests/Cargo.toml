@@ -46,6 +46,7 @@ pallet-cf-funding = { path = '../pallets/cf-funding' }
 pallet-cf-governance = { path = '../pallets/cf-governance' }
 pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress' }
 pallet-cf-lp = { path = '../pallets/cf-lp' }
+pallet-cf-refunding = { path = '../pallets/cf-refunding' }
 pallet-cf-pools = { path = '../pallets/cf-pools' }
 pallet-cf-reputation = { path = '../pallets/cf-reputation' }
 pallet-cf-swapping = { path = '../pallets/cf-swapping' }

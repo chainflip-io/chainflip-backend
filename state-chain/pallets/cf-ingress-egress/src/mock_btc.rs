@@ -20,6 +20,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
+		refunding::MockRefunding,
 		swap_deposit_handler::MockSwapDepositHandler,
 		swap_queue_api::MockSwapQueueApi,
 	},
@@ -125,6 +126,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
+	type Refunding = MockRefunding;
 	type SafeMode = MockRuntimeSafeMode;
 }
 

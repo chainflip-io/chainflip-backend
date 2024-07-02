@@ -58,12 +58,15 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
+
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
 use sp_std::collections::btree_map::BTreeMap;
+
+use crate::chainflip::refunding::RefundingHandler;
 
 pub use frame_support::{
 	construct_runtime, debug, parameter_types,
@@ -335,6 +338,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type Refunding = RefundingHandler;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -356,6 +360,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type Refunding = RefundingHandler;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -377,6 +382,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type Refunding = RefundingHandler;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -398,6 +404,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type Refunding = RefundingHandler;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -419,6 +426,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type Refunding = RefundingHandler;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -800,6 +808,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = EthereumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
+	type Refunding = RefundingHandler;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -824,6 +833,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = PolkadotChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
+	type Refunding = RefundingHandler;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -848,6 +858,7 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = BitcoinChainTracking;
 	type RetryPolicy = BitcoinRetryPolicy;
+	type Refunding = RefundingHandler;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -872,7 +883,15 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = ArbitrumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
+	type Refunding = RefundingHandler;
 	type CfeBroadcastRequest = CfeInterface;
+}
+
+impl pallet_cf_refunding::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
+	type PolkadotEnvironment = DotEnvironment;
+	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_broadcast::Config<Instance5> for Runtime {
@@ -896,6 +915,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = SolanaChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
+	type Refunding = RefundingHandler;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -989,6 +1009,8 @@ construct_runtime!(
 		SolanaThresholdSigner: pallet_cf_threshold_signature::<Instance5>,
 		SolanaBroadcaster: pallet_cf_broadcast::<Instance5>,
 		SolanaIngressEgress: pallet_cf_ingress_egress::<Instance5>,
+
+		Refunding: pallet_cf_refunding,
 	}
 );
 
@@ -1097,6 +1119,7 @@ pub type PalletExecutionOrder = (
 	SolanaIngressEgress,
 	// Liquidity Pools
 	LiquidityPools,
+	// Refunding,
 );
 
 /// Contains:
@@ -1140,14 +1163,14 @@ type PalletMigrations = (
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, ArbitrumInstance>,
-	// pallet_cf_broadcast::migrations::PalletMigration<Runtime, SolanaInstance>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
-	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	// TODO: After this migration is run, remember to un-comment the
@@ -1988,12 +2011,10 @@ impl_runtime_apis! {
 			}
 		}
 		fn cf_fee_imbalance() -> FeeImbalance {
-			let eth = pallet_cf_ingress_egress::WithheldTransactionFees::<Runtime, EthereumInstance>::iter().fold(0, |acc, elem| acc+ elem.1) -
-				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, EthereumInstance>::iter().fold(0, |acc, elem| acc + elem.1);
-			let dot = pallet_cf_ingress_egress::WithheldTransactionFees::<Runtime, PolkadotInstance>::iter().fold(0, |acc, elem| acc+ elem.1) -
-				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, PolkadotInstance>::iter().fold(0, |acc, elem| acc + elem.1);
-			let arb = pallet_cf_ingress_egress::WithheldTransactionFees::<Runtime, ArbitrumInstance>::iter().fold(0, |acc, elem| acc+ elem.1) -
-				pallet_cf_broadcast::TransactionFeeDeficit::<Runtime, ArbitrumInstance>::iter().fold(0, |acc, elem| acc + elem.1);
+
+			let eth = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Ethereum) - pallet_cf_refunding::RecordedFees::<Runtime>::get(ForeignChain::Ethereum).unwrap().values().sum::<AssetAmount>();
+			let dot = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Polkadot) - pallet_cf_refunding::RecordedFees::<Runtime>::get(ForeignChain::Polkadot).unwrap().values().sum::<AssetAmount>();
+			let arb = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Arbitrum) - pallet_cf_refunding::RecordedFees::<Runtime>::get(ForeignChain::Arbitrum).unwrap().values().sum::<AssetAmount>();
 
 			FeeImbalance {
 				ethereum: eth,

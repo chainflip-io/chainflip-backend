@@ -29,6 +29,8 @@ use cf_traits::{
 	},
 	DepositApi, NetworkEnvironmentProvider, OnDeposit,
 };
+
+use cf_traits::mocks::refunding::MockRefunding;
 use frame_support::{derive_impl, traits::UnfilteredDispatchable};
 use frame_system as system;
 use sp_core::H256;
@@ -130,6 +132,7 @@ impl crate::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
+	type Refunding = MockRefunding;
 	type SafeMode = MockRuntimeSafeMode;
 }
 

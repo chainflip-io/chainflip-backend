@@ -7,6 +7,7 @@ pub mod epoch_transition;
 pub mod evm_vault_activator;
 mod missed_authorship_slots;
 mod offences;
+pub mod refunding;
 mod signer_nomination;
 
 use crate::{
@@ -56,6 +57,7 @@ use cf_traits::{
 	EpochInfo, Heartbeat, IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit,
 	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
+
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{

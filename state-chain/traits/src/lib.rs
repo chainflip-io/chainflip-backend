@@ -222,6 +222,8 @@ pub enum StartKeyActivationResult {
 pub trait EpochTransitionHandler {
 	/// When an epoch has been expired.
 	fn on_expired_epoch(_expired: EpochIndex) {}
+	/// When a new epoch has started.
+	fn on_new_epoch(_new: EpochIndex) {}
 }
 
 pub trait ReputationResetter {
@@ -948,4 +950,17 @@ pub trait AssetConverter {
 
 pub trait IngressEgressFeeApi<C: Chain> {
 	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
+}
+
+pub trait Refunding {
+	fn record_gas_fees(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
+	fn withhold_transaction_fee(asset: Asset, amount: AssetAmount);
+	// TODO: Remove this after migration.
+	fn get_withheld_transaction_fees(_gas_asset: Asset) -> AssetAmount {
+		AssetAmount::default()
+	}
+	// TODO: Remove this after migration.
+	fn get_recorded_gas_fees(_gas_asset: Asset) -> u128 {
+		0
+	}
 }

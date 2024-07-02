@@ -21,6 +21,7 @@ members = [
   'state-chain/pallets/cf-governance',
   'state-chain/pallets/cf-ingress-egress',
   'state-chain/pallets/cf-lp',
+  'state-chain/pallets/cf-refunding',
   'state-chain/pallets/cf-pools',
   'state-chain/pallets/cf-reputation',
   'state-chain/pallets/cf-threshold-signature',

@@ -47,6 +47,7 @@ pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
 pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
 pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress', default-features = false }
 pallet-cf-lp = { path = '../pallets/cf-lp', default-features = false }
+pallet-cf-refunding = { path = "../pallets/cf-refunding", default-features = false }
 pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false }
 pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
 pallet-cf-funding = { path = '../pallets/cf-funding', default-features = false }
@@ -139,6 +140,7 @@ runtime-benchmarks = [
   'pallet-cf-governance/runtime-benchmarks',
   'pallet-cf-ingress-egress/runtime-benchmarks',
   'pallet-cf-lp/runtime-benchmarks',
+  'pallet-cf-refunding/runtime-benchmarks',
   'pallet-cf-pools/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
   'pallet-cf-swapping/runtime-benchmarks',
@@ -185,6 +187,7 @@ std = [
   'pallet-cf-governance/std',
   'pallet-cf-ingress-egress/std',
   'pallet-cf-lp/std',
+  'pallet-cf-refunding/std',
   'pallet-cf-pools/std',
   'pallet-cf-reputation/std',
   'pallet-cf-swapping/std',
@@ -232,6 +235,7 @@ try-runtime = [
   'pallet-cf-governance/try-runtime',
   'pallet-cf-ingress-egress/try-runtime',
   'pallet-cf-lp/try-runtime',
+  'pallet-cf-refunding/try-runtime',
   'pallet-cf-pools/try-runtime',
   'pallet-cf-reputation/try-runtime',
   'pallet-cf-funding/try-runtime',
