@@ -253,8 +253,6 @@ pub mod pallet {
 		SolanaInitialized,
 		/// Some unspendable Utxos are discarded from storage.
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
-		/// Solana's Genesis Hash storage has been updated.
-		SolanaGenesisHashUpdated { hash: SolHash },
 	}
 
 	#[pallet::call]
