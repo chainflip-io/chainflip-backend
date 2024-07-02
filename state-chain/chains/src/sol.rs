@@ -96,15 +96,16 @@ pub const LAMPORTS_PER_SIGNATURE: SolAmount = 5000u64;
 
 // This is to be used both for ingress/egress estimation and for setting the compute units
 // limit when crafting transactions by the State Chain.
-mod compute_units_costs {
-	use super::SolAmount;
-	pub const BASE_COMPUTE_UNITS_PER_TX: SolAmount = 450u64;
-	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolAmount = 7_500u64;
-	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolAmount = 300u64;
-	#[allow(dead_code)]
-	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolAmount = 31_000u64;
-	#[allow(dead_code)]
-	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolAmount = 41_200u64;
+pub mod compute_units_costs {
+	// TODO: Recompute these, especially the fetches now that we have historical accounts.
+	use super::SolComputeLimit;
+	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 450u32;
+	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 7_500u32;
+	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 300u32;
+	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 31_000u32;
+	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 41_200u32;
+	// TODO: To compute
+	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 300_000u32;
 }
 
 #[derive(
@@ -137,7 +138,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
 			};
 
-		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_transfer)
+		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_transfer.into())
 	}
 	fn estimate_ingress_fee(
 		&self,
@@ -151,7 +152,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
 			};
 
-		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_fetch)
+		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_fetch.into())
 	}
 }
 
