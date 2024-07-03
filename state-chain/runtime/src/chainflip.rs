@@ -315,21 +315,29 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 pub struct SolanaTransactionBuilder;
 impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransactionBuilder {
 	fn build_transaction(
-		_signed_call: &SolanaApi<SolEnvironment>,
+		signed_call: &SolanaApi<SolEnvironment>,
 	) -> <Solana as Chain>::Transaction {
-		todo!()
+		signed_call.transaction.clone()
 	}
+
 	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
-		todo!()
+		// Transaction fee on SOlana is a fixed 5k lamports per signature. Since we always have
+		// a single signature, therefore the transaction fee does not change.
 	}
+
 	fn calculate_gas_limit(_call: &SolanaApi<SolEnvironment>) -> Option<U256> {
-		todo!()
+		// Solana sets computation limits via the `compute_limit` attribute, instead of
+		// via transaction fee. Therefore this mechanism is not used for Solana.
+		None
 	}
+
 	fn requires_signature_refresh(
 		_call: &SolanaApi<SolEnvironment>,
 		_payload: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload,
 	) -> bool {
-		todo!()
+		// We use Durable Nonce mechanism to avoid the 150 blocks expiry period.
+		// This means the transaction won't expire and therefore no need to be resigned.
+		false
 	}
 }
 
