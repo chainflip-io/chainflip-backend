@@ -94,7 +94,7 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			Vec<DurableNonceAndAccount>,
 		) = match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 			cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
-				log::warn!("Need to set up Solana integration for Berghain");
+				log::error!("Need to set up Solana integration for Berghain");
 				(
 					SolAddress(hex_literal::hex!(
 						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
