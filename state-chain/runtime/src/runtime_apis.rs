@@ -25,7 +25,6 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_core::U256;
 use sp_runtime::DispatchError;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -89,7 +88,7 @@ fn serialize_as_hex<S>(amount: &AssetAmount, s: S) -> Result<S::Ok, S::Error>
 where
 	S: serde::Serializer,
 {
-	U256::from(*amount).serialize(s)
+	sp_core::U256::from(*amount).serialize(s)
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]

@@ -1,4 +1,9 @@
-use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
+use crate::{
+	state_chain_observer::client::{
+		chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
+	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
+};
 use cf_chains::{
 	sol::{SolAddress, SolHash},
 	Chain,
@@ -18,16 +23,16 @@ use crate::sol::{
 		ParsedAccount, RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding,
 	},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub async fn witness_nonces<ProcessCall, ProcessingFut, SolRetryRpcClient>(
+	pub async fn witness_nonces<ProcessCall, ProcessingFut, SolRetryRpcClient, StateChainClient>(
 		self,
 		process_call: ProcessCall,
 		sol_rpc: SolRetryRpcClient,
-		nonce_accounts: Vec<(SolAddress, SolHash)>,
+		state_chain_client: Arc<StateChainClient>,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner::Chain:
@@ -43,41 +48,48 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
+		StateChainClient: SignedExtrinsicApi + ChainApi + StorageApi + Send + Sync + 'static,
 	{
-		self.then(move |_epoch, header| {
+		self.then(move |epoch, header| {
 			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
 			let sol_rpc = sol_rpc.clone();
 			let _process_call = process_call.clone();
-			let nonce_accounts = nonce_accounts.clone();
+			let state_chain_client = state_chain_client.clone();
 			async move {
-				let nonce_addresses: Vec<SolAddress> = nonce_accounts
-					.clone()
-					.into_iter()
-					.map(|(nonce_address, _)| nonce_address)
-					.collect();
+				let nonce_accounts: HashMap<SolAddress, SolHash> = state_chain_client
+					.storage_map::<pallet_cf_environment::SolanaUnAvailableNonceAccounts<
+						state_chain_runtime::Runtime,
+					>, _>(state_chain_client.latest_finalized_block().hash)
+					.await
+					.context("Failed to get Solana unavailable nonce accounts from SC")?;
+
+				let nonce_addresses: Vec<SolAddress> =	nonce_accounts.keys().copied().collect();
+
 				let current_nonce_accounts = get_durable_nonces(&sol_rpc, nonce_addresses).await?;
 
-				let nonce_differences: Vec<(SolAddress, SolHash, SolHash)> = nonce_accounts
+				let calls = current_nonce_accounts
 					.into_iter()
-					.zip(current_nonce_accounts.into_iter())
-					.filter_map(
-						|((nonce_address, current_durable_nonce), (_, new_durable_nonce))| {
-							if current_durable_nonce != new_durable_nonce {
-								Some((nonce_address, current_durable_nonce, new_durable_nonce))
-							} else {
-								None
-							}
-						},
-					)
-					.collect();
+					.filter_map(|(address, current_durable_nonce)| {
+						if current_durable_nonce != *nonce_accounts.get(&address).expect("We just queried the nonces of the nonce accounts so the nonce account must exist") {
+							let call: Box<state_chain_runtime::RuntimeCall> = Box::new(
+							pallet_cf_environment::Call::<
+								state_chain_runtime::Runtime
+							>::update_sol_nonce { nonce_account: address, durable_nonce: current_durable_nonce }.into());
 
-				// Check if nonce_differences is empty
-				if !nonce_differences.is_empty() {
-					// TODO: Submit an extrinsic with the new nonce hash
-					println!(
-						"Nonce differences found. To submit extrinsic: {:?}",
-						nonce_differences
-					);
+							Some(state_chain_client.finalize_signed_extrinsic(
+								pallet_cf_witnesser::Call::witness_at_epoch {
+									call,
+									epoch_index: epoch.index,
+								},
+							))
+						} else {
+							None
+						}
+					})
+					.collect::<Vec<_>>();
+
+				for call in calls {
+					call.await;
 				}
 
 				Ok::<_, anyhow::Error>(())
