@@ -12,7 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::{SolAddress, SolAsset, SolHash, Solana},
+	sol::{SolApiEnvironment, SolHash, Solana},
 	Chain,
 };
 use cf_primitives::{
@@ -204,18 +204,12 @@ pub mod pallet {
 
 	// SOLANA CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
-	#[pallet::getter(fn sol_vault_address)]
-	pub type SolanaVaultAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn sol_genesis_hash)]
 	pub type SolanaGenesisHash<T> = StorageValue<_, SolHash, OptionQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn supported_sol_assets)]
-	/// Map of supported assets for Sol
-	pub type SolanaSupportedAssets<T: Config> =
-		StorageMap<_, Blake2_128Concat, SolAsset, SolAddress>;
+	#[pallet::getter(fn solana_api_environment)]
+	pub type SolanaApiEnvironment<T> = StorageValue<_, SolApiEnvironment, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -377,12 +371,12 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Manually witnesses the current Bitcoin block number to complete the pending vault
+		/// Manually witnesses the current Arbitrum block number to complete the pending vault
 		/// rotation.
 		///
 		/// ## Events
 		///
-		/// - [BitcoinBlockNumberSetForVault](Event::BitcoinBlockNumberSetForVault)
+		/// - [OnSuccess](Event::ArbitrumInitialized)
 		///
 		/// ## Errors
 		///
@@ -407,6 +401,7 @@ pub mod pallet {
 
 			Ok(dispatch_result)
 		}
+
 		#[pallet::call_index(6)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
@@ -447,10 +442,9 @@ pub mod pallet {
 		pub arb_vault_address: EvmAddress,
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
-		pub sol_vault_address: SolAddress,
-		pub sol_genesis_hash: Option<SolHash>,
-		pub sol_usdc_address: SolAddress,
 		pub network_environment: NetworkEnvironment,
+		pub sol_genesis_hash: Option<SolHash>,
+		pub sol_api_env: SolApiEnvironment,
 		pub _config: PhantomData<T>,
 	}
 
@@ -481,10 +475,8 @@ pub mod pallet {
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, self.arb_usdc_address);
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
-			SolanaVaultAddress::<T>::set(self.sol_vault_address);
-
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
-			SolanaSupportedAssets::<T>::insert(SolAsset::SolUsdc, self.sol_usdc_address);
+			SolanaApiEnvironment::<T>::set(self.sol_api_env);
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
