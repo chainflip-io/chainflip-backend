@@ -24,24 +24,26 @@ use cf_primitives::{EgressId, ForeignChain};
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
-pub struct NonceAccount;
+pub struct DurableNonce;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct AllNonceAccounts;
+
+pub type DurableNonceAndAccount = (SolAddress, SolHash);
 
 /// Super trait combining all Environment lookups required for the Solana chain.
 /// Also contains some calls for easy data retrieval.
 pub trait SolanaEnvironment:
 	ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress>
 	+ ChainEnvironment<ComputePrice, SolAmount>
-	+ ChainEnvironment<NonceAccount, (SolAddress, SolHash)>
-	+ ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>>
+	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
+	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
 		Self::lookup(ComputePrice).ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
 	}
 
 	fn nonce_account() -> Result<(SolAddress, SolHash), SolanaTransactionBuildingError> {
-		Self::lookup(NonceAccount).ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
+		Self::lookup(DurableNonce).ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
 	}
 
 	fn lookup_account(

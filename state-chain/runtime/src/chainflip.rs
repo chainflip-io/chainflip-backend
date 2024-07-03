@@ -45,10 +45,10 @@ use cf_chains::{
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ComputePrice, NonceAccount, SolanaApi, SolanaEnvAccountLookupKey,
-			SolanaEnvironment,
+			AllNonceAccounts, ComputePrice, DurableNonce, DurableNonceAndAccount, SolanaApi,
+			SolanaEnvAccountLookupKey, SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolHash,
+		SolAddress, SolAmount,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
@@ -520,17 +520,20 @@ impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
 	}
 }
 
-impl ChainEnvironment<NonceAccount, (SolAddress, SolHash)> for SolEnvironment {
-	fn lookup(_s: NonceAccount) -> Option<(SolAddress, SolHash)> {
-		// TODO
-		None
+impl ChainEnvironment<DurableNonce, DurableNonceAndAccount> for SolEnvironment {
+	fn lookup(_s: DurableNonce) -> Option<DurableNonceAndAccount> {
+		Environment::get_sol_nonce_and_account()
 	}
 }
 
-impl ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>> for SolEnvironment {
-	fn lookup(_s: AllNonceAccounts) -> Option<Vec<(SolAddress, SolHash)>> {
-		// TODO
-		None
+impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for SolEnvironment {
+	fn lookup(_s: AllNonceAccounts) -> Option<Vec<DurableNonceAndAccount>> {
+		let nonce_accounts = Environment::get_all_sol_nonce_accounts();
+		if nonce_accounts.is_empty() {
+			None
+		} else {
+			Some(nonce_accounts)
+		}
 	}
 }
 

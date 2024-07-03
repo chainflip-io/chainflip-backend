@@ -3,10 +3,11 @@ use cf_chains::{
 	instances::{
 		ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
 	},
-	sol::SolHash,
+	sol::{api::DurableNonceAndAccount, SolHash},
 };
 use cf_traits::SafeMode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use sol_prim::consts::{const_address, const_hash};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
@@ -86,68 +87,125 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			},
 		));
 
-		let (vault_address, genesis_hash, usdc_address): (SolAddress, Option<SolHash>, SolAddress) =
-			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
-				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
-					log::warn!("Need to set up Solana integration for Berghain");
-					(
+		let (vault_address, genesis_hash, usdc_address, durable_nonces_and_accounts): (
+			SolAddress,
+			Option<SolHash>,
+			SolAddress,
+			Vec<DurableNonceAndAccount>,
+		) = match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
+			cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
+				log::error!("Need to set up Solana integration for Berghain");
+				(
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					Some(SolHash(hex_literal::hex![
+						"45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
+					])),
+					SolAddress(hex_literal::hex!(
+						"c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61"
+					)),
+					vec![(
 						SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)), /* put correct values here */
-						Some(SolHash(hex_literal::hex![
-							"45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
-						])),
-						SolAddress(hex_literal::hex!(
-							"c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61"
 						)),
-					)
-				},
+						SolHash(hex_literal::hex!(
+							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+						)),
+					)],
+				)
+			},
 
-				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => {
-					log::warn!("Need to set up Solana integration for Perseverance");
-					(
+			cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => {
+				log::warn!("Need to set up Solana integration for Perseverance");
+				(
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					Some(SolHash(hex_literal::hex![
+						"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
+					])),
+					SolAddress(hex_literal::hex!(
+						"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
+					)),
+					vec![(
 						SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)), /* put correct values here */
-						Some(SolHash(hex_literal::hex![
-							"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
-						])),
-						SolAddress(hex_literal::hex!(
-							"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
 						)),
-					)
-				},
-				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
-					log::warn!("Need to set up Solana integration for Sisyphos");
-					(
+						SolHash(hex_literal::hex!(
+							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+						)),
+					)],
+				)
+			},
+			cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
+				log::warn!("Need to set up Solana integration for Sisyphos");
+				(
+					SolAddress(hex_literal::hex!(
+						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+					)), /* put correct values here */
+					Some(SolHash(hex_literal::hex![
+						"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
+					])),
+					SolAddress(hex_literal::hex!(
+						"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
+					)),
+					vec![(
 						SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)), /* put correct values here */
-						Some(SolHash(hex_literal::hex![
-							"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
-						])),
-						SolAddress(hex_literal::hex!(
-							"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
 						)),
-					)
-				},
-				_ => {
-					// Assume testnet
-					(
-						SolAddress(hex_literal::hex!(
-							"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
+						SolHash(hex_literal::hex!(
+							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
-						None,
-						SolAddress(hex_literal::hex!(
-							"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
-						)),
-					)
-				},
-			};
+					)],
+				)
+			},
+			_ => {
+				// Assume testnet
+				(
+					const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf"),
+					None,
+					const_address("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p"),
+					vec![
+						(
+							const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
+							const_hash("8PUq9wFfALkRq4G4f2SNWERhN93pA2GfFzZpvMAFL43Y"),
+						),
+						(
+							const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
+							const_hash("5P3UrY376M2wVe7PuTSFpqnbHQSqpVsyqS2VogUqQZJ"),
+						),
+						(
+							const_address("HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p"),
+							const_hash("2jUwmSErAu7DR6Hd3MJgDWrTEvbbbcmqh8cNwu8qxe8X"),
+						),
+						(
+							const_address("HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2"),
+							const_hash("GhzGACyEghEb1Pb8JMhKmGn7fmXoH8BKC8156P13XiCt"),
+						),
+						(
+							const_address("GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM"),
+							const_hash("HTZzc4YWgD9vxj3a1xsBtC9xaLxrUYEH7qr6fygoqbbc"),
+						),
+						(
+							const_address("EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn"),
+							const_hash("4DNnxKKdUkVpaZiAB7bqFA2SPkaGcTE9bvgD3zYiHiu3"),
+						),
+						(
+							const_address("9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa"),
+							const_hash("GgjtavVDxo4t5DywJPENe5aNb8U9LjHDU2qKEd3FQBRv"),
+						),
+					],
+				)
+			},
+		};
 
 		pallet_cf_environment::SolanaVaultAddress::<Runtime>::put(vault_address);
 		pallet_cf_environment::SolanaGenesisHash::<Runtime>::set(genesis_hash);
 		pallet_cf_environment::SolanaSupportedAssets::<Runtime>::insert(SolUsdc, usdc_address);
+		pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
+			durable_nonces_and_accounts,
+		);
 
 		Weight::zero()
 	}
