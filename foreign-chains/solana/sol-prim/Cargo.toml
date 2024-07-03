@@ -16,7 +16,7 @@ runtime-benchmarks = []
 
 
 [dependencies]
-cf-utilities = { package = "utilities", path = "../../../utilities" }
+cf-utilities = { package = "utilities", path = "../../../utilities", default-features = false }
 
 bs58 = { version = "0.5.1", optional = true, default-features = false }
 curve25519-dalek = { version = "^2.1", optional = true, default-features = false, features = [
