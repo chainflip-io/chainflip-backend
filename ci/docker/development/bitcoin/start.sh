@@ -16,6 +16,8 @@ else
   done
 
   electrs --conf electrs.conf &
+
+  btc_block_time=15
 fi
 
 echo "Bitcoin version: $btc_version"
