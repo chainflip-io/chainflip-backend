@@ -3,7 +3,7 @@ use cf_chains::{
 	instances::{
 		ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
 	},
-	sol::{api::DurableNonceAndAccount, SolApiEnvironment, SolHash},
+	sol::{SolApiEnvironment, SolHash},
 };
 use cf_traits::SafeMode;
 use cf_utilities::bs58_array;
