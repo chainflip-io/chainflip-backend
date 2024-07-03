@@ -3,9 +3,10 @@ use cf_chains::{
 	instances::{
 		ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
 	},
-	sol::{api::DurableNonceAndAccount, SolHash},
+	sol::{SolApiEnvironment, SolHash},
 };
 use cf_traits::SafeMode;
+use cf_utilities::bs58_array;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sol_prim::consts::{const_address, const_hash};
 #[cfg(feature = "try-runtime")]
@@ -47,7 +48,7 @@ pub struct SolanaIntegration;
 
 impl OnRuntimeUpgrade for SolanaIntegration {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		use cf_chains::{assets::sol::Asset::SolUsdc, sol::SolAddress};
+		use cf_chains::sol::SolAddress;
 		use frame_support::assert_ok;
 
 		assert_ok!(pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
@@ -86,24 +87,27 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			},
 		));
 
-		let (vault_address, genesis_hash, usdc_address, durable_nonces_and_accounts): (
-			SolAddress,
-			Option<SolHash>,
-			SolAddress,
-			Vec<DurableNonceAndAccount>,
-		) = match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
-			cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => {
-				log::error!("Need to set up Solana integration for Berghain");
-				(
-					SolAddress(hex_literal::hex!(
-						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-					)), /* put correct values here */
-					Some(SolHash(hex_literal::hex![
-						"45296998a6f8e2a784db5d9f95e18fc23f70441a1039446801089879b08c7ef0"
-					])),
-					SolAddress(hex_literal::hex!(
-						"c6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61"
-					)),
+		// Initialize Solana's API environment
+		// TODO: PRO-1465 Configure these variables correctly.
+		let (sol_env, genesis_hash, durable_nonces_and_accounts) =
+			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
+				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => (
+					SolApiEnvironment {
+						vault_program: SolAddress(bs58_array("11111111111111111111111111111111")),
+						vault_program_data_account: SolAddress(bs58_array(
+							"11111111111111111111111111111111",
+						)),
+						usdc_token_mint_pubkey: SolAddress(bs58_array(
+							"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+						)),
+						token_vault_pda_account: SolAddress(bs58_array(
+							"11111111111111111111111111111111",
+						)),
+						usdc_token_vault_ata: SolAddress(bs58_array(
+							"11111111111111111111111111111111",
+						)),
+					},
+					Some(SolHash(bs58_array("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"))),
 					vec![(
 						SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -112,21 +116,24 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
 					)],
-				)
-			},
-
-			cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => {
-				log::warn!("Need to set up Solana integration for Perseverance");
-				(
-					SolAddress(hex_literal::hex!(
-						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-					)), /* put correct values here */
-					Some(SolHash(hex_literal::hex![
-						"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
-					])),
-					SolAddress(hex_literal::hex!(
-						"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
-					)),
+				),
+				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => (
+					SolApiEnvironment {
+						vault_program: SolAddress(bs58_array("11111111111111111111111111111111")),
+						vault_program_data_account: SolAddress(bs58_array(
+							"11111111111111111111111111111111",
+						)),
+						usdc_token_mint_pubkey: SolAddress(bs58_array(
+							"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+						)),
+						token_vault_pda_account: SolAddress(bs58_array(
+							"11111111111111111111111111111111",
+						)),
+						usdc_token_vault_ata: SolAddress(bs58_array(
+							"11111111111111111111111111111111",
+						)),
+					},
+					Some(SolHash(bs58_array("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"))),
 					vec![(
 						SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -135,20 +142,24 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
 					)],
-				)
-			},
-			cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => {
-				log::warn!("Need to set up Solana integration for Sisyphos");
-				(
-					SolAddress(hex_literal::hex!(
-						"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-					)), /* put correct values here */
-					Some(SolHash(hex_literal::hex![
-						"ce59db5080fc2c6d3bcf7ca90712d3c2e5e6c28f27f0dfbb9953bdb0894c03ab"
-					])),
-					SolAddress(hex_literal::hex!(
-						"3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7"
-					)),
+				),
+				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => (
+					SolApiEnvironment {
+						vault_program: SolAddress(bs58_array("11111111111111111111111111111111")),
+						vault_program_data_account: SolAddress(bs58_array(
+							"11111111111111111111111111111111",
+						)),
+						usdc_token_mint_pubkey: SolAddress(bs58_array(
+							"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+						)),
+						token_vault_pda_account: SolAddress(bs58_array(
+							"11111111111111111111111111111111",
+						)),
+						usdc_token_vault_ata: SolAddress(bs58_array(
+							"11111111111111111111111111111111",
+						)),
+					},
+					Some(SolHash(bs58_array("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"))),
 					vec![(
 						SolAddress(hex_literal::hex!(
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -157,14 +168,27 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
 					)],
-				)
-			},
-			_ => {
-				// Assume testnet
-				(
-					const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf"),
+				),
+				_ => (
+					// Assume testnet
+					SolApiEnvironment {
+						vault_program: SolAddress(bs58_array(
+							"8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf",
+						)),
+						vault_program_data_account: SolAddress(bs58_array(
+							"wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc",
+						)),
+						usdc_token_mint_pubkey: SolAddress(bs58_array(
+							"24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p",
+						)),
+						token_vault_pda_account: SolAddress(bs58_array(
+							"CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d",
+						)),
+						usdc_token_vault_ata: SolAddress(bs58_array(
+							"GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd",
+						)),
+					},
 					None,
-					const_address("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p"),
 					vec![
 						(
 							const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
@@ -195,13 +219,11 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							const_hash("GgjtavVDxo4t5DywJPENe5aNb8U9LjHDU2qKEd3FQBRv"),
 						),
 					],
-				)
-			},
-		};
+				),
+			};
 
-		pallet_cf_environment::SolanaVaultAddress::<Runtime>::put(vault_address);
+		pallet_cf_environment::SolanaApiEnvironment::<Runtime>::put(sol_env);
 		pallet_cf_environment::SolanaGenesisHash::<Runtime>::set(genesis_hash);
-		pallet_cf_environment::SolanaSupportedAssets::<Runtime>::insert(SolUsdc, usdc_address);
 		pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
 			durable_nonces_and_accounts,
 		);

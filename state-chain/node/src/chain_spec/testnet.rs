@@ -46,9 +46,20 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
-	sol_vault_address: const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf"),
 	sol_genesis_hash: None,
-	sol_usdc_address: SolAddress(bs58_array("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p")),
+	sol_vault_program: SolAddress(bs58_array("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf")),
+	sol_vault_program_data_account: SolAddress(bs58_array(
+		"wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc",
+	)),
+	sol_usdc_token_mint_pubkey: SolAddress(bs58_array(
+		"24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p",
+	)),
+	sol_token_vault_pda_account: SolAddress(bs58_array(
+		"CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d",
+	)),
+	sol_usdc_token_vault_ata: SolAddress(bs58_array(
+		"GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd",
+	)),
 	sol_durable_nonces_and_accounts: [
 		(
 			const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),

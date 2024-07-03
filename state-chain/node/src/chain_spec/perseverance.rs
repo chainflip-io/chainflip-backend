@@ -50,9 +50,15 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
-	sol_vault_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
 	sol_genesis_hash: Some(SolHash(bs58_array("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"))),
-	sol_usdc_address: SolAddress(bs58_array("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")),
+	// TODO: PRO-1465 Configure these variables correctly.
+	sol_vault_program: SolAddress(bs58_array("11111111111111111111111111111111")),
+	sol_vault_program_data_account: SolAddress(bs58_array("11111111111111111111111111111111")),
+	sol_usdc_token_mint_pubkey: SolAddress(bs58_array(
+		"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+	)),
+	sol_token_vault_pda_account: SolAddress(bs58_array("11111111111111111111111111111111")),
+	sol_usdc_token_vault_ata: SolAddress(bs58_array("11111111111111111111111111111111")),
 	// todo: put correct values for nonces and accounts
 	sol_durable_nonces_and_accounts: [
 		(

@@ -15,7 +15,7 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	SolanaIngressEgress, System, Validator, YEAR,
+	SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -45,10 +45,10 @@ use cf_chains::{
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ComputePrice, DurableNonce, DurableNonceAndAccount, SolanaApi,
-			SolanaEnvAccountLookupKey, SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
+			DurableNonceAndAccount, SolanaApi, SolanaEnvironment,
 		},
-		SolAddress, SolAmount,
+		SolAddress, SolAmount, SolApiEnvironment,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
@@ -502,21 +502,23 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct SolEnvironment;
 
-/// TODO: Implement this in PRO-1362
-impl ChainEnvironment<SolanaEnvAccountLookupKey, SolAddress> for SolEnvironment {
-	fn lookup(key: SolanaEnvAccountLookupKey) -> Option<SolAddress> {
-		match key {
-			SolanaEnvAccountLookupKey::VaultProgram => Some(Environment::sol_vault_address()),
-			// TODO
-			_ => None,
-		}
+impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for SolEnvironment {
+	fn lookup(_s: ApiEnvironment) -> Option<SolApiEnvironment> {
+		Some(Environment::solana_api_environment())
+	}
+}
+
+impl ChainEnvironment<CurrentAggKey, SolAddress> for SolEnvironment {
+	fn lookup(_s: CurrentAggKey) -> Option<SolAddress> {
+		let epoch = SolanaThresholdSigner::current_key_epoch()?;
+		SolanaThresholdSigner::keys(epoch)
 	}
 }
 
 impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
 	fn lookup(_s: ComputePrice) -> Option<u64> {
-		// TODO
-		None
+		SolanaChainTracking::chain_state()
+			.map(|chain_state: ChainState<Solana>| chain_state.tracked_data.priority_fee)
 	}
 }
 
