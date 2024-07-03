@@ -111,8 +111,8 @@ pub enum SolanaTransactionType {
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(Environment))]
 pub struct SolanaApi<Environment: 'static> {
-	call_type: SolanaTransactionType,
-	transaction: SolTransaction,
+	pub call_type: SolanaTransactionType,
+	pub transaction: SolTransaction,
 	#[doc(hidden)]
 	#[codec(skip)]
 	_phantom: PhantomData<Environment>,
