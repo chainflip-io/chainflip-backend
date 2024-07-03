@@ -321,13 +321,16 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	}
 
 	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
-		// Transaction fee on SOlana is a fixed 5k lamports per signature. Since we always have
-		// a single signature, therefore the transaction fee does not change.
+		// It would only make sense to refresh the priority fee here but that would require
+		// resigning. To not have two valid transactions we'd need to resign with the same
+		// already used nonce which is unnecessarily cumbersome and not worth it. Having too
+		// low fees might delay its inclusion but the transaction will remain valid.
 	}
 
 	fn calculate_gas_limit(_call: &SolanaApi<SolEnvironment>) -> Option<U256> {
-		// Solana sets computation limits via the `compute_limit` attribute, instead of
-		// via transaction fee. Therefore this mechanism is not used for Solana.
+		// In non-CCM broadcasts the gas_limit will be adequately set in the transaction
+		// builder. In CCM broadcasts the gas_limit needs to be set according to the gas_budget.
+		// Implementing the logic for CCM is to be done in PRO-1479.
 		None
 	}
 
@@ -335,8 +338,11 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 		_call: &SolanaApi<SolEnvironment>,
 		_payload: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload,
 	) -> bool {
-		// We use Durable Nonce mechanism to avoid the 150 blocks expiry period.
-		// This means the transaction won't expire and therefore no need to be resigned.
+		// We use Durable Nonce mechanism to avoid the 150 blocks expiry period and so
+		// transactions won't expire. Then, the only reason to resign would be if the
+		// payload has been updated or the aggKey has been updated (key rotation).
+		// The payload won't be refreshed, as explained above, and the the broadcast
+		// barrier prevents a transaction from requiring to be resigned by a new aggKey.
 		false
 	}
 }
