@@ -2507,25 +2507,23 @@ fn test_buy_back_flip() {
 
 		NetworkFee::set(NETWORK_FEE);
 
-		// The default buy interval is zero, and this means we don't buy back.
-		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
-
-		// Set a non-zero buy interval
-		FlipBuyInterval::<Test>::set(INTERVAL);
-
-		// We are at the interval, but we don't have any network fees.
-		assert_eq!(0, CollectedNetworkFee::<Test>::get());
-		Swapping::on_initialize(INTERVAL * 2);
-		assert!(SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS))
-			.is_empty());
-
 		// Get some network fees, just like we did a swap.
 		let NetworkFeeTaken { remaining_amount, network_fee } =
 			Swapping::take_network_fee(SWAP_AMOUNT);
 
 		// Sanity check the network fee.
+		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
 		assert_eq!(network_fee, 20);
 		assert_eq!(remaining_amount + network_fee, SWAP_AMOUNT);
+
+		// The default buy interval is zero. Check that buy back is disabled & on_initialize does
+		// not panic.
+		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
+		Swapping::on_initialize(1);
+		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
+
+		// Set a non-zero buy interval
+		FlipBuyInterval::<Test>::set(INTERVAL);
 
 		// Nothing is bought if we're not at the interval.
 		Swapping::on_initialize(INTERVAL * 3 - 1);
