@@ -15,7 +15,7 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	SolanaIngressEgress, SolanaThresholdSigner, System, Validator, YEAR,
+	SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -503,21 +503,21 @@ impl ChainEnvironment<CurrentAggKey, SolAddress> for SolEnvironment {
 
 impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
 	fn lookup(_s: ComputePrice) -> Option<u64> {
-		// TODO
-		None
+		SolanaChainTracking::chain_state()
+			.map(|chain_state: ChainState<Solana>| chain_state.tracked_data.priority_fee)
 	}
 }
 
 impl ChainEnvironment<NonceAccount, (SolAddress, SolHash)> for SolEnvironment {
 	fn lookup(_s: NonceAccount) -> Option<(SolAddress, SolHash)> {
-		// TODO
+		// TODO: PRO-1209
 		None
 	}
 }
 
 impl ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>> for SolEnvironment {
 	fn lookup(_s: AllNonceAccounts) -> Option<Vec<(SolAddress, SolHash)>> {
-		// TODO
+		// TODO: PRO-1209
 		None
 	}
 }

@@ -62,7 +62,7 @@ pub mod pallet {
 	pub type CurrentChainState<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChainState<T::TargetChain>>;
 
-	/// The fee multiplier value used when estimating ingress/egree fees
+	/// The fee multiplier value used when estimating ingress/egress fees
 	#[pallet::storage]
 	#[pallet::getter(fn fee_multiplier)]
 	pub type FeeMultiplier<T: Config<I>, I: 'static = ()> =
