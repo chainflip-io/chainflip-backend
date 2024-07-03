@@ -12,6 +12,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
+use sol_prim::consts::{const_address, const_hash};
 use sp_core::H256;
 use utilities::bs58_array;
 
@@ -58,6 +59,37 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	sol_token_vault_pda_account: SolAddress(bs58_array("11111111111111111111111111111111")),
 	sol_usdc_token_vault_ata: SolAddress(bs58_array("11111111111111111111111111111111")),
+	// todo: put correct values for nonces and accounts
+	sol_durable_nonces_and_accounts: [
+		(
+			const_address("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"),
+			const_hash("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"),
+		),
+		(
+			const_address("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"),
+			const_hash("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"),
+		),
+		(
+			const_address("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"),
+			const_hash("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"),
+		),
+		(
+			const_address("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"),
+			const_hash("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"),
+		),
+		(
+			const_address("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"),
+			const_hash("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"),
+		),
+		(
+			const_address("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"),
+			const_hash("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"),
+		),
+		(
+			const_address("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"),
+			const_hash("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"),
+		),
+	],
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
