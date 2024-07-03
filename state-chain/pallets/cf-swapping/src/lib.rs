@@ -49,9 +49,6 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
-/// Number of blocks to wait before trying a previously failed swap again
-pub const SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
-
 struct SwapState {
 	swap: Swap,
 	stable_amount: Option<AssetAmount>,
@@ -237,6 +234,8 @@ impl_pallet_safe_mode! {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use core::cmp::max;
+
 	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId, SwapOutput};
@@ -344,6 +343,10 @@ pub mod pallet {
 	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
 	#[pallet::storage]
 	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
+	/// The delay in blocks before retrying a previously failed swap.
+	#[pallet::storage]
+	pub type SwapRetryDelay<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -474,6 +477,9 @@ pub mod pallet {
 		UpdatedBuyInterval {
 			buy_interval: BlockNumberFor<T>,
 		},
+		UpdatedSwapRetryDelay {
+			swap_retry_delay: BlockNumberFor<T>,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -501,23 +507,30 @@ pub mod pallet {
 		AffiliateAccountIsNotABroker,
 		/// Setting the buy interval to zero is not allowed.
 		ZeroBuyIntervalNotAllowed,
+		/// Setting the swap retry delay to zero is not allowed.
+		ZeroSwapRetryDelayNotAllowed,
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub flip_buy_interval: BlockNumberFor<T>,
+		pub swap_retry_delay: BlockNumberFor<T>,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			FlipBuyInterval::<T>::set(self.flip_buy_interval);
+			SwapRetryDelay::<T>::set(self.swap_retry_delay);
 		}
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
+			Self {
+				flip_buy_interval: BlockNumberFor::<T>::zero(),
+				swap_retry_delay: BlockNumberFor::<T>::from(5u32),
+			}
 		}
 	}
 
@@ -558,7 +571,7 @@ pub mod pallet {
 
 			if !T::SafeMode::get().swaps_enabled {
 				// Since we won't be executing swaps at this block, we need to reschedule them:
-				let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
+				let retry_block = current_block + max(SwapRetryDelay::<T>::get(), 1u32.into());
 				for swap in swaps_to_execute {
 					Self::deposit_event(Event::<T>::SwapRescheduled {
 						swap_id: swap.swap_id,
@@ -613,7 +626,8 @@ pub mod pallet {
 							}
 						};
 
-						let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
+						let retry_block =
+							current_block + max(SwapRetryDelay::<T>::get(), 1u32.into());
 
 						for swap in failed_swaps {
 							match swap.refund_params {
@@ -998,6 +1012,31 @@ pub mod pallet {
 			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);
 			FlipBuyInterval::<T>::set(new_buy_interval);
 			Self::deposit_event(Event::<T>::UpdatedBuyInterval { buy_interval: new_buy_interval });
+			Ok(())
+		}
+
+		/// Updates the swap retry delay.
+		///
+		/// ## Events
+		///
+		/// - [UpdatedSwapRetryDelay](Event::UpdatedSwapRetryDelay)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [ZeroSwapRetryDelayNotAllowed](pallet_cf_pools::Error::ZeroSwapRetryDelayNotAllowed)
+		#[pallet::call_index(13)]
+		#[pallet::weight(T::WeightInfo::update_buy_interval())]
+		pub fn update_swap_retry_delay(
+			origin: OriginFor<T>,
+			new_swap_retry_delay: BlockNumberFor<T>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(new_swap_retry_delay != Zero::zero(), Error::<T>::ZeroSwapRetryDelayNotAllowed);
+			SwapRetryDelay::<T>::set(new_swap_retry_delay);
+			Self::deposit_event(Event::<T>::UpdatedSwapRetryDelay {
+				swap_retry_delay: new_swap_retry_delay,
+			});
 			Ok(())
 		}
 	}

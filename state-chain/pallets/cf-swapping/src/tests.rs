@@ -1258,7 +1258,7 @@ fn cannot_swap_in_safe_mode() {
 		// No swap is done
 		Swapping::on_finalize(swaps_scheduled_at);
 
-		let retry_at_block = swaps_scheduled_at + SWAP_RETRY_DELAY_BLOCKS as u64;
+		let retry_at_block = swaps_scheduled_at + SwapRetryDelay::<Test>::get();
 		assert_eq!(SwapQueue::<Test>::decode_len(retry_at_block), Some(4));
 
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
@@ -2146,7 +2146,7 @@ fn swaps_get_retried_after_failure() {
 	let later_swaps = swaps.split_off(2);
 
 	const EXECUTE_AT_BLOCK: u64 = 3;
-	const RETRY_AT_BLOCK: u64 = EXECUTE_AT_BLOCK + SWAP_RETRY_DELAY_BLOCKS as u64;
+	const RETRY_AT_BLOCK: u64 = EXECUTE_AT_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 
 	new_test_ext()
 		.execute_with(|| {
