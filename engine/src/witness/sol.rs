@@ -32,7 +32,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 	},
 };
-use cf_chains::sol::{SolAddress, SolHash, SolSignature, LAMPORTS_PER_SIGNATURE};
+use cf_chains::sol::{SolHash, SolSignature, LAMPORTS_PER_SIGNATURE};
 
 use crate::common::Mutex;
 use anyhow::{Context, Result};
