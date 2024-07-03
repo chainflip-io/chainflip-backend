@@ -3,7 +3,7 @@ mod nonce_witnessing;
 mod sol_deposits;
 mod source;
 
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use cf_primitives::EpochIndex;
 use futures_core::Future;
@@ -169,12 +169,6 @@ where
 		.get(&cf_primitives::chains::assets::sol::Asset::SolUsdc)
 		.context("SolanaSupportedAssets does not include USDC")?;
 
-	// TODO: Get this from the environment once implemented
-	let nonces_accounts: Vec<(SolAddress, SolHash)> = vec![(
-		SolAddress::from_str("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo").unwrap(),
-		SolHash::from_str("4UjUkFWp1Zkdge8zkuptMqHG9Xwr5eWbyperujHAHiNC").unwrap(),
-	)];
-
 	let sol_source = SolSource::new(sol_client.clone()).strictly_monotonic().shared(scope);
 
 	sol_source
@@ -223,7 +217,7 @@ where
 	// extra rpc call.
 	sol_safe_vault_source_deposit_addresses
 		.clone()
-		.witness_nonces(process_call.clone(), sol_client.clone(), nonces_accounts)
+		.witness_nonces(process_call.clone(), sol_client.clone(), state_chain_client.clone())
 		.await
 		.continuous("SolanaNonceWitnessing".to_string(), db.clone())
 		.logging("SolanaNonceWitnessing")
