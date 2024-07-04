@@ -31,7 +31,7 @@ export async function sendDot(address: string, amount: string) {
   // waiting for block confirmation can still be done concurrently)
   await polkadotSigningMutex.runExclusive(async () => {
     await polkadot.tx.balances
-      .transfer(address, parseInt(planckAmount))
+      .transferKeepAlive(address, parseInt(planckAmount))
       .signAndSend(alice, { nonce: -1 }, ({ status, dispatchError }) => {
         if (dispatchError !== undefined) {
           if (dispatchError.isModule) {
