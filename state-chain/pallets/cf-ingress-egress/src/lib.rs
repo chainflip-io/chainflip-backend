@@ -58,9 +58,6 @@ use sp_std::{
 };
 pub use weights::WeightInfo;
 
-/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
-pub const MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
-
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
 	// If a (pre-witnessed) deposit on a channel has been boosted, we record
@@ -360,6 +357,7 @@ pub mod pallet {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
 		pub dust_limits: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
+		pub max_swap_retry_duration_blocks: u32,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
@@ -368,6 +366,7 @@ pub mod pallet {
 				deposit_channel_lifetime: Default::default(),
 				witness_safety_margin: None,
 				dust_limits: Default::default(),
+				max_swap_retry_duration_blocks: 3600 / SECONDS_PER_BLOCK as u32,
 			}
 		}
 	}
@@ -381,6 +380,8 @@ pub mod pallet {
 			for (asset, dust_limit) in self.dust_limits.clone() {
 				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
 			}
+
+			MaxSwapRetryDurationBlocks::<T, I>::set(self.max_swap_retry_duration_blocks);
 		}
 	}
 
@@ -567,6 +568,11 @@ pub mod pallet {
 	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
 
+	/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
+	#[pallet::storage]
+	pub(super) type MaxSwapRetryDurationBlocks<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, u32, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -689,6 +695,9 @@ pub mod pallet {
 		},
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
+		},
+		UpdatedMaxSwapRetryDuration {
+			max_swap_retry_duration_blocks: u32,
 		},
 	}
 
@@ -1142,6 +1151,25 @@ pub mod pallet {
 					Ok::<(), Error<T, I>>(())
 				})
 			})?;
+			Ok(())
+		}
+
+		/// Updates the max swap retry duration .
+		///
+		/// ## Events
+		///
+		/// - [MaxSwapRetryDurationBlocks](Event::MaxSwapRetryDurationBlocks)
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::update_max_swap_retry_duration())]
+		pub fn update_swap_retry_delay(
+			origin: OriginFor<T>,
+			new_max_swap_retry_duration_blocks: u32,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			MaxSwapRetryDurationBlocks::<T, I>::set(new_max_swap_retry_duration_blocks);
+			Self::deposit_event(Event::<T, I>::UpdatedMaxSwapRetryDuration {
+				max_swap_retry_duration_blocks: new_max_swap_retry_duration_blocks,
+			});
 			Ok(())
 		}
 	}
@@ -2000,7 +2028,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	> {
 		if let Some(refund_params) = &refund_params {
 			ensure!(
-				refund_params.retry_duration <= MAX_SWAP_RETRY_DURATION_BLOCKS,
+				refund_params.retry_duration <= MaxSwapRetryDurationBlocks::<T, I>::get(),
 				DispatchError::Other("Retry duration too long")
 			);
 		}

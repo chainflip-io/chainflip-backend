@@ -10,7 +10,7 @@ use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	traits::{OnNewAccount, OriginTrait},
+	traits::{OnNewAccount, OriginTrait, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
 use strum::IntoEnumIterator;
@@ -455,6 +455,21 @@ mod benchmarks {
 		assert_eq!(BoostPools::<T, I>::iter().count(), 1);
 	}
 
+	#[benchmark]
+	fn update_max_swap_retry_duration() {
+		let call =
+			Call::<T, I>::update_swap_retry_delay { new_max_swap_retry_duration_blocks: 123_u32 };
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		assert_eq!(MaxSwapRetryDurationBlocks::<T, I>::get(), 123_u32);
+	}
+
 	#[cfg(test)]
 	use crate::mock_eth::*;
 
@@ -492,6 +507,9 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_create_boost_pools::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_update_max_swap_retry_duration::<Test, ()>(true);
 		});
 	}
 }
