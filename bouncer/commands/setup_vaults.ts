@@ -110,8 +110,8 @@ async function main(): Promise<void> {
     const unsubscribe = await polkadot.tx.utility
       .batchAll([
         // Note the vault needs to be funded before we rotate.
-        polkadot.tx.balances.transfer(vaultAddress, 1000000000000),
-        polkadot.tx.balances.transfer(dotKey, 1000000000000),
+        polkadot.tx.balances.transferKeepAlive(vaultAddress, 1000000000000),
+        polkadot.tx.balances.transferKeepAlive(dotKey, 1000000000000),
         rotation,
       ])
       .signAndSend(alice, { nonce: -1 }, (result) => {
