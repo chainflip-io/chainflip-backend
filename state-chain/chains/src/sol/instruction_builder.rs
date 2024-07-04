@@ -14,6 +14,11 @@ use sp_std::{vec, vec::Vec};
 use crate::{
 	sol::{
 		api::SolanaTransactionBuildingError,
+		compute_units_costs::{
+			BASE_COMPUTE_UNITS_PER_TX, COMPUTE_UNITS_PER_FETCH_NATIVE,
+			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_ROTATION,
+			COMPUTE_UNITS_PER_TRANSFER_NATIVE, COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+		},
 		sol_tx_core::{
 			address_derivation::{derive_associated_token_account, derive_fetch_account},
 			compute_budget::ComputeBudgetInstruction,
@@ -21,12 +26,11 @@ use crate::{
 			token_instructions::AssociatedTokenAccountInstruction,
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolCcmAccounts, SolComputeLimit,
-		SolInstruction, SolPubkey, Solana
+		SolInstruction, SolPubkey, Solana,
 	},
 	FetchAssetParams, ForeignChainAddress,
 };
 use frame_support::sp_runtime::FixedU64;
-use crate::sol::compute_units_costs::{BASE_COMPUTE_UNITS_PER_TX, COMPUTE_UNITS_PER_ROTATION, COMPUTE_UNITS_PER_TRANSFER_NATIVE, COMPUTE_UNITS_PER_TRANSFER_TOKEN, COMPUTE_UNITS_PER_FETCH_NATIVE,COMPUTE_UNITS_PER_FETCH_TOKEN };
 
 fn system_program_id() -> SolAddress {
 	SYSTEM_PROGRAM_ID
@@ -82,22 +86,14 @@ impl SolanaInstructionBuilder {
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
 	) -> Result<Vec<SolInstruction>, SolanaTransactionBuildingError> {
-<<<<<<< HEAD
-		let mut compute_limit: SolComputeLimit  = BASE_COMPUTE_UNITS_PER_TX;
-=======
->>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
+		let mut compute_limit: SolComputeLimit = BASE_COMPUTE_UNITS_PER_TX;
 		let maybe_instructions = fetch_params
 			.into_iter()
 			.map(|param| {
 				match param.asset {
-<<<<<<< HEAD
 					SolAsset::Sol => {
 						compute_limit += COMPUTE_UNITS_PER_FETCH_NATIVE;
-						Ok(VaultProgram::with_id(sol_api_environment.vault_program)
-=======
-					SolAsset::Sol => Ok(VaultProgram::with_id(sol_api_environment.vault_program)
->>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
-						.fetch_native(
+						Ok(VaultProgram::with_id(sol_api_environment.vault_program).fetch_native(
 							param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
 							param.deposit_fetch_id.bump,
 							sol_api_environment.vault_program_data_account,
@@ -110,11 +106,8 @@ impl SolanaInstructionBuilder {
 							.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?
 							.address,
 							system_program_id(),
-<<<<<<< HEAD
-						))},
-=======
-						)),
->>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
+						))
+					},
 					SolAsset::SolUsdc => {
 						let ata = derive_associated_token_account(
 							param.deposit_fetch_id.address,
@@ -122,11 +115,8 @@ impl SolanaInstructionBuilder {
 						)
 						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
-<<<<<<< HEAD
 						compute_limit += COMPUTE_UNITS_PER_FETCH_TOKEN;
 
-=======
->>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
 						Ok(VaultProgram::with_id(sol_api_environment.vault_program).fetch_tokens(
 							param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
 							param.deposit_fetch_id.bump,
@@ -151,11 +141,13 @@ impl SolanaInstructionBuilder {
 			.collect::<Result<Vec<_>, SolanaTransactionBuildingError>>();
 
 		maybe_instructions.map(|instructions| {
-<<<<<<< HEAD
-			Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price, compute_limit)
-=======
-			Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
->>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
+			Self::finalize(
+				instructions,
+				nonce_account.into(),
+				agg_key.into(),
+				compute_price,
+				compute_limit,
+			)
 		})
 	}
 
@@ -171,7 +163,13 @@ impl SolanaInstructionBuilder {
 		let instructions =
 			vec![SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount)];
 
-		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price, BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_NATIVE)
+		Self::finalize(
+			instructions,
+			nonce_account.into(),
+			agg_key.into(),
+			compute_price,
+			BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+		)
 	}
 
 	/// Create an instruction to `transfer` token.
@@ -209,7 +207,13 @@ impl SolanaInstructionBuilder {
 			),
 		];
 
-		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price, BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_TOKEN)
+		Self::finalize(
+			instructions,
+			nonce_account.into(),
+			agg_key.into(),
+			compute_price,
+			BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+		)
 	}
 
 	/// Create an instruction set to rotate the current Vault agg key to the next key.
@@ -237,7 +241,13 @@ impl SolanaInstructionBuilder {
 			)
 		}));
 
-		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price, COMPUTE_UNITS_PER_ROTATION)
+		Self::finalize(
+			instructions,
+			nonce_account.into(),
+			agg_key.into(),
+			compute_price,
+			COMPUTE_UNITS_PER_ROTATION,
+		)
 	}
 
 	/// Creates an instruction set for CCM messages that transfer native Sol token
@@ -273,7 +283,13 @@ impl SolanaInstructionBuilder {
 		];
 
 		// TODO: To pass the compute limit correctly from the SC
-		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price, COMPUTE_LIMIT)
+		Self::finalize(
+			instructions,
+			nonce_account.into(),
+			agg_key.into(),
+			compute_price,
+			COMPUTE_LIMIT,
+		)
 	}
 
 	pub fn ccm_transfer_token(
@@ -327,7 +343,13 @@ impl SolanaInstructionBuilder {
 		).with_remaining_accounts(ccm_accounts.remaining_account_metas())];
 
 		// TODO: To pass the compute limit correctly from the SC
-		Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price, COMPUTE_LIMIT)
+		Self::finalize(
+			instructions,
+			nonce_account.into(),
+			agg_key.into(),
+			compute_price,
+			COMPUTE_LIMIT,
+		)
 	}
 }
 

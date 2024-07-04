@@ -74,10 +74,6 @@ pub enum SolanaTransactionBuildingError {
 	CannotLookupApiEnvironment,
 	CannotLookupCurrentAggKey,
 	CannotLookupComputePrice,
-<<<<<<< HEAD
-	CannotLookupTokenDecimals,
-=======
->>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
 	NoNonceAccountsSet,
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),

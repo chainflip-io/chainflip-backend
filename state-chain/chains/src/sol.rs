@@ -138,7 +138,8 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
 			};
 
-		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_transfer.into())
+		LAMPORTS_PER_SIGNATURE +
+			(self.priority_fee).saturating_mul(compute_units_per_transfer.into())
 	}
 	fn estimate_ingress_fee(
 		&self,
