@@ -1,10 +1,15 @@
 use crate::Runtime;
 use cf_primitives::AssetAmount;
-use codec::{Decode, Encode};
+use codec::Encode;
 use frame_support::{
 	migrations::VersionedPostUpgradeData,
 	traits::{GetStorageVersion, StorageVersion},
 };
+
+#[cfg(feature = "try-runtime")]
+use codec::Decode;
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
 
 pub struct NetworkFeesMigration;
 
