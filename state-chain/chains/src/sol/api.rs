@@ -13,6 +13,7 @@ use crate::{
 	sol::{
 		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolApiEnvironment,
 		SolAsset, SolCcmAccounts, SolHash, SolMessage, SolTransaction, SolanaCrypto,
+		MAX_FETCH_BATCH,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
 	ConsolidationError, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
@@ -387,15 +388,22 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 		fetch_params: Vec<FetchAssetParams<Solana>>,
 		transfer_params: Vec<(TransferAssetParams<Solana>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
-		// TODO: We might want to pull all nonces here?! (transfer.lengt + 1)
-		// How do we handle it if the length > total nonces? It should be split in the
-		// next trial. If we keep retrying as is it will never work.
-		// TODO: If we fail to build we should reset the nonces we fetched. I guess the
-		// idea is to rely on the fact that it shouldn't happen?
+		// TODO: The problem now is the number of nonces. We should make sure that #transfers +
+		// #batch_fetches is < #nonces, ideally with a margin of 1-2 so they don't get delayed if
+		// there are pending txs. The problem of doing the checks here is that it's too late if
+		// that's the case. Should we do it one layer above in `do_egress_scheduled_fetch_transfer`?
+		// A probably better option is to maybe have an option that frees up a nonce if the build
+		// fails, so this function aims to be able to handle any amount of txs.
+		// This, however, might be problematic with transfers as ig we get > #nonces transfers there
+		// is no way to handle it once we are at this stage. We'd need to pull less values from the
+		// `requests`.
 		let mut txs = Self::transfer(transfer_params)?;
 
 		if !fetch_params.is_empty() {
-			txs.push((Self::batch_fetch(fetch_params)?, vec![]));
+			for chunk in fetch_params.chunks(MAX_FETCH_BATCH) {
+				let chunk = chunk.to_vec();
+				txs.push((Self::batch_fetch(chunk)?, vec![]));
+			}
 		}
 
 		Ok(txs)

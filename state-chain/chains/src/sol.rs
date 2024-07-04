@@ -92,6 +92,9 @@ impl ChainCrypto for SolanaCrypto {
 	}
 }
 
+// TODO: To tweak this number
+pub const MAX_FETCH_BATCH: usize = 5;
+
 pub const LAMPORTS_PER_SIGNATURE: SolAmount = 5000u64;
 
 // This is to be used both for ingress/egress estimation and for setting the compute units
