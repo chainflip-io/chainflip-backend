@@ -157,12 +157,18 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		// Lookup environment variables, such as aggkey and durable nonce.
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
-		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
+
 		let compute_price = Environment::compute_price()?;
 
 		transfer_params
 			.into_iter()
 			.map(|(transfer_param, egress_id)| {
+				// TODO: I think this might be problematic if we fail to fetch a nonce account
+				// because the previusly fetched would be taken but the build would fail.
+				// Transaction building shouldn't fail but rather the issue is if we run out of
+				// nonces. Maybe then get a function that gets multiple nonces instead of just one?
+				let (nonce_account, durable_nonce) = Environment::nonce_account()?;
+
 				let transfer_instruction_set = match transfer_param.asset {
 					SolAsset::Sol => SolanaInstructionBuilder::transfer_native(
 						transfer_param.amount,
@@ -380,7 +386,10 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 		transfer_params: Vec<(TransferAssetParams<Solana>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
 		let mut txs = Self::transfer(transfer_params)?;
-		txs.push((Self::batch_fetch(fetch_params)?, vec![]));
+
+		if !fetch_params.is_empty() {
+			txs.push((Self::batch_fetch(fetch_params)?, vec![]));
+		}
 
 		Ok(txs)
 	}

@@ -11,7 +11,7 @@ use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sol_prim::consts::{const_address, const_hash};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
-use sp_std::{vec, vec::Vec};
+use sp_std::vec;
 
 pub mod old {
 	use super::*;
@@ -192,31 +192,31 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 					vec![
 						(
 							const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
-							const_hash("8PUq9wFfALkRq4G4f2SNWERhN93pA2GfFzZpvMAFL43Y"),
+							const_hash("Cq9Wwnn5prHaLe4kJsv8gwfevG78FbbqrwuXJeoCcy3F"),
 						),
 						(
 							const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
-							const_hash("5P3UrY376M2wVe7PuTSFpqnbHQSqpVsyqS2VogUqQZJ"),
+							const_hash("78jKw9x4KNWDuyc8cNrSeQrcMF9qno4KBTwL4mANUCPS"),
 						),
 						(
 							const_address("HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p"),
-							const_hash("2jUwmSErAu7DR6Hd3MJgDWrTEvbbbcmqh8cNwu8qxe8X"),
+							const_hash("8tqDp26Tc6bbuKbNYnPXaoHievTbSPQjDmM9TVnYCJXf"),
 						),
 						(
 							const_address("HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2"),
-							const_hash("GhzGACyEghEb1Pb8JMhKmGn7fmXoH8BKC8156P13XiCt"),
+							const_hash("GvVRkjsMnRMeHFrpx5wq4GEGZH3eJW9PbLfVqFjajZ47"),
 						),
 						(
 							const_address("GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM"),
-							const_hash("HTZzc4YWgD9vxj3a1xsBtC9xaLxrUYEH7qr6fygoqbbc"),
+							const_hash("7qzLYSLTigv4MmQRJJCij7La9ZFaxRe7Ai7xx6i8n5mD"),
 						),
 						(
 							const_address("EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn"),
-							const_hash("4DNnxKKdUkVpaZiAB7bqFA2SPkaGcTE9bvgD3zYiHiu3"),
+							const_hash("61BZ5VDjGw4SJgfommyZHVBaGKxUwaDUc13VnnuX6L8s"),
 						),
 						(
 							const_address("9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa"),
-							const_hash("GgjtavVDxo4t5DywJPENe5aNb8U9LjHDU2qKEd3FQBRv"),
+							const_hash("F3te41Tm3t9iRR8pZ4a4nrZQxJyB312AKXLB31co8wq4"),
 						),
 					],
 				),

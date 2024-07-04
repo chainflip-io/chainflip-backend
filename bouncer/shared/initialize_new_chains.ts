@@ -7,7 +7,7 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 import { getContractAddress, getSolWhaleKeyPair, encodeSolAddress } from '../shared/utils';
-import { signAndSendTxSol } from '../shared/send_sol';
+import { sendSol, signAndSendTxSol } from '../shared/send_sol';
 import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { submitGovernanceExtrinsic } from './cf_governance';
@@ -110,6 +110,13 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
   const tokenVaultPda = new PublicKey(getContractAddress('Solana', 'TOKEN_VAULT_PDA'));
   const upgradeSignerPda = new PublicKey('3eechPbKXiAVCubUkM9asJ5DbjNn7jHyi5KFLd5ocJbz');
+
+
+  // Fund new Solana Agg key
+  console.log("Funding Solana new aggregate key")
+  console.log("solKey: ", newAggKey)
+  await sendSol(solKey, "100");
+
 
   // Initialize Vault program
   const tx = new Transaction().add(

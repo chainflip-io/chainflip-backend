@@ -53,23 +53,28 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 {
 	let (_, monitored_egresses) = header.data;
 
-	let monitored_tx_signatures = monitored_egresses.into_iter().map(|(x, _)| x).collect();
+	println!("DEBUG_LOCALNET monitored_egresses: {:?}", monitored_egresses);
 
-	let success_witnesses_result = success_witnesses(&sol_client, monitored_tx_signatures).await;
+	let monitored_tx_signatures: Vec<_> = monitored_egresses.into_iter().map(|(x, _)| x).collect();
 
-	for (tx_signature, _slot, tx_fee) in success_witnesses_result {
-		process_call(
-			pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
-				tx_out_id: tx_signature,
-				signer_id: epoch.info.0,
-				tx_fee,
-				tx_metadata: (),
-				transaction_ref: tx_signature,
-			}
-			.into(),
-			epoch.index,
-		)
-		.await;
+	if !monitored_tx_signatures.is_empty() {
+		let success_witnesses_result =
+			success_witnesses(&sol_client, monitored_tx_signatures).await;
+
+		for (tx_signature, _slot, tx_fee) in success_witnesses_result {
+			process_call(
+				pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
+					tx_out_id: tx_signature,
+					signer_id: epoch.info.0,
+					tx_fee,
+					tx_metadata: (),
+					transaction_ref: tx_signature,
+				}
+				.into(),
+				epoch.index,
+			)
+			.await;
+		}
 	}
 }
 
