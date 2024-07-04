@@ -18,9 +18,9 @@ pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 
 // Sometimes we need to remove arguments that are valid for the new version but not for the old
 // version.
-// There are no settings currently on main branch that are not already in the old version.
+// We need to remove sol related arguments since they were not there in the previous version.
 pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
-	args
+	args.into_iter().filter(|arg| !arg.starts_with("--sol.")).collect()
 }
 
 pub use std::ffi::c_char;
