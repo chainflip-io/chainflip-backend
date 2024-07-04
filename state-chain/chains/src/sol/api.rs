@@ -167,6 +167,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				// because the previusly fetched would be taken but the build would fail.
 				// Transaction building shouldn't fail but rather the issue is if we run out of
 				// nonces. Maybe then get a function that gets multiple nonces instead of just one?
+				// Also, we shouldn't have more than the number of nonces we have in total or we'd
+				// never be able to build the calls.
 				let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 
 				let transfer_instruction_set = match transfer_param.asset {
@@ -385,6 +387,9 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 		fetch_params: Vec<FetchAssetParams<Solana>>,
 		transfer_params: Vec<(TransferAssetParams<Solana>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		// TODO: We might want to pull all nonces here?! (transfer.lengt + 1)
+		// How do we handle it if the length > total nonces? It should be split in the
+		// next trial. If we keep retrying as is it will never work.
 		let mut txs = Self::transfer(transfer_params)?;
 
 		if !fetch_params.is_empty() {

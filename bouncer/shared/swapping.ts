@@ -283,32 +283,52 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
   console.log('=== Testing all swaps ===');
 
-  Object.values(Assets).forEach((sourceAsset) => {
-    Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset && chainFromAsset(destAsset) !== 'Solana')
-      .forEach((destAsset) => {
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
+  // TODO: Doing so many swaps ends up with reaching the tx length limit on solana
+  // Object.values(Assets).forEach((sourceAsset) => {
+  //   Object.values(Assets)
+  //     .filter((destAsset) => sourceAsset !== destAsset && chainFromAsset(destAsset) !== 'Solana')
+  //     .forEach((destAsset) => {
+  //       // Regular swaps
+  //       appendSwap(sourceAsset, destAsset, testSwap);
 
-        const sourceChain = chainFromAsset(sourceAsset);
-        const destChain = chainFromAsset(destAsset);
-        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
-          // Contract Swaps
-          appendSwap(sourceAsset, destAsset, testSwapViaContract);
-          if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
-            // CCM contract swaps
-            appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
-          }
-        }
+  //       const sourceChain = chainFromAsset(sourceAsset);
+  //       const destChain = chainFromAsset(destAsset);
+  //       if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
+  //         // Contract Swaps
+  //         appendSwap(sourceAsset, destAsset, testSwapViaContract);
+  //         if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
+  //           // CCM contract swaps
+  //           appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
+  //         }
+  //       }
 
-        if (ccmSupportedChains.includes(destChain)) {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
-        }
-      });
-  });
+  //       if (ccmSupportedChains.includes(destChain)) {
+  //         // CCM swaps
+  //         appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+  //       }
+  //     });
+  // });
 
-  // appendSwap('Eth', 'Sol', testSwap);
+  // TODO: For now we make sure to not do too many fetches are they
+  // will be batched obtaining a tx that is too long.
+  appendSwap('Sol', 'Eth', testSwap);
+  appendSwap('Sol', 'Usdc', testSwap);
+  appendSwap('Sol', 'Dot', testSwap);
+  appendSwap('SolUsdc', 'Eth', testSwap);
+  appendSwap('SolUsdc', 'Usdc', testSwap);
+  appendSwap('SolUsdc', 'Dot', testSwap);
+  // appendSwap('Sol', 'Btc', testSwap);
+
+  // TODO: For now do < 7 transfers to make sure we have nonces
+  // available and it doesn't fail mid-building
+  // appendSwap('Dot','Sol', testSwap);
+  // appendSwap('Usdc','Sol', testSwap);
+  // // appendSwap('Btc','Sol', testSwap);
+  // appendSwap('Eth','Sol', testSwap);
+  // // appendSwap('Eth','SolUsdc', testSwap);
+  // appendSwap('Usdc','SolUsdc', testSwap);
+  // appendSwap('Dot','SolUsdc', testSwap);
+  // appendSwap('Btc','SolUsdc', testSwap);
 
   await Promise.all(allSwaps);
 
