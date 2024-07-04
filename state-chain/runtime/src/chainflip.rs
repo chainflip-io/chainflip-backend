@@ -15,7 +15,7 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	SolanaIngressEgress, SolanaThresholdSigner, System, Validator, YEAR,
+	SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -45,10 +45,10 @@ use cf_chains::{
 	},
 	sol::{
 		api::{
-			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, NonceAccount, SolanaApi,
-			SolanaEnvironment,
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
+			DurableNonceAndAccount, SolanaApi, SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolHash,
+		SolAddress, SolAmount, SolApiEnvironment,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
@@ -315,21 +315,35 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 pub struct SolanaTransactionBuilder;
 impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransactionBuilder {
 	fn build_transaction(
-		_signed_call: &SolanaApi<SolEnvironment>,
+		signed_call: &SolanaApi<SolEnvironment>,
 	) -> <Solana as Chain>::Transaction {
-		todo!()
+		signed_call.transaction.clone()
 	}
+
 	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
-		todo!()
+		// It would only make sense to refresh the priority fee here but that would require
+		// resigning. To not have two valid transactions we'd need to resign with the same
+		// already used nonce which is unnecessarily cumbersome and not worth it. Having too
+		// low fees might delay its inclusion but the transaction will remain valid.
 	}
+
 	fn calculate_gas_limit(_call: &SolanaApi<SolEnvironment>) -> Option<U256> {
-		todo!()
+		// In non-CCM broadcasts the gas_limit will be adequately set in the transaction
+		// builder. In CCM broadcasts the gas_limit needs to be set according to the gas_budget.
+		// Implementing the logic for CCM is to be done in PRO-1479.
+		None
 	}
+
 	fn requires_signature_refresh(
 		_call: &SolanaApi<SolEnvironment>,
 		_payload: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload,
 	) -> bool {
-		todo!()
+		// We use Durable Nonce mechanism to avoid the 150 blocks expiry period and so
+		// transactions won't expire. Then, the only reason to resign would be if the
+		// payload has been updated or the aggKey has been updated (key rotation).
+		// The payload won't be refreshed, as explained above, and the the broadcast
+		// barrier prevents a transaction from requiring to be resigned by a new aggKey.
+		false
 	}
 }
 
@@ -503,22 +517,25 @@ impl ChainEnvironment<CurrentAggKey, SolAddress> for SolEnvironment {
 
 impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
 	fn lookup(_s: ComputePrice) -> Option<u64> {
-		// TODO
-		None
+		SolanaChainTracking::chain_state()
+			.map(|chain_state: ChainState<Solana>| chain_state.tracked_data.priority_fee)
 	}
 }
 
-impl ChainEnvironment<NonceAccount, (SolAddress, SolHash)> for SolEnvironment {
-	fn lookup(_s: NonceAccount) -> Option<(SolAddress, SolHash)> {
-		// TODO
-		None
+impl ChainEnvironment<DurableNonce, DurableNonceAndAccount> for SolEnvironment {
+	fn lookup(_s: DurableNonce) -> Option<DurableNonceAndAccount> {
+		Environment::get_sol_nonce_and_account()
 	}
 }
 
-impl ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>> for SolEnvironment {
-	fn lookup(_s: AllNonceAccounts) -> Option<Vec<(SolAddress, SolHash)>> {
-		// TODO
-		None
+impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for SolEnvironment {
+	fn lookup(_s: AllNonceAccounts) -> Option<Vec<DurableNonceAndAccount>> {
+		let nonce_accounts = Environment::get_all_sol_nonce_accounts();
+		if nonce_accounts.is_empty() {
+			None
+		} else {
+			Some(nonce_accounts)
+		}
 	}
 }
 

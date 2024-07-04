@@ -698,7 +698,7 @@ pub mod pallet {
 		BelowEgressDustLimit,
 		/// Solana address derivation error.
 		SolanaAddressDerivationError,
-		/// Solana's Vault program cannot be loaded via the SolanaEnvironment.
+		/// Solana's Environment variables cannot be loaded via the SolanaEnvironment.
 		MissingSolanaApiEnvironment,
 		/// You cannot add 0 to a boost pool.
 		AddBoostAmountMustBeNonZero,

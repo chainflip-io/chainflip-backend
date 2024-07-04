@@ -82,14 +82,21 @@ impl SolanaInstructionBuilder {
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
 	) -> Result<Vec<SolInstruction>, SolanaTransactionBuildingError> {
+<<<<<<< HEAD
 		let mut compute_limit: SolComputeLimit  = BASE_COMPUTE_UNITS_PER_TX;
+=======
+>>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
 		let maybe_instructions = fetch_params
 			.into_iter()
 			.map(|param| {
 				match param.asset {
+<<<<<<< HEAD
 					SolAsset::Sol => {
 						compute_limit += COMPUTE_UNITS_PER_FETCH_NATIVE;
 						Ok(VaultProgram::with_id(sol_api_environment.vault_program)
+=======
+					SolAsset::Sol => Ok(VaultProgram::with_id(sol_api_environment.vault_program)
+>>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
 						.fetch_native(
 							param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
 							param.deposit_fetch_id.bump,
@@ -103,7 +110,11 @@ impl SolanaInstructionBuilder {
 							.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?
 							.address,
 							system_program_id(),
+<<<<<<< HEAD
 						))},
+=======
+						)),
+>>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
 					SolAsset::SolUsdc => {
 						let ata = derive_associated_token_account(
 							param.deposit_fetch_id.address,
@@ -111,8 +122,11 @@ impl SolanaInstructionBuilder {
 						)
 						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
+<<<<<<< HEAD
 						compute_limit += COMPUTE_UNITS_PER_FETCH_TOKEN;
 
+=======
+>>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
 						Ok(VaultProgram::with_id(sol_api_environment.vault_program).fetch_tokens(
 							param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
 							param.deposit_fetch_id.bump,
@@ -137,7 +151,11 @@ impl SolanaInstructionBuilder {
 			.collect::<Result<Vec<_>, SolanaTransactionBuildingError>>();
 
 		maybe_instructions.map(|instructions| {
+<<<<<<< HEAD
 			Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price, compute_limit)
+=======
+			Self::finalize(instructions, nonce_account.into(), agg_key.into(), compute_price)
+>>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
 		})
 	}
 

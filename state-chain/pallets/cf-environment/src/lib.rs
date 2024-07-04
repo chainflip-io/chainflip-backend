@@ -12,7 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::{SolApiEnvironment, SolHash, Solana},
+	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, Solana},
 	Chain,
 };
 use cf_primitives::{
@@ -63,7 +63,7 @@ pub enum SafeModeUpdate<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{btc::Utxo, Arbitrum};
+	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::DefaultNoBound;
@@ -105,6 +105,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Eth is not an Erc20 token, so its address can't be updated.
 		EthAddressNotUpdateable,
+		/// The nonce account is currently not being used or does not exist.
+		NonceAccountNotBeingUsedOrDoesntExist,
 	}
 
 	#[pallet::pallet]
@@ -204,6 +206,16 @@ pub mod pallet {
 
 	// SOLANA CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
+	#[pallet::getter(fn solana_available_nonce_accounts)]
+	pub type SolanaAvailableNonceAccounts<T> =
+		StorageValue<_, Vec<DurableNonceAndAccount>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn solana_unavailable_nonce_accounts)]
+	pub type SolanaUnAvailableNonceAccounts<T> =
+		StorageMap<_, Blake2_128Concat, SolAddress, SolHash>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn sol_genesis_hash)]
 	pub type SolanaGenesisHash<T> = StorageValue<_, SolHash, OptionQuery>;
 
@@ -253,8 +265,8 @@ pub mod pallet {
 		SolanaInitialized,
 		/// Some unspendable Utxos are discarded from storage.
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
-		/// Solana's Genesis Hash storage has been updated.
-		SolanaGenesisHashUpdated { hash: SolHash },
+		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
+		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
 	}
 
 	#[pallet::call]
@@ -424,6 +436,39 @@ pub mod pallet {
 
 			Ok(dispatch_result)
 		}
+
+		/// Updates the Durable Nonce for the nonce account upon witnessing that the corresponding
+		/// solana tx was successfully included in a block
+		///
+		/// ## Events
+		///
+		/// - [DurableNonceSetForAccount](Event::DurableNonceSetForAccount)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [NonceAccountNotBeingUsedOrDoesntExist](Error::NonceAccountNotBeingUsedOrDoesntExist)
+		#[pallet::call_index(7)]
+		// Todo
+		#[pallet::weight(Weight::zero())]
+		pub fn update_sol_nonce(
+			origin: OriginFor<T>,
+			nonce_account: SolAddress,
+			durable_nonce: SolHash,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			if let Some(_nonce) = SolanaUnAvailableNonceAccounts::<T>::take(nonce_account) {
+				SolanaAvailableNonceAccounts::<T>::append((nonce_account, durable_nonce));
+				Self::deposit_event(Event::<T>::DurableNonceSetForAccount {
+					nonce_account,
+					durable_nonce,
+				});
+				Ok(().into())
+			} else {
+				Err(Error::<T>::NonceAccountNotBeingUsedOrDoesntExist.into())
+			}
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -447,6 +492,7 @@ pub mod pallet {
 		pub network_environment: NetworkEnvironment,
 		pub sol_genesis_hash: Option<SolHash>,
 		pub sol_api_env: SolApiEnvironment,
+		pub sol_durable_nonces_and_accounts: Vec<DurableNonceAndAccount>,
 		pub _config: PhantomData<T>,
 	}
 
@@ -479,6 +525,7 @@ pub mod pallet {
 
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
 			SolanaApiEnvironment::<T>::set(self.sol_api_env);
+			SolanaAvailableNonceAccounts::<T>::set(self.sol_durable_nonces_and_accounts.clone());
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
@@ -629,6 +676,22 @@ impl<T: Config> Pallet<T> {
 				fee_info.min_fee_required_per_tx() +
 				fee_info.fee_per_output_utxo(),
 		)
+	}
+
+	pub fn get_sol_nonce_and_account() -> Option<DurableNonceAndAccount> {
+		let nonce_and_account = SolanaAvailableNonceAccounts::<T>::mutate(|nonce_and_accounts| {
+			nonce_and_accounts.pop()
+		});
+		nonce_and_account.map(|(account, nonce)| {
+			SolanaUnAvailableNonceAccounts::<T>::insert(account, nonce);
+			(account, nonce)
+		})
+	}
+
+	pub fn get_all_sol_nonce_accounts() -> Vec<DurableNonceAndAccount> {
+		let mut nonce_accounts = SolanaAvailableNonceAccounts::<T>::get();
+		nonce_accounts.extend(&mut SolanaUnAvailableNonceAccounts::<T>::iter());
+		nonce_accounts
 	}
 }
 

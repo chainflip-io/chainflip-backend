@@ -24,7 +24,7 @@ use cf_primitives::{EgressId, ForeignChain};
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
-pub struct NonceAccount;
+pub struct DurableNonce;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct AllNonceAccounts;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
@@ -32,14 +32,16 @@ pub struct ApiEnvironment;
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct CurrentAggKey;
 
+pub type DurableNonceAndAccount = (SolAddress, SolHash);
+
 /// Super trait combining all Environment lookups required for the Solana chain.
 /// Also contains some calls for easy data retrieval.
 pub trait SolanaEnvironment:
 	ChainEnvironment<ApiEnvironment, SolApiEnvironment>
 	+ ChainEnvironment<CurrentAggKey, SolAddress>
 	+ ChainEnvironment<ComputePrice, SolAmount>
-	+ ChainEnvironment<NonceAccount, (SolAddress, SolHash)>
-	+ ChainEnvironment<AllNonceAccounts, Vec<(SolAddress, SolHash)>>
+	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
+	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
 		Self::lookup(ComputePrice).ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
@@ -51,7 +53,7 @@ pub trait SolanaEnvironment:
 	}
 
 	fn nonce_account() -> Result<(SolAddress, SolHash), SolanaTransactionBuildingError> {
-		Self::lookup(NonceAccount).ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
+		Self::lookup(DurableNonce).ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
 	}
 
 	fn current_agg_key() -> Result<SolAddress, SolanaTransactionBuildingError> {
@@ -72,7 +74,10 @@ pub enum SolanaTransactionBuildingError {
 	CannotLookupApiEnvironment,
 	CannotLookupCurrentAggKey,
 	CannotLookupComputePrice,
+<<<<<<< HEAD
 	CannotLookupTokenDecimals,
+=======
+>>>>>>> 49a268e745ee66d28fe42779e04f5b590ec35451
 	NoNonceAccountsSet,
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),
@@ -112,8 +117,8 @@ pub enum SolanaTransactionType {
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(Environment))]
 pub struct SolanaApi<Environment: 'static> {
-	call_type: SolanaTransactionType,
-	transaction: SolTransaction,
+	pub call_type: SolanaTransactionType,
+	pub transaction: SolTransaction,
 	#[doc(hidden)]
 	#[codec(skip)]
 	_phantom: PhantomData<Environment>,

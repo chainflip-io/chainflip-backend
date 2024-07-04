@@ -1991,6 +1991,7 @@ dependencies = [
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "serde_json",
+ "sol-prim",
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
@@ -3393,6 +3394,7 @@ dependencies = [
  "engine-proc-macros",
  "engine-upgrade-utils",
  "predicates 3.1.0",
+ "tempfile",
 ]
 
 [[package]]
@@ -12612,6 +12614,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sol-prim",
  "sp-api",
  "sp-block-builder",
  "sp-consensus-aura",
