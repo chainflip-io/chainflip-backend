@@ -1157,6 +1157,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let batch_to_send: Vec<_> =
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Filter out disabled assets and requests that are not ready to be egressed.
+				// TODO: We might need to limit the amount of transfers and batches gotten here.
+				// Doing it inside the AllBatch means that if we are taking too many it will
+				// always keep failing. We should limit both the number of fetches (due to
+				// Tx Lenght) and the number of transfers (due to #nonces). Number of nonces
+				// required for a batch will be #transfers + 1.
 				requests
 					.extract_if(|request| {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&

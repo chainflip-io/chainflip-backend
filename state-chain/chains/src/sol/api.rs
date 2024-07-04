@@ -390,6 +390,8 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 		// TODO: We might want to pull all nonces here?! (transfer.lengt + 1)
 		// How do we handle it if the length > total nonces? It should be split in the
 		// next trial. If we keep retrying as is it will never work.
+		// TODO: If we fail to build we should reset the nonces we fetched. I guess the
+		// idea is to rely on the fact that it shouldn't happen?
 		let mut txs = Self::transfer(transfer_params)?;
 
 		if !fetch_params.is_empty() {
