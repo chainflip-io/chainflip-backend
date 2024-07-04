@@ -2,7 +2,7 @@ pub use cf_primitives::chains::Solana;
 
 use cf_primitives::ChannelId;
 use sp_core::ConstBool;
-use sp_std::vec::Vec;
+use sp_std::{vec, vec::Vec};
 
 use sol_prim::{AccountBump, SlotNumber};
 
