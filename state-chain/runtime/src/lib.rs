@@ -1665,12 +1665,8 @@ impl_runtime_apis! {
 								available_balance,
 								in_use_balance: owed_amount,
 							}
-					}).collect()
-				)
-
-
-
-
+						}).collect()
+					)
 				})),
 			}
 		}
