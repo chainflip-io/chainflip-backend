@@ -15,3 +15,14 @@ The amount of fees kept in the vault for the purpose of refunding validators tha
 
 **RecordedFees**
 The fees a validator payed to transmit a transaction.
+
+### Refunding process
+
+**EVM**
+For EVM chains (at the time of writing Ethereum/Arbitrum) we refund any account that has payed gas fees.
+
+**Bitcoin/Solana**
+For Bitcoin as well as Solana we don't refund actively, this is happening automatically. We book keep the withheld transaction fee to ensure the vault is not bleeding out from transaction fees.
+
+**Polkadot**
+For Polkadot we only refund the current agg key.

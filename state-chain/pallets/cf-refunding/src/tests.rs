@@ -120,13 +120,11 @@ pub fn btc_to_low_withheld_fees() {
 
 		Refunding::on_distribute_withheld_fees(1);
 
-		System::assert_last_event(RuntimeEvent::Refunding(
-			crate::Event::RefundedMoreThanWithheld {
-				chain: ForeignChain::Bitcoin,
-				withhold: 99,
-				refunded: 100,
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Refunding(crate::Event::VaultBleeding {
+			chain: ForeignChain::Bitcoin,
+			withheld: 99,
+			collected: 100,
+		}));
 
 		let recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin);
 

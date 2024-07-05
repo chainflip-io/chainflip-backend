@@ -67,6 +67,8 @@ pub mod pallet {
 			refunded: AssetAmount,
 			withhold: AssetAmount,
 		},
+		/// We paied more transaction fees than we withheld.
+		VaultBleeding { chain: ForeignChain, collected: AssetAmount, withheld: AssetAmount },
 	}
 
 	#[pallet::pallet]
@@ -93,31 +95,18 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	fn do_egress(
 		chain: ForeignChain,
-		fee: AssetAmount,
-		validator: ForeignChainAddress,
+		address: ForeignChainAddress,
+		amount: AssetAmount,
 		epoch: EpochIndex,
-		remaining_funds: AssetAmount,
 	) -> Result<(), ()> {
-		let amount = if remaining_funds < fee {
-			log::error!(
-				"Insufficient funds to schedule egress for validator: {:?} on chain: {:?}",
-				validator,
-				chain
-			);
-			Self::deposit_event(Event::RefundedMoreThanWithheld {
-				chain,
-				refunded: fee,
-				withhold: remaining_funds,
-			});
-			fee
-		} else {
-			fee
-		};
+		if amount == 0 {
+			return Err(())
+		}
 		if let Ok(egress_details) =
-			T::EgressHandler::schedule_egress(chain.gas_asset(), amount, validator.clone(), None)
+			T::EgressHandler::schedule_egress(chain.gas_asset(), amount, address.clone(), None)
 		{
 			Self::deposit_event(Event::RefundScheduled {
-				account_id: validator,
+				account_id: address,
 				egress_id: egress_details.egress_id,
 				chain,
 				amount,
@@ -126,8 +115,8 @@ impl<T: Config> Pallet<T> {
 			Ok(())
 		} else {
 			log::error!(
-				"Failed to schedule egress for validator: {:?} on chain: {:?}",
-				validator,
+				"Failed to schedule egress for address: {:?} on chain: {:?}",
+				address,
 				chain
 			);
 			Err(())
@@ -166,29 +155,37 @@ impl<T: Config> Pallet<T> {
 			let sum_recorded_fees: AssetAmount =
 				recorded_fees.clone().unwrap_or_default().values().sum();
 			if withheld_fees < sum_recorded_fees {
-				Self::deposit_event(Event::RefundedMoreThanWithheld {
+				// We are refunding more than we withheld -> That indicates that we have to adjust
+				// the fees.
+				Self::deposit_event(Event::VaultBleeding {
 					chain,
-					refunded: sum_recorded_fees,
-					withhold: withheld_fees,
+					collected: sum_recorded_fees,
+					withheld: withheld_fees,
 				});
 			}
 			match chain {
 				ForeignChain::Ethereum | ForeignChain::Arbitrum => {
-					let mut failed_egress: BTreeMap<ForeignChainAddress, AssetAmount> =
+					let mut retry_next_epoch: BTreeMap<ForeignChainAddress, AssetAmount> =
 						BTreeMap::new();
 					if let Some(recorded_fees) = recorded_fees {
-						for (validator, fee) in recorded_fees {
-							if Self::do_egress(chain, fee, validator.clone(), epoch, withheld_fees)
-								.is_ok()
-							{
+						for (address, fee) in recorded_fees {
+							// If there are no withheld fees left we should also stop refunding for
+							// EVM chains.
+							if withheld_fees.checked_sub(fee).is_none() {
+								retry_next_epoch.insert(address.clone(), fee);
+								break;
+							}
+							if Self::do_egress(chain, address.clone(), fee, epoch).is_ok() {
 								withheld_fees = withheld_fees.saturating_sub(fee);
 							} else {
-								failed_egress.insert(validator.clone(), fee);
+								retry_next_epoch.insert(address.clone(), fee);
 							}
 						}
 					}
-					if !failed_egress.is_empty() {
-						RecordedFees::<T>::insert(chain, failed_egress);
+					// If an egress failed or we have not enough funds left we should remember the
+					// funds we still have to refund.
+					if !retry_next_epoch.is_empty() {
+						RecordedFees::<T>::insert(chain, retry_next_epoch);
 					}
 					WithheldTransactionFees::<T>::insert(chain, withheld_fees);
 				},
@@ -201,10 +198,9 @@ impl<T: Config> Pallet<T> {
 					if let Some(vault_address) = T::PolkadotEnvironment::try_vault_account() {
 						if Self::do_egress(
 							chain,
-							sum_recorded_fees,
 							cf_chains::ForeignChainAddress::Dot(vault_address),
+							sum_recorded_fees,
 							epoch,
-							withheld_fees,
 						)
 						.is_ok()
 						{
