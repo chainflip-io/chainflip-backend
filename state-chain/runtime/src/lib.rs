@@ -1012,7 +1012,6 @@ type AllMigrations = (
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
-	MigrationsForV1_4,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1057,18 +1056,6 @@ type PalletMigrations = (
 	// pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
-);
-
-// TODO: After this release, remember to un-comment the
-// Arbitrum-specific pallet migrations.
-type MigrationsForV1_4 = (
-	migrations::housekeeping::Migration,
-	migrations::reap_old_accounts::Migration,
-	// NOTE: Do not change this validator pallet migration order:
-	// Migrate Validator pallet from version 0 -> 1
-	migrations::vanity_names::Migration,
-	// Migrate Validator pallet from version 1 -> 2
-	migrations::active_bidders::Migration,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
