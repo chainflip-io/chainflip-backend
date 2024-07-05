@@ -629,22 +629,61 @@ export async function observeCcmReceived(
   sourceAddress?: string,
   stopObserveEvent?: () => boolean,
 ): Promise<EVMEvent | undefined> {
-  return observeEVMEvent(
-    chainFromAsset(destAsset),
-    cfTesterAbi,
-    address,
-    'ReceivedxSwapAndCall',
-    [
-      chainContractId(chainFromAsset(sourceAsset)).toString(),
-      sourceAddress ?? null,
-      messageMetadata.message,
-      getContractAddress(chainFromAsset(destAsset), destAsset.toString()),
-      '*',
-      '*',
-      '*',
-    ],
-    stopObserveEvent,
-  );
+  const destChain = chainFromAsset(destAsset);
+  switch (destChain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+      return observeEVMEvent(
+        destChain,
+        cfTesterAbi,
+        address,
+        'ReceivedxSwapAndCall',
+        [
+          chainContractId(chainFromAsset(sourceAsset)).toString(),
+          sourceAddress ?? null,
+          messageMetadata.message,
+          getContractAddress(destChain, destAsset.toString()),
+          '*',
+          '*',
+          '*',
+        ],
+        stopObserveEvent,
+      );
+    case 'Solana':
+      return observeSolanaEvent(
+        destChain,
+        cfTesterAbi,
+        address,
+        'ReceivedxSwapAndCall',
+        [
+          chainContractId(chainFromAsset(sourceAsset)).toString(),
+          sourceAddress ?? null,
+          messageMetadata.message,
+          '*',
+          '*',
+          '*',
+          '*',
+        ],
+        stopObserveEvent,
+      );
+    default:
+      throw new Error(`Unsupported chain: ${destChain}`);
+  }
+
+}
+
+export async function observeSolanaEvent(
+  chain: Chain,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  contractAbi: any,
+  address: string,
+  eventName: string,
+  eventParametersExpected: (string | null)[],
+  stopObserveEvent?: () => boolean,
+  initialBlockNumber?: number,
+): Promise<EVMEvent | undefined> {
+  // TODO: Add logic to witness the event on the Solana CfTester
+  return undefined;
 }
 
 // Converts a hex string into a bytes array. Support hex strings start with and without 0x
