@@ -1640,14 +1640,14 @@ impl_runtime_apis! {
 
 					(
 						asset,
-						 pool_details.into_iter().map(|(fee_tier, details)| {
+						pool_details.into_iter().filter_map(|(fee_tier, details)| {
 							let available_balance = details.available_amounts.into_iter().find_map(|(id, amount)| {
 								if account_id == id {
 									Some(amount)
 								} else {
 									None
 								}
-							}).unwrap_or_default();
+							})?;
 
 							let owed_amount = details.pending_boosts.into_iter().flat_map(|(_, pending_deposits)| {
 								pending_deposits.into_iter().filter_map(|(id, amount)| {
@@ -1659,12 +1659,12 @@ impl_runtime_apis! {
 								})
 							}).sum();
 
-							LiquidityProviderBoostPoolInfo {
+							Some(LiquidityProviderBoostPoolInfo {
 								fee_tier,
 								total_balance: available_balance + owed_amount,
 								available_balance,
 								in_use_balance: owed_amount,
-							}
+							})
 						}).collect()
 					)
 				})),
