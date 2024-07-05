@@ -83,6 +83,8 @@ fn skip_refunding_if_safe_mode_is_disabled() {
 
 		Refunding::on_distribute_withheld_fees(1);
 
+		assert_egress(0, None);
+
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
 	});
@@ -123,12 +125,14 @@ pub fn refund_validators_btc() {
 
 		assert_eq!(recorded_fees_btc, None);
 
+		assert_egress(0, None);
+
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Bitcoin), 0);
 	});
 }
 
 #[test]
-pub fn btc_to_low_withheld_fees() {
+pub fn to_low_withheld_fees() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Bitcoin, 100, BTC_ADDR_1.clone());
 

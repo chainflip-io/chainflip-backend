@@ -88,7 +88,7 @@ pub mod pallet {
 			amount: AssetAmount,
 			epoch: EpochIndex,
 		},
-		/// We paied more transaction fees than we withheld.
+		/// We paid more transaction fees than we withheld.
 		VaultBleeding { chain: ForeignChain, collected: AssetAmount, withheld: AssetAmount },
 	}
 
@@ -97,12 +97,12 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Storage for recorded fees per validator and asset.
+	/// Storage for recorded fees per chain.
 	#[pallet::storage]
 	pub type RecordedFees<T: Config> =
 		StorageMap<_, Twox64Concat, ForeignChain, RefundingInfo, OptionQuery>;
 
-	/// Storage for validator's withheld transaction fees.
+	/// Storage for withheld transaction per chain.
 	#[pallet::storage]
 	pub type WithheldTransactionFees<T: Config> =
 		StorageMap<_, Twox64Concat, ForeignChain, AssetAmount, ValueQuery>;
@@ -139,6 +139,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Records the gas fee for a chain and a validator.
 	pub fn record_gas_fee(
 		account_id: ForeignChainAddress,
 		chain: ForeignChain,
@@ -162,9 +163,13 @@ impl<T: Config> Pallet<T> {
 				},
 		});
 	}
+
+	/// Records the withheld transaction fee for a chain.
 	pub fn withhold_transaction_fee(chain: ForeignChain, amount: AssetAmount) {
 		WithheldTransactionFees::<T>::mutate(chain, |fees| *fees += amount);
 	}
+
+	/// Distributes the withheld fees - called on every start of a new epoch.
 	pub fn on_distribute_withheld_fees(epoch: EpochIndex) {
 		if !T::SafeMode::get().do_refund {
 			log::info!("Refunding is disabled. Skipping refunding.");
@@ -230,6 +235,8 @@ impl<T: Config> Pallet<T> {
 						{
 							withheld_fees = withheld_fees.saturating_sub(sum_recorded_fees);
 						} else {
+							// If the egress failed we should remember the funds we still have to
+							// refund.
 							RecordedFees::<T>::insert(
 								chain,
 								RefundingInfo::Single(sum_recorded_fees),
