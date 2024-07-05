@@ -949,3 +949,12 @@ pub trait AssetConverter {
 pub trait IngressEgressFeeApi<C: Chain> {
 	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
 }
+
+pub trait TransfersLimitProvider {
+	fn maybe_transfers_limit() -> Option<usize> {
+		None
+	}
+}
+
+pub struct NoTransfersLimit;
+impl TransfersLimitProvider for NoTransfersLimit {}

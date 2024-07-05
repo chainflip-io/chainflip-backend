@@ -41,7 +41,7 @@ use cf_traits::{
 	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler,
 	CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
 	IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode, ScheduledEgressDetails,
-	SwapDepositHandler, SwapQueueApi, SwapType,
+	SwapDepositHandler, SwapQueueApi, SwapType, TransfersLimitProvider,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -438,6 +438,8 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		type SwapQueueApi: SwapQueueApi;
+
+		type TransfersLimitProvider: TransfersLimitProvider;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
@@ -1156,6 +1158,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn do_egress_scheduled_fetch_transfer() -> Result<(), AllBatchError> {
 		let batch_to_send: Vec<_> =
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
+				let mut maybe_no_of_transfers_remaining =
+					T::TransfersLimitProvider::maybe_transfers_limit();
 				// Filter out disabled assets and requests that are not ready to be egressed.
 				requests
 					.extract_if(|request| {
@@ -1188,7 +1192,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 											.unwrap_or(false)
 									},
 								),
-								FetchOrTransfer::Transfer { .. } => true,
+								FetchOrTransfer::Transfer { .. } => maybe_no_of_transfers_remaining
+									.as_mut()
+									.map(|no_of_transfers_remaining| {
+										if *no_of_transfers_remaining != 0 {
+											*no_of_transfers_remaining -= 1;
+											true
+										} else {
+											false
+										}
+									})
+									.unwrap_or(true),
 							}
 					})
 					.collect()

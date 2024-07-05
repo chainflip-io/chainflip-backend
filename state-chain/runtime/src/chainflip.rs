@@ -61,6 +61,7 @@ use cf_traits::{
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	EpochInfo, Heartbeat, IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit,
 	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	TransfersLimitProvider,
 };
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
@@ -866,3 +867,10 @@ impl_ingress_egress_fee_api_for_anychain!(
 	(Arbitrum, ArbitrumIngressEgress),
 	(Solana, SolanaIngressEgress)
 );
+
+pub struct SolanaTransfersLimit;
+impl TransfersLimitProvider for SolanaTransfersLimit {
+	fn maybe_transfers_limit() -> Option<usize> {
+		Some(Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(1))
+	}
+}

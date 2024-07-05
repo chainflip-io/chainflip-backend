@@ -125,6 +125,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
+	type TransfersLimitProvider = cf_traits::NoTransfersLimit;
 	type SafeMode = MockRuntimeSafeMode;
 }
 
