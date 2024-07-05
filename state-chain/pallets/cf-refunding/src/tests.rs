@@ -1,6 +1,6 @@
 use cf_chains::{ForeignChain, ForeignChainAddress};
 use cf_primitives::AssetAmount;
-use cf_traits::SetSafeMode;
+use cf_traits::{mocks::egress_handler::MockEgressParameter, SetSafeMode};
 
 use cf_chains::AnyChain;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SafeMode};
@@ -10,6 +10,17 @@ use crate::{mock::*, RecordedFees, WithheldTransactionFees};
 fn payed_gas(chain: ForeignChain, amount: AssetAmount, account: ForeignChainAddress) {
 	Refunding::record_gas_fee(account, chain, amount);
 	Refunding::withhold_transaction_fee(chain, amount);
+}
+
+fn assert_egress(
+	number_of_egresses: usize,
+	maybe_additional_conditions: Option<fn(egresses: Vec<MockEgressParameter<AnyChain>>)>,
+) {
+	let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
+	assert_eq!(egresses.len(), number_of_egresses);
+	if let Some(additional_conditions) = maybe_additional_conditions {
+		additional_conditions(egresses);
+	}
 }
 
 #[test]
@@ -34,16 +45,17 @@ fn refund_validators_evm() {
 
 		Refunding::on_distribute_withheld_fees(1);
 
-		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
-
 		let maybe_recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum);
 		let maybe_recorded_fees_arb = RecordedFees::<Test>::get(ForeignChain::Arbitrum);
 
-		assert_eq!(egresses.len(), 3);
-
-		for egress in egresses {
-			assert_eq!(egress.amount(), 100);
-		}
+		assert_egress(
+			3,
+			Some(|egresses: Vec<MockEgressParameter<AnyChain>>| {
+				for egress in egresses {
+					assert_eq!(egress.amount(), 100);
+				}
+			}),
+		);
 
 		assert_eq!(maybe_recorded_fees_eth, None);
 		assert_eq!(maybe_recorded_fees_arb, None);
@@ -148,6 +160,15 @@ pub fn refund_validators_polkadot() {
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Polkadot), 100);
 
 		Refunding::on_distribute_withheld_fees(1);
+
+		assert_egress(
+			1,
+			Some(|egresses: Vec<MockEgressParameter<AnyChain>>| {
+				for egress in egresses {
+					assert_eq!(egress.amount(), 100);
+				}
+			}),
+		);
 
 		let maybe_recorded_fees_dot = RecordedFees::<Test>::get(ForeignChain::Polkadot);
 
