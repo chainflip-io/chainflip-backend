@@ -101,9 +101,6 @@ pub fn refund_validators_btc() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Bitcoin, 100, BTC_ADDR_1.clone());
 
-		let maybe_recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin).unwrap();
-		let recorded_fees_btc = maybe_recorded_fees_btc.get_as_single().unwrap();
-
 		assert_eq!(100, 100);
 
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Bitcoin), 100);

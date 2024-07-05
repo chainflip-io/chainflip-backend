@@ -20,32 +20,33 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
+/// Holds all infos we need to refund a validator/vault/aggKey for any chain type.
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum AddressAndAmount {
-	// The vault or aggkey is paying the fees.
+pub enum RefundingInfo {
+	/// Only a single key to refund that is either always the current key or not relevant.
 	Single(AssetAmount),
-	// Any validator is paying the fees.
+	/// Many keys/validators to refund.
 	Multiple(BTreeMap<ForeignChainAddress, AssetAmount>),
 }
 
-impl AddressAndAmount {
+impl RefundingInfo {
 	pub fn sum(&self) -> AssetAmount {
 		match self {
-			AddressAndAmount::Single(amount) => *amount,
-			AddressAndAmount::Multiple(map) => map.values().sum(),
+			RefundingInfo::Single(amount) => *amount,
+			RefundingInfo::Multiple(map) => map.values().sum(),
 		}
 	}
 
 	pub fn get_as_multiple(&self) -> Option<&BTreeMap<ForeignChainAddress, AssetAmount>> {
 		match self {
-			AddressAndAmount::Multiple(map) => Some(map),
+			RefundingInfo::Multiple(map) => Some(map),
 			_ => None,
 		}
 	}
 
 	pub fn get_as_single(&self) -> Option<AssetAmount> {
 		match self {
-			AddressAndAmount::Single(amount) => Some(*amount),
+			RefundingInfo::Single(amount) => Some(*amount),
 			_ => None,
 		}
 	}
@@ -76,12 +77,6 @@ pub mod pallet {
 		type SafeMode: Get<PalletSafeMode>;
 	}
 
-	#[pallet::error]
-	pub enum Error<T> {
-		/// The user does not have enough funds.
-		InsufficientBalance,
-	}
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -92,11 +87,6 @@ pub mod pallet {
 			chain: ForeignChain,
 			amount: AssetAmount,
 			epoch: EpochIndex,
-		},
-		RefundedMoreThanWithheld {
-			chain: ForeignChain,
-			refunded: AssetAmount,
-			withhold: AssetAmount,
 		},
 		/// We paied more transaction fees than we withheld.
 		VaultBleeding { chain: ForeignChain, collected: AssetAmount, withheld: AssetAmount },
@@ -110,7 +100,7 @@ pub mod pallet {
 	/// Storage for recorded fees per validator and asset.
 	#[pallet::storage]
 	pub type RecordedFees<T: Config> =
-		StorageMap<_, Twox64Concat, ForeignChain, AddressAndAmount, OptionQuery>;
+		StorageMap<_, Twox64Concat, ForeignChain, RefundingInfo, OptionQuery>;
 
 	/// Storage for validator's withheld transaction fees.
 	#[pallet::storage]
@@ -156,19 +146,19 @@ impl<T: Config> Pallet<T> {
 	) {
 		RecordedFees::<T>::mutate(chain, |maybe_fees| match chain {
 			ForeignChain::Ethereum | ForeignChain::Arbitrum => {
-				if let Some(AddressAndAmount::Multiple(fees)) = maybe_fees {
+				if let Some(RefundingInfo::Multiple(fees)) = maybe_fees {
 					fees.entry(account_id).and_modify(|fee| *fee += gas_fee).or_insert(gas_fee);
 				} else {
 					let mut recorded_fees = BTreeMap::new();
 					recorded_fees.insert(account_id, gas_fee);
-					*maybe_fees = Some(AddressAndAmount::Multiple(recorded_fees));
+					*maybe_fees = Some(RefundingInfo::Multiple(recorded_fees));
 				}
 			},
 			_ =>
-				if let Some(AddressAndAmount::Single(amount)) = maybe_fees {
-					*maybe_fees = Some(AddressAndAmount::Single(amount.saturating_add(gas_fee)));
+				if let Some(RefundingInfo::Single(amount)) = maybe_fees {
+					*maybe_fees = Some(RefundingInfo::Single(amount.saturating_add(gas_fee)));
 				} else {
-					*maybe_fees = Some(AddressAndAmount::Single(gas_fee));
+					*maybe_fees = Some(RefundingInfo::Single(gas_fee));
 				},
 		});
 	}
@@ -219,10 +209,7 @@ impl<T: Config> Pallet<T> {
 					// If an egress failed or we have not enough funds left we should remember the
 					// funds we still have to refund.
 					if !retry_next_epoch.is_empty() {
-						RecordedFees::<T>::insert(
-							chain,
-							AddressAndAmount::Multiple(retry_next_epoch),
-						);
+						RecordedFees::<T>::insert(chain, RefundingInfo::Multiple(retry_next_epoch));
 					}
 					WithheldTransactionFees::<T>::insert(chain, withheld_fees);
 				},
@@ -245,7 +232,7 @@ impl<T: Config> Pallet<T> {
 						} else {
 							RecordedFees::<T>::insert(
 								chain,
-								AddressAndAmount::Single(sum_recorded_fees),
+								RefundingInfo::Single(sum_recorded_fees),
 							);
 						}
 					}
