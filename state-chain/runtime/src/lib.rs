@@ -59,6 +59,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 
+use cf_traits::Refunding as RefundingTrait;
 use pallet_cf_reputation::ExclusionList;
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
@@ -2012,9 +2013,9 @@ impl_runtime_apis! {
 		}
 		fn cf_fee_imbalance() -> FeeImbalance {
 
-			let eth = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Ethereum) - pallet_cf_refunding::RecordedFees::<Runtime>::get(ForeignChain::Ethereum).unwrap().values().sum::<AssetAmount>();
-			let dot = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Polkadot) - pallet_cf_refunding::RecordedFees::<Runtime>::get(ForeignChain::Polkadot).unwrap().values().sum::<AssetAmount>();
-			let arb = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Arbitrum) - pallet_cf_refunding::RecordedFees::<Runtime>::get(ForeignChain::Arbitrum).unwrap().values().sum::<AssetAmount>();
+			let eth = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Ethereum) - RefundingHandler::get_recorded_gas_fees(ForeignChain::Ethereum.gas_asset());
+			let dot = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Polkadot) - RefundingHandler::get_recorded_gas_fees(ForeignChain::Polkadot.gas_asset());
+			let arb = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Arbitrum) - RefundingHandler::get_recorded_gas_fees(ForeignChain::Arbitrum.gas_asset());
 
 			FeeImbalance {
 				ethereum: eth,

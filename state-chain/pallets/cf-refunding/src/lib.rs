@@ -20,6 +20,37 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum AddressAndAmount {
+	// The vault or aggkey is paying the fees.
+	Single(AssetAmount),
+	// Any validator is paying the fees.
+	Multiple(BTreeMap<ForeignChainAddress, AssetAmount>),
+}
+
+impl AddressAndAmount {
+	pub fn sum(&self) -> AssetAmount {
+		match self {
+			AddressAndAmount::Single(amount) => *amount,
+			AddressAndAmount::Multiple(map) => map.values().sum(),
+		}
+	}
+
+	pub fn get_as_multiple(&self) -> Option<&BTreeMap<ForeignChainAddress, AssetAmount>> {
+		match self {
+			AddressAndAmount::Multiple(map) => Some(map),
+			_ => None,
+		}
+	}
+
+	pub fn get_as_single(&self) -> Option<AssetAmount> {
+		match self {
+			AddressAndAmount::Single(amount) => Some(*amount),
+			_ => None,
+		}
+	}
+}
+
 impl_pallet_safe_mode!(PalletSafeMode; do_refund);
 
 #[frame_support::pallet]
@@ -78,13 +109,8 @@ pub mod pallet {
 
 	/// Storage for recorded fees per validator and asset.
 	#[pallet::storage]
-	pub type RecordedFees<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		ForeignChain,
-		BTreeMap<ForeignChainAddress, AssetAmount>,
-		OptionQuery,
-	>;
+	pub type RecordedFees<T: Config> =
+		StorageMap<_, Twox64Concat, ForeignChain, AddressAndAmount, OptionQuery>;
 
 	/// Storage for validator's withheld transaction fees.
 	#[pallet::storage]
@@ -128,14 +154,22 @@ impl<T: Config> Pallet<T> {
 		chain: ForeignChain,
 		gas_fee: AssetAmount,
 	) {
-		RecordedFees::<T>::mutate(chain, |maybe_fees| {
-			if let Some(fees) = maybe_fees {
-				fees.entry(account_id).and_modify(|fee| *fee += gas_fee).or_insert(gas_fee);
-			} else {
-				let mut recorded_fees = BTreeMap::new();
-				recorded_fees.insert(account_id, gas_fee);
-				*maybe_fees = Some(recorded_fees);
-			}
+		RecordedFees::<T>::mutate(chain, |maybe_fees| match chain {
+			ForeignChain::Ethereum | ForeignChain::Arbitrum => {
+				if let Some(AddressAndAmount::Multiple(fees)) = maybe_fees {
+					fees.entry(account_id).and_modify(|fee| *fee += gas_fee).or_insert(gas_fee);
+				} else {
+					let mut recorded_fees = BTreeMap::new();
+					recorded_fees.insert(account_id, gas_fee);
+					*maybe_fees = Some(AddressAndAmount::Multiple(recorded_fees));
+				}
+			},
+			_ =>
+				if let Some(AddressAndAmount::Single(amount)) = maybe_fees {
+					*maybe_fees = Some(AddressAndAmount::Single(amount.saturating_add(gas_fee)));
+				} else {
+					*maybe_fees = Some(AddressAndAmount::Single(gas_fee));
+				},
 		});
 	}
 	pub fn withhold_transaction_fee(chain: ForeignChain, amount: AssetAmount) {
@@ -153,7 +187,7 @@ impl<T: Config> Pallet<T> {
 			let mut withheld_fees = WithheldTransactionFees::<T>::get(chain);
 			let recorded_fees = RecordedFees::<T>::take(chain);
 			let sum_recorded_fees: AssetAmount =
-				recorded_fees.clone().unwrap_or_default().values().sum();
+				recorded_fees.as_ref().map_or(0, |fees| fees.sum());
 			if withheld_fees < sum_recorded_fees {
 				// We are refunding more than we withheld -> That indicates that we have to adjust
 				// the fees.
@@ -168,24 +202,27 @@ impl<T: Config> Pallet<T> {
 					let mut retry_next_epoch: BTreeMap<ForeignChainAddress, AssetAmount> =
 						BTreeMap::new();
 					if let Some(recorded_fees) = recorded_fees {
-						for (address, fee) in recorded_fees {
-							// If there are no withheld fees left we should also stop refunding for
-							// EVM chains.
-							if withheld_fees.checked_sub(fee).is_none() {
-								retry_next_epoch.insert(address.clone(), fee);
-								break;
-							}
-							if Self::do_egress(chain, address.clone(), fee, epoch).is_ok() {
-								withheld_fees = withheld_fees.saturating_sub(fee);
-							} else {
-								retry_next_epoch.insert(address.clone(), fee);
+						if let Some(recorded_fees) = recorded_fees.get_as_multiple() {
+							for (address, fee) in recorded_fees {
+								if withheld_fees.checked_sub(*fee).is_none() {
+									retry_next_epoch.insert(address.clone(), *fee);
+									break;
+								}
+								if Self::do_egress(chain, address.clone(), *fee, epoch).is_ok() {
+									withheld_fees = withheld_fees.saturating_sub(*fee);
+								} else {
+									retry_next_epoch.insert(address.clone(), *fee);
+								}
 							}
 						}
 					}
 					// If an egress failed or we have not enough funds left we should remember the
 					// funds we still have to refund.
 					if !retry_next_epoch.is_empty() {
-						RecordedFees::<T>::insert(chain, retry_next_epoch);
+						RecordedFees::<T>::insert(
+							chain,
+							AddressAndAmount::Multiple(retry_next_epoch),
+						);
 					}
 					WithheldTransactionFees::<T>::insert(chain, withheld_fees);
 				},
@@ -205,6 +242,11 @@ impl<T: Config> Pallet<T> {
 						.is_ok()
 						{
 							withheld_fees = withheld_fees.saturating_sub(sum_recorded_fees);
+						} else {
+							RecordedFees::<T>::insert(
+								chain,
+								AddressAndAmount::Single(sum_recorded_fees),
+							);
 						}
 					}
 					WithheldTransactionFees::<T>::insert(chain, withheld_fees);

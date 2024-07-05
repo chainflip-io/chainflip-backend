@@ -25,6 +25,10 @@ impl RefundingTrait for RefundingHandler {
 	}
 	fn get_recorded_gas_fees(asset: Asset) -> u128 {
 		let chain: ForeignChain = asset.into();
-		RecordedFees::<Runtime>::get(chain).unwrap_or_default().values().len() as u128
+		if let Some(recorded_fees) = RecordedFees::<Runtime>::get(chain) {
+			recorded_fees.sum()
+		} else {
+			0
+		}
 	}
 }

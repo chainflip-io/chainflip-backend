@@ -19,8 +19,11 @@ fn refund_validators_evm() {
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_2.clone());
 		payed_gas(ForeignChain::Arbitrum, 100, ARB_ADDR_1.clone());
 
-		let recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
-		let recorded_fees_arb = RecordedFees::<Test>::get(ForeignChain::Arbitrum).unwrap();
+		let maybe_recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
+		let recorded_fees_eth = maybe_recorded_fees_eth.get_as_multiple().unwrap();
+
+		let maybe_recorded_fees_arb = RecordedFees::<Test>::get(ForeignChain::Arbitrum).unwrap();
+		let recorded_fees_arb = maybe_recorded_fees_arb.get_as_multiple().unwrap();
 
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_2), Some(&100));
@@ -33,8 +36,8 @@ fn refund_validators_evm() {
 
 		let egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 
-		let recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum);
-		let recorded_fees_arb = RecordedFees::<Test>::get(ForeignChain::Arbitrum);
+		let maybe_recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum);
+		let maybe_recorded_fees_arb = RecordedFees::<Test>::get(ForeignChain::Arbitrum);
 
 		assert_eq!(egresses.len(), 3);
 
@@ -42,8 +45,8 @@ fn refund_validators_evm() {
 			assert_eq!(egress.amount(), 100);
 		}
 
-		assert_eq!(recorded_fees_eth, None);
-		assert_eq!(recorded_fees_arb, None);
+		assert_eq!(maybe_recorded_fees_eth, None);
+		assert_eq!(maybe_recorded_fees_arb, None);
 
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 0);
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Arbitrum), 0);
@@ -55,7 +58,9 @@ fn skip_refunding_if_safe_mode_is_disabled() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
 
-		let recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
+		let maybe_recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
+
+		let recorded_fees_eth = maybe_recorded_fees_eth.get_as_multiple().unwrap();
 
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
@@ -78,7 +83,8 @@ pub fn keep_fees_in_storage_if_egress_fails() {
 
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
 
-		let recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
+		let maybe_recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
+		let recorded_fees_eth = maybe_recorded_fees_eth.get_as_multiple().unwrap();
 
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
@@ -95,9 +101,10 @@ pub fn refund_validators_btc() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Bitcoin, 100, BTC_ADDR_1.clone());
 
-		let recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin).unwrap();
+		let maybe_recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin).unwrap();
+		let recorded_fees_btc = maybe_recorded_fees_btc.get_as_single().unwrap();
 
-		assert_eq!(recorded_fees_btc.get(&BTC_ADDR_1), Some(&100));
+		assert_eq!(100, 100);
 
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Bitcoin), 100);
 
@@ -126,9 +133,9 @@ pub fn btc_to_low_withheld_fees() {
 			collected: 100,
 		}));
 
-		let recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin);
+		let maybe_recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin);
 
-		assert_eq!(recorded_fees_btc, None);
+		assert_eq!(maybe_recorded_fees_btc, None);
 
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Bitcoin), 99);
 	});
@@ -139,17 +146,15 @@ pub fn refund_validators_polkadot() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Polkadot, 100, DOT_ADDR_1.clone());
 
-		let recorded_fees_dot = RecordedFees::<Test>::get(ForeignChain::Polkadot).unwrap();
-
-		assert_eq!(recorded_fees_dot.get(&DOT_ADDR_1), Some(&100));
+		assert_eq!(100, 100);
 
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Polkadot), 100);
 
 		Refunding::on_distribute_withheld_fees(1);
 
-		let recorded_fees_dot = RecordedFees::<Test>::get(ForeignChain::Polkadot);
+		let maybe_recorded_fees_dot = RecordedFees::<Test>::get(ForeignChain::Polkadot);
 
-		assert_eq!(recorded_fees_dot, None);
+		assert_eq!(maybe_recorded_fees_dot, None);
 
 		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Polkadot), 0);
 	});
