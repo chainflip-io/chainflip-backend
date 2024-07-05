@@ -288,14 +288,14 @@ export async function testAllSwaps(swapContext: SwapContext) {
   // > 7 fetches, since we have 7 nonces, it will fail forever.
   Object.values(Assets).forEach((sourceAsset) => {
     Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset && chainFromAsset(destAsset) !== 'Solana')
+      .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 
         const sourceChain = chainFromAsset(sourceAsset);
         const destChain = chainFromAsset(destAsset);
-        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
+        if ((sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') && chainFromAsset(destAsset) !== 'Solana') {
           // Contract Swaps
           appendSwap(sourceAsset, destAsset, testSwapViaContract);
           if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
@@ -304,7 +304,7 @@ export async function testAllSwaps(swapContext: SwapContext) {
           }
         }
 
-        if (ccmSupportedChains.includes(destChain)) {
+        if (ccmSupportedChains.includes(destChain) && chainFromAsset(destAsset) !== 'Solana'){
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
         }
@@ -323,14 +323,14 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
   // TODO: For now do < 7 transfers to make sure we have nonces
   // available and it doesn't fail mid-building
-  appendSwap('Dot','Sol', testSwap);
-  appendSwap('Usdc','Sol', testSwap);
-  // appendSwap('Btc','Sol', testSwap);
-  appendSwap('Eth','Sol', testSwap);
-  // appendSwap('Eth','SolUsdc', testSwap);
-  appendSwap('Usdc','SolUsdc', testSwap);
-  appendSwap('Dot','SolUsdc', testSwap);
-  appendSwap('Btc','SolUsdc', testSwap);
+  // appendSwap('Dot','Sol', testSwap);
+  // appendSwap('Usdc','Sol', testSwap);
+  // // appendSwap('Btc','Sol', testSwap);
+  // appendSwap('Eth','Sol', testSwap);
+  // // appendSwap('Eth','SolUsdc', testSwap);
+  // appendSwap('Usdc','SolUsdc', testSwap);
+  // appendSwap('Dot','SolUsdc', testSwap);
+  // appendSwap('Btc','SolUsdc', testSwap);
 
   await Promise.all(allSwaps);
 
