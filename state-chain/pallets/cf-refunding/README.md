@@ -1,20 +1,18 @@
 # Chainflip Refunding Pallet
 
-This pallet tracks fees paid by validators and ensures a periodical payout.
+This pallet tracks fees paid by validators/vaults/aggKeys and ensures a periodical refund.
 
 ## Overview
 
-Periodically (triggered every start of a new epoch) this pallet will iterate over all with hold transaction fees and refund the validators 
-paid for the fees in the first place. As long fees for the refund are available in the vault, we continue paying them out. If no withheld fees should
-be left for the current epoch, the validator is getting refunded in a later point in time (ideally the next epoch) when we have funds available again.
+Periodically (triggered every start of a new epoch) this pallet will iterate over all with hold transaction fees and triggering a refund. As long fees for the refund are available, we continue paying them out. If no withheld fees should be left for the current epoch, the we refunded in a later point in time (ideally the next epoch) when we have funds available again.
 
 ### Terminology
 
 **WithheldTransactionFees**
-The amount of fees kept in the vault for the purpose of refunding validators that have paid transaction fees.
+The amount of fees kept for the purpose of refunding fees.
 
 **RecordedFees**
-The fees a validator payed to transmit a transaction.
+The fees a validator/vault/aggKey payed to transmit a transaction on a Blockchain.
 
 ### Refunding process
 
