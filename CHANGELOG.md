@@ -2,6 +2,25 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.4.5] - 2024-07-01
+
+### Fixes
+
+- Fix Polkadot transaction encoding by adding the new CheckMetadataHash field to SignedExtra.
+
+## [1.4.4] - 2024-06-28
+
+### Fixes
+
+- Eager pruning of Chain Tracking witness data. ([#4994](https://github.com/chainflip-io/chainflip-backend/issues/4994))
+- Ensure broker fees are credited correctly. ([#5011](https://github.com/chainflip-io/chainflip-backend/issues/5011))
+
+## [1.4.3] - 2024-06-18
+
+### Fixes
+
+- Print cause of settings error ([#4972](https://github.com/chainflip-io/chainflip-backend/issues/4972))
+
 ## [1.4.2] - 2024-06-03
 
 ### Features
