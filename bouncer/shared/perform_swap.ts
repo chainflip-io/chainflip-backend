@@ -11,10 +11,13 @@ import {
   observeSwapEvents,
   observeBroadcastSuccess,
   getEncodedSolAddress,
+  observeFetch,
+  chainFromAsset,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swapping';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { get } from 'node:http';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
@@ -144,6 +147,14 @@ export async function doPerformSwap(
       observeBalanceIncrease(destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
+
+    const chain = chainFromAsset(sourceAsset);
+    // TODO: For some reason some EVM deposit channels are not being fetched?!
+    // if (chain !== 'Bitcoin' && chain !== 'Polkadot') {
+    if (chain === 'Solana') {
+      if (log) console.log(`${tag} Waiting deposit fetch ${depositAddress}`);
+      await observeFetch(sourceAsset, depositAddress);
+    }
 
     if (log) console.log(`${tag} Swap success! New balance: ${newBalance}!`);
     swapContext?.updateStatus(tag, SwapStatus.Success);

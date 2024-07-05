@@ -541,12 +541,12 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
       if (chain === 'Ethereum' || chain === 'Arbitrum') {
         const web3 = new Web3(getEvmEndpoint(chain));
         if ((await web3.eth.getCode(address)) === '0x') {
-          throw new Error('Eth address has no bytecode');
+          throw new Error('EVM address has no bytecode');
         }
       }
       return;
     }
-    await sleep(1000);
+    await sleep(5000);
   }
 
   throw new Error('Failed to observe the fetch');
