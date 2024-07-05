@@ -39,9 +39,9 @@ use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
 	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler,
-	CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
-	IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode, ScheduledEgressDetails,
-	SwapDepositHandler, SwapQueueApi, SwapType, TransfersLimitProvider,
+	CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment,
+	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, NetworkEnvironmentProvider,
+	OnDeposit, SafeMode, ScheduledEgressDetails, SwapDepositHandler, SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -439,7 +439,7 @@ pub mod pallet {
 
 		type SwapQueueApi: SwapQueueApi;
 
-		type TransfersLimitProvider: TransfersLimitProvider;
+		type FetchesTransfersLimitProvider: FetchesTransfersLimitProvider;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
@@ -1151,6 +1151,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.collect()
 	}
 
+	fn should_fetch_or_transfer(
+		maybe_no_of_fetch_or_transfers_remaining: &mut Option<usize>,
+	) -> bool {
+		maybe_no_of_fetch_or_transfers_remaining
+			.as_mut()
+			.map(|no_of_fetch_or_transfers_remaining| {
+				if *no_of_fetch_or_transfers_remaining != 0 {
+					*no_of_fetch_or_transfers_remaining -= 1;
+					true
+				} else {
+					false
+				}
+			})
+			.unwrap_or(true)
+	}
+
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
 	///
 	/// Note: Egress transactions with Blacklisted assets are not sent, and kept in storage.
@@ -1159,11 +1175,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let batch_to_send: Vec<_> =
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				let mut maybe_no_of_transfers_remaining =
-					T::TransfersLimitProvider::maybe_transfers_limit();
+					T::FetchesTransfersLimitProvider::maybe_transfers_limit();
+				let mut maybe_no_of_fetches_remaining =
+					T::FetchesTransfersLimitProvider::maybe_fetches_limit();
 				// Filter out disabled assets and requests that are not ready to be egressed.
 				requests
 					.extract_if(|request| {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
+							Self::should_fetch_or_transfer(&mut maybe_no_of_fetches_remaining) &&
 							match request {
 								FetchOrTransfer::Fetch {
 									deposit_address,
@@ -1192,17 +1211,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 											.unwrap_or(false)
 									},
 								),
-								FetchOrTransfer::Transfer { .. } => maybe_no_of_transfers_remaining
-									.as_mut()
-									.map(|no_of_transfers_remaining| {
-										if *no_of_transfers_remaining != 0 {
-											*no_of_transfers_remaining -= 1;
-											true
-										} else {
-											false
-										}
-									})
-									.unwrap_or(true),
+								FetchOrTransfer::Transfer { .. } => Self::should_fetch_or_transfer(
+									&mut maybe_no_of_transfers_remaining,
+								),
 							}
 					})
 					.collect()

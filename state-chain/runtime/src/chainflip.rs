@@ -59,9 +59,9 @@ use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, Beneficiari
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	EpochInfo, Heartbeat, IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit,
-	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
-	TransfersLimitProvider,
+	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
+	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	ScheduledEgressDetails,
 };
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
@@ -79,6 +79,7 @@ pub use offences::*;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
+use sol_prim::consts::MAX_SOL_FETCHES_PER_TX;
 use sp_core::U256;
 use sp_std::prelude::*;
 
@@ -868,9 +869,13 @@ impl_ingress_egress_fee_api_for_anychain!(
 	(Solana, SolanaIngressEgress)
 );
 
-pub struct SolanaTransfersLimit;
-impl TransfersLimitProvider for SolanaTransfersLimit {
+pub struct SolanaLimit;
+impl FetchesTransfersLimitProvider for SolanaLimit {
 	fn maybe_transfers_limit() -> Option<usize> {
 		Some(Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(1))
+	}
+
+	fn maybe_fetches_limit() -> Option<usize> {
+		Some(MAX_SOL_FETCHES_PER_TX)
 	}
 }
