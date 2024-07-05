@@ -115,10 +115,19 @@ pub struct AuctionState {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct LiquidityProviderBoostPoolInfo {
+	pub fee_tier: u16,
+	pub total_balance: AssetAmount,
+	pub available_balance: AssetAmount,
+	pub in_use_balance: AssetAmount,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
 	pub earned_fees: AssetMap<AssetAmount>,
+	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
