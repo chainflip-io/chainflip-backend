@@ -40,5 +40,5 @@ pub const NONCE_ACCOUNT_LENGTH: u64 = 80;
 pub const SOL_USDC_DECIMAL: u8 = 6u8;
 
 // Due to transaction size limit in Solana, we have a limit on number of fetches in a solana hetch
-// tx
+// tx. Batches of 5 fetches get to ~1000 bytes, max ~1090 for tokens.
 pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
