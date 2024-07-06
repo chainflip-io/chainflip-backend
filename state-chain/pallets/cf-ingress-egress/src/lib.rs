@@ -21,7 +21,6 @@ use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
 
 use frame_support::{pallet_prelude::OptionQuery, transactional};
-use std::cell::Cell;
 
 use cf_chains::{
 	address::{
@@ -1150,21 +1149,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.collect()
 	}
 
-	// TODO: This patch doesn't work!!
-	pub const MAX_BATCH_FETCH_TRANSFER: usize = 5;
-
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
 	///
 	/// Note: Egress transactions with Blacklisted assets are not sent, and kept in storage.
 	#[transactional]
 	fn do_egress_scheduled_fetch_transfer() -> Result<(), AllBatchError> {
-		let batch_size = Cell::new(0);
 		let batch_to_send: Vec<_> =
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Filter out disabled assets and requests that are not ready to be egressed.
 				requests
 					.extract_if(|request| {
-						let mut take = !DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
+						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
 							match request {
 								FetchOrTransfer::Fetch {
 									deposit_address,
@@ -1194,12 +1189,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									},
 								),
 								FetchOrTransfer::Transfer { .. } => true,
-							};
-						take = take && (batch_size.get() < Self::MAX_BATCH_FETCH_TRANSFER);
-						if take {
-							batch_size.set(batch_size.get() + 1);
-						}
-						take
+							}
 					})
 					.collect()
 			});

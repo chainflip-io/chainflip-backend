@@ -13,7 +13,6 @@ use crate::{
 	sol::{
 		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolApiEnvironment,
 		SolAsset, SolCcmAccounts, SolHash, SolMessage, SolTransaction, SolanaCrypto,
-		MAX_FETCH_BATCH,
 	},
 	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
 	ConsolidationError, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
@@ -164,12 +163,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		transfer_params
 			.into_iter()
 			.map(|(transfer_param, egress_id)| {
-				// TODO: I think this might be problematic if we fail to fetch a nonce account
-				// because the previusly fetched would be taken but the build would fail.
-				// Transaction building shouldn't fail but rather the issue is if we run out of
-				// nonces. Maybe then get a function that gets multiple nonces instead of just one?
-				// Also, we shouldn't have more than the number of nonces we have in total or we'd
-				// never be able to build the calls.
+				// TODO: Consider reading all nonces at once, either for the transfers
+				// or the transfers+fetches in the AllBatch function.
 				let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 
 				let transfer_instruction_set = match transfer_param.asset {
@@ -388,22 +383,10 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 		fetch_params: Vec<FetchAssetParams<Solana>>,
 		transfer_params: Vec<(TransferAssetParams<Solana>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
-		// TODO: The problem now is the number of nonces. We should make sure that #transfers +
-		// #batch_fetches is < #nonces, ideally with a margin of 1-2 so they don't get delayed if
-		// there are pending txs. The problem of doing the checks here is that it's too late if
-		// that's the case. Should we do it one layer above in `do_egress_scheduled_fetch_transfer`?
-		// A probably better option is to maybe have an option that frees up a nonce if the build
-		// fails, so this function aims to be able to handle any amount of txs.
-		// This, however, might be problematic with transfers as ig we get > #nonces transfers there
-		// is no way to handle it once we are at this stage. We'd need to pull less values from the
-		// `requests`.
 		let mut txs = Self::transfer(transfer_params)?;
 
 		if !fetch_params.is_empty() {
-			for chunk in fetch_params.chunks(MAX_FETCH_BATCH) {
-				let chunk = chunk.to_vec();
-				txs.push((Self::batch_fetch(chunk)?, vec![]));
-			}
+			txs.push((Self::batch_fetch(fetch_params)?, vec![]));
 		}
 
 		Ok(txs)
