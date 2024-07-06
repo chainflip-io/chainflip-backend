@@ -693,6 +693,10 @@ impl<T: Config> Pallet<T> {
 		nonce_accounts.extend(&mut SolanaUnAvailableNonceAccounts::<T>::iter());
 		nonce_accounts
 	}
+
+	pub fn get_number_of_available_sol_nonce_accounts() -> usize {
+		SolanaAvailableNonceAccounts::<T>::decode_len().unwrap_or(0)
+	}
 }
 
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {

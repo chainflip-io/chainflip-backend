@@ -283,9 +283,6 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
   console.log('=== Testing all swaps ===');
 
-  // TODO: Doing many fetches and a few transfers works now that we split th batch fetches. However,
-  // more than that results in the AllBatch failing forever. I suspect that happens when there is
-  // > 7 fetches, since we have 7 nonces, it will fail forever.
   Object.values(Assets).forEach((sourceAsset) => {
     Object.values(Assets)
       .filter((destAsset) => sourceAsset !== destAsset)
@@ -311,6 +308,32 @@ export async function testAllSwaps(swapContext: SwapContext) {
       });
   });
 
+  // appendSwap("Eth", "Sol", testSwap, newCcmMetadata('Eth'))
+
+
+
+  // ---------- CCM TESTING ---------------------------------------
+  // function toHexString(byteArray: number[]) {
+  //   return  '0x' +byteArray.map(function(byte) {
+  //       return ('0' + (byte & 0xFF).toString(16)).slice(-2);
+  //   }).join('');
+  // }
+
+  // let message = [124, 29, 15, 7];
+  // let cf_parameters = [116, 23, 218, 139, 153, 215, 116, 129, 39, 167, 107, 3, 214, 31, 238, 105, 200, 13, 254, 247, 58, 210, 213, 80, 55, 55, 190, 237, 197, 169, 237, 72, 1, 4, 167, 59, 223, 49, 227, 65, 33, 138, 105, 59, 135, 114, 196, 62, 207, 206, 205, 76, 243, 95, 173, 160, 154, 135, 234, 15, 134, 13, 2, 129, 104, 229, 0];
+  // // console.log("message", toHexString(message))
+  // // console.log(newCcmMetadata('Eth').message)
+  // // console.log("cf_params", toHexString(cf_parameters))
+  // // console.log(newCcmMetadata('Eth').cfParameters)
+
+  // appendSwap("Eth", "Sol", testSwap, {
+  //   message: toHexString(message),
+  //   gasBudget: newCcmMetadata('Eth').gasBudget,
+  //   cfParameters:toHexString(cf_parameters),
+  // })
+
+
+  // ---------------------------------------------------------------
   // // TODO: For now we make sure to not do too many fetches are they
   // // will be batched obtaining a tx that is too long.
   // appendSwap('Sol', 'Eth', testSwap);
