@@ -149,8 +149,7 @@ export async function doPerformSwap(
     ]);
 
     const chain = chainFromAsset(sourceAsset);
-    // TODO: Debug why it's not working for EVM chains
-    if (chain === 'Solana') {
+    if (chain !== 'Bitcoin' && chain !== 'Polkadot') {
       if (log) console.log(`${tag} Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);
     }

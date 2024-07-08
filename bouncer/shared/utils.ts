@@ -36,7 +36,7 @@ export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
-export const ccmSupportedChains = ['Ethereum', 'Arbitrum' , 'Solana'] as Chain[];
+export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 
 export type Asset = SDKAsset;
 export type Chain = SDKChain;
@@ -546,7 +546,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
       }
       return;
     }
-    await sleep(5000);
+    await sleep(1000);
   }
 
   throw new Error('Failed to observe the fetch');
@@ -669,7 +669,6 @@ export async function observeCcmReceived(
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
   }
-
 }
 
 export async function observeSolanaEvent(
