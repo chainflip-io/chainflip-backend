@@ -149,8 +149,7 @@ export async function doPerformSwap(
     ]);
 
     const chain = chainFromAsset(sourceAsset);
-    // TODO: For some reason some EVM deposit channels are not being fetched?!
-    // if (chain !== 'Bitcoin' && chain !== 'Polkadot') {
+    // TODO: Debug why it's not working for EVM chains
     if (chain === 'Solana') {
       if (log) console.log(`${tag} Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);

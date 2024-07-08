@@ -111,12 +111,9 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const tokenVaultPda = new PublicKey(getContractAddress('Solana', 'TOKEN_VAULT_PDA'));
   const upgradeSignerPda = new PublicKey('3eechPbKXiAVCubUkM9asJ5DbjNn7jHyi5KFLd5ocJbz');
 
-
   // Fund new Solana Agg key
-  console.log("Funding Solana new aggregate key")
-  console.log("solKey: ", newAggKey)
-  await sendSol(solKey, "100");
-
+  console.log('Funding Solana new aggregate key:', newAggKey.toString());
+  await sendSol(solKey, '100');
 
   // Initialize Vault program
   const tx = new Transaction().add(
