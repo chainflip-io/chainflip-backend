@@ -58,6 +58,8 @@ use sp_std::{
 };
 pub use weights::WeightInfo;
 
+const DEFAULT_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
 	// If a (pre-witnessed) deposit on a channel has been boosted, we record
@@ -366,7 +368,7 @@ pub mod pallet {
 				deposit_channel_lifetime: Default::default(),
 				witness_safety_margin: None,
 				dust_limits: Default::default(),
-				max_swap_retry_duration_blocks: 3600 / SECONDS_PER_BLOCK as u32,
+				max_swap_retry_duration_blocks: DEFAULT_SWAP_RETRY_DURATION_BLOCKS,
 			}
 		}
 	}
@@ -571,7 +573,7 @@ pub mod pallet {
 	/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
 	#[pallet::storage]
 	pub(super) type MaxSwapRetryDurationBlocks<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, u32, ValueQuery>;
+		StorageValue<_, u32, ValueQuery, ConstU32<DEFAULT_SWAP_RETRY_DURATION_BLOCKS>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]

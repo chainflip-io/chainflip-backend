@@ -49,6 +49,15 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
+pub struct DefaultSwapRetryDelay<T> {
+	_phantom: PhantomData<T>,
+}
+impl<T: Config> Get<BlockNumberFor<T>> for DefaultSwapRetryDelay<T> {
+	fn get() -> BlockNumberFor<T> {
+		BlockNumberFor::<T>::from(5u32)
+	}
+}
+
 struct SwapState {
 	swap: Swap,
 	stable_amount: Option<AssetAmount>,
@@ -346,7 +355,8 @@ pub mod pallet {
 
 	/// The delay in blocks before retrying a previously failed swap.
 	#[pallet::storage]
-	pub type SwapRetryDelay<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub type SwapRetryDelay<T: Config> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery, DefaultSwapRetryDelay<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -529,7 +539,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				flip_buy_interval: BlockNumberFor::<T>::zero(),
-				swap_retry_delay: BlockNumberFor::<T>::from(5u32),
+				swap_retry_delay: DefaultSwapRetryDelay::<T>::get(),
 			}
 		}
 	}
