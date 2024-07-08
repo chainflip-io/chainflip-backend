@@ -29,6 +29,10 @@ pub use sol_tx_core::{
 	Transaction as SolTransaction,
 };
 
+// Due to transaction size limit in Solana, we have a limit on number of fetches in a solana fetch
+// tx
+pub const MAX_SOL_FETCHES_PER_TX: usize = 10;
+
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;

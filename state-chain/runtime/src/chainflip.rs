@@ -79,7 +79,6 @@ pub use offences::*;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
-use sol_prim::consts::MAX_SOL_FETCHES_PER_TX;
 use sp_core::U256;
 use sp_std::prelude::*;
 
@@ -876,6 +875,6 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 	}
 
 	fn maybe_fetches_limit() -> Option<usize> {
-		Some(MAX_SOL_FETCHES_PER_TX)
+		Some(cf_chains::sol::MAX_SOL_FETCHES_PER_TX)
 	}
 }
