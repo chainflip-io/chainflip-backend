@@ -1,15 +1,10 @@
-use cf_utilities::{
-	rpc::NumberOrHex,
-	task_scope::{task_scope, Scope},
-};
+use cf_utilities::task_scope::{task_scope, Scope};
 use chainflip_api::{
-	self, clean_foreign_chain_address,
-	primitives::{
-		AccountRole, Affiliates, Asset, BasisPoints, BlockNumber, CcmChannelMetadata, ChannelId,
-		ChannelRefundParameters,
-	},
+	self,
+	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata},
 	settings::StateChain,
-	AccountId32, BrokerApi, OperatorApi, StateChainApi, WithdrawFeesDetail,
+	AccountId32, BrokerApi, OperatorApi, RefundParameters, StateChainApi, StringAddress,
+	SwapDepositAddress, WithdrawFeesDetail,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -18,34 +13,8 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
-use serde::{Deserialize, Serialize};
-use sp_core::U256;
 use std::path::PathBuf;
 use tracing::log;
-
-/// The response type expected by the broker api.
-///
-/// Note that changing this struct is a breaking change to the api.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct BrokerSwapDepositAddress {
-	pub address: String,
-	pub issued_block: BlockNumber,
-	pub channel_id: ChannelId,
-	pub source_chain_expiry_block: NumberOrHex,
-	pub channel_opening_fee: U256,
-}
-
-impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
-	fn from(value: chainflip_api::SwapDepositAddress) -> Self {
-		Self {
-			address: value.address,
-			issued_block: value.issued_block,
-			channel_id: value.channel_id,
-			source_chain_expiry_block: NumberOrHex::from(value.source_chain_expiry_block),
-			channel_opening_fee: value.channel_opening_fee,
-		}
-	}
-}
 
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
@@ -57,19 +26,19 @@ pub trait Rpc {
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
-		destination_address: String,
+		destination_address: StringAddress,
 		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<ChannelRefundParameters>,
-	) -> RpcResult<BrokerSwapDepositAddress>;
+		refund_parameters: Option<RefundParameters>,
+	) -> RpcResult<SwapDepositAddress>;
 
 	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
 	async fn withdraw_fees(
 		&self,
 		asset: Asset,
-		destination_address: String,
+		destination_address: StringAddress,
 	) -> RpcResult<WithdrawFeesDetail>;
 }
 
@@ -104,40 +73,35 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
-		destination_address: String,
+		destination_address: StringAddress,
 		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<ChannelRefundParameters>,
-	) -> RpcResult<BrokerSwapDepositAddress> {
+		refund_parameters: Option<RefundParameters>,
+	) -> RpcResult<SwapDepositAddress> {
 		Ok(self
 			.api
 			.broker_api()
 			.request_swap_deposit_address(
 				source_asset,
 				destination_asset,
-				clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
+				destination_address,
 				broker_commission,
 				channel_metadata,
 				boost_fee,
 				affiliate_fees.unwrap_or_default(),
 				refund_parameters,
 			)
-			.await
-			.map(BrokerSwapDepositAddress::from)?)
+			.await?)
 	}
 
 	async fn withdraw_fees(
 		&self,
 		asset: Asset,
-		destination_address: String,
+		destination_address: StringAddress,
 	) -> RpcResult<WithdrawFeesDetail> {
-		Ok(self
-			.api
-			.broker_api()
-			.withdraw_fees(asset, clean_foreign_chain_address(asset.into(), &destination_address)?)
-			.await?)
+		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
 	}
 }
 

@@ -65,10 +65,7 @@ async fn run_cli() -> Result<()> {
 							.request_swap_deposit_address(
 								params.source_asset,
 								params.destination_asset,
-								chainflip_api::clean_foreign_chain_address(
-									params.destination_asset.into(),
-									&params.destination_address,
-								)?,
+								params.destination_address,
 								params.broker_commission,
 								None,
 								params.boost_fee,
@@ -81,13 +78,7 @@ async fn run_cli() -> Result<()> {
 					BrokerSubcommands::WithdrawFees(params) => {
 						let withdraw_details = api
 							.broker_api()
-							.withdraw_fees(
-								params.asset,
-								chainflip_api::clean_foreign_chain_address(
-									params.asset.into(),
-									&params.destination_address,
-								)?,
-							)
+							.withdraw_fees(params.asset, params.destination_address)
 							.await?;
 						println!("Withdrawal request successfull submitted: {}", withdraw_details);
 					},

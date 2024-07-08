@@ -1,6 +1,6 @@
 use chainflip_api::{
 	primitives::{state_chain_runtime, AccountRole, Asset, EpochIndex, ForeignChain},
-	BasisPoints,
+	BasisPoints, StringAddress,
 };
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
@@ -67,7 +67,7 @@ pub struct SwapRequestParams {
 	// until we know which kind of address to expect (based
 	// on destination_asset)
 	/// Egress asset address to receive funds after the swap
-	pub destination_address: String,
+	pub destination_address: StringAddress,
 	/// Commission to the broker in basis points
 	pub broker_commission: BasisPoints,
 	/// Commission to the booster in basis points
@@ -78,7 +78,7 @@ pub struct WithdrawFeesParams {
 	/// Asset to withdraw ("ETH"|"DOT")
 	pub asset: Asset,
 	/// Egress asset address to receive withdrawn funds
-	pub destination_address: String,
+	pub destination_address: StringAddress,
 }
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum BrokerSubcommands {
