@@ -621,6 +621,22 @@ export async function observeEVMEvent(
   throw new Error(`Failed to observe the ${eventName} event`);
 }
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
+export async function observeSolanaEvent(
+  chain: Chain,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  contractAbi: any,
+  address: string,
+  eventName: string,
+  eventParametersExpected: (string | null)[],
+  stopObserveEvent?: () => boolean,
+  initialBlockNumber?: number,
+): Promise<EVMEvent | undefined> {
+  // TODO: Add logic to witness the event on the Solana CfTester
+  return undefined;
+}
+/* eslint-enable @typescript-eslint/no-unused-vars */
+
 export async function observeCcmReceived(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -669,20 +685,6 @@ export async function observeCcmReceived(
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
   }
-}
-
-export async function observeSolanaEvent(
-  chain: Chain,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contractAbi: any,
-  address: string,
-  eventName: string,
-  eventParametersExpected: (string | null)[],
-  stopObserveEvent?: () => boolean,
-  initialBlockNumber?: number,
-): Promise<EVMEvent | undefined> {
-  // TODO: Add logic to witness the event on the Solana CfTester
-  return undefined;
 }
 
 // Converts a hex string into a bytes array. Support hex strings start with and without 0x
