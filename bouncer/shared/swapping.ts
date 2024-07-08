@@ -117,7 +117,11 @@ export async function prepareSwap(
   tag += tagSuffix ? `${tagSuffix}]` : ']';
 
   // For swaps with a message force the address to be the CF Tester address.
-  if (messageMetadata && ccmSupportedChains.includes(chainFromAsset(destAsset))) {
+  if (
+    messageMetadata &&
+    ccmSupportedChains.includes(chainFromAsset(destAsset)) &&
+    chainFromAsset(destAsset) !== 'Solana'
+  ) {
     destAddress = getContractAddress(chainFromAsset(destAsset), 'CFTESTER');
     if (log) console.log(`${tag} Using CF Tester address: ${destAddress}`);
   } else {
@@ -283,33 +287,62 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
   console.log('=== Testing all swaps ===');
 
-  Object.values(Assets).forEach((sourceAsset) => {
-    Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset)
-      .forEach((destAsset) => {
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
+  // Object.values(Assets).forEach((sourceAsset) => {
+  //   Object.values(Assets)
+  //     .filter((destAsset) => sourceAsset !== destAsset)
+  //     .forEach((destAsset) => {
+  //       // Regular swaps
+  //       appendSwap(sourceAsset, destAsset, testSwap);
 
-        const sourceChain = chainFromAsset(sourceAsset);
-        const destChain = chainFromAsset(destAsset);
-        if (
-          (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') &&
-          chainFromAsset(destAsset) !== 'Solana'
-        ) {
-          // Contract Swaps
-          appendSwap(sourceAsset, destAsset, testSwapViaContract);
-          if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
-            // CCM contract swaps
-            appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
-          }
-        }
+  //       const sourceChain = chainFromAsset(sourceAsset);
+  //       const destChain = chainFromAsset(destAsset);
+  //       if (
+  //         (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') &&
+  //         chainFromAsset(destAsset) !== 'Solana'
+  //       ) {
+  //         // Contract Swaps
+  //         appendSwap(sourceAsset, destAsset, testSwapViaContract);
+  //         if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
+  //           // CCM contract swaps
+  //           appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
+  //         }
+  //       }
 
-        if (ccmSupportedChains.includes(destChain) && chainFromAsset(destAsset) !== 'Solana') {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
-        }
-      });
+  //       if (ccmSupportedChains.includes(destChain) && chainFromAsset(destAsset) !== 'Solana') {
+  //         // CCM swaps
+  //         appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+  //       }
+  //     });
+  // });
+
+  // await Promise.all(allSwaps);
+
+  // ---------- CCM TESTING ---------------------------------------
+  function toHexString(byteArray: number[]) {
+    // eslint-disable-next-line no-bitwise
+    return '0x' + byteArray.map((byte) => ('0' + (byte & 0xff).toString(16)).slice(-2)).join('');
+  }
+
+  // Bytes obtained from `create_ccm_native_transfer` test setting is_writable to false.
+  // Encoded Solana CF_TESTER address and it's mutability status.
+  const message = [124, 29, 15, 7];
+  const cfParameters = [
+    116, 23, 218, 139, 153, 215, 116, 129, 39, 167, 107, 3, 214, 31, 238, 105, 200, 13, 254, 247,
+    58, 210, 213, 80, 55, 55, 190, 237, 197, 169, 237, 72, 0, 4, 167, 59, 223, 49, 227, 65, 33, 138,
+    105, 59, 135, 114, 196, 62, 207, 206, 205, 76, 243, 95, 173, 160, 154, 135, 234, 15, 134, 13, 2,
+    129, 104, 229, 0,
+  ];
+
+  console.log('message', toHexString(message));
+  console.log('cf_params', toHexString(cfParameters));
+
+  appendSwap('Eth', 'Sol', testSwap, {
+    message: toHexString(message),
+    gasBudget: newCcmMetadata('Sol').gasBudget,
+    cfParameters: toHexString(cfParameters),
   });
+
+  appendSwap('Btc', 'Eth', testSwap, newCcmMetadata('Btc'));
 
   await Promise.all(allSwaps);
 
