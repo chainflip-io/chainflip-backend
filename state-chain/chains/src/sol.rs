@@ -95,17 +95,16 @@ impl ChainCrypto for SolanaCrypto {
 pub const LAMPORTS_PER_SIGNATURE: SolAmount = 5000u64;
 
 // This is to be used both for ingress/egress estimation and for setting the compute units
-// limit when crafting transactions by the State Chain.
+// limit when crafting transactions by the State Chain. Using a 50% buffer to ensure we'll
+// have enough compute units to cover the actual cost.
 pub mod compute_units_costs {
-	// TODO: Recompute these, especially the fetches now that we have historical accounts.
 	use super::SolComputeLimit;
-	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 450u32;
-	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 7_500u32;
-	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 300u32;
-	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 31_000u32;
-	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 41_200u32;
-	// TODO: To compute
-	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 300_000u32;
+	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 300u32 * 3 / 2;
+	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 15_000u32 * 3 / 2;
+	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32 * 3 / 2;
+	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 45_000u32 * 3 / 2;
+	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 50_000u32 * 3 / 2;
+	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32 * 3 / 2;
 }
 
 #[derive(

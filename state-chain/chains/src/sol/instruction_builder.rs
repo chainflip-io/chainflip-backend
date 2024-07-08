@@ -30,7 +30,6 @@ use crate::{
 	},
 	FetchAssetParams, ForeignChainAddress,
 };
-use frame_support::sp_runtime::FixedU64;
 
 fn system_program_id() -> SolAddress {
 	SYSTEM_PROGRAM_ID
@@ -45,9 +44,8 @@ fn token_program_id() -> SolAddress {
 }
 pub struct SolanaInstructionBuilder;
 
-/// TODO: Implement CCM gas_limit calculations
+/// TODO: Remove when PRO-1479 is completed
 const COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
-const COMPUTE_LIMIT_MULTIPLIER: FixedU64 = FixedU64::from_rational(4, 3);
 
 impl SolanaInstructionBuilder {
 	/// Finalize a Instruction Set. This should be internally called after a instruction set is
@@ -282,7 +280,7 @@ impl SolanaInstructionBuilder {
 				.with_remaining_accounts(ccm_accounts.remaining_account_metas()),
 		];
 
-		// TODO: To pass the compute limit correctly from the SC
+		// TODO: Complete in PRO-1479
 		Self::finalize(
 			instructions,
 			nonce_account.into(),
@@ -342,7 +340,7 @@ impl SolanaInstructionBuilder {
 			sys_var_instructions(),
 		).with_remaining_accounts(ccm_accounts.remaining_account_metas())];
 
-		// TODO: To pass the compute limit correctly from the SC
+		// TODO: Complete in PRO-1479
 		Self::finalize(
 			instructions,
 			nonce_account.into(),
