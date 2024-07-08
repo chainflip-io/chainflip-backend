@@ -163,8 +163,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		transfer_params
 			.into_iter()
 			.map(|(transfer_param, egress_id)| {
-				// TODO: Consider reading all nonces at once, either for the transfers
-				// or the transfers+fetches in the AllBatch function.
 				let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 
 				let transfer_instruction_set = match transfer_param.asset {

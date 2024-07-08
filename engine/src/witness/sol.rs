@@ -53,8 +53,6 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 {
 	let (_, monitored_egresses) = header.data;
 
-	println!("DEBUG_LOCALNET monitored_egresses: {:?}", monitored_egresses);
-
 	let monitored_tx_signatures: Vec<_> = monitored_egresses.into_iter().map(|(x, _)| x).collect();
 
 	if !monitored_tx_signatures.is_empty() {
