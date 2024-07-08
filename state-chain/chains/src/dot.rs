@@ -438,6 +438,7 @@ impl PolkadotExtrinsicBuilder {
 			(),
 			PolkadotChargeTransactionPayment(TIP),
 			(),
+			polkadot_sdk_types::CheckMetadataHash::default(),
 		))
 	}
 
@@ -460,6 +461,7 @@ impl PolkadotExtrinsicBuilder {
 					(),
 					(),
 					(),
+					None,
 				),
 			)
 			.encode(),
@@ -893,6 +895,34 @@ pub struct PolkadotCheckNonce(#[codec(compact)] pub PolkadotIndex);
 #[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotCheckMortality(pub Era);
 
+/// Temporarily copied from https://github.com/chainflip-io/polkadot-sdk/blob/8dbe4ee80734bba6644c7e5f879a363ce7c0a19f/substrate/frame/metadata-hash-extension/src/lib.rs
+/// TODO: import it from polkadot-sdk once we update to a more recent version.
+mod polkadot_sdk_types {
+	use super::*;
+
+	/// The mode of [`CheckMetadataHash`].
+	#[derive(Decode, Encode, PartialEq, Debug, TypeInfo, Clone, Copy, Eq)]
+	enum Mode {
+		Disabled,
+		Enabled,
+	}
+
+	pub type MetadataHash = Option<[u8; 32]>;
+
+	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo, DebugNoBound)]
+	pub struct CheckMetadataHash {
+		mode: Mode,
+		#[codec(skip)]
+		metadata_hash: MetadataHash,
+	}
+
+	impl Default for CheckMetadataHash {
+		fn default() -> Self {
+			Self { mode: Mode::Disabled, metadata_hash: None }
+		}
+	}
+}
+
 #[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotSignedExtra(
 	pub  (
@@ -905,6 +935,7 @@ pub struct PolkadotSignedExtra(
 		(),
 		PolkadotChargeTransactionPayment,
 		(),
+		polkadot_sdk_types::CheckMetadataHash,
 	),
 );
 
@@ -921,6 +952,7 @@ impl SignedExtension for PolkadotSignedExtra {
 		(),
 		(),
 		(),
+		polkadot_sdk_types::MetadataHash,
 	);
 	type Pre = ();
 	const IDENTIFIER: &'static str = "PolkadotSignedExtra";
@@ -943,6 +975,7 @@ impl SignedExtension for PolkadotSignedExtra {
 			(),
 			(),
 			(),
+			polkadot_sdk_types::MetadataHash::None,
 		))
 	}
 
@@ -994,85 +1027,22 @@ mod test_polkadot_extrinsics {
 	#[test]
 	fn decode_into_unchecked_extrinsic() {
 		// These extrinsic bytes were taken from real polkadot extrinsics
-		let tests = [
-			vec![
-				217u8, 2, 132, 0, 204, 244, 17, 138, 147, 245, 170, 200, 63, 156, 208, 149, 110,
-				196, 92, 172, 208, 18, 154, 161, 101, 9, 136, 32, 24, 224, 82, 32, 192, 44, 47, 57,
-				1, 32, 166, 154, 89, 119, 246, 7, 38, 66, 211, 127, 100, 163, 122, 246, 84, 202,
-				17, 78, 163, 200, 19, 43, 106, 49, 143, 86, 195, 159, 227, 118, 115, 227, 169, 9,
-				97, 166, 49, 79, 126, 77, 71, 89, 238, 7, 58, 148, 10, 231, 91, 245, 106, 134, 193,
-				131, 146, 1, 45, 189, 96, 26, 184, 146, 131, 0, 0, 0, 29, 0, 0, 74, 39, 43, 218,
-				234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152,
-				37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 1, 0, 26, 4, 4, 26, 1, 1, 0, 5, 4,
-				0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11,
-				51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 0,
-			],
-			vec![
-				121, 8, 132, 0, 204, 244, 17, 138, 147, 245, 170, 200, 63, 156, 208, 149, 110, 196,
-				92, 172, 208, 18, 154, 161, 101, 9, 136, 32, 24, 224, 82, 32, 192, 44, 47, 57, 1,
-				84, 216, 144, 8, 107, 255, 131, 148, 77, 46, 236, 161, 47, 65, 179, 130, 104, 234,
-				83, 208, 133, 54, 252, 198, 32, 98, 231, 23, 32, 223, 158, 37, 113, 39, 128, 26,
-				71, 238, 62, 48, 216, 232, 58, 100, 9, 178, 71, 216, 103, 218, 253, 161, 13, 133,
-				18, 152, 232, 222, 119, 193, 50, 148, 133, 141, 0, 4, 0, 29, 0, 0, 74, 39, 43, 218,
-				234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152,
-				37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 1, 0, 26, 4, 40, 26, 1, 9, 0, 5, 4,
-				0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11,
-				51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 0, 26, 1, 11, 0,
-				5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71,
-				242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 0, 26, 1,
-				10, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215,
-				71, 242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 0,
-				26, 1, 8, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141, 168,
-				78, 215, 71, 242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199, 158,
-				244, 0, 26, 1, 3, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43, 141,
-				168, 78, 215, 71, 242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102, 199,
-				158, 244, 0, 26, 1, 5, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64, 37, 43,
-				141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49, 248, 102,
-				199, 158, 244, 0, 26, 1, 2, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148, 117, 64,
-				37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152, 37, 203, 138, 113, 49,
-				248, 102, 199, 158, 244, 0, 26, 1, 6, 0, 5, 4, 0, 74, 39, 43, 218, 234, 215, 148,
-				117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152, 37, 203, 138,
-				113, 49, 248, 102, 199, 158, 244, 0, 26, 1, 7, 0, 5, 4, 0, 74, 39, 43, 218, 234,
-				215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152, 37,
-				203, 138, 113, 49, 248, 102, 199, 158, 244, 0, 26, 1, 4, 0, 5, 4, 0, 74, 39, 43,
-				218, 234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71,
-				152, 37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 0,
-			],
-			vec![
-				221, 2, 132, 0, 204, 244, 17, 138, 147, 245, 170, 200, 63, 156, 208, 149, 110, 196,
-				92, 172, 208, 18, 154, 161, 101, 9, 136, 32, 24, 224, 82, 32, 192, 44, 47, 57, 1,
-				200, 78, 45, 101, 48, 19, 155, 165, 69, 100, 122, 205, 219, 131, 91, 65, 66, 170,
-				61, 13, 161, 114, 7, 11, 131, 177, 140, 62, 103, 153, 252, 18, 210, 191, 208, 86,
-				61, 86, 217, 117, 127, 246, 180, 48, 214, 147, 58, 248, 233, 191, 10, 42, 37, 29,
-				228, 232, 55, 80, 241, 113, 77, 126, 212, 139, 0, 8, 0, 29, 0, 0, 74, 39, 43, 218,
-				234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152,
-				37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 1, 0, 26, 4, 4, 5, 0, 0, 0, 72, 60,
-				242, 234, 28, 242, 48, 175, 91, 19, 67, 23, 112, 3, 45, 92, 152, 192, 32, 128, 83,
-				192, 130, 139, 252, 127, 61, 7, 188, 82, 102, 7, 64, 85, 100, 5, 128,
-			],
-			vec![
-				45, 4, 132, 0, 204, 244, 17, 138, 147, 245, 170, 200, 63, 156, 208, 149, 110, 196,
-				92, 172, 208, 18, 154, 161, 101, 9, 136, 32, 24, 224, 82, 32, 192, 44, 47, 57, 1,
-				20, 152, 207, 160, 55, 187, 5, 113, 7, 208, 84, 47, 190, 91, 88, 68, 62, 57, 31,
-				104, 223, 192, 49, 28, 111, 86, 14, 178, 135, 30, 46, 14, 168, 54, 184, 233, 126,
-				246, 184, 109, 239, 170, 56, 183, 246, 177, 192, 191, 155, 156, 149, 102, 224, 39,
-				144, 118, 117, 83, 76, 179, 146, 169, 91, 133, 0, 12, 0, 29, 0, 0, 74, 39, 43, 218,
-				234, 215, 148, 117, 64, 37, 43, 141, 168, 78, 215, 71, 242, 11, 51, 73, 71, 152,
-				37, 203, 138, 113, 49, 248, 102, 199, 158, 244, 1, 0, 26, 4, 12, 5, 0, 0, 104, 234,
-				42, 87, 45, 71, 66, 169, 83, 127, 86, 95, 110, 56, 251, 79, 105, 212, 23, 12, 203,
-				214, 208, 176, 129, 190, 181, 248, 190, 28, 11, 6, 11, 29, 56, 246, 123, 70, 3, 5,
-				0, 0, 120, 112, 253, 81, 144, 212, 233, 27, 0, 48, 154, 238, 82, 149, 219, 107, 54,
-				192, 135, 124, 162, 21, 208, 18, 242, 77, 64, 233, 6, 149, 242, 40, 7, 160, 129,
-				23, 163, 117, 5, 0, 0, 4, 41, 131, 33, 217, 48, 147, 189, 214, 149, 115, 254, 142,
-				12, 203, 134, 243, 61, 205, 219, 227, 102, 234, 101, 59, 7, 10, 94, 12, 215, 106,
-				45, 11, 90, 10, 235, 19, 70, 3,
-			],
-		];
-
-		tests.into_iter().for_each(|bytes| {
-			let mut bytes = bytes.as_slice();
+		#[allow(clippy::single_element_loop)]
+		for mut bytes in [
+			// Single fetch.
+			&hex_literal::hex!(
+				"
+				dd02840022fd62bede1c2c45822a5007893b90c1d6c3407d9eb275aeb4890541cd893f6e01
+				c215c3a4cae054916d032cbf162efe92ca5fbe9953b686a5e1fe734db7d3f31503598c2fbb
+				ded5940b2cb40a7ae459d5cd769bb9460771e5aec5ae53367b268e004400001d00006d07de
+				61ff7c24ff7e3688df5e0e20e619454b8c82975dbd2afda98efa281f1301001a04041a010e
+				000504006d07de61ff7c24ff7e3688df5e0e20e619454b8c82975dbd2afda98efa281f1300
+			"
+			)[..],
+			// TODO: add more examples.
+		] {
 			PolkadotUncheckedExtrinsic::decode(&mut bytes).expect("Should decode extrinsic bytes");
-		})
+		}
 	}
 
 	#[ignore]
@@ -1140,5 +1110,54 @@ mod test_polkadot_extrinsics {
 		// be updated if we update the fee calculation.
 		assert_eq!(ingress_fee, 197_300_000u128);
 		assert_eq!(egress_fee, 197_450_000u128);
+	}
+
+	#[ignore]
+	#[test]
+	fn with_metadata_hash_extension() {
+		let mut ext = PolkadotExtrinsicBuilder::new(
+			PolkadotReplayProtection {
+				genesis_hash: H256::from_str(
+					"0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3",
+				)
+				.unwrap(),
+				signer: PolkadotAccountId::from_aliased(hex_literal::hex!(
+					"22fd62bede1c2c45822a5007893b90c1d6c3407d9eb275aeb4890541cd893f6e"
+				)),
+				nonce: 17,
+			},
+			PolkadotRuntimeCall::Proxy(ProxyCall::proxy {
+				real: PolkadotAccountIdLookup::from(PolkadotAccountId::from_aliased(
+					hex_literal::hex!(
+						"6d07de61ff7c24ff7e3688df5e0e20e619454b8c82975dbd2afda98efa281f13"
+					),
+				)),
+				force_proxy_type: Some(PolkadotProxyType::Any),
+				call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::force_batch {
+					calls: vec![PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
+						index: 14,
+						call: Box::new(PolkadotRuntimeCall::Balances(BalancesCall::transfer_all {
+							dest: PolkadotAccountIdLookup::from(PolkadotAccountId::from_aliased(
+								hex_literal::hex!(
+								"6d07de61ff7c24ff7e3688df5e0e20e619454b8c82975dbd2afda98efa281f13"
+							),
+							)),
+							keep_alive: false,
+						})),
+					})],
+				})),
+			}),
+		);
+		ext.insert_signature(PolkadotPair::from_seed(&RAW_SEED_1).sign(
+			&ext.get_signature_payload(
+				TEST_RUNTIME_VERSION.spec_version,
+				TEST_RUNTIME_VERSION.transaction_version,
+			),
+		));
+
+		println!(
+			"Encoded extrinsic: 0x{}",
+			hex::encode(ext.get_signed_unchecked_extrinsic().unwrap().encode())
+		);
 	}
 }
