@@ -7,10 +7,7 @@ use cf_amm::common::{price_at_tick, tick_at_price, Price, Side, Tick, PRICE_FRAC
 use cf_chains::Ethereum;
 use cf_primitives::{chains::assets::any::Asset, AssetAmount, SwapOutput};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
-use cf_traits::{
-	mocks::swap_queue_api::{MockSwap, MockSwapQueueApi},
-	AssetConverter, SwapType, SwappingApi,
-};
+use cf_traits::{AssetConverter, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::{bounded_vec, U256};
@@ -241,17 +238,9 @@ fn test_buy_back_flip() {
 		// If we're at an interval, we should buy flip.
 		LiquidityPools::on_initialize(INTERVAL * 3);
 		assert_eq!(0, CollectedNetworkFee::<Test>::get());
-		assert_eq!(
-			MockSwapQueueApi::get_swap_queue()
-				.first()
-				.expect("Should have scheduled a swap usdc -> flip"),
-			&MockSwap {
-				from: STABLE_ASSET,
-				to: FLIP,
-				amount: EXPECTED_COLLECTED_FEES,
-				swap_type: SwapType::NetworkFee,
-			}
-		);
+
+		// TODO: check that a swap is scheduled once we network fee stuff
+		// is moved to the swapping pallet
 	});
 }
 

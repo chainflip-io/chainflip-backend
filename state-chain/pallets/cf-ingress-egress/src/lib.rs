@@ -32,16 +32,15 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
-	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId, ThresholdSignatureRequestId,
-	SECONDS_PER_BLOCK,
+	EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapRequestId,
+	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	liquidity::{LpBalanceApi, LpDepositHandler},
-	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler,
-	CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
-	IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode, ScheduledEgressDetails,
-	SwapDepositHandler, SwapQueueApi, SwapType,
+	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, Chainflip,
+	DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight, IngressEgressFeeApi,
+	LpBalanceApi, LpDepositHandler, NetworkEnvironmentProvider, OnDeposit, SafeMode,
+	ScheduledEgressDetails, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -207,7 +206,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{LpDepositHandler, OnDeposit, SwapQueueApi};
+	use cf_traits::{LpDepositHandler, OnDeposit};
 	use core::marker::PhantomData;
 	use frame_support::{
 		traits::{ConstU128, EnsureOrigin, IsType},
@@ -288,9 +287,9 @@ pub mod pallet {
 	/// particular deposit.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub enum DepositAction<AccountId> {
-		Swap { swap_id: SwapId },
+		Swap { swap_request_id: SwapRequestId },
 		LiquidityProvision { lp_account: AccountId },
-		CcmTransfer { principal_swap_id: Option<SwapId>, gas_swap_id: Option<SwapId> },
+		CcmTransfer { swap_request_id: SwapRequestId },
 		NoAction,
 		BoostersCredited { prewitnessed_deposit_id: PrewitnessedDepositId },
 	}
@@ -400,12 +399,6 @@ pub mod pallet {
 		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>
 			+ LpDepositHandler<AccountId = Self::AccountId>;
 
-		/// For scheduling swaps.
-		type SwapDepositHandler: SwapDepositHandler<AccountId = Self::AccountId>;
-
-		/// Handler for Cross Chain Messages.
-		type CcmHandler: CcmHandler;
-
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain>
 			+ ExecutexSwapAndCall<Self::TargetChain>
@@ -437,7 +430,7 @@ pub mod pallet {
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 
-		type SwapQueueApi: SwapQueueApi;
+		type SwapRequestHandler: SwapRequestHandler<AccountId = Self::AccountId>;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
@@ -1496,20 +1489,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				broker_fees,
 				refund_params,
-			} => DepositAction::Swap {
-				swap_id: T::SwapDepositHandler::schedule_swap_from_channel(
-					<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
-						T::TargetChain,
-					>>::into_foreign_chain_address(deposit_address.clone()),
-					block_height.into(),
+			} => {
+				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
-					destination_asset,
 					amount_after_fees.into(),
-					destination_address,
+					destination_asset,
+					SwapRequestType::Regular { output_address: destination_address },
 					broker_fees,
 					refund_params,
-					channel_id,
-				),
+					SwapOrigin::DepositChannel {
+						deposit_address: T::AddressConverter::to_encoded_address(
+							<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
+								T::TargetChain,
+							>>::into_foreign_chain_address(deposit_address.clone()),
+						),
+						channel_id,
+						deposit_block_height: block_height.into(),
+					},
+				) {
+					DepositAction::Swap { swap_request_id }
+				} else {
+					DepositAction::NoAction
+				}
 			},
 			ChannelAction::CcmTransfer {
 				destination_asset,
@@ -1517,29 +1518,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				channel_metadata,
 				refund_params,
 			} => {
-				if let Ok(CcmSwapIds { principal_swap_id, gas_swap_id }) =
-					T::CcmHandler::on_ccm_deposit(
-						asset.into(),
-						amount_after_fees.into(),
-						destination_asset,
-						destination_address,
-						CcmDepositMetadata {
+				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
+					asset.into(),
+					amount_after_fees.into(),
+					destination_asset,
+					SwapRequestType::Ccm {
+						ccm_deposit_metadata: CcmDepositMetadata {
 							source_chain: asset.into(),
 							source_address: None,
 							channel_metadata,
 						},
-						SwapOrigin::DepositChannel {
-							deposit_address: T::AddressConverter::to_encoded_address(
-								<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
-									deposit_address.clone(),
-								),
+						output_address: destination_address,
+					},
+					Default::default(),
+					refund_params,
+					SwapOrigin::DepositChannel {
+						deposit_address: T::AddressConverter::to_encoded_address(
+							<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
+								deposit_address.clone(),
 							),
-							channel_id,
-							deposit_block_height: block_height.into(),
-						},
-						refund_params,
-					) {
-					DepositAction::CcmTransfer { principal_swap_id, gas_swap_id }
+						),
+						channel_id,
+						deposit_block_height: block_height.into(),
+					},
+				) {
+					DepositAction::CcmTransfer { swap_request_id }
 				} else {
 					DepositAction::NoAction
 				}
@@ -1812,6 +1815,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the remaining amount after the fee has been withheld, and the fee itself, both
 	/// measured in units of the input asset. A swap may be scheduled to convert the fee into the
 	/// gas asset.
+	#[allow(clippy::redundant_pattern_matching)]
 	pub fn withhold_ingress_or_egress_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,
@@ -1837,13 +1841,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}), available_amount);
 
 			if !transaction_fee.is_zero() {
-				T::SwapQueueApi::schedule_swap(
+				if let Err(_) = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
-					<T::TargetChain as Chain>::GAS_ASSET.into(),
 					transaction_fee.into(),
+					<T::TargetChain as Chain>::GAS_ASSET.into(),
+					SwapRequestType::IngressEgressFee,
+					Default::default(),
 					None, /* refund params */
-					SwapType::IngressEgressFee,
-				);
+					SwapOrigin::Internal,
+				) {
+					log_or_panic!("Ingress-egress fee swap should never fail");
+				}
 			}
 
 			transaction_fee

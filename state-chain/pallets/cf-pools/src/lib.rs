@@ -9,9 +9,10 @@ use cf_amm::{
 };
 use cf_chains::Chain;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, Chainflip, LpBalanceApi, NetworkFeeTaken, PoolApi, SwapQueueApi,
-	SwapType, SwappingApi,
+	impl_pallet_safe_mode, Chainflip, LpBalanceApi, NetworkFeeTaken, PoolApi, SwapRequestHandler,
+	SwapRequestType, SwappingApi,
 };
 use frame_support::{
 	dispatch::GetDispatchInfo,
@@ -131,6 +132,7 @@ pub mod pallet {
 		range_orders::{self, Liquidity},
 		NewError,
 	};
+	use cf_chains::SwapOrigin;
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::collections::btree_map::BTreeMap;
@@ -257,7 +259,7 @@ pub mod pallet {
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
 
-		type SwapQueueApi: SwapQueueApi;
+		type SwapRequestHandler: SwapRequestHandler;
 
 		#[pallet::constant]
 		type NetworkFee: Get<Permill>;
@@ -329,13 +331,20 @@ pub mod pallet {
 				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
-						T::SwapQueueApi::schedule_swap(
+						if T::SwapRequestHandler::init_swap_request(
 							any::Asset::Usdc,
-							any::Asset::Flip,
 							*collected_fee,
-							None, /* refund parameters */
-							SwapType::NetworkFee,
-						);
+							any::Asset::Flip,
+							SwapRequestType::NetworkFee,
+							Default::default(),
+							None,
+							SwapOrigin::Internal,
+						)
+						.is_err()
+						{
+							log_or_panic!("Network fee swap should never fail");
+						}
+
 						collected_fee.set_zero();
 						Ok::<_, DispatchError>(())
 					}) {

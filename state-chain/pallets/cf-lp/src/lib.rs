@@ -4,8 +4,8 @@
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
-	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
+	impl_pallet_safe_mode, AccountRoleRegistry, Chainflip, DepositApi, EgressApi, LpBalanceApi,
+	LpDepositHandler, PoolApi, ScheduledEgressDetails,
 };
 
 use sp_std::vec;
