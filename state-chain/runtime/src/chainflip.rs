@@ -59,8 +59,9 @@ use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, Beneficiari
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	EpochInfo, Heartbeat, IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit,
-	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
+	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	ScheduledEgressDetails,
 };
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
@@ -866,3 +867,22 @@ impl_ingress_egress_fee_api_for_anychain!(
 	(Arbitrum, ArbitrumIngressEgress),
 	(Solana, SolanaIngressEgress)
 );
+
+pub struct SolanaLimit;
+impl FetchesTransfersLimitProvider for SolanaLimit {
+	fn maybe_transfers_limit() -> Option<usize> {
+		// we need to leave one nonce for the fetch tx and one nonce reserved for rotation tx since
+		// rotation tx can fail to build if all nonce accounts are occupied
+		Some(Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(2))
+	}
+
+	fn maybe_fetches_limit() -> Option<usize> {
+		// only fetch if we have more than once nonce account available since one nonce nonce is
+		// reserved for rotations. See above
+		Some(if Environment::get_number_of_available_sol_nonce_accounts() > 1 {
+			cf_chains::sol::MAX_SOL_FETCHES_PER_TX
+		} else {
+			0
+		})
+	}
+}
