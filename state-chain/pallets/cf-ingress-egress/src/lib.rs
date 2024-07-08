@@ -1182,35 +1182,37 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				requests
 					.extract_if(|request| {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
-							Self::should_fetch_or_transfer(&mut maybe_no_of_fetches_remaining) &&
 							match request {
 								FetchOrTransfer::Fetch {
 									deposit_address,
 									deposit_fetch_id,
 									..
-								} => DepositChannelLookup::<T, I>::mutate(
-									deposit_address,
-									|details| {
-										details
-											.as_mut()
-											.map(|details| {
-												let can_fetch =
-													details.deposit_channel.state.can_fetch();
+								} =>
+									Self::should_fetch_or_transfer(
+										&mut maybe_no_of_fetches_remaining,
+									) && DepositChannelLookup::<T, I>::mutate(
+										deposit_address,
+										|details| {
+											details
+												.as_mut()
+												.map(|details| {
+													let can_fetch =
+														details.deposit_channel.state.can_fetch();
 
-												if can_fetch {
-													deposit_fetch_id.replace(
-														details.deposit_channel.fetch_id(),
-													);
-													details
-														.deposit_channel
-														.state
-														.on_fetch_scheduled();
-												}
-												can_fetch
-											})
-											.unwrap_or(false)
-									},
-								),
+													if can_fetch {
+														deposit_fetch_id.replace(
+															details.deposit_channel.fetch_id(),
+														);
+														details
+															.deposit_channel
+															.state
+															.on_fetch_scheduled();
+													}
+													can_fetch
+												})
+												.unwrap_or(false)
+										},
+									),
 								FetchOrTransfer::Transfer { .. } => Self::should_fetch_or_transfer(
 									&mut maybe_no_of_transfers_remaining,
 								),
