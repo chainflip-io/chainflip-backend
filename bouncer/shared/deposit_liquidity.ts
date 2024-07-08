@@ -50,6 +50,7 @@ export async function depositLiquidity(
         .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
     });
   }
+
   let eventHandle = observeEvent('liquidityProvider:LiquidityDepositAddressReady', {
     test: (event) => event.data.asset === ccy && event.data.accountId === lp.address,
   }).event;

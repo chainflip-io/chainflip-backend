@@ -157,14 +157,12 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		// Lookup environment variables, such as aggkey and durable nonce.
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
-
 		let compute_price = Environment::compute_price()?;
 
 		transfer_params
 			.into_iter()
 			.map(|(transfer_param, egress_id)| {
 				let (nonce_account, durable_nonce) = Environment::nonce_account()?;
-
 				let transfer_instruction_set = match transfer_param.asset {
 					SolAsset::Sol => SolanaInstructionBuilder::transfer_native(
 						transfer_param.amount,

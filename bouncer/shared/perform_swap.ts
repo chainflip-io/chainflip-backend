@@ -17,7 +17,6 @@ import {
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swapping';
 import { getChainflipApi, observeEvent } from './utils/substrate';
-import { get } from 'node:http';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
