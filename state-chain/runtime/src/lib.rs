@@ -1635,7 +1635,7 @@ impl_runtime_apis! {
 					(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
 				).collect(),
 				earned_fees: AssetMap::from_iter(pallet_cf_lp::HistoricalEarnedFees::<Runtime>::iter_prefix(&account_id)),
-				boost_balances: AssetMap::from_iter(Asset::all().map(|asset| {
+				boost_balances: AssetMap::from_fn(|asset| {
 					let pool_details = Self::cf_boost_pool_details(asset);
 
 					(
