@@ -1984,7 +1984,7 @@ mod test {
 							in_use_balance: 50_000_000,
 						}],
 					},
-					..Default::default(),
+					..Default::default()
 				},
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
