@@ -1976,7 +1976,6 @@ mod test {
 					sol: sol::AssetMap { sol: 2u32.into() },
 				},
 				boost_balances: any::AssetMap {
-					eth: eth::AssetMap { eth: vec![], flip: vec![], usdc: vec![], usdt: vec![] },
 					btc: btc::AssetMap {
 						btc: vec![LiquidityProviderBoostPoolInfo {
 							fee_tier: 5,
@@ -1985,9 +1984,7 @@ mod test {
 							in_use_balance: 50_000_000,
 						}],
 					},
-					dot: dot::AssetMap { dot: vec![] },
-					arb: arb::AssetMap { eth: vec![], usdc: vec![] },
-					sol: sol::AssetMap { sol: vec![] },
+					..Default::default(),
 				},
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
