@@ -101,7 +101,7 @@ pub struct StateChainEnvironment {
 	sol_usdc_token_mint_pubkey: SolAddress,
 	sol_token_vault_pda_account: SolAddress,
 	sol_usdc_token_vault_ata: SolAddress,
-	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 7], /* we inject 7 nonce accounts
+	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 8], /* we inject 8 nonce accounts
 	                                                               * at genesis */
 }
 

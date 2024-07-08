@@ -218,6 +218,10 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							const_address("9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa"),
 							const_hash("F3te41Tm3t9iRR8pZ4a4nrZQxJyB312AKXLB31co8wq4"),
 						),
+						(
+							const_address("J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna"),
+							const_hash("HKVCQ7mdp6nt4veHEvrUcYBgiWaydEx8cxU9t2p17Rbf"),
+						),
 					],
 				),
 			};

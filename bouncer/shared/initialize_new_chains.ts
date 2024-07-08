@@ -140,7 +140,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   );
 
   // Set nonce authority to the new AggKey
-  const numberOfNonceAccounts = 7;
+  const numberOfNonceAccounts = 8;
   for (let i = 0; i < numberOfNonceAccounts; i++) {
     // Using the index stringified as the seed ('0', '1', '2' ...)
     const seed = i.toString();
