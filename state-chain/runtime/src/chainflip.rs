@@ -871,10 +871,18 @@ impl_ingress_egress_fee_api_for_anychain!(
 pub struct SolanaLimit;
 impl FetchesTransfersLimitProvider for SolanaLimit {
 	fn maybe_transfers_limit() -> Option<usize> {
-		Some(Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(1))
+		// we need to leave one nonce for the fetch tx and one nonce reserved for rotation tx since
+		// rotation tx can fail to build if all nonce accounts are occupied
+		Some(Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(2))
 	}
 
 	fn maybe_fetches_limit() -> Option<usize> {
-		Some(cf_chains::sol::MAX_SOL_FETCHES_PER_TX)
+		// only fetch if we have more than once nonce account available since one nonce nonce is
+		// reserved for rotations. See above
+		Some(if Environment::get_number_of_available_sol_nonce_accounts() > 1 {
+			cf_chains::sol::MAX_SOL_FETCHES_PER_TX
+		} else {
+			0
+		})
 	}
 }
