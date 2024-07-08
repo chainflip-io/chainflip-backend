@@ -1283,7 +1283,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					payload: payload.clone(),
 				});
 
-				// TODO: consider removing this
 				Event::<T, I>::ThresholdSignatureRequest {
 					request_id,
 					ceremony_id,

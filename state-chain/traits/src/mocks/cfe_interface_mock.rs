@@ -15,6 +15,16 @@ pub enum MockCfeEvent<ValidatorId> {
 	EvmKeygenRequest(cfe_events::KeygenRequest<ValidatorId>),
 	// Note: we don't normally do handover for eth, but this works for tests
 	EthKeyHandoverRequest(cfe_events::KeyHandoverRequest<ValidatorId, MockEthereumChainCrypto>),
+	PeerIdRegistered {
+		account_id: ValidatorId,
+		pubkey: cf_primitives::Ed25519PublicKey,
+		port: u16,
+		ip: cf_primitives::Ipv6Addr,
+	},
+	PeerIdDeregistered {
+		account_id: ValidatorId,
+		pubkey: cf_primitives::Ed25519PublicKey,
+	},
 }
 
 const STORAGE_KEY: &[u8] = b"MockCfeInterface::Events";
@@ -45,19 +55,19 @@ impl<T: Chainflip> CfeBroadcastRequest<T, MockEthereum> for MockCfeInterface {
 
 impl<T: Chainflip> CfePeerRegistration<T> for MockCfeInterface {
 	fn peer_registered(
-		_account_id: <T as Chainflip>::ValidatorId,
-		_pubkey: cf_primitives::Ed25519PublicKey,
-		_port: u16,
-		_ip: cf_primitives::Ipv6Addr,
+		account_id: <T as Chainflip>::ValidatorId,
+		pubkey: cf_primitives::Ed25519PublicKey,
+		port: u16,
+		ip: cf_primitives::Ipv6Addr,
 	) {
-		// TODO: implement when needed for any test
+		Self::append_event(MockCfeEvent::PeerIdRegistered { account_id, pubkey, port, ip });
 	}
 
 	fn peer_deregistered(
-		_account_id: <T as Chainflip>::ValidatorId,
-		_pubkey: cf_primitives::Ed25519PublicKey,
+		account_id: <T as Chainflip>::ValidatorId,
+		pubkey: cf_primitives::Ed25519PublicKey,
 	) {
-		// TODO: implement when needed for any test
+		Self::append_event(MockCfeEvent::PeerIdDeregistered { account_id, pubkey });
 	}
 }
 
