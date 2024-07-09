@@ -298,9 +298,9 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StringAddress(String);
+pub struct AddressString(String);
 
-impl FromStr for StringAddress {
+impl FromStr for AddressString {
 	type Err = anyhow::Error;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -308,7 +308,7 @@ impl FromStr for StringAddress {
 	}
 }
 
-impl StringAddress {
+impl AddressString {
 	pub fn try_parse_to_encoded_address(self, chain: ForeignChain) -> Result<EncodedAddress> {
 		clean_foreign_chain_address(chain, self.0.as_str())
 	}
@@ -327,7 +327,7 @@ impl StringAddress {
 	}
 }
 
-impl fmt::Display for StringAddress {
+impl fmt::Display for AddressString {
 	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
 		write!(f, "{}", self.0)
 	}
@@ -336,13 +336,13 @@ impl fmt::Display for StringAddress {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RefundParameters {
 	pub retry_duration: BlockNumber,
-	pub refund_address: StringAddress,
+	pub refund_address: AddressString,
 	pub min_price: Price,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SwapDepositAddress {
-	pub address: StringAddress,
+	pub address: AddressString,
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
@@ -355,7 +355,7 @@ pub struct WithdrawFeesDetail {
 	pub egress_id: (ForeignChain, u64),
 	pub egress_amount: U256,
 	pub egress_fee: U256,
-	pub destination_address: StringAddress,
+	pub destination_address: AddressString,
 }
 
 impl fmt::Display for WithdrawFeesDetail {
@@ -385,7 +385,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
-		destination_address: StringAddress,
+		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
@@ -456,7 +456,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			)
 		}) {
 			Ok(SwapDepositAddress {
-				address: StringAddress::from_encoded_address(deposit_address),
+				address: AddressString::from_encoded_address(deposit_address),
 				issued_block: header.number,
 				channel_id: *channel_id,
 				source_chain_expiry_block: (*source_chain_expiry_block).into(),
@@ -469,7 +469,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	async fn withdraw_fees(
 		&self,
 		asset: Asset,
-		destination_address: StringAddress,
+		destination_address: AddressString,
 	) -> Result<WithdrawFeesDetail> {
 		let (tx_hash, events, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
@@ -502,7 +502,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				egress_id: *egress_id,
 				egress_amount: (*egress_amount).into(),
 				egress_fee: (*egress_fee).into(),
-				destination_address: StringAddress::from_encoded_address(destination_address),
+				destination_address: AddressString::from_encoded_address(destination_address),
 			})
 		} else {
 			bail!("No WithdrawalRequested event was found");

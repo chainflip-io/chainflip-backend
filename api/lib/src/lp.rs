@@ -1,4 +1,4 @@
-use crate::StringAddress;
+use crate::AddressString;
 
 use super::SimpleSubmissionApi;
 use anyhow::{bail, Result};
@@ -170,7 +170,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	async fn register_liquidity_refund_address(
 		&self,
 		chain: ForeignChain,
-		address: StringAddress,
+		address: AddressString,
 	) -> Result<H256> {
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(
@@ -228,7 +228,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		&self,
 		amount: AssetAmount,
 		asset: Asset,
-		destination_address: StringAddress,
+		destination_address: AddressString,
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<EgressId>> {
 		if amount == 0 {

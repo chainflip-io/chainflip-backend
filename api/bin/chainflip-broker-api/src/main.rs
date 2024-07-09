@@ -3,7 +3,7 @@ use chainflip_api::{
 	self,
 	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata},
 	settings::StateChain,
-	AccountId32, BrokerApi, OperatorApi, RefundParameters, StateChainApi, StringAddress,
+	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
 	SwapDepositAddress, WithdrawFeesDetail,
 };
 use clap::Parser;
@@ -26,7 +26,7 @@ pub trait Rpc {
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
-		destination_address: StringAddress,
+		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
@@ -38,7 +38,7 @@ pub trait Rpc {
 	async fn withdraw_fees(
 		&self,
 		asset: Asset,
-		destination_address: StringAddress,
+		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
 }
 
@@ -73,7 +73,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
-		destination_address: StringAddress,
+		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
@@ -99,7 +99,7 @@ impl RpcServer for RpcServerImpl {
 	async fn withdraw_fees(
 		&self,
 		asset: Asset,
-		destination_address: StringAddress,
+		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
 	}

@@ -17,7 +17,7 @@ use chainflip_api::{
 	},
 	settings::StateChain,
 	AccountId32, BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
-	SignedExtrinsicApi, StateChainApi, StorageApi, StringAddress, WaitFor,
+	SignedExtrinsicApi, StateChainApi, StorageApi, AddressString, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -111,7 +111,7 @@ pub trait Rpc {
 	async fn register_liquidity_refund_address(
 		&self,
 		chain: ForeignChain,
-		address: StringAddress,
+		address: AddressString,
 	) -> RpcResult<Hash>;
 
 	#[method(name = "withdraw_asset")]
@@ -119,7 +119,7 @@ pub trait Rpc {
 		&self,
 		amount: NumberOrHex,
 		asset: Asset,
-		destination_address: StringAddress,
+		destination_address: AddressString,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<EgressId>>;
 
@@ -267,7 +267,7 @@ impl RpcServer for RpcServerImpl {
 	async fn register_liquidity_refund_address(
 		&self,
 		chain: ForeignChain,
-		address: StringAddress,
+		address: AddressString,
 	) -> RpcResult<Hash> {
 		Ok(self.api.lp_api().register_liquidity_refund_address(chain, address).await?)
 	}
@@ -277,7 +277,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		amount: NumberOrHex,
 		asset: Asset,
-		destination_address: StringAddress,
+		destination_address: AddressString,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<EgressId>> {
 		Ok(self
