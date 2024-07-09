@@ -1877,6 +1877,10 @@ impl_runtime_apis! {
 			}
 
 		}
+
+		fn cf_safe_mode_statuses() -> RuntimeSafeMode {
+			pallet_cf_environment::RuntimeSafeMode::<Runtime>::get()
+		}
 	}
 
 	impl monitoring_apis::MonitoringRuntimeApi<Block> for Runtime {
