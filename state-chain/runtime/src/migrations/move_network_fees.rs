@@ -23,13 +23,13 @@ impl frame_support::traits::OnRuntimeUpgrade for NetworkFeesMigration {
 			// Moving the FlipBuyInterval & CollectedNetworkFee storage items from the pools
 			// pallet to the swapping pallet.
 			cf_runtime_upgrade_utilities::move_pallet_storage::<
-				pallet_cf_swapping::Pallet<Runtime>,
 				pallet_cf_pools::Pallet<Runtime>,
+				pallet_cf_swapping::Pallet<Runtime>,
 			>(b"FlipBuyInterval");
 
 			cf_runtime_upgrade_utilities::move_pallet_storage::<
-				pallet_cf_swapping::Pallet<Runtime>,
 				pallet_cf_pools::Pallet<Runtime>,
+				pallet_cf_swapping::Pallet<Runtime>,
 			>(b"CollectedNetworkFee");
 
 			// Bump the version of both pallets
