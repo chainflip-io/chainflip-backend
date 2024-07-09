@@ -370,51 +370,40 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
   console.log('=== Testing all swaps ===');
 
-  // Object.values(Assets).forEach((sourceAsset) => {
-  //   Object.values(Assets)
-  //     .filter((destAsset) => sourceAsset !== destAsset)
-  //     .forEach((destAsset) => {
-  //       // Regular swaps
-  //       // appendSwap(sourceAsset, destAsset, testSwap);
+  Object.values(Assets).forEach((sourceAsset) => {
+    Object.values(Assets)
+      .filter((destAsset) => sourceAsset !== destAsset)
+      .forEach((destAsset) => {
+        // Regular swaps
+        appendSwap(sourceAsset, destAsset, testSwap);
 
-  //       const sourceChain = chainFromAsset(sourceAsset);
-  //       const destChain = chainFromAsset(destAsset);
-  //       // if (
-  //       //   (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') &&
-  //       //   chainFromAsset(destAsset) !== 'Solana'
-  //       // ) {
-  //       //   // Contract Swaps
-  //       //   appendSwap(sourceAsset, destAsset, testSwapViaContract);
-  //       //   if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
-  //       //     // CCM contract swaps
-  //       //     appendSwap(
-  //       //       sourceAsset,
-  //       //       destAsset,
-  //       //       testSwapViaContract,
-  //       //       newCcmMetadata(sourceAsset, destAsset),
-  //       //     );
-  //       //   }
-  //       // }
+        const sourceChain = chainFromAsset(sourceAsset);
+        const destChain = chainFromAsset(destAsset);
+        if (
+          (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') &&
+          chainFromAsset(destAsset) !== 'Solana'
+        ) {
+          // Contract Swaps
+          appendSwap(sourceAsset, destAsset, testSwapViaContract);
+          if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
+            // CCM contract swaps
+            appendSwap(
+              sourceAsset,
+              destAsset,
+              testSwapViaContract,
+              true,
+            );
+          }
+        }
 
-  //       if (
-  //         ccmSupportedChains.includes(destChain) &&
-  //         destChain === 'Solana' &&
-  //       ) {
-  //         // CCM swaps
-  //         appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset, destAsset));
-  //       }
-  //     });
-  // });
-
-  // TODO: More than 8 will cause aan egress fail (egressInvalid). CCM not retried?
-  appendSwap('Eth', 'Sol', testSwap, true);
-  appendSwap('Btc', 'Sol', testSwap, true);
-  appendSwap('Dot', 'Sol', testSwap, true);
-  appendSwap('ArbUsdc', 'Sol', testSwap, true);
-  appendSwap('Usdc', 'SolUsdc', testSwap, true);
-  appendSwap('Btc', 'SolUsdc', testSwap, true);
-  appendSwap('Dot', 'SolUsdc', testSwap, true);
-  appendSwap('ArbEth', 'SolUsdc', testSwap, true);
+        if (
+          ccmSupportedChains.includes(destChain) 
+        ) {
+          // CCM swaps
+          appendSwap(sourceAsset, destAsset, testSwap, true);
+        }
+      });
+  });
 
   await Promise.all(allSwaps);
 

@@ -1286,11 +1286,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Blacklisted assets are not sent and will remain in storage.
 	fn do_egress_scheduled_ccm() {
+		let mut maybe_no_of_transfers_remaining =
+			T::FetchesTransfersLimitProvider::maybe_transfers_limit();
+
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 				// Filter out disabled assets, and take up to batch_size requests to be sent.
-				ccms.extract_if(|ccm| !DisabledEgressAssets::<T, I>::contains_key(ccm.asset()))
-					.collect()
+				ccms.extract_if(|ccm| {
+					!DisabledEgressAssets::<T, I>::contains_key(ccm.asset()) &&
+						Self::should_fetch_or_transfer(&mut maybe_no_of_transfers_remaining)
+				})
+				.collect()
 			});
 		for ccm in ccms_to_send {
 			match <T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
