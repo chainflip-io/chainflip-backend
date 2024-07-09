@@ -1,4 +1,5 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { PublicKey } from '@solana/web3.js';
 import Web3 from 'web3';
 import assert from 'assert';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
@@ -15,6 +16,7 @@ import {
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { performSwapViaContract, ContractSwapParams } from '../shared/contract_swap';
+import * as $ from 'parity-scale-codec';
 
 enum SolidityType {
   Uint256 = 'uint256',
@@ -318,32 +320,71 @@ export async function testAllSwaps(swapContext: SwapContext) {
   // await Promise.all(allSwaps);
 
   // ---------- CCM TESTING ---------------------------------------
-  function toHexString(byteArray: number[]) {
-    // eslint-disable-next-line no-bitwise
-    return '0x' + byteArray.map((byte) => ('0' + (byte & 0xff).toString(16)).slice(-2)).join('');
+  function toHexStringFromArray(byteArray: Uint8Array) {
+    return (
+      '0x' +
+      Array.from(byteArray)
+        // eslint-disable-next-line no-bitwise
+        .map((byte) => ('0' + (byte & 0xff).toString(16)).slice(-2))
+        .join('')
+    );
   }
+
+  // appendSwap('Btc', 'Eth', testSwap, newCcmMetadata('Btc'));
 
   // Bytes obtained from `create_ccm_native_transfer` test setting is_writable to false.
   // Encoded Solana CF_TESTER address and it's mutability status.
-  const message = [124, 29, 15, 7];
-  const cfParameters = [
+  const message = new Uint8Array([124, 29, 15, 7]);
+  const validCfParametersArray = new Uint8Array([
     116, 23, 218, 139, 153, 215, 116, 129, 39, 167, 107, 3, 214, 31, 238, 105, 200, 13, 254, 247,
     58, 210, 213, 80, 55, 55, 190, 237, 197, 169, 237, 72, 0, 4, 167, 59, 223, 49, 227, 65, 33, 138,
     105, 59, 135, 114, 196, 62, 207, 206, 205, 76, 243, 95, 173, 160, 154, 135, 234, 15, 134, 13, 2,
     129, 104, 229, 0,
+  ]);
+
+  // appendSwap('Eth', 'Sol', testSwap, {
+  //   message: toHexStringFromArray(message),
+  //   gasBudget: newCcmMetadata('Sol').gasBudget,
+  //   cfParameters: toHexStringFromArray(cfParametersArray),
+  // });
+
+  // Define the Solana accounts
+  const cfReceiver = {
+    pubkey: new PublicKey('8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH'),
+    is_writable: false,
+  };
+  const remainingAccount = {
+    pubkey: new PublicKey('CFp37nEY6E9byYHiuxQZg6vMCnzwNrgiF9nFGT6Zwcnx'),
+    is_writable: false,
+  };
+
+  // Convert the public keys and is_writable fields to byte arrays
+  const cfReceiverBytes = new Uint8Array([
+    ...cfReceiver.pubkey.toBytes(),
+    cfReceiver.is_writable ? 1 : 0,
+  ]);
+
+  const remainingAccounts = [
+    new Uint8Array([...remainingAccount.pubkey.toBytes(), remainingAccount.is_writable ? 1 : 0]),
   ];
 
-  console.log('message', toHexString(message));
-  console.log('cf_params', toHexString(cfParameters));
+  // Concatenate the byte arrays
+  const cfParameters = new Uint8Array([
+    ...cfReceiverBytes,
+    // Inserted by the codec::Encode
+    2 ** (remainingAccounts.length + 1),
+    ...remainingAccounts.flatMap((account) => Array.from(account)),
+  ]);
+
+  console.log(validCfParametersArray);
+  console.log(cfParameters);
+  console.log('match', validCfParametersArray.toString() === cfParameters.toString());
 
   appendSwap('Eth', 'Sol', testSwap, {
-    message: toHexString(message),
+    message: toHexStringFromArray(message),
     gasBudget: newCcmMetadata('Sol').gasBudget,
-    cfParameters: toHexString(cfParameters),
+    cfParameters: toHexStringFromArray(cfParameters),
   });
-
-  appendSwap('Btc', 'Eth', testSwap, newCcmMetadata('Btc'));
-
   await Promise.all(allSwaps);
 
   console.log('=== Swapping test complete ===');
