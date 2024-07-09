@@ -13,7 +13,7 @@ import {
   chainConstants,
 } from '@chainflip/cli';
 import Web3 from 'web3';
-import { Connection, Keypair } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
 import BigNumber from 'bignumber.js';
 import { base58Decode, base58Encode } from '../polkadot/util-crypto';
@@ -22,12 +22,14 @@ import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEvmAddress } from './new_evm_address';
 import { CcmDepositMetadata } from './new_swap';
-import { getCFTesterAbi } from './contract_interfaces';
+import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
+import {EventParser, BorshCoder} from '@coral-xyz/anchor';
 
 const cfTesterAbi = await getCFTesterAbi();
+const cfTesterIdl = await getCfTesterIdl();
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
@@ -546,7 +548,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
       }
       return;
     }
-    await sleep(1000);
+    await sleep(2000);
   }
 
   throw new Error('Failed to observe the fetch');
@@ -563,19 +565,18 @@ export async function observeEVMEvent(
   chain: Chain,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,
-  address: string,
+  destAddress: string,
   eventName: string,
   eventParametersExpected: (string | null)[],
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<EVMEvent | undefined> {
   const web3 = new Web3(getEvmEndpoint(chain));
-  const contract = new web3.eth.Contract(contractAbi, address);
+  const contract = new web3.eth.Contract(contractAbi, destAddress);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
   const stopObserve = stopObserveEvent ?? (() => false);
 
   // Gets all the event parameter as an array
-
   const eventAbi = contractAbi.find(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (item: any) => item.type === 'event' && item.name === eventName,
@@ -621,31 +622,56 @@ export async function observeEVMEvent(
   throw new Error(`Failed to observe the ${eventName} event`);
 }
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
-export async function observeSolanaEvent(
-  chain: Chain,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contractAbi: any,
-  address: string,
+export async function observeSolanaCcmEvent(
   eventName: string,
-  eventParametersExpected: (string | null)[],
-  stopObserveEvent?: () => boolean,
-  initialBlockNumber?: number,
-): Promise<EVMEvent | undefined> {
-  // TODO: Add logic to witness the event on the Solana CfTester
-  // See: https://github.com/chainflip-io/chainflip-sol-contracts/blob/7ab8fbd389d047eeccef9867ce0bb18b2593e92f/tests/tests.ts#L3295
-  // We either subscribe or we just use the rpc `getsignaturesforaddress` to get the transactions and find the one that matches
-  // what we are expecting. Problem might be that we still need the Anchor event parser to decode the values. Maybe we could
-  // consider logging them too, which is probably easier to parse here in the bouncer than Anchor's emit events.
-  // Otherwise adding anchor to the npm packages is probably not too bad.
-  return undefined;
+  sourceChain: string,
+  sourceAddress: string | null,
+  messageMetadata: CcmDepositMetadata,
+): Promise<undefined> {
+  const connection = getSolConnection();
+  const idl = cfTesterIdl;
+  const cfTesterAddress = new PublicKey(getContractAddress('Solana', 'CFTESTER'));
+
+  for (let i = 0; i < 300; i++) {
+    const txSignatures = await connection.getSignaturesForAddress(new PublicKey(getContractAddress('Solana', 'CFTESTER')));
+    for (const txSignature of txSignatures) {
+      const tx = await connection.getTransaction(txSignature.signature);
+      if (tx) {
+        const eventParser = new EventParser(cfTesterAddress, new BorshCoder(idl as any));
+        const events = eventParser.parseLogs(tx.meta?.logMessages ?? []);
+        for (const event of events) {
+          const matchEventName = event.name === eventName;
+          const matchSourceChain = event.data.source_chain.toString() === sourceChain;
+
+          if (sourceAddress!== null) {
+            if (event.data.source_address !== sourceAddress) {
+              throw new Error(`Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`);
+            }
+          } else {
+            if (event.data.source_address.toString() !== Buffer.from([0]).toString()) {
+              throw new Error(`Unexpected source address: ${event.data.source_address}, expecting ${Buffer.from([0])}`);
+            }
+          }
+          const hexMessage = '0x' + (event.data.message as Buffer).toString('hex');
+          const matchMessage = hexMessage === messageMetadata.message;
+          if (matchEventName && matchSourceChain && matchMessage) {
+            return undefined
+          }
+        }
+      }
+    }
+    await sleep(10000);
+  }
+  throw new Error(`Failed to observe Solana's ${eventName} event`);
+
+
 }
 /* eslint-enable @typescript-eslint/no-unused-vars */
 
 export async function observeCcmReceived(
   sourceAsset: Asset,
   destAsset: Asset,
-  address: string,
+  destAddress: string,
   messageMetadata: CcmDepositMetadata,
   sourceAddress?: string,
   stopObserveEvent?: () => boolean,
@@ -657,7 +683,7 @@ export async function observeCcmReceived(
       return observeEVMEvent(
         destChain,
         cfTesterAbi,
-        address,
+        destAddress,
         'ReceivedxSwapAndCall',
         [
           chainContractId(chainFromAsset(sourceAsset)).toString(),
@@ -671,21 +697,11 @@ export async function observeCcmReceived(
         stopObserveEvent,
       );
     case 'Solana':
-      return observeSolanaEvent(
-        destChain,
-        cfTesterAbi,
-        address,
-        'ReceivedxSwapAndCall',
-        [
-          chainContractId(chainFromAsset(sourceAsset)).toString(),
-          sourceAddress ?? null,
-          messageMetadata.message,
-          '*',
-          '*',
-          '*',
-          '*',
-        ],
-        stopObserveEvent,
+      return observeSolanaCcmEvent(
+        'ReceivedCcm',
+        chainContractId(chainFromAsset(sourceAsset)).toString(),
+        sourceAddress ?? null,
+        messageMetadata,
       );
     default:
       throw new Error(`Unsupported chain: ${destChain}`);

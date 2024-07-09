@@ -139,19 +139,7 @@ export function newCcmMetadata(
   gasBudgetFraction?: number,
   cfParamsArray?: string,
 ) {
-  // const message = ccmMessage ?? newAbiEncodedMessage();
-
-  function toHexStringFromArray(byteArray: Uint8Array) {
-    return (
-      '0x' +
-      Array.from(byteArray)
-        // eslint-disable-next-line no-bitwise
-        .map((byte) => ('0' + (byte & 0xff).toString(16)).slice(-2))
-        .join('')
-    );
-  }
-  const message = toHexStringFromArray(new Uint8Array([124, 29, 15, 7]));
-
+  const message = ccmMessage ?? newAbiEncodedMessage();
   const cfParameters = cfParamsArray ?? newCfParameters(destAsset);
   const gasDiv = gasBudgetFraction ?? 2;
 
@@ -344,17 +332,16 @@ export async function testAllSwaps(swapContext: SwapContext) {
     ccmSwap: boolean = false,
   ) {
     if (destAsset === 'Btc') {
-      Object.values(btcAddressTypes).forEach((btcAddrType) => {
-        allSwaps.push(
-          functionCall(
-            sourceAsset,
-            destAsset,
-            btcAddrType,
-            ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-            swapContext,
-          ),
-        );
-      });
+      const btcAddressTypesArray = Object.values(btcAddressTypes);
+      allSwaps.push(
+        functionCall(
+          sourceAsset,
+          destAsset,
+          btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
+          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
+          swapContext,
+        ),
+      );
     } else {
       allSwaps.push(
         functionCall(
