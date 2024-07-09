@@ -110,10 +110,8 @@ async fn run_cli() -> Result<()> {
 						chain,
 						address,
 					} => {
-						let lra_address =
-							chainflip_api::clean_foreign_chain_address(chain, &address)?;
 						let tx_hash =
-							api.lp_api().register_liquidity_refund_address(lra_address).await?;
+							api.lp_api().register_liquidity_refund_address(chain, address).await?;
 						println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
 					},
 					LiquidityProviderSubcommands::RegisterAccount => {

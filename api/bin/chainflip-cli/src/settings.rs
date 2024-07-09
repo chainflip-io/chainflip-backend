@@ -101,7 +101,7 @@ pub enum LiquidityProviderSubcommands {
 	},
 	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
-	RegisterLiquidityRefundAddress { chain: ForeignChain, address: String },
+	RegisterLiquidityRefundAddress { chain: ForeignChain, address: StringAddress },
 	/// Register this account as a liquidity provider account.
 	RegisterAccount,
 	/// De-register this liquidity provider account.
