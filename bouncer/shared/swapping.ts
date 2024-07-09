@@ -1,5 +1,5 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import { PublicKey } from '@solana/web3.js';
+import { Keypair, PublicKey } from '@solana/web3.js';
 import Web3 from 'web3';
 import assert from 'assert';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
@@ -16,7 +16,6 @@ import {
 import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { performSwapViaContract, ContractSwapParams } from '../shared/contract_swap';
-import * as $ from 'parity-scale-codec';
 
 enum SolidityType {
   Uint256 = 'uint256',
@@ -79,14 +78,81 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
   return web3.eth.abi.encodeParameters(typesArray, variables);
 }
 
+function newSolanaCfParameters() {
+  function arrayToHexString(byteArray: Uint8Array): string {
+    return (
+      '0x' +
+      Array.from(byteArray)
+        // eslint-disable-next-line no-bitwise
+        .map((byte) => ('0' + (byte & 0xff).toString(16)).slice(-2))
+        .join('')
+    );
+  }
+
+  const cfReceiver = {
+    pubkey: getContractAddress('Solana', 'CFTESTER'),
+    is_writable: false,
+  };
+  const remainingAccount = {
+    pubkey: Keypair.generate().publicKey,
+    is_writable: false,
+  };
+
+  // Convert the public keys and is_writable fields to byte arrays
+  const cfReceiverBytes = new Uint8Array([
+    ...new PublicKey(cfReceiver.pubkey).toBytes(),
+    cfReceiver.is_writable ? 1 : 0,
+  ]);
+
+  const remainingAccounts = [
+    new Uint8Array([...remainingAccount.pubkey.toBytes(), remainingAccount.is_writable ? 1 : 0]),
+  ];
+
+  // Concatenate the byte arrays
+  const cfParameters = new Uint8Array([
+    ...cfReceiverBytes,
+    // Inserted by the codec::Encode
+    2 ** (remainingAccounts.length + 1),
+    ...remainingAccounts.flatMap((account) => Array.from(account)),
+  ]);
+  return arrayToHexString(cfParameters);
+}
+
+function newCfParameters(destAsset: Asset) {
+  const destChain = chainFromAsset(destAsset);
+  switch (destChain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+      // Protocol shouldn't do anything with it.
+      return newAbiEncodedMessage();
+    case 'Solana':
+      return newSolanaCfParameters();
+    default:
+      throw new Error(`Unsupported chain: ${destChain}`);
+  }
+}
+
 export function newCcmMetadata(
   sourceAsset: Asset,
+  destAsset: Asset,
   ccmMessage?: string,
   gasBudgetFraction?: number,
-  cfParamsArray?: SolidityType[],
+  cfParamsArray?: string,
 ) {
-  const message = ccmMessage ?? newAbiEncodedMessage();
-  const cfParameters = newAbiEncodedMessage(cfParamsArray);
+  // const message = ccmMessage ?? newAbiEncodedMessage();
+
+  function toHexStringFromArray(byteArray: Uint8Array) {
+    return (
+      '0x' +
+      Array.from(byteArray)
+        // eslint-disable-next-line no-bitwise
+        .map((byte) => ('0' + (byte & 0xff).toString(16)).slice(-2))
+        .join('')
+    );
+  }
+  const message = toHexStringFromArray(new Uint8Array([124, 29, 15, 7]));
+
+  const cfParameters = cfParamsArray ?? newCfParameters(destAsset);
   const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
@@ -122,6 +188,7 @@ export async function prepareSwap(
   if (
     messageMetadata &&
     ccmSupportedChains.includes(chainFromAsset(destAsset)) &&
+    // Solana CCM are egressed at a random destination address
     chainFromAsset(destAsset) !== 'Solana'
   ) {
     destAddress = getContractAddress(chainFromAsset(destAsset), 'CFTESTER');
@@ -274,16 +341,30 @@ export async function testAllSwaps(swapContext: SwapContext) {
     sourceAsset: Asset,
     destAsset: Asset,
     functionCall: typeof testSwap | typeof testSwapViaContract,
-    messageMetadata?: CcmDepositMetadata,
+    ccmSwap: boolean = false,
   ) {
     if (destAsset === 'Btc') {
       Object.values(btcAddressTypes).forEach((btcAddrType) => {
         allSwaps.push(
-          functionCall(sourceAsset, destAsset, btcAddrType, messageMetadata, swapContext),
+          functionCall(
+            sourceAsset,
+            destAsset,
+            btcAddrType,
+            ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
+            swapContext,
+          ),
         );
       });
     } else {
-      allSwaps.push(functionCall(sourceAsset, destAsset, undefined, messageMetadata, swapContext));
+      allSwaps.push(
+        functionCall(
+          sourceAsset,
+          destAsset,
+          undefined,
+          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
+          swapContext,
+        ),
+      );
     }
   }
 
@@ -294,97 +375,46 @@ export async function testAllSwaps(swapContext: SwapContext) {
   //     .filter((destAsset) => sourceAsset !== destAsset)
   //     .forEach((destAsset) => {
   //       // Regular swaps
-  //       appendSwap(sourceAsset, destAsset, testSwap);
+  //       // appendSwap(sourceAsset, destAsset, testSwap);
 
   //       const sourceChain = chainFromAsset(sourceAsset);
   //       const destChain = chainFromAsset(destAsset);
-  //       if (
-  //         (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') &&
-  //         chainFromAsset(destAsset) !== 'Solana'
-  //       ) {
-  //         // Contract Swaps
-  //         appendSwap(sourceAsset, destAsset, testSwapViaContract);
-  //         if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
-  //           // CCM contract swaps
-  //           appendSwap(sourceAsset, destAsset, testSwapViaContract, newCcmMetadata(sourceAsset));
-  //         }
-  //       }
+  //       // if (
+  //       //   (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') &&
+  //       //   chainFromAsset(destAsset) !== 'Solana'
+  //       // ) {
+  //       //   // Contract Swaps
+  //       //   appendSwap(sourceAsset, destAsset, testSwapViaContract);
+  //       //   if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
+  //       //     // CCM contract swaps
+  //       //     appendSwap(
+  //       //       sourceAsset,
+  //       //       destAsset,
+  //       //       testSwapViaContract,
+  //       //       newCcmMetadata(sourceAsset, destAsset),
+  //       //     );
+  //       //   }
+  //       // }
 
-  //       if (ccmSupportedChains.includes(destChain) && chainFromAsset(destAsset) !== 'Solana') {
+  //       if (
+  //         ccmSupportedChains.includes(destChain) &&
+  //         destChain === 'Solana' &&
+  //       ) {
   //         // CCM swaps
-  //         appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset));
+  //         appendSwap(sourceAsset, destAsset, testSwap, newCcmMetadata(sourceAsset, destAsset));
   //       }
   //     });
   // });
 
-  // await Promise.all(allSwaps);
+  // TODO: More than 8 will cause aan egress fail (egressInvalid). CCM not retried?
+  appendSwap('Eth', 'Sol', testSwap);
+  appendSwap('Btc', 'Sol', testSwap);
+  appendSwap('Dot', 'Sol', testSwap);
+  appendSwap('ArbUsdc', 'Sol', testSwap);
+  appendSwap('Usdc', 'SolUsdc', testSwap);
+  appendSwap('Btc', 'SolUsdc', testSwap);
+  appendSwap('ArbEth', 'SolUsdc', testSwap);
 
-  // ---------- CCM TESTING ---------------------------------------
-  function toHexStringFromArray(byteArray: Uint8Array) {
-    return (
-      '0x' +
-      Array.from(byteArray)
-        // eslint-disable-next-line no-bitwise
-        .map((byte) => ('0' + (byte & 0xff).toString(16)).slice(-2))
-        .join('')
-    );
-  }
-
-  // appendSwap('Btc', 'Eth', testSwap, newCcmMetadata('Btc'));
-
-  // Bytes obtained from `create_ccm_native_transfer` test setting is_writable to false.
-  // Encoded Solana CF_TESTER address and it's mutability status.
-  const message = new Uint8Array([124, 29, 15, 7]);
-  const validCfParametersArray = new Uint8Array([
-    116, 23, 218, 139, 153, 215, 116, 129, 39, 167, 107, 3, 214, 31, 238, 105, 200, 13, 254, 247,
-    58, 210, 213, 80, 55, 55, 190, 237, 197, 169, 237, 72, 0, 4, 167, 59, 223, 49, 227, 65, 33, 138,
-    105, 59, 135, 114, 196, 62, 207, 206, 205, 76, 243, 95, 173, 160, 154, 135, 234, 15, 134, 13, 2,
-    129, 104, 229, 0,
-  ]);
-
-  // appendSwap('Eth', 'Sol', testSwap, {
-  //   message: toHexStringFromArray(message),
-  //   gasBudget: newCcmMetadata('Sol').gasBudget,
-  //   cfParameters: toHexStringFromArray(cfParametersArray),
-  // });
-
-  // Define the Solana accounts
-  const cfReceiver = {
-    pubkey: new PublicKey('8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH'),
-    is_writable: false,
-  };
-  const remainingAccount = {
-    pubkey: new PublicKey('CFp37nEY6E9byYHiuxQZg6vMCnzwNrgiF9nFGT6Zwcnx'),
-    is_writable: false,
-  };
-
-  // Convert the public keys and is_writable fields to byte arrays
-  const cfReceiverBytes = new Uint8Array([
-    ...cfReceiver.pubkey.toBytes(),
-    cfReceiver.is_writable ? 1 : 0,
-  ]);
-
-  const remainingAccounts = [
-    new Uint8Array([...remainingAccount.pubkey.toBytes(), remainingAccount.is_writable ? 1 : 0]),
-  ];
-
-  // Concatenate the byte arrays
-  const cfParameters = new Uint8Array([
-    ...cfReceiverBytes,
-    // Inserted by the codec::Encode
-    2 ** (remainingAccounts.length + 1),
-    ...remainingAccounts.flatMap((account) => Array.from(account)),
-  ]);
-
-  console.log(validCfParametersArray);
-  console.log(cfParameters);
-  console.log('match', validCfParametersArray.toString() === cfParameters.toString());
-
-  appendSwap('Eth', 'Sol', testSwap, {
-    message: toHexStringFromArray(message),
-    gasBudget: newCcmMetadata('Sol').gasBudget,
-    cfParameters: toHexStringFromArray(cfParameters),
-  });
   await Promise.all(allSwaps);
 
   console.log('=== Swapping test complete ===');

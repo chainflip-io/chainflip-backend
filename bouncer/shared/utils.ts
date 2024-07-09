@@ -633,6 +633,11 @@ export async function observeSolanaEvent(
   initialBlockNumber?: number,
 ): Promise<EVMEvent | undefined> {
   // TODO: Add logic to witness the event on the Solana CfTester
+  // See: https://github.com/chainflip-io/chainflip-sol-contracts/blob/7ab8fbd389d047eeccef9867ce0bb18b2593e92f/tests/tests.ts#L3295
+  // We either subscribe or we just use the rpc `getsignaturesforaddress` to get the transactions and find the one that matches
+  // what we are expecting. Problem might be that we still need the Anchor event parser to decode the values. Maybe we could
+  // consider logging them too, which is probably easier to parse here in the bouncer than Anchor's emit events.
+  // Otherwise adding anchor to the npm packages is probably not too bad.
   return undefined;
 }
 /* eslint-enable @typescript-eslint/no-unused-vars */
