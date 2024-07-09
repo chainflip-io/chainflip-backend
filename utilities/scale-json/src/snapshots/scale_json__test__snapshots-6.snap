@@ -1,0 +1,11 @@
+---
+source: utilities/scale-json/src/test.rs
+expression: decoded_json
+---
+{
+  "Other": {
+    "StructVariant": {
+      "field": 42
+    }
+  }
+}
