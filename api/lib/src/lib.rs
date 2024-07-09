@@ -456,7 +456,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			)
 		}) {
 			Ok(SwapDepositAddress {
-				address: StringAddress::from_encoded_address(&deposit_address),
+				address: StringAddress::from_encoded_address(deposit_address),
 				issued_block: header.number,
 				channel_id: *channel_id,
 				source_chain_expiry_block: (*source_chain_expiry_block).into(),
@@ -502,7 +502,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				egress_id: *egress_id,
 				egress_amount: (*egress_amount).into(),
 				egress_fee: (*egress_fee).into(),
-				destination_address: StringAddress::from_encoded_address(&destination_address),
+				destination_address: StringAddress::from_encoded_address(destination_address),
 			})
 		} else {
 			bail!("No WithdrawalRequested event was found");
