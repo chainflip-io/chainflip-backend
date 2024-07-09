@@ -407,13 +407,14 @@ export async function testAllSwaps(swapContext: SwapContext) {
   // });
 
   // TODO: More than 8 will cause aan egress fail (egressInvalid). CCM not retried?
-  appendSwap('Eth', 'Sol', testSwap);
-  appendSwap('Btc', 'Sol', testSwap);
-  appendSwap('Dot', 'Sol', testSwap);
-  appendSwap('ArbUsdc', 'Sol', testSwap);
-  appendSwap('Usdc', 'SolUsdc', testSwap);
-  appendSwap('Btc', 'SolUsdc', testSwap);
-  appendSwap('ArbEth', 'SolUsdc', testSwap);
+  appendSwap('Eth', 'Sol', testSwap, true);
+  appendSwap('Btc', 'Sol', testSwap, true);
+  appendSwap('Dot', 'Sol', testSwap, true);
+  appendSwap('ArbUsdc', 'Sol', testSwap, true);
+  appendSwap('Usdc', 'SolUsdc', testSwap, true);
+  appendSwap('Btc', 'SolUsdc', testSwap, true);
+  appendSwap('Dot', 'SolUsdc', testSwap, true);
+  appendSwap('ArbEth', 'SolUsdc', testSwap, true);
 
   await Promise.all(allSwaps);
 
