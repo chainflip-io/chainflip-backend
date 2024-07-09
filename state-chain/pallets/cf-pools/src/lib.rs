@@ -1005,9 +1005,7 @@ pub mod pallet {
 
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::cancel_all_orders())]
-		pub fn cancel_all_orders(
-			origin: OriginFor<T>,
-		) -> DispatchResult {
+		pub fn cancel_all_orders(origin: OriginFor<T>) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			ensure!(
 				T::SafeMode::get().limit_order_update_enabled,

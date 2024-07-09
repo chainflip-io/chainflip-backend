@@ -74,6 +74,12 @@ pub mod types {
 		pub bought_amount: U256,
 		pub sell_amount_change: Option<IncreaseOrDecrease<U256>>,
 	}
+
+	#[derive(Serialize, Deserialize, Clone)]
+	pub enum Order {
+		LimitOrder(LimitOrder),
+		RangeOrder(RangeOrder),
+	}
 }
 
 fn collect_range_order_returns(
@@ -143,6 +149,67 @@ fn collect_limit_order_returns(
 				sell_amount_change: sell_amount_change
 					.map(|increase_or_decrese| increase_or_decrese.map(|amount| amount.into())),
 			}),
+			_ => None,
+		})
+		.collect()
+}
+
+fn collect_order_returns(
+	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
+) -> Vec<types::Order> {
+	events
+		.into_iter()
+		.filter_map(|event| match event {
+			state_chain_runtime::RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::LimitOrderUpdated {
+					sell_amount_change,
+					sell_amount_total,
+					collected_fees,
+					bought_amount,
+					tick,
+					base_asset,
+					quote_asset,
+					side,
+					id,
+					..
+				},
+			) => Some(types::Order::LimitOrder(types::LimitOrder {
+				base_asset,
+				quote_asset,
+				side,
+				id: id.into(),
+				tick,
+				sell_amount_total: sell_amount_total.into(),
+				collected_fees: collected_fees.into(),
+				bought_amount: bought_amount.into(),
+				sell_amount_change: sell_amount_change
+					.map(|increase_or_decrease| increase_or_decrease.map(|amount| amount.into())),
+			})),
+			state_chain_runtime::RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::RangeOrderUpdated {
+					size_change,
+					liquidity_total,
+					collected_fees,
+					tick_range,
+					base_asset,
+					quote_asset,
+					id,
+					..
+				},
+			) => Some(types::Order::RangeOrder(types::RangeOrder {
+				base_asset,
+				quote_asset,
+				id: id.into(),
+				size_change: size_change.map(|increase_or_decrease| {
+					increase_or_decrease.map(|range_order_change| types::RangeOrderChange {
+						liquidity: range_order_change.liquidity.into(),
+						amounts: range_order_change.amounts.map(|amount| amount.into()),
+					})
+				}),
+				liquidity_total: liquidity_total.into(),
+				tick_range,
+				collected_fees: collected_fees.map(Into::into),
+			})),
 			_ => None,
 		})
 		.collect()
@@ -411,5 +478,19 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	async fn deregister_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_lp::Call::deregister_lp_account {})
 			.await
+	}
+
+	async fn cancel_all_orders(
+		&self,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<Vec<types::Order>>> {
+		Ok(into_api_wait_for_result(
+			self.submit_signed_extrinsic_wait_for(
+				pallet_cf_pools::Call::cancel_all_orders {},
+				wait_for,
+			)
+			.await?,
+			collect_order_returns,
+		))
 	}
 }

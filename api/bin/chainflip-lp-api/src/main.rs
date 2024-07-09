@@ -8,7 +8,7 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		types::{LimitOrder, RangeOrder},
+		types::{LimitOrder, RangeOrder, Order},
 		ApiWaitForResult, LpApi, PoolPairsMap, Side, Tick,
 	},
 	primitives::{
@@ -198,6 +198,12 @@ pub trait Rpc {
 
 	#[method(name = "order_fills")]
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
+
+	#[method(name = "cancel_all_orders")]
+	async fn cancel_all_orders(
+		&self,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<Order>>>;
 }
 
 pub struct RpcServerImpl {
@@ -501,6 +507,13 @@ impl RpcServer for RpcServerImpl {
 		};
 
 		Ok(order_fills(state_chain_client.clone(), block).await?)
+	}
+
+	async fn cancel_all_orders(
+		&self,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<Order>>> {
+		Ok(self.api.lp_api().cancel_all_orders(wait_for.unwrap_or_default()).await?)
 	}
 }
 
