@@ -83,4 +83,5 @@ try-runtime = [
   'frame-system/try-runtime',
   'sp-runtime/try-runtime',
   'cf-runtime-upgrade-utilities/try-runtime',
+  'cf-traits/try-runtime',
 ]

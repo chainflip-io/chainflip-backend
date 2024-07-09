@@ -536,7 +536,7 @@ pub mod pallet {
 							T::TargetChain,
 						>>::into_foreign_chain_address(signer_id.clone());
 
-						T::Refunding::record_gas_fees(
+						T::Refunding::record_gas_fee(
 							address_to_refund,
 							<T::TargetChain as Chain>::GAS_ASSET.into(),
 							to_refund.into(),

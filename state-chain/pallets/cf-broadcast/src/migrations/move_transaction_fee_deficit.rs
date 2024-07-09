@@ -19,7 +19,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
 				T::TargetChain,
 			>>::into_foreign_chain_address(signer_id);
-			T::Refunding::record_gas_fees(
+			T::Refunding::record_gas_fee(
 				address_to_refund,
 				<T::TargetChain as Chain>::GAS_ASSET.into(),
 				to_refund.into(),

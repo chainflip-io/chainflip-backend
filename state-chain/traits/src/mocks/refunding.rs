@@ -20,7 +20,7 @@ impl MockRefunding {
 }
 
 impl Refunding for MockRefunding {
-	fn record_gas_fees(_: ForeignChainAddress, _: Asset, amount: AssetAmount) {
+	fn record_gas_fee(_: ForeignChainAddress, _: Asset, amount: AssetAmount) {
 		TRANSACTION_FEE_DEFICIT.with(|cell| {
 			*cell.borrow_mut() += amount;
 		});
