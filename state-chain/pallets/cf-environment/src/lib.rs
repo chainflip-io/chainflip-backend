@@ -36,7 +36,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -692,6 +692,10 @@ impl<T: Config> Pallet<T> {
 		let mut nonce_accounts = SolanaAvailableNonceAccounts::<T>::get();
 		nonce_accounts.extend(&mut SolanaUnAvailableNonceAccounts::<T>::iter());
 		nonce_accounts
+	}
+
+	pub fn get_number_of_available_sol_nonce_accounts() -> usize {
+		SolanaAvailableNonceAccounts::<T>::decode_len().unwrap_or(0)
 	}
 }
 

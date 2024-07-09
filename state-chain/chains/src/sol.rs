@@ -2,7 +2,7 @@ pub use cf_primitives::chains::Solana;
 
 use cf_primitives::ChannelId;
 use sp_core::ConstBool;
-use sp_std::vec::Vec;
+use sp_std::{vec, vec::Vec};
 
 use sol_prim::{AccountBump, SlotNumber};
 
@@ -28,6 +28,10 @@ pub use sol_tx_core::{
 	Hash as RawSolHash, Instruction as SolInstruction, Message as SolMessage, Pubkey as SolPubkey,
 	Transaction as SolTransaction,
 };
+
+// Due to transaction size limit in Solana, we have a limit on number of fetches in a solana fetch
+// tx
+pub const MAX_SOL_FETCHES_PER_TX: usize = 10;
 
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
@@ -86,9 +90,17 @@ impl ChainCrypto for SolanaCrypto {
 	}
 
 	fn maybe_broadcast_barriers_on_rotation(
-		_rotation_broadcast_id: cf_primitives::BroadcastId,
+		rotation_broadcast_id: cf_primitives::BroadcastId,
 	) -> Vec<cf_primitives::BroadcastId> {
-		todo!()
+		// In solana, we need all the txs to have successfully broadcasted before we can broadcast
+		// the rotation tx so that all the durable nonces have been consumed. Moreover, we also need
+		// to wait for the rotation tx to go through before broadcasting subsequent txs. In both
+		// cases, failure to do so will fail transactions.
+		if rotation_broadcast_id > 1 {
+			vec![rotation_broadcast_id - 1, rotation_broadcast_id]
+		} else {
+			vec![rotation_broadcast_id]
+		}
 	}
 }
 

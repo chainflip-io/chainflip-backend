@@ -45,7 +45,7 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
-use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
+use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi, NoLimit};
 use codec::{alloc::string::ToString, Encode};
 use core::ops::Range;
 use frame_support::instances::*;
@@ -125,7 +125,7 @@ pub use pallet_cf_validator::SetSizeParameters;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, evm_vault_activator::EvmVaultActivator,
 	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
-	DotEnvironment, EvmEnvironment, SolEnvironment, TokenholderGovernanceBroadcaster,
+	DotEnvironment, EvmEnvironment, SolEnvironment, SolanaLimit, TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -340,6 +340,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -361,6 +362,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -382,6 +384,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -403,6 +406,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -424,6 +428,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
+	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
 }
 
