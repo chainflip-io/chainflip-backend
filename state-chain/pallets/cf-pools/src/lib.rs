@@ -1002,6 +1002,70 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::cancel_all_orders())]
+		pub fn cancel_all_orders(
+			origin: OriginFor<T>,
+		) -> DispatchResult {
+			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			ensure!(
+				T::SafeMode::get().limit_order_update_enabled,
+				Error::<T>::UpdatingLimitOrdersDisabled
+			);
+			ensure!(
+				T::SafeMode::get().limit_order_update_enabled,
+				Error::<T>::UpdatingLimitOrdersDisabled
+			);
+			for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
+				let mut pool = Pools::<T>::get(asset_pair).unwrap();
+
+				if let Some(range_orders_cache) = pool.range_orders_cache.get(lp).cloned() {
+					for (id, range) in range_orders_cache.iter() {
+						Self::inner_update_range_order(
+							&mut pool,
+							lp,
+							&asset_pair,
+							*id,
+							range.clone(),
+							IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
+								liquidity: Liquidity::MAX,
+							}),
+							crate::NoOpStatus::Error,
+						)?;
+					}
+				}
+
+				for (assets, limit_orders_cache) in pool
+					.limit_orders_cache
+					.as_ref()
+					.into_iter()
+					.filter_map(|(assets, limit_orders_cache)| {
+						limit_orders_cache
+							.get(lp)
+							.cloned()
+							.map(|limit_orders_cache| (assets, limit_orders_cache))
+					})
+					.collect::<Vec<_>>()
+				{
+					for (id, tick) in limit_orders_cache {
+						Self::inner_update_limit_order(
+							&mut pool,
+							lp,
+							&asset_pair,
+							assets.sell_order(),
+							id,
+							tick,
+							IncreaseOrDecrease::Decrease(cf_amm::common::Amount::MAX),
+							crate::NoOpStatus::Error,
+						)?;
+					}
+				}
+
+				Pools::<T>::insert(asset_pair, pool);
+			}
+			Ok(())
+		}
 	}
 }
 

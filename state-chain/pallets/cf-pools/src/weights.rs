@@ -41,6 +41,7 @@ pub trait WeightInfo {
 	fn set_pool_fees() -> Weight;
 	fn schedule_limit_order_update() -> Weight;
 	fn set_maximum_price_impact(n: u32, ) -> Weight;
+	fn cancel_all_orders() -> Weight;
 }
 
 /// Weights for pallet_cf_pools using the Substrate node and recommended hardware.
@@ -193,6 +194,12 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+
+	fn cancel_all_orders() -> Weight {
+		Weight::from_parts(79_000_000, 8005)
+			.saturating_add(T::DbWeight::get().reads(7_u64))
+			.saturating_add(T::DbWeight::get().writes(3_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -343,5 +350,11 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_parts(2_245_494, 0).saturating_mul(n.into()))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+
+	fn cancel_all_orders() -> Weight {
+		Weight::from_parts(79_000_000, 8005)
+			.saturating_add(RocksDbWeight::get().reads(7_u64))
+			.saturating_add(RocksDbWeight::get().writes(3_u64))
 	}
 }
