@@ -16,8 +16,8 @@ use chainflip_api::{
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	AccountId32, BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
-	SignedExtrinsicApi, StateChainApi, StorageApi, AddressString, WaitFor,
+	AccountId32, AddressString, BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
+	SignedExtrinsicApi, StateChainApi, StorageApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
