@@ -15,7 +15,7 @@ use crate::{
 	sol::{
 		api::SolanaTransactionBuildingError,
 		compute_units_costs::{
-			BASE_COMPUTE_UNITS_PER_TX, COMPUTE_UNITS_PER_FETCH_NATIVE,
+			compute_limit_with_buffer, BASE_COMPUTE_UNITS_PER_TX, COMPUTE_UNITS_PER_FETCH_NATIVE,
 			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_ROTATION,
 			COMPUTE_UNITS_PER_TRANSFER_NATIVE, COMPUTE_UNITS_PER_TRANSFER_TOKEN,
 		},
@@ -144,7 +144,7 @@ impl SolanaInstructionBuilder {
 				nonce_account.into(),
 				agg_key.into(),
 				compute_price,
-				compute_limit,
+				compute_limit_with_buffer(compute_limit),
 			)
 		})
 	}
@@ -166,7 +166,9 @@ impl SolanaInstructionBuilder {
 			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
-			BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+			compute_limit_with_buffer(
+				BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+			),
 		)
 	}
 
@@ -210,7 +212,7 @@ impl SolanaInstructionBuilder {
 			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
-			BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+			compute_limit_with_buffer(BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_TOKEN),
 		)
 	}
 
@@ -244,7 +246,7 @@ impl SolanaInstructionBuilder {
 			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
-			COMPUTE_UNITS_PER_ROTATION,
+			compute_limit_with_buffer(COMPUTE_UNITS_PER_ROTATION),
 		)
 	}
 

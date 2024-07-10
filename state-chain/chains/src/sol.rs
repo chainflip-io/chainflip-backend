@@ -107,16 +107,22 @@ impl ChainCrypto for SolanaCrypto {
 pub const LAMPORTS_PER_SIGNATURE: SolAmount = 5000u64;
 
 // This is to be used both for ingress/egress estimation and for setting the compute units
-// limit when crafting transactions by the State Chain. Using a 50% buffer to ensure we'll
-// have enough compute units to cover the actual cost.
+// limit when crafting transactions by the State Chain.
 pub mod compute_units_costs {
 	use super::SolComputeLimit;
-	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 300u32 * 3 / 2;
-	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 15_000u32 * 3 / 2;
-	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32 * 3 / 2;
-	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 45_000u32 * 3 / 2;
-	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 50_000u32 * 3 / 2;
-	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32 * 3 / 2;
+
+	// Applying a 50% buffer to ensure we'll have enough compute units to cover the actual cost.
+	pub const fn compute_limit_with_buffer(
+		compute_limit_value: SolComputeLimit,
+	) -> SolComputeLimit {
+		compute_limit_value * 3 / 2
+	}
+	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 300u32;
+	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 15_000u32;
+	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32;
+	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 45_000u32;
+	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 50_000u32;
+	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
 }
 
 #[derive(
@@ -143,11 +149,13 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 	) -> <Solana as crate::Chain>::ChainAmount {
 		use compute_units_costs::*;
 
-		let compute_units_per_transfer = BASE_COMPUTE_UNITS_PER_TX +
-			match asset {
-				assets::sol::Asset::Sol => COMPUTE_UNITS_PER_TRANSFER_NATIVE,
-				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
-			};
+		let compute_units_per_transfer = compute_limit_with_buffer(
+			BASE_COMPUTE_UNITS_PER_TX +
+				match asset {
+					assets::sol::Asset::Sol => COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+					assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+				},
+		);
 
 		LAMPORTS_PER_SIGNATURE +
 			(self.priority_fee).saturating_mul(compute_units_per_transfer.into())
@@ -158,11 +166,13 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 	) -> <Solana as crate::Chain>::ChainAmount {
 		use compute_units_costs::*;
 
-		let compute_units_per_fetch = BASE_COMPUTE_UNITS_PER_TX +
-			match asset {
-				assets::sol::Asset::Sol => COMPUTE_UNITS_PER_FETCH_NATIVE,
-				assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
-			};
+		let compute_units_per_fetch = compute_limit_with_buffer(
+			BASE_COMPUTE_UNITS_PER_TX +
+				match asset {
+					assets::sol::Asset::Sol => COMPUTE_UNITS_PER_FETCH_NATIVE,
+					assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
+				},
+		);
 
 		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_fetch.into())
 	}
