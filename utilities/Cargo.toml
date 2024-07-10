@@ -24,12 +24,14 @@ hex = { version = "0.4.3", default-features = false }
 itertools = { version = "0.11", default_features = false }
 lazy_format = "2.0"
 lazy_static = "1.4"
+log = "0.4"
 mockall = { version = "0.11.0", optional = true }
 num-traits = { version = "0.2", optional = true }
 pin-project = { version = "1.0.12", optional = true }
 predicates = { version = "3.0", optional = true }
 prometheus = { version = "0.13.0", default-features = false }
 regex = { version = "1", optional = true }
+scale-info = { version = "2.10", optional = true }
 scopeguard = { version = "1.2.0" }
 serde = { version = "1.0", optional = true, default_features = false, features = [
   "alloc",
@@ -38,6 +40,7 @@ serde = { version = "1.0", optional = true, default_features = false, features =
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true }
 sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true }
 tempfile = { version = "3.7.0", optional = true }
+thiserror = { version = "1.0.26", optional = true }
 tokio = { version = "1.13.1", features = ["full"], optional = true }
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = [
@@ -46,6 +49,10 @@ tracing-subscriber = { version = "0.3", features = [
 ], optional = true }
 url = { version = "2.4", optional = true }
 warp = { version = "0.3.5", optional = true }
+
+# local dependencies
+scale-json = { path = "./scale-json", optional = true }
+
 
 [dev-dependencies]
 serde_json = "1.0"
@@ -68,6 +75,9 @@ std = [
   'dep:pin-project',
   'dep:serde',
   'serde?/std',
+  'dep:scale-info',
+  'dep:scale-json',
+  'dep:thiserror',
   'dep:tracing',
   'dep:tracing-subscriber',
   'dep:warp',

@@ -65,33 +65,35 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 				let nonce_addresses: Vec<SolAddress> =	nonce_accounts.keys().copied().collect();
 
-				let current_nonce_accounts = get_durable_nonces(&sol_rpc, nonce_addresses).await?;
+				if !nonce_addresses.is_empty() {
 
-				let calls = current_nonce_accounts
-					.into_iter()
-					.filter_map(|(address, current_durable_nonce)| {
-						if current_durable_nonce != *nonce_accounts.get(&address).expect("We just queried the nonces of the nonce accounts so the nonce account must exist") {
-							let call: Box<state_chain_runtime::RuntimeCall> = Box::new(
-							pallet_cf_environment::Call::<
-								state_chain_runtime::Runtime
-							>::update_sol_nonce { nonce_account: address, durable_nonce: current_durable_nonce }.into());
+					let current_nonce_accounts = get_durable_nonces(&sol_rpc, nonce_addresses).await?;
 
-							Some(state_chain_client.finalize_signed_extrinsic(
-								pallet_cf_witnesser::Call::witness_at_epoch {
-									call,
-									epoch_index: epoch.index,
-								},
-							))
-						} else {
-							None
-						}
-					})
-					.collect::<Vec<_>>();
+					let calls = current_nonce_accounts
+						.into_iter()
+						.filter_map(|(address, current_durable_nonce)| {
+							if current_durable_nonce != *nonce_accounts.get(&address).expect("We just queried the nonces of the nonce accounts so the nonce account must exist") {
+								let call: Box<state_chain_runtime::RuntimeCall> = Box::new(
+								pallet_cf_environment::Call::<
+									state_chain_runtime::Runtime
+								>::update_sol_nonce { nonce_account: address, durable_nonce: current_durable_nonce }.into());
 
-				for call in calls {
-					call.await;
+								Some(state_chain_client.finalize_signed_extrinsic(
+									pallet_cf_witnesser::Call::witness_at_epoch {
+										call,
+										epoch_index: epoch.index,
+									},
+								))
+							} else {
+								None
+							}
+						})
+						.collect::<Vec<_>>();
+
+					for call in calls {
+						call.await;
+					}
 				}
-
 				Ok::<_, anyhow::Error>(())
 			}
 		})
@@ -122,8 +124,6 @@ where
 		.value;
 
 	let mut result = Vec::new();
-
-	println!("Accounts_info: {:?}", accounts_info);
 
 	for (nonce_account, nonce_account_info) in nonce_accounts.iter().zip(accounts_info) {
 		if let Some(UiAccount { data: UiAccountData::Json(account_data), .. }) = nonce_account_info

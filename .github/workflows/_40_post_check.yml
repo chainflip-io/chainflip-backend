@@ -90,9 +90,10 @@ jobs:
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
           touch /tmp/chainflip/debug.log
-
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
+          sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
+          sudo cp ./old-engine-dylib/libchainflip_engine_v*.so /usr/lib/
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 

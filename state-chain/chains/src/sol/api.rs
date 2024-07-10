@@ -157,12 +157,12 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		// Lookup environment variables, such as aggkey and durable nonce.
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
-		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
 		transfer_params
 			.into_iter()
 			.map(|(transfer_param, egress_id)| {
+				let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 				let transfer_instruction_set = match transfer_param.asset {
 					SolAsset::Sol => SolanaInstructionBuilder::transfer_native(
 						transfer_param.amount,
@@ -337,6 +337,10 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	fn transaction_out_id(&self) -> <SolanaCrypto as ChainCrypto>::TransactionOutId {
 		self.transaction.signatures.first().cloned().unwrap_or_default()
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		todo!()
+	}
 }
 
 impl<Env: 'static> ConsolidateCall<Solana> for SolanaApi<Env> {
@@ -380,7 +384,10 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 		transfer_params: Vec<(TransferAssetParams<Solana>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
 		let mut txs = Self::transfer(transfer_params)?;
-		txs.push((Self::batch_fetch(fetch_params)?, vec![]));
+
+		if !fetch_params.is_empty() {
+			txs.push((Self::batch_fetch(fetch_params)?, vec![]));
+		}
 
 		Ok(txs)
 	}

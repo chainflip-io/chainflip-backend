@@ -1,7 +1,7 @@
 use crate::*;
 use frame_support::traits::OnRuntimeUpgrade;
 
-mod old {
+pub(super) mod old {
 
 	use super::*;
 

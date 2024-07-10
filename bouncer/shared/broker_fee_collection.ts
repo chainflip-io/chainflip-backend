@@ -27,6 +27,8 @@ const swapAssetAmount = {
   [Assets.Usdt]: 1000,
   [Assets.ArbEth]: 1,
   [Assets.ArbUsdc]: 1000,
+  [Assets.Sol]: 10,
+  [Assets.SolUsdc]: 1000,
 };
 const commissionBps = 1000; // 10%
 

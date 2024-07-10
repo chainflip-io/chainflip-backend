@@ -10,6 +10,9 @@ import {
   observeSwapScheduled,
   observeSwapEvents,
   observeBroadcastSuccess,
+  getEncodedSolAddress,
+  observeFetch,
+  chainFromAsset,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swapping';
@@ -20,6 +23,8 @@ function encodeDestinationAddress(address: string, destAsset: Asset): string {
 
   if (destAddress && destAsset === 'Dot') {
     destAddress = encodeAddress(destAddress);
+  } else if (shortChainFromAsset(destAsset) === 'Sol') {
+    destAddress = getEncodedSolAddress(destAddress);
   }
 
   return destAddress;
@@ -141,6 +146,12 @@ export async function doPerformSwap(
       observeBalanceIncrease(destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
+
+    const chain = chainFromAsset(sourceAsset);
+    if (chain !== 'Bitcoin' && chain !== 'Polkadot') {
+      if (log) console.log(`${tag} Waiting deposit fetch ${depositAddress}`);
+      await observeFetch(sourceAsset, depositAddress);
+    }
 
     if (log) console.log(`${tag} Swap success! New balance: ${newBalance}!`);
     swapContext?.updateStatus(tag, SwapStatus.Success);
