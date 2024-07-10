@@ -37,11 +37,17 @@ const GAS_PER_BYTE = 17;
 const MIN_FEE: Record<string, number> = { Ethereum: 1000000000, Arbitrum: 100000000 };
 const LOOP_TIMEOUT = 15;
 
-function gasTestCcmMetadata(sourceAsset: Asset, gasToConsume: number, gasBudgetFraction?: number) {
+function gasTestCcmMetadata(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  gasToConsume: number,
+  gasBudgetFraction?: number,
+) {
   const web3 = new Web3();
 
   return newCcmMetadata(
     sourceAsset,
+    destAsset,
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasToConsume]),
     gasBudgetFraction,
   );
@@ -75,7 +81,12 @@ async function testGasLimitSwap(
   // Increase the gas consumption to make sure all the messages are unique
   const gasConsumption = gasToConsume ?? DEFAULT_GAS_CONSUMPTION[destChain]++;
 
-  const messageMetadata = gasTestCcmMetadata(sourceAsset, gasConsumption, gasBudgetFraction);
+  const messageMetadata = gasTestCcmMetadata(
+    sourceAsset,
+    destAsset,
+    gasConsumption,
+    gasBudgetFraction,
+  );
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
@@ -360,6 +371,8 @@ export async function testGasLimitCcmSwaps() {
     await sleep(500);
   }
 
+  // TODO: Modify this so we don't have to pass the chain to getRandomGasConsumption that
+  // matches the destination address. It should do it automatically.
   const gasLimitSwapsDefault = [
     testGasLimitSwap('Dot', 'Flip', undefined, getRandomGasConsumption('Ethereum')),
     testGasLimitSwap('Eth', 'Usdc', undefined, getRandomGasConsumption('Ethereum')),
