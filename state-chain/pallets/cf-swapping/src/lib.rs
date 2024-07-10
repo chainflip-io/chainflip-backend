@@ -361,6 +361,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
+			refund_parameters: Option<ChannelRefundParameters>,
 		},
 		/// A swap is scheduled for the first time
 		SwapScheduled {
@@ -956,7 +957,7 @@ pub mod pallet {
 					broker,
 					channel_metadata.clone(),
 					boost_fee,
-					refund_parameters,
+					refund_parameters.clone(),
 				)?;
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
@@ -971,6 +972,7 @@ pub mod pallet {
 				boost_fee,
 				channel_opening_fee,
 				affiliate_fees,
+				refund_parameters,
 			});
 
 			Ok(())

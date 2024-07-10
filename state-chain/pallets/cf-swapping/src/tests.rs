@@ -2234,8 +2234,14 @@ fn swaps_get_retried_after_failure() {
 }
 
 #[test]
-fn deposit_address_ready_event_contain_correct_boost_fee_value() {
+fn deposit_address_ready_event_contains_correct_parameters() {
 	new_test_ext().execute_with(|| {
+		let refund_parameters = ChannelRefundParameters {
+			retry_duration: 10,
+			refund_address: ForeignChainAddress::Eth([10; 20].into()),
+			min_price: 100.into(),
+		};
+
 		const BOOST_FEE: u16 = 100;
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 			RuntimeOrigin::signed(ALICE),
@@ -2246,11 +2252,15 @@ fn deposit_address_ready_event_contain_correct_boost_fee_value() {
 			None,
 			BOOST_FEE,
 			Default::default(),
-			None,
+			Some(refund_parameters.clone()),
 		));
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Swapping(Event::SwapDepositAddressReady { boost_fee: BOOST_FEE, .. })
+			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
+				boost_fee: BOOST_FEE,
+				refund_parameters: Some(ref refund_params_in_event),
+				..
+			}) if refund_params_in_event == &refund_parameters
 		);
 	});
 }

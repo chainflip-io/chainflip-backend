@@ -1,4 +1,4 @@
-use crate::{chainflip::Offence, Hash, Runtime, RuntimeEvent};
+use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
@@ -13,7 +13,6 @@ use cf_primitives::{
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
-use frame_system::EventRecord;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::OwedAmount;
 use pallet_cf_pools::{
@@ -158,13 +157,6 @@ pub struct FailingWitnessValidators {
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
-/// Filter that controls what RuntimeEvents gets returned from CustomRuntimeApi::cf_get_events
-#[derive(Serialize, Deserialize, TypeInfo, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum EventFilter {
-	AllEvents,
-	SystemOnly,
-}
-
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -275,8 +267,8 @@ decl_runtime_apis!(
 		) -> Option<FailingWitnessValidators>;
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
-		fn cf_get_events(filter: EventFilter) -> Vec<EventRecord<RuntimeEvent, Hash>>;
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
+		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
 	}
 );
