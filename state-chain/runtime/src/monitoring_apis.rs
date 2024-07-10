@@ -1,8 +1,10 @@
 use crate::{chainflip::Offence, ValidatorInfo};
 use cf_chains::dot::PolkadotAccountId;
+use cf_primitives::AssetAmount;
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::AccountId32;
 pub use pallet_cf_ingress_egress::OwedAmount;
+use pallet_cf_refunding::VaultImbalance;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
@@ -56,11 +58,24 @@ pub struct OpenDepositChannels {
 	pub arbitrum: u32,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
-pub struct FeeImbalance {
-	pub ethereum: u128,
-	pub polkadot: u128,
-	pub arbitrum: u128,
+pub struct FeeImbalance<A> {
+	pub ethereum: VaultImbalance<A>,
+	pub polkadot: VaultImbalance<A>,
+	pub arbitrum: VaultImbalance<A>,
+	pub bitcoin: VaultImbalance<A>,
 }
+
+impl<A> FeeImbalance<A> {
+	pub fn map<B>(&self, f: impl Fn(&A) -> B) -> FeeImbalance<B> {
+		FeeImbalance {
+			ethereum: self.ethereum.map(&f),
+			polkadot: self.polkadot.map(&f),
+			arbitrum: self.arbitrum.map(&f),
+			bitcoin: self.bitcoin.map(&f),
+		}
+	}
+}
+
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct AuthoritiesInfo {
 	pub authorities: u32,
@@ -90,7 +105,7 @@ pub struct MonitoringData {
 	pub pending_broadcasts: PendingBroadcasts,
 	pub pending_tss: PendingTssCeremonies,
 	pub open_deposit_channels: OpenDepositChannels,
-	pub fee_imbalance: FeeImbalance,
+	pub fee_imbalance: FeeImbalance<AssetAmount>,
 	pub authorities: AuthoritiesInfo,
 	pub build_version: LastRuntimeUpgradeInfo,
 	pub suspended_validators: Vec<(Offence, u32)>,
@@ -112,7 +127,7 @@ decl_runtime_apis!(
 		fn cf_pending_tss_ceremonies_count() -> PendingTssCeremonies;
 		fn cf_pending_swaps_count() -> u32;
 		fn cf_open_deposit_channels_count() -> OpenDepositChannels;
-		fn cf_fee_imbalance() -> FeeImbalance;
+		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount>;
 		fn cf_build_version() -> LastRuntimeUpgradeInfo;
 		fn cf_monitoring_data() -> MonitoringData;
 		fn cf_accounts_info(

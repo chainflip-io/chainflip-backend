@@ -247,6 +247,33 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	pub fn vault_imbalance(asset: Asset) -> VaultImbalance<AssetAmount> {
+		let owed = Liabilities::<T>::get(asset).values().sum::<u128>();
+		let withheld = WithheldAssets::<T>::get(asset);
+		if owed > withheld {
+			VaultImbalance::Deficit(owed - withheld)
+		} else {
+			VaultImbalance::Surplus(withheld - owed)
+		}
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug, Serialize, Deserialize)]
+pub enum VaultImbalance<A> {
+	/// There are more withheld assets than what is owed.
+	Surplus(A),
+	/// There are more assets owed than what is withheld.
+	Deficit(A),
+}
+
+impl<A> VaultImbalance<A> {
+	pub fn map<B>(&self, f: impl FnOnce(&A) -> B) -> VaultImbalance<B> {
+		match self {
+			VaultImbalance::Surplus(amount) => VaultImbalance::Surplus(f(amount)),
+			VaultImbalance::Deficit(amount) => VaultImbalance::Deficit(f(amount)),
+		}
+	}
+}
 
 impl<T: Config> Refunding for Pallet<T> {
 	fn record_gas_fee(address: ForeignChainAddress, asset: Asset, amount: AssetAmount) {

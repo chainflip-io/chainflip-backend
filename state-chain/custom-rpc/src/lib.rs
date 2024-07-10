@@ -85,21 +85,8 @@ impl From<RedemptionsInfo> for RpcRedemptionsInfo {
 		Self { total_balance: redemption_info.total_balance.into(), count: redemption_info.count }
 	}
 }
-#[derive(Serialize, Deserialize)]
-pub struct RpcFeeImbalance {
-	pub ethereum: NumberOrHex,
-	pub polkadot: NumberOrHex,
-	pub arbitrum: NumberOrHex,
-}
-impl From<FeeImbalance> for RpcFeeImbalance {
-	fn from(fee_imbalance: FeeImbalance) -> Self {
-		Self {
-			ethereum: fee_imbalance.ethereum.into(),
-			polkadot: fee_imbalance.polkadot.into(),
-			arbitrum: fee_imbalance.arbitrum.into(),
-		}
-	}
-}
+
+pub type RpcFeeImbalance = FeeImbalance<NumberOrHex>;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcFlipSupply {
@@ -137,7 +124,7 @@ impl From<MonitoringData> for RpcMonitoringData {
 		Self {
 			epoch: monitoring_data.epoch.into(),
 			pending_redemptions: monitoring_data.pending_redemptions.into(),
-			fee_imbalance: monitoring_data.fee_imbalance.into(),
+			fee_imbalance: monitoring_data.fee_imbalance.map(|i| (*i).into()),
 			external_chains_height: monitoring_data.external_chains_height,
 			btc_utxos: monitoring_data.btc_utxos,
 			pending_broadcasts: monitoring_data.pending_broadcasts,
