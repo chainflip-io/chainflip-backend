@@ -34,11 +34,7 @@ mod test_set_gov_key_with_agg_key {
 	use super::*;
 	use crate::{
 		eth::api::abi::load_abi,
-		evm::{
-			api::{ApiCall, EvmTransactionBuilder},
-			tests::asymmetrise,
-			SchnorrVerificationComponents,
-		},
+		evm::{api::EvmTransactionBuilder, tests::asymmetrise, SchnorrVerificationComponents},
 	};
 
 	#[test]

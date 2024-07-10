@@ -26,7 +26,7 @@ import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
-import {EventParser, BorshCoder} from '@coral-xyz/anchor';
+import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -630,26 +630,31 @@ export async function observeSolanaCcmEvent(
 ): Promise<undefined> {
   function decodeCfParameters(cfParametersHex: string) {
     // Convert the hexadecimal string back to a byte array
-    const cfParameters = new Uint8Array((cfParametersHex.slice(2).match(/.{1,2}/g)?.map(byte => parseInt(byte, 16))) ?? []);
-      
+    const cfParameters = new Uint8Array(
+      cfParametersHex
+        .slice(2)
+        .match(/.{1,2}/g)
+        ?.map((byte) => parseInt(byte, 16)) ?? [],
+    );
+
     const publicKeySize = 32;
     const remainingAccountSize = publicKeySize + 1;
-  
+
     // Extra byte for the encoded length
     const remainingAccountsBytes = cfParameters.slice(remainingAccountSize + 1);
-  
+
     const remainingAccounts = [];
     const remainingIsWritable = [];
-  
+
     // Extract the remaining bytes in groups of publicKeySize + 1
     for (let i = 0; i < remainingAccountsBytes.length; i += remainingAccountSize) {
       const publicKeyBytes = remainingAccountsBytes.slice(i, i + publicKeySize);
       const isWritable = remainingAccountsBytes[i + publicKeySize];
-  
+
       remainingAccounts.push(new PublicKey(publicKeyBytes));
       remainingIsWritable.push(Boolean(isWritable));
     }
-  
+
     return { remainingAccounts, remainingIsWritable };
   }
 
@@ -658,7 +663,9 @@ export async function observeSolanaCcmEvent(
   const cfTesterAddress = new PublicKey(getContractAddress('Solana', 'CFTESTER'));
 
   for (let i = 0; i < 300; i++) {
-    const txSignatures = await connection.getSignaturesForAddress(new PublicKey(getContractAddress('Solana', 'CFTESTER')));
+    const txSignatures = await connection.getSignaturesForAddress(
+      new PublicKey(getContractAddress('Solana', 'CFTESTER')),
+    );
     for (const txSignature of txSignatures) {
       const tx = await connection.getTransaction(txSignature.signature);
       if (tx) {
@@ -668,13 +675,17 @@ export async function observeSolanaCcmEvent(
           const matchEventName = event.name === eventName;
           const matchSourceChain = event.data.source_chain.toString() === sourceChain;
 
-          if (sourceAddress!== null) {
+          if (sourceAddress !== null) {
             if (event.data.source_address !== sourceAddress) {
-              throw new Error(`Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`);
+              throw new Error(
+                `Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`,
+              );
             }
           } else {
             if (event.data.source_address.toString() !== Buffer.from([0]).toString()) {
-              throw new Error(`Unexpected source address: ${event.data.source_address}, expecting ${Buffer.from([0])}`);
+              throw new Error(
+                `Unexpected source address: ${event.data.source_address}, expecting ${Buffer.from([0])}`,
+              );
             }
           }
           const hexMessage = '0x' + (event.data.message as Buffer).toString('hex');
@@ -682,20 +693,33 @@ export async function observeSolanaCcmEvent(
 
           // The message is being used as the main discriminator
           if (matchEventName && matchSourceChain && matchMessage) {
-            const {remainingAccounts: expectedRemainingAccounts, remainingIsWritable: expectedRemainingIsWritable} = decodeCfParameters(messageMetadata.cfParameters);
-            if (expectedRemainingIsWritable.length !== event.data.remaining_is_writable.length || expectedRemainingIsWritable.toString() !== event.data.remaining_is_writable.toString()) {
-              throw new Error(`Unexpected remaining is writable: ${event.data.remaining_is_writable}, expecting ${expectedRemainingIsWritable}`);
+            const {
+              remainingAccounts: expectedRemainingAccounts,
+              remainingIsWritable: expectedRemainingIsWritable,
+            } = decodeCfParameters(messageMetadata.cfParameters);
+            if (
+              expectedRemainingIsWritable.length !== event.data.remaining_is_writable.length ||
+              expectedRemainingIsWritable.toString() !== event.data.remaining_is_writable.toString()
+            ) {
+              throw new Error(
+                `Unexpected remaining is writable: ${event.data.remaining_is_writable}, expecting ${expectedRemainingIsWritable}`,
+              );
             }
 
             if (event.data.remaining_is_signer.some((value: boolean) => value === true)) {
               throw new Error(`Expected all remaining accounts to be read-only`);
             }
 
-            if (expectedRemainingAccounts.length !== event.data.remaining_pubkeys.length || expectedRemainingAccounts.toString() !== event.data.remaining_pubkeys.toString()) {
-              throw new Error(`Unexpected remaining accounts: ${event.data.remaining_accounts}, expecting ${expectedRemainingAccounts}`);
+            if (
+              expectedRemainingAccounts.length !== event.data.remaining_pubkeys.length ||
+              expectedRemainingAccounts.toString() !== event.data.remaining_pubkeys.toString()
+            ) {
+              throw new Error(
+                `Unexpected remaining accounts: ${event.data.remaining_accounts}, expecting ${expectedRemainingAccounts}`,
+              );
             }
 
-            return undefined
+            return undefined;
           }
         }
       }
@@ -703,8 +727,6 @@ export async function observeSolanaCcmEvent(
     await sleep(10000);
   }
   throw new Error(`Failed to observe Solana's ${eventName} event`);
-
-
 }
 /* eslint-enable @typescript-eslint/no-unused-vars */
 

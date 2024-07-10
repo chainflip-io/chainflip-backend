@@ -1,10 +1,12 @@
-use cf_chains::{ApiCall, Chain};
+use cf_chains::{ApiCall, Chain, ChainCrypto};
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+use codec::MaxEncodedLen;
 use core::marker::PhantomData;
 use frame_support::{
 	traits::{OriginTrait, UnfilteredDispatchable},
-	Parameter,
+	CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, Parameter, PartialEqNoBound,
 };
+use scale_info::TypeInfo;
 use sp_runtime::traits::Member;
 
 use crate::Broadcaster;
@@ -15,6 +17,53 @@ pub struct MockBroadcaster<T>(PhantomData<T>);
 
 impl<T> MockPallet for MockBroadcaster<T> {
 	const PREFIX: &'static [u8] = b"MockBroadcaster";
+}
+
+#[derive(
+	Encode,
+	Decode,
+	CloneNoBound,
+	Copy,
+	DefaultNoBound,
+	TypeInfo,
+	PartialEqNoBound,
+	EqNoBound,
+	DebugNoBound,
+	MaxEncodedLen,
+)]
+#[scale_info(skip_type_params(C))]
+pub struct MockApiCall<C> {
+	is_signed: bool,
+	_phantom: PhantomData<C>,
+}
+
+impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
+	fn threshold_signature_payload(&self) -> <C as cf_chains::ChainCrypto>::Payload {
+		unimplemented!()
+	}
+
+	fn signed(
+		self,
+		_threshold_signature: &<C as cf_chains::ChainCrypto>::ThresholdSignature,
+	) -> Self {
+		Self { is_signed: true, _phantom: Default::default() }
+	}
+
+	fn chain_encoded(&self) -> Vec<u8> {
+		self.encode()
+	}
+
+	fn is_signed(&self) -> bool {
+		self.is_signed
+	}
+
+	fn transaction_out_id(&self) -> <C as cf_chains::ChainCrypto>::TransactionOutId {
+		unimplemented!()
+	}
+
+	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
 }
 
 impl<
@@ -71,13 +120,17 @@ impl<
 		)
 	}
 
-	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
+	fn re_sign_broadcast(
+		broadcast_id: BroadcastId,
+		_request_broadcast: bool,
+		_refresh_replay_protection: bool,
+	) -> Result<ThresholdSignatureRequestId, sp_runtime::DispatchError> {
 		Self::put_value(b"RESIGNED_CALLBACKS", broadcast_id);
-		Some(Self::next_threshold_id())
+		Ok(Self::next_threshold_id())
 	}
 
 	/// Clean up storage data related to a broadcast ID.
-	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {}
+	fn expire_broadcast(_broadcast_id: BroadcastId) {}
 
 	fn threshold_sign_and_broadcast_rotation_tx(
 		api_call: Self::ApiCall,

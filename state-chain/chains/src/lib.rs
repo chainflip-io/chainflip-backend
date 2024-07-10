@@ -330,6 +330,9 @@ pub trait ApiCall<C: ChainCrypto>: Parameter {
 
 	/// Generates an identifier for the output of the transaction.
 	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId;
+
+	/// Refresh the replay protection data.
+	fn refresh_replay_protection(&mut self);
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
@@ -443,8 +446,6 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 		expiry: u64,
 		executor: Option<eth::Address>,
 	) -> Self;
-
-	fn amount(&self) -> u128;
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
