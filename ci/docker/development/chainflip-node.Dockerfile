@@ -21,8 +21,12 @@ WORKDIR /etc/chainflip
 
 RUN chmod +x /usr/local/bin/chainflip-node
 
+COPY ./ci/docker/scripts/chainflip-node /usr/local/bin
+RUN chmod +x /usr/local/bin/liveness.sh \
+    && chmod +x /usr/local/bin/readiness.sh
+
 RUN apt-get update \
-    && apt-get install -y ca-certificates --no-install-recommends \
+    && apt-get install -y ca-certificates curl jq --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
