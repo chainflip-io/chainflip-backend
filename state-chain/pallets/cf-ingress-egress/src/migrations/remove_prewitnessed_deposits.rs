@@ -34,7 +34,7 @@ mod old {
 		pub deposit_channel: DepositChannel<T::TargetChain>,
 		pub opened_at: TargetChainBlockNumber<T, I>,
 		pub expires_at: TargetChainBlockNumber<T, I>,
-		pub action: ChannelAction<T::AccountId>,
+		pub action: next::ChannelAction<T::AccountId>,
 		pub boost_fee: BasisPoints,
 		// Using the old BoostStatus here
 		pub boost_status: BoostStatus,
@@ -50,6 +50,10 @@ mod old {
 	>;
 }
 
+mod next {
+	pub use crate::migrations::add_refund_params::old::*;
+}
+
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
@@ -57,7 +61,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		let _ = old::PrewitnessedDeposits::<T, I>::clear(u32::MAX, None);
 
 		// convert to new BoostStatus
-		DepositChannelLookup::<T, I>::translate_values::<old::DepositChannelDetails<T, I>, _>(
+		next::DepositChannelLookup::<T, I>::translate_values::<old::DepositChannelDetails<T, I>, _>(
 			|old| {
 				let boost_status =
 					if let old::BoostStatus::Boosted { prewitnessed_deposit_id, pools } =
@@ -73,7 +77,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 						BoostStatus::NotBoosted
 					};
 
-				Some(DepositChannelDetails::<T, I> {
+				Some(next::DepositChannelDetails::<T, I> {
 					deposit_channel: old.deposit_channel,
 					opened_at: old.opened_at,
 					expires_at: old.expires_at,
@@ -89,7 +93,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(DepositChannelLookup::<T, I>::iter_values()
+		Ok(old::DepositChannelLookup::<T, I>::iter_values()
 			.map(|v| v.boost_status)
 			.collect::<Vec<_>>()
 			.encode())
@@ -100,7 +104,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		let old_values: Vec<old::BoostStatus> =
 			Vec::decode(&mut &state[..]).map_err(|_| DispatchError::Other("decode error"))?;
 
-		let new_boost_status = DepositChannelLookup::<T, I>::iter_values()
+		let new_boost_status = next::DepositChannelLookup::<T, I>::iter_values()
 			.map(|v| v.boost_status)
 			.collect::<Vec<_>>();
 
@@ -170,7 +174,7 @@ mod migration_tests {
 					deposit_channel: deposit_channel.clone(),
 					opened_at: 420,
 					expires_at: 6969,
-					action: ChannelAction::<u64>::LiquidityProvision { lp_account: 22 },
+					action: next::ChannelAction::<u64>::LiquidityProvision { lp_account: 22 },
 					boost_fee: 8,
 					boost_status: old::BoostStatus::Boosted {
 						prewitnessed_deposit_id: 2,

@@ -164,7 +164,9 @@ impl<E> ArbitrumApi<E> {
 	}
 }
 
-impl<E> ApiCall<EvmCrypto> for ArbitrumApi<E> {
+impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> ApiCall<EvmCrypto>
+	for ArbitrumApi<E>
+{
 	fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
 		map_over_api_variants!(self, call, call.threshold_signature_payload())
 	}
@@ -183,6 +185,14 @@ impl<E> ApiCall<EvmCrypto> for ArbitrumApi<E> {
 
 	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.transaction_out_id())
+	}
+
+	fn refresh_replay_protection(&mut self) {
+		map_over_api_variants!(
+			self,
+			call,
+			call.refresh_replay_protection(E::replay_protection(E::key_manager_address()))
+		)
 	}
 }
 

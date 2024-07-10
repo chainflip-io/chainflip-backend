@@ -45,6 +45,8 @@ members = [
   'engine-upgrade-utils',
   'engine-proc-macros',
   'utilities',
+  'utilities/scale-json',
+  'utilities/scale-json-event-logger',
   'state-chain/custom-rpc',
   'state-chain/cf-session-benchmarking',
   'engine/multisig',

@@ -96,7 +96,7 @@ impl EvmCall for RegisterRedemption {
 #[cfg(test)]
 mod test_register_redemption {
 	use crate::{
-		eth::api::{abi::load_abi, ApiCall, EvmReplayProtection, EvmTransactionBuilder},
+		eth::api::{abi::load_abi, EvmReplayProtection, EvmTransactionBuilder},
 		evm::SchnorrVerificationComponents,
 	};
 

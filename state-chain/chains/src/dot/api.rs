@@ -5,7 +5,10 @@ use super::{
 	PolkadotAccountId, PolkadotCrypto, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion,
 };
 use crate::{dot::Polkadot, *};
-use frame_support::{traits::Get, CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
+use frame_support::{
+	traits::{Defensive, Get},
+	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
+};
 use sp_std::marker::PhantomData;
 
 /// Chainflip api calls available on Polkadot.
@@ -152,7 +155,9 @@ macro_rules! map_over_api_variants {
 	};
 }
 
-impl<E: PolkadotEnvironment> ApiCall<PolkadotCrypto> for PolkadotApi<E> {
+impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<PolkadotCrypto>
+	for PolkadotApi<E>
+{
 	fn threshold_signature_payload(&self) -> <PolkadotCrypto as ChainCrypto>::Payload {
 		let RuntimeVersion { spec_version, transaction_version, .. } = E::runtime_version();
 		map_over_api_variants!(
@@ -179,8 +184,9 @@ impl<E: PolkadotEnvironment> ApiCall<PolkadotCrypto> for PolkadotApi<E> {
 			self,
 			call,
 			call.get_signed_unchecked_extrinsic()
-				.expect("Must be called after `signed`")
-				.encode()
+				.defensive_proof("`chain_encoded` is only called on signed api calls.")
+				.map(|extrinsic| extrinsic.encode())
+				.unwrap_or_default()
 		)
 	}
 
@@ -191,60 +197,16 @@ impl<E: PolkadotEnvironment> ApiCall<PolkadotCrypto> for PolkadotApi<E> {
 	fn transaction_out_id(&self) -> <PolkadotCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.signature().unwrap())
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		map_over_api_variants!(
+			self,
+			call,
+			call.refresh_replay_protection(E::replay_protection(false))
+		)
+	}
 }
 
 pub trait CreatePolkadotVault: ApiCall<PolkadotCrypto> {
 	fn new_unsigned() -> Self;
-}
-
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, TypeInfo, Encode, Decode)]
-#[scale_info(skip_type_params(E))]
-pub struct OpaqueApiCall<E> {
-	builder: PolkadotExtrinsicBuilder,
-	#[codec(skip)]
-	_environment: PhantomData<E>,
-}
-
-impl<E> From<OpaqueApiCall<E>> for PolkadotExtrinsicBuilder {
-	fn from(call: OpaqueApiCall<E>) -> Self {
-		call.builder
-	}
-}
-
-trait WithEnvironment {
-	fn with_environment<E>(self) -> OpaqueApiCall<E>;
-}
-
-impl WithEnvironment for PolkadotExtrinsicBuilder {
-	fn with_environment<E>(self) -> OpaqueApiCall<E> {
-		OpaqueApiCall { builder: self, _environment: PhantomData }
-	}
-}
-
-impl<E: PolkadotEnvironment + 'static> ApiCall<PolkadotCrypto> for OpaqueApiCall<E> {
-	fn threshold_signature_payload(&self) -> <PolkadotCrypto as ChainCrypto>::Payload {
-		let RuntimeVersion { spec_version, transaction_version, .. } = E::runtime_version();
-
-		self.builder.get_signature_payload(spec_version, transaction_version)
-	}
-
-	fn signed(mut self, signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature) -> Self {
-		self.builder.insert_signature(signature.clone());
-		self
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		self.builder
-			.get_signed_unchecked_extrinsic()
-			.expect("Must be called after `signed`")
-			.encode()
-	}
-
-	fn is_signed(&self) -> bool {
-		self.builder.is_signed()
-	}
-
-	fn transaction_out_id(&self) -> <PolkadotCrypto as ChainCrypto>::TransactionOutId {
-		self.builder.signature().unwrap()
-	}
 }

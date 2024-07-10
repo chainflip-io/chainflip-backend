@@ -337,6 +337,10 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	fn transaction_out_id(&self) -> <SolanaCrypto as ChainCrypto>::TransactionOutId {
 		self.transaction.signatures.first().cloned().unwrap_or_default()
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		todo!()
+	}
 }
 
 impl<Env: 'static> ConsolidateCall<Solana> for SolanaApi<Env> {

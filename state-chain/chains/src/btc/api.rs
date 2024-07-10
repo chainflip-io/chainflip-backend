@@ -194,4 +194,8 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		// No replay protection refresh for Bitcoin.
+	}
 }

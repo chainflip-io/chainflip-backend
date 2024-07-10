@@ -33,3 +33,10 @@ All the versions that are required to be bumped are checked in the `build.rs` fi
 ### Developer Notes
 
 - The `cfe_entrypoint`, which is the C FFI entrypoint of the dylib that the runner can call, has its version defined by the version specified in the `engine-proc-macros` crate, and NOT the version of the dylib crate itself. This is perhaps a little counterintuitive, but it's just how Rust environment variables and proc-macros work at the moment. This is why the proc-macros crate checks it's version against the `NEW_VERSION` and `OLD_VERSION` consts in it's [build.rs](./../engine-proc-macros/build.rs) file.
+
+## Resources
+
+Some useful resources on dylib file resolution:
+
+- A forum post on [dylib identification](https://forums.developer.apple.com/forums/thread/736719).
+- The man pages for `ld`, `otool` and `install_name_tool`.

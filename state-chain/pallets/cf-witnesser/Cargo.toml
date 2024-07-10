@@ -17,6 +17,10 @@ workspace = true
 
 [dependencies]
 hex = { version = '0.4', default-features = false }
+serde = { version = '1.0.195', default_features = false, features = [
+  'alloc',
+  'derive',
+] }
 
 # Internal deps
 cf-primitives = { path = '../../primitives', default-features = false }
@@ -61,6 +65,7 @@ std = [
   'hex/std',
   'scale-info/std',
   'sp-std/std',
+  'serde/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
