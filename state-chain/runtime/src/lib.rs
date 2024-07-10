@@ -888,7 +888,7 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 impl pallet_cf_refunding::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
-	type PolkadotEnvironment = DotEnvironment;
+	type PolkadotKeyProvider = PolkadotThresholdSigner;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -2008,16 +2008,12 @@ impl_runtime_apis! {
 				arbitrum: arb_channels,
 			}
 		}
-		fn cf_fee_imbalance() -> FeeImbalance {
-
-			let eth = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Ethereum) - RefundingHandler::get_recorded_gas_fees(ForeignChain::Ethereum.gas_asset());
-			let dot = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Polkadot) - RefundingHandler::get_recorded_gas_fees(ForeignChain::Polkadot.gas_asset());
-			let arb = pallet_cf_refunding::WithheldTransactionFees::<Runtime>::get(ForeignChain::Arbitrum) - RefundingHandler::get_recorded_gas_fees(ForeignChain::Arbitrum.gas_asset());
-
+		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount> {
 			FeeImbalance {
-				ethereum: eth,
-				polkadot: dot,
-				arbitrum: arb,
+				ethereum: pallet_cf_refunding::Pallet::<Runtime>::vault_imbalance(ForeignChain::Ethereum.gas_asset()),
+				polkadot: pallet_cf_refunding::Pallet::<Runtime>::vault_imbalance(ForeignChain::Polkadot.gas_asset()),
+				arbitrum: pallet_cf_refunding::Pallet::<Runtime>::vault_imbalance(ForeignChain::Arbitrum.gas_asset()),
+				bitcoin: pallet_cf_refunding::Pallet::<Runtime>::vault_imbalance(ForeignChain::Bitcoin.gas_asset()),
 			}
 		}
 		fn cf_build_version() -> LastRuntimeUpgradeInfo {

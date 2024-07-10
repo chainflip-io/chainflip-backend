@@ -11,7 +11,7 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 	fn on_expired_epoch(expired: EpochIndex) {
 		<Witnesser as EpochTransitionHandler>::on_expired_epoch(expired);
 	}
-	fn on_new_epoch(new: EpochIndex) {
-		Refunding::on_distribute_withheld_fees(new);
+	fn on_new_epoch(_new: EpochIndex) {
+		Refunding::on_distribute_withheld_fees();
 	}
 }

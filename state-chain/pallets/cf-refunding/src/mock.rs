@@ -1,20 +1,20 @@
 use crate as pallet_cf_refunding;
 use crate::PalletSafeMode;
-use cf_chains::{btc::ScriptPubkey, dot::PolkadotAccountId, AnyChain};
+use cf_chains::{
+	btc::ScriptPubkey,
+	dot::{PolkadotAccountId, PolkadotCrypto},
+	AnyChain,
+};
 use cf_primitives::AccountId;
 
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, mocks::egress_handler::MockEgressHandler,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
+	mocks::{egress_handler::MockEgressHandler, key_provider::MockKeyProvider},
 };
 use frame_support::{derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-	Permill,
-};
-
-use cf_chains::dot::api::PolkadotEnvironment;
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 use cf_chains::ForeignChainAddress;
 
@@ -62,10 +62,6 @@ impl system::Config for Test {
 
 impl_mock_chainflip!(Test);
 
-parameter_types! {
-	pub const NetworkFee: Permill = Permill::from_percent(0);
-}
-
 pub const ETH_ADDR_1: ForeignChainAddress = ForeignChainAddress::Eth(H160([0; 20]));
 pub const ETH_ADDR_2: ForeignChainAddress = ForeignChainAddress::Eth(H160([1; 20]));
 pub const ARB_ADDR_1: ForeignChainAddress = ForeignChainAddress::Arb(H160([2; 20]));
@@ -76,24 +72,12 @@ pub const DOT_ADDR_1: ForeignChainAddress =
 pub const BTC_ADDR_1: ForeignChainAddress =
 	ForeignChainAddress::Btc(ScriptPubkey::Taproot([1u8; 32]));
 
-pub struct DotEnvironmentMock;
-
-impl PolkadotEnvironment for DotEnvironmentMock {
-	fn try_vault_account() -> Option<PolkadotAccountId> {
-		Some(PolkadotAccountId::from_aliased([2; 32]))
-	}
-
-	fn runtime_version() -> cf_chains::dot::RuntimeVersion {
-		todo!()
-	}
-}
-
 impl_mock_runtime_safe_mode!(refunding: PalletSafeMode);
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = MockEgressHandler<AnyChain>;
-	type PolkadotEnvironment = DotEnvironmentMock;
+	type PolkadotKeyProvider = MockKeyProvider<PolkadotCrypto>;
 	type SafeMode = MockRuntimeSafeMode;
 }
 
@@ -101,5 +85,8 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	|| {
+		MockKeyProvider::<PolkadotCrypto>::set_key(
+			PolkadotAccountId::from_aliased([0xff; 32]),
+		);
 	}
 }

@@ -1,15 +1,15 @@
 use cf_chains::{ForeignChain, ForeignChainAddress};
 use cf_primitives::AssetAmount;
-use cf_traits::{mocks::egress_handler::MockEgressParameter, SetSafeMode};
+use cf_traits::{mocks::egress_handler::MockEgressParameter, Refunding, SetSafeMode};
 
 use cf_chains::AnyChain;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SafeMode};
 
-use crate::{mock::*, RecordedFees, WithheldTransactionFees};
+use crate::{mock::*, ExternalOwner, Liabilities, Pallet, WithheldAssets};
 
 fn payed_gas(chain: ForeignChain, amount: AssetAmount, account: ForeignChainAddress) {
-	Refunding::record_gas_fee(account, chain, amount);
-	Refunding::withhold_transaction_fee(chain, amount);
+	Pallet::<Test>::record_gas_fee(account, chain.gas_asset(), amount);
+	Pallet::<Test>::withhold_transaction_fee(chain.gas_asset(), amount);
 }
 
 fn assert_egress(
@@ -30,23 +30,21 @@ fn refund_validators_evm() {
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_2.clone());
 		payed_gas(ForeignChain::Arbitrum, 100, ARB_ADDR_1.clone());
 
-		let maybe_recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
-		let recorded_fees_eth = maybe_recorded_fees_eth.get_as_multiple().unwrap();
+		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
 
-		let maybe_recorded_fees_arb = RecordedFees::<Test>::get(ForeignChain::Arbitrum).unwrap();
-		let recorded_fees_arb = maybe_recorded_fees_arb.get_as_multiple().unwrap();
+		let recorded_fees_arb = Liabilities::<Test>::get(ForeignChain::Arbitrum.gas_asset());
 
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_2), Some(&100));
-		assert_eq!(recorded_fees_arb.get(&ARB_ADDR_1), Some(&100));
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_2.into()), Some(&100));
+		assert_eq!(recorded_fees_arb.get(&ARB_ADDR_1.into()), Some(&100));
 
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 200);
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Arbitrum), 100);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 200);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Arbitrum.gas_asset()), 100);
 
-		Refunding::on_distribute_withheld_fees(1);
+		Pallet::<Test>::on_distribute_withheld_fees();
 
-		let maybe_recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum);
-		let maybe_recorded_fees_arb = RecordedFees::<Test>::get(ForeignChain::Arbitrum);
+		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
+		let recorded_fees_arb = Liabilities::<Test>::get(ForeignChain::Arbitrum.gas_asset());
 
 		assert_egress(
 			3,
@@ -57,11 +55,11 @@ fn refund_validators_evm() {
 			}),
 		);
 
-		assert_eq!(maybe_recorded_fees_eth, None);
-		assert_eq!(maybe_recorded_fees_arb, None);
+		assert!(recorded_fees_eth.is_empty());
+		assert!(recorded_fees_arb.is_empty());
 
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 0);
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Arbitrum), 0);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 0);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Arbitrum.gas_asset()), 0);
 	});
 }
 
@@ -70,23 +68,21 @@ fn skip_refunding_if_safe_mode_is_disabled() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
 
-		let maybe_recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
+		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
 
-		let recorded_fees_eth = maybe_recorded_fees_eth.get_as_multiple().unwrap();
-
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			refunding: crate::PalletSafeMode::CODE_RED,
 		});
 
-		Refunding::on_distribute_withheld_fees(1);
+		Pallet::<Test>::on_distribute_withheld_fees();
 
 		assert_egress(0, None);
 
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
 	});
 }
 
@@ -97,16 +93,15 @@ pub fn keep_fees_in_storage_if_egress_fails() {
 
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
 
-		let maybe_recorded_fees_eth = RecordedFees::<Test>::get(ForeignChain::Ethereum).unwrap();
-		let recorded_fees_eth = maybe_recorded_fees_eth.get_as_multiple().unwrap();
+		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
 
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
 
-		Refunding::on_distribute_withheld_fees(1);
+		Pallet::<Test>::on_distribute_withheld_fees();
 
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1), Some(&100));
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Ethereum), 100);
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
 	});
 }
 
@@ -117,17 +112,17 @@ pub fn refund_validators_btc() {
 
 		assert_eq!(100, 100);
 
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Bitcoin), 100);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Bitcoin.gas_asset()), 100);
 
-		Refunding::on_distribute_withheld_fees(1);
+		Pallet::<Test>::on_distribute_withheld_fees();
 
-		let recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin);
+		let recorded_fees_btc = Liabilities::<Test>::get(ForeignChain::Bitcoin.gas_asset());
 
-		assert_eq!(recorded_fees_btc, None);
+		assert!(recorded_fees_btc.is_empty());
 
 		assert_egress(0, None);
 
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Bitcoin), 0);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Bitcoin.gas_asset()), 0);
 	});
 }
 
@@ -136,21 +131,20 @@ pub fn to_low_withheld_fees() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Bitcoin, 100, BTC_ADDR_1.clone());
 
-		WithheldTransactionFees::<Test>::insert(ForeignChain::Bitcoin, 99);
+		WithheldAssets::<Test>::insert(ForeignChain::Bitcoin.gas_asset(), 99);
 
-		Refunding::on_distribute_withheld_fees(1);
+		Pallet::<Test>::on_distribute_withheld_fees();
 
-		System::assert_last_event(RuntimeEvent::Refunding(crate::Event::VaultBleeding {
+		System::assert_last_event(RuntimeEvent::Refunding(crate::Event::VaultDeficitDetected {
 			chain: ForeignChain::Bitcoin,
-			withheld: 99,
-			collected: 100,
+			amount_owed: 100,
+			available: 99,
 		}));
 
-		let maybe_recorded_fees_btc = RecordedFees::<Test>::get(ForeignChain::Bitcoin);
+		let recorded_fees_btc = Liabilities::<Test>::get(ForeignChain::Bitcoin.gas_asset());
 
-		assert_eq!(maybe_recorded_fees_btc, None);
-
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Bitcoin), 99);
+		assert_eq!(recorded_fees_btc[&ExternalOwner::Vault], 1);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Bitcoin.gas_asset()), 0);
 	});
 }
 
@@ -161,9 +155,9 @@ pub fn refund_validators_polkadot() {
 
 		assert_eq!(100, 100);
 
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Polkadot), 100);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Polkadot.gas_asset()), 100);
 
-		Refunding::on_distribute_withheld_fees(1);
+		Pallet::<Test>::on_distribute_withheld_fees();
 
 		assert_egress(
 			1,
@@ -174,10 +168,10 @@ pub fn refund_validators_polkadot() {
 			}),
 		);
 
-		let maybe_recorded_fees_dot = RecordedFees::<Test>::get(ForeignChain::Polkadot);
+		let recorded_fees_dot = Liabilities::<Test>::get(ForeignChain::Polkadot.gas_asset());
 
-		assert_eq!(maybe_recorded_fees_dot, None);
+		assert!(recorded_fees_dot.is_empty());
 
-		assert_eq!(WithheldTransactionFees::<Test>::get(ForeignChain::Polkadot), 0);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Polkadot.gas_asset()), 0);
 	});
 }

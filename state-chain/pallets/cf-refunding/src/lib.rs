@@ -1,16 +1,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{dot::api::PolkadotEnvironment, AnyChain, ForeignChainAddress};
-use cf_primitives::{AssetAmount, EpochIndex};
-use cf_traits::{impl_pallet_safe_mode, Chainflip, EgressApi};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use cf_chains::{AnyChain, ForeignChain, ForeignChainAddress};
+use cf_primitives::{Asset, AssetAmount};
+use cf_runtime_utilities::log_or_panic;
+use cf_traits::{impl_pallet_safe_mode, Chainflip, EgressApi, KeyProvider, Refunding};
+use frame_support::{
+	pallet_prelude::*, sp_runtime::traits::Saturating, traits::DefensiveSaturating,
+};
+use serde::{Deserialize, Serialize};
+use sp_std::{collections::btree_map::BTreeMap, vec};
 
-use sp_std::vec;
-
-use cf_chains::ForeignChain;
-
-use frame_support::pallet_prelude::*;
 pub use pallet::*;
 
 #[cfg(test)]
@@ -20,35 +20,36 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
-/// Holds all infos we need to refund a validator/vault/aggKey for any chain type.
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum RefundingInfo {
-	/// Only a single key to refund that is either always the current key or not relevant.
-	Single(AssetAmount),
-	/// Many keys/validators to refund.
-	Multiple(BTreeMap<ForeignChainAddress, AssetAmount>),
+pub enum ExternalOwner {
+	Vault,
+	AggKey,
+	Account(ForeignChainAddress),
 }
 
-impl RefundingInfo {
-	pub fn sum(&self) -> AssetAmount {
-		match self {
-			RefundingInfo::Single(amount) => *amount,
-			RefundingInfo::Multiple(map) => map.values().sum(),
+impl From<ForeignChainAddress> for ExternalOwner {
+	fn from(address: ForeignChainAddress) -> Self {
+		ExternalOwner::Account(address)
+	}
+}
+
+impl core::cmp::Ord for ExternalOwner {
+	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+		match (self, other) {
+			(ExternalOwner::Vault, ExternalOwner::Vault) => core::cmp::Ordering::Equal,
+			(ExternalOwner::Vault, _) => core::cmp::Ordering::Less,
+			(_, ExternalOwner::Vault) => core::cmp::Ordering::Greater,
+			(ExternalOwner::AggKey, ExternalOwner::AggKey) => core::cmp::Ordering::Equal,
+			(ExternalOwner::AggKey, ExternalOwner::Account(_)) => core::cmp::Ordering::Less,
+			(ExternalOwner::Account(a), ExternalOwner::Account(b)) => a.cmp(b),
+			(ExternalOwner::Account(_), _) => core::cmp::Ordering::Greater,
 		}
 	}
+}
 
-	pub fn get_as_multiple(&self) -> Option<&BTreeMap<ForeignChainAddress, AssetAmount>> {
-		match self {
-			RefundingInfo::Multiple(map) => Some(map),
-			_ => None,
-		}
-	}
-
-	pub fn get_as_single(&self) -> Option<AssetAmount> {
-		match self {
-			RefundingInfo::Single(amount) => Some(*amount),
-			_ => None,
-		}
+impl core::cmp::PartialOrd for ExternalOwner {
+	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+		Some(self.cmp(other))
 	}
 }
 
@@ -56,7 +57,7 @@ impl_pallet_safe_mode!(PalletSafeMode; do_refund);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_chains::ForeignChain;
+	use cf_chains::{dot::PolkadotCrypto, ForeignChain};
 	use cf_primitives::EgressId;
 
 	use super::*;
@@ -71,7 +72,7 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 
 		/// Polkadot environment.
-		type PolkadotEnvironment: PolkadotEnvironment;
+		type PolkadotKeyProvider: KeyProvider<PolkadotCrypto>;
 
 		/// Safe mode configuration.
 		type SafeMode: Get<PalletSafeMode>;
@@ -82,14 +83,16 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Refund scheduled for a validator.
 		RefundScheduled {
-			account_id: ForeignChainAddress,
 			egress_id: EgressId,
-			chain: ForeignChain,
+			destination: ForeignChainAddress,
 			amount: AssetAmount,
-			epoch: EpochIndex,
 		},
-		/// We paid more transaction fees than we withheld.
-		VaultBleeding { chain: ForeignChain, collected: AssetAmount, withheld: AssetAmount },
+		/// The Vault is running a deficit: we owe more than we have set aside for refunds.
+		VaultDeficitDetected {
+			chain: ForeignChain,
+			amount_owed: AssetAmount,
+			available: AssetAmount,
+		},
 	}
 
 	#[pallet::pallet]
@@ -97,155 +100,180 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
-	/// Storage for recorded fees per chain.
+	/// Liabilities are funds that are owed to some external party.
 	#[pallet::storage]
-	pub type RecordedFees<T: Config> =
-		StorageMap<_, Twox64Concat, ForeignChain, RefundingInfo, OptionQuery>;
+	pub type Liabilities<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, BTreeMap<ExternalOwner, AssetAmount>, ValueQuery>;
 
-	/// Storage for withheld transaction per chain.
+	/// Funds that have been set aside to refund external [Liabilities].
 	#[pallet::storage]
-	pub type WithheldTransactionFees<T: Config> =
-		StorageMap<_, Twox64Concat, ForeignChain, AssetAmount, ValueQuery>;
+	pub type WithheldAssets<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 }
 
 impl<T: Config> Pallet<T> {
-	fn do_egress(
+	fn refund_via_egress(
 		chain: ForeignChain,
 		address: ForeignChainAddress,
 		amount: AssetAmount,
-		epoch: EpochIndex,
-	) -> Result<(), ()> {
-		if amount == 0 {
-			return Err(())
-		}
-		if let Ok(egress_details) =
+	) -> Result<(), DispatchError> {
+		let egress_details =
 			T::EgressHandler::schedule_egress(chain.gas_asset(), amount, address.clone(), None)
-		{
-			Self::deposit_event(Event::RefundScheduled {
-				account_id: address,
-				egress_id: egress_details.egress_id,
-				chain,
-				amount,
-				epoch,
-			});
-			Ok(())
-		} else {
-			log::error!(
-				"Failed to schedule egress for address: {:?} on chain: {:?}",
-				address,
-				chain
-			);
-			Err(())
-		}
+				.map_err(Into::into)?;
+		Self::deposit_event(Event::RefundScheduled {
+			egress_id: egress_details.egress_id,
+			destination: address,
+			amount,
+		});
+		Ok(())
 	}
 
-	/// Records the gas fee for a chain and a validator.
-	pub fn record_gas_fee(
-		account_id: ForeignChainAddress,
+	/// Reconciles the amount owed with the amount available for distribution.
+	///
+	/// The owed and available amount are mutated in place.
+	///
+	/// For Ethereum and Arbitrum, we expect to the validators and pay out via egress to their
+	/// accounts. For Polkadot, we expect to pay out to the current AggKey account.
+	/// For Bitcoin and Solana, the vault pays the fees directly so we don't need to egress
+	/// anything.
+	///
+	/// Note that we refund to accounts atomically (we never partially refund an account), whereas
+	/// refunds to vaults or aggkeys can be made incrementally.
+	fn reconcile(
 		chain: ForeignChain,
-		gas_fee: AssetAmount,
-	) {
-		RecordedFees::<T>::mutate(chain, |maybe_fees| match chain {
-			ForeignChain::Ethereum | ForeignChain::Arbitrum => {
-				if let Some(RefundingInfo::Multiple(fees)) = maybe_fees {
-					fees.entry(account_id).and_modify(|fee| *fee += gas_fee).or_insert(gas_fee);
-				} else {
-					let mut recorded_fees = BTreeMap::new();
-					recorded_fees.insert(account_id, gas_fee);
-					*maybe_fees = Some(RefundingInfo::Multiple(recorded_fees));
+		owner: &ExternalOwner,
+		amount_owed: &mut AssetAmount,
+		available: &mut AssetAmount,
+	) -> Result<(), DispatchError> {
+		if *amount_owed > *available {
+			Self::deposit_event(Event::VaultDeficitDetected {
+				chain,
+				amount_owed: *amount_owed,
+				available: *available,
+			});
+		}
+		let amount_reconciled = match chain {
+			ForeignChain::Ethereum | ForeignChain::Arbitrum => match owner {
+				ExternalOwner::Account(address) =>
+					if *amount_owed > *available {
+						0
+					} else {
+						Self::refund_via_egress(chain, address.clone(), *amount_owed)?;
+						*amount_owed
+					},
+				other => {
+					log_or_panic!(
+						"{:?} Liabilities are not supported for chain {:?}.",
+						other,
+						chain
+					);
+					0
+				},
+			},
+			ForeignChain::Polkadot => {
+				match owner {
+					ExternalOwner::AggKey => {
+						let address = ForeignChainAddress::Dot(
+							T::PolkadotKeyProvider::active_epoch_key()
+								// TODO: make this more defensive
+								.expect("Key must exist otherwise we would have nothing to refund.")
+								.key,
+						);
+						let refund_amount = core::cmp::min(*amount_owed, *available);
+						Self::refund_via_egress(chain, address, refund_amount)?;
+						refund_amount
+					},
+					other => {
+						log_or_panic!(
+							"{:?} Liabilities are not supported for chain {:?}.",
+							other,
+							chain
+						);
+						0
+					},
 				}
 			},
-			_ =>
-				if let Some(RefundingInfo::Single(amount)) = maybe_fees {
-					*maybe_fees = Some(RefundingInfo::Single(amount.saturating_add(gas_fee)));
-				} else {
-					*maybe_fees = Some(RefundingInfo::Single(gas_fee));
+			ForeignChain::Bitcoin | ForeignChain::Solana => match owner {
+				ExternalOwner::Vault => core::cmp::min(*amount_owed, *available),
+				other => {
+					log_or_panic!(
+						"{:?} Liabilities are not supported for chain {:?}.",
+						other,
+						chain
+					);
+					0
 				},
-		});
-	}
+			},
+		};
 
-	/// Records the withheld transaction fee for a chain.
-	pub fn withhold_transaction_fee(chain: ForeignChain, amount: AssetAmount) {
-		WithheldTransactionFees::<T>::mutate(chain, |fees| *fees += amount);
+		available.defensive_saturating_reduce(amount_reconciled);
+		amount_owed.defensive_saturating_reduce(amount_reconciled);
+
+		Ok(())
 	}
 
 	/// Distributes the withheld fees - called on every start of a new epoch.
-	pub fn on_distribute_withheld_fees(epoch: EpochIndex) {
+	pub fn on_distribute_withheld_fees() {
 		if !T::SafeMode::get().do_refund {
 			log::info!("Refunding is disabled. Skipping refunding.");
 			return;
 		}
 
-		let chains = WithheldTransactionFees::<T>::iter_keys().collect::<Vec<_>>();
+		for chain in ForeignChain::iter() {
+			let owed_assets = Liabilities::<T>::take(chain.gas_asset());
+			WithheldAssets::<T>::mutate(chain.gas_asset(), |total_withheld| {
+				let mut owed_assets = owed_assets.into_iter().collect::<Vec<_>>();
+				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(*amount));
 
-		for chain in chains {
-			let mut withheld_fees = WithheldTransactionFees::<T>::get(chain);
-			let recorded_fees = RecordedFees::<T>::take(chain);
-			let sum_recorded_fees: AssetAmount =
-				recorded_fees.as_ref().map_or(0, |fees| fees.sum());
-			if withheld_fees < sum_recorded_fees {
-				// We are refunding more than we withheld -> That indicates that we have to adjust
-				// the fees.
-				Self::deposit_event(Event::VaultBleeding {
-					chain,
-					collected: sum_recorded_fees,
-					withheld: withheld_fees,
-				});
-			}
-			match chain {
-				ForeignChain::Ethereum | ForeignChain::Arbitrum => {
-					let mut retry_next_epoch: BTreeMap<ForeignChainAddress, AssetAmount> =
-						BTreeMap::new();
-					if let Some(recorded_fees) = recorded_fees {
-						if let Some(recorded_fees) = recorded_fees.get_as_multiple() {
-							for (address, fee) in recorded_fees {
-								if withheld_fees.checked_sub(*fee).is_none() {
-									retry_next_epoch.insert(address.clone(), *fee);
-									break;
-								}
-								if Self::do_egress(chain, address.clone(), *fee, epoch).is_ok() {
-									withheld_fees = withheld_fees.saturating_sub(*fee);
-								} else {
-									retry_next_epoch.insert(address.clone(), *fee);
-								}
-							}
-						}
+				for (destination, amount) in &mut owed_assets {
+					debug_assert!(*amount > 0);
+					match Self::reconcile(chain, destination, amount, total_withheld) {
+						Ok(_) =>
+							if *total_withheld == 0 {
+								break;
+							},
+						Err(_) => break,
 					}
-					// If an egress failed or we have not enough funds left we should remember the
-					// funds we still have to refund.
-					if !retry_next_epoch.is_empty() {
-						RecordedFees::<T>::insert(chain, RefundingInfo::Multiple(retry_next_epoch));
-					}
-					WithheldTransactionFees::<T>::insert(chain, withheld_fees);
-				},
-				ForeignChain::Bitcoin | ForeignChain::Solana =>
-					if withheld_fees >= sum_recorded_fees {
-						withheld_fees = withheld_fees.saturating_sub(sum_recorded_fees);
-						WithheldTransactionFees::<T>::insert(chain, withheld_fees);
-					},
-				ForeignChain::Polkadot => {
-					if let Some(vault_address) = T::PolkadotEnvironment::try_vault_account() {
-						if Self::do_egress(
-							chain,
-							cf_chains::ForeignChainAddress::Dot(vault_address),
-							sum_recorded_fees,
-							epoch,
-						)
-						.is_ok()
-						{
-							withheld_fees = withheld_fees.saturating_sub(sum_recorded_fees);
-						} else {
-							// If the egress failed we should remember the funds we still have to
-							// refund.
-							RecordedFees::<T>::insert(
-								chain,
-								RefundingInfo::Single(sum_recorded_fees),
-							);
-						}
-					}
-					WithheldTransactionFees::<T>::insert(chain, withheld_fees);
-				},
-			}
+				}
+
+				owed_assets.retain(|(_, amount)| *amount > 0);
+				if !owed_assets.is_empty() {
+					Liabilities::<T>::insert(
+						chain.gas_asset(),
+						owed_assets.into_iter().collect::<BTreeMap<_, _>>(),
+					);
+				}
+			});
 		}
+	}
+
+
+impl<T: Config> Refunding for Pallet<T> {
+	fn record_gas_fee(address: ForeignChainAddress, asset: Asset, amount: AssetAmount) {
+		Liabilities::<T>::mutate(asset, |fees| {
+			fees.entry(match ForeignChain::from(asset) {
+				ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
+				ForeignChain::Polkadot => ExternalOwner::AggKey,
+				ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
+			})
+			.and_modify(|fee| fee.saturating_accrue(amount))
+			.or_insert(amount);
+		});
+	}
+
+	fn withhold_transaction_fee(asset: Asset, amount: AssetAmount) {
+		WithheldAssets::<T>::mutate(asset, |fees| {
+			fees.saturating_accrue(amount);
+		});
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn get_withheld_transaction_fees(asset: Asset) -> AssetAmount {
+		WithheldAssets::<T>::get(asset)
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn get_recorded_gas_fees(asset: Asset) -> u128 {
+		Liabilities::<T>::get(asset).values().sum()
 	}
 }
