@@ -16,6 +16,7 @@ import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
 import BigNumber from 'bignumber.js';
+import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import { base58Decode, base58Encode } from '../polkadot/util-crypto';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
@@ -26,7 +27,6 @@ import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
-import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -669,6 +669,7 @@ export async function observeSolanaCcmEvent(
     for (const txSignature of txSignatures) {
       const tx = await connection.getTransaction(txSignature.signature);
       if (tx) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const eventParser = new EventParser(cfTesterAddress, new BorshCoder(idl as any));
         const events = eventParser.parseLogs(tx.meta?.logMessages ?? []);
         for (const event of events) {
@@ -681,12 +682,10 @@ export async function observeSolanaCcmEvent(
                 `Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`,
               );
             }
-          } else {
-            if (event.data.source_address.toString() !== Buffer.from([0]).toString()) {
-              throw new Error(
-                `Unexpected source address: ${event.data.source_address}, expecting ${Buffer.from([0])}`,
-              );
-            }
+          } else if (event.data.source_address.toString() !== Buffer.from([0]).toString()) {
+            throw new Error(
+              `Unexpected source address: ${event.data.source_address}, expecting ${Buffer.from([0])}`,
+            );
           }
           const hexMessage = '0x' + (event.data.message as Buffer).toString('hex');
           const matchMessage = hexMessage === messageMetadata.message;
@@ -728,7 +727,6 @@ export async function observeSolanaCcmEvent(
   }
   throw new Error(`Failed to observe Solana's ${eventName} event`);
 }
-/* eslint-enable @typescript-eslint/no-unused-vars */
 
 export async function observeCcmReceived(
   sourceAsset: Asset,

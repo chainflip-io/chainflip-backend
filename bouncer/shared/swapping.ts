@@ -101,17 +101,14 @@ function newSolanaCfParameters() {
   ]);
 
   // The maximum number of accounts that can be passed is limited by the tx size and
-  // therefore also depends on the message length. With the limited message < 100 bytes 
+  // therefore also depends on the message length. With the limited message < 100 bytes
   // we can ensure we fit 10 accounts but we can fit almost double for native asset.
   const remainingAccounts = [];
   const numRemainingAccounts = Math.floor(Math.random() * 10) + 1;
 
   for (let i = 0; i < numRemainingAccounts; i++) {
     remainingAccounts.push(
-      new Uint8Array([
-        ...Keypair.generate().publicKey.toBytes(),
-        Math.random() < 0.5 ? 1 : 0,
-      ])
+      new Uint8Array([...Keypair.generate().publicKey.toBytes(), Math.random() < 0.5 ? 1 : 0]),
     );
   }
 
@@ -396,18 +393,11 @@ export async function testAllSwaps(swapContext: SwapContext) {
           appendSwap(sourceAsset, destAsset, testSwapViaContract);
           if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
             // CCM contract swaps
-            appendSwap(
-              sourceAsset,
-              destAsset,
-              testSwapViaContract,
-              true,
-            );
+            appendSwap(sourceAsset, destAsset, testSwapViaContract, true);
           }
         }
 
-        if (
-          ccmSupportedChains.includes(destChain) 
-        ) {
+        if (ccmSupportedChains.includes(destChain)) {
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, true);
         }
