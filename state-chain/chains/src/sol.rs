@@ -29,9 +29,9 @@ pub use sol_tx_core::{
 	Transaction as SolTransaction,
 };
 
-// Due to transaction size limit in Solana, we have a limit on number of fetches in a solana fetch
-// tx
-pub const MAX_SOL_FETCHES_PER_TX: usize = 10;
+// Due to transaction size limit in Solana, we have a limit on number of fetches in a solana hetch
+// tx. Batches of 5 fetches get to ~1000 bytes, max ~1090 for tokens.
+pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";

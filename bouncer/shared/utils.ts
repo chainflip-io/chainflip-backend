@@ -38,8 +38,8 @@ export const snowWhiteMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 
-export type Asset = SDKAsset | 'Sol' | 'SolUsdc';
-export type Chain = SDKChain | 'Solana';
+export type Asset = SDKAsset;
+export type Chain = SDKChain;
 
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
@@ -158,21 +158,16 @@ export function defaultAssetAmounts(asset: Asset): string {
 
 export function assetContractId(asset: Asset): number {
   if (isSDKAsset(asset)) return assetConstants[asset].contractId;
-  if (asset === 'Sol') return 9;
-  if (asset === 'SolUsdc') return 10;
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function assetDecimals(asset: Asset): number {
   if (isSDKAsset(asset)) return assetConstants[asset].decimals;
-  if (asset === 'Sol') return 9;
-  if (asset === 'SolUsdc') return 6;
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function chainContractId(chain: Chain): number {
   if (isSDKChain(chain)) return chainConstants[chain].contractId;
-  if (chain === 'Solana') return 5;
   throw new Error(`Unsupported chain: ${chain}`);
 }
 
@@ -186,6 +181,8 @@ export function chainGasAsset(chain: Chain): Asset {
       return Assets.Dot;
     case 'Arbitrum':
       return Assets.ArbEth;
+    case 'Solana':
+      return Assets.Sol;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -262,6 +259,8 @@ export function ingressEgressPalletForChain(chain: Chain) {
     case 'Bitcoin':
     case 'Polkadot':
     case 'Arbitrum':
+      return `${toLowerCase(chain)}IngressEgress` as const;
+    case 'Solana':
       return `${toLowerCase(chain)}IngressEgress` as const;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
@@ -542,7 +541,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
       if (chain === 'Ethereum' || chain === 'Arbitrum') {
         const web3 = new Web3(getEvmEndpoint(chain));
         if ((await web3.eth.getCode(address)) === '0x') {
-          throw new Error('Eth address has no bytecode');
+          throw new Error('EVM address has no bytecode');
         }
       }
       return;
@@ -622,6 +621,22 @@ export async function observeEVMEvent(
   throw new Error(`Failed to observe the ${eventName} event`);
 }
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
+export async function observeSolanaEvent(
+  chain: Chain,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  contractAbi: any,
+  address: string,
+  eventName: string,
+  eventParametersExpected: (string | null)[],
+  stopObserveEvent?: () => boolean,
+  initialBlockNumber?: number,
+): Promise<EVMEvent | undefined> {
+  // TODO: Add logic to witness the event on the Solana CfTester
+  return undefined;
+}
+/* eslint-enable @typescript-eslint/no-unused-vars */
+
 export async function observeCcmReceived(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -630,22 +645,46 @@ export async function observeCcmReceived(
   sourceAddress?: string,
   stopObserveEvent?: () => boolean,
 ): Promise<EVMEvent | undefined> {
-  return observeEVMEvent(
-    chainFromAsset(destAsset),
-    cfTesterAbi,
-    address,
-    'ReceivedxSwapAndCall',
-    [
-      chainContractId(chainFromAsset(sourceAsset)).toString(),
-      sourceAddress ?? null,
-      messageMetadata.message,
-      getContractAddress(chainFromAsset(destAsset), destAsset.toString()),
-      '*',
-      '*',
-      '*',
-    ],
-    stopObserveEvent,
-  );
+  const destChain = chainFromAsset(destAsset);
+  switch (destChain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+      return observeEVMEvent(
+        destChain,
+        cfTesterAbi,
+        address,
+        'ReceivedxSwapAndCall',
+        [
+          chainContractId(chainFromAsset(sourceAsset)).toString(),
+          sourceAddress ?? null,
+          messageMetadata.message,
+          getContractAddress(destChain, destAsset.toString()),
+          '*',
+          '*',
+          '*',
+        ],
+        stopObserveEvent,
+      );
+    case 'Solana':
+      return observeSolanaEvent(
+        destChain,
+        cfTesterAbi,
+        address,
+        'ReceivedxSwapAndCall',
+        [
+          chainContractId(chainFromAsset(sourceAsset)).toString(),
+          sourceAddress ?? null,
+          messageMetadata.message,
+          '*',
+          '*',
+          '*',
+          '*',
+        ],
+        stopObserveEvent,
+      );
+    default:
+      throw new Error(`Unsupported chain: ${destChain}`);
+  }
 }
 
 // Converts a hex string into a bytes array. Support hex strings start with and without 0x

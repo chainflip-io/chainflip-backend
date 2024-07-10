@@ -7,7 +7,7 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 import { getContractAddress, getSolWhaleKeyPair, encodeSolAddress } from '../shared/utils';
-import { signAndSendTxSol } from '../shared/send_sol';
+import { sendSol, signAndSendTxSol } from '../shared/send_sol';
 import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { submitGovernanceExtrinsic } from './cf_governance';
@@ -111,6 +111,10 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const tokenVaultPda = new PublicKey(getContractAddress('Solana', 'TOKEN_VAULT_PDA'));
   const upgradeSignerPda = new PublicKey('3eechPbKXiAVCubUkM9asJ5DbjNn7jHyi5KFLd5ocJbz');
 
+  // Fund new Solana Agg key
+  console.log('Funding Solana new aggregate key:', newAggKey.toString());
+  await sendSol(solKey, '100');
+
   // Initialize Vault program
   const tx = new Transaction().add(
     new TransactionInstruction({
@@ -133,7 +137,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   );
 
   // Set nonce authority to the new AggKey
-  const numberOfNonceAccounts = 7;
+  const numberOfNonceAccounts = 8;
   for (let i = 0; i < numberOfNonceAccounts; i++) {
     // Using the index stringified as the seed ('0', '1', '2' ...)
     const seed = i.toString();

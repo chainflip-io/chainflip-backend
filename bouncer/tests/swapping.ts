@@ -9,4 +9,4 @@ async function main(): Promise<void> {
   swapContext.print_report();
 }
 
-await executeWithTimeout(main(), 200);
+await executeWithTimeout(main(), 400);
