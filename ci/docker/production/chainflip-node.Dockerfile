@@ -18,7 +18,7 @@ COPY --chown=1000:1000 ./state-chain/node/chainspecs/berghain.chainspec.raw.json
 
 WORKDIR /etc/chainflip
 
-COPY ./ci/docker/scripts/chainflip-node /usr/local/bin
+COPY --chown=1000:1000 ./ci/docker/scripts/chainflip-node /usr/local/bin
 RUN chmod +x /usr/local/bin/liveness.sh \
     && chmod +x /usr/local/bin/readiness.sh
 
