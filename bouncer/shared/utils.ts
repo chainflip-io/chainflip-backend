@@ -707,28 +707,14 @@ export async function observeSolanaCcmEvent(
               );
             }
 
-            // This won't be really tested until we have contract CCM swaps from an EVM chain to Solana
             if (sourceAddress !== null) {
               const hexSourceAddress = '0x' + (event.data.source_address as Buffer).toString('hex');
               if (hexSourceAddress !== sourceAddress) {
-                console.log('sourceAddress', sourceAddress);
-                console.log('hexSourceAddress', hexSourceAddress);
-                console.log('event.data.source_address', event.data.source_address);
-                console.log('sourceAddress is empty', sourceAddress === '');
-                console.log('event source address is empty', event.data.source_address === '');
                 throw new Error(
                   `Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`,
                 );
               }
             } else if (event.data.source_address.toString() !== Buffer.from([]).toString()) {
-              const hexSourceAddress = '0x' + (event.data.source_address as Buffer).toString('hex');
-              console.log('sourceAddress', sourceAddress);
-              console.log('hexSourceAddress', hexSourceAddress);
-              console.log('event.data.source_address', event.data.source_address);
-              console.log('sourceAddress is empty', sourceAddress === '');
-              console.log('event source address is empty', event.data.source_address === '');
-              console.log('empty buffer', Buffer.from([]));
-
               throw new Error(
                 `Unexpected source address: ${event.data.source_address}, expecting empty ${Buffer.from([0])}`,
               );

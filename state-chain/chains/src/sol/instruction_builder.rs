@@ -48,7 +48,7 @@ pub struct SolanaInstructionBuilder;
 const COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
 
 impl SolanaInstructionBuilder {
-	// TODO: Share code with EVM API?
+	// TODO: Shares code with EVM's ExecutexSwapAndCall or make it a function of ForeignChainAddress
 	fn destructure_address(source_address: Option<ForeignChainAddress>) -> Vec<u8> {
 		match source_address {
 			None => vec![],
