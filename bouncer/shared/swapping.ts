@@ -385,10 +385,11 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
         const sourceChain = chainFromAsset(sourceAsset);
         const destChain = chainFromAsset(destAsset);
-        if ((sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') && destChain !== 'Solana') {
+        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
           // Contract Swaps
           appendSwap(sourceAsset, destAsset, testSwapViaContract);
-          if (destChain === 'Ethereum' || destChain === 'Arbitrum') {
+
+          if (ccmSupportedChains.includes(destChain)) {
             // CCM contract swaps
             appendSwap(sourceAsset, destAsset, testSwapViaContract, true);
           }
@@ -400,6 +401,9 @@ export async function testAllSwaps(swapContext: SwapContext) {
         }
       });
   });
+
+  // TODO: Problem seems to be sourceAddress encoding
+  appendSwap('Eth', 'Sol', testSwapViaContract, true);
 
   await Promise.all(allSwaps);
 
