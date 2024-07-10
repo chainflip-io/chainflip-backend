@@ -4,12 +4,12 @@
 //! Instructions and Instruction sets with some level of abstraction.
 //! This avoids the need to deal with low level Solana core types.
 
-use codec::Encode;
 use sol_prim::consts::{
 	SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
 };
 
 use sp_std::{vec, vec::Vec};
+// use cf_primitives::ForeignChain;
 
 use crate::{
 	sol::{
@@ -48,6 +48,17 @@ pub struct SolanaInstructionBuilder;
 const COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
 
 impl SolanaInstructionBuilder {
+	// TODO: Share code with EVM API?
+	fn destructure_address(source_address: Option<ForeignChainAddress>) -> Vec<u8> {
+		match source_address {
+			None => vec![],
+			Some(ForeignChainAddress::Eth(source_address)) => source_address.0.to_vec(),
+			Some(ForeignChainAddress::Dot(source_address)) => source_address.aliased_ref().to_vec(),
+			Some(ForeignChainAddress::Btc(script)) => script.bytes(),
+			Some(ForeignChainAddress::Arb(source_address)) => source_address.0.to_vec(),
+			Some(ForeignChainAddress::Sol(source_address)) => source_address.0.to_vec(),
+		}
+	}
 	/// Finalize a Instruction Set. This should be internally called after a instruction set is
 	/// complete. This will add some extra instruction required for the integrity of the Solana
 	/// Transaction.
@@ -269,7 +280,7 @@ impl SolanaInstructionBuilder {
 			VaultProgram::with_id(vault_program)
 				.execute_ccm_native_call(
 					source_chain as u32,
-					source_address.encode(), // TODO: check if this is correct (scale encoding?)
+					Self::destructure_address(source_address),
 					message,
 					amount,
 					vault_program_data_account,
@@ -330,7 +341,7 @@ impl SolanaInstructionBuilder {
 		),
 		VaultProgram::with_id(vault_program).execute_ccm_token_call(
 			source_chain as u32,
-			source_address.encode(), // TODO: check if this is correct (scale encoding?)
+			Self::destructure_address(source_address),
 			message,
 			amount,
 			vault_program_data_account,

@@ -402,9 +402,6 @@ export async function testAllSwaps(swapContext: SwapContext) {
       });
   });
 
-  // TODO: Problem seems to be sourceAddress encoding
-  appendSwap('Eth', 'Sol', testSwapViaContract, true);
-
   await Promise.all(allSwaps);
 
   console.log('=== Swapping test complete ===');
