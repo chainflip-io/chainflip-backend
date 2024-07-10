@@ -628,6 +628,31 @@ export async function observeSolanaCcmEvent(
   sourceAddress: string | null,
   messageMetadata: CcmDepositMetadata,
 ): Promise<undefined> {
+  function decodeCfParameters(cfParametersHex: string) {
+    // Convert the hexadecimal string back to a byte array
+    const cfParameters = new Uint8Array((cfParametersHex.slice(2).match(/.{1,2}/g)?.map(byte => parseInt(byte, 16))) ?? []);
+      
+    const publicKeySize = 32;
+    const remainingAccountSize = publicKeySize + 1;
+  
+    // Extra byte for the encoded length
+    const remainingAccountsBytes = cfParameters.slice(remainingAccountSize + 1);
+  
+    const remainingAccounts = [];
+    const remainingIsWritable = [];
+  
+    // Extract the remaining bytes in groups of publicKeySize + 1
+    for (let i = 0; i < remainingAccountsBytes.length; i += remainingAccountSize) {
+      const publicKeyBytes = remainingAccountsBytes.slice(i, i + publicKeySize);
+      const isWritable = remainingAccountsBytes[i + publicKeySize];
+  
+      remainingAccounts.push(new PublicKey(publicKeyBytes));
+      remainingIsWritable.push(Boolean(isWritable));
+    }
+  
+    return { remainingAccounts, remainingIsWritable };
+  }
+
   const connection = getSolConnection();
   const idl = cfTesterIdl;
   const cfTesterAddress = new PublicKey(getContractAddress('Solana', 'CFTESTER'));
@@ -654,7 +679,22 @@ export async function observeSolanaCcmEvent(
           }
           const hexMessage = '0x' + (event.data.message as Buffer).toString('hex');
           const matchMessage = hexMessage === messageMetadata.message;
+
+          // The message is being used as the main discriminator
           if (matchEventName && matchSourceChain && matchMessage) {
+            const {remainingAccounts: expectedRemainingAccounts, remainingIsWritable: expectedRemainingIsWritable} = decodeCfParameters(messageMetadata.cfParameters);
+            if (expectedRemainingIsWritable.length !== event.data.remaining_is_writable.length || expectedRemainingIsWritable.toString() !== event.data.remaining_is_writable.toString()) {
+              throw new Error(`Unexpected remaining is writable: ${event.data.remaining_is_writable}, expecting ${expectedRemainingIsWritable}`);
+            }
+
+            if (event.data.remaining_is_signer.some((value: boolean) => value === true)) {
+              throw new Error(`Expected all remaining accounts to be read-only`);
+            }
+
+            if (expectedRemainingAccounts.length !== event.data.remaining_pubkeys.length || expectedRemainingAccounts.toString() !== event.data.remaining_pubkeys.toString()) {
+              throw new Error(`Unexpected remaining accounts: ${event.data.remaining_accounts}, expecting ${expectedRemainingAccounts}`);
+            }
+
             return undefined
           }
         }

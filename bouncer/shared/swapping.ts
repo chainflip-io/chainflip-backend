@@ -93,10 +93,6 @@ function newSolanaCfParameters() {
     pubkey: getContractAddress('Solana', 'CFTESTER'),
     is_writable: false,
   };
-  const remainingAccount = {
-    pubkey: Keypair.generate().publicKey,
-    is_writable: false,
-  };
 
   // Convert the public keys and is_writable fields to byte arrays
   const cfReceiverBytes = new Uint8Array([
@@ -104,21 +100,33 @@ function newSolanaCfParameters() {
     cfReceiver.is_writable ? 1 : 0,
   ]);
 
-  const remainingAccounts = [
-    new Uint8Array([...remainingAccount.pubkey.toBytes(), remainingAccount.is_writable ? 1 : 0]),
-  ];
+  // The maximum number of accounts that can be passed is limited by the tx size and
+  // therefore also depends on the message length. With the limited message < 100 bytes 
+  // we can ensure we fit 10 accounts but we can fit almost double for native asset.
+  const remainingAccounts = [];
+  const numRemainingAccounts = Math.floor(Math.random() * 10) + 1;
+
+  for (let i = 0; i < numRemainingAccounts; i++) {
+    remainingAccounts.push(
+      new Uint8Array([
+        ...Keypair.generate().publicKey.toBytes(),
+        Math.random() < 0.5 ? 1 : 0,
+      ])
+    );
+  }
 
   // Concatenate the byte arrays
   const cfParameters = new Uint8Array([
     ...cfReceiverBytes,
     // Inserted by the codec::Encode
-    2 ** (remainingAccounts.length + 1),
+    4 * remainingAccounts.length,
     ...remainingAccounts.flatMap((account) => Array.from(account)),
   ]);
+
   return arrayToHexString(cfParameters);
 }
 
-function newCfParameters(destAsset: Asset) {
+function newCfParameters(destAsset: Asset): string {
   const destChain = chainFromAsset(destAsset);
   switch (destChain) {
     case 'Ethereum':
@@ -132,6 +140,20 @@ function newCfParameters(destAsset: Asset) {
   }
 }
 
+function newCcmMessage(destAsset: Asset): string {
+  const destChain = chainFromAsset(destAsset);
+  switch (destChain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+      return newAbiEncodedMessage();
+    case 'Solana':
+      // Random hex string of < 100 bytes
+      return randomAsHex(Math.floor(Math.random() * 100) + 1);
+    default:
+      throw new Error(`Unsupported chain: ${destChain}`);
+  }
+}
+
 export function newCcmMetadata(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -139,7 +161,7 @@ export function newCcmMetadata(
   gasBudgetFraction?: number,
   cfParamsArray?: string,
 ) {
-  const message = ccmMessage ?? newAbiEncodedMessage();
+  const message = ccmMessage ?? newCcmMessage(destAsset);
   const cfParameters = cfParamsArray ?? newCfParameters(destAsset);
   const gasDiv = gasBudgetFraction ?? 2;
 
@@ -176,7 +198,7 @@ export async function prepareSwap(
   if (
     messageMetadata &&
     ccmSupportedChains.includes(chainFromAsset(destAsset)) &&
-    // Solana CCM are egressed at a random destination address
+    // Solana CCM are egressed to a random destination address
     chainFromAsset(destAsset) !== 'Solana'
   ) {
     destAddress = getContractAddress(chainFromAsset(destAsset), 'CFTESTER');
