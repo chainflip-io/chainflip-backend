@@ -676,17 +676,6 @@ export async function observeSolanaCcmEvent(
           const matchEventName = event.name === eventName;
           const matchSourceChain = event.data.source_chain.toString() === sourceChain;
 
-          if (sourceAddress !== null) {
-            if (event.data.source_address !== sourceAddress) {
-              throw new Error(
-                `Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`,
-              );
-            }
-          } else if (event.data.source_address.toString() !== Buffer.from([0]).toString()) {
-            throw new Error(
-              `Unexpected source address: ${event.data.source_address}, expecting ${Buffer.from([0])}`,
-            );
-          }
           const hexMessage = '0x' + (event.data.message as Buffer).toString('hex');
           const matchMessage = hexMessage === messageMetadata.message;
 
@@ -718,6 +707,18 @@ export async function observeSolanaCcmEvent(
               );
             }
 
+            // This won't be really tested until we have contract CCM swaps from an EVM chain to Solana
+            if (sourceAddress !== null) {
+              if (event.data.source_address !== sourceAddress) {
+                throw new Error(
+                  `Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`,
+                );
+              }
+            } else if (event.data.source_address.toString() !== Buffer.from([0]).toString()) {
+              throw new Error(
+                `Unexpected source address: ${event.data.source_address}, expecting ${Buffer.from([0])}`,
+              );
+            }
             return undefined;
           }
         }

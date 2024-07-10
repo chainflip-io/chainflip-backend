@@ -385,10 +385,7 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
         const sourceChain = chainFromAsset(sourceAsset);
         const destChain = chainFromAsset(destAsset);
-        if (
-          (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') &&
-          chainFromAsset(destAsset) !== 'Solana'
-        ) {
+        if ((sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') && destChain !== 'Solana') {
           // Contract Swaps
           appendSwap(sourceAsset, destAsset, testSwapViaContract);
           if (destChain === 'Ethereum' || destChain === 'Arbitrum') {

@@ -269,7 +269,7 @@ impl SolanaInstructionBuilder {
 			VaultProgram::with_id(vault_program)
 				.execute_ccm_native_call(
 					source_chain as u32,
-					source_address.encode(),
+					source_address.encode(), // TODO: check if this is correct (scale encoding?)
 					message,
 					amount,
 					vault_program_data_account,
@@ -330,7 +330,7 @@ impl SolanaInstructionBuilder {
 		),
 		VaultProgram::with_id(vault_program).execute_ccm_token_call(
 			source_chain as u32,
-			source_address.encode(),
+			source_address.encode(), // TODO: check if this is correct (scale encoding?)
 			message,
 			amount,
 			vault_program_data_account,

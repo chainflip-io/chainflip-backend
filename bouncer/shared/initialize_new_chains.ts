@@ -91,8 +91,6 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
     return;
   }
 
-  console.log('Initializing Solana programs');
-
   const solanaVaultProgramId = new PublicKey(getContractAddress('Solana', 'VAULT'));
 
   const dataAccount = new PublicKey(getContractAddress('Solana', 'DATA_ACCOUNT'));
