@@ -231,6 +231,8 @@ async function testGasLimitSwapToSolana(
     testTag,
   );
 
+  console.log(`${tag} Finished tracking event`);
+
   // TODO: Update computePrice, gasLimitBudget, minGasLimitRequired
   const computePrice = 1;
   const gasLimitBudget = (egressBudgetAmount - LAMPORTS_PER_SOL) / computePrice;
@@ -238,9 +240,12 @@ async function testGasLimitSwapToSolana(
 
   const solanaBaseComputeOverHead = getBaseGasOverheadBuffer(destChain);
 
-  // TODO: Add deficit tracking regardless of the options? Maybe that's how we make sure it's broadcasted
+  // TODO: Add deficit tracking regardless?
   if (minGasLimitRequired - solanaBaseComputeOverHead >= gasLimitBudget) {
     // TODO: Handle this case for Solana - no broadcast aborted but rather reverted tx
+    console.log(
+      `${tag} Gas too low, transaction expected to revert. Not checking anything for now`,
+    );
   } else if (minGasLimitRequired + solanaBaseComputeOverHead < gasLimitBudget) {
     // Expecting success
     const txHash = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
@@ -368,8 +373,7 @@ async function testGasLimitSwapToEvm(
 
     // Stop listening for broadcast failure
     await observeBroadcastFailure.stop();
-
-    console.log(`${tag} Broadcast failure stopped!`);
+    console.log(`${tag} Stopped listening to broadcast failure!`);
 
     const receipt = await web3.eth.getTransactionReceipt(ccmReceived?.txHash as string);
     const tx = await web3.eth.getTransaction(ccmReceived?.txHash as string);
@@ -447,6 +451,7 @@ async function testRandomConsumptionTestEvm(sourceAsset: Asset, destAsset: Asset
 let spam = true;
 
 export async function testGasLimitCcmSwaps() {
+  // TODO: Add Solana spamming to raise priority fees
   // Spam chains to increase the gasLimitBudget price
   const spammingEth = spamEvm('Ethereum', 500, () => spam);
   const spammingArb = spamEvm('Arbitrum', 500, () => spam);
@@ -471,7 +476,8 @@ export async function testGasLimitCcmSwaps() {
 
   // TODO: Modify this so we don't have to pass the chain to getRandomGasConsumption that
   // matches the destination address. It should do it automatically.
-  const gasLimitSwapsDefault = [
+  const randomConsumptionTestEvm = [
+    // TODO: Add SOL -> EVM
     testRandomConsumptionTestEvm('Dot', 'Flip'),
     testRandomConsumptionTestEvm('Eth', 'Usdc'),
     testRandomConsumptionTestEvm('Eth', 'Usdt'),
@@ -485,6 +491,7 @@ export async function testGasLimitCcmSwaps() {
 
   // Gas budget to 10% of the default swap amount, which should be enough
   const gasLimitSwapsSufBudget = [
+    // TODO: Add SOL -> EVM
     testGasLimitSwapToEvm('Dot', 'Usdc', ' sufBudget', 10),
     testGasLimitSwapToEvm('Usdc', 'Eth', ' sufBudget', 10),
     testGasLimitSwapToEvm('Flip', 'Usdt', ' sufBudget', 10),
@@ -517,15 +524,16 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwapToEvm('Btc', 'ArbEth', ' insufBudget', 10 ** 5),
     testGasLimitSwapToEvm('ArbEth', 'Eth', ' insufBudget', 10 ** 6),
     testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' insufBudget', 10 ** 5),
-    // testGasLimitSwapToSolana('Btc', 'Sol', ' insufBudget', 10 ** 6),
-    // testGasLimitSwapToSolana('Dot', 'Sol', ' insufBudget', 10 ** 6),
-    // testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' insufBudget', 10 ** 6),
-    // testGasLimitSwapToSolana('Eth', 'SolUsdc', ' insufBudget', 10 ** 6),
+
+    testGasLimitSwapToSolana('Btc', 'Sol', ' insufBudget', 5 * 10 ** 5),
+    testGasLimitSwapToSolana('Dot', 'Sol', ' insufBudget', 5 * 10 ** 6),
+    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' insufBudget', 10 ** 7),
+    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' insufBudget', 10 ** 8),
   ];
 
   await Promise.all([
     ...gasLimitSwapsSufBudget,
-    ...gasLimitSwapsDefault,
+    ...randomConsumptionTestEvm,
     ...gasLimitSwapsInsufBudget,
   ]);
 
