@@ -20,9 +20,9 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, EventFilter,
-		FailingWitnessValidators, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
+		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderInfo, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
+		SimulatedSwapInformation, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -1775,7 +1775,7 @@ impl_runtime_apis! {
 
 		fn cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
 			if EthereumIngressEgress::get_failed_call(broadcast_id).is_some() {
-				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
+				EthereumBroadcaster::threshold_signature_data(broadcast_id).map(|api_call|{
 					chainflip::EthTransactionBuilder::build_transaction(&api_call)
 				})
 			} else {
@@ -1785,7 +1785,7 @@ impl_runtime_apis! {
 
 		fn cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as cf_chains::Chain>::Transaction> {
 			if ArbitrumIngressEgress::get_failed_call(broadcast_id).is_some() {
-				ArbitrumBroadcaster::threshold_signature_data(broadcast_id).map(|(api_call, _)|{
+				ArbitrumBroadcaster::threshold_signature_data(broadcast_id).map(|api_call|{
 					chainflip::ArbTransactionBuilder::build_transaction(&api_call)
 				})
 			} else {
@@ -1819,21 +1819,6 @@ impl_runtime_apis! {
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::channel_opening_fee(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::channel_opening_fee(),
 			}
-		}
-
-		fn cf_get_events(filter: EventFilter) -> Vec<frame_system::EventRecord<RuntimeEvent, Hash>> {
-			frame_system::Events::<Runtime>::get()
-				.into_iter()
-				.filter_map(|event_record|
-					if match &filter {
-						EventFilter::AllEvents => true,
-						EventFilter::SystemOnly => matches!(event_record.event, RuntimeEvent::System(..)),
-					} {
-						Some(*event_record)
-					} else {
-						None
-					}
-				).collect::<Vec<_>>()
 		}
 
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth> {
@@ -1897,6 +1882,10 @@ impl_runtime_apis! {
 				ForeignChain::Solana => boost_pools_details::<SolanaInstance>(asset.try_into().unwrap()),
 			}
 
+		}
+
+		fn cf_safe_mode_statuses() -> RuntimeSafeMode {
+			pallet_cf_environment::RuntimeSafeMode::<Runtime>::get()
 		}
 	}
 

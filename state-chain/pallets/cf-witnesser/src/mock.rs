@@ -65,7 +65,19 @@ parameter_types! {
 	pub const GracePeriod: u64 = 10u64;
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(
+	serde::Serialize,
+	serde::Deserialize,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+)]
 pub struct MockCallFilter;
 
 impl CallDispatchFilter<RuntimeCall> for MockCallFilter {

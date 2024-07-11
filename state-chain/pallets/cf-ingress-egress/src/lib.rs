@@ -143,7 +143,19 @@ impl<C: Chain> CrossChainMessage<C> {
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(
+	serde::Serialize,
+	serde::Deserialize,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+)]
 #[scale_info(skip_type_params(I))]
 pub struct PalletSafeMode<I: 'static> {
 	pub boost_deposits_enabled: bool,
@@ -152,6 +164,7 @@ pub struct PalletSafeMode<I: 'static> {
 	pub deposits_enabled: bool,
 	#[doc(hidden)]
 	#[codec(skip)]
+	#[serde(skip_serializing)]
 	_phantom: PhantomData<I>,
 }
 
@@ -826,32 +839,35 @@ pub mod pallet {
 				match current_epoch.saturating_sub(call.original_epoch) {
 					// The call is stale, clean up storage.
 					n if n >= 2 => {
-						T::Broadcaster::clean_up_broadcast_storage(call.broadcast_id);
+						T::Broadcaster::expire_broadcast(call.broadcast_id);
 						Self::deposit_event(Event::<T, I>::FailedForeignChainCallExpired {
 							broadcast_id: call.broadcast_id,
 						});
 					},
-					// Previous epoch, signature is invalid. Re-sign and store.
-					1 => {
-						if let Some(threshold_signature_id) =
-							T::Broadcaster::threshold_resign(call.broadcast_id)
-						{
+					// Previous epoch, signature is invalid. Re-sign but don't broadcast.
+					1 => match T::Broadcaster::re_sign_broadcast(call.broadcast_id, false, false) {
+						Ok(threshold_signature_id) => {
 							Self::deposit_event(Event::<T, I>::FailedForeignChainCallResigned {
 								broadcast_id: call.broadcast_id,
 								threshold_signature_id,
 							});
 							FailedForeignChainCalls::<T, I>::append(current_epoch, call);
-						} else {
-							// We are here if the Call needs to be resigned, yet no API call data is
-							// available to use. In this situation, there's nothing else that can be
-							// done.
-							log::error!("Foreign Chain Call message cannot be re-signed: Call data unavailable. Broadcast Id: {:?}", call.broadcast_id);
-						}
+						},
+						Err(e) => {
+							// This can happen if a broadcast is still pending
+							// since the previous epoch.
+							// TODO: make sure this can't happen.
+							log::warn!(
+								"Failed CCM call for broadcast {} not re-signed: {:?}",
+								call.broadcast_id,
+								e
+							);
+						},
 					},
 					// Current epoch, shouldn't be possible.
 					_ => {
 						log_or_panic!(
-							"Unexpected Call for the current epoch. Broadcast Id: {:?}",
+							"Logic error: Found call for current epoch in prevoius epoch's failed calls: broadcast_id: {}.",
 							call.broadcast_id,
 						);
 					},
