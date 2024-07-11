@@ -15,12 +15,12 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
 		asset_converter::MockAssetConverter,
+		asset_withholding::MockAssetWithholding,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
-		refunding::MockRefunding,
 		swap_deposit_handler::MockSwapDepositHandler,
 		swap_queue_api::MockSwapQueueApi,
 	},
@@ -126,7 +126,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
-	type Refunding = MockRefunding;
+	type AssetWithholding = MockAssetWithholding;
 	type SafeMode = MockRuntimeSafeMode;
 }
 

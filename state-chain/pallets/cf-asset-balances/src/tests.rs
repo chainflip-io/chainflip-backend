@@ -1,6 +1,8 @@
 use cf_chains::{ForeignChain, ForeignChainAddress};
 use cf_primitives::AssetAmount;
-use cf_traits::{mocks::egress_handler::MockEgressParameter, Refunding, SetSafeMode};
+use cf_traits::{
+	mocks::egress_handler::MockEgressParameter, AssetWithholding, LiabilityTracker, SetSafeMode,
+};
 
 use cf_chains::AnyChain;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SafeMode};
@@ -8,8 +10,8 @@ use cf_traits::{mocks::egress_handler::MockEgressHandler, SafeMode};
 use crate::{mock::*, ExternalOwner, Liabilities, Pallet, WithheldAssets};
 
 fn payed_gas(chain: ForeignChain, amount: AssetAmount, account: ForeignChainAddress) {
-	Pallet::<Test>::record_gas_fee(account, chain.gas_asset(), amount);
-	Pallet::<Test>::withhold_transaction_fee(chain.gas_asset(), amount);
+	Pallet::<Test>::record_liability(account, chain.gas_asset(), amount);
+	Pallet::<Test>::withhold_assets(chain.gas_asset(), amount);
 }
 
 fn assert_egress(
@@ -41,7 +43,7 @@ fn refund_validators_evm() {
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 200);
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Arbitrum.gas_asset()), 100);
 
-		Pallet::<Test>::on_distribute_withheld_fees();
+		Pallet::<Test>::trigger_reconciliation();
 
 		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
 		let recorded_fees_arb = Liabilities::<Test>::get(ForeignChain::Arbitrum.gas_asset());
@@ -77,7 +79,7 @@ fn skip_refunding_if_safe_mode_is_disabled() {
 			refunding: crate::PalletSafeMode::CODE_RED,
 		});
 
-		Pallet::<Test>::on_distribute_withheld_fees();
+		Pallet::<Test>::trigger_reconciliation();
 
 		assert_egress(0, None);
 
@@ -98,7 +100,7 @@ pub fn keep_fees_in_storage_if_egress_fails() {
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
 
-		Pallet::<Test>::on_distribute_withheld_fees();
+		Pallet::<Test>::trigger_reconciliation();
 
 		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
@@ -114,7 +116,7 @@ pub fn refund_validators_btc() {
 
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Bitcoin.gas_asset()), 100);
 
-		Pallet::<Test>::on_distribute_withheld_fees();
+		Pallet::<Test>::trigger_reconciliation();
 
 		let recorded_fees_btc = Liabilities::<Test>::get(ForeignChain::Bitcoin.gas_asset());
 
@@ -133,7 +135,7 @@ pub fn to_low_withheld_fees() {
 
 		WithheldAssets::<Test>::insert(ForeignChain::Bitcoin.gas_asset(), 99);
 
-		Pallet::<Test>::on_distribute_withheld_fees();
+		Pallet::<Test>::trigger_reconciliation();
 
 		System::assert_last_event(RuntimeEvent::AssetBalances(
 			crate::Event::VaultDeficitDetected {
@@ -159,7 +161,7 @@ pub fn refund_validators_polkadot() {
 
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Polkadot.gas_asset()), 100);
 
-		Pallet::<Test>::on_distribute_withheld_fees();
+		Pallet::<Test>::trigger_reconciliation();
 
 		assert_egress(
 			1,

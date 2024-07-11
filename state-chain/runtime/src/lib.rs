@@ -336,7 +336,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
-	type Refunding = AssetBalances;
+	type AssetWithholding = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -358,7 +358,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
-	type Refunding = AssetBalances;
+	type AssetWithholding = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -380,7 +380,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
-	type Refunding = AssetBalances;
+	type AssetWithholding = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -402,7 +402,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
-	type Refunding = AssetBalances;
+	type AssetWithholding = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -424,7 +424,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
-	type Refunding = AssetBalances;
+	type AssetWithholding = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -806,7 +806,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = EthereumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
-	type Refunding = AssetBalances;
+	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -831,7 +831,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = PolkadotChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
-	type Refunding = AssetBalances;
+	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -856,7 +856,7 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = BitcoinChainTracking;
 	type RetryPolicy = BitcoinRetryPolicy;
-	type Refunding = AssetBalances;
+	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -881,7 +881,7 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = ArbitrumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
-	type Refunding = AssetBalances;
+	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -913,7 +913,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = SolanaChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
-	type Refunding = AssetBalances;
+	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 }
 

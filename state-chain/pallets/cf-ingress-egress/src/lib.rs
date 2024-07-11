@@ -22,8 +22,6 @@ pub use boost_pool::OwedAmount;
 
 use frame_support::{pallet_prelude::OptionQuery, transactional};
 
-use cf_traits::Refunding;
-
 use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
@@ -40,10 +38,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, Broadcaster, CcmHandler,
-	CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
-	IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode, ScheduledEgressDetails,
-	SwapDepositHandler, SwapQueueApi, SwapType,
+	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, AssetWithholding, Broadcaster,
+	CcmHandler, CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment,
+	GetBlockHeight, IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode,
+	ScheduledEgressDetails, SwapDepositHandler, SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -143,7 +141,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 #[scale_info(skip_type_params(I))]
@@ -441,7 +439,7 @@ pub mod pallet {
 
 		type SwapQueueApi: SwapQueueApi;
 
-		type Refunding: Refunding;
+		type AssetWithholding: AssetWithholding;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
@@ -2023,7 +2021,7 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 		fee: TargetChainAmount<T, I>,
 	) {
 		if !fee.is_zero() {
-			T::Refunding::withhold_transaction_fee(
+			T::AssetWithholding::withhold_assets(
 				<T::TargetChain as Chain>::GAS_ASSET.into(),
 				fee.into(),
 			);

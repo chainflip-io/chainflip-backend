@@ -19,7 +19,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
-	Chainflip, EpochInfo, GetBlockHeight, Refunding, SafeMode, ThresholdSigner,
+	Chainflip, EpochInfo, GetBlockHeight, LiabilityTracker, SafeMode, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -64,7 +64,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{AccountRoleRegistry, BroadcastNomination, OnBroadcastReady, Refunding};
+	use cf_traits::{AccountRoleRegistry, BroadcastNomination, LiabilityTracker, OnBroadcastReady};
 	use frame_support::{pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -193,8 +193,7 @@ pub mod pallet {
 
 		type CfeBroadcastRequest: CfeBroadcastRequest<Self, Self::TargetChain>;
 
-		/// The chain specific refunding adapter.
-		type Refunding: Refunding;
+		type LiabilityTracker: LiabilityTracker;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -536,7 +535,7 @@ pub mod pallet {
 							T::TargetChain,
 						>>::into_foreign_chain_address(signer_id.clone());
 
-						T::Refunding::record_gas_fee(
+						T::LiabilityTracker::record_liability(
 							address_to_refund,
 							<T::TargetChain as Chain>::GAS_ASSET.into(),
 							to_refund.into(),

@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "std", feature(option_get_or_insert_default))]
 
 mod async_result;
 pub mod liquidity;
@@ -952,18 +953,16 @@ pub trait IngressEgressFeeApi<C: Chain> {
 	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
 }
 
-pub trait Refunding {
-	fn record_gas_fee(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
-	fn withhold_transaction_fee(asset: Asset, amount: AssetAmount);
+pub trait LiabilityTracker {
+	fn record_liability(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
 
-	// TODO: Remove this after migration.
 	#[cfg(feature = "try-runtime")]
-	fn get_withheld_transaction_fees(_gas_asset: Asset) -> AssetAmount {
-		AssetAmount::default()
-	}
-	// TODO: Remove this after migration.
+	fn total_liabilities(_gas_asset: Asset) -> AssetAmount;
+}
+
+pub trait AssetWithholding {
+	fn withhold_assets(asset: Asset, amount: AssetAmount);
+
 	#[cfg(feature = "try-runtime")]
-	fn get_recorded_gas_fees(_gas_asset: Asset) -> u128 {
-		0
-	}
+	fn withheld_assets(gas_asset: Asset) -> AssetAmount;
 }

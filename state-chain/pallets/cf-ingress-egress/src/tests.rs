@@ -24,11 +24,11 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
+		asset_withholding::MockAssetWithholding,
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
 		chain_tracking::ChainTracker,
 		funding_info::MockFundingInfo,
-		refunding::MockRefunding,
 		swap_queue_api::{MockSwap, MockSwapQueueApi},
 	},
 	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
@@ -1643,7 +1643,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(
 		assert!(MockSwapQueueApi::get_swap_queue().is_empty());
 
 		assert_eq!(
-			MockRefunding::get_withheld_transaction_fees(),
+			MockAssetWithholding::withheld_assets(ForeignChain::Ethereum.gas_asset()),
 			GAS_FEE,
 			"Expected ingress egress fee to be withheld for gas asset"
 		);

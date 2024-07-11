@@ -11,6 +11,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Witnesser as EpochTransitionHandler>::on_expired_epoch(expired);
 	}
 	fn on_new_epoch(_new: EpochIndex) {
-		AssetBalances::on_distribute_withheld_fees();
+		AssetBalances::trigger_reconciliation();
 	}
 }

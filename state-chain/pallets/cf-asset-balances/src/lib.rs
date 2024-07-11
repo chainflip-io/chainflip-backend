@@ -4,7 +4,9 @@
 use cf_chains::{AnyChain, ForeignChain, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::{impl_pallet_safe_mode, Chainflip, EgressApi, KeyProvider, Refunding};
+use cf_traits::{
+	impl_pallet_safe_mode, AssetWithholding, Chainflip, EgressApi, KeyProvider, LiabilityTracker,
+};
 use frame_support::{
 	pallet_prelude::*, sp_runtime::traits::Saturating, traits::DefensiveSaturating,
 };
@@ -53,7 +55,7 @@ impl core::cmp::PartialOrd for ExternalOwner {
 	}
 }
 
-impl_pallet_safe_mode!(PalletSafeMode; do_refund);
+impl_pallet_safe_mode!(PalletSafeMode; reconciliation_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -212,10 +214,9 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Distributes the withheld fees - called on every start of a new epoch.
-	pub fn on_distribute_withheld_fees() {
-		if !T::SafeMode::get().do_refund {
-			log::info!("Refunding is disabled. Skipping refunding.");
+	pub fn trigger_reconciliation() {
+		if !T::SafeMode::get().reconciliation_enabled {
+			log::info!("Reconciliation is disabled. Skipping reconciliation.");
 			return;
 		}
 
@@ -275,8 +276,9 @@ impl<A> VaultImbalance<A> {
 	}
 }
 
-impl<T: Config> Refunding for Pallet<T> {
-	fn record_gas_fee(address: ForeignChainAddress, asset: Asset, amount: AssetAmount) {
+impl<T: Config> LiabilityTracker for Pallet<T> {
+	fn record_liability(address: ForeignChainAddress, asset: Asset, amount: AssetAmount) {
+		debug_assert_eq!(ForeignChain::from(asset), address.chain());
 		Liabilities::<T>::mutate(asset, |fees| {
 			fees.entry(match ForeignChain::from(asset) {
 				ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
@@ -288,19 +290,21 @@ impl<T: Config> Refunding for Pallet<T> {
 		});
 	}
 
-	fn withhold_transaction_fee(asset: Asset, amount: AssetAmount) {
+	#[cfg(feature = "try-runtime")]
+	fn total_liabilities(asset: Asset) -> u128 {
+		Liabilities::<T>::get(asset).values().sum()
+	}
+}
+
+impl<T: Config> AssetWithholding for Pallet<T> {
+	fn withhold_assets(asset: Asset, amount: AssetAmount) {
 		WithheldAssets::<T>::mutate(asset, |fees| {
 			fees.saturating_accrue(amount);
 		});
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn get_withheld_transaction_fees(asset: Asset) -> AssetAmount {
+	fn withheld_assets(asset: Asset) -> AssetAmount {
 		WithheldAssets::<T>::get(asset)
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn get_recorded_gas_fees(asset: Asset) -> u128 {
-		Liabilities::<T>::get(asset).values().sum()
 	}
 }

@@ -19,7 +19,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
 				T::TargetChain,
 			>>::into_foreign_chain_address(signer_id);
-			T::Refunding::record_gas_fee(
+			T::LiabilityTracker::record_liability(
 				address_to_refund,
 				<T::TargetChain as Chain>::GAS_ASSET.into(),
 				to_refund.into(),
@@ -44,7 +44,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		);
 		let recorded_fees = <u128>::decode(&mut &state[..]).unwrap();
 		let migrated =
-			T::Refunding::get_recorded_gas_fees(<T::TargetChain as Chain>::GAS_ASSET.into());
+			T::LiabilityTracker::total_liabilities(<T::TargetChain as Chain>::GAS_ASSET.into());
 		assert_eq!(recorded_fees, migrated, "Migrated fees do not match for asset!");
 		Ok(())
 	}
