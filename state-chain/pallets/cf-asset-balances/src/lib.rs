@@ -11,7 +11,7 @@ use frame_support::{
 	pallet_prelude::*, sp_runtime::traits::Saturating, traits::DefensiveSaturating,
 };
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, vec};
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 pub use pallet::*;
 

@@ -3,11 +3,11 @@ use crate::{EgressApi, ScheduledEgressDetails};
 use cf_chains::{CcmCfParameters, CcmDepositMetadata, CcmMessage, Chain};
 use cf_primitives::{AssetAmount, EgressCounter};
 use codec::{Decode, Encode};
-use scale_info::TypeInfo;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchError,
 };
+use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
 
 pub struct MockEgressHandler<C>(PhantomData<C>);

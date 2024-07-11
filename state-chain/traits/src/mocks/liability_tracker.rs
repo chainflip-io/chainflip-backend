@@ -4,7 +4,7 @@ use crate::{
 };
 use cf_chains::ForeignChainAddress;
 use cf_primitives::{Asset, AssetAmount};
-use sp_runtime::Saturating;
+use frame_support::sp_runtime::Saturating;
 use sp_std::collections::btree_map::BTreeMap;
 
 pub struct MockLiabilityTracker;

@@ -3,7 +3,7 @@ use crate::{
 	AssetWithholding,
 };
 use cf_primitives::{Asset, AssetAmount};
-use sp_runtime::Saturating;
+use frame_support::sp_runtime::Saturating;
 
 pub struct MockAssetWithholding;
 
