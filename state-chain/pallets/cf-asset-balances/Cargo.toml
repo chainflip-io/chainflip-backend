@@ -26,7 +26,7 @@ cf-utilities = { package = "utilities", path = '../../../utilities', default-fea
 
 log = { version = '0.4.16', default-features = false }
 
-serde = { version = '1.0.195', default_features = false, features = [
+serde = { version = '1.0.126', default_features = false, features = [
     'alloc',
     'derive',
 ] }
@@ -41,13 +41,11 @@ scale-info = { version = '2.10.0', default-features = false, features = [
 
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true, default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 
 [dev-dependencies]
-pallet-cf-account-roles = { path = '../cf-account-roles' }
 cf-test-utilities = { path = '../../test-utilities' }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 
@@ -61,7 +59,7 @@ std = [
     'cf-runtime-utilities/std',
     'cf-utilities/std',
     'codec/std',
-    'frame-benchmarking/std',
+    'frame-benchmarking?/std',
     'frame-support/std',
     'frame-system/std',
     'scale-info/std',
@@ -76,7 +74,6 @@ runtime-benchmarks = [
     'frame-benchmarking/runtime-benchmarks',
     'frame-support/runtime-benchmarks',
     'frame-system/runtime-benchmarks',
-    'pallet-cf-account-roles/runtime-benchmarks',
 ]
 try-runtime = [
     'cf-runtime-upgrade-utilities/try-runtime',
