@@ -371,8 +371,6 @@ export async function testGasLimitCcmSwaps() {
     await sleep(500);
   }
 
-  // TODO: Modify this so we don't have to pass the chain to getRandomGasConsumption that
-  // matches the destination address. It should do it automatically.
   const gasLimitSwapsDefault = [
     testGasLimitSwap('Dot', 'Flip', undefined, getRandomGasConsumption('Ethereum')),
     testGasLimitSwap('Eth', 'Usdc', undefined, getRandomGasConsumption('Ethereum')),
@@ -400,6 +398,8 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwap('ArbUsdc', 'Flip', ' sufBudget', undefined, 10),
   ];
 
+  // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to
+  // panic when not in release due to zero swap input amount. So for now we provide the minimum so it gets swapped to just > 0.
   const gasLimitSwapsInsufBudget = [
     testGasLimitSwap('Dot', 'Flip', ' insufBudget', undefined, 10 ** 6),
     testGasLimitSwap('Eth', 'Usdc', ' insufBudget', undefined, 10 ** 8),
