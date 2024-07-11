@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use sol_prim::consts::SOL_USDC_DECIMAL;
+use sol_prim::consts::{MIN_EGRESS_AMOUNT, SOL_USDC_DECIMAL};
 
 use codec::{Decode, Encode};
 use frame_support::{
@@ -161,6 +161,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		transfer_params
 			.into_iter()
+			.filter(|(transfer_param, _)| transfer_param.amount > MIN_EGRESS_AMOUNT)
 			.map(|(transfer_param, egress_id)| {
 				let (nonce_account, durable_nonce) = Environment::nonce_account()?;
 				let transfer_instruction_set = match transfer_param.asset {
@@ -389,7 +390,11 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 			txs.push((Self::batch_fetch(fetch_params)?, vec![]));
 		}
 
-		Ok(txs)
+		if txs.is_empty() {
+			Err(AllBatchError::NotRequired)
+		} else {
+			Ok(txs)
+		}
 	}
 }
 

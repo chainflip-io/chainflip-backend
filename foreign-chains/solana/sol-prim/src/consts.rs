@@ -1,4 +1,4 @@
-use crate::{Address, Digest};
+use crate::{Address, Amount, Digest};
 use cf_utilities::bs58_array;
 
 pub const SOLANA_SIGNATURE_LEN: usize = 64;
@@ -38,3 +38,5 @@ pub const MAX_TRANSACTION_LENGTH: usize = 1_232;
 pub const NONCE_ACCOUNT_LENGTH: u64 = 80;
 
 pub const SOL_USDC_DECIMAL: u8 = 6u8;
+
+pub const MIN_EGRESS_AMOUNT: Amount = 0; // todo
