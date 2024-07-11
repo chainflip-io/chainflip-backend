@@ -1,26 +1,25 @@
-# Chainflip Refunding Pallet
-
-This pallet tracks fees paid by validators/vaults/aggKeys and ensures a periodical refund.
+# Chainflip Asset Balances Pallet
 
 ## Overview
 
-Periodically (triggered every start of a new epoch) this pallet will iterate over all with hold transaction fees and triggering a refund. As long fees for the refund are available, we continue paying them out. If no withheld fees should be left for the current epoch, the we refunded in a later point in time (ideally the next epoch) when we have funds available again.
+The pallet tracks balances for assets held in Chainflip vaults. Notably, this excludes any *native* FLIP tokens that were added via the Funding process.
 
-### Terminology
+The vault contains:
 
-**WithheldTransactionFees**
-The amount of fees kept for the purpose of refunding fees.
+- Assets owned by on-chain accounts (Brokers, LPs).
+- Liabilities that owed to external parties and have yet be reconciled (see below).
+- Assets that have been *withheld* during ingress and/or egress in order to cover the abovementioned liabilities.
 
-**RecordedFees**
-The fees a validator/vault/aggKey payed to transmit a transaction on a Blockchain.
+Periodically, this pallet will iterate over all outstanding liabilities and reconcile these with the withheld funds.
 
-### Refunding process
+### Reconciliation
 
-**EVM**
-For EVM chains (at the time of writing Ethereum/Arbitrum) we refund any account that has payed gas fees.
+Reconciliation is the process by which we cancel out any liabilities with assets that have been withheld for this purpose.
 
-**Bitcoin/Solana**
-For Bitcoin as well as Solana we don't refund actively, this is happening automatically. We book keep the withheld transaction fee to ensure the vault is not bleeding out from transaction fees.
+There are three cases that need to be considered:
 
-**Polkadot**
-For Polkadot we only refund the current agg key.
+- If funds are owed to an external account, we issue a transfer from the vault to that account. This is the case for EVM chains (Ethereum, Abritrum, etc): because validators pay transaction fees behalf of the vault, they need to be refunded.
+- If funds are owed to the current AggKey, we issue a transfer from the vault to the current AggKey account. This is the case for Polkadot, because all transactions are signed by the AggKey, which therefore pays fees for the vault.
+- If funds are owed to the vault, we simply cancel the amounts against each other. This is the case for Bitcoin and Solana, because in both cases the fees are implicitly paid by the vault during execution.
+
+If, during reconciliation, we determine that the vault is running a deficit (meaning: we are not withholding enough funds to cover our liabilities), we emit an event to notify the network.
