@@ -1,7 +1,6 @@
+use crate::AssetBalances;
 use cf_primitives::EpochIndex;
 use cf_traits::EpochTransitionHandler;
-
-use crate::Refunding;
 
 use crate::Witnesser;
 
@@ -12,6 +11,6 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<Witnesser as EpochTransitionHandler>::on_expired_epoch(expired);
 	}
 	fn on_new_epoch(_new: EpochIndex) {
-		Refunding::on_distribute_withheld_fees();
+		AssetBalances::on_distribute_withheld_fees();
 	}
 }

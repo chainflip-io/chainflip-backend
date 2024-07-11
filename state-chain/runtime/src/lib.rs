@@ -336,7 +336,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
-	type Refunding = Refunding;
+	type Refunding = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -358,7 +358,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
-	type Refunding = Refunding;
+	type Refunding = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -380,7 +380,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
-	type Refunding = Refunding;
+	type Refunding = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -402,7 +402,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
-	type Refunding = Refunding;
+	type Refunding = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -424,7 +424,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetConverter = LiquidityPools;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
-	type Refunding = Refunding;
+	type Refunding = AssetBalances;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -806,7 +806,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = EthereumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
-	type Refunding = Refunding;
+	type Refunding = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -831,7 +831,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = PolkadotChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
-	type Refunding = Refunding;
+	type Refunding = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -856,7 +856,7 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = BitcoinChainTracking;
 	type RetryPolicy = BitcoinRetryPolicy;
-	type Refunding = Refunding;
+	type Refunding = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -881,11 +881,11 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = ArbitrumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
-	type Refunding = Refunding;
+	type Refunding = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
-impl pallet_cf_refunding::Config for Runtime {
+impl pallet_cf_asset_balances::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type PolkadotKeyProvider = PolkadotThresholdSigner;
@@ -913,7 +913,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type ChainTracking = SolanaChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
-	type Refunding = Refunding;
+	type Refunding = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 }
 
@@ -1008,7 +1008,7 @@ construct_runtime!(
 		SolanaBroadcaster: pallet_cf_broadcast::<Instance5>,
 		SolanaIngressEgress: pallet_cf_ingress_egress::<Instance5>,
 
-		Refunding: pallet_cf_refunding,
+		AssetBalances: pallet_cf_asset_balances,
 	}
 );
 
@@ -1083,7 +1083,7 @@ pub type PalletExecutionOrder = (
 	Governance,
 	TokenholderGovernance,
 	Reputation,
-	Refunding,
+	AssetBalances,
 	// Chain Tracking
 	EthereumChainTracking,
 	PolkadotChainTracking,
@@ -2010,10 +2010,10 @@ impl_runtime_apis! {
 		}
 		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount> {
 			FeeImbalance {
-				ethereum: pallet_cf_refunding::Pallet::<Runtime>::vault_imbalance(ForeignChain::Ethereum.gas_asset()),
-				polkadot: pallet_cf_refunding::Pallet::<Runtime>::vault_imbalance(ForeignChain::Polkadot.gas_asset()),
-				arbitrum: pallet_cf_refunding::Pallet::<Runtime>::vault_imbalance(ForeignChain::Arbitrum.gas_asset()),
-				bitcoin: pallet_cf_refunding::Pallet::<Runtime>::vault_imbalance(ForeignChain::Bitcoin.gas_asset()),
+				ethereum: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Ethereum.gas_asset()),
+				polkadot: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Polkadot.gas_asset()),
+				arbitrum: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Arbitrum.gas_asset()),
+				bitcoin: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Bitcoin.gas_asset()),
 			}
 		}
 		fn cf_build_version() -> LastRuntimeUpgradeInfo {

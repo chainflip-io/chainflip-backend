@@ -1493,6 +1493,7 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-account-roles",
+ "pallet-cf-asset-balances",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
  "pallet-cf-emissions",
@@ -1503,7 +1504,6 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
- "pallet-cf-refunding",
  "pallet-cf-reputation",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
@@ -1725,13 +1725,13 @@ dependencies = [
  "libp2p-identity 0.2.8",
  "libsecp256k1",
  "pallet-cf-account-roles",
+ "pallet-cf-asset-balances",
  "pallet-cf-environment",
  "pallet-cf-funding",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
- "pallet-cf-refunding",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -7463,6 +7463,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-asset-balances"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
+ "cf-test-utilities",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-cf-account-roles",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core 21.0.0",
+ "sp-io 23.0.0",
+ "sp-runtime 24.0.0",
+ "sp-std 8.0.0",
+ "utilities",
+]
+
+[[package]]
 name = "pallet-cf-broadcast"
 version = "0.1.0"
 dependencies = [
@@ -7699,31 +7724,6 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-arithmetic 16.0.0",
- "sp-core 21.0.0",
- "sp-io 23.0.0",
- "sp-runtime 24.0.0",
- "sp-std 8.0.0",
- "utilities",
-]
-
-[[package]]
-name = "pallet-cf-refunding"
-version = "0.1.0"
-dependencies = [
- "cf-chains",
- "cf-primitives",
- "cf-runtime-upgrade-utilities",
- "cf-runtime-utilities",
- "cf-test-utilities",
- "cf-traits",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "log",
- "pallet-cf-account-roles",
- "parity-scale-codec",
- "scale-info",
- "serde",
  "sp-core 21.0.0",
  "sp-io 23.0.0",
  "sp-runtime 24.0.0",
@@ -12646,6 +12646,7 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-account-roles",
+ "pallet-cf-asset-balances",
  "pallet-cf-broadcast",
  "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",
@@ -12657,7 +12658,6 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
- "pallet-cf-refunding",
  "pallet-cf-reputation",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",

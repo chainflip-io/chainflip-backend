@@ -1,4 +1,4 @@
-use crate as pallet_cf_refunding;
+use crate as pallet_cf_asset_balances;
 use crate::PalletSafeMode;
 use cf_chains::{
 	btc::ScriptPubkey,
@@ -24,7 +24,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 frame_support::construct_runtime!(
 	pub enum Test {
 		System: frame_system,
-		Refunding: pallet_cf_refunding,
+		AssetBalances: pallet_cf_asset_balances,
 	}
 );
 

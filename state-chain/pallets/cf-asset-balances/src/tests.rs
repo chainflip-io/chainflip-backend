@@ -135,11 +135,13 @@ pub fn to_low_withheld_fees() {
 
 		Pallet::<Test>::on_distribute_withheld_fees();
 
-		System::assert_last_event(RuntimeEvent::Refunding(crate::Event::VaultDeficitDetected {
-			chain: ForeignChain::Bitcoin,
-			amount_owed: 100,
-			available: 99,
-		}));
+		System::assert_last_event(RuntimeEvent::AssetBalances(
+			crate::Event::VaultDeficitDetected {
+				chain: ForeignChain::Bitcoin,
+				amount_owed: 100,
+				available: 99,
+			},
+		));
 
 		let recorded_fees_btc = Liabilities::<Test>::get(ForeignChain::Bitcoin.gas_asset());
 
