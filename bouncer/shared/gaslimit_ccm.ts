@@ -1,5 +1,6 @@
 import Web3 from 'web3';
-import { InternalAsset as Asset, InternalAssets as Assets, Chain } from '@chainflip/cli';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { InternalAsset as Asset, Chain } from '@chainflip/cli';
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
   ccmSupportedChains,
@@ -15,87 +16,75 @@ import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { spamEvm } from './send_evm';
 import { observeEvent, observeBadEvent } from './utils/substrate';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { CcmDepositMetadata } from './new_swap';
 
-// This test uses the CFTester contract as the receiver for a CCM call. The contract will consume approximately
-// the gasLimitBudget amount specified in the CCM message with an error margin. On top of that, the gasLimitBudget overhead of the
-// CCM call itself is ~115k (Eth) ~5.2M (Arb) with some variability depending on the parameters. We also add extra gasLimitBudget
-// depending on the lenght of the message.
-const MIN_BASE_GAS_OVERHEAD: Record<string, number> = { Ethereum: 100000, Arbitrum: 5200000 };
-const BASE_GAS_OVERHEAD_BUFFER: Record<string, number> = { Ethereum: 20000, Arbitrum: 200000, Solana: 50000 };
-const CFE_GAS_LIMIT_CAP: Record<string, number> = { Ethereum: 10000000, Arbitrum: 25000000 };
-// Minimum and maximum gas consumption values to be in a useful range for testing.
-const MIN_TEST_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 200000, Arbitrum: 1000000 };
-const MAX_TEST_GAS_CONSUMPTION: Record<string, number> = {
-  Ethereum: 4000000,
-  Arbitrum: 6000000,
-};
+const LOOP_TIMEOUT = 15;
 // Arbitrary default gas consumption values for testing.
 const DEFAULT_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 260000, Arbitrum: 3000000 };
 // The base overhead increases with message lenght. This is an approximation => BASE_GAS_OVERHEAD + messageLength * gasPerByte
 // EVM requires 16 gas per calldata byte so a reasonable approximation is 17 to cover hashing and other operations over the data.
-const GAS_PER_BYTE = 17;
-// MIN_FEE is the priority fee for Ethereum and baseFee for Arbitrum, since those are the fees that increase here upon spamming.
-const MIN_FEE: Record<string, number> = { Ethereum: 1000000000, Arbitrum: 100000000 };
-const LOOP_TIMEOUT = 15;
+const EVM_GAS_PER_BYTE = 17;
 
-
-// TODO: Probably we should only call this function for EVM chains not Solana
-function gasTestCcmMetadata(
-  sourceAsset: Asset,
-  destAsset: Asset,
-  gasToConsume: number,
-  gasBudgetFraction?: number,
-) {
-  const web3 = new Web3();
-
-  return newCcmMetadata(
-    sourceAsset,
-    destAsset,
-    chainFromAsset(destAsset) === 'Solana' ? undefined : web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasToConsume]),
-    gasBudgetFraction,
-  );
-}
-
-async function getEvmChainFees(chain: Chain) {
-  const trackedData = (
-    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
-  ).data.newChainState.trackedData;
-
-  const baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
-
-  // Arbitrum doesn't have priority fee
-  let priorityFee = 0;
-  if (chain !== 'Arbitrum') {
-    priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
+function getMinGasOverhead(chain: Chain): number {
+  switch (chain) {
+    case 'Ethereum':
+      return 100000;
+    case 'Arbitrum':
+      return 5200000;
+    default:
+      throw new Error(`Chain ${chain} is not supported for CCM`);
   }
-
-  return { baseFee, priorityFee };
 }
 
-async function testGasLimitSwap(
+function getEngineBroadcastLimit(chain: Chain): number {
+  switch (chain) {
+    case 'Ethereum':
+      return 10000000;
+    case 'Arbitrum':
+      return 25000000;
+    case 'Solana':
+      return 14000000;
+    default:
+      throw new Error(`Chain ${chain} is not supported for CCM`);
+  }
+}
+
+function getBaseGasOverheadBuffer(chain: Chain): number {
+  switch (chain) {
+    case 'Ethereum':
+      return 20000;
+    case 'Arbitrum':
+      return 200000;
+    case 'Solana':
+      return 50000;
+    default:
+      throw new Error(`Chain ${chain} is not supported for CCM`);
+  }
+}
+
+// MIN_FEE is the priority fee for Ethereum and baseFee for Arbitrum, since those are the fees that increase here upon spamming.
+function getChainMinFee(chain: Chain): number {
+  switch (chain) {
+    case 'Ethereum':
+      return 1000000000;
+    case 'Arbitrum':
+      return 100000000;
+    default:
+      throw new Error(`Chain ${chain} is not supported for CCM`);
+  }
+}
+
+async function trackGasLimitSwap(
   sourceAsset: Asset,
   destAsset: Asset,
+  messageMetadata: CcmDepositMetadata,
   testTag?: string,
-  gasToConsume?: number,
-  gasBudgetFraction?: number,
 ) {
-
   const destChain = chainFromAsset(destAsset);
-
   if (!ccmSupportedChains.includes(destChain)) {
     throw new Error(`Chain ${destChain} is not supported for CCM`);
   }
 
-  // Increase the gas consumption to make sure all the messages are unique
-  const gasConsumption = gasToConsume ?? DEFAULT_GAS_CONSUMPTION[destChain.toString()]++;
-
-  const messageMetadata = gasTestCcmMetadata(
-    sourceAsset,
-    destAsset,
-    gasConsumption,
-    gasBudgetFraction,
-  );
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
@@ -215,32 +204,106 @@ async function testGasLimitSwap(
   }
 
   console.log(`${tag} Egress budget amount: ${egressBudgetAmount}`);
+  const egressId = swapIdToEgressId[swapId];
+  const broadcastId = egressIdToBroadcastId[egressId];
+  const txPayload = broadcastIdToTxPayload[broadcastId];
+  return { tag, destAddress, egressBudgetAmount, broadcastId, txPayload };
+}
 
-  let gasLimitBudget: number;
-  let minGasLimitRequired: number;
-  if (destChain === 'Ethereum' || destChain ==='Arbitrum') {
-    const txPayload = broadcastIdToTxPayload[egressIdToBroadcastId[swapIdToEgressId[swapId]]];
-    const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
-    gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
+async function testGasLimitSwapToSolana(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  testTag?: string,
+  gasBudgetFraction?: number,
+) {
+  const destChain = chainFromAsset(destAsset);
 
-    const byteLength = Web3.utils.hexToBytes(messageMetadata.message).length;
-
-    minGasLimitRequired =
-      gasConsumption + MIN_BASE_GAS_OVERHEAD[destChain.toString()] + byteLength * GAS_PER_BYTE;
-  } else {
-    // Solana
-    // TODO: Update computePrice, gasLimitBudget, minGasLimitRequired
-    const computePrice = 1;
-    gasLimitBudget = (egressBudgetAmount - LAMPORTS_PER_SOL) / computePrice;
-    minGasLimitRequired = 25_000; // this is for compute logic from the cfTester
-    console.log("minlimit", minGasLimitRequired  + BASE_GAS_OVERHEAD_BUFFER[destChain])
-    console.log("gasLimitBudget", gasLimitBudget)
+  if (destChain !== 'Solana') {
+    throw new Error(`Destination chain ${destChain} is not Solana`);
   }
+
+  const ccmMetadata = newCcmMetadata(sourceAsset, destAsset, undefined, gasBudgetFraction);
+
+  const { tag, destAddress, egressBudgetAmount } = await trackGasLimitSwap(
+    sourceAsset,
+    destAsset,
+    ccmMetadata,
+    testTag,
+  );
+
+  // TODO: Update computePrice, gasLimitBudget, minGasLimitRequired
+  const computePrice = 1;
+  const gasLimitBudget = (egressBudgetAmount - LAMPORTS_PER_SOL) / computePrice;
+  const minGasLimitRequired = 25_000; // this is for compute logic from the cfTester
+
+  const solanaBaseComputeOverHead = getBaseGasOverheadBuffer(destChain);
+
+  // TODO: Add deficit tracking regardless of the options? Maybe that's how we make sure it's broadcasted
+  if (minGasLimitRequired - solanaBaseComputeOverHead >= gasLimitBudget) {
+    // TODO: Handle this case for Solana - no broadcast aborted but rather reverted tx
+  } else if (minGasLimitRequired + solanaBaseComputeOverHead < gasLimitBudget) {
+    // Expecting success
+    const txHash = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
+
+    // TODO: Check transaction parameters
+    // TODO: Check instruction's set compute limit?
+    // TODO: Check broadcast compyte limit of 14M
+    console.log(`${tag} CCM event emitted!`);
+    console.log(`${tag} Swap success! TxHash: ${txHash}!`);
+  }
+}
+
+const usedNumbers = new Set<number>();
+// Minimum and maximum gas consumption values to be in a useful range for testing.
+const MIN_TEST_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 200000, Arbitrum: 1000000 };
+const MAX_TEST_GAS_CONSUMPTION: Record<string, number> = {
+  Ethereum: 4000000,
+  Arbitrum: 6000000,
+};
+
+async function testGasLimitSwapToEvm(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  testTag?: string,
+  gasBudgetFraction?: number,
+  gasToConsume?: number,
+) {
+  const destChain = chainFromAsset(destAsset);
+
+  if (destChain !== 'Arbitrum' && destChain !== 'Ethereum') {
+    throw new Error(`Destination chain ${destChain} is not Ethereum nor Arbitrum`);
+  }
+
+  // Increase the gas consumption to make sure all the messages are unique
+  const gasConsumption = gasToConsume ?? DEFAULT_GAS_CONSUMPTION[destChain.toString()]++;
+
+  const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
+
+  const ccmMetadata = newCcmMetadata(
+    sourceAsset,
+    destAsset,
+    web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
+    gasBudgetFraction,
+  );
+
+  const { tag, destAddress, egressBudgetAmount, broadcastId, txPayload } = await trackGasLimitSwap(
+    sourceAsset,
+    destAsset,
+    ccmMetadata,
+    testTag,
+  );
+
+  const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
+  const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
+  const byteLength = Web3.utils.hexToBytes(ccmMetadata.message).length;
+  const minGasLimitRequired =
+    gasConsumption + getMinGasOverhead(destChain) + byteLength * EVM_GAS_PER_BYTE;
+
+  const evmBaseComputeOverHead = getBaseGasOverheadBuffer(destChain);
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
-  if (minGasLimitRequired  + BASE_GAS_OVERHEAD_BUFFER[destChain] >= gasLimitBudget) {
+  if (minGasLimitRequired - evmBaseComputeOverHead >= gasLimitBudget) {
     let stopObservingCcmReceived = false;
 
-    // TODO: In Solana it won't abort, it should be sent and it should fail. To check and update.
     console.log(
       `${tag} Gas budget of ${gasLimitBudget} is too low. Expecting BroadcastAborted event. Time to wait for CCM event`,
     );
@@ -252,7 +315,7 @@ async function testGasLimitSwap(
       sourceAsset,
       destAsset,
       destAddress,
-      messageMetadata,
+      ccmMetadata,
       undefined,
       () => stopObservingCcmReceived,
     ).then((event) => {
@@ -265,15 +328,11 @@ async function testGasLimitSwap(
       `${tag} Gas budget of ${gasLimitBudget} is too low. Expecting BroadcastAborted event.`,
     );
     await observeEvent(`${destChain.toLowerCase()}Broadcaster:BroadcastAborted`, {
-      test: (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
+      test: (event) => event.data.broadcastId === broadcastId,
     }).event;
     stopObservingCcmReceived = true;
-    console.log(
-      `${tag} Broadcast Aborted found! broadcastId: ${
-        egressIdToBroadcastId[swapIdToEgressId[swapId]]
-      }`,
-    );
-  } else if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain] < gasLimitBudget) {
+    console.log(`${tag} Broadcast Aborted found! broadcastId: ${broadcastId}`);
+  } else if (minGasLimitRequired + evmBaseComputeOverHead < gasLimitBudget) {
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
     // Check that broadcast is not aborted
@@ -281,14 +340,13 @@ async function testGasLimitSwap(
       `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
       {
         test: (event) => {
-          const aborted =
-            event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]];
+          const aborted = event.data.broadcastId === broadcastId;
           if (aborted) {
             console.log(
               `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${
                 event.data.broadcastId
               }. Gas budget: ${gasLimitBudget} while limit is ${
-                minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain]
+                minGasLimitRequired + evmBaseComputeOverHead
               }!`,
             );
           }
@@ -301,15 +359,10 @@ async function testGasLimitSwap(
     console.log(`${tag} Waiting for CCM event...`);
 
     // Expecting success
-    const ccmReceived = await observeCcmReceived(
-      sourceAsset,
-      destAsset,
-      destAddress,
-      messageMetadata,
-    );
-    // if (ccmReceived?.returnValues.ccmTestGasUsed < gasConsumption) {
-    //   throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
-    // }
+    const ccmReceived = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
+    if (ccmReceived?.returnValues.ccmTestGasUsed < gasConsumption) {
+      throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
+    }
 
     console.log(`${tag} CCM event emitted!`);
 
@@ -318,52 +371,76 @@ async function testGasLimitSwap(
 
     console.log(`${tag} Broadcast failure stopped!`);
 
-    // const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
-    // const receipt = await web3.eth.getTransactionReceipt(ccmReceived?.txHash as string);
-    // const tx = await web3.eth.getTransaction(ccmReceived?.txHash as string);
-    // const gasUsed = receipt.gasUsed;
-    // const gasPrice = tx.gasPrice;
-    // const totalFee = gasUsed * Number(gasPrice);
+    const receipt = await web3.eth.getTransactionReceipt(ccmReceived?.txHash as string);
+    const tx = await web3.eth.getTransaction(ccmReceived?.txHash as string);
+    const gasUsed = receipt.gasUsed;
+    const gasPrice = tx.gasPrice;
+    const totalFee = gasUsed * Number(gasPrice);
 
-    // const feeDeficitHandle = observeEvent(
-    //   `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
-    //   { test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee },
-    // );
+    const feeDeficitHandle = observeEvent(
+      `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
+      { test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee },
+    );
 
-    // if (tx.maxFeePerGas !== maxFeePerGas.toString()) {
-    //   throw new Error(
-    //     `${tag} Tx Max fee per gas ${tx.maxFeePerGas} different than expected ${maxFeePerGas}`,
-    //   );
-    // }
-    // if (tx.gas !== Math.min(gasLimitBudget, CFE_GAS_LIMIT_CAP[destChain])) {
-    //   throw new Error(`${tag} Tx gas limit ${tx.gas} different than expected ${gasLimitBudget}`);
-    // }
-    // // This should not happen by definition, as maxFeePerGas * gasLimit < egressBudgetAmount
-    // if (totalFee > egressBudgetAmount) {
-    //   throw new Error(
-    //     `${tag} Transaction fee paid is higher than the budget paid by the user! totalFee: ${totalFee} egressBudgetAmount: ${egressBudgetAmount}`,
-    //   );
-    // }
-    console.log(`${tag} Swap success! TxHash: ${typeof ccmReceived === 'string' ? ccmReceived :ccmReceived?.txHash as string}!`);
+    if (tx.maxFeePerGas !== maxFeePerGas.toString()) {
+      throw new Error(
+        `${tag} Tx Max fee per gas ${tx.maxFeePerGas} different than expected ${maxFeePerGas}`,
+      );
+    }
+    if (tx.gas !== Math.min(gasLimitBudget, getEngineBroadcastLimit(destChain))) {
+      throw new Error(`${tag} Tx gas limit ${tx.gas} different than expected ${gasLimitBudget}`);
+    }
+    // This should not happen by definition, as maxFeePerGas * gasLimit < egressBudgetAmount
+    if (totalFee > egressBudgetAmount) {
+      throw new Error(
+        `${tag} Transaction fee paid is higher than the budget paid by the user! totalFee: ${totalFee} egressBudgetAmount: ${egressBudgetAmount}`,
+      );
+    }
+    console.log(
+      `${tag} Swap success! TxHash: ${typeof ccmReceived === 'string' ? ccmReceived : (ccmReceived?.txHash as string)}!`,
+    );
 
-    // console.log(`${tag} Waiting for a fee deficit to be recorded...`);
-    // await feeDeficitHandle.event;
-    // console.log(`${tag} Fee deficit recorded!`);
+    console.log(`${tag} Waiting for a fee deficit to be recorded...`);
+    await feeDeficitHandle.event;
+    console.log(`${tag} Fee deficit recorded!`);
   } else {
     console.log(`${tag} Budget too tight, can't determine if swap should succeed.`);
   }
 }
 
-const usedNumbers = new Set<number>();
+async function getEvmChainFees(chain: Chain) {
+  const trackedData = (
+    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
+  ).data.newChainState.trackedData;
 
-function getRandomGasConsumption(chain: Chain): number {
-  const range = MAX_TEST_GAS_CONSUMPTION[chain] - MIN_TEST_GAS_CONSUMPTION[chain] + 1;
-  let randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION[chain];
-  while (usedNumbers.has(randomInt)) {
-    randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION[chain];
+  const baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
+
+  // Arbitrum doesn't have priority fee
+  let priorityFee = 0;
+  if (chain !== 'Arbitrum') {
+    priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
   }
-  usedNumbers.add(randomInt);
-  return randomInt;
+
+  return { baseFee, priorityFee };
+}
+
+async function testRandomConsumptionTestEvm(sourceAsset: Asset, destAsset: Asset) {
+  function getRandomGasConsumption(chain: Chain): number {
+    const range = MAX_TEST_GAS_CONSUMPTION[chain] - MIN_TEST_GAS_CONSUMPTION[chain] + 1;
+    let randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION[chain];
+    while (usedNumbers.has(randomInt)) {
+      randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION[chain];
+    }
+    usedNumbers.add(randomInt);
+    return randomInt;
+  }
+
+  testGasLimitSwapToEvm(
+    sourceAsset,
+    destAsset,
+    ' randGasConsumption',
+    getRandomGasConsumption(chainFromAsset(destAsset)),
+  );
 }
 
 // Spamming to raise Ethereum's fee, otherwise it will get stuck at almost zero fee (~7 wei)
@@ -376,12 +453,12 @@ export async function testGasLimitCcmSwaps() {
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
+  const ethMinPriorityFee = getChainMinFee('Ethereum');
+  const arbMinBaseFee = getChainMinFee('Arbitrum');
   while (
-    (await getEvmChainFees('Ethereum')).priorityFee < MIN_FEE.Ethereum ||
-    (await getEvmChainFees('Arbitrum')).baseFee < MIN_FEE.Arbitrum
+    (await getEvmChainFees('Ethereum')).priorityFee < ethMinPriorityFee ||
+    (await getEvmChainFees('Arbitrum')).baseFee < arbMinBaseFee
   ) {
-    console.log('Arbitrum fees', await getEvmChainFees('Arbitrum'));
-    console.log('Ethereum fees', await getEvmChainFees('Ethereum'));
     if (++i > LOOP_TIMEOUT) {
       spam = false;
       await spammingEth;
@@ -395,59 +472,55 @@ export async function testGasLimitCcmSwaps() {
   // TODO: Modify this so we don't have to pass the chain to getRandomGasConsumption that
   // matches the destination address. It should do it automatically.
   const gasLimitSwapsDefault = [
-    // testGasLimitSwap('Dot', 'Flip', undefined, getRandomGasConsumption('Ethereum')),
-    // testGasLimitSwap('Eth', 'Usdc', undefined, getRandomGasConsumption('Ethereum')),
-    // testGasLimitSwap('Eth', 'Usdt', undefined, getRandomGasConsumption('Ethereum')),
-    // testGasLimitSwap('Flip', 'Eth', undefined, getRandomGasConsumption('Ethereum')),
-    // testGasLimitSwap('Btc', 'Eth', undefined, getRandomGasConsumption('Ethereum')),
-    // testGasLimitSwap('Dot', 'ArbEth', undefined, getRandomGasConsumption('Arbitrum')),
-    // testGasLimitSwap('Eth', 'ArbUsdc', undefined, getRandomGasConsumption('Arbitrum')),
-    // testGasLimitSwap('Flip', 'ArbEth', undefined, getRandomGasConsumption('Arbitrum')),
-    // testGasLimitSwap('ArbEth', 'Eth', undefined, getRandomGasConsumption('Arbitrum')),
-    // testGasLimitSwap('Btc', 'Sol', undefined, getRandomGasConsumption('Solana')),
-    // testGasLimitSwap('Dot', 'Sol', undefined, getRandomGasConsumption('Solana')),
-    // testGasLimitSwap('ArbUsdc', 'SolUsdc', undefined, getRandomGasConsumption('Solana')),
-    // testGasLimitSwap('Eth', 'SolUsdc', undefined, getRandomGasConsumption('Solana')),
+    testRandomConsumptionTestEvm('Dot', 'Flip'),
+    testRandomConsumptionTestEvm('Eth', 'Usdc'),
+    testRandomConsumptionTestEvm('Eth', 'Usdt'),
+    testRandomConsumptionTestEvm('Flip', 'Eth'),
+    testRandomConsumptionTestEvm('Btc', 'Eth'),
+    testRandomConsumptionTestEvm('Dot', 'ArbEth'),
+    testRandomConsumptionTestEvm('Eth', 'ArbUsdc'),
+    testRandomConsumptionTestEvm('Flip', 'ArbEth'),
+    testRandomConsumptionTestEvm('ArbEth', 'Eth'),
   ];
 
   // Gas budget to 10% of the default swap amount, which should be enough
   const gasLimitSwapsSufBudget = [
-    // testGasLimitSwap('Dot', 'Usdc', ' sufBudget', undefined, 10),
-    // testGasLimitSwap('Usdc', 'Eth', ' sufBudget', undefined, 10),
-    // testGasLimitSwap('Flip', 'Usdt', ' sufBudget', undefined, 10),
-    // testGasLimitSwap('Usdt', 'Eth', ' sufBudget', undefined, 10),
-    // testGasLimitSwap('Btc', 'Flip', ' sufBudget', undefined, 10),
-    // testGasLimitSwap('Dot', 'ArbEth', ' sufBudget', undefined, 10),
-    // testGasLimitSwap('Eth', 'ArbUsdc', ' sufBudget', undefined, 10),
-    // testGasLimitSwap('ArbEth', 'Flip', ' sufBudget', undefined, 10),
-    // testGasLimitSwap('Btc', 'ArbUsdc', ' sufBudget', undefined, 10),
-    // testGasLimitSwap('Eth', 'ArbEth', ' sufBudget', undefined, 10),
-    // testGasLimitSwap('ArbUsdc', 'Flip', ' sufBudget', undefined, 10),
+    testGasLimitSwapToEvm('Dot', 'Usdc', ' sufBudget', 10),
+    testGasLimitSwapToEvm('Usdc', 'Eth', ' sufBudget', 10),
+    testGasLimitSwapToEvm('Flip', 'Usdt', ' sufBudget', 10),
+    testGasLimitSwapToEvm('Usdt', 'Eth', ' sufBudget', 10),
+    testGasLimitSwapToEvm('Btc', 'Flip', ' sufBudget', 10),
+    testGasLimitSwapToEvm('Dot', 'ArbEth', ' sufBudget', 10),
+    testGasLimitSwapToEvm('Eth', 'ArbUsdc', ' sufBudget', 10),
+    testGasLimitSwapToEvm('ArbEth', 'Flip', ' sufBudget', 10),
+    testGasLimitSwapToEvm('Btc', 'ArbUsdc', ' sufBudget', 10),
+    testGasLimitSwapToEvm('Eth', 'ArbEth', ' sufBudget', 10),
+    testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' sufBudget', 10),
 
-    testGasLimitSwap('Btc', 'Sol', undefined, 10),
-    testGasLimitSwap('Dot', 'Sol', undefined, 10),
-    testGasLimitSwap('ArbUsdc', 'SolUsdc', undefined, 10),
-    testGasLimitSwap('Eth', 'SolUsdc', undefined, 10),
+    testGasLimitSwapToSolana('Btc', 'Sol', ' sufBudget', 10),
+    testGasLimitSwapToSolana('Dot', 'Sol', ' sufBudget', 10),
+    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' sufBudget', 10),
+    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' sufBudget', 10),
   ];
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to
   // panic when not in release due to zero swap input amount. So for now we provide the minimum so it gets swapped to just > 0.
   const gasLimitSwapsInsufBudget = [
-    // testGasLimitSwap('Dot', 'Flip', ' insufBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('Eth', 'Usdc', ' insufBudget', undefined, 10 ** 8),
-    // testGasLimitSwap('Eth', 'Usdt', ' insufBudget', undefined, 10 ** 8),
-    // testGasLimitSwap('Flip', 'Eth', ' insufBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('Btc', 'Eth', ' insufBudget', undefined, 10 ** 5),
-    // testGasLimitSwap('Dot', 'ArbUsdc', ' insufBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('Eth', 'ArbEth', ' insufBudget', undefined, 10 ** 8),
-    // testGasLimitSwap('Flip', 'ArbUsdc', ' insufBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('Btc', 'ArbEth', ' insufBudget', undefined, 10 ** 5),
-    // testGasLimitSwap('ArbEth', 'Eth', ' insufBudget', undefined, 10 ** 6),
-    // testGasLimitSwap('ArbUsdc', 'Flip', ' insufBudget', undefined, 10 ** 5),
-    // testGasLimitSwap('Btc', 'Sol', undefined, 10 ** 6),
-    // testGasLimitSwap('Dot', 'Sol', undefined, 10 ** 6),
-    // testGasLimitSwap('ArbUsdc', 'SolUsdc', undefined, 10 ** 6),
-    // testGasLimitSwap('Eth', 'SolUsdc', undefined, 10 ** 6),
+    testGasLimitSwapToEvm('Dot', 'Flip', ' insufBudget', 10 ** 6),
+    testGasLimitSwapToEvm('Eth', 'Usdc', ' insufBudget', 10 ** 8),
+    testGasLimitSwapToEvm('Eth', 'Usdt', ' insufBudget', 10 ** 8),
+    testGasLimitSwapToEvm('Flip', 'Eth', ' insufBudget', 10 ** 6),
+    testGasLimitSwapToEvm('Btc', 'Eth', ' insufBudget', 10 ** 5),
+    testGasLimitSwapToEvm('Dot', 'ArbUsdc', ' insufBudget', 10 ** 6),
+    testGasLimitSwapToEvm('Eth', 'ArbEth', ' insufBudget', 10 ** 8),
+    testGasLimitSwapToEvm('Flip', 'ArbUsdc', ' insufBudget', 10 ** 6),
+    testGasLimitSwapToEvm('Btc', 'ArbEth', ' insufBudget', 10 ** 5),
+    testGasLimitSwapToEvm('ArbEth', 'Eth', ' insufBudget', 10 ** 6),
+    testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' insufBudget', 10 ** 5),
+    // testGasLimitSwapToSolana('Btc', 'Sol', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToSolana('Dot', 'Sol', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToSolana('Eth', 'SolUsdc', ' insufBudget', 10 ** 6),
   ];
 
   await Promise.all([

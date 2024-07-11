@@ -685,7 +685,7 @@ export async function observeSolanaCcmEvent(
               remainingAccounts: expectedRemainingAccounts,
               remainingIsWritable: expectedRemainingIsWritable,
             } = decodeExpectedCfParameters(messageMetadata.cfParameters);
-            
+
             if (
               expectedRemainingIsWritable.length !== event.data.remaining_is_writable.length ||
               expectedRemainingIsWritable.toString() !== event.data.remaining_is_writable.toString()
