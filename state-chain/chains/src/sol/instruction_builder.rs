@@ -29,6 +29,8 @@ use crate::{
 };
 use sp_std::{vec, vec::Vec};
 
+use super::LAMPORTS_PER_SIGNATURE;
+
 fn system_program_id() -> SolAddress {
 	SYSTEM_PROGRAM_ID
 }
@@ -41,9 +43,6 @@ fn token_program_id() -> SolAddress {
 	TOKEN_PROGRAM_ID
 }
 pub struct SolanaInstructionBuilder;
-
-/// TODO: Remove when PRO-1479 is completed
-const COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
 
 impl SolanaInstructionBuilder {
 	// TODO: Shares code with EVM's ExecutexSwapAndCall or make it a function of ForeignChainAddress
@@ -272,6 +271,7 @@ impl SolanaInstructionBuilder {
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
+		gas_budget: SolAmount,
 	) -> Vec<SolInstruction> {
 		let instructions = vec![
 			SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount),
@@ -291,13 +291,12 @@ impl SolanaInstructionBuilder {
 				.with_remaining_accounts(ccm_accounts.remaining_account_metas()),
 		];
 
-		// TODO: Complete in PRO-1479
 		Self::finalize(
 			instructions,
 			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
-			COMPUTE_LIMIT,
+			Self::calculate_gas_limit(gas_budget, compute_price),
 		)
 	}
 
@@ -318,6 +317,7 @@ impl SolanaInstructionBuilder {
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
 		token_decimals: u8,
+		gas_budget: SolAmount,
 	) -> Vec<SolInstruction> {
 		let instructions = vec![
 		AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
@@ -351,14 +351,25 @@ impl SolanaInstructionBuilder {
 			sys_var_instructions(),
 		).with_remaining_accounts(ccm_accounts.remaining_account_metas())];
 
-		// TODO: Complete in PRO-1479
 		Self::finalize(
 			instructions,
 			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
-			COMPUTE_LIMIT,
+			Self::calculate_gas_limit(gas_budget, compute_price),
 		)
+	}
+
+	// TODO: Add a transaction CAP => ~1.4M? Seems like tx can get mined anyway as long as they
+	// don't consume the amount.
+	fn calculate_gas_limit(gas_budget: SolAmount, compute_price: SolAmount) -> SolComputeLimit {
+		let gas_after_signature = gas_budget.saturating_sub(LAMPORTS_PER_SIGNATURE);
+		let result = if compute_price == 0 {
+			gas_after_signature
+		} else {
+			gas_after_signature / compute_price
+		};
+		result as SolComputeLimit
 	}
 }
 
@@ -633,6 +644,8 @@ mod test {
 			agg_key(),
 			nonce_account(),
 			compute_price(),
+			// TODO: Why does this doesn't match the previous code? Rounding?
+			300_000u64 * compute_price() + LAMPORTS_PER_SIGNATURE
 		);
 
 		// Serialized tx built in `create_ccm_native_transfer` test
@@ -669,6 +682,8 @@ mod test {
 			nonce_account(),
 			compute_price(),
 			SOL_USDC_DECIMAL,
+			// TODO: Why does this doesn't match the previous code? Rounding?
+			300_000u64 * compute_price() + LAMPORTS_PER_SIGNATURE
 		);
 
 		// Serialized tx built in `create_ccm_token_transfer` test
@@ -676,4 +691,6 @@ mod test {
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}
+
+	// TODO: Add test for calculate_gas_limit - normal, compute_price === 0, saturating to zero, overflowing, reaching CAP
 }

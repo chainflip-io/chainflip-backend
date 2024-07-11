@@ -117,6 +117,9 @@ pub mod compute_units_costs {
 	) -> SolComputeLimit {
 		compute_limit_value * 3 / 2
 	}
+
+	// TODO: Update this numbers because in localnet the priority fee is zero
+	// and therefore it's lacking the set_compute_unit_price instruction.
 	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 300u32;
 	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32;

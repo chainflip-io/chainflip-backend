@@ -627,8 +627,8 @@ export async function observeSolanaCcmEvent(
   sourceChain: string,
   sourceAddress: string | null,
   messageMetadata: CcmDepositMetadata,
-): Promise<undefined> {
-  function decodeCfParameters(cfParametersHex: string) {
+): Promise<string> {
+  function decodeExpectedCfParameters(cfParametersHex: string) {
     // Convert the hexadecimal string back to a byte array
     const cfParameters = new Uint8Array(
       cfParametersHex
@@ -684,13 +684,14 @@ export async function observeSolanaCcmEvent(
             const {
               remainingAccounts: expectedRemainingAccounts,
               remainingIsWritable: expectedRemainingIsWritable,
-            } = decodeCfParameters(messageMetadata.cfParameters);
+            } = decodeExpectedCfParameters(messageMetadata.cfParameters);
+            
             if (
               expectedRemainingIsWritable.length !== event.data.remaining_is_writable.length ||
               expectedRemainingIsWritable.toString() !== event.data.remaining_is_writable.toString()
             ) {
               throw new Error(
-                `Unexpected remaining is writable: ${event.data.remaining_is_writable}, expecting ${expectedRemainingIsWritable}`,
+                `Unexpected remaining account is writable: ${event.data.remaining_is_writable}, expecting ${expectedRemainingIsWritable}`,
               );
             }
 
@@ -703,7 +704,7 @@ export async function observeSolanaCcmEvent(
               expectedRemainingAccounts.toString() !== event.data.remaining_pubkeys.toString()
             ) {
               throw new Error(
-                `Unexpected remaining accounts: ${event.data.remaining_accounts}, expecting ${expectedRemainingAccounts}`,
+                `Unexpected remaining accounts: ${event.data.remaining_pubkeys}, expecting ${expectedRemainingAccounts}`,
               );
             }
 
@@ -719,7 +720,7 @@ export async function observeSolanaCcmEvent(
                 `Unexpected source address: ${event.data.source_address}, expecting empty ${Buffer.from([0])}`,
               );
             }
-            return undefined;
+            return txSignature.signature;
           }
         }
       }
@@ -736,7 +737,7 @@ export async function observeCcmReceived(
   messageMetadata: CcmDepositMetadata,
   sourceAddress?: string,
   stopObserveEvent?: () => boolean,
-): Promise<EVMEvent | undefined> {
+): Promise<EVMEvent | string | undefined> {
   const destChain = chainFromAsset(destAsset);
   switch (destChain) {
     case 'Ethereum':
