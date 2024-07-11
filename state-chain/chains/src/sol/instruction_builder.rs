@@ -8,9 +8,6 @@ use sol_prim::consts::{
 	SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
 };
 
-use sp_std::{vec, vec::Vec};
-// use cf_primitives::ForeignChain;
-
 use crate::{
 	sol::{
 		api::SolanaTransactionBuildingError,
@@ -30,6 +27,7 @@ use crate::{
 	},
 	FetchAssetParams, ForeignChainAddress,
 };
+use sp_std::{vec, vec::Vec};
 
 fn system_program_id() -> SolAddress {
 	SYSTEM_PROGRAM_ID
