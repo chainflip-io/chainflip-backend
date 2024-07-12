@@ -105,6 +105,8 @@ impl ChainCrypto for SolanaCrypto {
 }
 
 pub const LAMPORTS_PER_SIGNATURE: SolAmount = 5000u64;
+pub const MAX_COMPUTE_UNITS_PER_TRANSACTION: SolComputeLimit = 1_400_000u32;
+pub const MIN_CCM_COMPUTE_UNITS_PER_TRANSACTION: SolComputeLimit = 20_000u32;
 
 // This is to be used both for ingress/egress estimation and for setting the compute units
 // limit when crafting transactions by the State Chain.

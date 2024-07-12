@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import { InternalAsset as Asset, Chain } from '@chainflip/cli';
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
@@ -7,6 +7,7 @@ import {
   chainFromAsset,
   chainGasAsset,
   getEvmEndpoint,
+  getSolConnection,
   observeCcmReceived,
   observeSwapScheduled,
   sleep,
@@ -19,6 +20,7 @@ import { observeEvent, observeBadEvent } from './utils/substrate';
 import { CcmDepositMetadata } from './new_swap';
 
 const LOOP_TIMEOUT = 15;
+const LAMPORTS_PER_SIGNATURE = 5000;
 // Arbitrary default gas consumption values for testing.
 const DEFAULT_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 260000, Arbitrum: 3000000 };
 // The base overhead increases with message lenght. This is an approximation => BASE_GAS_OVERHEAD + messageLength * gasPerByte
@@ -235,26 +237,89 @@ async function testGasLimitSwapToSolana(
 
   // TODO: Update computePrice, gasLimitBudget, minGasLimitRequired
   const computePrice = 1;
-  const gasLimitBudget = (egressBudgetAmount - LAMPORTS_PER_SOL) / computePrice;
-  const minGasLimitRequired = 25_000; // this is for compute logic from the cfTester
+
+  const gasLimitBudget = Math.max(0, egressBudgetAmount - LAMPORTS_PER_SIGNATURE) / computePrice;
+  const minGasLimitRequired = 80_000; // this is for compute logic from the cfTester
 
   const solanaBaseComputeOverHead = getBaseGasOverheadBuffer(destChain);
 
-  // TODO: Add deficit tracking regardless?
-  if (minGasLimitRequired - solanaBaseComputeOverHead >= gasLimitBudget) {
-    // TODO: Handle this case for Solana - no broadcast aborted but rather reverted tx
-    console.log(
-      `${tag} Gas too low, transaction expected to revert. Not checking anything for now`,
-    );
-  } else if (minGasLimitRequired + solanaBaseComputeOverHead < gasLimitBudget) {
-    // Expecting success
-    const txHash = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
+  const connection = getSolConnection();
 
-    // TODO: Check transaction parameters
-    // TODO: Check instruction's set compute limit?
-    // TODO: Check broadcast compyte limit of 14M
+  if (minGasLimitRequired >= gasLimitBudget + solanaBaseComputeOverHead) {
+    console.log(`${tag} Gas too low, transaction expected to revert`);
+    // TODO: Seems like for failed tx's due to not enough compute budget is not getting included.
+    // I have seen some but it doesn't seem to work. It's not a problem with the broadcasting.
+    // We could also have deficit tracking for this case but we can't do it until this issue is
+    // resolved. If that is resolved then the deficit logic can be shared outside this statement
+    throw new Error("This scenario won't work for now");
+
+    let confirmedSignaturesInfo;
+    let attempts = 0;
+    let transaction;
+
+    while (attempts < 20) {
+      confirmedSignaturesInfo = await connection.getSignaturesForAddress(
+        new PublicKey(destAddress),
+        undefined,
+        'finalized',
+      );
+      if (confirmedSignaturesInfo.length > 0) {
+        if (confirmedSignaturesInfo.length > 1) {
+          throw new Error('More than 1 signature found');
+        }
+        transaction = await connection.getTransaction(confirmedSignaturesInfo[0].signature, {
+          commitment: 'confirmed',
+        });
+        if (transaction !== null) {
+          // This doesn't throw an error, for now it's fine to print it.
+          if (transaction?.meta?.err === null) {
+            throw new Error('Transaction should have reverted');
+          }
+          break;
+        }
+        await sleep(1000);
+        attempts++;
+      }
+    }
+
+    if (transaction === null) {
+      throw new Error('Transaction not found');
+    }
+  } else if (minGasLimitRequired + solanaBaseComputeOverHead < gasLimitBudget) {
+    console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
+
+    const txHash = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
     console.log(`${tag} CCM event emitted!`);
-    console.log(`${tag} Swap success! TxHash: ${txHash}!`);
+
+    const transaction = await connection.getTransaction(txHash as string, {
+      commitment: 'confirmed',
+    });
+    // Checking that the compute limit is set correctly (and < MAX_CAP) is cumbersome without manually parsing instructions
+    const totalFee =
+      transaction?.meta?.fee ??
+      (() => {
+        throw new Error('Transaction, meta, or fee is null or undefined');
+      })();
+    if (transaction?.meta?.err !== null) {
+      throw new Error(`${tag} Transaction should not have reverted!`);
+    }
+    const feeDeficitHandle = observeEvent(
+      `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
+      { test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee },
+    );
+
+    // This should not happen by definition, as maxFeePerGas * gasLimit < egressBudgetAmount
+    if (totalFee > egressBudgetAmount) {
+      throw new Error(
+        `${tag} Transaction fee paid is higher than the budget paid by the user! totalFee: ${totalFee} egressBudgetAmount: ${egressBudgetAmount}`,
+      );
+    }
+    console.log(`${tag} CCM Swap success! TxHash: ${txHash}!`);
+    console.log(`${tag} Waiting for a fee deficit to be recorded...`);
+    await feeDeficitHandle.event;
+    console.log(`${tag} Fee deficit recorded!`);
+  } else {
+    console.log(`${tag} Budget too tight, can't determine if swap should succeed.`);
   }
 }
 
@@ -306,7 +371,8 @@ async function testGasLimitSwapToEvm(
 
   const evmBaseComputeOverHead = getBaseGasOverheadBuffer(destChain);
   // This is a very rough approximation for the gas limit required. A buffer is added to account for that.
-  if (minGasLimitRequired - evmBaseComputeOverHead >= gasLimitBudget) {
+
+  if (minGasLimitRequired >= gasLimitBudget + evmBaseComputeOverHead) {
     let stopObservingCcmReceived = false;
 
     console.log(
@@ -474,10 +540,7 @@ export async function testGasLimitCcmSwaps() {
     await sleep(500);
   }
 
-  // TODO: Modify this so we don't have to pass the chain to getRandomGasConsumption that
-  // matches the destination address. It should do it automatically.
   const randomConsumptionTestEvm = [
-    // TODO: Add SOL -> EVM
     testRandomConsumptionTestEvm('Dot', 'Flip'),
     testRandomConsumptionTestEvm('Eth', 'Usdc'),
     testRandomConsumptionTestEvm('Eth', 'Usdt'),
@@ -487,11 +550,12 @@ export async function testGasLimitCcmSwaps() {
     testRandomConsumptionTestEvm('Eth', 'ArbUsdc'),
     testRandomConsumptionTestEvm('Flip', 'ArbEth'),
     testRandomConsumptionTestEvm('ArbEth', 'Eth'),
+    testRandomConsumptionTestEvm('Sol', 'ArbUsdc'),
+    testRandomConsumptionTestEvm('SolUsdc', 'Eth'),
   ];
 
   // Gas budget to 10% of the default swap amount, which should be enough
   const gasLimitSwapsSufBudget = [
-    // TODO: Add SOL -> EVM
     testGasLimitSwapToEvm('Dot', 'Usdc', ' sufBudget', 10),
     testGasLimitSwapToEvm('Usdc', 'Eth', ' sufBudget', 10),
     testGasLimitSwapToEvm('Flip', 'Usdt', ' sufBudget', 10),
@@ -504,6 +568,8 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwapToEvm('Eth', 'ArbEth', ' sufBudget', 10),
     testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' sufBudget', 10),
 
+    testGasLimitSwapToEvm('Sol', 'Usdc', ' sufBudget', 10),
+    testGasLimitSwapToEvm('SolUsdc', 'ArbEth', ' sufBudget', 10),
     testGasLimitSwapToSolana('Btc', 'Sol', ' sufBudget', 10),
     testGasLimitSwapToSolana('Dot', 'Sol', ' sufBudget', 10),
     testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' sufBudget', 10),
@@ -525,10 +591,10 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwapToEvm('ArbEth', 'Eth', ' insufBudget', 10 ** 6),
     testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' insufBudget', 10 ** 5),
 
-    testGasLimitSwapToSolana('Btc', 'Sol', ' insufBudget', 5 * 10 ** 5),
-    testGasLimitSwapToSolana('Dot', 'Sol', ' insufBudget', 5 * 10 ** 6),
-    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' insufBudget', 10 ** 7),
-    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' insufBudget', 10 ** 8),
+    // testGasLimitSwapToSolana('Btc', 'Sol', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToSolana('Dot', 'Sol', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' insufBudget', 10 ** 7),
+    // testGasLimitSwapToSolana('Eth', 'SolUsdc', ' insufBudget', 10 ** 8),
   ];
 
   await Promise.all([

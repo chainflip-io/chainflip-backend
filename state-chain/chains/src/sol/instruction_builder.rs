@@ -29,7 +29,10 @@ use crate::{
 };
 use sp_std::{vec, vec::Vec};
 
-use super::LAMPORTS_PER_SIGNATURE;
+use super::{
+	LAMPORTS_PER_SIGNATURE, MAX_COMPUTE_UNITS_PER_TRANSACTION,
+	MIN_CCM_COMPUTE_UNITS_PER_TRANSACTION,
+};
 
 fn system_program_id() -> SolAddress {
 	SYSTEM_PROGRAM_ID
@@ -75,7 +78,6 @@ impl SolanaInstructionBuilder {
 			final_instructions
 				.push(ComputeBudgetInstruction::set_compute_unit_price(compute_price));
 		}
-
 		final_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(compute_limit));
 
 		final_instructions.append(&mut instructions);
@@ -360,16 +362,22 @@ impl SolanaInstructionBuilder {
 		)
 	}
 
-	// TODO: Add a transaction CAP => ~1.4M? Seems like tx can get mined anyway as long as they
-	// don't consume the amount.
-	fn calculate_gas_limit(gas_budget: SolAmount, compute_price: SolAmount) -> SolComputeLimit {
+	pub fn calculate_gas_limit(gas_budget: SolAmount, compute_price: SolAmount) -> SolComputeLimit {
 		let gas_after_signature = gas_budget.saturating_sub(LAMPORTS_PER_SIGNATURE);
 		let result = if compute_price == 0 {
 			gas_after_signature
 		} else {
 			gas_after_signature / compute_price
 		};
-		result as SolComputeLimit
+		let capped_result =
+			std::cmp::min(result as SolComputeLimit, MAX_COMPUTE_UNITS_PER_TRANSACTION);
+		// TODO: Do we actually want/need a minimum?
+		std::cmp::max(capped_result, MIN_CCM_COMPUTE_UNITS_PER_TRANSACTION)
+		// TODO: Why is this not being applied?!
+		// TODO: Try hardcoding it back to COMPUTE_LIMIT.
+		// Actually, debug why tests were not passing below, that might give us a clue!!
+
+		// 200_000u32 as SolComputeLimit
 	}
 }
 
@@ -393,6 +401,8 @@ mod test {
 		consts::{MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL},
 		DerivedAta,
 	};
+
+	const COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
 
 	fn get_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -623,6 +633,26 @@ mod test {
 	}
 
 	#[test]
+	fn can_calculate_gas_limit() {
+		let mut tx_compute_limit = SolanaInstructionBuilder::calculate_gas_limit(
+			COMPUTE_LIMIT as u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
+			compute_price(),
+		);
+		assert_eq!(tx_compute_limit, COMPUTE_LIMIT);
+		tx_compute_limit = SolanaInstructionBuilder::calculate_gas_limit(
+			MAX_COMPUTE_UNITS_PER_TRANSACTION as u64 + LAMPORTS_PER_SIGNATURE + 1,
+			1,
+		);
+		assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_TRANSACTION);
+		tx_compute_limit = SolanaInstructionBuilder::calculate_gas_limit(
+			MIN_CCM_COMPUTE_UNITS_PER_TRANSACTION as u64 + LAMPORTS_PER_SIGNATURE -
+				LAMPORTS_PER_SIGNATURE * 3,
+			1,
+		);
+		assert_eq!(tx_compute_limit, MIN_CCM_COMPUTE_UNITS_PER_TRANSACTION);
+	}
+
+	#[test]
 	fn can_create_ccm_native_instruction_set() {
 		let ccm_param = ccm_parameter();
 		let transfer_param = TransferAssetParams::<Solana> {
@@ -645,7 +675,7 @@ mod test {
 			nonce_account(),
 			compute_price(),
 			// TODO: Why does this doesn't match the previous code? Rounding?
-			300_000u64 * compute_price() + LAMPORTS_PER_SIGNATURE
+			300_000u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
 		);
 
 		// Serialized tx built in `create_ccm_native_transfer` test
@@ -683,7 +713,7 @@ mod test {
 			compute_price(),
 			SOL_USDC_DECIMAL,
 			// TODO: Why does this doesn't match the previous code? Rounding?
-			300_000u64 * compute_price() + LAMPORTS_PER_SIGNATURE
+			300_000u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
 		);
 
 		// Serialized tx built in `create_ccm_token_transfer` test
@@ -692,5 +722,6 @@ mod test {
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}
 
-	// TODO: Add test for calculate_gas_limit - normal, compute_price === 0, saturating to zero, overflowing, reaching CAP
+	// TODO: Add test for calculate_gas_limit - normal, compute_price === 0, saturating to zero,
+	// overflowing, reaching CAP
 }
