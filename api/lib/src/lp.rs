@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::{H256, U256};
 use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
+use utilities::dynamic_events::{DynamicRuntimeEvent, JsonExt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -77,74 +78,111 @@ pub mod types {
 }
 
 fn collect_range_order_returns(
-	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
-) -> Vec<types::RangeOrder> {
+	events: impl IntoIterator<Item = DynamicRuntimeEvent>,
+) -> Result<Vec<types::RangeOrder>> {
 	events
 		.into_iter()
-		.filter_map(|event| match event {
-			state_chain_runtime::RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::RangeOrderUpdated {
-					size_change,
-					liquidity_total,
-					collected_fees,
-					tick_range,
-					base_asset,
-					quote_asset,
-					id,
-					..
-				},
-			) => Some(types::RangeOrder {
-				base_asset,
-				quote_asset,
-				id: id.into(),
-				size_change: size_change.map(|increase_or_decrese| {
-					increase_or_decrese.map(|range_order_change| types::RangeOrderChange {
-						liquidity: range_order_change.liquidity.into(),
-						amounts: range_order_change.amounts.map(|amount| amount.into()),
-					})
-				}),
-				liquidity_total: liquidity_total.into(),
-				tick_range,
-				collected_fees: collected_fees.map(Into::into),
-			}),
-			_ => None,
+		.filter_map(|e| e.pallet_event("LiquidityPools", "RangeOrderUpdated"))
+		.map(|event| {
+			Ok(types::RangeOrder {
+				base_asset: event["base_asset"].try_deserialize_into()?,
+				quote_asset: event["quote_asset"].try_deserialize_into()?,
+				id: event["id"].try_deserialize_into()?,
+				size_change: event["size_change"]
+					// TODO: this probably won't work because it was encoded via SCALE rather than
+					// directly from the source type (eg. snake_case isn't respected during
+					// encoding).
+					.try_deserialize_into::<Option<IncreaseOrDecrease<types::RangeOrderChange>>>()?
+					.map(|increase_or_decrease| {
+						increase_or_decrease.map(|range_order_change| types::RangeOrderChange {
+							liquidity: range_order_change.liquidity,
+							amounts: range_order_change.amounts,
+						})
+					}),
+				liquidity_total: event["liquidity_total"].try_deserialize_into()?,
+				tick_range: event["tick_range"].try_deserialize_into()?,
+				collected_fees: event["collected_fees"].try_deserialize_into()?,
+			})
 		})
+		// |event| match event {
+		// state_chain_runtime::RuntimeEvent::LiquidityPools(
+		// 	pallet_cf_pools::Event::RangeOrderUpdated {
+		// 		size_change,
+		// 		liquidity_total,
+		// 		collected_fees,
+		// 		tick_range,
+		// 		base_asset,
+		// 		quote_asset,
+		// 		id,
+		// 		..
+		// 	},
+		// 	) => Some(types::RangeOrder {
+		// 		base_asset,
+		// 		quote_asset,
+		// 		id: id.into(),
+		// 		size_change: size_change.map(|increase_or_decrese| {
+		// 			increase_or_decrese.map(|range_order_change| types::RangeOrderChange {
+		// 				liquidity: range_order_change.liquidity.into(),
+		// 				amounts: range_order_change.amounts.map(|amount| amount.into()),
+		// 			})
+		// 		}),
+		// 		liquidity_total: liquidity_total.into(),
+		// 		tick_range,
+		// 		collected_fees: collected_fees.map(Into::into),
+		// 	}),
+		// 	_ => None,
+		// })
 		.collect()
 }
 
 fn collect_limit_order_returns(
-	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
-) -> Vec<types::LimitOrder> {
+	events: impl IntoIterator<Item = DynamicRuntimeEvent>,
+) -> Result<Vec<types::LimitOrder>> {
 	events
 		.into_iter()
-		.filter_map(|event| match event {
-			state_chain_runtime::RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::LimitOrderUpdated {
-					sell_amount_change,
-					sell_amount_total,
-					collected_fees,
-					bought_amount,
-					tick,
-					base_asset,
-					quote_asset,
-					side,
-					id,
-					..
-				},
-			) => Some(types::LimitOrder {
-				base_asset,
-				quote_asset,
-				side,
-				id: id.into(),
-				tick,
-				sell_amount_total: sell_amount_total.into(),
-				collected_fees: collected_fees.into(),
-				bought_amount: bought_amount.into(),
-				sell_amount_change: sell_amount_change
-					.map(|increase_or_decrese| increase_or_decrese.map(|amount| amount.into())),
-			}),
-			_ => None,
+		.filter_map(|e| e.pallet_event("LiquidityPools", "LimitOrderUpdated"))
+		.map(|event| {
+			Ok(types::LimitOrder {
+				base_asset: event["base_asset"].try_deserialize_into()?,
+				quote_asset: event["quote_asset"].try_deserialize_into()?,
+				side: event["side"].try_deserialize_into()?,
+				id: event["id"].try_deserialize_into()?,
+				tick: event["tick"].try_deserialize_into()?,
+				sell_amount_total: event["sell_amount_total"].try_deserialize_into()?,
+				collected_fees: event["collected_fees"].try_deserialize_into()?,
+				bought_amount: event["bought_amount"].try_deserialize_into()?,
+				sell_amount_change: event["sell_amount_change"]
+					.try_deserialize_into::<Option<IncreaseOrDecrease<U256>>>()?,
+			})
 		})
+		// .filter_map(|event| match event {
+		// 	state_chain_runtime::RuntimeEvent::LiquidityPools(
+		// 		pallet_cf_pools::Event::LimitOrderUpdated {
+		// 			sell_amount_change,
+		// 			sell_amount_total,
+		// 			collected_fees,
+		// 			bought_amount,
+		// 			tick,
+		// 			base_asset,
+		// 			quote_asset,
+		// 			side,
+		// 			id,
+		// 			..
+		// 		},
+		// 	) => Some(types::LimitOrder {
+		// 		base_asset,
+		// 		quote_asset,
+		// 		side,
+		// 		id: id.into(),
+		// 		tick,
+		// 		sell_amount_total: sell_amount_total.into(),
+		// 		collected_fees: collected_fees.into(),
+		// 		bought_amount: bought_amount.into(),
+		// 		sell_amount_change: sell_amount_change
+		// 			.map(|increase_or_decrese| increase_or_decrese.map(|amount| amount.into())),
+		// 	}),
+		// 	_ => None,
+		// })
 		.collect()
 }
 
@@ -152,15 +190,15 @@ impl LpApi for StateChainClient {}
 
 fn into_api_wait_for_result<T>(
 	from: WaitForResult,
-	map_events: impl FnOnce(Vec<state_chain_runtime::RuntimeEvent>) -> T,
-) -> ApiWaitForResult<T> {
-	match from {
+	map_events: impl FnOnce(Vec<DynamicRuntimeEvent>) -> Result<T>,
+) -> Result<ApiWaitForResult<T>> {
+	Ok(match from {
 		WaitForResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 		WaitForResult::Details(details) => {
 			let (tx_hash, events, ..) = details;
-			ApiWaitForResult::TxDetails { tx_hash, response: map_events(events) }
+			ApiWaitForResult::TxDetails { tx_hash, response: map_events(events)? }
 		},
-	}
+	})
 }
 
 #[async_trait]
@@ -198,18 +236,13 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				let (tx_hash, events, ..) = details;
 				let encoded_address = events
 					.into_iter()
-					.find_map(|event| match event {
-						state_chain_runtime::RuntimeEvent::LiquidityProvider(
-							pallet_cf_lp::Event::LiquidityDepositAddressReady {
-								deposit_address,
-								..
-							},
-						) => Some(deposit_address),
-						_ => None,
+					.find_map(|e| {
+						e.pallet_event("LiquidityProvider", "LiquidityDepositAddressReady")
 					})
 					.ok_or_else(|| {
 						anyhow::anyhow!("No LiquidityDepositAddressReady event was found")
-					})?;
+					})
+					.and_then(|e| e["deposit_address"].try_deserialize_into())?;
 
 				ApiWaitForResult::TxDetails { tx_hash, response: encoded_address }
 			},
@@ -240,15 +273,9 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				let (tx_hash, events, ..) = details;
 				let egress_id = events
 					.into_iter()
-					.find_map(|event| match event {
-						state_chain_runtime::RuntimeEvent::LiquidityProvider(
-							pallet_cf_lp::Event::WithdrawalEgressScheduled { egress_id, .. },
-						) => Some(egress_id),
-						_ => None,
-					})
-					.ok_or_else(|| {
-						anyhow::anyhow!("No WithdrawalEgressScheduled event was found")
-					})?;
+					.find_map(|e| e.pallet_event("LiquidityProvider", "WithdrawalEgressScheduled"))
+					.ok_or_else(|| anyhow::anyhow!("No WithdrawalEgressScheduled event was found"))
+					.and_then(|e| e["egress_id"].try_deserialize_into())?;
 
 				ApiWaitForResult::TxDetails { tx_hash, response: egress_id }
 			},
@@ -299,7 +326,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			)
 			.await?,
 			collect_range_order_returns,
-		))
+		)?)
 	}
 
 	async fn set_range_order(
@@ -325,7 +352,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			)
 			.await?,
 			collect_range_order_returns,
-		))
+		)?)
 	}
 
 	async fn update_limit_order(
@@ -400,7 +427,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				self.submit_signed_extrinsic_wait_for(call, wait_for).await?
 			},
 			collect_limit_order_returns,
-		))
+		)?)
 	}
 
 	async fn register_account(&self) -> Result<H256> {

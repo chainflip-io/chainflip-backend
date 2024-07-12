@@ -271,12 +271,11 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 					executor.clone(),
 				)))?;
 
-
-				module.merge(MonitoringApiServer::into_rpc(CustomRpc {
-					client: client.clone(),
+				module.merge(MonitoringApiServer::into_rpc(CustomRpc::new(
+					client.clone(),
 					backend.clone(),
-					executor: executor.clone(),
-				}))?;
+					executor.clone(),
+				)))?;
 
 				Ok(module)
 			};

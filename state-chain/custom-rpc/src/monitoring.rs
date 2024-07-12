@@ -73,7 +73,6 @@ pub trait MonitoringApi {
 
 macro_rules! pass_through {
 	($( $name:ident -> $result_type:ty ),+) => {
-
 		$(
 			fn $name(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<$result_type> {
 				self.client
@@ -85,7 +84,7 @@ macro_rules! pass_through {
 	};
 }
 
-impl<C, B> MonitoringApiServer for CustomRpc<C, B>
+impl<C, B, S> MonitoringApiServer for CustomRpc<C, B, S>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
 	C: sp_api::ProvideRuntimeApi<B>
@@ -95,6 +94,7 @@ where
 		+ HeaderBackend<B>
 		+ BlockchainEvents<B>,
 	C::Api: MonitoringRuntimeApi<B>,
+	S: Send + Sync + 'static,
 {
 	pass_through! {
 		cf_authorities -> AuthoritiesInfo,

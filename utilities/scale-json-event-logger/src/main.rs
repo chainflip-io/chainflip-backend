@@ -143,7 +143,7 @@ async fn decode_events_at_hash(
 		.into_iter()
 		.filter(|json_event| filter.include(json_event))
 	{
-		println!("{}", event.into_inner());
+		println!("{}", event.event().as_ref());
 	}
 
 	Ok(())
