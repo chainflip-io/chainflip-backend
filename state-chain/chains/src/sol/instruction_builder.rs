@@ -375,7 +375,8 @@ impl SolanaInstructionBuilder {
 			DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER
 		} else {
 			// Budget is in lamports, compute price is in CU/microlamport
-			(budget_after_signature / compute_price.div_ceil(MICROLAMPORT_TO_LAMPORTS)) as SolComputeLimit
+			(budget_after_signature / compute_price.div_ceil(MICROLAMPORT_TO_LAMPORTS))
+				as SolComputeLimit
 		};
 		sp_std::cmp::max(
 			sp_std::cmp::min(result, MAX_COMPUTE_UNITS_PER_TRANSACTION),
