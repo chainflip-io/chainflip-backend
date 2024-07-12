@@ -18,6 +18,7 @@ import { send } from './send';
 import { spamEvm } from './send_evm';
 import { observeEvent, observeBadEvent } from './utils/substrate';
 import { CcmDepositMetadata } from './new_swap';
+import { spamSolana } from './send_sol';
 
 const LOOP_TIMEOUT = 15;
 const LAMPORTS_PER_SIGNATURE = 5000;
@@ -33,6 +34,8 @@ function getMinGasOverhead(chain: Chain): number {
       return 100000;
     case 'Arbitrum':
       return 5200000;
+    case 'Solana':
+      return 80000;
     default:
       throw new Error(`Chain ${chain} is not supported for CCM`);
   }
@@ -71,9 +74,29 @@ function getChainMinFee(chain: Chain): number {
       return 1000000000;
     case 'Arbitrum':
       return 100000000;
+    case 'Solana':
+      return 100000000;
     default:
       throw new Error(`Chain ${chain} is not supported for CCM`);
   }
+}
+
+async function getChainFees(chain: Chain) {
+  const trackedData = (
+    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
+  ).data.newChainState.trackedData;
+
+  let baseFee = 0;
+  if (chain !== 'Solana') {
+    baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
+  }
+  // Arbitrum doesn't have priority fee
+  let priorityFee = 0;
+  if (chain !== 'Arbitrum') {
+    priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
+  }
+
+  return { baseFee, priorityFee };
 }
 
 async function trackGasLimitSwap(
@@ -233,16 +256,19 @@ async function testGasLimitSwapToSolana(
     testTag,
   );
 
-  console.log(`${tag} Finished tracking event`);
+  console.log(`${tag} Finished tracking events`);
 
-  // TODO: Update computePrice, gasLimitBudget, minGasLimitRequired
-  const computePrice = 1;
+  const { priorityFee: computePrice } = await getChainFees('Solana');
 
-  const gasLimitBudget = Math.max(0, egressBudgetAmount - LAMPORTS_PER_SIGNATURE) / computePrice;
-  const minGasLimitRequired = 80_000; // this is for compute logic from the cfTester
+  if (computePrice === 0) {
+    throw new Error('Compute price shouldnt be 0');
+  }
+  const gasLimitBudget = Math.floor(
+    Math.max(0, egressBudgetAmount - LAMPORTS_PER_SIGNATURE) / Math.ceil(computePrice / 10 ** 6),
+  );
 
+  const minGasLimitRequired = getMinGasOverhead('Solana');
   const solanaBaseComputeOverHead = getBaseGasOverheadBuffer(destChain);
-
   const connection = getSolConnection();
 
   if (minGasLimitRequired >= gasLimitBudget + solanaBaseComputeOverHead) {
@@ -472,22 +498,6 @@ async function testGasLimitSwapToEvm(
   }
 }
 
-async function getEvmChainFees(chain: Chain) {
-  const trackedData = (
-    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
-  ).data.newChainState.trackedData;
-
-  const baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
-
-  // Arbitrum doesn't have priority fee
-  let priorityFee = 0;
-  if (chain !== 'Arbitrum') {
-    priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
-  }
-
-  return { baseFee, priorityFee };
-}
-
 async function testRandomConsumptionTestEvm(sourceAsset: Asset, destAsset: Asset) {
   function getRandomGasConsumption(chain: Chain): number {
     const range = MAX_TEST_GAS_CONSUMPTION[chain] - MIN_TEST_GAS_CONSUMPTION[chain] + 1;
@@ -510,30 +520,46 @@ async function testRandomConsumptionTestEvm(sourceAsset: Asset, destAsset: Asset
 // Spamming to raise Ethereum's fee, otherwise it will get stuck at almost zero fee (~7 wei)
 let spam = true;
 
+async function spamChain(chain: Chain) {
+  switch (chain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+      spamEvm('Ethereum', 500, () => spam);
+      break;
+    case 'Solana':
+      spamSolana(getChainMinFee('Solana'), 100, () => spam);
+      break;
+    default:
+      throw new Error(`Chain ${chain} is not supported for CCM`);
+  }
+}
+
 export async function testGasLimitCcmSwaps() {
-  // TODO: Add Solana spamming to raise priority fees
-  // Spam chains to increase the gasLimitBudget price
-  const spammingEth = spamEvm('Ethereum', 500, () => spam);
-  const spammingArb = spamEvm('Arbitrum', 500, () => spam);
+  const spammingEth = spamChain('Ethereum');
+  const spammingArb = spamChain('Arbitrum');
+  const spammingSol = spamChain('Solana');
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
   const ethMinPriorityFee = getChainMinFee('Ethereum');
   const arbMinBaseFee = getChainMinFee('Arbitrum');
+  const solMinPrioFee = getChainMinFee('Solana');
   while (
-    (await getEvmChainFees('Ethereum')).priorityFee < ethMinPriorityFee ||
-    (await getEvmChainFees('Arbitrum')).baseFee < arbMinBaseFee
+    (await getChainFees('Ethereum')).priorityFee < ethMinPriorityFee ||
+    (await getChainFees('Arbitrum')).baseFee < arbMinBaseFee ||
+    (await getChainFees('Solana')).priorityFee < solMinPrioFee
   ) {
     if (++i > LOOP_TIMEOUT) {
       spam = false;
       await spammingEth;
       await spammingArb;
+      await spammingSol;
       console.log("=== Skipping gasLimit CCM test as the priority fee didn't increase enough. ===");
       return;
     }
     await sleep(500);
   }
-
+  console.log('Success!! Fess reached the minimum amount!');
   const randomConsumptionTestEvm = [
     testRandomConsumptionTestEvm('Dot', 'Flip'),
     testRandomConsumptionTestEvm('Eth', 'Usdc'),
@@ -600,6 +626,7 @@ export async function testGasLimitCcmSwaps() {
   spam = false;
   await spammingEth;
   await spammingArb;
+  await spammingSol;
 
   // Make sure all the spamming has stopped to avoid triggering connectivity issues when running the next test.
   await sleep(10000);

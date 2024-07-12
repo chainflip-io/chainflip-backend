@@ -372,15 +372,13 @@ impl SolanaInstructionBuilder {
 	) -> SolComputeLimit {
 		let budget_after_signature = gas_budget.saturating_sub(LAMPORTS_PER_SIGNATURE);
 		let result = if compute_price == 0 {
-			// TODO: Fix this => DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER
-			// DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER
-			budget_after_signature
+			DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER
 		} else {
 			// Budget is in lamports, compute price is in CU/microlamport
-			budget_after_signature / compute_price.div_ceil(MICROLAMPORT_TO_LAMPORTS)
+			(budget_after_signature / compute_price.div_ceil(MICROLAMPORT_TO_LAMPORTS)) as SolComputeLimit
 		};
 		sp_std::cmp::max(
-			sp_std::cmp::min(result as SolComputeLimit, MAX_COMPUTE_UNITS_PER_TRANSACTION),
+			sp_std::cmp::min(result, MAX_COMPUTE_UNITS_PER_TRANSACTION),
 			match asset {
 				SolAsset::Sol => MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
 				SolAsset::SolUsdc => MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
@@ -678,8 +676,7 @@ mod test {
 
 			tx_compute_limit =
 				SolanaInstructionBuilder::calculate_gas_limit(TEST_EGRESS_BUDGET, 0, *asset);
-			// TODO: Update this to DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER
-			assert_eq!(tx_compute_limit as u64, TEST_EGRESS_BUDGET - LAMPORTS_PER_SIGNATURE);
+			assert_eq!(tx_compute_limit, DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER);
 		}
 
 		// Test lower cap
