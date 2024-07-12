@@ -15,12 +15,12 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
