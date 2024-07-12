@@ -247,12 +247,6 @@ async function testGasLimitSwapToSolana(
 
   if (minGasLimitRequired >= gasLimitBudget + solanaBaseComputeOverHead) {
     console.log(`${tag} Gas too low, transaction expected to revert`);
-    // TODO: Seems like for failed tx's due to not enough compute budget is not getting included.
-    // I have seen some but it doesn't seem to work. It's not a problem with the broadcasting.
-    // We could also have deficit tracking for this case but we can't do it until this issue is
-    // resolved. If that is resolved then the deficit logic can be shared outside this statement
-    throw new Error("This scenario won't work for now");
-
     let confirmedSignaturesInfo;
     let attempts = 0;
     let transaction;
@@ -277,7 +271,7 @@ async function testGasLimitSwapToSolana(
           }
           break;
         }
-        await sleep(1000);
+        await sleep(2000);
         attempts++;
       }
     }
@@ -591,10 +585,10 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwapToEvm('ArbEth', 'Eth', ' insufBudget', 10 ** 6),
     testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' insufBudget', 10 ** 5),
 
-    // testGasLimitSwapToSolana('Btc', 'Sol', ' insufBudget', 10 ** 6),
-    // testGasLimitSwapToSolana('Dot', 'Sol', ' insufBudget', 10 ** 6),
-    // testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' insufBudget', 10 ** 7),
-    // testGasLimitSwapToSolana('Eth', 'SolUsdc', ' insufBudget', 10 ** 8),
+    testGasLimitSwapToSolana('Btc', 'Sol', ' insufBudget', 10 ** 6),
+    testGasLimitSwapToSolana('Dot', 'Sol', ' insufBudget', 10 ** 6),
+    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' insufBudget', 10 ** 7),
+    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' insufBudget', 10 ** 8),
   ];
 
   await Promise.all([
