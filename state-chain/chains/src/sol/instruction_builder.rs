@@ -362,7 +362,7 @@ impl SolanaInstructionBuilder {
 		)
 	}
 
-	pub fn calculate_gas_limit(gas_budget: SolAmount, compute_price: SolAmount) -> SolComputeLimit {
+	fn calculate_gas_limit(gas_budget: SolAmount, compute_price: SolAmount) -> SolComputeLimit {
 		let gas_after_signature = gas_budget.saturating_sub(LAMPORTS_PER_SIGNATURE);
 		let result = if compute_price == 0 {
 			gas_after_signature
@@ -373,10 +373,7 @@ impl SolanaInstructionBuilder {
 			std::cmp::min(result as SolComputeLimit, MAX_COMPUTE_UNITS_PER_TRANSACTION);
 		// TODO: Do we actually want/need a minimum?
 		std::cmp::max(capped_result, MIN_CCM_COMPUTE_UNITS_PER_TRANSACTION)
-		// TODO: Why is this not being applied?!
-		// TODO: Try hardcoding it back to COMPUTE_LIMIT.
-		// Actually, debug why tests were not passing below, that might give us a clue!!
-
+		// TODO: Try hardcoding it - why is it not being applied
 		// 200_000u32 as SolComputeLimit
 	}
 }
@@ -402,7 +399,8 @@ mod test {
 		DerivedAta,
 	};
 
-	const COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
+	// Arbitrary number used for testing
+	const TEST_COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
 
 	fn get_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -635,10 +633,10 @@ mod test {
 	#[test]
 	fn can_calculate_gas_limit() {
 		let mut tx_compute_limit = SolanaInstructionBuilder::calculate_gas_limit(
-			COMPUTE_LIMIT as u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
+			TEST_COMPUTE_LIMIT as u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
 			compute_price(),
 		);
-		assert_eq!(tx_compute_limit, COMPUTE_LIMIT);
+		assert_eq!(tx_compute_limit, TEST_COMPUTE_LIMIT);
 		tx_compute_limit = SolanaInstructionBuilder::calculate_gas_limit(
 			MAX_COMPUTE_UNITS_PER_TRANSACTION as u64 + LAMPORTS_PER_SIGNATURE + 1,
 			1,
@@ -674,8 +672,7 @@ mod test {
 			agg_key(),
 			nonce_account(),
 			compute_price(),
-			// TODO: Why does this doesn't match the previous code? Rounding?
-			300_000u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
+			TEST_COMPUTE_LIMIT as u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
 		);
 
 		// Serialized tx built in `create_ccm_native_transfer` test
@@ -712,8 +709,7 @@ mod test {
 			nonce_account(),
 			compute_price(),
 			SOL_USDC_DECIMAL,
-			// TODO: Why does this doesn't match the previous code? Rounding?
-			300_000u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
+			TEST_COMPUTE_LIMIT as u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
 		);
 
 		// Serialized tx built in `create_ccm_token_transfer` test
@@ -721,7 +717,4 @@ mod test {
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}
-
-	// TODO: Add test for calculate_gas_limit - normal, compute_price === 0, saturating to zero,
-	// overflowing, reaching CAP
 }
