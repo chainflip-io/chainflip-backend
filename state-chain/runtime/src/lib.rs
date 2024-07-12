@@ -1216,6 +1216,7 @@ mod benches {
 		[pallet_cf_lp, LiquidityProvider]
 		[pallet_cf_pools, LiquidityPools]
 		[pallet_cf_cfe_interface, CfeInterface]
+		[pallet_cf_asset_balances, AssetBalances]
 	);
 }
 

@@ -19,6 +19,8 @@ pub use pallet::*;
 mod mock;
 #[cfg(test)]
 mod tests;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
