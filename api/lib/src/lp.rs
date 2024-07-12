@@ -11,7 +11,8 @@ use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
 	StateChainClient,
 };
-use pallet_cf_pools::{IncreaseOrDecrease, OrderId, RangeOrderSize};
+use frame_support::{pallet_prelude::ConstU32, BoundedVec};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
 use serde::{Deserialize, Serialize};
 use sp_core::{H256, U256};
 use state_chain_runtime::RuntimeCall;
@@ -480,13 +481,14 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			.await
 	}
 
-	async fn cancel_all_orders(
+	async fn cancel_orders_batch(
 		&self,
+		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<Vec<types::Order>>> {
 		Ok(into_api_wait_for_result(
 			self.submit_signed_extrinsic_wait_for(
-				pallet_cf_pools::Call::cancel_all_orders {},
+				pallet_cf_pools::Call::cancel_orders_batch { orders },
 				wait_for,
 			)
 			.await?,

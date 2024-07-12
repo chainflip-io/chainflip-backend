@@ -8,7 +8,7 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		types::{LimitOrder, RangeOrder, Order},
+		types::{LimitOrder, Order, RangeOrder},
 		ApiWaitForResult, LpApi, PoolPairsMap, Side, Tick,
 	},
 	primitives::{
@@ -29,9 +29,11 @@ use jsonrpsee::{
 	types::SubscriptionResult,
 	SubscriptionSink,
 };
-use pallet_cf_pools::{AssetPair, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{
+	AssetPair, CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE,
+};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
-use sp_core::{H256, U256};
+use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
 use std::{
 	collections::{HashMap, HashSet},
 	ops::Range,
@@ -202,6 +204,13 @@ pub trait Rpc {
 	#[method(name = "cancel_all_orders")]
 	async fn cancel_all_orders(
 		&self,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<Vec<ApiWaitForResult<Vec<Order>>>>;
+
+	#[method(name = "cancel_orders_batch")]
+	async fn cancel_orders_batch(
+		&self,
+		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<Order>>>;
 }
@@ -512,8 +521,99 @@ impl RpcServer for RpcServerImpl {
 	async fn cancel_all_orders(
 		&self,
 		wait_for: Option<WaitFor>,
+	) -> RpcResult<Vec<ApiWaitForResult<Vec<Order>>>> {
+		let mut orders_to_delete: Vec<CloseOrder> = vec![];
+		let pool_environment = self
+			.api
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_pools_environment(None)
+			.await?;
+
+		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
+			if let Some(pool) = pool_environment.fees[base_asset] {
+				let orders = self
+					.api
+					.state_chain_client
+					.base_rpc_client
+					.raw_rpc_client
+					.cf_pool_orders(
+						base_asset,
+						pool.quote_asset,
+						Some(self.api.state_chain_client.account_id()),
+						None,
+					)
+					.await?;
+				for order in orders.range_orders {
+					orders_to_delete.push(CloseOrder::Range {
+						base_asset,
+						quote_asset: pool.quote_asset,
+						id: try_parse_number_or_hex(NumberOrHex::Hex(order.id))
+							.expect("cannot fail, u64 returned as a hex") as u64,
+					});
+				}
+				for order in orders.limit_orders.asks {
+					orders_to_delete.push(CloseOrder::Limit {
+						base_asset,
+						quote_asset: pool.quote_asset,
+						side: Side::Sell,
+						id: try_parse_number_or_hex(NumberOrHex::Hex(order.id))
+							.expect("cannot fail, u64 returned as a hex") as u64,
+					});
+				}
+				for order in orders.limit_orders.bids {
+					orders_to_delete.push(CloseOrder::Limit {
+						base_asset,
+						quote_asset: pool.quote_asset,
+						side: Side::Buy,
+						id: try_parse_number_or_hex(NumberOrHex::Hex(order.id))
+							.expect("cannot fail, u64 returned as a hex") as u64,
+					});
+				}
+			}
+		}
+		// in case there are more than 100 elements we need to split the orders into chunks of 100
+		// and submit multiple extrinsics
+		let mut extrinsic_submissions = vec![];
+		while orders_to_delete.len() > MAX_ORDERS_DELETE as usize {
+			let bounded_orders_to_delete: BoundedVec<CloseOrder, ConstU32<100>> =
+				BoundedVec::try_from(
+					orders_to_delete.drain(..MAX_ORDERS_DELETE as usize).collect::<Vec<_>>(),
+				)
+				.expect("cannot fail");
+			extrinsic_submissions.push(
+				self.api
+					.lp_api()
+					.cancel_orders_batch(bounded_orders_to_delete, wait_for.unwrap_or_default())
+					.await?,
+			);
+		}
+		if !orders_to_delete.is_empty() {
+			extrinsic_submissions.push(
+				self.api
+					.lp_api()
+					.cancel_orders_batch(
+						orders_to_delete.try_into().expect("cannot fail"),
+						wait_for.unwrap_or_default(),
+					)
+					.await?,
+			);
+		}
+
+		Ok(extrinsic_submissions)
+	}
+
+	async fn cancel_orders_batch(
+		&self,
+		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<Vec<Order>>> {
-		Ok(self.api.lp_api().cancel_all_orders(wait_for.unwrap_or_default()).await?)
+		Ok(self
+			.api
+			.lp_api()
+			.cancel_orders_batch(orders, wait_for.unwrap_or_default())
+			.await?)
 	}
 }
 

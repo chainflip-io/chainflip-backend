@@ -42,6 +42,26 @@ mod tests;
 
 impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_update_enabled);
 
+pub const MAX_ORDERS_DELETE: u32 = 100;
+#[derive(
+	serde::Serialize,
+	serde::Deserialize,
+	Copy,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialEq,
+	Eq,
+	Hash,
+)]
+#[serde(untagged)]
+pub enum CloseOrder {
+	Limit { base_asset: any::Asset, quote_asset: any::Asset, side: Side, id: OrderId },
+	Range { base_asset: any::Asset, quote_asset: any::Asset, id: OrderId },
+}
 // TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
 // nature.
 #[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq, Hash)]
@@ -488,6 +508,10 @@ pub mod pallet {
 		PriceImpactLimitSet {
 			asset_pair: AssetPair,
 			limit: Option<u32>,
+		},
+		/// An order wasn't deleted (order not found)
+		OrderDeletionFailed {
+			order: CloseOrder,
 		},
 	}
 
@@ -1004,8 +1028,11 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::cancel_all_orders())]
-		pub fn cancel_all_orders(origin: OriginFor<T>) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::cancel_orders_batch())]
+		pub fn cancel_orders_batch(
+			origin: OriginFor<T>,
+			orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		) -> DispatchResult {
 			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			ensure!(
 				T::SafeMode::get().limit_order_update_enabled,
@@ -1015,53 +1042,71 @@ pub mod pallet {
 				T::SafeMode::get().limit_order_update_enabled,
 				Error::<T>::UpdatingLimitOrdersDisabled
 			);
-			for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
-				let mut pool = Pools::<T>::get(asset_pair).unwrap();
-
-				if let Some(range_orders_cache) = pool.range_orders_cache.get(lp).cloned() {
-					for (id, range) in range_orders_cache.iter() {
-						Self::inner_update_range_order(
-							&mut pool,
-							lp,
-							&asset_pair,
-							*id,
-							range.clone(),
-							IncreaseOrDecrease::Decrease(range_orders::Size::Liquidity {
-								liquidity: Liquidity::MAX,
-							}),
-							crate::NoOpStatus::Error,
-						)?;
-					}
-				}
-
-				for (assets, limit_orders_cache) in pool
-					.limit_orders_cache
-					.as_ref()
-					.into_iter()
-					.filter_map(|(assets, limit_orders_cache)| {
-						limit_orders_cache
-							.get(lp)
-							.cloned()
-							.map(|limit_orders_cache| (assets, limit_orders_cache))
-					})
-					.collect::<Vec<_>>()
-				{
-					for (id, tick) in limit_orders_cache {
-						Self::inner_update_limit_order(
-							&mut pool,
-							lp,
-							&asset_pair,
-							assets.sell_order(),
-							id,
-							tick,
-							IncreaseOrDecrease::Decrease(cf_amm::common::Amount::MAX),
-							crate::NoOpStatus::Error,
-						)?;
-					}
-				}
-
-				Pools::<T>::insert(asset_pair, pool);
+			for order in orders {
+				match order {
+					CloseOrder::Limit { base_asset, quote_asset, side, id } => {
+						Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
+							match (pool.limit_orders_cache[side.to_sold_pair()]
+								.get(lp)
+								.and_then(|limit_orders| limit_orders.get(&id))
+								.cloned(),)
+							{
+								(None,) => {
+									Self::deposit_event(Event::<T>::OrderDeletionFailed { order });
+									Ok::<(), DispatchError>(())
+								},
+								(Some(previous_tick),) => {
+									Self::inner_update_limit_order(
+										pool,
+										lp,
+										asset_pair,
+										side,
+										id,
+										previous_tick,
+										crate::pallet::IncreaseOrDecrease::Decrease(
+											cf_amm::common::Amount::MAX,
+										),
+										crate::NoOpStatus::Allow,
+									)?;
+									Ok(())
+								},
+							}
+						})?;
+					},
+					CloseOrder::Range { base_asset, quote_asset, id } => {
+						Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
+							match (pool
+								.range_orders_cache
+								.get(lp)
+								.and_then(|range_orders| range_orders.get(&id))
+								.cloned(),)
+							{
+								(None,) => {
+									Self::deposit_event(Event::<T>::OrderDeletionFailed { order });
+									Ok::<(), DispatchError>(())
+								},
+								(Some(previous_tick_range),) => {
+									Self::inner_update_range_order(
+										pool,
+										lp,
+										asset_pair,
+										id,
+										previous_tick_range.clone(),
+										IncreaseOrDecrease::Decrease(
+											range_orders::Size::Liquidity {
+												liquidity: Liquidity::MAX,
+											},
+										),
+										NoOpStatus::Allow,
+									)?;
+									Ok(())
+								},
+							}
+						})?;
+					},
+				};
 			}
+
 			Ok(())
 		}
 	}
