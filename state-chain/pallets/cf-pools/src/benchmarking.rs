@@ -12,6 +12,7 @@ use frame_support::{
 	traits::{EnsureOrigin, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
+use sp_std::vec;
 
 fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 	let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
@@ -31,7 +32,6 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-	use frame_support::__private::bounded_vec;
 
 	#[benchmark]
 	fn update_buy_interval() {
@@ -296,7 +296,7 @@ mod benchmarks {
 		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000_000,));
 		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000_000,));
 		let mut orders_to_delete: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>> =
-			bounded_vec!();
+			vec![].try_into().unwrap();
 		for i in 1..101i32 {
 			assert_ok!(Pallet::<T>::set_range_order(
 				RawOrigin::Signed(caller.clone()).into(),
