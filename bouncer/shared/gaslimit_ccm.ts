@@ -230,7 +230,6 @@ async function trackGasLimitSwap(
     egressBudgetAmount = Number(swapIdToEgressAmount[gasSwapId].replace(/,/g, ''));
   }
 
-  console.log(`${tag} Egress budget amount: ${egressBudgetAmount}`);
   const egressId = swapIdToEgressId[swapId];
   const broadcastId = egressIdToBroadcastId[egressId];
   const txPayload = broadcastIdToTxPayload[broadcastId];
@@ -266,7 +265,7 @@ async function testGasLimitSwapToSolana(
     throw new Error('Compute price shouldnt be 0');
   }
   const gasLimitBudget = Math.floor(
-    Math.max(0, egressBudgetAmount - LAMPORTS_PER_SIGNATURE) / Math.ceil(computePrice / 10 ** 6),
+    (Math.max(0, egressBudgetAmount - LAMPORTS_PER_SIGNATURE) * 10 ** 6) / computePrice,
   );
 
   const minGasLimitRequired = getMinGasOverhead('Solana');
@@ -333,7 +332,6 @@ async function testGasLimitSwapToSolana(
       { test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee },
     );
 
-    // This should not happen by definition, as maxFeePerGas * gasLimit < egressBudgetAmount
     if (totalFee > egressBudgetAmount) {
       throw new Error(
         `${tag} Transaction fee paid is higher than the budget paid by the user! totalFee: ${totalFee} egressBudgetAmount: ${egressBudgetAmount}`,
@@ -595,10 +593,11 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' sufBudget', 10),
     testGasLimitSwapToEvm('Sol', 'Usdc', ' sufBudget', 10),
     testGasLimitSwapToEvm('SolUsdc', 'ArbEth', ' sufBudget', 10),
-    testGasLimitSwapToSolana('Btc', 'Sol', ' sufBudget', 10),
-    testGasLimitSwapToSolana('Dot', 'Sol', ' sufBudget', 10),
-    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' sufBudget', 10),
-    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' sufBudget', 10),
+    testGasLimitSwapToSolana('Usdc', 'Sol', ' sufBudget', 10),
+    testGasLimitSwapToSolana('Btc', 'Sol', ' sufBudget', 100),
+    testGasLimitSwapToSolana('Dot', 'Sol', ' sufBudget', 100),
+    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' sufBudget', 100),
+    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' sufBudget', 100),
   ];
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to

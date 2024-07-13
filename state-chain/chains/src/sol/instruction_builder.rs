@@ -379,7 +379,7 @@ impl SolanaInstructionBuilder {
 			sp_std::cmp::min(
 				MAX_COMPUTE_UNITS_PER_TRANSACTION as u128,
 				(budget_after_signature as u128 * MICROLAMPORTS_PER_LAMPORT as u128)
-					.div_ceil(compute_price as u128),
+					/ (compute_price as u128),
 			) as SolComputeLimit;
 
 		sp_std::cmp::max(
