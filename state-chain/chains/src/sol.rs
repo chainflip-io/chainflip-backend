@@ -105,7 +105,7 @@ impl ChainCrypto for SolanaCrypto {
 }
 
 // TODO: Move this values to foreign-chain
-pub const MICROLAMPORT_TO_LAMPORTS: SolAmount = 100_000u64;
+pub const MICROLAMPORTS_PER_LAMPORT: u32 = 1_000_000u32;
 pub const LAMPORTS_PER_SIGNATURE: SolAmount = 5000u64;
 pub const MAX_COMPUTE_UNITS_PER_TRANSACTION: SolComputeLimit = 1_400_000u32;
 
@@ -170,9 +170,14 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		LAMPORTS_PER_SIGNATURE +
-			(self.priority_fee.div_ceil(MICROLAMPORT_TO_LAMPORTS))
-				.saturating_mul(compute_units_per_transfer.into())
+		LAMPORTS_PER_SIGNATURE.saturating_add(
+			// It should never approach overflow but just in case
+			std::cmp::min(
+				SolAmount::MAX as u128,
+				(self.priority_fee as u128 * compute_units_per_transfer as u128)
+					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
+			) as SolAmount,
+		)
 	}
 	fn estimate_ingress_fee(
 		&self,
@@ -188,9 +193,14 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		LAMPORTS_PER_SIGNATURE +
-			(self.priority_fee.div_ceil(MICROLAMPORT_TO_LAMPORTS))
-				.saturating_mul(compute_units_per_fetch.into())
+		LAMPORTS_PER_SIGNATURE.saturating_add(
+			// It should never approach overflow but just in case
+			std::cmp::min(
+				SolAmount::MAX as u128,
+				(self.priority_fee as u128 * compute_units_per_fetch as u128)
+					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
+			) as SolAmount,
+		)
 	}
 }
 

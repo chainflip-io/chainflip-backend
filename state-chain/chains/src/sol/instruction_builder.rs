@@ -34,7 +34,7 @@ use super::{
 		DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER, MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
 		MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
 	},
-	LAMPORTS_PER_SIGNATURE, MAX_COMPUTE_UNITS_PER_TRANSACTION, MICROLAMPORT_TO_LAMPORTS,
+	LAMPORTS_PER_SIGNATURE, MAX_COMPUTE_UNITS_PER_TRANSACTION, MICROLAMPORTS_PER_LAMPORT,
 };
 
 fn system_program_id() -> SolAddress {
@@ -371,15 +371,19 @@ impl SolanaInstructionBuilder {
 		asset: SolAsset,
 	) -> SolComputeLimit {
 		let budget_after_signature = gas_budget.saturating_sub(LAMPORTS_PER_SIGNATURE);
-		let result = if compute_price == 0 {
-			DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER
-		} else {
+		if compute_price == 0 {
+			return DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER;
+		}
+		let compute_budget =
 			// Budget is in lamports, compute price is in CU/microlamport
-			(budget_after_signature / compute_price.div_ceil(MICROLAMPORT_TO_LAMPORTS))
-				as SolComputeLimit
-		};
+			std::cmp::min(
+				MAX_COMPUTE_UNITS_PER_TRANSACTION as u128,
+				(budget_after_signature as u128 * MICROLAMPORTS_PER_LAMPORT as u128)
+					.div_ceil(compute_price as u128),
+			) as SolComputeLimit;
+
 		sp_std::cmp::max(
-			sp_std::cmp::min(result, MAX_COMPUTE_UNITS_PER_TRANSACTION),
+			compute_budget,
 			match asset {
 				SolAsset::Sol => MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
 				SolAsset::SolUsdc => MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
@@ -410,7 +414,7 @@ mod test {
 	};
 
 	// Arbitrary number used for testing
-	const TEST_COMPUTE_LIMIT: SolComputeLimit = 200_000u32;
+	const TEST_COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
 
 	fn get_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -642,14 +646,14 @@ mod test {
 
 	#[test]
 	fn can_calculate_gas_limit() {
-		const TEST_EGRESS_BUDGET: SolAmount = 1_000_000;
+		const TEST_EGRESS_BUDGET: SolAmount = 500_000;
+		const TEST_COMPUTE_PRICE: SolAmount = 2_000_000;
 
-		let compute_price_lamports = compute_price().div_ceil(MICROLAMPORT_TO_LAMPORTS);
-
+		let compute_price_lamports = TEST_COMPUTE_PRICE.div_ceil(MICROLAMPORTS_PER_LAMPORT.into());
 		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
 			let mut tx_compute_limit: u32 = SolanaInstructionBuilder::calculate_gas_limit(
-				TEST_EGRESS_BUDGET as u64 * compute_price_lamports + LAMPORTS_PER_SIGNATURE,
-				compute_price(),
+				TEST_EGRESS_BUDGET * compute_price_lamports + LAMPORTS_PER_SIGNATURE,
+				TEST_COMPUTE_PRICE,
 				*asset,
 			);
 			assert_eq!(tx_compute_limit as u64, TEST_EGRESS_BUDGET);
@@ -657,20 +661,46 @@ mod test {
 			// Rounded up
 			assert_eq!(
 				SolanaInstructionBuilder::calculate_gas_limit(
-					TEST_EGRESS_BUDGET as u64 + LAMPORTS_PER_SIGNATURE,
-					MICROLAMPORT_TO_LAMPORTS,
+					(TEST_EGRESS_BUDGET + 1) as SolAmount + LAMPORTS_PER_SIGNATURE,
+					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
 					*asset,
 				),
 				SolanaInstructionBuilder::calculate_gas_limit(
-					TEST_EGRESS_BUDGET as u64 + LAMPORTS_PER_SIGNATURE,
-					1,
+					(TEST_EGRESS_BUDGET + 9) as SolAmount + LAMPORTS_PER_SIGNATURE,
+					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
 					*asset,
 				)
 			);
+			assert_eq!(
+				SolanaInstructionBuilder::calculate_gas_limit(
+					(TEST_EGRESS_BUDGET + 1) as SolAmount * compute_price_lamports +
+						LAMPORTS_PER_SIGNATURE,
+					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
+					*asset,
+				),
+				SolanaInstructionBuilder::calculate_gas_limit(
+					TEST_EGRESS_BUDGET as SolAmount * compute_price_lamports +
+						LAMPORTS_PER_SIGNATURE,
+					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
+					*asset,
+				) + 1
+			);
 
+			// Test SolComputeLimit saturation
+			assert_eq!(
+				SolanaInstructionBuilder::calculate_gas_limit(
+					(SolComputeLimit::MAX as SolAmount) * 2 * compute_price_lamports +
+						LAMPORTS_PER_SIGNATURE,
+					TEST_COMPUTE_PRICE,
+					*asset,
+				),
+				MAX_COMPUTE_UNITS_PER_TRANSACTION
+			);
+
+			// Test upper cap
 			tx_compute_limit = SolanaInstructionBuilder::calculate_gas_limit(
 				MAX_COMPUTE_UNITS_PER_TRANSACTION as u64 * compute_price_lamports * 2,
-				compute_price(),
+				TEST_COMPUTE_PRICE,
 				*asset,
 			);
 			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_TRANSACTION);
@@ -712,7 +742,9 @@ mod test {
 			agg_key(),
 			nonce_account(),
 			compute_price(),
-			TEST_COMPUTE_LIMIT as u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
+			(TEST_COMPUTE_LIMIT as u128 * compute_price() as u128)
+				.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()) as u64 +
+				LAMPORTS_PER_SIGNATURE,
 		);
 
 		// Serialized tx built in `create_ccm_native_transfer` test
@@ -749,7 +781,9 @@ mod test {
 			nonce_account(),
 			compute_price(),
 			SOL_USDC_DECIMAL,
-			TEST_COMPUTE_LIMIT as u64 * compute_price() + LAMPORTS_PER_SIGNATURE,
+			(TEST_COMPUTE_LIMIT as u128 * compute_price() as u128)
+				.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()) as u64 +
+				LAMPORTS_PER_SIGNATURE,
 		);
 
 		// Serialized tx built in `create_ccm_token_transfer` test

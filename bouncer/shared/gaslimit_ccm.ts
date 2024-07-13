@@ -292,7 +292,7 @@ async function testGasLimitSwapToSolana(
         transaction = await connection.getTransaction(confirmedSignaturesInfo[0].signature, {
           commitment: 'confirmed',
         });
-        console.log(`${tag} Transaction found: ${transaction}`)
+        console.log(`${tag} Transaction found: ${transaction}`);
         if (transaction !== null) {
           // This doesn't throw an error, for now it's fine to print it.
           if (transaction?.meta?.err === null) {
@@ -308,7 +308,7 @@ async function testGasLimitSwapToSolana(
     if (transaction === null) {
       throw new Error('Transaction not found');
     }
-    console.log(`${tag} CCM Swap success! TxHash: ${confirmedSignaturesInfo[0].signature}!`);
+    console.log(`${tag} CCM Swap success!`);
   } else if (minGasLimitRequired + solanaBaseComputeOverHead < gasLimitBudget) {
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
@@ -386,7 +386,7 @@ async function testGasLimitSwapToEvm(
     ccmMetadata,
     testTag,
   );
-  console.log(`${tag} Finished tracking events`)
+  console.log(`${tag} Finished tracking events`);
 
   const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
   const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
@@ -564,7 +564,7 @@ export async function testGasLimitCcmSwaps() {
     }
     await sleep(500);
   }
-  console.log('Success!! Fess reached the minimum amount!');
+
   const randomConsumptionTestEvm = [
     testRandomConsumptionTestEvm('Dot', 'Flip'),
     testRandomConsumptionTestEvm('Eth', 'Usdc'),
@@ -614,6 +614,8 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwapToEvm('Btc', 'ArbEth', ' insufBudget', 10 ** 5),
     testGasLimitSwapToEvm('ArbEth', 'Eth', ' insufBudget', 10 ** 6),
     testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' insufBudget', 10 ** 5),
+    testGasLimitSwapToEvm('Sol', 'Usdc', ' sufBudget', 10 ** 6),
+    testGasLimitSwapToEvm('SolUsdc', 'Eth', ' sufBudget', 10 ** 6),
     testGasLimitSwapToSolana('Btc', 'Sol', ' insufBudget', 10 ** 6),
     testGasLimitSwapToSolana('Dot', 'Sol', ' insufBudget', 10 ** 6),
     testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' insufBudget', 10 ** 7),
