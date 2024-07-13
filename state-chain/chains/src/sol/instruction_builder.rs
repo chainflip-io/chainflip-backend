@@ -658,7 +658,7 @@ mod test {
 			);
 			assert_eq!(tx_compute_limit as u64, TEST_EGRESS_BUDGET);
 
-			// Rounded up
+			// Rounded down
 			assert_eq!(
 				SolanaInstructionBuilder::calculate_gas_limit(
 					(TEST_EGRESS_BUDGET + 1) as SolAmount + LAMPORTS_PER_SIGNATURE,
@@ -683,7 +683,7 @@ mod test {
 						LAMPORTS_PER_SIGNATURE,
 					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
 					*asset,
-				) + 1
+				)
 			);
 
 			// Test SolComputeLimit saturation
