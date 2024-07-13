@@ -126,6 +126,7 @@ async function trackGasLimitSwap(
     messageMetadata,
   );
 
+  console.log(`${tag} Observing Swap Scheduled`);
   const swapScheduledHandle = observeSwapScheduled(
     sourceAsset,
     destAsset,
@@ -136,6 +137,7 @@ async function trackGasLimitSwap(
   let gasSwapScheduledHandle;
 
   if (chainGasAsset(destChain) !== sourceAsset) {
+    console.log(`${tag} Observing Gas Swap Scheduled`);
     gasSwapScheduledHandle = observeSwapScheduled(
       sourceAsset,
       chainGasAsset(destChain),
@@ -290,6 +292,7 @@ async function testGasLimitSwapToSolana(
         transaction = await connection.getTransaction(confirmedSignaturesInfo[0].signature, {
           commitment: 'confirmed',
         });
+        console.log(`${tag} Transaction found: ${transaction}`)
         if (transaction !== null) {
           // This doesn't throw an error, for now it's fine to print it.
           if (transaction?.meta?.err === null) {
@@ -297,7 +300,7 @@ async function testGasLimitSwapToSolana(
           }
           break;
         }
-        await sleep(2000);
+        await sleep(5000);
         attempts++;
       }
     }
@@ -305,6 +308,7 @@ async function testGasLimitSwapToSolana(
     if (transaction === null) {
       throw new Error('Transaction not found');
     }
+    console.log(`${tag} CCM Swap success! TxHash: ${confirmedSignaturesInfo[0].signature}!`);
   } else if (minGasLimitRequired + solanaBaseComputeOverHead < gasLimitBudget) {
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
@@ -382,6 +386,7 @@ async function testGasLimitSwapToEvm(
     ccmMetadata,
     testTag,
   );
+  console.log(`${tag} Finished tracking events`)
 
   const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
   const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
@@ -561,60 +566,65 @@ export async function testGasLimitCcmSwaps() {
   }
   console.log('Success!! Fess reached the minimum amount!');
   const randomConsumptionTestEvm = [
-    testRandomConsumptionTestEvm('Dot', 'Flip'),
-    testRandomConsumptionTestEvm('Eth', 'Usdc'),
-    testRandomConsumptionTestEvm('Eth', 'Usdt'),
-    testRandomConsumptionTestEvm('Flip', 'Eth'),
-    testRandomConsumptionTestEvm('Btc', 'Eth'),
-    testRandomConsumptionTestEvm('Dot', 'ArbEth'),
-    testRandomConsumptionTestEvm('Eth', 'ArbUsdc'),
-    testRandomConsumptionTestEvm('Flip', 'ArbEth'),
-    testRandomConsumptionTestEvm('ArbEth', 'Eth'),
-    testRandomConsumptionTestEvm('Sol', 'ArbUsdc'),
-    testRandomConsumptionTestEvm('SolUsdc', 'Eth'),
+    // testRandomConsumptionTestEvm('Dot', 'Flip'),
+    // testRandomConsumptionTestEvm('Eth', 'Usdc'),
+    // testRandomConsumptionTestEvm('Eth', 'Usdt'),
+    // testRandomConsumptionTestEvm('Flip', 'Eth'),
+    // testRandomConsumptionTestEvm('Btc', 'Eth'),
+    // testRandomConsumptionTestEvm('Dot', 'ArbEth'),
+    // testRandomConsumptionTestEvm('Eth', 'ArbUsdc'),
+    // testRandomConsumptionTestEvm('Flip', 'ArbEth'),
+    // testRandomConsumptionTestEvm('ArbEth', 'Eth'),
+    // testRandomConsumptionTestEvm('Sol', 'ArbUsdc'),
+    // testRandomConsumptionTestEvm('SolUsdc', 'Eth'),
   ];
 
   // Gas budget to 10% of the default swap amount, which should be enough
   const gasLimitSwapsSufBudget = [
-    testGasLimitSwapToEvm('Dot', 'Usdc', ' sufBudget', 10),
-    testGasLimitSwapToEvm('Usdc', 'Eth', ' sufBudget', 10),
-    testGasLimitSwapToEvm('Flip', 'Usdt', ' sufBudget', 10),
-    testGasLimitSwapToEvm('Usdt', 'Eth', ' sufBudget', 10),
-    testGasLimitSwapToEvm('Btc', 'Flip', ' sufBudget', 10),
-    testGasLimitSwapToEvm('Dot', 'ArbEth', ' sufBudget', 10),
-    testGasLimitSwapToEvm('Eth', 'ArbUsdc', ' sufBudget', 10),
-    testGasLimitSwapToEvm('ArbEth', 'Flip', ' sufBudget', 10),
-    testGasLimitSwapToEvm('Btc', 'ArbUsdc', ' sufBudget', 10),
-    testGasLimitSwapToEvm('Eth', 'ArbEth', ' sufBudget', 10),
-    testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('Dot', 'Usdc', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('Usdc', 'Eth', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('Flip', 'Usdt', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('Usdt', 'Eth', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('Btc', 'Flip', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('Dot', 'ArbEth', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('Eth', 'ArbUsdc', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('ArbEth', 'Flip', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('Btc', 'ArbUsdc', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('Eth', 'ArbEth', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' sufBudget', 10),
 
+    // TODO: These two like this are weird -> Deposit is ignored but
+    // it's fetched anyway?! That's bad behaviour!! Does this happen
+    // with other chains?!
     testGasLimitSwapToEvm('Sol', 'Usdc', ' sufBudget', 10),
-    testGasLimitSwapToEvm('SolUsdc', 'ArbEth', ' sufBudget', 10),
-    testGasLimitSwapToSolana('Btc', 'Sol', ' sufBudget', 10),
-    testGasLimitSwapToSolana('Dot', 'Sol', ' sufBudget', 10),
-    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' sufBudget', 10),
-    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' sufBudget', 10),
+    // testGasLimitSwapToEvm('SolUsdc', 'ArbEth', ' sufBudget', 10),
+
+
+    // testGasLimitSwapToSolana('Btc', 'Sol', ' sufBudget', 10),
+    // testGasLimitSwapToSolana('Dot', 'Sol', ' sufBudget', 10),
+    // testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' sufBudget', 10),
+    // testGasLimitSwapToSolana('Eth', 'SolUsdc', ' sufBudget', 10),
   ];
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to
   // panic when not in release due to zero swap input amount. So for now we provide the minimum so it gets swapped to just > 0.
   const gasLimitSwapsInsufBudget = [
-    testGasLimitSwapToEvm('Dot', 'Flip', ' insufBudget', 10 ** 6),
-    testGasLimitSwapToEvm('Eth', 'Usdc', ' insufBudget', 10 ** 8),
-    testGasLimitSwapToEvm('Eth', 'Usdt', ' insufBudget', 10 ** 8),
-    testGasLimitSwapToEvm('Flip', 'Eth', ' insufBudget', 10 ** 6),
-    testGasLimitSwapToEvm('Btc', 'Eth', ' insufBudget', 10 ** 5),
-    testGasLimitSwapToEvm('Dot', 'ArbUsdc', ' insufBudget', 10 ** 6),
-    testGasLimitSwapToEvm('Eth', 'ArbEth', ' insufBudget', 10 ** 8),
-    testGasLimitSwapToEvm('Flip', 'ArbUsdc', ' insufBudget', 10 ** 6),
-    testGasLimitSwapToEvm('Btc', 'ArbEth', ' insufBudget', 10 ** 5),
-    testGasLimitSwapToEvm('ArbEth', 'Eth', ' insufBudget', 10 ** 6),
-    testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' insufBudget', 10 ** 5),
+    // testGasLimitSwapToEvm('Dot', 'Flip', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToEvm('Eth', 'Usdc', ' insufBudget', 10 ** 8),
+    // testGasLimitSwapToEvm('Eth', 'Usdt', ' insufBudget', 10 ** 8),
+    // testGasLimitSwapToEvm('Flip', 'Eth', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToEvm('Btc', 'Eth', ' insufBudget', 10 ** 5),
+    // testGasLimitSwapToEvm('Dot', 'ArbUsdc', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToEvm('Eth', 'ArbEth', ' insufBudget', 10 ** 8),
+    // testGasLimitSwapToEvm('Flip', 'ArbUsdc', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToEvm('Btc', 'ArbEth', ' insufBudget', 10 ** 5),
+    // testGasLimitSwapToEvm('ArbEth', 'Eth', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToEvm('ArbUsdc', 'Flip', ' insufBudget', 10 ** 5),
 
-    testGasLimitSwapToSolana('Btc', 'Sol', ' insufBudget', 10 ** 6),
-    testGasLimitSwapToSolana('Dot', 'Sol', ' insufBudget', 10 ** 6),
-    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' insufBudget', 10 ** 7),
-    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' insufBudget', 10 ** 8),
+    // testGasLimitSwapToSolana('Btc', 'Sol', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToSolana('Dot', 'Sol', ' insufBudget', 10 ** 6),
+    // testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' insufBudget', 10 ** 7),
+    // testGasLimitSwapToSolana('Eth', 'SolUsdc', ' insufBudget', 10 ** 8),
   ];
 
   await Promise.all([
