@@ -172,7 +172,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 
 		LAMPORTS_PER_SIGNATURE.saturating_add(
 			// It should never approach overflow but just in case
-			std::cmp::min(
+			sp_std::cmp::min(
 				SolAmount::MAX as u128,
 				(self.priority_fee as u128 * compute_units_per_transfer as u128)
 					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
@@ -195,7 +195,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 
 		LAMPORTS_PER_SIGNATURE.saturating_add(
 			// It should never approach overflow but just in case
-			std::cmp::min(
+			sp_std::cmp::min(
 				SolAmount::MAX as u128,
 				(self.priority_fee as u128 * compute_units_per_fetch as u128)
 					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
