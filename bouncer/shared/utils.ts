@@ -554,7 +554,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
   throw new Error('Failed to observe the fetch');
 }
 
-type EVMEvent = {
+type ContractEvent = {
   name: string;
   address: string;
   txHash: string;
@@ -570,7 +570,7 @@ export async function observeEVMEvent(
   eventParametersExpected: (string | null)[],
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
-): Promise<EVMEvent | undefined> {
+): Promise<ContractEvent | undefined> {
   const web3 = new Web3(getEvmEndpoint(chain));
   const contract = new web3.eth.Contract(contractAbi, destAddress);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
@@ -627,7 +627,7 @@ export async function observeSolanaCcmEvent(
   sourceChain: string,
   sourceAddress: string | null,
   messageMetadata: CcmDepositMetadata,
-): Promise<string> {
+): Promise<ContractEvent> {
   function decodeExpectedCfParameters(cfParametersHex: string) {
     // Convert the hexadecimal string back to a byte array
     const cfParameters = new Uint8Array(
@@ -663,9 +663,7 @@ export async function observeSolanaCcmEvent(
   const cfTesterAddress = new PublicKey(getContractAddress('Solana', 'CFTESTER'));
 
   for (let i = 0; i < 300; i++) {
-    const txSignatures = await connection.getSignaturesForAddress(
-      new PublicKey(getContractAddress('Solana', 'CFTESTER')),
-    );
+    const txSignatures = await connection.getSignaturesForAddress(cfTesterAddress);
     for (const txSignature of txSignatures) {
       const tx = await connection.getTransaction(txSignature.signature);
       if (tx) {
@@ -720,7 +718,12 @@ export async function observeSolanaCcmEvent(
                 `Unexpected source address: ${event.data.source_address}, expecting empty ${Buffer.from([0])}`,
               );
             }
-            return txSignature.signature;
+            return {
+              name: event.name,
+              address: cfTesterAddress.toString(),
+              txHash: txSignature.signature,
+              returnValues: event.data,
+            };
           }
         }
       }
@@ -737,7 +740,7 @@ export async function observeCcmReceived(
   messageMetadata: CcmDepositMetadata,
   sourceAddress?: string,
   stopObserveEvent?: () => boolean,
-): Promise<EVMEvent | string | undefined> {
+): Promise<ContractEvent | undefined> {
   const destChain = chainFromAsset(destAsset);
   switch (destChain) {
     case 'Ethereum':

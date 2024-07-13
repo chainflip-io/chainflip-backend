@@ -312,10 +312,11 @@ async function testGasLimitSwapToSolana(
   } else if (minGasLimitRequired + solanaBaseComputeOverHead < gasLimitBudget) {
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
-    const txHash = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
+    const ccmEvent = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
+    const txSignature = ccmEvent?.txHash as string;
     console.log(`${tag} CCM event emitted!`);
 
-    const transaction = await connection.getTransaction(txHash as string, {
+    const transaction = await connection.getTransaction(txSignature, {
       commitment: 'confirmed',
     });
     // Checking that the compute limit is set correctly (and < MAX_CAP) is cumbersome without manually parsing instructions
@@ -338,7 +339,7 @@ async function testGasLimitSwapToSolana(
         `${tag} Transaction fee paid is higher than the budget paid by the user! totalFee: ${totalFee} egressBudgetAmount: ${egressBudgetAmount}`,
       );
     }
-    console.log(`${tag} CCM Swap success! TxHash: ${txHash}!`);
+    console.log(`${tag} CCM Swap success! TxHash: ${txSignature}!`);
     console.log(`${tag} Waiting for a fee deficit to be recorded...`);
     await feeDeficitHandle.event;
     console.log(`${tag} Fee deficit recorded!`);
