@@ -171,7 +171,8 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		);
 
 		LAMPORTS_PER_SIGNATURE +
-			(self.priority_fee).saturating_mul(compute_units_per_transfer.into())
+			(self.priority_fee.div_ceil(MICROLAMPORT_TO_LAMPORTS))
+				.saturating_mul(compute_units_per_transfer.into())
 	}
 	fn estimate_ingress_fee(
 		&self,
@@ -187,7 +188,9 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_fetch.into())
+		LAMPORTS_PER_SIGNATURE +
+			(self.priority_fee.div_ceil(MICROLAMPORT_TO_LAMPORTS))
+				.saturating_mul(compute_units_per_fetch.into())
 	}
 }
 
