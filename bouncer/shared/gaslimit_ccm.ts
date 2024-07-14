@@ -486,9 +486,7 @@ async function testGasLimitSwapToEvm(
         `${tag} Transaction fee paid is higher than the budget paid by the user! totalFee: ${totalFee} egressBudgetAmount: ${egressBudgetAmount}`,
       );
     }
-    console.log(
-      `${tag} Swap success! TxHash: ${ccmReceived?.txHash}!`,
-    );
+    console.log(`${tag} Swap success! TxHash: ${ccmReceived?.txHash}!`);
 
     console.log(`${tag} Waiting for a fee deficit to be recorded...`);
     await feeDeficitHandle.event;
