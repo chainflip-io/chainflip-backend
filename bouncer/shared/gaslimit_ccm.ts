@@ -126,7 +126,6 @@ async function trackGasLimitSwap(
     messageMetadata,
   );
 
-  console.log(`${tag} Observing Swap Scheduled`);
   const swapScheduledHandle = observeSwapScheduled(
     sourceAsset,
     destAsset,
@@ -137,7 +136,6 @@ async function trackGasLimitSwap(
   let gasSwapScheduledHandle;
 
   if (chainGasAsset(destChain) !== sourceAsset) {
-    console.log(`${tag} Observing Gas Swap Scheduled`);
     gasSwapScheduledHandle = observeSwapScheduled(
       sourceAsset,
       chainGasAsset(destChain),
@@ -223,7 +221,6 @@ async function trackGasLimitSwap(
   if (chainGasAsset(destChain) === sourceAsset) {
     egressBudgetAmount = messageMetadata.gasBudget;
   } else {
-    console.log(`${tag} Waiting for gas swap to be scheduled`);
     const {
       data: { swapId: gasSwapId },
     } = await gasSwapScheduledHandle!;
@@ -463,7 +460,6 @@ async function testGasLimitSwapToEvm(
 
     // Stop listening for broadcast failure
     await observeBroadcastFailure.stop();
-    console.log(`${tag} Stopped listening to broadcast failure!`);
 
     const receipt = await web3.eth.getTransactionReceipt(ccmReceived?.txHash as string);
     const tx = await web3.eth.getTransaction(ccmReceived?.txHash as string);
@@ -491,7 +487,7 @@ async function testGasLimitSwapToEvm(
       );
     }
     console.log(
-      `${tag} Swap success! TxHash: ${typeof ccmReceived === 'string' ? ccmReceived : (ccmReceived?.txHash as string)}!`,
+      `${tag} Swap success! TxHash: ${ccmReceived?.txHash}!`,
     );
 
     console.log(`${tag} Waiting for a fee deficit to be recorded...`);
