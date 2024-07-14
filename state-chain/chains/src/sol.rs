@@ -19,6 +19,7 @@ pub mod sol_tx_core;
 
 pub use crate::assets::sol::Asset as SolAsset;
 pub use sol_prim::{
+	consts::{LAMPORTS_PER_SIGNATURE, MICROLAMPORTS_PER_LAMPORT},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
 	Signature as SolSignature,
@@ -103,11 +104,6 @@ impl ChainCrypto for SolanaCrypto {
 		}
 	}
 }
-
-// TODO: Move this values to foreign-chain
-pub const MICROLAMPORTS_PER_LAMPORT: u32 = 1_000_000u32;
-pub const LAMPORTS_PER_SIGNATURE: SolAmount = 5000u64;
-pub const MAX_COMPUTE_UNITS_PER_TRANSACTION: SolComputeLimit = 1_400_000u32;
 
 // This is to be used both for ingress/egress estimation and for setting the compute units
 // limit when crafting transactions by the State Chain.
