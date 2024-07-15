@@ -990,7 +990,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> Result<u32, DispatchError> {
-		let pool_orders = Self::pool_orders(base_asset, quote_asset, Some(who.clone()))?;
+		let pool_orders = Self::pool_orders(base_asset, quote_asset, Some(who.clone()), false)?;
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
@@ -1756,6 +1756,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		option_lp: Option<T::AccountId>,
+		filled_orders: bool,
 	) -> Result<PoolOrders<T>, DispatchError> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
@@ -1786,7 +1787,16 @@ impl<T: Config> Pallet<T> {
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
 							.unwrap();
-						if position_info.amount.is_zero() {
+						if filled_orders {
+							Some(LimitOrder {
+								lp: lp.clone(),
+								id: id.into(),
+								tick,
+								sell_amount: position_info.amount,
+								fees_earned: collected.accumulative_fees,
+								original_sell_amount: collected.original_amount,
+							})
+						} else if position_info.amount.is_zero() {
 							None
 						} else {
 							Some(LimitOrder {
