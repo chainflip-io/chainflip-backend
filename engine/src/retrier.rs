@@ -19,8 +19,10 @@ use core::cmp::min;
 use futures::Future;
 use futures_util::stream::FuturesUnordered;
 use rand::Rng;
-use std::fmt;
-use std::fmt::{Display, Formatter};
+use std::{
+	fmt,
+	fmt::{Display, Formatter},
+};
 use tokio::sync::{mpsc, oneshot};
 use utilities::{
 	metrics::{RPC_RETRIER_REQUESTS, RPC_RETRIER_TOTAL_REQUESTS},
@@ -93,7 +95,7 @@ impl std::ops::Not for PrimaryOrSecondary {
 	}
 }
 
-impl Display for PrimaryOrSecondary{
+impl Display for PrimaryOrSecondary {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		match self {
 			PrimaryOrSecondary::Primary => write!(f, "Primary"),
