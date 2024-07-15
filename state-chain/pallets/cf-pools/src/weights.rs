@@ -32,7 +32,6 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_pools.
 pub trait WeightInfo {
-	fn update_buy_interval() -> Weight;
 	fn new_pool() -> Weight;
 	fn update_range_order() -> Weight;
 	fn set_range_order() -> Weight;

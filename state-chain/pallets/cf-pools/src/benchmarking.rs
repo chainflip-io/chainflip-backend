@@ -8,7 +8,6 @@ use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	sp_runtime::traits::One,
 	traits::{EnsureOrigin, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
@@ -32,20 +31,6 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 #[benchmarks]
 mod benchmarks {
 	use super::*;
-
-	#[benchmark]
-	fn update_buy_interval() {
-		let call = Call::<T>::update_buy_interval { new_buy_interval: BlockNumberFor::<T>::one() };
-
-		#[block]
-		{
-			assert_ok!(
-				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
-			);
-		}
-
-		assert_eq!(FlipBuyInterval::<T>::get(), BlockNumberFor::<T>::one());
-	}
 
 	#[benchmark]
 	fn new_pool() {
@@ -200,7 +185,7 @@ mod benchmarks {
 			Some(0),
 			10_000,
 		));
-		assert_ok!(Pallet::<T>::swap_with_network_fee(STABLE_ASSET, Asset::Eth, 1_000));
+		assert_ok!(Pallet::<T>::swap_single_leg(STABLE_ASSET, Asset::Eth, 1_000));
 		let fee = 1_000;
 		let call = Call::<T>::set_pool_fees {
 			base_asset: Asset::Eth,

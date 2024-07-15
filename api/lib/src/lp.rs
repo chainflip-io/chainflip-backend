@@ -1,3 +1,5 @@
+use crate::AddressString;
+
 use super::SimpleSubmissionApi;
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -5,7 +7,7 @@ pub use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::address::EncodedAddress;
+use cf_chains::{address::EncodedAddress, ForeignChain};
 use cf_primitives::{AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
@@ -233,10 +235,16 @@ fn into_api_wait_for_result<T>(
 
 #[async_trait]
 pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
-	async fn register_liquidity_refund_address(&self, address: EncodedAddress) -> Result<H256> {
+	async fn register_liquidity_refund_address(
+		&self,
+		chain: ForeignChain,
+		address: AddressString,
+	) -> Result<H256> {
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(
-				pallet_cf_lp::Call::register_liquidity_refund_address { address },
+				pallet_cf_lp::Call::register_liquidity_refund_address {
+					address: address.try_parse_to_encoded_address(chain)?,
+				},
 			))
 			.await
 			.until_in_block()
@@ -288,7 +296,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		&self,
 		amount: AssetAmount,
 		asset: Asset,
-		destination_address: EncodedAddress,
+		destination_address: AddressString,
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<EgressId>> {
 		if amount == 0 {
@@ -297,7 +305,12 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 
 		let wait_for_result = self
 			.submit_signed_extrinsic_wait_for(
-				pallet_cf_lp::Call::withdraw_asset { amount, asset, destination_address },
+				pallet_cf_lp::Call::withdraw_asset {
+					amount,
+					asset,
+					destination_address: destination_address
+						.try_parse_to_encoded_address(asset.into())?,
+				},
 				wait_for,
 			)
 			.await?;
