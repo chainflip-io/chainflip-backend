@@ -19,7 +19,10 @@ use core::cmp::min;
 use futures::Future;
 use futures_util::stream::FuturesUnordered;
 use rand::Rng;
-use std::fmt;
+use std::{
+	fmt,
+	fmt::{Display, Formatter},
+};
 use tokio::sync::{mpsc, oneshot};
 use utilities::{
 	metrics::{RPC_RETRIER_REQUESTS, RPC_RETRIER_TOTAL_REQUESTS},
@@ -88,6 +91,15 @@ impl std::ops::Not for PrimaryOrSecondary {
 		match self {
 			PrimaryOrSecondary::Primary => PrimaryOrSecondary::Secondary,
 			PrimaryOrSecondary::Secondary => PrimaryOrSecondary::Primary,
+		}
+	}
+}
+
+impl Display for PrimaryOrSecondary {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		match self {
+			PrimaryOrSecondary::Primary => write!(f, "Primary"),
+			PrimaryOrSecondary::Secondary => write!(f, "Secondary"),
 		}
 	}
 }
@@ -408,7 +420,7 @@ where
 					request_holder.insert(request_id, (response_sender, closure));
 				},
 				let (request_id, request_log, retry_limit, primary_or_secondary, result) = submission_holder.next_or_pending() => {
-					RPC_RETRIER_TOTAL_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
+					RPC_RETRIER_TOTAL_REQUESTS.inc(&[name, request_log.rpc_method.as_str(), primary_or_secondary.to_string().as_str()]);
 					match result {
 						Ok(value) => {
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
