@@ -31,27 +31,13 @@ impl ExecutexSwapAndCall {
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
 	) -> Self {
-		let (source_chain, source_address) =
-			Self::destructure_address(source_chain, source_address);
-		Self { transfer_param, source_chain, source_address, gas_budget, message }
-	}
-
-	fn destructure_address(
-		chain: ForeignChain,
-		address: Option<ForeignChainAddress>,
-	) -> (u32, Vec<u8>) {
-		match address {
-			None => (chain as u32, vec![]),
-			Some(ForeignChainAddress::Eth(source_address)) =>
-				(ForeignChain::Ethereum as u32, source_address.0.to_vec()),
-			Some(ForeignChainAddress::Dot(source_address)) =>
-				(ForeignChain::Polkadot as u32, source_address.aliased_ref().to_vec()),
-			Some(ForeignChainAddress::Btc(script)) =>
-				(ForeignChain::Bitcoin as u32, script.bytes()),
-			Some(ForeignChainAddress::Arb(source_address)) =>
-				(ForeignChain::Arbitrum as u32, source_address.0.to_vec()),
-			Some(ForeignChainAddress::Sol(source_address)) =>
-				(ForeignChain::Solana as u32, source_address.0.to_vec()),
+		Self {
+			transfer_param,
+			source_chain: source_chain as u32,
+			source_address: source_address
+				.map_or_else(Vec::new, |address| address.to_source_address()),
+			gas_budget,
+			message,
 		}
 	}
 }
@@ -92,6 +78,7 @@ mod test_execute_x_swap_and_execute {
 			api::{EvmReplayProtection, EvmTransactionBuilder},
 			SchnorrVerificationComponents,
 		},
+		ForeignChainAddress,
 	};
 	use ethabi::Address;
 
@@ -114,10 +101,8 @@ mod test_execute_x_swap_and_execute {
 		let dummy_src_address =
 			ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([0xff; 32]));
 		let dummy_src_chain = ForeignChain::Polkadot;
-		let (dummy_chain, dummy_address) = super::ExecutexSwapAndCall::destructure_address(
-			dummy_src_chain,
-			Some(dummy_src_address.clone()),
-		);
+		let dummy_chain = dummy_src_chain as u32;
+		let dummy_address = ForeignChainAddress::to_source_address(dummy_src_address.clone());
 		let dummy_message = vec![0x00, 0x01, 0x02, 0x03, 0x04];
 
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
