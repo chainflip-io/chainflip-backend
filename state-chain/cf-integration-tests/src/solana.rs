@@ -120,7 +120,6 @@ fn can_build_solana_batch_all() {
 		])
 		.build()
 		.execute_with(|| {
-			// Create a network of 150 validators
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
@@ -139,6 +138,9 @@ fn can_build_solana_batch_all() {
 			assert_eq!(schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, None), 1);
 			assert_eq!(schedule_deposit_to_swap(BOB, Asset::SolUsdc, Asset::Sol, None), 3);
 
+			// Verify the correct API call has been built, signed and broadcasted
+
+			// Test that the BatchFetch is scheduled.
 			testnet.move_forward_blocks(1);
 			System::assert_has_event(
 				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<
@@ -150,11 +152,9 @@ fn can_build_solana_batch_all() {
 				}),
 			);
 
-			// In then next block, the Batch Fetch is to be broadcasted
 			testnet.move_forward_blocks(1);
 
-			// Verify the correct API call has been built, signed and broadcasted:
-			// 1 BatchFetch with no egress IDs, + 2 Transfers each with a single egress ID.
+			// Test that the 2 Transfers is scheduled.
 			System::assert_has_event(
 				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<
 					Runtime,
@@ -185,7 +185,6 @@ fn can_rotate_solana_vault() {
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
-			// Create a network of 150 validators
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {})
 				.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into())
@@ -249,7 +248,6 @@ fn can_send_solana_ccm() {
 		])
 		.build()
 		.execute_with(|| {
-			// Create a network of 150 validators
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
@@ -283,9 +281,20 @@ fn can_send_solana_ccm() {
 				3
 			);
 
-			// Wait until call is built and signed and broadcasted.
+			// Wait until calls are built, signed and broadcasted.
+			testnet.move_forward_blocks(1);
+			System::assert_has_event(
+				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<
+					Runtime,
+					SolanaInstance,
+				>::BatchBroadcastRequested {
+					broadcast_id: 2,
+					egress_ids: vec![],
+				}),
+			);
+
 			// 2 calls should be built - one for each CCM.
-			testnet.move_forward_blocks(2);
+			testnet.move_forward_blocks(1);
 			System::assert_has_event(RuntimeEvent::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Event::<Runtime, SolanaInstance>::CcmBroadcastRequested {
 					broadcast_id: 3,
