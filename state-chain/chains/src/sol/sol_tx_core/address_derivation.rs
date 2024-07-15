@@ -54,7 +54,7 @@ mod tests {
 	fn derive_associated_token_account_on_curve() {
 		let wallet_address =
 			SolAddress::from_str("HfasueN6RNPjSM6rKGH5dga6kS2oUF8siGH3m4MXPURp").unwrap();
-		let mint_pubkey = sol_test_values::MINT_PUB_KEY;
+		let mint_pubkey = sol_test_values::USDC_TOKEN_MINT_PUB_KEY;
 
 		assert_eq!(
 			derive_associated_token_account(wallet_address, mint_pubkey).unwrap(),
@@ -70,7 +70,7 @@ mod tests {
 	fn derive_associated_token_account_off_curve() {
 		let pda_address =
 			SolAddress::from_str("9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6").unwrap();
-		let mint_pubkey = sol_test_values::MINT_PUB_KEY;
+		let mint_pubkey = sol_test_values::USDC_TOKEN_MINT_PUB_KEY;
 
 		assert_eq!(
 			derive_associated_token_account(pda_address, mint_pubkey).unwrap(),
@@ -158,7 +158,7 @@ mod tests {
 	#[test]
 	fn can_derive_deposit_address_token() {
 		let vault_program = sol_test_values::VAULT_PROGRAM;
-		let token_mint_pubkey = sol_test_values::MINT_PUB_KEY;
+		let token_mint_pubkey = sol_test_values::USDC_TOKEN_MINT_PUB_KEY;
 		let derived_account_0 = derive_deposit_address(0u64, vault_program).unwrap();
 		assert_eq!(
 			derive_associated_token_account(derived_account_0.address, token_mint_pubkey).unwrap(),
@@ -210,7 +210,7 @@ mod tests {
 	#[test]
 	fn can_derive_fetch_account_token() {
 		let vault_program = sol_test_values::VAULT_PROGRAM;
-		let token_mint_pubkey = sol_test_values::MINT_PUB_KEY;
+		let token_mint_pubkey = sol_test_values::USDC_TOKEN_MINT_PUB_KEY;
 		let deposit_channel = derive_deposit_address(0u64, vault_program).unwrap().address;
 		let deposit_channel_ata =
 			derive_associated_token_account(deposit_channel, token_mint_pubkey)

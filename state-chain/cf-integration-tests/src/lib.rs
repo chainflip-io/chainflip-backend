@@ -13,6 +13,7 @@ mod funding;
 mod genesis;
 mod governance;
 mod new_epoch;
+mod solana;
 mod swapping;
 mod witnessing;
 

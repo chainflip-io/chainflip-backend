@@ -189,7 +189,7 @@ pub enum OrderType {
 }
 
 #[track_caller]
-fn setup_pool_and_accounts(assets: Vec<Asset>, order_type: OrderType) {
+pub fn setup_pool_and_accounts(assets: Vec<Asset>, order_type: OrderType) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
 	new_account(&ZION, AccountRole::Broker);
 
