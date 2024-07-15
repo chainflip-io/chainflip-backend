@@ -46,16 +46,6 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_pools using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	/// Storage: `LiquidityPools::FlipBuyInterval` (r:0 w:1)
-	/// Proof: `LiquidityPools::FlipBuyInterval` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_buy_interval() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 4_000_000 picoseconds.
-		Weight::from_parts(4_000_000, 0)
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
 	/// Storage: `LiquidityPools::Pools` (r:1 w:1)
 	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn new_pool() -> Weight {
@@ -217,16 +207,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	/// Storage: `LiquidityPools::FlipBuyInterval` (r:0 w:1)
-	/// Proof: `LiquidityPools::FlipBuyInterval` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_buy_interval() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 4_000_000 picoseconds.
-		Weight::from_parts(4_000_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
 	/// Storage: `LiquidityPools::Pools` (r:1 w:1)
 	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn new_pool() -> Weight {
