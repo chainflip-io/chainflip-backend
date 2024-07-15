@@ -39,4 +39,4 @@ pub const NONCE_ACCOUNT_LENGTH: u64 = 80;
 
 pub const SOL_USDC_DECIMAL: u8 = 6u8;
 
-pub const MIN_EGRESS_AMOUNT: Amount = 1; // todo
+pub const MIN_EGRESS_AMOUNT: Amount = 890880;
