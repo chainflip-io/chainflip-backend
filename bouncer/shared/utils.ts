@@ -548,7 +548,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
       }
       return;
     }
-    await sleep(2000);
+    await sleep(3000);
   }
 
   throw new Error('Failed to observe the fetch');
