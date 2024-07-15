@@ -6,6 +6,7 @@ use cf_primitives::{Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AssetWithholding, Chainflip, EgressApi, KeyProvider, LiabilityTracker,
+	ScheduledEgressDetails,
 };
 use frame_support::{
 	pallet_prelude::*, sp_runtime::traits::Saturating, traits::DefensiveSaturating,
@@ -23,6 +24,11 @@ mod mock;
 mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
+
+// TODO: Figure out adequate values for these.
+pub const MAX_ETH_REFUND_PER_EPOCH: u32 = 25;
+pub const MAX_ARB_REFUND_PER_EPOCH: u32 = 10;
+pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum ExternalOwner {
@@ -82,6 +88,12 @@ pub mod pallet {
 		type SafeMode: Get<PalletSafeMode>;
 	}
 
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Refund amount is too low to cover the fee.
+		RefundAmountTooLow,
+	}
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -123,13 +135,30 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), DispatchError> {
 		let egress_details =
 			T::EgressHandler::schedule_egress(chain.gas_asset(), amount, address.clone(), None)
-				.map_err(Into::into)?;
+				.map_err(Into::into)
+				.and_then(
+					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
+						if egress_amount < REFUND_FEE_MULTIPLE * fee_withheld {
+							Err(Error::<T>::RefundAmountTooLow.into())
+						} else {
+							Ok(result)
+						}
+					},
+				)?;
 		Self::deposit_event(Event::RefundScheduled {
 			egress_id: egress_details.egress_id,
 			destination: address,
 			amount,
 		});
 		Ok(())
+	}
+
+	fn should_abort_refunding(chain: ForeignChain, number_or_refunds: u32) -> bool {
+		match chain {
+			ForeignChain::Ethereum => number_or_refunds > MAX_ETH_REFUND_PER_EPOCH,
+			ForeignChain::Arbitrum => number_or_refunds > MAX_ARB_REFUND_PER_EPOCH,
+			_ => return false,
+		}
 	}
 
 	/// Reconciles the amount owed with the amount available for distribution.
@@ -174,28 +203,29 @@ impl<T: Config> Pallet<T> {
 					0
 				},
 			},
-			ForeignChain::Polkadot => {
-				match owner {
-					ExternalOwner::AggKey => {
-						let address = ForeignChainAddress::Dot(
-							T::PolkadotKeyProvider::active_epoch_key()
-								// TODO: make this more defensive
-								.expect("Key must exist otherwise we would have nothing to refund.")
-								.key,
-						);
+			ForeignChain::Polkadot => match owner {
+				ExternalOwner::AggKey => {
+					if let Some(active_key) = T::PolkadotKeyProvider::active_epoch_key() {
 						let refund_amount = core::cmp::min(*amount_owed, *available);
-						Self::refund_via_egress(chain, address, refund_amount)?;
+						Self::refund_via_egress(
+							chain,
+							ForeignChainAddress::Dot(active_key.key),
+							refund_amount,
+						)?;
 						refund_amount
-					},
-					other => {
-						log_or_panic!(
-							"{:?} Liabilities are not supported for chain {:?}.",
-							other,
-							chain
-						);
+					} else {
+						log_or_panic!("No active epoch key found for Polkadot.");
 						0
-					},
-				}
+					}
+				},
+				other => {
+					log_or_panic!(
+						"{:?} Liabilities are not supported for chain {:?}.",
+						other,
+						chain
+					);
+					0
+				},
 			},
 			ForeignChain::Bitcoin | ForeignChain::Solana => match owner {
 				ExternalOwner::Vault => core::cmp::min(*amount_owed, *available),
@@ -228,8 +258,13 @@ impl<T: Config> Pallet<T> {
 				let mut owed_assets = owed_assets.into_iter().collect::<Vec<_>>();
 				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(*amount));
 
+				let mut refund_counter = 0;
+
 				for (destination, amount) in &mut owed_assets {
 					debug_assert!(*amount > 0);
+					if Self::should_abort_refunding(chain, refund_counter) {
+						break;
+					}
 					match Self::reconcile(chain, destination, amount, total_withheld) {
 						Ok(_) =>
 							if *total_withheld == 0 {
@@ -237,6 +272,7 @@ impl<T: Config> Pallet<T> {
 							},
 						Err(_) => break,
 					}
+					refund_counter += 1;
 				}
 
 				owed_assets.retain(|(_, amount)| *amount > 0);
