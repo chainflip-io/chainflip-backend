@@ -22,6 +22,8 @@ pub use boost_pool::OwedAmount;
 
 use frame_support::{pallet_prelude::OptionQuery, transactional};
 
+use cf_chains::CcmError;
+
 use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
@@ -594,7 +596,7 @@ pub mod pallet {
 		},
 		CcmEgressInvalid {
 			egress_id: EgressId,
-			error: DispatchError,
+			error: CcmError,
 		},
 		DepositFetchesScheduled {
 			channel_id: ChannelId,

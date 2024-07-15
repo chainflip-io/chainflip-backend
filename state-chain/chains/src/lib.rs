@@ -474,6 +474,11 @@ impl From<DispatchError> for AllBatchError {
 		AllBatchError::DispatchError(e)
 	}
 }
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum CcmError {
+	AssetAmountTooLow,
+	DispatchError(DispatchError),
+}
 
 #[derive(Debug)]
 pub enum ConsolidationError {
@@ -500,7 +505,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
-	) -> Result<Self, DispatchError>;
+	) -> Result<Self, CcmError>;
 }
 
 pub trait TransferFallback<C: Chain>: ApiCall<C::ChainCrypto> {

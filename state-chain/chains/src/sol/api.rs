@@ -14,9 +14,9 @@ use crate::{
 		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolApiEnvironment,
 		SolAsset, SolCcmAccounts, SolHash, SolMessage, SolTransaction, SolanaCrypto,
 	},
-	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
-	ConsolidationError, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
-	SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
+	AllBatch, AllBatchError, ApiCall, CcmError, Chain, ChainCrypto, ChainEnvironment,
+	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
 };
 
 use cf_primitives::{EgressId, ForeignChain};
@@ -373,12 +373,19 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		_gas_budget: <Solana as Chain>::ChainAmount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
-	) -> Result<Self, DispatchError> {
-		Self::ccm_transfer(transfer_param, source_chain, source_address, message, cf_parameters)
-			.map_err(|e| {
-				log::error!("Failed to construct Solana CCM transfer transaction! Error: {:?}", e);
-				e.into()
-			})
+	) -> Result<Self, CcmError> {
+		if !(transfer_param.asset == SolAsset::Sol && transfer_param.amount < MIN_EGRESS_AMOUNT) {
+			Self::ccm_transfer(transfer_param, source_chain, source_address, message, cf_parameters)
+				.map_err(|e| {
+					log::error!(
+						"Failed to construct Solana CCM transfer transaction! Error: {:?}",
+						e
+					);
+					CcmError::DispatchError(e.into())
+				})
+		} else {
+			Err(CcmError::AssetAmountTooLow)
+		}
 	}
 }
 

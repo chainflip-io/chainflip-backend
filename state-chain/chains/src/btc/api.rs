@@ -140,8 +140,10 @@ impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for Bitc
 		_gas_budget: <Bitcoin as Chain>::ChainAmount,
 		_message: Vec<u8>,
 		_cf_parameters: Vec<u8>,
-	) -> Result<Self, DispatchError> {
-		Err(DispatchError::Other("Bitcoin's ExecutexSwapAndCall is not supported."))
+	) -> Result<Self, CcmError> {
+		Err(CcmError::DispatchError(DispatchError::Other(
+			"Bitcoin's ExecutexSwapAndCall is not supported.",
+		)))
 	}
 }
 
