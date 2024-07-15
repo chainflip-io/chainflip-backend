@@ -49,17 +49,6 @@ fn token_program_id() -> SolAddress {
 pub struct SolanaInstructionBuilder;
 
 impl SolanaInstructionBuilder {
-	// TODO: Shares code with EVM's ExecutexSwapAndCall or make it a function of ForeignChainAddress
-	fn destructure_address(source_address: Option<ForeignChainAddress>) -> Vec<u8> {
-		match source_address {
-			None => vec![],
-			Some(ForeignChainAddress::Eth(source_address)) => source_address.0.to_vec(),
-			Some(ForeignChainAddress::Dot(source_address)) => source_address.aliased_ref().to_vec(),
-			Some(ForeignChainAddress::Btc(script)) => script.bytes(),
-			Some(ForeignChainAddress::Arb(source_address)) => source_address.0.to_vec(),
-			Some(ForeignChainAddress::Sol(source_address)) => source_address.0.to_vec(),
-		}
-	}
 	/// Finalize a Instruction Set. This should be internally called after a instruction set is
 	/// complete. This will add some extra instruction required for the integrity of the Solana
 	/// Transaction.
@@ -281,7 +270,7 @@ impl SolanaInstructionBuilder {
 			VaultProgram::with_id(vault_program)
 				.execute_ccm_native_call(
 					source_chain as u32,
-					Self::destructure_address(source_address),
+					source_address.map_or_else(Vec::new, |address| address.to_source_address()),
 					message,
 					amount,
 					vault_program_data_account,
@@ -342,7 +331,7 @@ impl SolanaInstructionBuilder {
 		),
 		VaultProgram::with_id(vault_program).execute_ccm_token_call(
 			source_chain as u32,
-			Self::destructure_address(source_address),
+			source_address.map_or_else(Vec::new, |address| address.to_source_address()),
 			message,
 			amount,
 			vault_program_data_account,

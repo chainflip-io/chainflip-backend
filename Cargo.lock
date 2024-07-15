@@ -1433,6 +1433,7 @@ dependencies = [
  "borsh",
  "bs58 0.5.1",
  "cf-primitives",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "curve25519-dalek 3.2.1",
  "digest 0.10.7",
