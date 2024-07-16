@@ -35,9 +35,17 @@ jobs:
       - name: Configure Git 🛠️
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
+      - name: Check so age before build
+        run: |
+          stat ./target/release/libchainflip_engine_v1_5_0.so
+
       - name: Build chainflip binaries 🏗️
         run: |
           cargo cf-build-${{ inputs.profile }} --locked
+
+      - name: Check so age after build
+        run: |
+          stat ./target/release/libchainflip_engine_v1_5_0.so
 
       - name: ls directory
         run: |
