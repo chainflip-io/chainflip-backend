@@ -13,21 +13,23 @@ import {
   chainConstants,
 } from '@chainflip/cli';
 import Web3 from 'web3';
-import { Connection, Keypair } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
 import BigNumber from 'bignumber.js';
+import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import { base58Decode, base58Encode } from '../polkadot/util-crypto';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEvmAddress } from './new_evm_address';
 import { CcmDepositMetadata } from './new_swap';
-import { getCFTesterAbi } from './contract_interfaces';
+import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
 
 const cfTesterAbi = await getCFTesterAbi();
+const cfTesterIdl = await getCfTesterIdl();
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
@@ -546,7 +548,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
       }
       return;
     }
-    await sleep(1000);
+    await sleep(2000);
   }
 
   throw new Error('Failed to observe the fetch');
@@ -563,19 +565,18 @@ export async function observeEVMEvent(
   chain: Chain,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,
-  address: string,
+  destAddress: string,
   eventName: string,
   eventParametersExpected: (string | null)[],
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<EVMEvent | undefined> {
   const web3 = new Web3(getEvmEndpoint(chain));
-  const contract = new web3.eth.Contract(contractAbi, address);
+  const contract = new web3.eth.Contract(contractAbi, destAddress);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
   const stopObserve = stopObserveEvent ?? (() => false);
 
   // Gets all the event parameter as an array
-
   const eventAbi = contractAbi.find(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (item: any) => item.type === 'event' && item.name === eventName,
@@ -621,26 +622,117 @@ export async function observeEVMEvent(
   throw new Error(`Failed to observe the ${eventName} event`);
 }
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
-export async function observeSolanaEvent(
-  chain: Chain,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contractAbi: any,
-  address: string,
+export async function observeSolanaCcmEvent(
   eventName: string,
-  eventParametersExpected: (string | null)[],
-  stopObserveEvent?: () => boolean,
-  initialBlockNumber?: number,
-): Promise<EVMEvent | undefined> {
-  // TODO: Add logic to witness the event on the Solana CfTester
-  return undefined;
+  sourceChain: string,
+  sourceAddress: string | null,
+  messageMetadata: CcmDepositMetadata,
+): Promise<undefined> {
+  function decodeCfParameters(cfParametersHex: string) {
+    // Convert the hexadecimal string back to a byte array
+    const cfParameters = new Uint8Array(
+      cfParametersHex
+        .slice(2)
+        .match(/.{1,2}/g)
+        ?.map((byte) => parseInt(byte, 16)) ?? [],
+    );
+
+    const publicKeySize = 32;
+    const remainingAccountSize = publicKeySize + 1;
+
+    // Extra byte for the encoded length
+    const remainingAccountsBytes = cfParameters.slice(remainingAccountSize + 1);
+
+    const remainingAccounts = [];
+    const remainingIsWritable = [];
+
+    // Extract the remaining bytes in groups of publicKeySize + 1
+    for (let i = 0; i < remainingAccountsBytes.length; i += remainingAccountSize) {
+      const publicKeyBytes = remainingAccountsBytes.slice(i, i + publicKeySize);
+      const isWritable = remainingAccountsBytes[i + publicKeySize];
+
+      remainingAccounts.push(new PublicKey(publicKeyBytes));
+      remainingIsWritable.push(Boolean(isWritable));
+    }
+
+    return { remainingAccounts, remainingIsWritable };
+  }
+
+  const connection = getSolConnection();
+  const idl = cfTesterIdl;
+  const cfTesterAddress = new PublicKey(getContractAddress('Solana', 'CFTESTER'));
+
+  for (let i = 0; i < 300; i++) {
+    const txSignatures = await connection.getSignaturesForAddress(
+      new PublicKey(getContractAddress('Solana', 'CFTESTER')),
+    );
+    for (const txSignature of txSignatures) {
+      const tx = await connection.getTransaction(txSignature.signature);
+      if (tx) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const eventParser = new EventParser(cfTesterAddress, new BorshCoder(idl as any));
+        const events = eventParser.parseLogs(tx.meta?.logMessages ?? []);
+        for (const event of events) {
+          const matchEventName = event.name === eventName;
+          const matchSourceChain = event.data.source_chain.toString() === sourceChain;
+
+          const hexMessage = '0x' + (event.data.message as Buffer).toString('hex');
+          const matchMessage = hexMessage === messageMetadata.message;
+
+          // The message is being used as the main discriminator
+          if (matchEventName && matchSourceChain && matchMessage) {
+            const {
+              remainingAccounts: expectedRemainingAccounts,
+              remainingIsWritable: expectedRemainingIsWritable,
+            } = decodeCfParameters(messageMetadata.cfParameters);
+            if (
+              expectedRemainingIsWritable.length !== event.data.remaining_is_writable.length ||
+              expectedRemainingIsWritable.toString() !== event.data.remaining_is_writable.toString()
+            ) {
+              throw new Error(
+                `Unexpected remaining is writable: ${event.data.remaining_is_writable}, expecting ${expectedRemainingIsWritable}`,
+              );
+            }
+
+            if (event.data.remaining_is_signer.some((value: boolean) => value === true)) {
+              throw new Error(`Expected all remaining accounts to be read-only`);
+            }
+
+            if (
+              expectedRemainingAccounts.length !== event.data.remaining_pubkeys.length ||
+              expectedRemainingAccounts.toString() !== event.data.remaining_pubkeys.toString()
+            ) {
+              throw new Error(
+                `Unexpected remaining accounts: ${event.data.remaining_accounts}, expecting ${expectedRemainingAccounts}`,
+              );
+            }
+
+            if (sourceAddress !== null) {
+              const hexSourceAddress = '0x' + (event.data.source_address as Buffer).toString('hex');
+              if (hexSourceAddress !== sourceAddress) {
+                throw new Error(
+                  `Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`,
+                );
+              }
+            } else if (event.data.source_address.toString() !== Buffer.from([]).toString()) {
+              throw new Error(
+                `Unexpected source address: ${event.data.source_address}, expecting empty ${Buffer.from([0])}`,
+              );
+            }
+            return undefined;
+          }
+        }
+      }
+    }
+    await sleep(10000);
+  }
+  throw new Error(`Failed to observe Solana's ${eventName} event`);
 }
-/* eslint-enable @typescript-eslint/no-unused-vars */
 
 export async function observeCcmReceived(
   sourceAsset: Asset,
   destAsset: Asset,
-  address: string,
+  destAddress: string,
   messageMetadata: CcmDepositMetadata,
   sourceAddress?: string,
   stopObserveEvent?: () => boolean,
@@ -652,7 +744,7 @@ export async function observeCcmReceived(
       return observeEVMEvent(
         destChain,
         cfTesterAbi,
-        address,
+        destAddress,
         'ReceivedxSwapAndCall',
         [
           chainContractId(chainFromAsset(sourceAsset)).toString(),
@@ -666,21 +758,11 @@ export async function observeCcmReceived(
         stopObserveEvent,
       );
     case 'Solana':
-      return observeSolanaEvent(
-        destChain,
-        cfTesterAbi,
-        address,
-        'ReceivedxSwapAndCall',
-        [
-          chainContractId(chainFromAsset(sourceAsset)).toString(),
-          sourceAddress ?? null,
-          messageMetadata.message,
-          '*',
-          '*',
-          '*',
-          '*',
-        ],
-        stopObserveEvent,
+      return observeSolanaCcmEvent(
+        'ReceivedCcm',
+        chainContractId(chainFromAsset(sourceAsset)).toString(),
+        sourceAddress ?? null,
+        messageMetadata,
       );
     default:
       throw new Error(`Unsupported chain: ${destChain}`);

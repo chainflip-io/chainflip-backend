@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 cf-primitives = { path = '../primitives', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+cf-runtime-utilities = { path = '../runtime-utilities', default-features = false }
 
 # Cryptography
 digest = { version = "0.10" }

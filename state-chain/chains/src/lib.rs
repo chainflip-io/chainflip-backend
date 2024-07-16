@@ -529,6 +529,7 @@ pub enum SwapOrigin {
 	},
 }
 
+// TODO: PRO-1491
 pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
 pub const MAX_CCM_CF_PARAM_LENGTH: u32 = 1_000;
 

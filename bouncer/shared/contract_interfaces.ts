@@ -29,3 +29,6 @@ export const getKeyManagerAbi = loadContractCached(
 export const getSolanaVaultIdl = loadContractCached(
   `../contract-interfaces/sol-program-idls/${CF_SOL_PROGRAM_IDL_TAG}/vault.json`,
 );
+export const getCfTesterIdl = loadContractCached(
+  `../contract-interfaces/sol-program-idls/${CF_SOL_PROGRAM_IDL_TAG}/cf_tester.json`,
+);
