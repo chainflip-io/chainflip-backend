@@ -749,7 +749,7 @@ pub mod pallet {
 			>>::from_ref(&account_id);
 
 			ensure!(
-				(LastExpiredEpoch::<T>::get()..=CurrentEpoch::<T>::get())
+				(LastExpiredEpoch::<T>::get() + 1..=CurrentEpoch::<T>::get())
 					.all(|epoch| !HistoricalAuthorities::<T>::get(epoch).contains(validator_id)),
 				Error::<T>::StillKeyHolder
 			);

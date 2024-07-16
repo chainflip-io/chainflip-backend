@@ -1,6 +1,6 @@
 use chainflip_api::{
 	primitives::{state_chain_runtime, AccountRole, Asset, EpochIndex, ForeignChain},
-	BasisPoints,
+	AddressString, BasisPoints,
 };
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
@@ -67,7 +67,7 @@ pub struct SwapRequestParams {
 	// until we know which kind of address to expect (based
 	// on destination_asset)
 	/// Egress asset address to receive funds after the swap
-	pub destination_address: String,
+	pub destination_address: AddressString,
 	/// Commission to the broker in basis points
 	pub broker_commission: BasisPoints,
 	/// Commission to the booster in basis points
@@ -78,7 +78,7 @@ pub struct WithdrawFeesParams {
 	/// Asset to withdraw ("ETH"|"DOT")
 	pub asset: Asset,
 	/// Egress asset address to receive withdrawn funds
-	pub destination_address: String,
+	pub destination_address: AddressString,
 }
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum BrokerSubcommands {
@@ -101,7 +101,7 @@ pub enum LiquidityProviderSubcommands {
 	},
 	/// Register a Liquidity Refund Address for the given chain. An address must be
 	/// registered to request a deposit address for the given chain.
-	RegisterLiquidityRefundAddress { chain: ForeignChain, address: String },
+	RegisterLiquidityRefundAddress { chain: ForeignChain, address: AddressString },
 	/// Register this account as a liquidity provider account.
 	RegisterAccount,
 	/// De-register this liquidity provider account.

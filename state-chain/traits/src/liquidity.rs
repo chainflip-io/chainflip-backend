@@ -78,6 +78,8 @@ pub trait PoolApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> Result<u32, DispatchError>;
+
+	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
 }
 
 impl<T: frame_system::Config> PoolApi for T {
@@ -94,6 +96,9 @@ impl<T: frame_system::Config> PoolApi for T {
 	) -> Result<u32, DispatchError> {
 		Ok(0)
 	}
+	fn open_order_balances(_who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		AssetMap::from_fn(|_| 0)
+	}
 }
 
 pub struct NetworkFeeTaken {
@@ -101,10 +106,6 @@ pub struct NetworkFeeTaken {
 	pub network_fee: AssetAmount,
 }
 pub trait SwappingApi {
-	/// Takes the swap amount in STABLE_ASSET, collect network fee from it
-	/// and return the (remaining value, network fee taken)
-	fn take_network_fee(input_amount: AssetAmount) -> NetworkFeeTaken;
-
 	/// Process a single leg of a swap, into or from Stable asset. No network fee is taken.
 	fn swap_single_leg(
 		from: Asset,
@@ -148,4 +149,11 @@ pub enum SwapType {
 	CcmGas(SwapId),
 	NetworkFee,
 	IngressEgressFee,
+}
+
+pub trait BoostApi {
+	type AccountId;
+	type AssetMap;
+
+	fn boost_pool_account_balances(who: &Self::AccountId) -> Self::AssetMap;
 }
