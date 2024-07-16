@@ -92,7 +92,7 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	traits::{
 		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
-		One, OpaqueKeys, UniqueSaturatedInto, Verify,
+		One, OpaqueKeys, Saturating, UniqueSaturatedInto, Verify,
 	},
 	BoundedVec,
 };
@@ -116,8 +116,8 @@ pub use cf_primitives::{
 	SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
-	SwappingApi,
+	AccountInfo, BoostApi, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode,
+	SessionKeysRegistered, SwappingApi,
 };
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
@@ -247,6 +247,10 @@ impl pallet_cf_environment::Config for Runtime {
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
+parameter_types! {
+	pub const NetworkFee: Permill = Permill::from_perthousand(1);
+}
+
 impl pallet_cf_swapping::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = chainflip::AnyChainIngressEgressHandler;
@@ -258,6 +262,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
+	type NetworkFee = NetworkFee;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -332,7 +337,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
-	type AssetConverter = LiquidityPools;
+	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
@@ -353,7 +358,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type ChainTracking = PolkadotChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
-	type AssetConverter = LiquidityPools;
+	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
@@ -374,7 +379,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type ChainTracking = BitcoinChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
-	type AssetConverter = LiquidityPools;
+	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
@@ -395,7 +400,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type ChainTracking = ArbitrumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
-	type AssetConverter = LiquidityPools;
+	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
@@ -416,21 +421,16 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type ChainTracking = SolanaChainTracking;
 	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
-	type AssetConverter = LiquidityPools;
+	type AssetConverter = Swapping;
 	type FeePayment = Flip;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
-}
-
-parameter_types! {
-	pub const NetworkFee: Permill = Permill::from_perthousand(1);
 }
 
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = LiquidityProvider;
 	type SwapQueueApi = Swapping;
-	type NetworkFee = NetworkFee;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = ();
 }
@@ -1110,6 +1110,7 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	MigrationsForV1_5,
+	migrations::move_network_fees::NetworkFeesMigration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1261,6 +1262,20 @@ impl_runtime_apis! {
 		}
 		fn cf_free_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
 			LiquidityProvider::free_balances(&account_id).map_err(Into::into)
+		}
+		fn cf_lp_total_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
+			let free_balances = LiquidityProvider::free_balances(&account_id)?;
+			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
+			let boost_pools_balances = {
+				AssetMap {
+					eth: EthereumIngressEgress::boost_pool_account_balances(&account_id),
+					arb: ArbitrumIngressEgress::boost_pool_account_balances(&account_id),
+					btc: BitcoinIngressEgress::boost_pool_account_balances(&account_id),
+					dot: PolkadotIngressEgress::boost_pool_account_balances(&account_id),
+					sol: SolanaIngressEgress::boost_pool_account_balances(&account_id)
+				}
+			};
+			Ok(free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances))
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()
@@ -1440,7 +1455,7 @@ impl_runtime_apis! {
 
 			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, from, amount);
 
-			let swap_output = LiquidityPools::swap_with_network_fee(
+			let swap_output = Swapping::swap_with_network_fee(
 				from,
 				to,
 				amount_to_swap,
@@ -1536,7 +1551,7 @@ impl_runtime_apis! {
 		fn cf_ingress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				ForeignChainAndAsset::Ethereum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
+					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_ingress_fee(asset)
 					)
@@ -1544,7 +1559,7 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_ingress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_ingress_fee(asset).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
+					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_ingress_fee(asset)
 					)
@@ -1557,7 +1572,7 @@ impl_runtime_apis! {
 		fn cf_egress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				ForeignChainAndAsset::Ethereum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
+					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Ethereum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, EthereumInstance>::estimate_egress_fee(asset)
 					)
@@ -1565,7 +1580,7 @@ impl_runtime_apis! {
 				ForeignChainAndAsset::Polkadot(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, PolkadotInstance>::estimate_egress_fee(asset)),
 				ForeignChainAndAsset::Bitcoin(asset) => Some(pallet_cf_chain_tracking::Pallet::<Runtime, BitcoinInstance>::estimate_egress_fee(asset).into()),
 				ForeignChainAndAsset::Arbitrum(asset) => {
-					pallet_cf_pools::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
+					pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_egress_fee(asset)
 					)
