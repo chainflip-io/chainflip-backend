@@ -962,7 +962,7 @@ pub trait LiabilityTracker {
 	fn record_liability(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
 
 	#[cfg(feature = "try-runtime")]
-	fn total_liabilities(_gas_asset: Asset) -> AssetAmount;
+	fn total_liabilities(gas_asset: Asset) -> AssetAmount;
 }
 
 pub trait AssetWithholding {

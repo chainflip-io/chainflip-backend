@@ -203,9 +203,8 @@ impl<T: Config> Pallet<T> {
 					},
 				other => {
 					log_or_panic!(
-						"{:?} Liabilities are only supported for ExternalOwner::Account types, not {:?} for EVM chains.",
-						other,
-						chain
+						"Expected ExternalOwner::Account for EVM chains, got {:?}.",
+						other
 					);
 					0
 				},
