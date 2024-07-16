@@ -20,7 +20,7 @@ env:
 
 jobs:
   compile:
-    runs-on: namespace-profile-rust-builder
+    runs-on: digitalocean
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
       credentials:
