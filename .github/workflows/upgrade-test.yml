@@ -227,6 +227,8 @@ jobs:
           ls -l /usr/lib/libchainflip_engine_v*.so
           echo "Check for libchainflip_engine_v*.so complete"
           sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
+          echo "Check /usr/lib after copy"
+          ls -l /usr/lib/libchainflip_engine_v*.so
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
