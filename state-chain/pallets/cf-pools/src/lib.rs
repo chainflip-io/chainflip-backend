@@ -5,8 +5,8 @@ use cf_amm::{
 	range_orders::{self, Liquidity},
 	PoolState,
 };
-use cf_chains::{assets::any::AssetMap, Chain};
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
+use cf_chains::assets::any::AssetMap;
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_traits::{
 	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwappingApi,
 };
@@ -21,7 +21,7 @@ use frame_support::{
 
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::traits::{SaturatedConversion, UniqueSaturatedInto, Zero};
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -997,7 +997,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 	}
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
-		let mut result = AssetMap::from_fn(|_| 0);
+		let mut result: AssetMap<AssetAmount> = AssetMap::from_fn(|_| 0);
 
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
 			let pool_orders = match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone())) {

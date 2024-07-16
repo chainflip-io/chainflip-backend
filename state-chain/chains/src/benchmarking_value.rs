@@ -160,44 +160,44 @@ impl BenchmarkValue for PolkadotTransactionId {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<T: Default> BenchmarkValue for AssetMap<T> {
+impl<T: BenchmarkValue> BenchmarkValue for AssetMap<T> {
 	fn benchmark_value() -> Self {
-		Self::from_fn(|_| T::default())
+		Self::from_fn(|_| T::benchmark_value())
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<T: Default> BenchmarkValue for eth::AssetMap<T> {
+impl<T: BenchmarkValue> BenchmarkValue for eth::AssetMap<T> {
 	fn benchmark_value() -> Self {
-		Self::from_fn(|_| T::default())
+		Self::from_fn(|_| T::benchmark_value())
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<T: Default> BenchmarkValue for btc::AssetMap<T> {
+impl<T: BenchmarkValue> BenchmarkValue for btc::AssetMap<T> {
 	fn benchmark_value() -> Self {
-		Self::from_fn(|_| T::default())
+		Self::from_fn(|_| T::benchmark_value())
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<T: Default> BenchmarkValue for dot::AssetMap<T> {
+impl<T: BenchmarkValue> BenchmarkValue for dot::AssetMap<T> {
 	fn benchmark_value() -> Self {
-		Self::from_fn(|_| T::default())
+		Self::from_fn(|_| T::benchmark_value())
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<T: Default> BenchmarkValue for arb::AssetMap<T> {
+impl<T: BenchmarkValue> BenchmarkValue for arb::AssetMap<T> {
 	fn benchmark_value() -> Self {
-		Self::from_fn(|_| T::default())
+		Self::from_fn(|_| T::benchmark_value())
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<T: Default> BenchmarkValue for sol::AssetMap<T> {
+impl<T: BenchmarkValue> BenchmarkValue for sol::AssetMap<T> {
 	fn benchmark_value() -> Self {
-		Self::from_fn(|_| T::default())
+		Self::from_fn(|_| T::benchmark_value())
 	}
 }
 
