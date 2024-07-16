@@ -26,8 +26,8 @@ mod tests;
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
 // TODO: Figure out adequate values for these.
-pub const MAX_ETH_REFUND_PER_EPOCH: u32 = 25;
-pub const MAX_ARB_REFUND_PER_EPOCH: u32 = 10;
+pub const MAX_ETH_REFUND_PER_EPOCH: usize = 25;
+pub const MAX_ARB_REFUND_PER_EPOCH: usize = 10;
 pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -103,6 +103,8 @@ pub mod pallet {
 			destination: ForeignChainAddress,
 			amount: AssetAmount,
 		},
+		/// The refund was skipped because the
+		RefundSkipped { reason: DispatchError },
 		/// The Vault is running a deficit: we owe more than we have set aside for refunds.
 		VaultDeficitDetected {
 			chain: ForeignChain,
@@ -139,6 +141,9 @@ impl<T: Config> Pallet<T> {
 				.and_then(
 					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
 						if egress_amount < REFUND_FEE_MULTIPLE * fee_withheld {
+							Self::deposit_event(Event::RefundSkipped {
+								reason: Error::<T>::RefundAmountTooLow.into(),
+							});
 							Err(Error::<T>::RefundAmountTooLow.into())
 						} else {
 							Ok(result)
@@ -153,11 +158,11 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn should_abort_refunding(chain: ForeignChain, number_or_refunds: u32) -> bool {
+	fn should_abort_refunding(chain: ForeignChain, number_or_refunds: usize) -> bool {
 		match chain {
-			ForeignChain::Ethereum => number_or_refunds > MAX_ETH_REFUND_PER_EPOCH,
-			ForeignChain::Arbitrum => number_or_refunds > MAX_ARB_REFUND_PER_EPOCH,
-			_ => return false,
+			ForeignChain::Ethereum => number_or_refunds >= MAX_ETH_REFUND_PER_EPOCH,
+			ForeignChain::Arbitrum => number_or_refunds >= MAX_ARB_REFUND_PER_EPOCH,
+			_ => false,
 		}
 	}
 
@@ -258,9 +263,7 @@ impl<T: Config> Pallet<T> {
 				let mut owed_assets = owed_assets.into_iter().collect::<Vec<_>>();
 				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(*amount));
 
-				let mut refund_counter = 0;
-
-				for (destination, amount) in &mut owed_assets {
+				for (refund_counter, (destination, amount)) in owed_assets.iter_mut().enumerate() {
 					debug_assert!(*amount > 0);
 					if Self::should_abort_refunding(chain, refund_counter) {
 						break;
@@ -272,7 +275,6 @@ impl<T: Config> Pallet<T> {
 							},
 						Err(_) => break,
 					}
-					refund_counter += 1;
 				}
 
 				owed_assets.retain(|(_, amount)| *amount > 0);

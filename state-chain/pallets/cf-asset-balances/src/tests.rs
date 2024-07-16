@@ -1,10 +1,11 @@
-use cf_chains::{ForeignChain, ForeignChainAddress};
+use cf_chains::{Ethereum, ForeignChain, ForeignChainAddress};
 use cf_primitives::AssetAmount;
 use cf_traits::{
 	mocks::egress_handler::MockEgressParameter, AssetWithholding, LiabilityTracker, SetSafeMode,
 };
 
 use cf_chains::AnyChain;
+use cf_test_utilities::assert_has_event;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SafeMode};
 
 use crate::{mock::*, ExternalOwner, Liabilities, Pallet, WithheldAssets};
@@ -112,8 +113,6 @@ pub fn refund_validators_btc() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Bitcoin, 100, BTC_ADDR_1.clone());
 
-		assert_eq!(100, 100);
-
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Bitcoin.gas_asset()), 100);
 
 		Pallet::<Test>::trigger_reconciliation();
@@ -157,8 +156,6 @@ pub fn refund_validators_polkadot() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Polkadot, 100, DOT_ADDR_1.clone());
 
-		assert_eq!(100, 100);
-
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Polkadot.gas_asset()), 100);
 
 		Pallet::<Test>::trigger_reconciliation();
@@ -177,5 +174,54 @@ pub fn refund_validators_polkadot() {
 		assert!(recorded_fees_dot.is_empty());
 
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Polkadot.gas_asset()), 0);
+	});
+}
+
+#[test]
+pub fn max_refunds_per_epoch() {
+	new_test_ext().execute_with(|| {
+		for i in 0..crate::MAX_ETH_REFUND_PER_EPOCH + 2 {
+			payed_gas(
+				ForeignChain::Ethereum,
+				100,
+				ForeignChainAddress::Eth(sp_core::H160([i as u8; 20])),
+			);
+		}
+		assert_eq!(
+			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()),
+			(100 * (crate::MAX_ETH_REFUND_PER_EPOCH as u128 + 2))
+		);
+		Pallet::<Test>::trigger_reconciliation();
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 200);
+		assert!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()) > 0);
+		assert_eq!(Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).len(), 2);
+		Pallet::<Test>::trigger_reconciliation();
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 0);
+		assert_eq!(Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).len(), 0);
+	});
+}
+
+#[test]
+pub fn do_not_refund_if_amount_is_too_low() {
+	new_test_ext().execute_with(|| {
+		const REFUND_AMOUNT: u128 = 10;
+		payed_gas(ForeignChain::Ethereum, REFUND_AMOUNT, ETH_ADDR_1.clone());
+
+		MockEgressHandler::<Ethereum>::set_fee(REFUND_AMOUNT * 2);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), REFUND_AMOUNT);
+
+		Pallet::<Test>::trigger_reconciliation();
+
+		assert_has_event::<Test>(
+			crate::Event::RefundSkipped { reason: crate::Error::<Test>::RefundAmountTooLow.into() }
+				.into(),
+		);
+
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), REFUND_AMOUNT);
+		assert_eq!(
+			Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset())
+				.get(&ExternalOwner::Account(ETH_ADDR_1)),
+			Some(&REFUND_AMOUNT)
+		);
 	});
 }
