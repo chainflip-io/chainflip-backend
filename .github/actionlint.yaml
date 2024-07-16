@@ -3,6 +3,7 @@ self-hosted-runner:
   labels:
     [
       digitalocean,
+      digitalocean-rust,
       hetzner,
       namespace-profile-rust-builder,
       nscloud-ubuntu-22.04-amd64-2x4,
