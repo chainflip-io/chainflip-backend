@@ -1,16 +1,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use core::ops::Range;
-
 use cf_amm::{
 	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
 	limit_orders::{self, Collected, PositionInfo},
 	range_orders::{self, Liquidity},
 	PoolState,
 };
+use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_traits::{
 	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwappingApi,
 };
+use core::ops::Range;
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
@@ -21,6 +21,7 @@ use frame_support::{
 
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -993,6 +994,39 @@ impl<T: Config> PoolApi for Pallet<T> {
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
+	}
+
+	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		let mut result: AssetMap<AssetAmount> = AssetMap::from_fn(|_| 0);
+
+		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
+			let pool_orders = match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone())) {
+				Ok(orders) => orders,
+				Err(_) => continue,
+			};
+			for ask in pool_orders.limit_orders.asks {
+				result[base_asset] = result[base_asset]
+					.saturating_add(ask.sell_amount.saturated_into::<AssetAmount>());
+			}
+			for bid in pool_orders.limit_orders.bids {
+				result[Asset::Usdc] = result[Asset::Usdc]
+					.saturating_add(bid.sell_amount.saturated_into::<AssetAmount>());
+			}
+			for range_order in pool_orders.range_orders {
+				let pair = Self::pool_range_order_liquidity_value(
+					base_asset,
+					Asset::Usdc,
+					range_order.range,
+					range_order.liquidity,
+				)
+				.expect("Cannot fail we are sure the pool exists and the orders too");
+				result[base_asset] =
+					result[base_asset].saturating_add(pair.base.saturated_into::<AssetAmount>());
+				result[Asset::Usdc] =
+					result[Asset::Usdc].saturating_add(pair.quote.saturated_into::<AssetAmount>());
+			}
+		}
+		result
 	}
 }
 

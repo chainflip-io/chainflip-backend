@@ -92,7 +92,7 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	traits::{
 		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
-		One, OpaqueKeys, UniqueSaturatedInto, Verify,
+		One, OpaqueKeys, Saturating, UniqueSaturatedInto, Verify,
 	},
 	BoundedVec,
 };
@@ -116,8 +116,8 @@ pub use cf_primitives::{
 	SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
-	SwappingApi,
+	AccountInfo, BoostApi, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode,
+	SessionKeysRegistered, SwappingApi,
 };
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
@@ -1262,6 +1262,20 @@ impl_runtime_apis! {
 		}
 		fn cf_free_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
 			LiquidityProvider::free_balances(&account_id).map_err(Into::into)
+		}
+		fn cf_lp_total_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
+			let free_balances = LiquidityProvider::free_balances(&account_id)?;
+			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
+			let boost_pools_balances = {
+				AssetMap {
+					eth: EthereumIngressEgress::boost_pool_account_balances(&account_id),
+					arb: ArbitrumIngressEgress::boost_pool_account_balances(&account_id),
+					btc: BitcoinIngressEgress::boost_pool_account_balances(&account_id),
+					dot: PolkadotIngressEgress::boost_pool_account_balances(&account_id),
+					sol: SolanaIngressEgress::boost_pool_account_balances(&account_id)
+				}
+			};
+			Ok(free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances))
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()

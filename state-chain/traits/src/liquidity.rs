@@ -78,6 +78,8 @@ pub trait PoolApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> Result<u32, DispatchError>;
+
+	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
 }
 
 impl<T: frame_system::Config> PoolApi for T {
@@ -93,6 +95,9 @@ impl<T: frame_system::Config> PoolApi for T {
 		_quote_asset: Asset,
 	) -> Result<u32, DispatchError> {
 		Ok(0)
+	}
+	fn open_order_balances(_who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		AssetMap::from_fn(|_| 0)
 	}
 }
 
@@ -144,4 +149,11 @@ pub enum SwapType {
 	CcmGas(SwapId),
 	NetworkFee,
 	IngressEgressFee,
+}
+
+pub trait BoostApi {
+	type AccountId;
+	type AssetMap;
+
+	fn boost_pool_account_balances(who: &Self::AccountId) -> Self::AssetMap;
 }

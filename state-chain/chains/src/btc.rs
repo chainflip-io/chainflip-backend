@@ -6,7 +6,8 @@ pub mod utxo_selection;
 extern crate alloc;
 use self::deposit_address::DepositAddress;
 use crate::{
-	Chain, ChainCrypto, DepositChannel, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
+	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, DepositChannel, FeeEstimationApi,
+	FeeRefundCalculator, RetryPolicy,
 };
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
@@ -18,12 +19,12 @@ use cf_primitives::{
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES, VAULT_UTXO_SIZE_IN_BYTES,
 };
 use cf_utilities::SliceToArray;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use core::{cmp::max, mem::size_of};
 use frame_support::{
 	pallet_prelude::RuntimeDebug,
 	traits::{ConstBool, ConstU32},
-	BoundedVec,
+	BoundedVec, Parameter,
 };
 use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
@@ -31,6 +32,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use sp_io::hashing::sha2_256;
+use sp_runtime::traits::{MaybeSerializeDeserialize, Member};
 use sp_std::{vec, vec::Vec};
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
@@ -229,16 +231,27 @@ impl Chain for Bitcoin {
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = BitcoinTrackedData;
 	type ChainAsset = assets::btc::Asset;
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+			+ Default,
+	> = assets::btc::AssetMap<T>;
 	type ChainAccount = ScriptPubkey;
 	type DepositFetchId = BitcoinFetchId;
 	type DepositChannelState = DepositAddress;
 	type DepositDetails = UtxoId;
 	type Transaction = BitcoinTransactionData;
 	type TransactionMetadata = ();
+	type TransactionRef = Hash;
 	// There is no need for replay protection on Bitcoin since it is a UTXO chain.
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
-	type TransactionRef = Hash;
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
