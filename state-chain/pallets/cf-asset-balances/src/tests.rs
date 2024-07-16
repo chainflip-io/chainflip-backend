@@ -67,7 +67,7 @@ fn refund_validators_evm() {
 }
 
 #[test]
-fn skip_refunding_if_safe_mode_is_disabled() {
+fn skip_refunding_if_safe_mode_is_enabled() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
 

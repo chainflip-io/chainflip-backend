@@ -43,6 +43,7 @@ impl From<ForeignChainAddress> for ExternalOwner {
 	}
 }
 
+// The implementation for the **Ord** trait is required to use ExternalOwner as a key in a BTreeMap.
 impl core::cmp::Ord for ExternalOwner {
 	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
 		match (self, other) {
@@ -90,7 +91,7 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Refund amount is too low to cover the fee.
+		/// Refund amount is too low to cover the egress fees. In this case, the refund is skipped.
 		RefundAmountTooLow,
 	}
 
@@ -103,7 +104,7 @@ pub mod pallet {
 			destination: ForeignChainAddress,
 			amount: AssetAmount,
 		},
-		/// The refund was skipped because the
+		/// The refund was skipped because of the given reason.
 		RefundSkipped { reason: DispatchError },
 		/// The Vault is running a deficit: we owe more than we have set aside for refunds.
 		VaultDeficitDetected {
@@ -135,30 +136,31 @@ impl<T: Config> Pallet<T> {
 		address: ForeignChainAddress,
 		amount: AssetAmount,
 	) -> Result<(), DispatchError> {
-		let egress_details =
-			T::EgressHandler::schedule_egress(chain.gas_asset(), amount, address.clone(), None)
-				.map_err(Into::into)
-				.and_then(
-					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
-						if egress_amount < REFUND_FEE_MULTIPLE * fee_withheld {
-							Self::deposit_event(Event::RefundSkipped {
-								reason: Error::<T>::RefundAmountTooLow.into(),
-							});
-							Err(Error::<T>::RefundAmountTooLow.into())
-						} else {
-							Ok(result)
-						}
-					},
-				)?;
-		Self::deposit_event(Event::RefundScheduled {
-			egress_id: egress_details.egress_id,
-			destination: address,
-			amount,
-		});
-		Ok(())
+		match T::EgressHandler::schedule_egress(chain.gas_asset(), amount, address.clone(), None)
+			.map_err(Into::into)
+			.and_then(|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
+				if egress_amount < REFUND_FEE_MULTIPLE * fee_withheld {
+					Err(Error::<T>::RefundAmountTooLow.into())
+				} else {
+					Ok(result)
+				}
+			}) {
+			Ok(ScheduledEgressDetails { egress_id, .. }) => {
+				Self::deposit_event(Event::RefundScheduled {
+					egress_id,
+					destination: address,
+					amount,
+				});
+				Ok(())
+			},
+			Err(err) => {
+				Self::deposit_event(Event::RefundSkipped { reason: err });
+				Err(err)
+			},
+		}
 	}
 
-	fn should_abort_refunding(chain: ForeignChain, number_or_refunds: usize) -> bool {
+	fn stop_refunding(chain: ForeignChain, number_or_refunds: usize) -> bool {
 		match chain {
 			ForeignChain::Ethereum => number_or_refunds >= MAX_ETH_REFUND_PER_EPOCH,
 			ForeignChain::Arbitrum => number_or_refunds >= MAX_ARB_REFUND_PER_EPOCH,
@@ -166,17 +168,17 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Reconciles the amount owed with the amount available for distribution.
-	///
-	/// The owed and available amount are mutated in place.
-	///
-	/// For Ethereum and Arbitrum, we expect to the validators and pay out via egress to their
-	/// accounts. For Polkadot, we expect to pay out to the current AggKey account.
-	/// For Bitcoin and Solana, the vault pays the fees directly so we don't need to egress
-	/// anything.
-	///
-	/// Note that we refund to accounts atomically (we never partially refund an account), whereas
-	/// refunds to vaults or aggkeys can be made incrementally.
+	// Reconciles the amount owed with the amount available for distribution.
+	//
+	// The owed and available amount are mutated in place.
+	//
+	// For Ethereum and Arbitrum, we expect to the validators and pay out via egress to their
+	// accounts. For Polkadot, we expect to pay out to the current AggKey account.
+	// For Bitcoin and Solana, the vault pays the fees directly so we don't need to egress
+	// anything.
+	//
+	// Note that we refund to accounts atomically (we never partially refund an account), whereas
+	// refunds to vaults or aggkeys can be made incrementally.
 	fn reconcile(
 		chain: ForeignChain,
 		owner: &ExternalOwner,
@@ -201,7 +203,7 @@ impl<T: Config> Pallet<T> {
 					},
 				other => {
 					log_or_panic!(
-						"{:?} Liabilities are not supported for chain {:?}.",
+						"{:?} Liabilities are only supported for ExternalOwner::Account types, not {:?} for EVM chains.",
 						other,
 						chain
 					);
@@ -251,6 +253,9 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	/// Triggers the reconciliation process for all chains.
+	/// This function will refund the owed assets to the appropriate accounts following the chain
+	/// specific requirements.
 	pub fn trigger_reconciliation() {
 		if !T::SafeMode::get().reconciliation_enabled {
 			log::info!("Reconciliation is disabled. Skipping reconciliation.");
@@ -258,22 +263,21 @@ impl<T: Config> Pallet<T> {
 		}
 
 		for chain in ForeignChain::iter() {
-			let owed_assets = Liabilities::<T>::take(chain.gas_asset());
 			WithheldAssets::<T>::mutate(chain.gas_asset(), |total_withheld| {
-				let mut owed_assets = owed_assets.into_iter().collect::<Vec<_>>();
+				let mut owed_assets =
+					Liabilities::<T>::take(chain.gas_asset()).into_iter().collect::<Vec<_>>();
 				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(*amount));
 
 				for (refund_counter, (destination, amount)) in owed_assets.iter_mut().enumerate() {
 					debug_assert!(*amount > 0);
-					if Self::should_abort_refunding(chain, refund_counter) {
+					if Self::stop_refunding(chain, refund_counter) {
 						break;
 					}
 					match Self::reconcile(chain, destination, amount, total_withheld) {
-						Ok(_) =>
-							if *total_withheld == 0 {
-								break;
-							},
-						Err(_) => break,
+						Err(_) | Ok(_) if *total_withheld == 0 => {
+							break;
+						},
+						_ => {},
 					}
 				}
 

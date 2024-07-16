@@ -77,7 +77,7 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							ingress_egress_bitcoin: old.ingress_egress_bitcoin,
 							ingress_egress_polkadot: old.ingress_egress_polkadot,
 							ingress_egress_arbitrum: old.ingress_egress_arbitrum,
-							ingress_egress_solana: <pallet_cf_ingress_egress::PalletSafeMode<SolanaInstance> as SafeMode>::CODE_RED,
+							ingress_egress_solana: <pallet_cf_ingress_egress::PalletSafeMode<SolanaInstance> as SafeMode>::CODE_GREEN,
 							witnesser: old.witnesser,
 						}
 				})
