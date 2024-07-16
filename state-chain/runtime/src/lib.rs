@@ -1267,50 +1267,57 @@ impl_runtime_apis! {
 			let mut balances = LiquidityProvider::free_balances(&account_id).map_err(Into::<DispatchErrorWithMessage>::into)?;
 			let base_assets: Vec<Asset> = Asset::all().collect();
 			for base_asset in base_assets {
-				let orders = Self::cf_pool_orders(base_asset, Asset::Usdc, Some(account_id.clone())).unwrap();
 				let boosted_funds = Self::cf_boost_pool_details(base_asset);
+				let boost_amount = boosted_funds.iter().fold(0, |acc, (_fee, elem)| acc + elem.available_amounts.get(&account_id).unwrap_or(&0u128) + elem.pending_boosts.iter().fold(0, |acc, (_boost_id, elem)| acc + elem.get(&account_id).unwrap_or(&OwedAmount{total: 0u128, fee: 0u128}).total));
 				// pub struct BoostPoolDetails {
 				// 	pub available_amounts: BTreeMap<AccountId32, u128>,
 				// 	pub pending_boosts: BTreeMap<u64, BTreeMap<AccountId32, OwedAmount<u128>>>,
 				// 	pub pending_withdrawals: BTreeMap<AccountId32, BTreeSet<u64>>,
 				// }
-				let boost_amount = boosted_funds.iter().fold(0, |acc, (_fee, elem)| acc + elem.available_amounts.get(&account_id).unwrap_or(&0u128) + elem.pending_boosts.iter().fold(0, |acc, (_boost_id, elem)| acc + elem.get(&account_id).unwrap_or(&OwedAmount{total: 0u128, fee: 0u128}).total));
-				for ask in orders.limit_orders.asks {
-					match base_asset {
-						Asset::Usdc => {
-							// is this necessary? is it possible to open orders from usdc to usdc???
-							// maybe querying cf_pool_orders for USDC -> USDC throw an error! keep this into account
-							// If it throws an error just handle it and only check the boosted funds for usdc not the orders!
-							balances.eth.usdc += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
-						},
-						Asset::Usdt => {
-							balances.eth.usdt += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
-						},
-						Asset::Eth => {
-							balances.eth.eth += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
-						},
-						Asset::Flip => {
-							balances.eth.flip += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
-						},
-						Asset::Btc => {
-							balances.btc.btc += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
-						},
-						Asset::Dot => {
-							balances.dot.dot += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
-						},
-						Asset::ArbEth => {
-							balances.arb.eth += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
-						},
-						Asset::ArbUsdc => {
-							balances.arb.usdc += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
-						},
-						Asset::Sol => {
-							balances.sol.sol += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+				match Self::cf_pool_orders(base_asset, Asset::Usdc, Some(account_id.clone())) {
+					Ok(orders) => {
+						for ask in orders.limit_orders.asks {
+							match base_asset {
+								Asset::Usdc => {
+									// is this necessary? is it possible to open orders from usdc to usdc???
+									// maybe querying cf_pool_orders for USDC -> USDC throw an error! keep this into account
+									// If it throws an error just handle it and only check the boosted funds for usdc not the orders!
+									balances.eth.usdc += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+								},
+								Asset::Usdt => {
+									balances.eth.usdt += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+								},
+								Asset::Eth => {
+									balances.eth.eth += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+								},
+								Asset::Flip => {
+									balances.eth.flip += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+								},
+								Asset::Btc => {
+									balances.btc.btc += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+								},
+								Asset::Dot => {
+									balances.dot.dot += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+								},
+								Asset::ArbEth => {
+									balances.arb.eth += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+								},
+								Asset::ArbUsdc => {
+									balances.arb.usdc += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+								},
+								Asset::Sol => {
+									balances.sol.sol += <sp_core::U256 as TryInto<u128>>::try_into(ask.sell_amount).unwrap() + boost_amount;
+								}
+							}
 						}
+						for bid in orders.limit_orders.bids {
+							balances.eth.usdc += <sp_core::U256 as TryInto<u128>>::try_into(bid.sell_amount).unwrap() + boost_amount;
+						}
+					},
+					Err(_) => {
+						// the pool usdc/usdc doesn't exists so it throws an error, we should still check the boosted funds for usdc!
+						balances.eth.usdc += boost_amount;
 					}
-				}
-				for bid in orders.limit_orders.bids {
-					balances.eth.usdc += <sp_core::U256 as TryInto<u128>>::try_into(bid.sell_amount).unwrap() + boost_amount;
 				}
 			}
 
