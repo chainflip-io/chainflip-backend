@@ -93,6 +93,18 @@ fn schedule_deposit_to_swap(
 		},
 	));
 
+	assert!(
+		assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapDepositAddressReady {
+		deposit_address: event_deposit_address,
+		source_asset,
+		destination_asset,
+		..
+	}) if event_deposit_address == EncodedAddress::Sol(deposit_address.into())
+		&& source_asset == from 
+		&& destination_asset == to
+		=> true)
+	);
+
 	assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
 		swap_id,
 		origin: SwapOrigin::DepositChannel {
