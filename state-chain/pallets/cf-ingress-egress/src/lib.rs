@@ -30,8 +30,8 @@ use cf_chains::{
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
-	EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, BoostPoolTier, BroadcastId,
+	ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId,
 	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -214,7 +214,7 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static = ()> {
 	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
 	/// Set the max allowed value for the number of blocks to keep retrying a swap before it is
 	/// refunded
-	SetMaxSwapRetryDurationBlocks { blocks: u32 },
+	SetMaxSwapRetryDurationBlocks { blocks: BlockNumber },
 }
 
 #[frame_support::pallet]
@@ -362,7 +362,7 @@ pub mod pallet {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
 		pub dust_limits: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
-		pub max_swap_retry_duration_blocks: u32,
+		pub max_swap_retry_duration_blocks: BlockNumber,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
@@ -576,7 +576,7 @@ pub mod pallet {
 	/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
 	#[pallet::storage]
 	pub(super) type MaxSwapRetryDurationBlocks<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, u32, ValueQuery, ConstU32<DEFAULT_SWAP_RETRY_DURATION_BLOCKS>>;
+		StorageValue<_, BlockNumber, ValueQuery, ConstU32<DEFAULT_SWAP_RETRY_DURATION_BLOCKS>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -702,7 +702,7 @@ pub mod pallet {
 			boost_pool: BoostPoolId<T::TargetChain>,
 		},
 		MaxSwapRetryDurationSet {
-			max_swap_retry_duration_blocks: u32,
+			max_swap_retry_duration_blocks: BlockNumber,
 		},
 	}
 
