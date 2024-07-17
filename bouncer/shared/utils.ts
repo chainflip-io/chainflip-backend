@@ -14,10 +14,8 @@ import {
 } from '@chainflip/cli';
 import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
 import BigNumber from 'bignumber.js';
-import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import { base58Decode, base58Encode } from '../polkadot/util-crypto';
 import { newDotAddress } from './new_dot_address';
@@ -26,13 +24,11 @@ import { getBalance } from './get_balance';
 import { newEvmAddress } from './new_evm_address';
 import { CcmDepositMetadata } from './new_swap';
 import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
-import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
 
 const cfTesterAbi = await getCFTesterAbi();
-const cfTesterIdl = await getCfTesterIdl();
 const cfTesterIdl = await getCfTesterIdl();
 
 export const lpMutex = new Mutex();
@@ -627,7 +623,6 @@ export async function observeEVMEvent(
 }
 
 export async function observeSolanaCcmEvent(
-export async function observeSolanaCcmEvent(
   eventName: string,
   sourceChain: string,
   sourceAddress: string | null,
@@ -742,7 +737,6 @@ export async function observeCcmReceived(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  destAddress: string,
   messageMetadata: CcmDepositMetadata,
   sourceAddress?: string,
   stopObserveEvent?: () => boolean,
@@ -754,7 +748,6 @@ export async function observeCcmReceived(
       return observeEVMEvent(
         destChain,
         cfTesterAbi,
-        destAddress,
         destAddress,
         'ReceivedxSwapAndCall',
         [
@@ -769,11 +762,6 @@ export async function observeCcmReceived(
         stopObserveEvent,
       );
     case 'Solana':
-      return observeSolanaCcmEvent(
-        'ReceivedCcm',
-        chainContractId(chainFromAsset(sourceAsset)).toString(),
-        sourceAddress ?? null,
-        messageMetadata,
       return observeSolanaCcmEvent(
         'ReceivedCcm',
         chainContractId(chainFromAsset(sourceAsset)).toString(),
