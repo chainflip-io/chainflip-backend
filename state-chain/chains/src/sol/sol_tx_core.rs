@@ -867,7 +867,6 @@ impl FromStr for Hash {
 }
 
 /// Values used for testing purposes
-#[cfg(test)]
 pub mod sol_test_values {
 	use crate::{
 		sol::{
@@ -877,6 +876,7 @@ pub mod sol_test_values {
 		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
 	};
 	use sol_prim::consts::{const_address, const_hash};
+	use sp_std::vec;
 
 	pub const VAULT_PROGRAM: SolAddress =
 		const_address("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf");
@@ -885,13 +885,13 @@ pub mod sol_test_values {
 	pub const VAULT_PROGRAM_DATA_ACCOUNT: SolAddress =
 		const_address("wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc");
 	// MIN_PUB_KEY per supported spl-token
-	pub const MINT_PUB_KEY: SolAddress =
+	pub const USDC_TOKEN_MINT_PUB_KEY: SolAddress =
 		const_address("24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p");
 	pub const TOKEN_VAULT_PDA_ACCOUNT: SolAddress =
 		const_address("CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d");
 	// This can be derived from the TOKEN_VAULT_PDA_ACCOUNT and the mintPubKey but we can have it
 	// stored There will be a different one per each supported spl-token
-	pub const TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: SolAddress =
+	pub const USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: SolAddress =
 		const_address("GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd");
 	pub const NONCE_ACCOUNTS: [SolAddress; 10] = [
 		const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
@@ -1182,7 +1182,7 @@ mod tests {
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let vault_program_id = VAULT_PROGRAM;
-		let token_mint_pubkey = MINT_PUB_KEY;
+		let token_mint_pubkey = USDC_TOKEN_MINT_PUB_KEY;
 
 		let seed = 0u64;
 		let deposit_channel = derive_deposit_address(seed, vault_program_id).unwrap();
@@ -1232,8 +1232,8 @@ mod tests {
 				agg_key_pubkey,
 				deposit_channel.address,
 				deposit_channel_ata.address,
-				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
-				MINT_PUB_KEY,
+				USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				USDC_TOKEN_MINT_PUB_KEY,
 				TOKEN_PROGRAM_ID,
 				deposit_channel_historical_fetch.address,
 				SYSTEM_PROGRAM_ID,
@@ -1259,7 +1259,7 @@ mod tests {
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let vault_program_id = VAULT_PROGRAM;
-		let token_mint_pubkey = MINT_PUB_KEY;
+		let token_mint_pubkey = USDC_TOKEN_MINT_PUB_KEY;
 
 		let deposit_channel_0 = derive_deposit_address(0u64, vault_program_id).unwrap();
 		let deposit_channel_ata_0 =
@@ -1292,8 +1292,8 @@ mod tests {
 				agg_key_pubkey,
 				deposit_channel_0.address,
 				deposit_channel_ata_0.address,
-				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
-				MINT_PUB_KEY,
+				USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				USDC_TOKEN_MINT_PUB_KEY,
 				TOKEN_PROGRAM_ID,
 				deposit_channel_historical_fetch_0.address,
 				SYSTEM_PROGRAM_ID,
@@ -1306,8 +1306,8 @@ mod tests {
 				agg_key_pubkey,
 				deposit_channel_1.address,
 				deposit_channel_ata_1.address,
-				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
-				MINT_PUB_KEY,
+				USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				USDC_TOKEN_MINT_PUB_KEY,
 				TOKEN_PROGRAM_ID,
 				deposit_channel_historical_fetch_1.address,
 				SYSTEM_PROGRAM_ID,
@@ -1340,7 +1340,7 @@ mod tests {
 		let durable_nonce = TEST_DURABLE_NONCE.into();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
-		let token_mint_pubkey = MINT_PUB_KEY;
+		let token_mint_pubkey = USDC_TOKEN_MINT_PUB_KEY;
 
 		let to_pubkey = TRANSFER_TO_ACCOUNT;
 		let to_pubkey_ata = derive_associated_token_account(to_pubkey, token_mint_pubkey).unwrap();
@@ -1355,7 +1355,7 @@ mod tests {
 			AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
 				&agg_key_pubkey,
 				&to_pubkey.into(),
-				&MINT_PUB_KEY.into(),
+				&USDC_TOKEN_MINT_PUB_KEY.into(),
 				&to_pubkey_ata.address.into(),
 			),
 			VaultProgram::with_id(VAULT_PROGRAM).transfer_tokens(
@@ -1364,9 +1364,9 @@ mod tests {
 				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				TOKEN_VAULT_PDA_ACCOUNT,
-				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 				to_pubkey_ata.address,
-				MINT_PUB_KEY,
+				USDC_TOKEN_MINT_PUB_KEY,
 				TOKEN_PROGRAM_ID,
 			),
 		];
@@ -1482,7 +1482,7 @@ mod tests {
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 		let agg_key_pubkey = agg_key_keypair.pubkey();
 		let amount = TRANSFER_AMOUNT;
-		let token_mint_pubkey = MINT_PUB_KEY;
+		let token_mint_pubkey = USDC_TOKEN_MINT_PUB_KEY;
 		let extra_accounts = ccm_accounts();
 		let ccm_parameter = ccm_parameter();
 
@@ -1508,9 +1508,9 @@ mod tests {
 				VAULT_PROGRAM_DATA_ACCOUNT,
 				agg_key_pubkey,
 				TOKEN_VAULT_PDA_ACCOUNT,
-				TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+				USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 				to_pubkey_ata.address,
-				MINT_PUB_KEY,
+				USDC_TOKEN_MINT_PUB_KEY,
 				TOKEN_PROGRAM_ID,
 			),
 			VaultProgram::with_id(VAULT_PROGRAM).execute_ccm_token_call(
@@ -1523,7 +1523,7 @@ mod tests {
 				to_pubkey_ata.address,
 				extra_accounts.clone().cf_receiver,
 				TOKEN_PROGRAM_ID,
-				MINT_PUB_KEY,
+				USDC_TOKEN_MINT_PUB_KEY,
 				SYS_VAR_INSTRUCTIONS,
 			).with_remaining_accounts(extra_accounts.remaining_account_metas()),
 		];

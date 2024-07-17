@@ -406,8 +406,8 @@ mod test {
 			vault_program: VAULT_PROGRAM,
 			vault_program_data_account: VAULT_PROGRAM_DATA_ACCOUNT,
 			token_vault_pda_account: TOKEN_VAULT_PDA_ACCOUNT,
-			usdc_token_mint_pubkey: MINT_PUB_KEY,
-			usdc_token_vault_ata: TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+			usdc_token_mint_pubkey: USDC_TOKEN_MINT_PUB_KEY,
+			usdc_token_vault_ata: USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 		}
 	}
 

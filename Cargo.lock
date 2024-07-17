@@ -1525,6 +1525,7 @@ dependencies = [
  "rand 0.8.5",
  "scale-info",
  "secp256k1 0.27.0",
+ "sol-prim",
  "sp-block-builder",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
