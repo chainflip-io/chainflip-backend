@@ -362,7 +362,7 @@ impl SolanaInstructionBuilder {
 			return DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER;
 		}
 		let compute_budget =
-			// Budget is in lamports, compute price is in CU/microlamport
+			// Budget is in lamports, compute price is in microlamports/CU
 			sp_std::cmp::min(
 				MAX_COMPUTE_UNITS_PER_TRANSACTION as u128,
 				(budget_after_signature as u128 * MICROLAMPORTS_PER_LAMPORT as u128)
