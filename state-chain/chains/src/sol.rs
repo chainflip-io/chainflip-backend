@@ -7,8 +7,10 @@ use sp_std::{vec, vec::Vec};
 use sol_prim::{AccountBump, SlotNumber};
 
 use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use frame_support::Parameter;
 use serde::{Deserialize, Serialize};
+use sp_runtime::traits::{MaybeSerializeDeserialize, Member};
 
 use super::{Chain, ChainCrypto};
 
@@ -18,6 +20,7 @@ pub mod instruction_builder;
 pub mod sol_tx_core;
 
 pub use crate::assets::sol::Asset as SolAsset;
+use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
@@ -44,6 +47,17 @@ impl Chain for Solana {
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+			+ Default,
+	> = assets::sol::AssetMap<T>;
 	type ChainAccount = SolAddress;
 	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
