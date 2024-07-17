@@ -4,6 +4,7 @@ use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sp_std::marker::PhantomData;
 
 pub mod housekeeping;
+pub mod move_network_fees;
 pub mod reap_old_accounts;
 pub mod solana_integration;
 

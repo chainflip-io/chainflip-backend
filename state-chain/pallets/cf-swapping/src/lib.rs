@@ -19,13 +19,19 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{Get, Saturating},
-		DispatchError, Permill,
+		DispatchError, Permill, TransactionOutcome,
 	},
+	storage::with_transaction_unchecked,
+	traits::Defensive,
 	transactional,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, Rounding};
+use sp_arithmetic::{
+	helpers_128bit::multiply_by_rational_with_rounding,
+	traits::{UniqueSaturatedInto, Zero},
+	Rounding,
+};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 #[cfg(test)]
 mod mock;
@@ -39,7 +45,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
@@ -233,7 +239,7 @@ impl_pallet_safe_mode! {
 pub mod pallet {
 	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
-	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId};
+	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId, SwapOutput};
 	use cf_traits::{
 		AccountRoleRegistry, CcmSwapIds, Chainflip, EgressApi, ScheduledEgressDetails,
 		SwapDepositHandler,
@@ -279,6 +285,9 @@ pub mod pallet {
 		>;
 
 		type IngressEgressFeeHandler: IngressEgressFeeApi<AnyChain>;
+
+		#[pallet::constant]
+		type NetworkFee: Get<Permill>;
 	}
 
 	#[pallet::pallet]
@@ -327,6 +336,14 @@ pub mod pallet {
 	/// FLIP ready to be burned.
 	#[pallet::storage]
 	pub type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
+	/// Interval at which we buy FLIP in order to burn it.
+	#[pallet::storage]
+	pub type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
+	#[pallet::storage]
+	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -454,6 +471,9 @@ pub mod pallet {
 			swap_id: SwapId,
 			fee_amount: AssetAmount,
 		},
+		UpdatedBuyInterval {
+			buy_interval: BlockNumberFor<T>,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -469,7 +489,6 @@ pub mod pallet {
 		CcmInsufficientDepositAmount,
 		/// The provided address could not be decoded.
 		InvalidDestinationAddress,
-
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
 		/// Broker registration is disabled due to Safe Mode.
@@ -480,10 +499,59 @@ pub mod pallet {
 		EarnedFeesNotWithdrawn,
 		/// The provided list of broker contains an account which is not registered as Broker
 		AffiliateAccountIsNotABroker,
+		/// Setting the buy interval to zero is not allowed.
+		ZeroBuyIntervalNotAllowed,
+	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub flip_buy_interval: BlockNumberFor<T>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+		fn build(&self) {
+			FlipBuyInterval::<T>::set(self.flip_buy_interval);
+		}
+	}
+
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
+		}
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+			let interval = FlipBuyInterval::<T>::get();
+			if interval.is_zero() {
+				log::debug!("Flip buy interval is zero, skipping.")
+			} else {
+				weight_used.saturating_accrue(T::DbWeight::get().reads(1));
+				if (current_block % interval).is_zero() &&
+					!CollectedNetworkFee::<T>::get().is_zero()
+				{
+					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
+						Self::schedule_swap(
+							Asset::Usdc,
+							Asset::Flip,
+							*collected_fee,
+							None, /* refund parameters */
+							SwapType::NetworkFee,
+						);
+						collected_fee.set_zero();
+						Ok::<_, DispatchError>(())
+					}) {
+						log::warn!("Unable to swap Network Fee to Flip: {e:?}");
+					}
+				}
+			}
+			weight_used
+		}
+
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(current_block: BlockNumberFor<T>) {
 			let mut swaps_to_execute = SwapQueue::<T>::take(current_block);
@@ -909,6 +977,29 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Updates the buy interval.
+		///
+		/// ## Events
+		///
+		/// - [UpdatedBuyInterval](Event::UpdatedBuyInterval)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [ZeroBuyIntervalNotAllowed](pallet_cf_pools::Error::ZeroBuyIntervalNotAllowed)
+		#[pallet::call_index(11)]
+		#[pallet::weight(T::WeightInfo::update_buy_interval())]
+		pub fn update_buy_interval(
+			origin: OriginFor<T>,
+			new_buy_interval: BlockNumberFor<T>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);
+			FlipBuyInterval::<T>::set(new_buy_interval);
+			Self::deposit_event(Event::<T>::UpdatedBuyInterval { buy_interval: new_buy_interval });
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -994,7 +1085,7 @@ pub mod pallet {
 				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
 
 				let NetworkFeeTaken { remaining_amount, network_fee } =
-					T::SwappingApi::take_network_fee(*stable_amount);
+					Self::take_network_fee(*stable_amount);
 
 				*stable_amount = remaining_amount;
 
@@ -1319,6 +1410,61 @@ pub mod pallet {
 				log_or_panic!("CCM egress scheduling should never fail.");
 			}
 		}
+
+		#[transactional]
+		pub fn swap_with_network_fee(
+			from: Asset,
+			to: Asset,
+			input_amount: AssetAmount,
+		) -> Result<SwapOutput, DispatchError> {
+			Ok(match (from, to) {
+				(_, STABLE_ASSET) => {
+					let NetworkFeeTaken { remaining_amount: output, network_fee } =
+						Self::take_network_fee(T::SwappingApi::swap_single_leg(
+							from,
+							to,
+							input_amount,
+						)?);
+
+					SwapOutput { intermediary: None, output, network_fee }
+				},
+				(STABLE_ASSET, _) => {
+					let NetworkFeeTaken { remaining_amount: input_amount, network_fee } =
+						Self::take_network_fee(input_amount);
+
+					SwapOutput {
+						intermediary: None,
+						output: T::SwappingApi::swap_single_leg(from, to, input_amount)?,
+						network_fee,
+					}
+				},
+				_ => {
+					let NetworkFeeTaken { remaining_amount: intermediary, network_fee } =
+						Self::take_network_fee(T::SwappingApi::swap_single_leg(
+							from,
+							STABLE_ASSET,
+							input_amount,
+						)?);
+
+					SwapOutput {
+						intermediary: Some(intermediary),
+						output: T::SwappingApi::swap_single_leg(STABLE_ASSET, to, intermediary)?,
+						network_fee,
+					}
+				},
+			})
+		}
+
+		pub fn take_network_fee(input: AssetAmount) -> NetworkFeeTaken {
+			if input.is_zero() {
+				return NetworkFeeTaken { remaining_amount: 0, network_fee: 0 };
+			}
+			let (remaining, fee) = utilities::calculate_network_fee(T::NetworkFee::get(), input);
+			CollectedNetworkFee::<T>::mutate(|total| {
+				total.saturating_accrue(fee);
+			});
+			NetworkFeeTaken { remaining_amount: remaining, network_fee: fee }
+		}
 	}
 
 	impl<T: Config> SwapDepositHandler for Pallet<T> {
@@ -1533,6 +1679,52 @@ pub mod pallet {
 			Ok(CcmSwapIds { principal_swap_id, gas_swap_id })
 		}
 	}
+
+	impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
+		fn calculate_input_for_gas_output<C: Chain>(
+			input_asset: C::ChainAsset,
+			required_gas: C::ChainAmount,
+		) -> Option<C::ChainAmount> {
+			use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
+
+			if required_gas.is_zero() {
+				return Some(Zero::zero())
+			}
+
+			let output_asset = C::GAS_ASSET.into();
+			let input_asset = input_asset.into();
+			if input_asset == output_asset {
+				return Some(required_gas)
+			}
+
+			let estimation_input = utilities::fee_estimation_basis(input_asset).defensive_proof(
+				"Fee estimation cap not available. Please report this to Chainflip Labs.",
+			)?;
+
+			let estimation_output = with_transaction_unchecked(|| {
+				TransactionOutcome::Rollback(
+					Self::swap_with_network_fee(input_asset, output_asset, estimation_input).ok(),
+				)
+			})?
+			.output;
+
+			if estimation_output == 0 {
+				None
+			} else {
+				let input_amount_to_convert = multiply_by_rational_with_rounding(
+					required_gas.into(),
+					estimation_input,
+					estimation_output,
+					sp_arithmetic::Rounding::Down,
+				)
+				.defensive_proof(
+					"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
+				)?;
+
+				Some(input_amount_to_convert.unique_saturated_into())
+			}
+		}
+	}
 }
 
 impl<T: Config> SwapQueueApi for Pallet<T> {
@@ -1587,5 +1779,37 @@ impl<T: Config> SwapQueueApi for Pallet<T> {
 impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	fn take_flip_to_burn() -> AssetAmount {
 		FlipToBurn::<T>::take()
+	}
+}
+
+pub mod utilities {
+	use super::*;
+
+	pub fn calculate_network_fee(
+		fee_percentage: Permill,
+		input: AssetAmount,
+	) -> (AssetAmount, AssetAmount) {
+		let fee = fee_percentage * input;
+		(input - fee, fee)
+	}
+
+	/// The amount of a non-gas asset to be used for transaction fee estimation.
+	///
+	/// This should be of a similar order of magnitude to expected fees to get an accurate result.
+	///
+	/// The value should be large enough to allow a good estimation of the fee, but small enough
+	/// to not exhaust the pool liquidity.
+	pub fn fee_estimation_basis(asset: Asset) -> Option<u128> {
+		use cf_primitives::FLIPPERINOS_PER_FLIP;
+		/// 20 Dollars.
+		const USD_ESTIMATION_CAP: u128 = 20_000_000;
+
+		match asset {
+			Asset::Flip => Some(10 * FLIPPERINOS_PER_FLIP),
+			Asset::Usdc => Some(USD_ESTIMATION_CAP),
+			Asset::Usdt => Some(USD_ESTIMATION_CAP),
+			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
+			_ => None,
+		}
 	}
 }
