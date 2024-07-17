@@ -128,7 +128,7 @@ pub fn refund_validators_btc() {
 }
 
 #[test]
-pub fn to_low_withheld_fees() {
+pub fn not_enough_withheld_fees() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Bitcoin, 100, BTC_ADDR_1.clone());
 

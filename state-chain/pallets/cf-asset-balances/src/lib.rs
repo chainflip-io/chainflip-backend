@@ -9,7 +9,8 @@ use cf_traits::{
 	ScheduledEgressDetails,
 };
 use frame_support::{
-	pallet_prelude::*, sp_runtime::traits::Saturating, traits::DefensiveSaturating,
+	pallet_prelude::*, sp_runtime::traits::Saturating, storage::transactional::with_storage_layer,
+	traits::DefensiveSaturating,
 };
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
@@ -26,7 +27,7 @@ mod tests;
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
 // TODO: Figure out adequate values for these.
-pub const MAX_ETH_REFUND_PER_EPOCH: usize = 25;
+pub const MAX_ETH_REFUND_PER_EPOCH: usize = 50;
 pub const MAX_ARB_REFUND_PER_EPOCH: usize = 10;
 pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
@@ -136,15 +137,19 @@ impl<T: Config> Pallet<T> {
 		address: ForeignChainAddress,
 		amount: AssetAmount,
 	) -> Result<(), DispatchError> {
-		match T::EgressHandler::schedule_egress(chain.gas_asset(), amount, address.clone(), None)
-			.map_err(Into::into)
-			.and_then(|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
-				if egress_amount < REFUND_FEE_MULTIPLE * fee_withheld {
-					Err(Error::<T>::RefundAmountTooLow.into())
-				} else {
-					Ok(result)
-				}
-			}) {
+		match with_storage_layer(|| {
+			T::EgressHandler::schedule_egress(chain.gas_asset(), amount, address.clone(), None)
+				.map_err(Into::into)
+				.and_then(
+					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
+						if egress_amount < REFUND_FEE_MULTIPLE * fee_withheld {
+							Err(Error::<T>::RefundAmountTooLow.into())
+						} else {
+							Ok(result)
+						}
+					},
+				)
+		}) {
 			Ok(ScheduledEgressDetails { egress_id, .. }) => {
 				Self::deposit_event(Event::RefundScheduled {
 					egress_id,
