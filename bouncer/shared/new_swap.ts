@@ -37,7 +37,12 @@ export async function newSwap(
             message: messageMetadata.message as `0x${string}`,
             gasBudget: messageMetadata.gasBudget.toString(),
           },
-          boostFeeBps,
+          maxBoostFeeBps: boostFeeBps,
+          refundParameters: {
+            retryDuration: 500,
+            refundAddress: '0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF',
+            minPrice: '100',
+          },
         },
         {
           url: brokerUrl,
