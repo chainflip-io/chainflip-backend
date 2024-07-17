@@ -222,8 +222,12 @@ jobs:
           touch /tmp/chainflip/debug.log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
-          # TODO: Should be able to remove this cp line after 1.5 is released.
+          echo "/usr/lib before copy of .so files"
+          ls -l /usr/lib
           sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
+          sudo cp ./upgrade-to-bins/libchainflip_engine_v*.so /usr/lib/
+          echo "/usr/lib after copy of .so files"
+          ls -l /usr/lib
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 

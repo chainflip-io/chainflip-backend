@@ -141,7 +141,12 @@ impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		ingress_egress: IngressEgressConfig { deposit_channel_lifetime: 100, witness_safety_margin: Some(2), dust_limits: Default::default() },
+		ingress_egress: IngressEgressConfig {
+			deposit_channel_lifetime: 100,
+			witness_safety_margin: Some(2),
+			dust_limits: Default::default(),
+			max_swap_retry_duration_blocks: 600,
+		},
 	},
 	|| {
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Ethereum>::set_tracked_data(
