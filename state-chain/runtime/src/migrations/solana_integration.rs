@@ -96,6 +96,7 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			};
 
 		pallet_cf_environment::SolanaVaultAddress::<Runtime>::put(vault_address);
+		pallet_cf_environment::PALLET_VERSION.put::<pallet_cf_environment::Pallet<Runtime>>();
 
 		Weight::zero()
 	}
