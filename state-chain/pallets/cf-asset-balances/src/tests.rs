@@ -180,7 +180,7 @@ pub fn refund_validators_polkadot() {
 #[test]
 pub fn max_refunds_per_epoch() {
 	new_test_ext().execute_with(|| {
-		for i in 0..crate::MAX_ETH_REFUND_PER_EPOCH + 2 {
+		for i in 0..crate::MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH + 2 {
 			payed_gas(
 				ForeignChain::Ethereum,
 				100,
@@ -189,7 +189,7 @@ pub fn max_refunds_per_epoch() {
 		}
 		assert_eq!(
 			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()),
-			(100 * (crate::MAX_ETH_REFUND_PER_EPOCH as u128 + 2))
+			(100 * (crate::MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH as u128 + 2))
 		);
 		Pallet::<Test>::trigger_reconciliation();
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 200);

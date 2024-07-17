@@ -26,9 +26,8 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
-// TODO: Figure out adequate values for these.
-pub const MAX_ETH_REFUND_PER_EPOCH: usize = 50;
-pub const MAX_ARB_REFUND_PER_EPOCH: usize = 10;
+pub const MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH: usize = 50;
+pub const MAX_REFUNDED_VALIDATORS_ARB_PER_EPOCH: usize = 50;
 pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -167,8 +166,8 @@ impl<T: Config> Pallet<T> {
 
 	fn stop_refunding(chain: ForeignChain, number_or_refunds: usize) -> bool {
 		match chain {
-			ForeignChain::Ethereum => number_or_refunds >= MAX_ETH_REFUND_PER_EPOCH,
-			ForeignChain::Arbitrum => number_or_refunds >= MAX_ARB_REFUND_PER_EPOCH,
+			ForeignChain::Ethereum => number_or_refunds >= MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH,
+			ForeignChain::Arbitrum => number_or_refunds >= MAX_REFUNDED_VALIDATORS_ARB_PER_EPOCH,
 			_ => false,
 		}
 	}
