@@ -92,9 +92,13 @@ jobs:
           touch /tmp/chainflip/debug.log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
+          echo "Check for libchainflip_engine_v*.so"
+          ls -l /usr/lib/
           # TODO: These shouldn't be required: PRO-1510
           sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
           sudo cp ./old-engine-dylib/libchainflip_engine_v*.so /usr/lib/
+          echo "Check /usr/lib after copy"
+          ls -l /usr/lib/
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 

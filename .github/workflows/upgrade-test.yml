@@ -222,13 +222,11 @@ jobs:
           touch /tmp/chainflip/debug.log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
-          echo "/usr/lib before copy of .so"
+          echo "/usr/lib before copy of .so files"
           ls -l /usr/lib
           sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
-          echo "/usr/lib after binary root path copy of .so"
-          ls -l /usr/lib
           sudo cp ./upgrade-to-bins/libchainflip_engine_v*.so /usr/lib/
-          echo "/usr/lib after upgrade-to-bins copy of .so"
+          echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
