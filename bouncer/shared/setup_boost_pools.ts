@@ -1,4 +1,10 @@
-import { InternalAssets as Assets, chainConstants, getInternalAsset } from '@chainflip/cli';
+import {
+  InternalAssets as Assets,
+  Asset as SDKAsset,
+  Chain,
+  chainConstants,
+  getInternalAsset,
+} from '@chainflip/cli';
 import {
   ingressEgressPalletForChain,
   chainFromAsset,
@@ -86,7 +92,10 @@ export async function setupBoostPools(): Promise<void> {
           if (tier <= 0) {
             throw new Error(`Invalid tier value: ${tier}`);
           }
-          newPools.push({ asset: getInternalAsset({ asset, chain }), tier });
+          newPools.push({
+            asset: getInternalAsset({ asset, chain } as { asset: SDKAsset; chain: Chain }),
+            tier,
+          });
         }
       }
       boostPoolCreationPromises.push(createBoostPools(newPools));

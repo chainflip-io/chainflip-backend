@@ -7,8 +7,6 @@
   },
   "dependencies": {
     "@chainflip/cli": "1.5.0-fok.0",
-    "@chainflip/bitcoin": "0.2.2",
-    "@chainflip/rpc": "1.4.10",
     "@iarna/toml": "^2.2.5",
     "@polkadot/api": "^11.3.1",
     "@polkadot/keyring": "12.6.2",
