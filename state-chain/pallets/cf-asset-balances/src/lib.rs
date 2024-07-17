@@ -105,7 +105,7 @@ pub mod pallet {
 			amount: AssetAmount,
 		},
 		/// The refund was skipped because of the given reason.
-		RefundSkipped { reason: DispatchError },
+		RefundSkipped { reason: DispatchError, chain: ForeignChain, address: ForeignChainAddress },
 		/// The Vault is running a deficit: we owe more than we have set aside for refunds.
 		VaultDeficitDetected {
 			chain: ForeignChain,
@@ -158,7 +158,7 @@ impl<T: Config> Pallet<T> {
 				Ok(())
 			},
 			Err(err) => {
-				Self::deposit_event(Event::RefundSkipped { reason: err });
+				Self::deposit_event(Event::RefundSkipped { reason: err, chain, address });
 				Err(err)
 			},
 		}

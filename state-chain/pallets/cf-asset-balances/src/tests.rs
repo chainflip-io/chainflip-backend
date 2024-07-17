@@ -213,8 +213,12 @@ pub fn do_not_refund_if_amount_is_too_low() {
 		Pallet::<Test>::trigger_reconciliation();
 
 		assert_has_event::<Test>(
-			crate::Event::RefundSkipped { reason: crate::Error::<Test>::RefundAmountTooLow.into() }
-				.into(),
+			crate::Event::RefundSkipped {
+				reason: crate::Error::<Test>::RefundAmountTooLow.into(),
+				chain: ForeignChain::Ethereum,
+				address: ETH_ADDR_1,
+			}
+			.into(),
 		);
 
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), REFUND_AMOUNT);
