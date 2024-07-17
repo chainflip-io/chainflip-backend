@@ -231,10 +231,15 @@ pub enum CcmFailReason {
 	InsufficientDepositAmount,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum PalletConfigUpdate {
+#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T, I))]
+pub enum PalletConfigUpdate<T: Config> {
 	/// Set the maximum amount allowed to be put into a swap. Excess amounts are confiscated.
 	MaximumSwapAmount { asset: Asset, amount: Option<AssetAmount> },
+	/// Set the delay in blocks before retrying a previously failed swap.
+	SwapRetryDelay { delay: BlockNumberFor<T> },
+	/// Set the interval at which we buy FLIP in order to burn it.
+	FlipBuyInterval { interval: BlockNumberFor<T> },
 }
 
 impl_pallet_safe_mode! {
@@ -484,10 +489,10 @@ pub mod pallet {
 			swap_id: SwapId,
 			fee_amount: AssetAmount,
 		},
-		UpdatedBuyInterval {
+		BuyIntervalSet {
 			buy_interval: BlockNumberFor<T>,
 		},
-		UpdatedSwapRetryDelay {
+		SwapRetryDelaySet {
 			swap_retry_delay: BlockNumberFor<T>,
 		},
 	}
@@ -578,10 +583,10 @@ pub mod pallet {
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(current_block: BlockNumberFor<T>) {
 			let mut swaps_to_execute = SwapQueue::<T>::take(current_block);
+			let retry_block = current_block + max(SwapRetryDelay::<T>::get(), 1u32.into());
 
 			if !T::SafeMode::get().swaps_enabled {
 				// Since we won't be executing swaps at this block, we need to reschedule them:
-				let retry_block = current_block + max(SwapRetryDelay::<T>::get(), 1u32.into());
 				for swap in swaps_to_execute {
 					Self::deposit_event(Event::<T>::SwapRescheduled {
 						swap_id: swap.swap_id,
@@ -635,9 +640,6 @@ pub mod pallet {
 								},
 							}
 						};
-
-						let retry_block =
-							current_block + max(SwapRetryDelay::<T>::get(), 1u32.into());
 
 						for swap in failed_swaps {
 							match swap.refund_params {
@@ -880,7 +882,7 @@ pub mod pallet {
 		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
+			updates: BoundedVec<PalletConfigUpdate<T>, ConstU32<10>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -889,6 +891,24 @@ pub mod pallet {
 					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
 						MaximumSwapAmount::<T>::set(asset, amount);
 						Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
+					},
+					PalletConfigUpdate::SwapRetryDelay { delay } => {
+						ensure!(
+							delay != BlockNumberFor::<T>::zero(),
+							Error::<T>::ZeroSwapRetryDelayNotAllowed
+						);
+						SwapRetryDelay::<T>::set(delay);
+						Self::deposit_event(Event::<T>::SwapRetryDelaySet {
+							swap_retry_delay: delay,
+						});
+					},
+					PalletConfigUpdate::FlipBuyInterval { interval } => {
+						ensure!(
+							interval != BlockNumberFor::<T>::zero(),
+							Error::<T>::ZeroBuyIntervalNotAllowed
+						);
+						FlipBuyInterval::<T>::set(interval);
+						Self::deposit_event(Event::<T>::BuyIntervalSet { buy_interval: interval });
 					},
 				}
 			}
@@ -999,54 +1019,6 @@ pub mod pallet {
 				refund_parameters,
 			});
 
-			Ok(())
-		}
-
-		/// Updates the buy interval.
-		///
-		/// ## Events
-		///
-		/// - [UpdatedBuyInterval](Event::UpdatedBuyInterval)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [ZeroBuyIntervalNotAllowed](pallet_cf_pools::Error::ZeroBuyIntervalNotAllowed)
-		#[pallet::call_index(11)]
-		#[pallet::weight(T::WeightInfo::update_buy_interval())]
-		pub fn update_buy_interval(
-			origin: OriginFor<T>,
-			new_buy_interval: BlockNumberFor<T>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);
-			FlipBuyInterval::<T>::set(new_buy_interval);
-			Self::deposit_event(Event::<T>::UpdatedBuyInterval { buy_interval: new_buy_interval });
-			Ok(())
-		}
-
-		/// Updates the swap retry delay.
-		///
-		/// ## Events
-		///
-		/// - [UpdatedSwapRetryDelay](Event::UpdatedSwapRetryDelay)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [ZeroSwapRetryDelayNotAllowed](pallet_cf_pools::Error::ZeroSwapRetryDelayNotAllowed)
-		#[pallet::call_index(13)]
-		#[pallet::weight(T::WeightInfo::update_buy_interval())]
-		pub fn update_swap_retry_delay(
-			origin: OriginFor<T>,
-			new_swap_retry_delay: BlockNumberFor<T>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(new_swap_retry_delay != Zero::zero(), Error::<T>::ZeroSwapRetryDelayNotAllowed);
-			SwapRetryDelay::<T>::set(new_swap_retry_delay);
-			Self::deposit_event(Event::<T>::UpdatedSwapRetryDelay {
-				swap_retry_delay: new_swap_retry_delay,
-			});
 			Ok(())
 		}
 	}

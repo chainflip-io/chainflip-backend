@@ -17,7 +17,7 @@ use cf_chains::{
 	TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
-use cf_test_utilities::assert_has_event;
+use cf_test_utilities::{assert_events_eq, assert_has_event};
 use cf_traits::{
 	mocks::{
 		self,
@@ -867,28 +867,6 @@ fn multi_use_deposit_same_block() {
 }
 
 #[test]
-fn can_set_minimum_deposit() {
-	new_test_ext().execute_with(|| {
-		let asset = eth::Asset::Eth;
-		let minimum_deposit = 1_500u128;
-		assert_eq!(MinimumDeposit::<Test, ()>::get(asset), 0);
-		// Set the new minimum deposits
-		assert_ok!(IngressEgress::update_pallet_config(
-			RuntimeOrigin::root(),
-			vec![PalletConfigUpdate::<Test, _>::SetMinimumDeposit { asset, minimum_deposit }]
-				.try_into()
-				.unwrap()
-		));
-
-		assert_eq!(MinimumDeposit::<Test, ()>::get(asset), minimum_deposit);
-
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test, ()>::MinimumDepositSet { asset, minimum_deposit },
-		));
-	});
-}
-
-#[test]
 fn deposits_below_minimum_are_rejected() {
 	new_test_ext().execute_with(|| {
 		let eth = eth::Asset::Eth;
@@ -1596,30 +1574,64 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 }
 
 #[test]
-fn can_update_multiple_items_at_once() {
+fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
+		const NEW_OPENING_FEE: u128 = 300;
+		const NEW_MIN_DEPOSIT_FLIP: u128 = 100;
+		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
+		const NEW_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 1234;
+
+		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), 0);
+		assert_ne!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION_BLOCKS);
+
+		// Update all config items at the same time, and updates 2 separate min deposit amounts.
 		assert_ok!(IngressEgress::update_pallet_config(
 			OriginTrait::root(),
 			vec![
-				PalletConfigUpdate::ChannelOpeningFee { fee: 100 },
+				PalletConfigUpdate::ChannelOpeningFee { fee: NEW_OPENING_FEE },
 				PalletConfigUpdate::SetMinimumDeposit {
 					asset: eth::Asset::Flip,
-					minimum_deposit: 100
+					minimum_deposit: NEW_MIN_DEPOSIT_FLIP
 				},
 				PalletConfigUpdate::SetMinimumDeposit {
 					asset: eth::Asset::Eth,
-					minimum_deposit: 200
+					minimum_deposit: NEW_MIN_DEPOSIT_ETH
+				},
+				PalletConfigUpdate::SetMaxSwapRetryDurationBlocks {
+					blocks: NEW_MAX_SWAP_RETRY_DURATION_BLOCKS
 				},
 			]
 			.try_into()
 			.unwrap()
 		));
-		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 100);
-		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), 100);
-		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), 200);
+
+		// Check that the new values were set
+		assert_eq!(ChannelOpeningFee::<Test, _>::get(), NEW_OPENING_FEE);
+		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), NEW_MIN_DEPOSIT_FLIP);
+		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), NEW_MIN_DEPOSIT_ETH);
+		assert_eq!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION_BLOCKS);
+
+		// Check that the events were emitted
+		assert_events_eq!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::ChannelOpeningFeeSet {
+				fee: NEW_OPENING_FEE
+			}),
+			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::MinimumDepositSet {
+				asset: eth::Asset::Flip,
+				minimum_deposit: NEW_MIN_DEPOSIT_FLIP
+			}),
+			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::MinimumDepositSet {
+				asset: eth::Asset::Eth,
+				minimum_deposit: NEW_MIN_DEPOSIT_ETH
+			}),
+			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::MaxSwapRetryDurationSet {
+				max_swap_retry_duration_blocks: NEW_MAX_SWAP_RETRY_DURATION_BLOCKS
+			})
+		);
 	});
 }
 

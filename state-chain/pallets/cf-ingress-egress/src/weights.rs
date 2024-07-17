@@ -43,7 +43,6 @@ pub trait WeightInfo {
 	fn deposit_boosted() -> Weight;
 	fn boost_finalised() -> Weight;
 	fn create_boost_pools() -> Weight;
-	fn update_max_swap_retry_duration() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -271,16 +270,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: `EthereumIngressEgress::MaxSwapRetryDurationBlocks` (r:0 w:1)
-	/// Proof: `EthereumIngressEgress::MaxSwapRetryDurationBlocks` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_max_swap_retry_duration() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 5_000_000 picoseconds.
-		Weight::from_parts(6_000_000, 0)
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
 }
 
 // For backwards compatibility and tests
@@ -505,16 +494,6 @@ impl WeightInfo for () {
 		// Minimum execution time: 10_000_000 picoseconds.
 		Weight::from_parts(11_000_000, 3694)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
-	/// Storage: `EthereumIngressEgress::MaxSwapRetryDurationBlocks` (r:0 w:1)
-	/// Proof: `EthereumIngressEgress::MaxSwapRetryDurationBlocks` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_max_swap_retry_duration() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 5_000_000 picoseconds.
-		Weight::from_parts(6_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 }

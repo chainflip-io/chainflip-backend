@@ -112,9 +112,6 @@ impl SwappingApi for MockSwappingApi {
 pub struct MockWeightInfo;
 
 impl WeightInfo for MockWeightInfo {
-	fn update_buy_interval() -> Weight {
-		Weight::from_parts(100, 0)
-	}
 	fn request_swap_deposit_address() -> Weight {
 		Weight::from_parts(100, 0)
 	}

@@ -17,7 +17,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, ForeignChain, NetworkEnvironment,
 };
-use cf_test_utilities::assert_event_sequence;
+use cf_test_utilities::{assert_event_sequence, assert_events_eq};
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
@@ -2381,21 +2381,62 @@ fn test_get_scheduled_swap_legs_fallback() {
 }
 
 #[test]
-fn can_update_multiple_items_at_once() {
+fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
+		const NEW_MAX_SWAP_AMOUNT_BTC: Option<AssetAmount> = Some(100);
+		const NEW_MAX_SWAP_AMOUNT_DOT: Option<AssetAmount> = Some(69);
+		let new_swap_retry_delay = BlockNumberFor::<Test>::from(1234u32);
+		let new_flip_buy_interval = BlockNumberFor::<Test>::from(5678u32);
+
+		// Check that the default values are different from the new ones
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Dot).is_none());
+		assert_ne!(SwapRetryDelay::<Test>::get(), new_swap_retry_delay);
+		assert_ne!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
+
+		// Update all config items at the same time, and updates 2 separate max swap amounts.
 		assert_ok!(Swapping::update_pallet_config(
 			OriginTrait::root(),
 			vec![
-				PalletConfigUpdate::MaximumSwapAmount { asset: Asset::Btc, amount: Some(100) },
-				PalletConfigUpdate::MaximumSwapAmount { asset: Asset::Dot, amount: Some(200) },
+				PalletConfigUpdate::MaximumSwapAmount {
+					asset: Asset::Btc,
+					amount: NEW_MAX_SWAP_AMOUNT_BTC
+				},
+				PalletConfigUpdate::MaximumSwapAmount {
+					asset: Asset::Dot,
+					amount: NEW_MAX_SWAP_AMOUNT_DOT
+				},
+				PalletConfigUpdate::SwapRetryDelay { delay: new_swap_retry_delay },
+				PalletConfigUpdate::FlipBuyInterval { interval: new_flip_buy_interval },
 			]
 			.try_into()
 			.unwrap()
 		));
-		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Btc), Some(100));
-		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Dot), Some(200));
+
+		// Check that the new values were set
+		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Btc), NEW_MAX_SWAP_AMOUNT_BTC);
+		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Dot), NEW_MAX_SWAP_AMOUNT_DOT);
+		assert_eq!(SwapRetryDelay::<Test>::get(), new_swap_retry_delay);
+		assert_eq!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
+
+		// Check that the events were emitted
+		assert_events_eq!(
+			Test,
+			RuntimeEvent::Swapping(crate::Event::MaximumSwapAmountSet {
+				asset: Asset::Btc,
+				amount: NEW_MAX_SWAP_AMOUNT_BTC,
+			}),
+			RuntimeEvent::Swapping(crate::Event::MaximumSwapAmountSet {
+				asset: Asset::Dot,
+				amount: NEW_MAX_SWAP_AMOUNT_DOT,
+			}),
+			RuntimeEvent::Swapping(crate::Event::SwapRetryDelaySet {
+				swap_retry_delay: new_swap_retry_delay
+			}),
+			RuntimeEvent::Swapping(crate::Event::BuyIntervalSet {
+				buy_interval: new_flip_buy_interval
+			})
+		);
 	});
 }
 

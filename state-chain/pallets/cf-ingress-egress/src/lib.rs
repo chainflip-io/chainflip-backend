@@ -212,6 +212,9 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static = ()> {
 	ChannelOpeningFee { fee: T::Amount },
 	/// Set the minimum deposit allowed for a particular asset.
 	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
+	/// Set the max allowed value for the number of blocks to keep retrying a swap before it is
+	/// refunded
+	SetMaxSwapRetryDurationBlocks { blocks: u32 },
 }
 
 #[frame_support::pallet]
@@ -698,7 +701,7 @@ pub mod pallet {
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
 		},
-		UpdatedMaxSwapRetryDuration {
+		MaxSwapRetryDurationSet {
 			max_swap_retry_duration_blocks: u32,
 		},
 	}
@@ -1067,6 +1070,12 @@ pub mod pallet {
 							minimum_deposit,
 						});
 					},
+					PalletConfigUpdate::SetMaxSwapRetryDurationBlocks { blocks } => {
+						MaxSwapRetryDurationBlocks::<T, I>::set(blocks);
+						Self::deposit_event(Event::<T, I>::MaxSwapRetryDurationSet {
+							max_swap_retry_duration_blocks: blocks,
+						});
+					},
 				}
 			}
 
@@ -1153,25 +1162,6 @@ pub mod pallet {
 					Ok::<(), Error<T, I>>(())
 				})
 			})?;
-			Ok(())
-		}
-
-		/// Updates the max swap retry duration .
-		///
-		/// ## Events
-		///
-		/// - [MaxSwapRetryDurationBlocks](Event::MaxSwapRetryDurationBlocks)
-		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::update_max_swap_retry_duration())]
-		pub fn update_swap_retry_delay(
-			origin: OriginFor<T>,
-			new_max_swap_retry_duration_blocks: u32,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			MaxSwapRetryDurationBlocks::<T, I>::set(new_max_swap_retry_duration_blocks);
-			Self::deposit_event(Event::<T, I>::UpdatedMaxSwapRetryDuration {
-				max_swap_retry_duration_blocks: new_max_swap_retry_duration_blocks,
-			});
 			Ok(())
 		}
 	}
