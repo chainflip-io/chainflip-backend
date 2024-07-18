@@ -227,5 +227,7 @@ pub fn do_not_refund_if_amount_is_too_low() {
 				.get(&ExternalOwner::Account(ETH_ADDR_1)),
 			Some(&REFUND_AMOUNT)
 		);
+
+		assert_egress(0, None);
 	});
 }
