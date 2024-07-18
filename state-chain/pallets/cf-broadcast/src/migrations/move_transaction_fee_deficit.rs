@@ -1,6 +1,7 @@
 use crate::*;
 use frame_support::traits::OnRuntimeUpgrade;
 
+use cf_primitives::AssetAmount;
 use frame_support::pallet_prelude::{DispatchError, ValueQuery, Weight};
 
 mod old {
@@ -30,9 +31,10 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let total_amount_of_recorded_fees =
-			old::TransactionFeeDeficit::<T, I>::iter().collect::<Vec<_>>().len() as u128;
-		Ok(total_amount_of_recorded_fees.encode())
+		Ok(old::TransactionFeeDeficit::<T, I>::iter()
+			.map(|(_, v)| v.into())
+			.sum::<AssetAmount>()
+			.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -42,7 +44,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			0,
 			"TransactionFeeDeficit not empty - migration failed!"
 		);
-		let recorded_fees = <u128>::decode(&mut &state[..]).unwrap();
+		let recorded_fees = <AssetAmount>::decode(&mut &state[..]).unwrap();
 		let migrated =
 			T::LiabilityTracker::total_liabilities(<T::TargetChain as Chain>::GAS_ASSET.into());
 		assert_eq!(recorded_fees, migrated, "Migrated fees do not match for asset!");
