@@ -16,7 +16,7 @@ use std::{
 use crate::common::Signal;
 use anyhow::Result;
 use core::cmp::min;
-use futures::Future;
+use futures::{Future, FutureExt};
 use futures_util::stream::FuturesUnordered;
 use rand::Rng;
 use std::{
@@ -30,7 +30,7 @@ use utilities::{
 	UnendingStream,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RetryLimit {
 	// For requests that should never fail. Failure in these cases is directly or indirectly the
 	// fault of the operator. e.g. a faulty Ethereum node.
@@ -291,8 +291,14 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 	}
 
 	// Returns a client, and the type of client selected.
-	pub async fn select_client(&mut self) -> (Client, PrimaryOrSecondary) {
-		futures::future::select_all(
+	pub async fn select_client(
+		&mut self,
+		// We use retry limit to determine if we want to wait or not. The assumption is that if we
+		// are willing to stop retrying for a request, then we are also willing to exit early when
+		// not ready - to allow the network to select another participant more quickly.
+		retry_limit: RetryLimit,
+	) -> Option<(Client, PrimaryOrSecondary)> {
+		let client_select_fut = futures::future::select_all(
 			utilities::conditional::conditional(
 				&self.secondary_signal,
 				|secondary_signal| {
@@ -316,9 +322,13 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 				|()| [&self.primary_signal].into_iter(),
 			)
 			.map(|signal| Box::pin(signal.clone().wait())),
-		)
-		.await
-		.0
+		);
+
+		if retry_limit == RetryLimit::NoLimit {
+			Some(client_select_fut.await.0)
+		} else {
+			client_select_fut.now_or_never().map(|(client, ..)| client)
+		}
 	}
 
 	pub fn request_failed(&mut self, failed_client: PrimaryOrSecondary) {
@@ -413,11 +423,14 @@ where
 				if let Some((response_sender, request_log, closure, retry_limit)) = request_receiver.recv() => {
 					RPC_RETRIER_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 					let request_id = request_holder.next_request_id();
-					let (client, primary_or_secondary) = client_selector.select_client().await;
 
-					tracing::debug!("Retrier {name}: Received request `{request_log}` assigning request_id `{request_id}` and requesting with `{primary_or_secondary:?}`");
-					submission_holder.push(submission_future(client, request_log, retry_limit, &closure, request_id, initial_request_timeout, 0, primary_or_secondary));
-					request_holder.insert(request_id, (response_sender, closure));
+					if let Some((client, primary_or_secondary)) = client_selector.select_client(retry_limit).await {
+						tracing::debug!("Retrier {name}: Received request `{request_log}` assigning request_id `{request_id}` and requesting with `{primary_or_secondary:?}`");
+						submission_holder.push(submission_future(client, request_log, retry_limit, &closure, request_id, initial_request_timeout, 0, primary_or_secondary));
+						request_holder.insert(request_id, (response_sender, closure));
+					} else {
+						tracing::warn!("Retrier {name}: No clients available for request when received `{request_log}` with id `{request_id}`. Dropping request.");
+					}
 				},
 				let (request_id, request_log, retry_limit, primary_or_secondary, result) = submission_holder.next_or_pending() => {
 					RPC_RETRIER_TOTAL_REQUESTS.inc(&[name, request_log.rpc_method.as_str(), primary_or_secondary.to_string().as_str()]);
@@ -469,9 +482,13 @@ where
 							}
 							_ => {
 								// This await should always return immediately since we must already have a client if we've already made a request.
-								let (next_client, next_primary_or_secondary) = client_selector.select_client().await;
-								tracing::trace!("Retrier {name}: Retrying request `{request_log}` with id `{request_id}` and client `{next_primary_or_secondary:?}`, attempt `{next_attempt}`");
-								submission_holder.push(submission_future(next_client, request_log, retry_limit, closure, request_id, initial_request_timeout, next_attempt, next_primary_or_secondary));
+								if let Some((next_client, next_primary_or_secondary)) = client_selector.select_client(retry_limit).await {
+									tracing::trace!("Retrier {name}: Retrying request `{request_log}` with id `{request_id}` and client `{next_primary_or_secondary:?}`, attempt `{next_attempt}`");
+									submission_holder.push(submission_future(next_client, request_log, retry_limit, closure, request_id, initial_request_timeout, next_attempt, next_primary_or_secondary));
+								} else {
+									tracing::warn!("Retrier {name}: No clients available for request `{request_log}` with id `{request_id}`. Dropping request.");
+									request_holder.remove(&request_id);
+								}
 							}
 						}
 					}
@@ -1025,6 +1042,42 @@ mod tests {
 						PrimaryOrSecondary::Primary,
 					]
 				);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	// When we startup the clients may be initialising. If both clients are initialising than we
+	// want to exit rather than waiting forever, in the case of requests with a retry limit set such
+	// as broadcasts.
+	#[tokio::test]
+	async fn return_error_when_retry_limit_if_no_client_ready() {
+		task_scope(|scope| {
+			async move {
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
+
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					futures::future::pending::<()>(),
+					Some(futures::future::pending::<()>()),
+					INITIAL_TIMEOUT,
+					100,
+				);
+
+				retrier_client
+					.request_with_limit(
+						RequestLog::new("request".to_string(), None),
+						// The clients aren't ready - so this future will never actually run.
+						specific_fut_err::<(), _>(INITIAL_TIMEOUT),
+						5,
+					)
+					.await
+					.unwrap_err();
 
 				Ok(())
 			}
