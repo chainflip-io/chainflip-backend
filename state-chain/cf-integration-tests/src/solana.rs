@@ -148,7 +148,7 @@ fn can_build_solana_batch_all() {
 			// Initiate 2 swaps - Sol -> SolUsdc and SolUsdc -> Sol
 			// This will results in 2 fetches and 2 transfers of different assets.
 			assert_eq!(schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, None), 1);
-			assert_eq!(schedule_deposit_to_swap(BOB, Asset::SolUsdc, Asset::Sol, None), 3);
+			assert_eq!(schedule_deposit_to_swap(BOB, Asset::SolUsdc, Asset::Sol, None), 2);
 
 			// Verify the correct API call has been built, signed and broadcasted
 
@@ -290,7 +290,7 @@ fn can_send_solana_ccm() {
 					Asset::Sol,
 					Some(sol_test_values::ccm_parameter().channel_metadata)
 				),
-				3
+				2
 			);
 
 			// Wait until calls are built, signed and broadcasted.
