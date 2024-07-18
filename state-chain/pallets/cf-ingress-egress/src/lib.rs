@@ -37,8 +37,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, BoostApi, Broadcaster,
-	CcmHandler, CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment,
+	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, AssetWithholding, BoostApi,
+	Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment,
 	GetBlockHeight, IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode,
 	ScheduledEgressDetails, SwapDepositHandler, SwapQueueApi, SwapType,
 };
@@ -140,7 +140,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
 
 #[derive(
 	serde::Serialize,
@@ -458,6 +458,8 @@ pub mod pallet {
 
 		type SwapQueueApi: SwapQueueApi;
 
+		type AssetWithholding: AssetWithholding;
+
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
 	}
@@ -556,11 +558,6 @@ pub mod pallet {
 	#[pallet::getter(fn witness_safety_margin)]
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
-
-	/// Tracks fees withheld from ingresses and egresses.
-	#[pallet::storage]
-	pub type WithheldTransactionFees<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
 	/// The fixed fee charged for opening a channel, in Flipperinos.
 	#[pallet::storage]
@@ -2060,9 +2057,10 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 		fee: TargetChainAmount<T, I>,
 	) {
 		if !fee.is_zero() {
-			WithheldTransactionFees::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |fees| {
-				fees.saturating_accrue(fee);
-			});
+			T::AssetWithholding::withhold_assets(
+				<T::TargetChain as Chain>::GAS_ASSET.into(),
+				fee.into(),
+			);
 			// Since we credit the fees to the withheld fees, we need to take these from somewhere,
 			// ie. we effectively have transferred them from the vault.
 			DepositBalances::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |tracker| {

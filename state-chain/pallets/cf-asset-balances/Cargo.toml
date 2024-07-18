@@ -1,8 +1,8 @@
 [package]
-name = 'pallet-cf-broadcast'
+name = 'pallet-cf-asset-balances'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'FRAME pallet template for transaction broadcast flow with the CFE.'
+description = 'Pallet for tracking asset balances on Chainflip.'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'
@@ -16,67 +16,69 @@ targets = ['x86_64-unknown-linux-gnu']
 workspace = true
 
 [dependencies]
-# Chainflip
+# Internal dependencies
 cf-chains = { path = '../../chains', default-features = false }
 cf-primitives = { path = '../../primitives', default-features = false }
-cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
-cfe-events = { path = '../../cfe-events', default-features = false }
+cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false }
+cf-utilities = { package = "utilities", path = '../../../utilities', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
-serde = { default_features = false, version = '1.0.126', features = [
-  'alloc',
-  'derive',
-] }
-# Parity deps
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
-  'derive',
-] }
-scale-info = { version = '2.10.0', default-features = false, features = [
-  'derive',
+
+serde = { version = '1.0.126', default_features = false, features = [
+    'alloc',
+    'derive',
 ] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true, default-features = false }
+# Parity deps
+codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
+    'derive',
+] }
+scale-info = { version = '2.10.0', default-features = false, features = [
+    'derive',
+] }
+
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true, default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 
 [dev-dependencies]
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 cf-test-utilities = { path = '../../test-utilities' }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 
 [features]
 default = ['std']
 std = [
-  'cf-chains/std',
-  'cfe-events/std',
-  'cf-primitives/std',
-  'cf-runtime-upgrade-utilities/std',
-  'cf-runtime-utilities/std',
-  'cf-traits/std',
-  'codec/std',
-  'frame-benchmarking?/std',
-  'frame-support/std',
-  'frame-system/std',
-  'log/std',
-  'scale-info/std',
-  'sp-std/std',
-  'serde/std',
+    'cf-chains/std',
+    'cf-primitives/std',
+    'cf-traits/std',
+    'cf-runtime-upgrade-utilities/std',
+    'cf-runtime-utilities/std',
+    'cf-utilities/std',
+    'codec/std',
+    'frame-benchmarking?/std',
+    'frame-support/std',
+    'frame-system/std',
+    'scale-info/std',
+    'log/std',
+    'serde/std',
+    'sp-std/std',
 ]
 runtime-benchmarks = [
-  'cf-chains/runtime-benchmarks',
-  'cf-primitives/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
+    'cf-chains/runtime-benchmarks',
+    'cf-primitives/runtime-benchmarks',
+    'cf-traits/runtime-benchmarks',
+    'frame-benchmarking/runtime-benchmarks',
+    'frame-support/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
 ]
 try-runtime = [
-  'cf-runtime-upgrade-utilities/try-runtime',
-  'cf-traits/try-runtime',
-  'frame-support/try-runtime',
-  'frame-system/try-runtime',
+    'cf-runtime-upgrade-utilities/try-runtime',
+    'cf-traits/try-runtime',
+    'frame-support/try-runtime',
+    'frame-system/try-runtime',
 ]

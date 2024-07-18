@@ -2461,7 +2461,7 @@ fn transaction_fees_are_collected() {
 
 		Swapping::schedule_swap(Asset::Flip, Asset::Eth, AMOUNT, None, SwapType::IngressEgressFee);
 		assert_eq!(
-			MockIngressEgressFeeHandler::<Ethereum>::get_withheld_transaction_fees(
+			MockIngressEgressFeeHandler::<Ethereum>::withheld_assets(
 				cf_chains::assets::eth::GAS_ASSET
 			),
 			0
@@ -2470,7 +2470,7 @@ fn transaction_fees_are_collected() {
 		Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
 		assert_swaps_queue_is_empty();
 		assert_eq!(
-			MockIngressEgressFeeHandler::<Ethereum>::get_withheld_transaction_fees(
+			MockIngressEgressFeeHandler::<Ethereum>::withheld_assets(
 				cf_chains::assets::eth::GAS_ASSET
 			),
 			AMOUNT

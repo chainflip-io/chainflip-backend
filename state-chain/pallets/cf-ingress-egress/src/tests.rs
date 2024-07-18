@@ -7,7 +7,7 @@ use crate::{
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MaxSwapRetryDurationBlocks, MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode,
 	PrewitnessedDepositIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
-	TargetChainAccount, WithheldTransactionFees,
+	TargetChainAccount,
 };
 use cf_chains::{
 	address::{AddressConverter, IntoForeignChainAddress},
@@ -24,6 +24,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
+		asset_withholding::MockAssetWithholding,
 		block_height_provider::BlockHeightProvider,
 		ccm_handler::{CcmRequest, MockCcmHandler},
 		chain_tracking::ChainTracker,
@@ -1652,8 +1653,9 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(
 		// fee immediately.
 		test_function(eth::Asset::Eth);
 		assert!(MockSwapQueueApi::get_swap_queue().is_empty());
+
 		assert_eq!(
-			WithheldTransactionFees::<Test, _>::get(eth::Asset::Eth),
+			MockAssetWithholding::withheld_assets(ForeignChain::Ethereum.gas_asset()),
 			GAS_FEE,
 			"Expected ingress egress fee to be withheld for gas asset"
 		);

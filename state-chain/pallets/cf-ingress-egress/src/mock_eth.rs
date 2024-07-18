@@ -19,6 +19,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		api_call::{MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
+		asset_withholding::MockAssetWithholding,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 		chain_tracking::ChainTracker,
@@ -129,6 +130,7 @@ impl crate::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
+	type AssetWithholding = MockAssetWithholding;
 	type SafeMode = MockRuntimeSafeMode;
 }
 

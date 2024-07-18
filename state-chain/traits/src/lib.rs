@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "std", feature(option_get_or_insert_default))]
 
 mod async_result;
 pub mod liquidity;
@@ -222,6 +223,8 @@ pub enum StartKeyActivationResult {
 pub trait EpochTransitionHandler {
 	/// When an epoch has been expired.
 	fn on_expired_epoch(_expired: EpochIndex) {}
+	/// When a new epoch has started.
+	fn on_new_epoch(_new: EpochIndex) {}
 }
 
 pub trait ReputationResetter {
@@ -953,4 +956,18 @@ pub trait AssetConverter {
 
 pub trait IngressEgressFeeApi<C: Chain> {
 	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
+}
+
+pub trait LiabilityTracker {
+	fn record_liability(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
+
+	#[cfg(feature = "try-runtime")]
+	fn total_liabilities(gas_asset: Asset) -> AssetAmount;
+}
+
+pub trait AssetWithholding {
+	fn withhold_assets(asset: Asset, amount: AssetAmount);
+
+	#[cfg(feature = "try-runtime")]
+	fn withheld_assets(gas_asset: Asset) -> AssetAmount;
 }
