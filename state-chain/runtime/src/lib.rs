@@ -1268,15 +1268,7 @@ impl_runtime_apis! {
 		fn cf_lp_total_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
 			let free_balances = LiquidityProvider::free_balances(&account_id)?;
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
-			let boost_pools_balances = {
-				AssetMap {
-					eth: EthereumIngressEgress::boost_pool_account_balances(&account_id),
-					arb: ArbitrumIngressEgress::boost_pool_account_balances(&account_id),
-					btc: BitcoinIngressEgress::boost_pool_account_balances(&account_id),
-					dot: PolkadotIngressEgress::boost_pool_account_balances(&account_id),
-					sol: SolanaIngressEgress::boost_pool_account_balances(&account_id)
-				}
-			};
+			let boost_pools_balances = IngressEgressBoostApi::boost_pool_account_balances(&account_id);
 			Ok(free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances))
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
