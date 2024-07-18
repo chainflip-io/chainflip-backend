@@ -1034,6 +1034,42 @@ mod tests {
 		.unwrap();
 	}
 
+	// When we startup the clients may be initialising. If both clients are initialising than we
+	// want to exit rather than waiting forever, in the case of requests with a retry limit set such
+	// as broadcasts.
+	#[tokio::test]
+	async fn return_error_when_retry_limit_if_no_client_ready() {
+		task_scope(|scope| {
+			async move {
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
+
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					futures::future::pending::<()>(),
+					Some(futures::future::pending::<()>()),
+					INITIAL_TIMEOUT,
+					100,
+				);
+
+				retrier_client
+					.request_with_limit(
+						RequestLog::new("request".to_string(), None),
+						// The clients aren't ready - so this future will never actually run.
+						specific_fut_err::<(), _>(INITIAL_TIMEOUT),
+						5,
+					)
+					.await
+					.unwrap_err();
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
 	#[tokio::test]
 	#[ignore = "Test runs forever. Useful for manually testing the failing requests will never return (because they are retried until success)."]
 	async fn request_always_fails() {
