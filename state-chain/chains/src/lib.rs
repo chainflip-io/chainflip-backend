@@ -657,3 +657,24 @@ pub struct ChannelRefundParameters {
 	pub refund_address: ForeignChainAddress,
 	pub min_price: Price,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CcmValidityError {
+	CannotDecodeCfParameters,
+	MessageTooLong,
+	CfParametersContainsInvalidAccounts,
+	CfParametersContainsTooManyAccounts,
+	UnsupportedAsset,
+}
+
+pub trait CcmValidityChecker {
+	fn is_valid(
+		_ccm: &CcmChannelMetadata,
+		_egress_asset: cf_primitives::Asset,
+	) -> Result<(), CcmValidityError> {
+		Ok(())
+	}
+}
+
+pub struct AlwaysValid;
+impl CcmValidityChecker for AlwaysValid {}

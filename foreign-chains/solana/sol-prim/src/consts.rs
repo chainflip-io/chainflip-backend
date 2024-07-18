@@ -34,7 +34,12 @@ pub const BPF_LOADER_UPGRADEABLE_ID: Address =
 pub const COMPUTE_BUDGET_PROGRAM: Address =
 	const_address("ComputeBudget111111111111111111111111111111");
 
-pub const MAX_TRANSACTION_LENGTH: usize = 1_232;
-pub const NONCE_ACCOUNT_LENGTH: u64 = 80;
+pub const MAX_TRANSACTION_LENGTH: usize = 1_232usize;
+pub const NONCE_ACCOUNT_LENGTH: u64 = 80u64;
 
 pub const SOL_USDC_DECIMAL: u8 = 6u8;
+
+// TODO: Confirm the value
+pub const MAX_CCM_MESSAGE_LENGTH_SOL: usize = 1_000usize;
+pub const MAX_CCM_MESSAGE_LENGTH_USDC: usize = 1_000usize;
+pub const MAX_CCM_EXTRA_ACCOUNTS: usize = 5usize;

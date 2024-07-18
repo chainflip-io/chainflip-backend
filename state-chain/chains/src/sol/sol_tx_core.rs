@@ -787,8 +787,8 @@ impl From<Hash> for SolHash {
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone)]
 pub struct CcmAddress {
-	pubkey: Pubkey,
-	is_writable: bool,
+	pub pubkey: Pubkey,
+	pub is_writable: bool,
 }
 
 impl From<CcmAddress> for AccountMeta {

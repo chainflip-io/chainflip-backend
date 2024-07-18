@@ -154,6 +154,7 @@ impl pallet_cf_swapping::Config for Test {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
+	type CcmValidityChecker = cf_chains::AlwaysValid;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

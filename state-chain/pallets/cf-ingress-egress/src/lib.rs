@@ -27,8 +27,9 @@ use cf_chains::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
 	},
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall, DepositChannel,
-	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	CcmValidityChecker, Chain, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall,
+	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId, EgressCounter,
@@ -456,6 +457,9 @@ pub mod pallet {
 
 		type FetchesTransfersLimitProvider: FetchesTransfersLimitProvider;
 
+		/// For checking if the CCM message passed in is valid.
+		type CcmValidityChecker: CcmValidityChecker;
+
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
 	}
@@ -731,6 +735,8 @@ pub mod pallet {
 		DepositChannelCreationDisabled,
 		/// The specified boost pool does not exist.
 		BoostPoolDoesNotExist,
+		/// Failed to open deposit channel because the CCM message is invalid.
+		InvalidCcm,
 	}
 
 	#[pallet::hooks]
@@ -1799,6 +1805,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		DispatchError,
 	> {
 		ensure!(T::SafeMode::get().deposits_enabled, Error::<T, I>::DepositChannelCreationDisabled);
+
+		// For ccm messages, check for validity.
+		if let ChannelAction::CcmTransfer { destination_asset, channel_metadata, .. } =
+			action.clone()
+		{
+			T::CcmValidityChecker::is_valid(&channel_metadata, destination_asset).map_err(|e| {
+				log::warn!(
+					"Failed to open channel due to invalid CCM. Requester: {:?}, Error: {:?}",
+					requester,
+					e
+				);
+				Error::<T, I>::InvalidCcm
+			})?;
+		}
+
 		let channel_opening_fee = ChannelOpeningFee::<T, I>::get();
 		T::FeePayment::try_burn_fee(requester, channel_opening_fee)?;
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });

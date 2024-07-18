@@ -11,12 +11,13 @@ use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	sol::{
-		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolApiEnvironment,
-		SolAsset, SolCcmAccounts, SolHash, SolMessage, SolTransaction, SolanaCrypto,
+		ccm_checker::SolanaCcmValidityChecker, instruction_builder::SolanaInstructionBuilder,
+		SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolCcmAccounts, SolHash, SolMessage,
+		SolTransaction, SolanaCrypto,
 	},
-	AllBatch, AllBatchError, ApiCall, Chain, ChainCrypto, ChainEnvironment, ConsolidateCall,
-	ConsolidationError, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
-	SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
+	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, CcmValidityChecker, Chain, ChainCrypto,
+	ChainEnvironment, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, FetchAssetParams,
+	ForeignChainAddress, SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
 };
 
 use cf_primitives::{EgressId, ForeignChain};
@@ -78,6 +79,7 @@ pub enum SolanaTransactionBuildingError {
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),
 	CannotDecodeCcmCfParam,
+	InvalidCcm,
 }
 
 impl sp_std::fmt::Display for SolanaTransactionBuildingError {
@@ -250,6 +252,30 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
+		// Verify the validity of the CCM message before building the call.
+		SolanaCcmValidityChecker::<Environment>::is_valid(
+			&CcmChannelMetadata {
+				message: message
+					.clone()
+					.try_into()
+					.expect("This is parsed from bounded vec, therefore the size must fit"),
+				gas_budget: 0,
+				cf_parameters: cf_parameters
+					.clone()
+					.try_into()
+					.expect("This is parsed from bounded vec, therefore the size must fit"),
+			},
+			transfer_param.asset.into(),
+		)
+		.map_err(|e| {
+			log::warn!(
+				"Failed to build CCM API call. Transfer param: {:?}, Error: {:?}",
+				transfer_param,
+				e
+			);
+			SolanaTransactionBuildingError::InvalidCcm
+		})?;
+
 		let ccm_accounts = SolCcmAccounts::decode(&mut &cf_parameters[..])
 			.map_err(|_| SolanaTransactionBuildingError::CannotDecodeCcmCfParam)?;
 

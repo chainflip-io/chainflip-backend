@@ -3,8 +3,8 @@
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
-	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters, SwapOrigin,
-	SwapRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, CcmValidityChecker, ChannelRefundParameters,
+	SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId,
@@ -279,6 +279,9 @@ pub mod pallet {
 		>;
 
 		type IngressEgressFeeHandler: IngressEgressFeeApi<AnyChain>;
+
+		/// For checking if the CCM message passed in is valid.
+		type CcmValidityChecker: CcmValidityChecker;
 	}
 
 	#[pallet::pallet]
@@ -469,7 +472,6 @@ pub mod pallet {
 		CcmInsufficientDepositAmount,
 		/// The provided address could not be decoded.
 		InvalidDestinationAddress,
-
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
 		/// Broker registration is disabled due to Safe Mode.
@@ -480,6 +482,8 @@ pub mod pallet {
 		EarnedFeesNotWithdrawn,
 		/// The provided list of broker contains an account which is not registered as Broker
 		AffiliateAccountIsNotABroker,
+		/// Failed to open deposit channel because the CCM message is invalid.
+		InvalidCcm,
 	}
 
 	#[pallet::hooks]
@@ -746,6 +750,21 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
+			// For ccm messages on the Solana chain, check for validity.
+			if let EncodedAddress::Sol(_) = destination_address {
+				T::CcmValidityChecker::is_valid(
+					&deposit_metadata.channel_metadata,
+					destination_asset,
+				)
+				.map_err(|e| {
+					log::warn!(
+						"Failed to process CCM due to invalid data. Tx hash: {:?}, Error: {:?}",
+						tx_hash,
+						e
+					);
+					Error::<T>::InvalidCcm
+				})?;
+			}
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 

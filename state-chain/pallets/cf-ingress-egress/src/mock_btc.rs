@@ -1,10 +1,13 @@
 pub use crate::{self as pallet_cf_ingress_egress};
 
 use crate::PalletSafeMode;
-use cf_chains::btc::{deposit_address::DepositAddress, BitcoinTrackedData};
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
 	Chain,
+};
+use cf_chains::{
+	btc::{deposit_address::DepositAddress, BitcoinTrackedData},
+	AlwaysValid,
 };
 pub use cf_primitives::chains::{assets, Bitcoin};
 use cf_primitives::ChannelId;
@@ -125,6 +128,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
+	type CcmValidityChecker = AlwaysValid;
 	type SafeMode = MockRuntimeSafeMode;
 }
 
