@@ -36,10 +36,11 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
+	impl_pallet_safe_mode,
 	liquidity::{LpBalanceApi, LpDepositHandler},
 	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, AssetWithholding, BoostApi,
 	Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment,
-	GetBlockHeight, IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode,
+	GetBlockHeight, IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit,
 	ScheduledEgressDetails, SwapDepositHandler, SwapQueueApi, SwapType,
 };
 use frame_support::{
@@ -142,46 +143,12 @@ impl<C: Chain> CrossChainMessage<C> {
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
 
-#[derive(
-	serde::Serialize,
-	serde::Deserialize,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	Copy,
-	Clone,
-	PartialEq,
-	Eq,
-	RuntimeDebug,
-)]
-#[scale_info(skip_type_params(I))]
-pub struct PalletSafeMode<I: 'static> {
-	pub boost_deposits_enabled: bool,
-	pub add_boost_funds_enabled: bool,
-	pub stop_boosting_enabled: bool,
-	pub deposits_enabled: bool,
-	#[doc(hidden)]
-	#[codec(skip)]
-	#[serde(skip_serializing)]
-	_phantom: PhantomData<I>,
-}
-
-impl<I: 'static> SafeMode for PalletSafeMode<I> {
-	const CODE_RED: Self = PalletSafeMode {
-		boost_deposits_enabled: false,
-		add_boost_funds_enabled: false,
-		stop_boosting_enabled: false,
-		deposits_enabled: false,
-		_phantom: PhantomData,
-	};
-	const CODE_GREEN: Self = PalletSafeMode {
-		boost_deposits_enabled: true,
-		add_boost_funds_enabled: true,
-		stop_boosting_enabled: true,
-		deposits_enabled: true,
-		_phantom: PhantomData,
-	};
+impl_pallet_safe_mode! {
+	PalletSafeMode<I>;
+	boost_deposits_enabled,
+	add_boost_funds_enabled,
+	stop_boosting_enabled,
+	deposits_enabled,
 }
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
