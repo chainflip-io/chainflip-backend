@@ -123,9 +123,10 @@ pub use cf_traits::{
 pub use pallet_cf_validator::SetSizeParameters;
 
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, evm_vault_activator::EvmVaultActivator,
-	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
-	DotEnvironment, EvmEnvironment, SolEnvironment, TokenholderGovernanceBroadcaster,
+	boost_api::IngressEgressBoostApi, epoch_transition::ChainflipEpochTransitions,
+	evm_vault_activator::EvmVaultActivator, BroadcastReadyProvider, BtcEnvironment,
+	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EvmEnvironment, SolEnvironment,
+	TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -442,6 +443,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type AddressConverter = ChainAddressConverter;
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
+	type BoostApi = IngressEgressBoostApi;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;

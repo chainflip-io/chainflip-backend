@@ -4,7 +4,7 @@ use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
 	AnyChain, Chain, Ethereum,
 };
-use cf_primitives::{chains::assets, AccountId, ChannelId};
+use cf_primitives::{chains::assets, AccountId, AssetAmount, ChannelId};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
@@ -13,7 +13,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler,
 	},
-	AccountRoleRegistry,
+	AccountRoleRegistry, BoostApi,
 };
 use frame_support::{
 	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
@@ -106,6 +106,17 @@ impl crate::Config for Test {
 	type PoolApi = Self;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
+	type BoostApi = MockIngressEgressBoostApi;
+}
+
+pub struct MockIngressEgressBoostApi;
+impl BoostApi for MockIngressEgressBoostApi {
+	type AccountId = AccountId;
+	type AssetMap = cf_chains::assets::any::AssetMap<AssetAmount>;
+
+	fn boost_pool_account_balances(_who: &Self::AccountId) -> Self::AssetMap {
+		Self::AssetMap::from_fn(|_| 0)
+	}
 }
 
 pub const LP_ACCOUNT: [u8; 32] = [1u8; 32];

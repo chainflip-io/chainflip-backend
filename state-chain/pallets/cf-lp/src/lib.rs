@@ -4,8 +4,8 @@
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
-	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
-	EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
+	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, BoostApi, Chainflip,
+	DepositApi, EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
 };
 
 use sp_std::vec;
@@ -75,6 +75,11 @@ pub mod pallet {
 		/// The interface for sweeping funds from pools into free balance
 		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
+		/// The interface to access boosted balances
+		type BoostApi: BoostApi<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			AssetMap = cf_chains::assets::any::AssetMap<AssetAmount>,
+		>;
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 
@@ -112,6 +117,8 @@ pub mod pallet {
 		DestinationAccountNotLiquidityProvider,
 		/// The account cannot transfer to itself.
 		CannotTransferToOriginAccount,
+		/// The account still has funds remaining in the boost pools
+		BoostedFundsRemaining,
 	}
 
 	#[pallet::event]
@@ -294,6 +301,8 @@ pub mod pallet {
 		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
 			const STABLE_ASSET: Asset = Asset::Usdc;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
+			T::PoolApi::sweep(&account_id)?;
+			let boost_pools_balances = T::BoostApi::boost_pool_account_balances(&account_id);
 
 			ensure!(
 				Asset::all().filter(|asset| *asset != STABLE_ASSET).all(|asset| {
@@ -305,6 +314,10 @@ pub mod pallet {
 			ensure!(
 				Self::free_balances(&account_id)?.iter().all(|(_, amount)| *amount == 0),
 				Error::<T>::FundsRemaining
+			);
+			ensure!(
+				boost_pools_balances.iter().all(|(_asset, amount)| { *amount == 0 }),
+				Error::<T>::BoostedFundsRemaining
 			);
 
 			let _ = FreeBalances::<T>::clear_prefix(&account_id, u32::MAX, None);
