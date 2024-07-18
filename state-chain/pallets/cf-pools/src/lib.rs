@@ -990,7 +990,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> Result<u32, DispatchError> {
-		let pool_orders = Self::pool_orders(base_asset, quote_asset, Some(who.clone()), false)?;
+		let pool_orders = Self::pool_orders(base_asset, quote_asset, Some(who.clone()), true)?;
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
