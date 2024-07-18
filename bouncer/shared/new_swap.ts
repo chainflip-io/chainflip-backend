@@ -9,6 +9,12 @@ export interface CcmDepositMetadata {
   cfParameters: string;
 }
 
+export interface RefundParameters {
+  retryDuration: number;
+  refundAddress: string;
+  minPrice: string;
+}
+
 export async function newSwap(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -16,6 +22,7 @@ export async function newSwap(
   messageMetadata?: CcmDepositMetadata,
   brokerCommissionBps = defaultCommissionBps,
   boostFeeBps = 0,
+  refundParameters?: RefundParameters,
 ): Promise<void> {
   const destinationAddress =
     destAsset === 'Dot' ? decodeDotAddressForContract(destAddress) : destAddress;
@@ -37,7 +44,8 @@ export async function newSwap(
             message: messageMetadata.message as `0x${string}`,
             gasBudget: messageMetadata.gasBudget.toString(),
           },
-          boostFeeBps,
+          maxBoostFeeBps: boostFeeBps,
+          refundParameters,
         },
         {
           url: brokerUrl,

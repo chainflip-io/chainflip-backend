@@ -1,6 +1,6 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { encodeAddress } from '../polkadot/util-crypto';
-import { newSwap } from './new_swap';
+import { newSwap, RefundParameters } from './new_swap';
 import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
 import {
@@ -42,6 +42,7 @@ export async function requestNewSwap(
   brokerCommissionBps?: number,
   log = true,
   boostFeeBps = 0,
+  refundParameters?: RefundParameters,
 ): Promise<SwapParams> {
   const addressPromise = observeEvent('swapping:SwapDepositAddressReady', {
     test: (event) => {
@@ -76,6 +77,7 @@ export async function requestNewSwap(
     messageMetadata,
     brokerCommissionBps,
     boostFeeBps,
+    refundParameters,
   );
 
   const res = (await addressPromise).data;
