@@ -49,6 +49,10 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use scale_info::{
+	build::{Fields, Variants},
+	Path, Type,
+};
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -197,17 +201,9 @@ pub struct FailedForeignChainCall {
 }
 
 #[derive(
-	CloneNoBound,
-	RuntimeDebugNoBound,
-	PartialEqNoBound,
-	EqNoBound,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
+	CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, MaxEncodedLen,
 )]
-#[scale_info(skip_type_params(T, I))]
-pub enum PalletConfigUpdate<T: Config<I>, I: 'static = ()> {
+pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
 	ChannelOpeningFee { fee: T::Amount },
 	/// Set the minimum deposit allowed for a particular asset.
@@ -215,6 +211,60 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static = ()> {
 	/// Set the max allowed value for the number of blocks to keep retrying a swap before it is
 	/// refunded
 	SetMaxSwapRetryDurationBlocks { blocks: BlockNumber },
+}
+
+const fn get_name_for_set_minimum_deposit<T: Config<I>, I: 'static>() -> &'static str {
+	match T::TargetChain::NAME.as_bytes() {
+		b"Ethereum" => "SetMinimumDepositEthereum",
+		b"Polkadot" => "SetMinimumDepositPolkadot",
+		b"Bitcoin" => "SetMinimumDepositBitcoin",
+		b"Arbitrum" => "SetMinimumDepositArbitrum",
+		b"Solana" => "SetMinimumDepositSolana",
+		_ => panic!("Add the new chain to this list!"),
+	}
+}
+
+const fn get_name_for_pallet_config_update<T: Config<I>, I: 'static>() -> &'static str {
+	match T::TargetChain::NAME.as_bytes() {
+		b"Ethereum" => "PalletConfigUpdateEthereum",
+		b"Polkadot" => "PalletConfigUpdatePolkadot",
+		b"Bitcoin" => "PalletConfigUpdateBitcoin",
+		b"Arbitrum" => "PalletConfigUpdateArbitrum",
+		b"Solana" => "PalletConfigUpdateSolana",
+		_ => panic!("Add the new chain to this list!"),
+	}
+}
+
+impl<T, I> TypeInfo for PalletConfigUpdate<T, I>
+where
+	T: Config<I>,
+	I: 'static,
+{
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new(get_name_for_pallet_config_update::<T, I>(), module_path!()))
+			.variant(
+				Variants::new()
+					.variant("ChannelOpeningFee", |v| {
+						v.index(0)
+							.fields(Fields::named().field(|f| f.ty::<T::Amount>().name("fee")))
+					})
+					.variant(get_name_for_set_minimum_deposit::<T, I>(), |v| {
+						v.index(1).fields(
+							Fields::named()
+								.field(|f| f.ty::<TargetChainAsset<T, I>>().name("asset"))
+								.field(|f| {
+									f.ty::<TargetChainAmount<T, I>>().name("minimum_deposit")
+								}),
+						)
+					})
+					.variant("SetMaxSwapRetryDurationBlocks", |v| {
+						v.index(2)
+							.fields(Fields::named().field(|f| f.ty::<BlockNumber>().name("blocks")))
+					}),
+			)
+	}
 }
 
 #[frame_support::pallet]
