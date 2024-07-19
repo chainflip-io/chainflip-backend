@@ -2,6 +2,9 @@
 
 # Input string
 input_string="$1"
+# Version type to extract. default is major_minor
+
+version_type="${2:-major_minor}"
 
 # Regular expression to match version pattern (X.Y.Z or X.Y)
 # This pattern looks for numbers separated by dots.
@@ -15,6 +18,13 @@ fi
 
 # Extract major and minor version
 major_minor=$(echo "$version" | cut -d. -f1,2)
+full_version=$(echo "$version" | cut -d. -f1,2,3)
+
+if [[ "$version_type" == "major_minor" ]]; then
+    semver_version="$major_minor"
+else
+    semver_version="$full_version"
+fi
 
 # Output the major and minor version
-echo "$major_minor"
+echo "$semver_version"

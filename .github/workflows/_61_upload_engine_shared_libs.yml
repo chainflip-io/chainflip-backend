@@ -1,10 +1,5 @@
 on:
   workflow_call:
-    inputs:
-      version:
-        description: Release version
-        required: true
-        type: string
 
 permissions:
   id-token: write
@@ -34,10 +29,13 @@ jobs:
           mv chainflip-backend-bin/libchainflip_engine_v*.so /tmp/chainflip-engine-shared-libs/
           mv chainflip-backend-bin-mac-m2/libchainflip_engine_v*.dylib /tmp/chainflip-engine-shared-libs
 
-      - name: Debug 🐛
+      - name: Set Version 🔦
+        id: version
         run: |
-          ls -la chainflip-backend-bin
-          ls -la chainflip-backend-bin-mac-m2
+          chmod +x chainflip-backend-bin/chainflip-node
+          VERSION=./ci/scripts/extract_version.sh "$(./chainflip-node --version)" full
+          echo "Version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials using OIDC 🪪
         uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
@@ -47,4 +45,4 @@ jobs:
 
       - name: Upload engine shared libraries S3 🚀
         run: |
-          aws s3 cp /tmp/chainflip-engine-shared-libs/ s3://repo.chainflip.io/releases/${{ inputs.version }} --recursive
+          aws s3 cp /tmp/chainflip-engine-shared-libs/ s3://repo.chainflip.io/releases/${{ steps.version.outputs.version }} --recursive
