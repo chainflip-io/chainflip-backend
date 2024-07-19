@@ -55,17 +55,17 @@ jobs:
           name: chainflip-node-runtime-production
           path: assets/runtime
 
-      - name: Download public images 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
-        with:
-          name: chainflip-backend-public-images
-          path: assets/docker/public
+      # - name: Download public images 📥
+      #   uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+      #   with:
+      #     name: chainflip-backend-public-images
+      #     path: assets/docker/public
 
-      - name: Download private images 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
-        with:
-          name: chainflip-backend-private-images
-          path: assets/docker/private
+      # - name: Download private images 📥
+      #   uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+      #   with:
+      #     name: chainflip-backend-private-images
+      #     path: assets/docker/private
 
       - name: DEBUG - List files 📂
         run: |
