@@ -717,6 +717,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
 						broadcast_barriers.pop_first();
 					});
+				} else {
+					break
 				}
 			}
 		});
