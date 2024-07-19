@@ -33,7 +33,7 @@ jobs:
         id: version
         run: |
           chmod +x chainflip-backend-bin/chainflip-node
-          VERSION=./ci/scripts/extract_version.sh "$(./chainflip-node --version)" full
+          VERSION=./ci/scripts/extract_version.sh "$(./chainflip-backend-bin/chainflip-node --version)" full
           echo "Version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
