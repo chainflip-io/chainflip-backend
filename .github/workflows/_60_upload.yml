@@ -41,7 +41,7 @@ jobs:
       - name: Move .dylib files 📂
         run: |
           mkdir -p assets/m2
-          mv /tmp/assets/m2/libchainflip_engine_v*.dylib assets/assets/m2/
+          mv /tmp/assets/m2/libchainflip_engine_v*.dylib assets/m2/
 
       - name: Download packages 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
