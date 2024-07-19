@@ -10,7 +10,7 @@ export interface CcmDepositMetadata {
 }
 
 export interface RefundParameters {
-  retryDuration: number;
+  retryDurationBlocks: number;
   refundAddress: string;
   minPrice: string;
 }
@@ -44,12 +44,12 @@ export async function newSwap(
             message: messageMetadata.message as `0x${string}`,
             gasBudget: messageMetadata.gasBudget.toString(),
           },
+          commissionBps: brokerCommissionBps,
           maxBoostFeeBps: boostFeeBps,
           refundParameters,
         },
         {
           url: brokerUrl,
-          commissionBps: brokerCommissionBps,
         },
         'backspin',
       );

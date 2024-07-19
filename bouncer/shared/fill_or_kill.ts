@@ -34,7 +34,7 @@ async function testMinPriceRefund(asset: Asset, amount: number) {
   console.log(`Current swap retry delay: ${currentRetryDuration} blocks`);
 
   const refundParameters: RefundParameters = {
-    retryDuration: 1.6 * currentRetryDuration, // More than the swap retry delay, so it will be retried once.
+    retryDurationBlocks: 1.6 * currentRetryDuration, // More than the swap retry delay, so it will be retried once.
     refundAddress:
       asset === Assets.Dot ? decodeDotAddressForContract(refundAddress) : refundAddress,
     minPrice: invalidMinPrice,
