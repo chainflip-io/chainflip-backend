@@ -96,10 +96,3 @@ jobs:
   merge-commit-summary:
     needs: [publish]
     uses: ./.github/workflows/_04_merge_commit_summary.yml
-  upload:
-    needs: [package]
-    uses: ./.github/workflows/_60_upload.yml
-    secrets: inherit
-    with:
-      network: "berghain"
-      version: "1.5.0"
