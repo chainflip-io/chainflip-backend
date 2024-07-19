@@ -25,10 +25,9 @@ jobs:
 
       - name: Set Version 🔦
         id: version
-        shell: bash
         run: |
           chmod +x chainflip-backend-bin/chainflip-node
-          RAW_VERSION=$(./chainflip-backend-bin/chainflip-node --version)
+          RAW_VERSION=$(echo $(./chainflip-backend-bin/chainflip-node --version))
           echo "Raw Version: $RAW_VERSION"
           VERSION=./ci/scripts/extract_version.sh "${RAW_VERSION}" full
           echo "Version: $VERSION"
