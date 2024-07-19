@@ -1000,7 +1000,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 		let mut result: AssetMap<AssetAmount> = AssetMap::from_fn(|_| 0);
 
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
-			let pool_orders = match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone())) {
+			let pool_orders = match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()), false) {
 				Ok(orders) => orders,
 				Err(_) => continue,
 			};
