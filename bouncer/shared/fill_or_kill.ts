@@ -56,7 +56,7 @@ async function testMinPriceRefund(asset: Asset, amount: number) {
   const depositChannelId = swapRequest.channelId;
 
   const observeSwapScheduled = observeEvent('swapping:SwapScheduled', {
-    test: (event) => event.data.origin.DepositChannel.channelId === depositChannelId.toString(),
+    test: (event) => event.data.origin.DepositChannel?.channelId === depositChannelId.toString(),
   }).event;
 
   // Deposit the asset
@@ -64,7 +64,7 @@ async function testMinPriceRefund(asset: Asset, amount: number) {
   console.log(`Sent ${amount} ${asset} to ${depositAddress}`);
 
   const swapId = Number((await observeSwapScheduled).data.swapId);
-  console.log(`Swap scheduled, swapId: ${swapId}`);
+  console.log(`${asset} swap scheduled, swapId: ${swapId}`);
 
   // TODO: Observing after the SwapScheduled event means its possible to miss the events, but we need to the swap id.
   const observeRefundEgressScheduled = observeEvent(`swapping:RefundEgressScheduled`, {
@@ -83,15 +83,15 @@ async function testMinPriceRefund(asset: Asset, amount: number) {
     observeRefundEgressScheduled,
   ]);
   if (firstSwapEvent.name.method === 'SwapExecuted') {
-    throw new Error('Swap was executed instead of failing and being retried');
+    throw new Error(`${asset} swap ${swapId} was executed instead of failing and being retried`);
   } else if (firstSwapEvent.name.method !== 'SwapRescheduled') {
-    throw new Error('Swap was not retried once as expected');
+    throw new Error(`${asset} swap ${swapId} was not retried once as expected`);
   }
-  console.log('Swap was rescheduled');
+  console.log(`${asset} swap ${swapId} was rescheduled`);
 
   const secondSwapEvent = await Promise.race([observeRefundEgressScheduled, observeSwapExecuted]);
   if (secondSwapEvent.name.method === 'SwapExecuted') {
-    throw new Error('Swap was executed instead of being refunded');
+    throw new Error(`${asset} swap ${swapId} was executed instead of being refunded`);
   }
 
   const refundBalanceAfter = await observeBalanceIncrease(
@@ -100,7 +100,9 @@ async function testMinPriceRefund(asset: Asset, amount: number) {
     refundBalanceBefore,
   );
 
-  console.log(`Refund balance before: ${refundBalanceBefore}, after: ${refundBalanceAfter}`);
+  console.log(
+    `Refund balance before: ${refundBalanceBefore}, after: ${refundBalanceAfter} ${asset} `,
+  );
   // We expect the refund to be a little less due to ingress and egress fees.
   assert(
     isWithinOnePercent(
@@ -108,7 +110,7 @@ async function testMinPriceRefund(asset: Asset, amount: number) {
       amountToFineAmountBigInt(refundBalanceBefore, asset) +
         amountToFineAmountBigInt(amount, asset),
     ),
-    'Refund amount is incorrect',
+    `${asset} refund amount is incorrect (swapId: ${swapId})`,
   );
 }
 
