@@ -213,26 +213,17 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	SetMaxSwapRetryDurationBlocks { blocks: BlockNumber },
 }
 
-const fn get_name_for_set_minimum_deposit<T: Config<I>, I: 'static>() -> &'static str {
-	match T::TargetChain::NAME.as_bytes() {
-		b"Ethereum" => "SetMinimumDepositEthereum",
-		b"Polkadot" => "SetMinimumDepositPolkadot",
-		b"Bitcoin" => "SetMinimumDepositBitcoin",
-		b"Arbitrum" => "SetMinimumDepositArbitrum",
-		b"Solana" => "SetMinimumDepositSolana",
-		_ => panic!("Add the new chain to this list!"),
-	}
-}
-
-const fn get_name_for_pallet_config_update<T: Config<I>, I: 'static>() -> &'static str {
-	match T::TargetChain::NAME.as_bytes() {
-		b"Ethereum" => "PalletConfigUpdateEthereum",
-		b"Polkadot" => "PalletConfigUpdatePolkadot",
-		b"Bitcoin" => "PalletConfigUpdateBitcoin",
-		b"Arbitrum" => "PalletConfigUpdateArbitrum",
-		b"Solana" => "PalletConfigUpdateSolana",
-		_ => panic!("Add the new chain to this list!"),
-	}
+macro_rules! append_chain_to_name {
+	($name:ident) => {
+		match T::TargetChain::NAME {
+			"Ethereum" => concat!(stringify!($name), "Ethereum"),
+			"Polkadot" => concat!(stringify!($name), "Polkadot"),
+			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
+			"Arbitrum" => concat!(stringify!($name), "Arbitrum"),
+			"Solana" => concat!(stringify!($name), "Solana"),
+			_ => concat!(stringify!($name), "Other"),
+		}
+	};
 }
 
 impl<T, I> TypeInfo for PalletConfigUpdate<T, I>
@@ -243,14 +234,14 @@ where
 	type Identity = Self;
 	fn type_info() -> Type {
 		Type::builder()
-			.path(Path::new(get_name_for_pallet_config_update::<T, I>(), module_path!()))
+			.path(Path::new(append_chain_to_name!(PalletConfigUpdate), module_path!()))
 			.variant(
 				Variants::new()
 					.variant("ChannelOpeningFee", |v| {
 						v.index(0)
 							.fields(Fields::named().field(|f| f.ty::<T::Amount>().name("fee")))
 					})
-					.variant(get_name_for_set_minimum_deposit::<T, I>(), |v| {
+					.variant(append_chain_to_name!(SetMinimumDeposit), |v| {
 						v.index(1).fields(
 							Fields::named()
 								.field(|f| f.ty::<TargetChainAsset<T, I>>().name("asset"))
