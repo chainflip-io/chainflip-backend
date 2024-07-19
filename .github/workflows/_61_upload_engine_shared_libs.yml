@@ -32,6 +32,7 @@ jobs:
           echo "Version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "url_friendly_version=$(echo $VERSION | tr . _)" >> $GITHUB_OUTPUT
+          echo "full_version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Move shared library files 📂
         run: |
