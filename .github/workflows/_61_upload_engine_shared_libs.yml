@@ -28,7 +28,9 @@ jobs:
         shell: bash
         run: |
           chmod +x chainflip-backend-bin/chainflip-node
-          VERSION=./ci/scripts/extract_version.sh "$(./chainflip-backend-bin/chainflip-node --version)" full
+          RAW_VERSION=$(./chainflip-backend-bin/chainflip-node --version)
+          echo "Raw Version: $RAW_VERSION"
+          VERSION=./ci/scripts/extract_version.sh "${RAW_VERSION}" full
           echo "Version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "url_friendly_version=$(echo $VERSION | tr . _)" >> $GITHUB_OUTPUT
