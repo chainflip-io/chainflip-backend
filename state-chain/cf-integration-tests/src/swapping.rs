@@ -34,13 +34,13 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle},
 };
 use pallet_cf_broadcast::{
-	AwaitingBroadcast, BroadcastIdCounter, RequestFailureCallbacks, RequestSuccessCallbacks,
-	ThresholdSignatureData,
+	AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls, RequestFailureCallbacks,
+	RequestSuccessCallbacks,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_lp::HistoricalEarnedFees;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
-use pallet_cf_swapping::{SwapRequestIdCounter, SWAP_DELAY_BLOCKS, SWAP_RETRY_DELAY_BLOCKS};
+use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay, SWAP_DELAY_BLOCKS};
 use sp_core::U256;
 use state_chain_runtime::{
 	chainflip::{
@@ -660,7 +660,7 @@ fn failed_swaps_are_rolled_back() {
 
 		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
 		// shouldn't be drained.
-		Swapping::on_finalize(swaps_scheduled_at + SWAP_RETRY_DELAY_BLOCKS);
+		Swapping::on_finalize(swaps_scheduled_at + SwapRetryDelay::<Runtime>::get());
 		assert_eq!(
 			Some(eth_price),
 			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
@@ -676,7 +676,7 @@ fn failed_swaps_are_rolled_back() {
 		setup_pool_and_accounts(vec![Asset::Flip], OrderType::RangeOrder);
 		System::reset_events();
 
-		Swapping::on_finalize(swaps_scheduled_at + 2 * SWAP_RETRY_DELAY_BLOCKS);
+		Swapping::on_finalize(swaps_scheduled_at + 2 * SwapRetryDelay::<Runtime>::get());
 
 		assert_ne!(
 			Some(eth_price),
@@ -934,7 +934,7 @@ fn can_resign_failed_ccm() {
 				vec![]
 			);
 
-			assert!(ThresholdSignatureData::<Runtime, Instance1>::get(broadcast_id).is_none());
+			assert!(PendingApiCalls::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 		});
@@ -1030,7 +1030,7 @@ fn can_handle_failed_vault_transfer() {
 				vec![]
 			);
 
-			assert!(ThresholdSignatureData::<Runtime, Instance1>::get(broadcast_id).is_none());
+			assert!(PendingApiCalls::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 		});

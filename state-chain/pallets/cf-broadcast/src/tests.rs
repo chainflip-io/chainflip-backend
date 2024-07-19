@@ -3,22 +3,22 @@
 use crate::{
 	mock::*, AbortedBroadcasts, AwaitingBroadcast, BroadcastData, BroadcastId, Config,
 	DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks,
-	ThresholdSignatureData, Timeouts, TransactionFeeDeficit, TransactionMetadata,
-	TransactionOutIdToBroadcastId,
+	PalletOffence, PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks,
+	RequestSuccessCallbacks, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
 	mocks::{
-		ChainChoice, MockAggKey, MockApiCall, MockBroadcastBarriers, MockEthereum,
-		MockEthereumChainCrypto, MockEthereumTransactionMetadata, MockThresholdSignature,
-		MockTransactionBuilder, ETH_TX_FEE, MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
+		ChainChoice, MockApiCall, MockBroadcastBarriers, MockEthereum, MockEthereumChainCrypto,
+		MockEthereumTransactionMetadata, MockTransactionBuilder, ETH_TX_FEE,
+		MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
-	ChainCrypto, FeeRefundCalculator,
+	ChainCrypto, FeeRefundCalculator, ForeignChain,
 };
 use cf_traits::{
 	mocks::{
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
+		liability_tracker::MockLiabilityTracker,
 		signer_nomination::MockNominator,
 		threshold_signer::MockThresholdSigner,
 	},
@@ -122,7 +122,7 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 	);
 	assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());
 	assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
-	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
+	assert!(PendingApiCalls::<Test, Instance1>::get(broadcast_id).is_none());
 	assert!(TransactionMetadata::<Test, Instance1>::get(broadcast_id).is_none());
 	assert!(!PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id))
 }
@@ -160,17 +160,16 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		let broadcast_data = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).unwrap();
 
-		let nominee = MockNominator::get_last_nominee().unwrap();
-
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
+		assert_eq!(MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()), 0);
 
 		witness_broadcast(tx_out_id);
 
 		let expected_refund = broadcast_data.transaction_payload.return_fee_refund(ETH_TX_FEE);
 
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).is_none());
-
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), expected_refund);
+		assert_eq!(
+			MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()),
+			expected_refund
+		);
 
 		assert_eq!(
 			System::events().get(1).expect("an event").event,
@@ -525,9 +524,7 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 		let (tx_out_id, api_call) = api_call(1);
 		initiate_and_sign_broadcast(&api_call, TxType::Normal);
 
-		let nominee = MockNominator::get_last_nominee().unwrap();
-
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
+		assert_eq!(MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()), 0);
 
 		witness_broadcast(tx_out_id);
 
@@ -563,16 +560,7 @@ fn callback_is_called_upon_broadcast_failure() {
 			broadcast_id,
 			new_mock_broadcast_attempt(broadcast_id, 0u64),
 		);
-		ThresholdSignatureData::<Test, Instance1>::insert(
-			broadcast_id,
-			(
-				api_call,
-				MockThresholdSignature {
-					signing_key: MockAggKey([0u8; 4]),
-					signed_payload: [0u8; 4],
-				},
-			),
-		);
+		PendingApiCalls::<Test, Instance1>::insert(broadcast_id, api_call);
 
 		// Broadcast fails when no broadcaster can be nominated.
 		let nominee = ready_to_abort_broadcast(broadcast_id);
@@ -680,7 +668,7 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 			));
 
 			assert_eq!(
-				TransactionFeeDeficit::<Test, Instance1>::get(nominee),
+				MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()),
 				broadcast_data.transaction_payload.return_fee_refund(ETH_TX_FEE)
 			);
 		});
@@ -1278,4 +1266,70 @@ fn broadcast_is_retried_without_initial_nominee() {
 			));
 			assert_broadcast_storage_cleaned_up(broadcast_id);
 		});
+}
+
+#[test]
+fn broadcast_re_signing() {
+	new_test_ext()
+		.execute_with(|| {
+			let (broadcast_id, _) = start_mock_broadcast();
+			// BroadcastDelay::set(Some(1u32.into()));
+			// assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64),
+			// broadcast_id));
+
+			// Abort the broadcast
+			let nominee = ready_to_abort_broadcast(broadcast_id);
+			assert_ok!(Broadcaster::transaction_failed(
+				RuntimeOrigin::signed(nominee),
+				broadcast_id
+			));
+			System::assert_last_event(RuntimeEvent::Broadcaster(
+				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
+			));
+			broadcast_id
+		})
+		.then_execute_at_next_block(|broadcast_id| {
+			// Check that the broadcast is aborted
+			assert!(!PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+
+			// Request a re-sign
+			assert_ok!(crate::Pallet::<Test, Instance1>::re_sign_aborted_broadcasts(
+				RuntimeOrigin::root(),
+				vec![broadcast_id],
+				true,
+				false,
+			));
+			// Check that the broadcast is re-scheduled
+			assert!(PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+			assert!(!AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+		});
+}
+
+#[test]
+fn threshold_sign_and_refresh_replay_protection() {
+	new_test_ext().execute_with(|| {
+		MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_refreshed_replay_protection();
+		let broadcast_id: u8 = 1;
+
+		let (tx_out_id, api_call) = api_call(broadcast_id);
+		PendingApiCalls::<Test, Instance1>::insert(
+			broadcast_id as u32,
+			api_call.clone(),
+		);
+
+		TransactionOutIdToBroadcastId::<Test, Instance1>::insert(
+			tx_out_id,
+			(broadcast_id as u32, 0),
+		);
+
+		assert_ok!(Broadcaster::re_sign_aborted_broadcasts(
+			RuntimeOrigin::root(),
+			vec![broadcast_id as u32],
+			false,
+			true,
+		));
+
+		assert!(MockTransactionBuilder::<MockEthereum, RuntimeCall>::get_refreshed_replay_protection_state(), "Refreshed replay protection has not been refreshed!");
+	});
 }

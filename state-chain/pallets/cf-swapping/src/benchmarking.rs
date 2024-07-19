@@ -182,7 +182,6 @@ mod benchmarks {
 			),
 			vec![
 				Swap::new(1, 1, Asset::Usdc, Asset::Eth, 1_000 - 1, None, SwapType::CcmPrincipal,),
-				Swap::new(2, 1, Asset::Usdc, Asset::Eth, 1, None, SwapType::CcmGas,)
 			]
 		);
 	}

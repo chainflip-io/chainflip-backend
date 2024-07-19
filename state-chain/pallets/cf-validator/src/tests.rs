@@ -5,7 +5,11 @@ use core::ops::Range;
 use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
-	mocks::{key_rotator::MockKeyRotatorA, reputation_resetter::MockReputationResetter},
+	mocks::{
+		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
+		key_rotator::MockKeyRotatorA,
+		reputation_resetter::MockReputationResetter,
+	},
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
@@ -323,14 +327,16 @@ fn register_peer_id() {
 			10,
 			alice_peer_keypair.sign(&ALICE.encode()[..]),
 		));
+
 		assert_eq!(
-			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
-				ALICE,
-				alice_peer_public_key,
-				40044,
-				10
-			)),
+			MockCfeInterface::take_events(),
+			vec![
+			MockCfeEvent::PeerIdRegistered {
+				account_id: ALICE,
+				pubkey: alice_peer_public_key,
+				port: 40044,
+				ip: 10
+			}],
 			"should emit event on register peer id"
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&alice_peer_public_key), Some(()));
@@ -358,14 +364,16 @@ fn register_peer_id() {
 			11,
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		),);
+
 		assert_eq!(
-			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
-				BOB,
-				bob_peer_public_key,
-				40043,
-				11
-			)),
+			MockCfeInterface::take_events(),
+			vec![
+			MockCfeEvent::PeerIdRegistered {
+				account_id: BOB,
+				pubkey: bob_peer_public_key,
+				port: 40043,
+				ip: 11
+			}],
 			"should emit event on register peer id"
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
@@ -394,14 +402,16 @@ fn register_peer_id() {
 			11,
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
+
 		assert_eq!(
-			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
-				BOB,
-				bob_peer_public_key,
-				40043,
-				11
-			)),
+			MockCfeInterface::take_events(),
+			vec![
+			MockCfeEvent::PeerIdRegistered {
+				account_id: BOB,
+				pubkey: bob_peer_public_key,
+				port: 40043,
+				ip: 11
+			}],
 			"should emit event on register peer id"
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
@@ -415,16 +425,6 @@ fn register_peer_id() {
 			12,
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
-		assert_eq!(
-			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
-				BOB,
-				bob_peer_public_key,
-				40043,
-				12
-			)),
-			"should emit event on register peer id"
-		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(ValidatorPallet::node_peer_id(&BOB), Some((bob_peer_public_key, 40043, 12)));
 	});
@@ -1198,6 +1198,27 @@ fn validator_registration_and_deregistration() {
 
 		// State should be cleaned up.
 		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+	});
+}
+
+#[test]
+fn validator_deregistration_after_expired_epoch() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE),));
+		ValidatorPallet::transition_to_next_epoch(vec![1, ALICE], 100);
+
+		// Can't deregister
+		assert_noop!(
+			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),),
+			Error::<Test>::StillKeyHolder
+		);
+
+		let epoch_to_expire = ValidatorPallet::current_epoch();
+		ValidatorPallet::transition_to_next_epoch(vec![1, 2], 100);
+		ValidatorPallet::expire_epoch(epoch_to_expire);
+
+		// Now you can deregister
+		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),));
 	});
 }
 

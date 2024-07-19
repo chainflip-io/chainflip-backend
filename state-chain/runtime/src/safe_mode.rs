@@ -16,6 +16,7 @@ impl_runtime_safe_mode! {
 	validator: pallet_cf_validator::PalletSafeMode,
 	pools: pallet_cf_pools::PalletSafeMode,
 	reputation: pallet_cf_reputation::PalletSafeMode,
+	asset_balances: pallet_cf_asset_balances::PalletSafeMode,
 	threshold_signature_evm: pallet_cf_threshold_signature::PalletSafeMode<Instance16>,
 	threshold_signature_bitcoin: pallet_cf_threshold_signature::PalletSafeMode<Instance3>,
 	threshold_signature_polkadot: pallet_cf_threshold_signature::PalletSafeMode<Instance2>,
@@ -37,6 +38,8 @@ impl_runtime_safe_mode! {
 /// This is done through the SafeMode::CodeAmber of the Witnesser pallet.
 /// Only calls allowed here can be dispatched with Witnesser origin.
 #[derive(
+	serde::Serialize,
+	serde::Deserialize,
 	Encode,
 	Decode,
 	MaxEncodedLen,

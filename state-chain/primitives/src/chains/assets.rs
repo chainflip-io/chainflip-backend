@@ -320,6 +320,14 @@ macro_rules! assets {
 				}
 			}
 
+			pub trait GetChainAssetMap<T> {
+				type Asset ;
+				fn from_fn<F: FnMut(Self::Asset) -> T>(f: F) -> Self;
+			}
+			impl<T> GetChainAssetMap<T> for () {
+				type Asset = ();
+				fn from_fn<F: FnMut(Self::Asset) -> T>(_f: F) -> Self {}
+			}
 			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 			pub struct AssetMap<T> {
 				$(
@@ -387,6 +395,45 @@ macro_rules! assets {
 						map[asset] = value;
 						map
 					})
+				}
+			}
+
+			impl<N: sp_arithmetic::traits::Saturating> sp_arithmetic::traits::Saturating for AssetMap<N> {
+				fn saturating_add(self, rhs: AssetMap<N>) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_add(rhs.$chain_member_and_module),
+						)+
+					}
+				}
+				fn saturating_sub(self, rhs: AssetMap<N>) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_sub(rhs.$chain_member_and_module),
+						)+
+					}
+				}
+				fn saturating_mul(self, rhs: AssetMap<N>) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_mul(rhs.$chain_member_and_module),
+						)+
+					}
+				}
+				fn saturating_pow(self, exp: usize) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_pow(exp),
+						)+
+					}
+				}
+			}
+			impl<T> GetChainAssetMap<T> for AssetMap<T> {
+				type Asset = Asset;
+				fn from_fn<F: FnMut(Self::Asset) -> T>(mut f: F) -> Self {
+					Self {
+						$($chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>::from_fn(|asset| f(asset.into())),)+
+					}
 				}
 			}
 		}
@@ -531,6 +578,46 @@ macro_rules! assets {
 							map[asset] = value;
 							map
 						})
+					}
+				}
+
+				impl<N: sp_arithmetic::traits::Saturating> sp_arithmetic::traits::Saturating for AssetMap<N> {
+					fn saturating_add(self, rhs: AssetMap<N>) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_add(rhs.$asset_member),
+							)+
+						}
+					}
+					fn saturating_sub(self, rhs: AssetMap<N>) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_sub(rhs.$asset_member),
+							)+
+						}
+					}
+					fn saturating_mul(self, rhs: AssetMap<N>) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_mul(rhs.$asset_member),
+							)+
+						}
+					}
+					fn saturating_pow(self, exp: usize) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_pow(exp),
+							)+
+						}
+					}
+				}
+
+				impl<T> super::any::GetChainAssetMap<T> for AssetMap<T> {
+					type Asset = Asset;
+					fn from_fn<F: FnMut(Self::Asset) -> T>(mut f: F) -> Self {
+						Self {
+							$($asset_member: f(Asset::$asset_variant.into()),)+
+						}
 					}
 				}
 			}

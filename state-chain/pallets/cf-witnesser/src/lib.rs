@@ -30,9 +30,22 @@ use frame_support::{
 	Hashable,
 };
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+)]
 pub enum PalletSafeMode<CallPermission> {
 	CodeGreen,
 	CodeRed,

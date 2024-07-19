@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "std", feature(option_get_or_insert_default))]
 
 mod async_result;
 mod liquidity;
@@ -225,6 +226,8 @@ pub enum StartKeyActivationResult {
 pub trait EpochTransitionHandler {
 	/// When an epoch has been expired.
 	fn on_expired_epoch(_expired: EpochIndex) {}
+	/// When a new epoch has started.
+	fn on_new_epoch(_new: EpochIndex) {}
 }
 
 pub trait ReputationResetter {
@@ -527,15 +530,20 @@ pub trait Broadcaster<C: Chain> {
 		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId);
 
-	/// Resign a call, and update the signature data storage, but do not broadcast.
-	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId>;
+	/// Request a new threshold signature for a previously aborted broadcast's payload, optionally
+	/// also requesting the validators to send the transaction.
+	fn re_sign_broadcast(
+		broadcast_id: BroadcastId,
+		request_broadcast: bool,
+		refresh_replay_protection: bool,
+	) -> Result<ThresholdSignatureRequestId, DispatchError>;
 
 	/// Request a call to be threshold signed, but do not broadcast.
 	/// The caller must manage storage cleanup, so signatures are not stored indefinitely.
 	fn threshold_sign(api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId);
 
-	/// Clean up storage data related to a broadcast ID.
-	fn clean_up_broadcast_storage(broadcast_id: BroadcastId);
+	/// Removes all data associated with a broadcast.
+	fn expire_broadcast(broadcast_id: BroadcastId);
 }
 
 /// The heartbeat of the network
@@ -926,4 +934,18 @@ pub trait AssetConverter {
 
 pub trait IngressEgressFeeApi<C: Chain> {
 	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
+}
+
+pub trait LiabilityTracker {
+	fn record_liability(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
+
+	#[cfg(feature = "try-runtime")]
+	fn total_liabilities(gas_asset: Asset) -> AssetAmount;
+}
+
+pub trait AssetWithholding {
+	fn withhold_assets(asset: Asset, amount: AssetAmount);
+
+	#[cfg(feature = "try-runtime")]
+	fn withheld_assets(gas_asset: Asset) -> AssetAmount;
 }

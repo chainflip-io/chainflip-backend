@@ -58,6 +58,7 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							validator: old.validator,
 							pools: old.pools,
 							reputation: old.reputation,
+							asset_balances: <pallet_cf_asset_balances::PalletSafeMode as SafeMode>::CODE_GREEN,
 							threshold_signature_evm: old.threshold_signature_evm,
 							threshold_signature_bitcoin: old.threshold_signature_bitcoin,
 							threshold_signature_polkadot: old.threshold_signature_polkadot,

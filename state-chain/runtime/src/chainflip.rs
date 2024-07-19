@@ -56,6 +56,7 @@ use cf_traits::{
 	EpochInfo, Heartbeat, IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit,
 	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
+
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{

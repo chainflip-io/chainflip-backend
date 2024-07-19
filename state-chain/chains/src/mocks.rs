@@ -96,20 +96,31 @@ impl Chain for MockEthereum {
 
 	type ChainCrypto = MockEthereumChainCrypto;
 
-	type DepositFetchId = MockEthereumChannelId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
-	type TrackedData = MockTrackedData;
 	type TransactionFee = TransactionFee;
-	type ChainAccount = u64;
+	type TrackedData = MockTrackedData;
 	type ChainAsset = assets::eth::Asset;
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+			+ Default,
+	> = assets::eth::AssetMap<T>;
+	type ChainAccount = u64;
+	type DepositFetchId = MockEthereumChannelId;
 	type DepositChannelState = MockLifecycleHooks;
 	type DepositDetails = [u8; 4];
 	type Transaction = MockTransaction;
 	type TransactionMetadata = MockEthereumTransactionMetadata;
+	type TransactionRef = u32;
 	type ReplayProtectionParams = ();
 	type ReplayProtection = EvmReplayProtection;
-	type TransactionRef = u32;
 }
 
 impl ToHumanreadableAddress for u64 {
@@ -365,10 +376,15 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId {
 		self.tx_out_id.clone()
 	}
+
+	fn refresh_replay_protection(&mut self) {
+		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow_mut() = true)
+	}
 }
 
 thread_local! {
 	pub static REQUIRES_REFRESH: std::cell::RefCell<bool> = const { RefCell::new(false) };
+	pub static REFRESHED_REPLAY_PROTECTION: std::cell::RefCell<bool> = const { RefCell::new(false) };
 }
 
 pub struct MockTransactionBuilder<C, Call>(PhantomData<(C, Call)>);
@@ -376,6 +392,12 @@ pub struct MockTransactionBuilder<C, Call>(PhantomData<(C, Call)>);
 impl<C, Call> MockTransactionBuilder<C, Call> {
 	pub fn set_requires_refresh() {
 		REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow_mut() = true)
+	}
+	pub fn set_refreshed_replay_protection() {
+		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow_mut() = false)
+	}
+	pub fn get_refreshed_replay_protection_state() -> bool {
+		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow())
 	}
 }
 

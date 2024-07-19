@@ -11,7 +11,7 @@ use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	DispatchResult, Permill,
+	DispatchResult,
 };
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -65,8 +65,6 @@ impl system::Config for Test {
 impl_mock_chainflip!(Test);
 
 parameter_types! {
-	// 20 Basis Points
-	pub static NetworkFee: Permill = Permill::from_perthousand(2);
 	pub static AliceCollectedEth: AssetAmount = Default::default();
 	pub static AliceCollectedUsdc: AssetAmount = Default::default();
 	pub static BobCollectedEth: AssetAmount = Default::default();
@@ -150,7 +148,6 @@ impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = MockBalance;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
-	type NetworkFee = NetworkFee;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 }

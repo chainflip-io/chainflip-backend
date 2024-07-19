@@ -25,7 +25,10 @@ cf-utilities = { package = 'utilities', path = '../../../utilities', default-fea
 cfe-events = { path = '../../cfe-events', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
-
+serde = { default_features = false, version = '1.0.126', features = [
+  'alloc',
+  'derive',
+] }
 # Required for bechmarking
 pallet-cf-validator = { path = '../cf-validator', optional = true, default-features = false }
 pallet-cf-reputation = { path = '../cf-reputation', optional = true, default-features = false }
@@ -70,6 +73,7 @@ std = [
   # for the benchmark tests
   'pallet-cf-reputation?/std',
   'pallet-cf-validator?/std',
+  'serde/std',
 ]
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',

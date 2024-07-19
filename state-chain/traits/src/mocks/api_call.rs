@@ -7,9 +7,8 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets, ForeignChain};
 use codec::{Decode, Encode};
-use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
+use frame_support::{sp_runtime::DispatchError, CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
-use sp_runtime::DispatchError;
 
 pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xee; 20];
 pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0xcf; 20];
@@ -56,6 +55,10 @@ impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
 	}
 
 	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
+		unimplemented!()
+	}
+
+	fn refresh_replay_protection(&mut self) {
 		unimplemented!()
 	}
 }
@@ -210,6 +213,10 @@ impl ApiCall<BitcoinCrypto> for MockBitcoinApiCall<MockBtcEnvironment> {
 	}
 
 	fn transaction_out_id(&self) -> <BitcoinCrypto as ChainCrypto>::TransactionOutId {
+		unimplemented!()
+	}
+
+	fn refresh_replay_protection(&mut self) {
 		unimplemented!()
 	}
 }

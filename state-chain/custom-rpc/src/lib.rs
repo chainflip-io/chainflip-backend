@@ -15,7 +15,6 @@ use cf_primitives::{
 	ForeignChain, NetworkEnvironment, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
-use codec::Encode;
 use core::ops::Range;
 use jsonrpsee::{
 	core::{error::SubscriptionClosed, RpcResult},
@@ -44,8 +43,9 @@ use state_chain_runtime::{
 	},
 	runtime_apis::{
 		BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage,
-		EventFilter, FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
+		FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
 	},
+	safe_mode::RuntimeSafeMode,
 	NetworkFee,
 };
 use std::{
@@ -54,7 +54,6 @@ use std::{
 	sync::Arc,
 };
 pub mod monitoring;
-mod type_decoder;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcEpochState {
@@ -85,21 +84,8 @@ impl From<RedemptionsInfo> for RpcRedemptionsInfo {
 		Self { total_balance: redemption_info.total_balance.into(), count: redemption_info.count }
 	}
 }
-#[derive(Serialize, Deserialize)]
-pub struct RpcFeeImbalance {
-	pub ethereum: NumberOrHex,
-	pub polkadot: NumberOrHex,
-	pub arbitrum: NumberOrHex,
-}
-impl From<FeeImbalance> for RpcFeeImbalance {
-	fn from(fee_imbalance: FeeImbalance) -> Self {
-		Self {
-			ethereum: fee_imbalance.ethereum.into(),
-			polkadot: fee_imbalance.polkadot.into(),
-			arbitrum: fee_imbalance.arbitrum.into(),
-		}
-	}
-}
+
+pub type RpcFeeImbalance = FeeImbalance<NumberOrHex>;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcFlipSupply {
@@ -137,7 +123,7 @@ impl From<MonitoringData> for RpcMonitoringData {
 		Self {
 			epoch: monitoring_data.epoch.into(),
 			pending_redemptions: monitoring_data.pending_redemptions.into(),
-			fee_imbalance: monitoring_data.fee_imbalance.into(),
+			fee_imbalance: monitoring_data.fee_imbalance.map(|i| (*i).into()),
 			external_chains_height: monitoring_data.external_chains_height,
 			btc_utxos: monitoring_data.btc_utxos,
 			pending_broadcasts: monitoring_data.pending_broadcasts,
@@ -621,6 +607,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<any::AssetMap<U256>>;
+	#[method(name = "lp_total_balances", aliases = ["lp_total_balances"])]
+	fn cf_lp_total_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<any::AssetMap<U256>>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -804,18 +796,6 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<FailingWitnessValidators>>;
 
-	#[method(name = "get_events")]
-	fn cf_get_events(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<scale_value::Value>>;
-
-	#[method(name = "get_system_events_encoded")]
-	fn cf_get_system_events_encoded(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<sp_core::Bytes>>;
-
 	#[method(name = "boost_pools_depth")]
 	fn cf_boost_pools_depth(
 		&self,
@@ -835,6 +815,12 @@ pub trait CustomApi {
 		asset: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BoostPoolFeesResponse>;
+
+	#[method(name = "safe_mode_statuses")]
+	fn cf_safe_mode_statuses(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RuntimeSafeMode>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1094,6 +1080,22 @@ where
 			.and_then(|result| {
 				result
 					.map(|free_balances| free_balances.map(Into::into))
+					.map_err(map_dispatch_error)
+			})
+	}
+
+	fn cf_lp_total_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<any::AssetMap<U256>> {
+		self.client
+			.runtime_api()
+			.cf_lp_total_balances(self.unwrap_or_best(at), account_id)
+			.map_err(to_rpc_error)
+			.and_then(|result| {
+				result
+					.map(|total_balances| total_balances.map(Into::into))
 					.map_err(map_dispatch_error)
 			})
 	}
@@ -1677,39 +1679,6 @@ where
 			.map_err(to_rpc_error)
 	}
 
-	fn cf_get_events(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<scale_value::Value>> {
-		let event_decoder = type_decoder::TypeDecoder::new::<
-			frame_system::EventRecord<state_chain_runtime::RuntimeEvent, state_chain_runtime::Hash>,
-		>();
-		let events = self
-			.client
-			.runtime_api()
-			.cf_get_events(self.unwrap_or_best(at), EventFilter::AllEvents)
-			.map_err(to_rpc_error)?;
-
-		Ok(events
-			.into_iter()
-			.map(|event_record| event_decoder.decode_data(event_record.encode()))
-			.collect::<Vec<_>>())
-	}
-
-	fn cf_get_system_events_encoded(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<sp_core::Bytes>> {
-		Ok(self
-			.client
-			.runtime_api()
-			.cf_get_events(self.unwrap_or_best(at), EventFilter::SystemOnly)
-			.map_err(to_rpc_error)?
-			.into_iter()
-			.map(|event| event.encode().into())
-			.collect::<Vec<_>>())
-	}
-
 	fn cf_boost_pool_details(
 		&self,
 		asset: Option<Asset>,
@@ -1746,6 +1715,16 @@ where
 				})
 				.map_err(to_rpc_error)
 		})
+	}
+
+	fn cf_safe_mode_statuses(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RuntimeSafeMode> {
+		self.client
+			.runtime_api()
+			.cf_safe_mode_statuses(self.unwrap_or_best(at))
+			.map_err(to_rpc_error)
 	}
 }
 

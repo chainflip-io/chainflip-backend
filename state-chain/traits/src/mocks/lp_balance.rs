@@ -1,7 +1,7 @@
 use crate::{LpBalanceApi, LpDepositHandler};
 use cf_chains::assets::any::{Asset, AssetMap};
 use cf_primitives::AssetAmount;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{CheckedSub, Saturating},
 	DispatchError, DispatchResult,
 };
@@ -82,9 +82,7 @@ impl LpBalanceApi for MockBalance {
 
 	fn record_fees(_who: &Self::AccountId, _amount: AssetAmount, _asset: Asset) {}
 
-	fn free_balances(
-		who: &Self::AccountId,
-	) -> Result<AssetMap<AssetAmount>, sp_runtime::DispatchError> {
+	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
 		Ok(AssetMap::try_from_iter(Asset::all().map(|asset| {
 			(asset, Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default())
 		}))

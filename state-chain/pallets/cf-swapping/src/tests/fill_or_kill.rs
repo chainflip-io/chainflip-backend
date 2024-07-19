@@ -64,7 +64,7 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 fn price_limit_is_respected_in_fok_swap() {
 	const SWAPS_ADDED_BLOCK: u64 = 1;
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
-	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + SWAP_RETRY_DELAY_BLOCKS as u64;
+	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 
 	const HIGH_MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * 2;
 
@@ -122,7 +122,7 @@ fn price_limit_is_respected_in_fok_swap() {
 fn fok_swap_gets_refunded_due_to_price_limit() {
 	const SWAPS_ADDED_BLOCK: u64 = 1;
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
-	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + SWAP_RETRY_DELAY_BLOCKS as u64;
+	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 	// The swap will be refunded after the first retry:
 	const SWAP_REFUND_AT_BLOCK: u32 = SWAP_RETRIED_AT_BLOCK as u32;
 
@@ -168,7 +168,7 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 	const SWAPS_ADDED_BLOCK: u64 = 1;
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
-	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + SWAP_RETRY_DELAY_BLOCKS as u64;
+	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 	// The swap will be refunded after the first retry:
 	const SWAP_REFUND_AT_BLOCK: u32 = SWAP_RETRIED_AT_BLOCK as u32;
 

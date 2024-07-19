@@ -14,11 +14,12 @@ pub use cf_primitives::{
 };
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter,
 		api_call::{MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
+		asset_withholding::MockAssetWithholding,
 		broadcaster::MockBroadcaster,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
@@ -27,7 +28,7 @@ use cf_traits::{
 	},
 	DepositApi, NetworkEnvironmentProvider, OnDeposit,
 };
-use frame_support::{derive_impl, traits::UnfilteredDispatchable};
+use frame_support::derive_impl;
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
@@ -70,7 +71,6 @@ impl system::Config for Test {
 }
 
 impl_mock_chainflip!(Test);
-impl_mock_callback!(RuntimeOrigin);
 
 pub struct MockDepositHandler;
 impl OnDeposit<Ethereum> for MockDepositHandler {}
@@ -126,6 +126,7 @@ impl crate::Config for Test {
 	type FeePayment = MockFeePayment<Self>;
 	type SwapRequestHandler =
 		MockSwapRequestHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
+	type AssetWithholding = MockAssetWithholding;
 	type SafeMode = MockRuntimeSafeMode;
 }
 
@@ -136,7 +137,12 @@ impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		ingress_egress: IngressEgressConfig { deposit_channel_lifetime: 100, witness_safety_margin: Some(2), dust_limits: Default::default() },
+		ingress_egress: IngressEgressConfig {
+			deposit_channel_lifetime: 100,
+			witness_safety_margin: Some(2),
+			dust_limits: Default::default(),
+			max_swap_retry_duration_blocks: 600,
+		},
 	},
 	|| {
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Ethereum>::set_tracked_data(

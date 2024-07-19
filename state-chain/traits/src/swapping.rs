@@ -1,8 +1,8 @@
 use cf_chains::{CcmDepositMetadata, ChannelRefundParameters, ForeignChainAddress, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, SwapRequestId};
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
-use sp_runtime::DispatchError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {

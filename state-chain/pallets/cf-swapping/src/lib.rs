@@ -20,13 +20,19 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{Get, Saturating},
-		DispatchError, Permill,
+		DispatchError, Permill, TransactionOutcome,
 	},
+	storage::with_transaction_unchecked,
+	traits::Defensive,
 	transactional,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_arithmetic::{helpers_128bit::multiply_by_rational_with_rounding, traits::Zero, Rounding};
+use sp_arithmetic::{
+	helpers_128bit::multiply_by_rational_with_rounding,
+	traits::{UniqueSaturatedInto, Zero},
+	Rounding,
+};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 #[cfg(test)]
 mod mock;
@@ -40,12 +46,18 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
-/// Number of blocks to wait before trying a previously failed swap again
-pub const SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
+pub struct DefaultSwapRetryDelay<T> {
+	_phantom: PhantomData<T>,
+}
+impl<T: Config> Get<BlockNumberFor<T>> for DefaultSwapRetryDelay<T> {
+	fn get() -> BlockNumberFor<T> {
+		BlockNumberFor::<T>::from(5u32)
+	}
+}
 
 struct SwapState {
 	swap: Swap,
@@ -264,10 +276,15 @@ pub enum CcmFailReason {
 	InsufficientDepositAmount,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum PalletConfigUpdate {
+#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T, I))]
+pub enum PalletConfigUpdate<T: Config> {
 	/// Set the maximum amount allowed to be put into a swap. Excess amounts are confiscated.
 	MaximumSwapAmount { asset: Asset, amount: Option<AssetAmount> },
+	/// Set the delay in blocks before retrying a previously failed swap.
+	SwapRetryDelay { delay: BlockNumberFor<T> },
+	/// Set the interval at which we buy FLIP in order to burn it.
+	FlipBuyInterval { interval: BlockNumberFor<T> },
 }
 
 impl_pallet_safe_mode! {
@@ -276,9 +293,13 @@ impl_pallet_safe_mode! {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use core::cmp::max;
+
 	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
-	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId, SwapRequestId};
+	use cf_primitives::{
+		Asset, AssetAmount, BasisPoints, EgressId, SwapId, SwapOutput, SwapRequestId,
+	};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, ScheduledEgressDetails};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
@@ -321,6 +342,9 @@ pub mod pallet {
 		>;
 
 		type IngressEgressFeeHandler: IngressEgressFeeApi<AnyChain>;
+
+		#[pallet::constant]
+		type NetworkFee: Get<Permill>;
 	}
 
 	#[pallet::pallet]
@@ -365,6 +389,19 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FlipToBurn<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
 
+	/// Interval at which we buy FLIP in order to burn it.
+	#[pallet::storage]
+	pub type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
+	#[pallet::storage]
+	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
+	/// The delay in blocks before retrying a previously failed swap.
+	#[pallet::storage]
+	pub type SwapRetryDelay<T: Config> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery, DefaultSwapRetryDelay<T>>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -394,6 +431,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
+			refund_parameters: Option<ChannelRefundParameters>,
 		},
 		/// A swap is scheduled for the first time
 		SwapScheduled {
@@ -478,6 +516,12 @@ pub mod pallet {
 			amount: AssetAmount,
 			reason: DispatchError,
 		},
+		BuyIntervalSet {
+			buy_interval: BlockNumberFor<T>,
+		},
+		SwapRetryDelaySet {
+			swap_retry_delay: BlockNumberFor<T>,
+		},
 		// TODO: add SwapFailed?
 	}
 	#[pallet::error]
@@ -494,7 +538,6 @@ pub mod pallet {
 		CcmInsufficientDepositAmount,
 		/// The provided address could not be decoded.
 		InvalidDestinationAddress,
-
 		/// Withdrawals are disabled due to Safe Mode.
 		WithdrawalsDisabled,
 		/// Broker registration is disabled due to Safe Mode.
@@ -505,17 +548,80 @@ pub mod pallet {
 		EarnedFeesNotWithdrawn,
 		/// The provided list of broker contains an account which is not registered as Broker
 		AffiliateAccountIsNotABroker,
+		/// Setting the buy interval to zero is not allowed.
+		ZeroBuyIntervalNotAllowed,
+		/// Setting the swap retry delay to zero is not allowed.
+		ZeroSwapRetryDelayNotAllowed,
+	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub flip_buy_interval: BlockNumberFor<T>,
+		pub swap_retry_delay: BlockNumberFor<T>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+		fn build(&self) {
+			FlipBuyInterval::<T>::set(self.flip_buy_interval);
+			SwapRetryDelay::<T>::set(self.swap_retry_delay);
+		}
+	}
+
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				flip_buy_interval: BlockNumberFor::<T>::zero(),
+				swap_retry_delay: DefaultSwapRetryDelay::<T>::get(),
+			}
+		}
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+			let interval = FlipBuyInterval::<T>::get();
+			if interval.is_zero() {
+				log::debug!("Flip buy interval is zero, skipping.")
+			} else {
+				weight_used.saturating_accrue(T::DbWeight::get().reads(1));
+				if (current_block % interval).is_zero() &&
+					!CollectedNetworkFee::<T>::get().is_zero()
+				{
+					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
+						if Self::init_swap_request(
+							Asset::Usdc,
+							*collected_fee,
+							Asset::Flip,
+							SwapRequestType::NetworkFee,
+							Default::default(),
+							None,
+							SwapOrigin::Internal,
+						)
+						.is_err()
+						{
+							log_or_panic!("Network fee swap should never fail");
+						}
+
+						collected_fee.set_zero();
+						Ok::<_, DispatchError>(())
+					}) {
+						log::warn!("Unable to swap Network Fee to Flip: {e:?}");
+					}
+				}
+			}
+			weight_used
+		}
+
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(current_block: BlockNumberFor<T>) {
 			let mut swaps_to_execute = SwapQueue::<T>::take(current_block);
+			let retry_block = current_block + max(SwapRetryDelay::<T>::get(), 1u32.into());
 
 			if !T::SafeMode::get().swaps_enabled {
 				// Since we won't be executing swaps at this block, we need to reschedule them:
-				let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
 				for swap in swaps_to_execute {
 					Self::deposit_event(Event::<T>::SwapRescheduled {
 						swap_id: swap.swap_id,
@@ -569,8 +675,6 @@ pub mod pallet {
 								},
 							}
 						};
-
-						let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
 
 						for swap in failed_swaps {
 							match swap.refund_params {
@@ -808,7 +912,7 @@ pub mod pallet {
 		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
+			updates: BoundedVec<PalletConfigUpdate<T>, ConstU32<10>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -817,6 +921,24 @@ pub mod pallet {
 					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
 						MaximumSwapAmount::<T>::set(asset, amount);
 						Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
+					},
+					PalletConfigUpdate::SwapRetryDelay { delay } => {
+						ensure!(
+							delay != BlockNumberFor::<T>::zero(),
+							Error::<T>::ZeroSwapRetryDelayNotAllowed
+						);
+						SwapRetryDelay::<T>::set(delay);
+						Self::deposit_event(Event::<T>::SwapRetryDelaySet {
+							swap_retry_delay: delay,
+						});
+					},
+					PalletConfigUpdate::FlipBuyInterval { interval } => {
+						ensure!(
+							interval != BlockNumberFor::<T>::zero(),
+							Error::<T>::ZeroBuyIntervalNotAllowed
+						);
+						FlipBuyInterval::<T>::set(interval);
+						Self::deposit_event(Event::<T>::BuyIntervalSet { buy_interval: interval });
 					},
 				}
 			}
@@ -909,7 +1031,7 @@ pub mod pallet {
 					broker,
 					channel_metadata.clone(),
 					boost_fee,
-					refund_parameters,
+					refund_parameters.clone(),
 				)?;
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
@@ -924,6 +1046,7 @@ pub mod pallet {
 				boost_fee,
 				channel_opening_fee,
 				affiliate_fees,
+				refund_parameters,
 			});
 
 			Ok(())
@@ -1017,7 +1140,7 @@ pub mod pallet {
 						// Don't take network fee for network fee swaps
 						NetworkFeeTaken { remaining_amount: stable_amount_copy, network_fee: 0 }
 					} else {
-						T::SwappingApi::take_network_fee(stable_amount_copy)
+						Self::take_network_fee(stable_amount_copy)
 					};
 
 				*stable_amount = remaining_amount;
@@ -1397,6 +1520,61 @@ pub mod pallet {
 
 			swap_id
 		}
+
+		#[transactional]
+		pub fn swap_with_network_fee(
+			from: Asset,
+			to: Asset,
+			input_amount: AssetAmount,
+		) -> Result<SwapOutput, DispatchError> {
+			Ok(match (from, to) {
+				(_, STABLE_ASSET) => {
+					let NetworkFeeTaken { remaining_amount: output, network_fee } =
+						Self::take_network_fee(T::SwappingApi::swap_single_leg(
+							from,
+							to,
+							input_amount,
+						)?);
+
+					SwapOutput { intermediary: None, output, network_fee }
+				},
+				(STABLE_ASSET, _) => {
+					let NetworkFeeTaken { remaining_amount: input_amount, network_fee } =
+						Self::take_network_fee(input_amount);
+
+					SwapOutput {
+						intermediary: None,
+						output: T::SwappingApi::swap_single_leg(from, to, input_amount)?,
+						network_fee,
+					}
+				},
+				_ => {
+					let NetworkFeeTaken { remaining_amount: intermediary, network_fee } =
+						Self::take_network_fee(T::SwappingApi::swap_single_leg(
+							from,
+							STABLE_ASSET,
+							input_amount,
+						)?);
+
+					SwapOutput {
+						intermediary: Some(intermediary),
+						output: T::SwappingApi::swap_single_leg(STABLE_ASSET, to, intermediary)?,
+						network_fee,
+					}
+				},
+			})
+		}
+
+		pub fn take_network_fee(input: AssetAmount) -> NetworkFeeTaken {
+			if input.is_zero() {
+				return NetworkFeeTaken { remaining_amount: 0, network_fee: 0 };
+			}
+			let (remaining, fee) = utilities::calculate_network_fee(T::NetworkFee::get(), input);
+			CollectedNetworkFee::<T>::mutate(|total| {
+				total.saturating_accrue(fee);
+			});
+			NetworkFeeTaken { remaining_amount: remaining, network_fee: fee }
+		}
 	}
 
 	impl<T: Config> SwapRequestHandler for Pallet<T> {
@@ -1669,6 +1847,52 @@ pub mod pallet {
 			Ok(request_id)
 		}
 	}
+
+	impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
+		fn calculate_input_for_gas_output<C: Chain>(
+			input_asset: C::ChainAsset,
+			required_gas: C::ChainAmount,
+		) -> Option<C::ChainAmount> {
+			use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
+
+			if required_gas.is_zero() {
+				return Some(Zero::zero())
+			}
+
+			let output_asset = C::GAS_ASSET.into();
+			let input_asset = input_asset.into();
+			if input_asset == output_asset {
+				return Some(required_gas)
+			}
+
+			let estimation_input = utilities::fee_estimation_basis(input_asset).defensive_proof(
+				"Fee estimation cap not available. Please report this to Chainflip Labs.",
+			)?;
+
+			let estimation_output = with_transaction_unchecked(|| {
+				TransactionOutcome::Rollback(
+					Self::swap_with_network_fee(input_asset, output_asset, estimation_input).ok(),
+				)
+			})?
+			.output;
+
+			if estimation_output == 0 {
+				None
+			} else {
+				let input_amount_to_convert = multiply_by_rational_with_rounding(
+					required_gas.into(),
+					estimation_input,
+					estimation_output,
+					sp_arithmetic::Rounding::Down,
+				)
+				.defensive_proof(
+					"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
+				)?;
+
+				Some(input_amount_to_convert.unique_saturated_into())
+			}
+		}
+	}
 }
 
 impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
@@ -1682,5 +1906,36 @@ pub struct NoPendingSwaps<T: Config>(PhantomData<T>);
 impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
 	fn is_satisfied() -> bool {
 		SwapQueue::<T>::iter().all(|(_, swaps)| swaps.is_empty())
+	}
+}
+pub mod utilities {
+	use super::*;
+
+	pub fn calculate_network_fee(
+		fee_percentage: Permill,
+		input: AssetAmount,
+	) -> (AssetAmount, AssetAmount) {
+		let fee = fee_percentage * input;
+		(input - fee, fee)
+	}
+
+	/// The amount of a non-gas asset to be used for transaction fee estimation.
+	///
+	/// This should be of a similar order of magnitude to expected fees to get an accurate result.
+	///
+	/// The value should be large enough to allow a good estimation of the fee, but small enough
+	/// to not exhaust the pool liquidity.
+	pub fn fee_estimation_basis(asset: Asset) -> Option<u128> {
+		use cf_primitives::FLIPPERINOS_PER_FLIP;
+		/// 20 Dollars.
+		const USD_ESTIMATION_CAP: u128 = 20_000_000;
+
+		match asset {
+			Asset::Flip => Some(10 * FLIPPERINOS_PER_FLIP),
+			Asset::Usdc => Some(USD_ESTIMATION_CAP),
+			Asset::Usdt => Some(USD_ESTIMATION_CAP),
+			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
+			_ => None,
+		}
 	}
 }

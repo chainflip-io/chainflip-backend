@@ -2,8 +2,8 @@ use crate::{swapping::SwapRequestType, EgressApi, SwapRequestHandler};
 use cf_chains::{Chain, ChannelRefundParameters, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, SwapRequestId};
 use codec::{Decode, Encode};
+use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
-use sp_runtime::DispatchError;
 
 use crate::mocks::MockPalletStorage;
 

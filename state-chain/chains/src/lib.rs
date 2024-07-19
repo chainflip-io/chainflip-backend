@@ -48,6 +48,7 @@ pub mod sol;
 
 pub mod address;
 pub mod deposit_channel;
+use cf_primitives::chains::assets::any::GetChainAssetMap;
 pub use deposit_channel::*;
 use strum::IntoEnumIterator;
 pub mod instances;
@@ -207,6 +208,27 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ IntoEnumIterator
 		+ Unpin;
 
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+			+ Default
+	>: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Copy
+		+ MaybeSerializeDeserialize
+		+ BenchmarkValue
+		+ FullCodec
+		+ Unpin
+		+ Default
+		+ GetChainAssetMap<T, Asset = Self::ChainAsset>;
+
 	type ChainAccount: Member
 		+ Parameter
 		+ MaxEncodedLen
@@ -327,6 +349,9 @@ pub trait ApiCall<C: ChainCrypto>: Parameter {
 
 	/// Generates an identifier for the output of the transaction.
 	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId;
+
+	/// Refresh the replay protection data.
+	fn refresh_replay_protection(&mut self);
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
@@ -440,8 +465,6 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 		expiry: u64,
 		executor: Option<eth::Address>,
 	) -> Self;
-
-	fn amount(&self) -> u128;
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
