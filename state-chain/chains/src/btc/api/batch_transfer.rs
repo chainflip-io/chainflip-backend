@@ -39,8 +39,13 @@ impl ApiCall<BitcoinCrypto> for BatchTransfer {
 		self.bitcoin_transaction.get_signing_payloads()
 	}
 
-	fn signed(mut self, signatures: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature) -> Self {
+	fn signed(
+		mut self,
+		signatures: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature,
+		signer: <BitcoinCrypto as ChainCrypto>::AggKey,
+	) -> Self {
 		self.bitcoin_transaction.add_signatures(signatures.clone());
+		self.bitcoin_transaction.signer = Some(signer);
 		self
 	}
 
@@ -58,5 +63,9 @@ impl ApiCall<BitcoinCrypto> for BatchTransfer {
 
 	fn refresh_replay_protection(&mut self) {
 		// No replay protection for Bitcoin.
+	}
+
+	fn signer(&self) -> Option<<BitcoinCrypto as ChainCrypto>::AggKey> {
+		self.bitcoin_transaction.signer
 	}
 }

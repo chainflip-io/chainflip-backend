@@ -697,6 +697,7 @@ pub struct BitcoinTransaction {
 	signatures: Vec<Signature>,
 	transaction_bytes: Vec<u8>,
 	old_utxo_input_indices: VecDeque<u32>,
+	pub signer: Option<AggKey>,
 }
 
 const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
@@ -745,7 +746,14 @@ impl BitcoinTransaction {
 		transaction_bytes.push(SEGWIT_MARKER);
 		transaction_bytes.push(SEGWIT_FLAG);
 		extend_with_inputs_outputs(&mut transaction_bytes, &inputs, &outputs);
-		Self { inputs, outputs, signatures: vec![], transaction_bytes, old_utxo_input_indices }
+		Self {
+			inputs,
+			outputs,
+			signatures: vec![],
+			transaction_bytes,
+			old_utxo_input_indices,
+			signer: None,
+		}
 	}
 
 	pub fn add_signatures(&mut self, signatures: Vec<Signature>) {

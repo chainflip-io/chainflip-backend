@@ -5,6 +5,7 @@ use crate::{
 };
 use common::*;
 use ethabi::{Address, ParamType, Token, Uint};
+use evm::AggKey;
 use frame_support::{
 	sp_runtime::traits::{Hash, Keccak256},
 	traits::Defensive,
@@ -157,11 +158,12 @@ pub struct EvmTransactionBuilder<C> {
 	pub sig_data: Option<SigData>,
 	pub replay_protection: EvmReplayProtection,
 	pub call: C,
+	pub signer: Option<AggKey>,
 }
 
 impl<C: EvmCall> EvmTransactionBuilder<C> {
 	pub fn new_unsigned(replay_protection: EvmReplayProtection, call: C) -> Self {
-		Self { replay_protection, call, sig_data: None }
+		Self { replay_protection, call, sig_data: None, signer: None }
 	}
 
 	pub fn replay_protection(&self) -> EvmReplayProtection {
@@ -194,8 +196,10 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 	pub fn signed(
 		mut self,
 		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
+		signer: AggKey,
 	) -> Self {
 		self.sig_data = Some(SigData::new(self.replay_protection.nonce, threshold_signature));
+		self.signer = Some(signer);
 		self
 	}
 

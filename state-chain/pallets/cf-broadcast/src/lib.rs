@@ -39,6 +39,9 @@ use scale_info::TypeInfo;
 use sp_std::{collections::btree_set::BTreeSet, marker, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
+type AggKey<T, I> =
+	<<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
+
 #[derive(
 	serde::Serialize,
 	serde::Deserialize,
@@ -81,7 +84,10 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_traits::{AccountRoleRegistry, BroadcastNomination, OnBroadcastReady};
-	use frame_support::{pallet_prelude::*, traits::EnsureOrigin};
+	use frame_support::{
+		pallet_prelude::{OptionQuery, *},
+		traits::EnsureOrigin,
+	};
 	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured Transaction.
@@ -309,6 +315,15 @@ pub mod pallet {
 	#[pallet::getter(fn aborted_broadcasts)]
 	pub type AbortedBroadcasts<T, I = ()> = StorageValue<_, BTreeSet<BroadcastId>, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn incoming_key_broadcast_id)]
+	pub type IncomingKeyAndBroadcastId<T, I = ()> =
+		StorageValue<_, (AggKey<T, I>, BroadcastId), OptionQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn current_on_chain_key)]
+	pub type CurrentOnChainKey<T, I = ()> = StorageValue<_, AggKey<T, I>, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -457,7 +472,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
-			let signature = T::ThresholdSigner::signature_result(threshold_request_id)
+			let (signer, signature_result) =
+				T::ThresholdSigner::signature_result(threshold_request_id);
+			let signature = signature_result
 				.ready_or_else(|r| {
 					log::error!(
 						"Signature not found for threshold request {:?}. Request status: {:?}",
@@ -468,7 +485,7 @@ pub mod pallet {
 				})?
 				.expect("signature can not be unavailable");
 
-			let signed_api_call = api_call.signed(&signature);
+			let signed_api_call = api_call.signed(&signature, signer);
 
 			PendingApiCalls::<T, I>::insert(broadcast_id, signed_api_call.clone());
 
@@ -539,6 +556,15 @@ pub mod pallet {
 					.ok_or(Error::<T, I>::InvalidPayload)?;
 
 			Self::remove_pending_broadcast(&broadcast_id);
+
+			if IncomingKeyAndBroadcastId::<T, I>::exists() {
+				let (incoming_key, rotation_broadcast_id) =
+					IncomingKeyAndBroadcastId::<T, I>::get().unwrap();
+				if rotation_broadcast_id == broadcast_id {
+					CurrentOnChainKey::<T, I>::put(incoming_key);
+					IncomingKeyAndBroadcastId::<T, I>::kill();
+				}
+			}
 
 			if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
 				if tx_metadata.verify_metadata(&expected_tx_metadata) {
@@ -686,7 +712,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if !pending_broadcasts.remove(broadcast_id) {
 				log::warn!("Expected broadcast with id {} to still be pending.", broadcast_id);
 			}
-			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
+			while let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
 				if pending_broadcasts.first().map_or(true, |id| *id > *broadcast_barrier_id) {
 					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
 						broadcast_barriers.pop_first();
@@ -763,6 +789,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				if T::TransactionBuilder::requires_signature_refresh(
 					&api_call,
 					&broadcast_data.threshold_signature_payload,
+					CurrentOnChainKey::<T, I>::get(),
 				) {
 					Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
 					Self::threshold_sign(api_call, broadcast_id, true);
@@ -990,6 +1017,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 
 	fn threshold_sign_and_broadcast_rotation_tx(
 		api_call: Self::ApiCall,
+		new_key: AggKey<T, I>,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		let (broadcast_id, request_id) =
 			<Self as Broadcaster<_>>::threshold_sign_and_broadcast(api_call);
@@ -1004,6 +1032,8 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 					}
 				}
 		}
+
+		IncomingKeyAndBroadcastId::<T, I>::set(Some((new_key, broadcast_id)));
 
 		(broadcast_id, request_id)
 	}

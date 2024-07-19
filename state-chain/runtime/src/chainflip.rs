@@ -43,7 +43,7 @@ use cf_chains::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
-	sol::api::SolanaApi,
+	sol::{api::SolanaApi, SolanaCrypto},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
@@ -221,10 +221,11 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 			}
 
 			fn requires_signature_refresh(
-				_call: &$chain_api<$env>,
+				call: &$chain_api<$env>,
 				_payload: &<EvmCrypto as ChainCrypto>::Payload,
+				maybe_current_on_chain_key: Option<<EvmCrypto as ChainCrypto>::AggKey>
 			) -> bool {
-				false
+				maybe_current_on_chain_key.map_or(false, |current_on_chain_key| current_on_chain_key != call.signer().expect("since we are checking whether signature refresh is required, it means there already should be a signature"))
 			}
 
 			/// Calculate the gas limit for a this evm chain's call, using the current gas price.
@@ -271,6 +272,7 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 	fn requires_signature_refresh(
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		_maybe_current_onchain_key: Option<<PolkadotCrypto as ChainCrypto>::AggKey>,
 	) -> bool {
 		// Current key and signature are irrelevant. The only thing that can invalidate a polkadot
 		// transaction is if the payload changes due to a runtime version update.
@@ -295,6 +297,7 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	fn requires_signature_refresh(
 		_call: &BitcoinApi<BtcEnvironment>,
 		_payload: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		_maybe_current_onchain_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
 	) -> bool {
 		// The payload for a Bitcoin transaction will never change and so it doesnt need to be
 		// checked here. We also dont need to check for the signature here because even if we are in
@@ -322,6 +325,7 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	fn requires_signature_refresh(
 		_call: &SolanaApi<SolEnvironment>,
 		_payload: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		_maybe_current_onchain_key: Option<<SolanaCrypto as ChainCrypto>::AggKey>,
 	) -> bool {
 		todo!()
 	}

@@ -164,11 +164,12 @@ impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<Polkad
 	fn signed(
 		mut self,
 		threshold_signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature,
+		signer: <PolkadotCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		map_over_api_variants!(
 			self,
 			ref mut call,
-			call.insert_signature(threshold_signature.clone())
+			call.insert_signature_and_signer(threshold_signature.clone(), signer)
 		);
 		self
 	}
@@ -198,6 +199,10 @@ impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<Polkad
 			call,
 			call.refresh_replay_protection(E::replay_protection(false))
 		)
+	}
+
+	fn signer(&self) -> Option<<PolkadotCrypto as ChainCrypto>::AggKey> {
+		map_over_api_variants!(self, call, call.signer)
 	}
 }
 

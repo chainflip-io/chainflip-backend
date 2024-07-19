@@ -422,6 +422,7 @@ pub struct PolkadotExtrinsicBuilder {
 	extrinsic_call: PolkadotRuntimeCall,
 	replay_protection: PolkadotReplayProtection,
 	signature: Option<PolkadotSignature>,
+	pub signer: Option<PolkadotPublicKey>,
 }
 
 impl PolkadotExtrinsicBuilder {
@@ -429,7 +430,7 @@ impl PolkadotExtrinsicBuilder {
 		replay_protection: PolkadotReplayProtection,
 		extrinsic_call: PolkadotRuntimeCall,
 	) -> Self {
-		Self { extrinsic_call, replay_protection, signature: None }
+		Self { extrinsic_call, replay_protection, signature: None, signer: None }
 	}
 
 	pub fn signature(&self) -> Option<PolkadotSignature> {
@@ -479,8 +480,13 @@ impl PolkadotExtrinsicBuilder {
 		)
 	}
 
-	pub fn insert_signature(&mut self, signature: PolkadotSignature) {
+	pub fn insert_signature_and_signer(
+		&mut self,
+		signature: PolkadotSignature,
+		signer: PolkadotAccountId,
+	) {
 		self.signature.replace(signature);
+		self.signer.replace(signer);
 	}
 
 	pub fn get_signed_unchecked_extrinsic(&self) -> Option<PolkadotUncheckedExtrinsic> {

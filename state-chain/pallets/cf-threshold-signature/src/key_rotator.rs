@@ -154,7 +154,7 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 								request_ids,
 							}) => {
 								request_ids.retain(|request_id| {
-									Signature::<T, I>::get(request_id) != AsyncResult::Void
+									Signature::<T, I>::get(request_id).1 != AsyncResult::Void
 								});
 								if request_ids.is_empty() {
 									T::VaultActivator::activate_key();

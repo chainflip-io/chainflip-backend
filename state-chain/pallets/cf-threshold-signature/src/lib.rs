@@ -438,8 +438,13 @@ pub mod pallet {
 	/// State of the threshold signature requested.
 	#[pallet::storage]
 	#[pallet::getter(fn signature)]
-	pub type Signature<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, RequestId, AsyncResult<SignatureResultFor<T, I>>, ValueQuery>;
+	pub type Signature<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		RequestId,
+		(AggKeyFor<T, I>, AsyncResult<SignatureResultFor<T, I>>),
+		ValueQuery,
+	>;
 
 	/// A map containing lists of ceremony ids that should be retried at the block stored in the
 	/// key.
@@ -864,10 +869,9 @@ pub mod pallet {
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
 						ThresholdCeremonyType::KeygenVerification => {
-							Signature::<T, I>::insert(
-								request_id,
-								AsyncResult::Ready(Err(offenders.clone())),
-							);
+							Signature::<T, I>::mutate(request_id, |(_, signature_result)| {
+								*signature_result = AsyncResult::Ready(Err(offenders.clone()))
+							});
 							Self::maybe_dispatch_callback(request_id, ceremony_id);
 							Event::<T, I>::ThresholdSignatureFailed {
 								request_id,
@@ -979,7 +983,9 @@ pub mod pallet {
 				attempt_count
 			);
 
-			Signature::<T, I>::insert(request_id, AsyncResult::Ready(Ok(signature)));
+			Signature::<T, I>::mutate(request_id, |(_, signature_result)| {
+				*signature_result = AsyncResult::Ready(Ok(signature))
+			});
 			Self::maybe_dispatch_callback(request_id, ceremony_id);
 
 			Ok(().into())
@@ -1216,10 +1222,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::new_ceremony_attempt(RequestInstruction {
 			request_context: RequestContext { request_id, payload, attempt_count: 0 },
-			request_type,
+			request_type: request_type.clone(),
 		});
 
-		Signature::<T, I>::insert(request_id, AsyncResult::Pending);
+		Signature::<T, I>::insert(
+			request_id,
+			(
+				match request_type {
+					RequestType::SpecificKey(key, _) => key,
+					RequestType::KeygenVerification { key, .. } => key,
+				},
+				AsyncResult::Pending,
+			),
+		);
 
 		request_id
 	}
@@ -1461,7 +1476,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			<T as pallet::Config<I>>::RuntimeOrigin,
 		>::into(origin))?;
 
-		match Self::signature_result(threshold_request_id).ready_or_else(|r| {
+		match Self::signature_result(threshold_request_id).1.ready_or_else(|r| {
 			log::error!(
 				"Signature not found for threshold request {:?}. Request status: {:?}",
 				threshold_request_id,
@@ -1570,14 +1585,16 @@ where
 		on_signature_ready: Self::Callback,
 	) -> Result<(), Self::Error> {
 		ensure!(
-			matches!(Signature::<T, I>::get(request_id), AsyncResult::Pending),
+			matches!(Signature::<T, I>::get(request_id).1, AsyncResult::Pending),
 			Error::<T, I>::InvalidRequestId
 		);
 		RequestCallback::<T, I>::insert(request_id, on_signature_ready);
 		Ok(())
 	}
 
-	fn signature_result(request_id: RequestId) -> cf_traits::AsyncResult<SignatureResultFor<T, I>> {
+	fn signature_result(
+		request_id: RequestId,
+	) -> (AggKeyFor<T, I>, cf_traits::AsyncResult<SignatureResultFor<T, I>>) {
 		Signature::<T, I>::take(request_id)
 	}
 
@@ -1585,8 +1602,9 @@ where
 	fn insert_signature(
 		request_id: RequestId,
 		signature: <T::TargetChainCrypto as ChainCrypto>::ThresholdSignature,
+		signer: AggKeyFor<T, I>,
 	) {
-		Signature::<T, I>::insert(request_id, AsyncResult::Ready(Ok(signature)));
+		Signature::<T, I>::insert(request_id, (signer, AsyncResult::Ready(Ok(signature))));
 	}
 }
 

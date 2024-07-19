@@ -157,9 +157,10 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 	fn signed(
 		self,
 		threshold_signature: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature,
+		signer: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		match self {
-			BitcoinApi::BatchTransfer(call) => call.signed(threshold_signature).into(),
+			BitcoinApi::BatchTransfer(call) => call.signed(threshold_signature, signer).into(),
 
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
@@ -190,5 +191,12 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 
 	fn refresh_replay_protection(&mut self) {
 		// No replay protection refresh for Bitcoin.
+	}
+
+	fn signer(&self) -> Option<<BitcoinCrypto as ChainCrypto>::AggKey> {
+		match self {
+			BitcoinApi::BatchTransfer(call) => call.signer(),
+			BitcoinApi::_Phantom(..) => unreachable!(),
+		}
 	}
 }
