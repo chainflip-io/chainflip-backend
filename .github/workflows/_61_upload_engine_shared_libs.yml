@@ -47,4 +47,4 @@ jobs:
 
       - name: Upload engine shared libraries S3 🚀
         run: |
-          aws s3 cp /tmp/chainflip-engine-shared-libs/ s3://repo.chainflip.io/releases/${{ steps.version.outputs.url_friendly_version }} --recursive
+          aws s3 cp /tmp/chainflip-engine-shared-libs/ s3://repo.chainflip.io/lib/${{ steps.version.outputs.url_friendly_version }} --recursive
