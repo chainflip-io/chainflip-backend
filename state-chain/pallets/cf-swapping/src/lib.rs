@@ -49,8 +49,14 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
-/// Number of blocks to wait before trying a previously failed swap again
-pub const SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
+pub struct DefaultSwapRetryDelay<T> {
+	_phantom: PhantomData<T>,
+}
+impl<T: Config> Get<BlockNumberFor<T>> for DefaultSwapRetryDelay<T> {
+	fn get() -> BlockNumberFor<T> {
+		BlockNumberFor::<T>::from(5u32)
+	}
+}
 
 struct SwapState {
 	swap: Swap,
@@ -225,10 +231,15 @@ pub enum CcmFailReason {
 	InsufficientDepositAmount,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum PalletConfigUpdate {
+#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T, I))]
+pub enum PalletConfigUpdate<T: Config> {
 	/// Set the maximum amount allowed to be put into a swap. Excess amounts are confiscated.
 	MaximumSwapAmount { asset: Asset, amount: Option<AssetAmount> },
+	/// Set the delay in blocks before retrying a previously failed swap.
+	SwapRetryDelay { delay: BlockNumberFor<T> },
+	/// Set the interval at which we buy FLIP in order to burn it.
+	FlipBuyInterval { interval: BlockNumberFor<T> },
 }
 
 impl_pallet_safe_mode! {
@@ -237,6 +248,8 @@ impl_pallet_safe_mode! {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use core::cmp::max;
+
 	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId, SwapId, SwapOutput};
@@ -344,6 +357,11 @@ pub mod pallet {
 	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
 	#[pallet::storage]
 	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
+	/// The delay in blocks before retrying a previously failed swap.
+	#[pallet::storage]
+	pub type SwapRetryDelay<T: Config> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery, DefaultSwapRetryDelay<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -471,8 +489,11 @@ pub mod pallet {
 			swap_id: SwapId,
 			fee_amount: AssetAmount,
 		},
-		UpdatedBuyInterval {
+		BuyIntervalSet {
 			buy_interval: BlockNumberFor<T>,
+		},
+		SwapRetryDelaySet {
+			swap_retry_delay: BlockNumberFor<T>,
 		},
 	}
 	#[pallet::error]
@@ -501,23 +522,30 @@ pub mod pallet {
 		AffiliateAccountIsNotABroker,
 		/// Setting the buy interval to zero is not allowed.
 		ZeroBuyIntervalNotAllowed,
+		/// Setting the swap retry delay to zero is not allowed.
+		ZeroSwapRetryDelayNotAllowed,
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub flip_buy_interval: BlockNumberFor<T>,
+		pub swap_retry_delay: BlockNumberFor<T>,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			FlipBuyInterval::<T>::set(self.flip_buy_interval);
+			SwapRetryDelay::<T>::set(self.swap_retry_delay);
 		}
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
+			Self {
+				flip_buy_interval: BlockNumberFor::<T>::zero(),
+				swap_retry_delay: DefaultSwapRetryDelay::<T>::get(),
+			}
 		}
 	}
 
@@ -555,10 +583,10 @@ pub mod pallet {
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(current_block: BlockNumberFor<T>) {
 			let mut swaps_to_execute = SwapQueue::<T>::take(current_block);
+			let retry_block = current_block + max(SwapRetryDelay::<T>::get(), 1u32.into());
 
 			if !T::SafeMode::get().swaps_enabled {
 				// Since we won't be executing swaps at this block, we need to reschedule them:
-				let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
 				for swap in swaps_to_execute {
 					Self::deposit_event(Event::<T>::SwapRescheduled {
 						swap_id: swap.swap_id,
@@ -612,8 +640,6 @@ pub mod pallet {
 								},
 							}
 						};
-
-						let retry_block = current_block + SWAP_RETRY_DELAY_BLOCKS.into();
 
 						for swap in failed_swaps {
 							match swap.refund_params {
@@ -856,7 +882,7 @@ pub mod pallet {
 		#[pallet::weight(<T as frame_system::Config>::SystemWeightInfo::set_storage(updates.len() as u32))]
 		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			updates: BoundedVec<PalletConfigUpdate, ConstU32<10>>,
+			updates: BoundedVec<PalletConfigUpdate<T>, ConstU32<10>>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -865,6 +891,24 @@ pub mod pallet {
 					PalletConfigUpdate::MaximumSwapAmount { asset, amount } => {
 						MaximumSwapAmount::<T>::set(asset, amount);
 						Self::deposit_event(Event::<T>::MaximumSwapAmountSet { asset, amount });
+					},
+					PalletConfigUpdate::SwapRetryDelay { delay } => {
+						ensure!(
+							delay != BlockNumberFor::<T>::zero(),
+							Error::<T>::ZeroSwapRetryDelayNotAllowed
+						);
+						SwapRetryDelay::<T>::set(delay);
+						Self::deposit_event(Event::<T>::SwapRetryDelaySet {
+							swap_retry_delay: delay,
+						});
+					},
+					PalletConfigUpdate::FlipBuyInterval { interval } => {
+						ensure!(
+							interval != BlockNumberFor::<T>::zero(),
+							Error::<T>::ZeroBuyIntervalNotAllowed
+						);
+						FlipBuyInterval::<T>::set(interval);
+						Self::deposit_event(Event::<T>::BuyIntervalSet { buy_interval: interval });
 					},
 				}
 			}
@@ -975,29 +1019,6 @@ pub mod pallet {
 				refund_parameters,
 			});
 
-			Ok(())
-		}
-
-		/// Updates the buy interval.
-		///
-		/// ## Events
-		///
-		/// - [UpdatedBuyInterval](Event::UpdatedBuyInterval)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [ZeroBuyIntervalNotAllowed](pallet_cf_pools::Error::ZeroBuyIntervalNotAllowed)
-		#[pallet::call_index(11)]
-		#[pallet::weight(T::WeightInfo::update_buy_interval())]
-		pub fn update_buy_interval(
-			origin: OriginFor<T>,
-			new_buy_interval: BlockNumberFor<T>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);
-			FlipBuyInterval::<T>::set(new_buy_interval);
-			Self::deposit_event(Event::<T>::UpdatedBuyInterval { buy_interval: new_buy_interval });
 			Ok(())
 		}
 	}
