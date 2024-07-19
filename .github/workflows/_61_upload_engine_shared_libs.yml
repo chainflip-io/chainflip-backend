@@ -14,7 +14,7 @@ permissions:
   id-token: write
   contents: read
 jobs:
-  prerelease:
+  upload:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout 🛒
@@ -36,7 +36,7 @@ jobs:
         run: |
           mkdir -p /tmp/chainflip-engine-shared-libs/
           mv chainflip-backend-bin/libchainflip_engine_v*.so /tmp/chainflip-engine-shared-libs/
-          mv chainflip-backend-bin/libchainflip_engine_v*.dylib /tmp/chainflip-engine-shared-libs
+          mv chainflip-backend-bin-mac-m2/libchainflip_engine_v*.dylib /tmp/chainflip-engine-shared-libs
 
       - name: Debug 🐛
         run: |
