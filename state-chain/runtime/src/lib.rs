@@ -12,7 +12,10 @@ pub mod test_runner;
 use cf_runtime_upgrade_utilities::VersionedMigration;
 mod weights;
 use crate::{
-	chainflip::{calculate_account_apy, Offence},
+	chainflip::{
+		calculate_account_apy, reputation_points_qualification::ReputationPointsQualification,
+		Offence,
+	},
 	monitoring_apis::{
 		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance, FlipSupply,
 		LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels, PendingBroadcasts,
@@ -25,6 +28,7 @@ use crate::{
 		SimulatedSwapInformation, ValidatorInfo,
 	},
 };
+
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
@@ -215,7 +219,10 @@ impl pallet_cf_validator::Config for Runtime {
 					SessionKeysRegistered<Self, pallet_session::Pallet<Self>>,
 					(
 						chainflip::ValidatorRoleQualification,
-						pallet_cf_validator::QualifyByCfeVersion<Self>,
+						(
+							pallet_cf_validator::QualifyByCfeVersion<Self>,
+							ReputationPointsQualification,
+						),
 					),
 				),
 			),
