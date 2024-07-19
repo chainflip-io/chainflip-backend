@@ -32,6 +32,7 @@ jobs:
           echo "Raw Version: $RAW_VERSION"
           VERSION=./ci/scripts/extract_version.sh "${RAW_VERSION}" full
           echo "Version: $VERSION"
+          echo "raw_version=$RAW_VERSION" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "url_friendly_version=$(echo $VERSION | tr . _)" >> $GITHUB_OUTPUT
 
