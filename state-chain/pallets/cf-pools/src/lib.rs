@@ -1000,10 +1000,11 @@ impl<T: Config> PoolApi for Pallet<T> {
 		let mut result: AssetMap<AssetAmount> = AssetMap::from_fn(|_| 0);
 
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
-			let pool_orders = match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()), false) {
-				Ok(orders) => orders,
-				Err(_) => continue,
-			};
+			let pool_orders =
+				match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()), false) {
+					Ok(orders) => orders,
+					Err(_) => continue,
+				};
 			for ask in pool_orders.limit_orders.asks {
 				result[base_asset] = result[base_asset]
 					.saturating_add(ask.sell_amount.saturated_into::<AssetAmount>());
@@ -1787,7 +1788,7 @@ impl<T: Config> Pallet<T> {
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
 							.unwrap();
-						if filled_orders {
+						if filled_orders || !position_info.amount.is_zero() {
 							Some(LimitOrder {
 								lp: lp.clone(),
 								id: id.into(),
@@ -1796,17 +1797,8 @@ impl<T: Config> Pallet<T> {
 								fees_earned: collected.accumulative_fees,
 								original_sell_amount: collected.original_amount,
 							})
-						} else if position_info.amount.is_zero() {
-							None
 						} else {
-							Some(LimitOrder {
-								lp: lp.clone(),
-								id: id.into(),
-								tick,
-								sell_amount: position_info.amount,
-								fees_earned: collected.accumulative_fees,
-								original_sell_amount: collected.original_amount,
-							})
+							None
 						}
 					})
 					.collect()
