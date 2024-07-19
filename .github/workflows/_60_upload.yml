@@ -26,11 +26,22 @@ jobs:
           name: chainflip-backend-bin
           path: assets/bin
 
+      - name: Download Mac M2 binaries 📥
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        with:
+          name: chainflip-backend-bin-mac-m2
+          path: /tmp/assets/m2
+
       - name: Remove non production binaries 🗑
         run: |
           rm -f assets/bin/chainflip-engine-databases
           rm -f assets/bin/chainflip-ingress-egress-tracker
           rm -f assets/bin/generate-genesis-keys
+
+      - name: Move .dylib files 📂
+        run: |
+          mkdir -p assets/m2
+          mv /tmp/assets/m2/libchainflip_engine_v*.dylib assets/assets/m2/
 
       - name: Download packages 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
@@ -56,14 +67,18 @@ jobs:
           name: chainflip-backend-private-images
           path: assets/docker/private
 
-      - name: Configure AWS credentials using OIDC 🪪
-        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
-        with:
-          aws-region: eu-central-1
-          role-to-assume: arn:aws:iam::771478732399:role/chainflip-github-bot
-
-      - name: Upload packages to s3 pre-release bucket 📤
+      - name: DEBUG - List files 📂
         run: |
-          aws s3 cp assets s3://chainflip-mainnet-prerelease/${{ inputs.version }}/ --recursive
-          aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://chainflip-mainnet-prerelease/${{ inputs.version }}/chainspecs/${{ inputs.network }}.chainspec.json
-          aws s3 cp CHANGELOG.md s3://chainflip-mainnet-prerelease/${{ inputs.version }}/CHANGELOG.md
+          ls -laR assets
+
+      # - name: Configure AWS credentials using OIDC 🪪
+      #   uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
+      #   with:
+      #     aws-region: eu-central-1
+      #     role-to-assume: arn:aws:iam::771478732399:role/chainflip-github-bot
+
+      # - name: Upload packages to s3 pre-release bucket 📤
+      #   run: |
+      #     aws s3 cp assets s3://chainflip-mainnet-prerelease/${{ inputs.version }}/ --recursive
+      #     aws s3 cp state-chain/node/chainspecs/${{ inputs.network }}.chainspec.raw.json s3://chainflip-mainnet-prerelease/${{ inputs.version }}/chainspecs/${{ inputs.network }}.chainspec.json
+      #     aws s3 cp CHANGELOG.md s3://chainflip-mainnet-prerelease/${{ inputs.version }}/CHANGELOG.md

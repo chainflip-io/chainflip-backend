@@ -105,6 +105,4 @@ jobs:
   upload-engine-shared-libs:
     needs: [build, build-m2]
     uses: ./.github/workflows/_61_upload_engine_shared_libs.yml
-    with:
-      version: ${{ github.sha }}
     secrets: inherit
