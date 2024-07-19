@@ -31,6 +31,11 @@ jobs:
     secrets: inherit
     with:
       profile: "release"
+  build-m2:
+    uses: ./.github/workflows/_21_build_m2.yml
+    secrets: inherit
+    with:
+      profile: "release"
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
     uses: ./.github/workflows/_20_build.yml
@@ -59,6 +64,12 @@ jobs:
     with:
       network: "test"
     secrets: inherit
+  upload-engine-shared-libs:
+    needs: [build]
+    uses: ./.github/workflows/_61_upload_engine_shared_libs.yml
+    with:
+      version: ${{ github.sha }}
+    secrets: inherit
   post-check:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
@@ -81,7 +92,7 @@ jobs:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: ci/${{ github.sha }}/
+      version: ${{ github.sha }}
       environment: "development"
     secrets: inherit
   merge-commit-summary:
