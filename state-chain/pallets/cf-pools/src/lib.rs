@@ -1029,6 +1029,10 @@ impl<T: Config> PoolApi for Pallet<T> {
 		}
 		result
 	}
+
+	fn pools() -> Vec<PoolPairsMap<Asset>> {
+		Self::pools()
+	}
 }
 
 #[derive(
