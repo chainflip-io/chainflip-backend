@@ -49,11 +49,11 @@ jobs:
           name: chainflip-backend-packages
           path: assets/debian
 
-      - name: Download runtime 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
-        with:
-          name: chainflip-node-runtime-production
-          path: assets/runtime
+      # - name: Download runtime 📥
+      #   uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+      #   with:
+      #     name: chainflip-node-runtime-production
+      #     path: assets/runtime
 
       # - name: Download public images 📥
       #   uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
