@@ -31,6 +31,7 @@ jobs:
 
       - name: Set Version 🔦
         id: version
+        shell: bash
         run: |
           chmod +x chainflip-backend-bin/chainflip-node
           VERSION=./ci/scripts/extract_version.sh "$(./chainflip-backend-bin/chainflip-node --version)" full
