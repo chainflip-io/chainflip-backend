@@ -302,7 +302,6 @@ pub mod pallet {
 			const STABLE_ASSET: Asset = Asset::Usdc;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 			T::PoolApi::sweep(&account_id)?;
-			let boost_pools_balances = T::BoostApi::boost_pool_account_balances(&account_id);
 
 			ensure!(
 				Asset::all().filter(|asset| *asset != STABLE_ASSET).all(|asset| {
@@ -316,7 +315,9 @@ pub mod pallet {
 				Error::<T>::FundsRemaining
 			);
 			ensure!(
-				boost_pools_balances.iter().all(|(_asset, amount)| { *amount == 0 }),
+				T::BoostApi::boost_pool_account_balances(&account_id)
+					.iter()
+					.all(|(_asset, amount)| { *amount == 0 }),
 				Error::<T>::BoostedFundsRemaining
 			);
 
