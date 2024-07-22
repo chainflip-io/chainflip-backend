@@ -93,6 +93,7 @@ impl_mock_chainflip!(Test);
 
 parameter_types! {
 	pub const NetworkFee: Permill = Permill::from_percent(0);
+	pub static BoostBalance: AssetAmount = Default::default();
 }
 
 impl_mock_runtime_safe_mode!(liquidity_provider: PalletSafeMode);
@@ -115,7 +116,21 @@ impl BoostApi for MockIngressEgressBoostApi {
 	type AssetMap = cf_chains::assets::any::AssetMap<AssetAmount>;
 
 	fn boost_pool_account_balances(_who: &Self::AccountId) -> Self::AssetMap {
-		Self::AssetMap::from_fn(|_| 0)
+		Self::AssetMap::from_fn(|_| BoostBalance::get())
+	}
+}
+
+impl MockIngressEgressBoostApi {
+	pub fn set_boost_funds(amount: AssetAmount) -> Result<(), ()> {
+		BoostBalance::set(amount);
+		Ok(())
+	}
+	pub fn remove_boost_funds(amount: AssetAmount) -> Result<(), ()> {
+		if amount > BoostBalance::get() {
+			return Err(());
+		}
+		BoostBalance::set(amount - BoostBalance::get());
+		Ok(())
 	}
 }
 
