@@ -501,7 +501,7 @@ mod ccm {
 
 	#[track_caller]
 	fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) {
-		let ccm_metadata = generate_ccm_deposit();
+		let ccm_deposit_metadata = generate_ccm_deposit();
 		let output_address = ForeignChainAddress::Eth(Default::default());
 		let encoded_output_address =
 			MockAddressConverter::to_encoded_address(output_address.clone());
@@ -510,7 +510,10 @@ mod ccm {
 			input_asset,
 			input_amount,
 			output_asset,
-			SwapRequestType::Ccm { ccm_deposit_metadata: ccm_metadata.clone(), output_address },
+			SwapRequestType::Ccm {
+				ccm_deposit_metadata: ccm_deposit_metadata.clone(),
+				output_address
+			},
 			Default::default(),
 			None,
 			origin.clone(),
@@ -522,8 +525,8 @@ mod ccm {
 			output_asset,
 			input_amount,
 			broker_fee: 0,
-			request_type: RequestTypeEncoded::Ccm {
-				ccm_metadata,
+			request_type: SwapRequestTypeEncoded::Ccm {
+				ccm_deposit_metadata,
 				output_address: encoded_output_address,
 			},
 			origin,
@@ -870,7 +873,9 @@ fn swap_by_witnesser_happy_path() {
 			output_asset: OUTPUT_ASSET,
 			input_amount: AMOUNT,
 			broker_fee: 0,
-			request_type: RequestTypeEncoded::Regular { output_address: encoded_output_address },
+			request_type: SwapRequestTypeEncoded::Regular {
+				output_address: encoded_output_address,
+			},
 			origin: ORIGIN,
 		}));
 
@@ -2088,7 +2093,7 @@ fn network_fee_swap_gets_burnt() {
 				input_amount: AMOUNT,
 				output_asset: OUTPUT_ASSET,
 				broker_fee: 0,
-				request_type: RequestTypeEncoded::NetworkFee,
+				request_type: SwapRequestTypeEncoded::NetworkFee,
 				origin: SwapOrigin::Internal,
 			}));
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapScheduled { .. }),);
@@ -2128,7 +2133,7 @@ fn transaction_fees_are_collected() {
 				input_amount: AMOUNT,
 				output_asset: OUTPUT_ASSET,
 				broker_fee: 0,
-				request_type: RequestTypeEncoded::IngressEgressFee,
+				request_type: SwapRequestTypeEncoded::IngressEgressFee,
 				origin: SwapOrigin::Internal,
 			}));
 

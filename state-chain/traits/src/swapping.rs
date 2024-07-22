@@ -14,12 +14,15 @@ pub enum SwapType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SwapRequestType {
+pub enum SwapRequestTypeGeneric<Address> {
 	NetworkFee,
 	IngressEgressFee,
-	Regular { output_address: ForeignChainAddress },
-	Ccm { output_address: ForeignChainAddress, ccm_deposit_metadata: CcmDepositMetadata },
+	Regular { output_address: Address },
+	Ccm { output_address: Address, ccm_deposit_metadata: CcmDepositMetadata },
 }
+
+pub type SwapRequestType = SwapRequestTypeGeneric<ForeignChainAddress>;
+pub type SwapRequestTypeEncoded = SwapRequestTypeGeneric<cf_chains::address::EncodedAddress>;
 
 pub trait SwapRequestHandler {
 	type AccountId;

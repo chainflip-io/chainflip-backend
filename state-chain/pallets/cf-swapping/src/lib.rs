@@ -2,7 +2,7 @@
 
 use cf_amm::common::Side;
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
+	address::{AddressConverter, ForeignChainAddress},
 	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters, SwapOrigin,
 	SwapRefundParameters,
 };
@@ -14,7 +14,7 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, DepositApi, ExecutionCondition, IngressEgressFeeApi, NetworkFeeTaken,
-	SwapRequestHandler, SwapRequestType, SwapType, SwappingApi,
+	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -229,14 +229,6 @@ pub struct CcmSwapAmounts {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum RequestTypeEncoded {
-	Regular { output_address: EncodedAddress },
-	Ccm { output_address: EncodedAddress, ccm_metadata: CcmDepositMetadata },
-	NetworkFee,
-	IngressEgressFee,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 enum CcmSwapState {
 	PrincipalSwapScheduled {
 		principal_swap_id: SwapId,
@@ -416,7 +408,7 @@ pub mod pallet {
 			output_asset: Asset,
 			broker_fee: AssetAmount,
 			origin: SwapOrigin,
-			request_type: RequestTypeEncoded,
+			request_type: SwapRequestTypeEncoded,
 		},
 		SwapRequestCompleted {
 			swap_request_id: SwapRequestId,
@@ -1686,7 +1678,7 @@ pub mod pallet {
 						},
 					);
 
-					RequestTypeEncoded::NetworkFee
+					SwapRequestTypeEncoded::NetworkFee
 				},
 				SwapRequestType::IngressEgressFee => {
 					let _swap_id = Self::schedule_swap(
@@ -1709,7 +1701,7 @@ pub mod pallet {
 						},
 					);
 
-					RequestTypeEncoded::IngressEgressFee
+					SwapRequestTypeEncoded::IngressEgressFee
 				},
 				SwapRequestType::Regular { output_address } => {
 					Self::schedule_swap(
@@ -1734,7 +1726,7 @@ pub mod pallet {
 						},
 					);
 
-					RequestTypeEncoded::Regular {
+					SwapRequestTypeEncoded::Regular {
 						output_address: T::AddressConverter::to_encoded_address(output_address),
 					}
 				},
@@ -1833,9 +1825,9 @@ pub mod pallet {
 						);
 					}
 
-					RequestTypeEncoded::Ccm {
+					SwapRequestTypeEncoded::Ccm {
 						output_address: encoded_destination_address,
-						ccm_metadata: ccm_deposit_metadata,
+						ccm_deposit_metadata,
 					}
 				},
 			};

@@ -9,7 +9,7 @@ pub mod safe_mode;
 pub use safe_mode::*;
 mod swapping;
 
-pub use swapping::{SwapRequestHandler, SwapRequestType, SwapType};
+pub use swapping::{SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType};
 
 pub mod mocks;
 pub mod offence_reporting;
