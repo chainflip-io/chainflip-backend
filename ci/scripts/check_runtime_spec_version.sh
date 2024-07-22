@@ -5,7 +5,7 @@ network=$1
 runtime_spec_version_file="state-chain/runtime/src/lib.rs"
 
 # Extract the spec_version from the Rust file
-spec_version=$(grep '#[sp_version::runtime_version]' -A 10 $runtime_spec_version_file | grep 'spec_version' | awk '{print $2}' | tr -d ',')
+spec_version=$(grep -F '#[sp_version::runtime_version]' -A 10 $runtime_spec_version_file | grep 'spec_version' | awk '{print $2}' | tr -d ',')
 
 if [ -z $network ]; then
     echo "Network not specified"
