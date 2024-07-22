@@ -358,6 +358,15 @@ fn account_registration_and_deregistration() {
 			EncodedAddress::Eth(Default::default()),
 		));
 
+		assert_ok!(MockIngressEgressBoostApi::set_boost_funds(100));
+
+		assert_noop!(
+			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
+			Error::<Test>::BoostedFundsRemaining,
+		);
+
+		assert_ok!(MockIngressEgressBoostApi::remove_boost_funds(100));
+
 		assert_ok!(
 			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
 		);
