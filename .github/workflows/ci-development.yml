@@ -64,10 +64,6 @@ jobs:
     with:
       network: "test"
     secrets: inherit
-  upload-engine-shared-libs:
-    needs: [build, build-m2]
-    uses: ./.github/workflows/_61_upload_engine_shared_libs.yml
-    secrets: inherit
   post-check:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
