@@ -164,7 +164,7 @@ macro_rules! impl_pallet_safe_mode {
     ) => {
         #[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
 		#[scale_info(skip_type_params($generic))]
-        pub struct $pallet_safe_mode<$generic> {
+        pub struct $pallet_safe_mode<$generic: 'static> {
             $(
                 pub $flag: bool,
             )+
