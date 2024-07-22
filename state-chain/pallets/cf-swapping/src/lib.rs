@@ -261,7 +261,7 @@ struct SwapRequest {
 	id: SwapRequestId,
 	input_asset: Asset,
 	output_asset: Asset,
-	refund_params: Option<SwapRefundParameters>,
+	refund_params: Option<ChannelRefundParameters>,
 	state: SwapRequestState,
 }
 
@@ -1640,7 +1640,7 @@ pub mod pallet {
 			};
 
 			// Now that we know input amount, we can calculate the minimum output amount:
-			let refund_params = refund_params.map(|params| SwapRefundParameters {
+			let swap_refund_params = refund_params.clone().map(|params| SwapRefundParameters {
 				refund_block: {
 					use sp_arithmetic::traits::UniqueSaturatedInto;
 					// In practice block number always fits in u32:
@@ -1685,7 +1685,7 @@ pub mod pallet {
 						input_asset,
 						output_asset,
 						net_amount,
-						refund_params.clone(),
+						None,
 						SwapType::IngressEgressFee,
 						request_id,
 					);
@@ -1708,7 +1708,7 @@ pub mod pallet {
 						input_asset,
 						output_asset,
 						net_amount,
-						refund_params.clone(),
+						swap_refund_params.clone(),
 						SwapType::Swap,
 						request_id,
 					);
@@ -1766,7 +1766,7 @@ pub mod pallet {
 							input_asset,
 							output_asset,
 							principal_swap_amount,
-							refund_params.clone(),
+							swap_refund_params.clone(),
 							SwapType::CcmPrincipal,
 							request_id,
 						);
@@ -1804,7 +1804,7 @@ pub mod pallet {
 							id: request_id,
 							input_asset,
 							output_asset,
-							refund_params: refund_params.clone(),
+							refund_params: None,
 							state: SwapRequestState::Ccm {
 								state: ccm_state,
 								ccm_deposit_metadata: ccm_deposit_metadata.clone(),
