@@ -694,10 +694,9 @@ impl ScriptPubkey {
 pub struct BitcoinTransaction {
 	inputs: Vec<Utxo>,
 	pub outputs: Vec<BitcoinOutput>,
-	signatures: Vec<Signature>,
+	pub signer_and_signatures: Option<(AggKey, Vec<Signature>)>,
 	transaction_bytes: Vec<u8>,
 	old_utxo_input_indices: VecDeque<u32>,
-	pub signer: Option<AggKey>,
 }
 
 const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
@@ -749,21 +748,22 @@ impl BitcoinTransaction {
 		Self {
 			inputs,
 			outputs,
-			signatures: vec![],
+			signer_and_signatures: None,
 			transaction_bytes,
 			old_utxo_input_indices,
-			signer: None,
 		}
 	}
 
-	pub fn add_signatures(&mut self, signatures: Vec<Signature>) {
+	pub fn add_signer_and_signatures(&mut self, signer: AggKey, signatures: Vec<Signature>) {
 		debug_assert_eq!(signatures.len(), self.inputs.len());
-		self.signatures = signatures;
+		self.signer_and_signatures = Some((signer, signatures));
 	}
 
 	pub fn is_signed(&self) -> bool {
-		self.signatures.len() == self.inputs.len() &&
-			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
+		self.signer_and_signatures.as_ref().is_some_and(|(_, signatures)| {
+			signatures.len() == self.inputs.len() &&
+				!signatures.iter().any(|signature| signature == &[0u8; 64])
+		})
 	}
 
 	pub fn txid(&self) -> Hash {
@@ -782,11 +782,18 @@ impl BitcoinTransaction {
 
 		let mut transaction_bytes = self.transaction_bytes;
 
+		let signatures = self
+			.signer_and_signatures
+			.expect(
+				"this function is only called after the tx is signed so signatures should exist",
+			)
+			.1;
+
 		for i in 0..self.inputs.len() {
 			if let Some(script_path) = self.inputs[i].deposit_address.script_path.clone() {
 				transaction_bytes.push(NUM_WITNESSES_SCRIPT);
 				transaction_bytes.push(LEN_SIGNATURE);
-				transaction_bytes.extend(self.signatures[i]);
+				transaction_bytes.extend(signatures[i]);
 				transaction_bytes.extend(script_path.unlock_script.btc_serialize());
 				// Length of tweaked pubkey + leaf version
 				transaction_bytes.push(33u8);
@@ -795,7 +802,7 @@ impl BitcoinTransaction {
 			} else {
 				transaction_bytes.push(NUM_WITNESSES_KEY);
 				transaction_bytes.push(LEN_SIGNATURE);
-				transaction_bytes.extend(self.signatures[i]);
+				transaction_bytes.extend(signatures[i]);
 			}
 		}
 		transaction_bytes.extend(LOCKTIME);

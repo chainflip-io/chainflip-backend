@@ -44,8 +44,7 @@ impl ApiCall<BitcoinCrypto> for BatchTransfer {
 		signatures: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature,
 		signer: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Self {
-		self.bitcoin_transaction.add_signatures(signatures.clone());
-		self.bitcoin_transaction.signer = Some(signer);
+		self.bitcoin_transaction.add_signer_and_signatures(signer, signatures.clone());
 		self
 	}
 
@@ -66,6 +65,9 @@ impl ApiCall<BitcoinCrypto> for BatchTransfer {
 	}
 
 	fn signer(&self) -> Option<<BitcoinCrypto as ChainCrypto>::AggKey> {
-		self.bitcoin_transaction.signer
+		self.bitcoin_transaction
+			.signer_and_signatures
+			.as_ref()
+			.map(|(signer, _)| signer.clone())
 	}
 }

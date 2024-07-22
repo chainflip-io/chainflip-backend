@@ -421,8 +421,7 @@ pub struct CurrentVaultAndProxy {
 pub struct PolkadotExtrinsicBuilder {
 	extrinsic_call: PolkadotRuntimeCall,
 	replay_protection: PolkadotReplayProtection,
-	signature: Option<PolkadotSignature>,
-	pub signer: Option<PolkadotPublicKey>,
+	pub signer_and_signature: Option<(PolkadotPublicKey, PolkadotSignature)>,
 }
 
 impl PolkadotExtrinsicBuilder {
@@ -430,11 +429,11 @@ impl PolkadotExtrinsicBuilder {
 		replay_protection: PolkadotReplayProtection,
 		extrinsic_call: PolkadotRuntimeCall,
 	) -> Self {
-		Self { extrinsic_call, replay_protection, signature: None, signer: None }
+		Self { extrinsic_call, replay_protection, signer_and_signature: None }
 	}
 
 	pub fn signature(&self) -> Option<PolkadotSignature> {
-		self.signature.clone()
+		self.signer_and_signature.as_ref().map(|(_, signature)| signature.clone())
 	}
 
 	fn extra(&self) -> PolkadotSignedExtra {
@@ -485,15 +484,14 @@ impl PolkadotExtrinsicBuilder {
 		signature: PolkadotSignature,
 		signer: PolkadotAccountId,
 	) {
-		self.signature.replace(signature);
-		self.signer.replace(signer);
+		self.signer_and_signature.replace((signer, signature));
 	}
 
 	pub fn get_signed_unchecked_extrinsic(&self) -> Option<PolkadotUncheckedExtrinsic> {
-		self.signature.as_ref().map(|signature| {
+		self.signer_and_signature.as_ref().map(|(signer, signature)| {
 			PolkadotUncheckedExtrinsic::new_signed(
 				self.extrinsic_call.clone(),
-				self.replay_protection.signer,
+				signer.clone(),
 				signature.clone(),
 				self.extra(),
 			)
@@ -501,11 +499,11 @@ impl PolkadotExtrinsicBuilder {
 	}
 
 	pub fn is_signed(&self) -> bool {
-		self.signature.is_some()
+		self.signer_and_signature.is_some()
 	}
 
 	pub fn refresh_replay_protection(&mut self, replay_protection: PolkadotReplayProtection) {
-		self.signature = None;
+		self.signer_and_signature = None;
 		self.replay_protection = replay_protection;
 	}
 }

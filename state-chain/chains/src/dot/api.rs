@@ -202,7 +202,8 @@ impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<Polkad
 	}
 
 	fn signer(&self) -> Option<<PolkadotCrypto as ChainCrypto>::AggKey> {
-		map_over_api_variants!(self, call, call.signer)
+		map_over_api_variants!(self, call, call.signer_and_signature.clone())
+			.map(|(signer, _)| signer)
 	}
 }
 

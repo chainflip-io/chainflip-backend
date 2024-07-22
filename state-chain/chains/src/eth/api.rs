@@ -338,7 +338,7 @@ impl<E: ReplayProtectionProvider<Ethereum> + EvmEnvironmentProvider<Ethereum>> A
 	}
 
 	fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {
-		map_over_api_variants!(self, call, call.signer)
+		map_over_api_variants!(self, call, call.signer_and_sig_data).map(|(signer, _)| signer)
 	}
 }
 

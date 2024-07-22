@@ -155,15 +155,14 @@ pub trait EvmCall {
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct EvmTransactionBuilder<C> {
-	pub sig_data: Option<SigData>,
+	pub signer_and_sig_data: Option<(AggKey, SigData)>,
 	pub replay_protection: EvmReplayProtection,
 	pub call: C,
-	pub signer: Option<AggKey>,
 }
 
 impl<C: EvmCall> EvmTransactionBuilder<C> {
 	pub fn new_unsigned(replay_protection: EvmReplayProtection, call: C) -> Self {
-		Self { replay_protection, call, sig_data: None, signer: None }
+		Self { replay_protection, call, signer_and_sig_data: None }
 	}
 
 	pub fn replay_protection(&self) -> EvmReplayProtection {
@@ -186,11 +185,14 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 	}
 
 	fn expect_sig_data_defensive(&self, reason: &'static str) -> SigData {
-		self.sig_data.defensive_proof(reason).unwrap_or(SigData {
-			sig: Default::default(),
-			nonce: Default::default(),
-			k_times_g_address: Default::default(),
-		})
+		self.signer_and_sig_data
+			.defensive_proof(reason)
+			.map(|(_, sig_data)| sig_data)
+			.unwrap_or(SigData {
+				sig: Default::default(),
+				nonce: Default::default(),
+				k_times_g_address: Default::default(),
+			})
 	}
 
 	pub fn signed(
@@ -198,8 +200,9 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
 		signer: AggKey,
 	) -> Self {
-		self.sig_data = Some(SigData::new(self.replay_protection.nonce, threshold_signature));
-		self.signer = Some(signer);
+		self.signer_and_sig_data =
+			Some((signer, SigData::new(self.replay_protection.nonce, threshold_signature)));
+
 		self
 	}
 
@@ -210,7 +213,7 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 	}
 
 	pub fn is_signed(&self) -> bool {
-		self.sig_data.is_some()
+		self.signer_and_sig_data.is_some()
 	}
 
 	pub fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
@@ -224,7 +227,7 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 	}
 
 	pub fn refresh_replay_protection(&mut self, replay_protection: EvmReplayProtection) {
-		self.sig_data = None;
+		self.signer_and_sig_data = None;
 		self.replay_protection = replay_protection;
 	}
 }
