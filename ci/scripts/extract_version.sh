@@ -25,6 +25,3 @@ if [[ "$version_type" == "major_minor" ]]; then
 else
     echo $full_version
 fi
-
-# Output the major and minor version
-echo "$semver_version"
