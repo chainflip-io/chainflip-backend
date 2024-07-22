@@ -21,9 +21,9 @@ major_minor=$(echo "$version" | cut -d. -f1,2)
 full_version=$(echo "$version" | cut -d. -f1,2,3)
 
 if [[ "$version_type" == "major_minor" ]]; then
-    semver_version="$major_minor"
+    echo $major_minor
 else
-    semver_version="$full_version"
+    echo $full_version
 fi
 
 # Output the major and minor version
