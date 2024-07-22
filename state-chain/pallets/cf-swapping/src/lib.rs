@@ -193,15 +193,18 @@ pub mod ccm {
 			return Err(CcmFailReason::InsufficientDepositAmount)
 		}
 
-		// if the gas asset is different.
-		let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
-		let other_gas_asset = if source_asset == output_gas_asset || gas_budget.is_zero() {
-			None
-		} else {
-			Some(output_gas_asset)
-		};
+		// Return gas asset only if it is different from the input asset (and thus requires a swap)
+		let output_gas_asset = destination_chain.gas_asset();
 
-		Ok(CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset })
+		Ok(CcmSwapAmounts {
+			principal_swap_amount,
+			gas_budget,
+			other_gas_asset: if source_asset == output_gas_asset || gas_budget.is_zero() {
+				None
+			} else {
+				Some(output_gas_asset)
+			},
+		})
 	}
 }
 
@@ -460,14 +463,14 @@ pub mod pallet {
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
-			swap_request_id: SwapId,
+			swap_request_id: SwapRequestId,
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
 			fee: AssetAmount,
 		},
 		RefundEgressScheduled {
-			swap_request_id: SwapId,
+			swap_request_id: SwapRequestId,
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
@@ -1618,7 +1621,10 @@ pub mod pallet {
 			});
 
 			// Do not limit the maximum swap amount for network fee swaps.
-			let net_amount = if matches!(request_type, SwapRequestType::NetworkFee) {
+			let net_amount = if matches!(
+				request_type,
+				SwapRequestType::NetworkFee | SwapRequestType::IngressEgressFee
+			) {
 				net_amount
 			} else {
 				let (swap_amount, confiscated_amount) =
