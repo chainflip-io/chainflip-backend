@@ -195,9 +195,10 @@ where
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
 		_cf_parameters: Vec<u8>,
-	) -> Result<Self, DispatchError> {
+	) -> Result<Self, ExecutexSwapAndCallError> {
 		let transfer_param = EncodableTransferAssetParams {
-			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			asset: E::token_address(transfer_param.asset)
+				.ok_or(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))?,
 			to: transfer_param.to,
 			amount: transfer_param.amount,
 		};

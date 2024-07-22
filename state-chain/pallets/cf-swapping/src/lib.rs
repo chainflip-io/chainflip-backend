@@ -894,9 +894,18 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			if channel_metadata.is_some() {
+			if let Some(ccm) = channel_metadata.as_ref() {
 				let destination_chain: ForeignChain = destination_asset.into();
 				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
+
+				T::CcmValidityChecker::is_valid(ccm, destination_asset).map_err(|e| {
+					log::warn!(
+						"Failed to open channel due to invalid CCM. Broker: {:?}, Error: {:?}",
+						broker,
+						e
+					);
+					Error::<T>::InvalidCcm
+				})?;
 			}
 
 			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =

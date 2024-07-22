@@ -2,6 +2,7 @@ use crate::{
 	sol::{api::SolanaEnvironment, SolAsset, SolCcmAccounts},
 	CcmChannelMetadata, CcmValidityChecker, CcmValidityError,
 };
+use cf_primitives::ForeignChain;
 use codec::Decode;
 use core::marker::PhantomData;
 use sol_prim::consts::{
@@ -17,43 +18,48 @@ impl<Environment: SolanaEnvironment> CcmValidityChecker for SolanaCcmValidityChe
 		ccm: &CcmChannelMetadata,
 		egress_asset: cf_primitives::Asset,
 	) -> Result<(), CcmValidityError> {
-		// Check if the cf_parameter can be decoded
-		let ccm_accounts = SolCcmAccounts::decode(&mut &ccm.cf_parameters.clone()[..])
-			.map_err(|_| CcmValidityError::CannotDecodeCfParameters)?;
-		let asset: SolAsset =
-			egress_asset.try_into().map_err(|_| CcmValidityError::UnsupportedAsset)?;
+		if ForeignChain::from(egress_asset) == ForeignChain::Solana {
+			// Check if the cf_parameter can be decoded
+			let ccm_accounts = SolCcmAccounts::decode(&mut &ccm.cf_parameters.clone()[..])
+				.map_err(|_| CcmValidityError::CannotDecodeCfParameters)?;
+			let asset: SolAsset = egress_asset
+				.try_into()
+				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
 
-		// Ensure the length is within limit.
-		if ccm.message.len() >
-			match asset {
-				SolAsset::Sol => MAX_CCM_MESSAGE_LENGTH_SOL,
-				SolAsset::SolUsdc => MAX_CCM_MESSAGE_LENGTH_USDC,
-			} {
-			return Err(CcmValidityError::MessageTooLong)
-		}
-		if ccm_accounts.remaining_accounts.len() > MAX_CCM_EXTRA_ACCOUNTS {
-			return Err(CcmValidityError::CfParametersContainsTooManyAccounts)
-		}
-
-		// Check if the parameter accounts are valid
-		if let Ok(api_env) = Environment::api_environment() {
-			let token_pda = api_env.token_vault_pda_account.into();
-			if ccm_accounts.cf_receiver.pubkey == token_pda ||
-				ccm_accounts.remaining_accounts.iter().any(|acc| acc.pubkey == token_pda)
-			{
-				return Err(CcmValidityError::CfParametersContainsInvalidAccounts)
+			// Ensure the length is within limit.
+			if ccm.message.len() >
+				match asset {
+					SolAsset::Sol => MAX_CCM_MESSAGE_LENGTH_SOL,
+					SolAsset::SolUsdc => MAX_CCM_MESSAGE_LENGTH_USDC,
+				} {
+				return Err(CcmValidityError::MessageTooLong)
 			}
-		};
-		if let Ok(agg_key) = Environment::current_agg_key() {
-			let agg_key = agg_key.into();
-			if ccm_accounts.cf_receiver.pubkey == agg_key ||
-				ccm_accounts.remaining_accounts.iter().any(|acc| acc.pubkey == agg_key)
-			{
-				return Err(CcmValidityError::CfParametersContainsInvalidAccounts)
+			if ccm_accounts.remaining_accounts.len() > MAX_CCM_EXTRA_ACCOUNTS {
+				return Err(CcmValidityError::CfParametersContainsTooManyAccounts)
 			}
-		};
 
-		Ok(())
+			// Check if the parameter accounts are valid
+			if let Ok(api_env) = Environment::api_environment() {
+				let token_pda = api_env.token_vault_pda_account.into();
+				if ccm_accounts.cf_receiver.pubkey == token_pda ||
+					ccm_accounts.remaining_accounts.iter().any(|acc| acc.pubkey == token_pda)
+				{
+					return Err(CcmValidityError::CfParametersContainsInvalidAccounts)
+				}
+			};
+			if let Ok(agg_key) = Environment::current_agg_key() {
+				let agg_key = agg_key.into();
+				if ccm_accounts.cf_receiver.pubkey == agg_key ||
+					ccm_accounts.remaining_accounts.iter().any(|acc| acc.pubkey == agg_key)
+				{
+					return Err(CcmValidityError::CfParametersContainsInvalidAccounts)
+				}
+			};
+
+			Ok(())
+		} else {
+			Ok(())
+		}
 	}
 }
 
@@ -71,7 +77,7 @@ mod test {
 			},
 			signing_key::SolSigningKey,
 			sol_tx_core::{signer::Signer, sol_test_values},
-			SolAddress, SolAmount, SolApiEnvironment, SolCcmAddress,
+			SolAddress, SolAmount, SolApiEnvironment, SolCcmAddress, SolPubkey,
 		},
 		ChainEnvironment,
 	};
@@ -142,7 +148,7 @@ mod test {
 	}
 
 	#[test]
-	fn can_check_ccm_length() {
+	fn can_check_ccm_message_length() {
 		let mut ccm = sol_test_values::ccm_parameter().channel_metadata;
 
 		// Can check message for Sol egress
@@ -168,23 +174,34 @@ mod test {
 	}
 
 	#[test]
-	fn can_check_supported_asset() {
-		let ccm = sol_test_values::ccm_parameter().channel_metadata;
+	fn can_check_cf_parameter_length() {
+		let mut ccm = sol_test_values::ccm_parameter().channel_metadata;
+
+		let param = SolCcmAccounts {
+			cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+			remaining_accounts: [SolCcmAddress {
+				pubkey: SolPubkey([0x02; 32]),
+				is_writable: false,
+			}; MAX_CCM_EXTRA_ACCOUNTS]
+				.to_vec(),
+		}
+		.encode();
+		ccm.cf_parameters = param.try_into().unwrap();
+		assert_ok!(SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Sol));
+
+		let param = SolCcmAccounts {
+			cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+			remaining_accounts: [SolCcmAddress {
+				pubkey: SolPubkey([0x02; 32]),
+				is_writable: false,
+			}; MAX_CCM_EXTRA_ACCOUNTS + 1]
+				.to_vec(),
+		}
+		.encode();
+		ccm.cf_parameters = param.try_into().unwrap();
 		assert_err!(
-			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Eth),
-			CcmValidityError::UnsupportedAsset
-		);
-		assert_err!(
-			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::ArbUsdc),
-			CcmValidityError::UnsupportedAsset
-		);
-		assert_err!(
-			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Flip),
-			CcmValidityError::UnsupportedAsset
-		);
-		assert_err!(
-			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Usdc),
-			CcmValidityError::UnsupportedAsset
+			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Sol),
+			CcmValidityError::CfParametersContainsTooManyAccounts
 		);
 	}
 
@@ -207,8 +224,8 @@ mod test {
 		.try_into()
 		.unwrap();
 		assert_err!(
-			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Usdc),
-			CcmValidityError::UnsupportedAsset
+			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Sol),
+			CcmValidityError::CfParametersContainsInvalidAccounts
 		);
 
 		ccm.cf_parameters = SolCcmAccounts {
@@ -228,8 +245,8 @@ mod test {
 		.try_into()
 		.unwrap();
 		assert_err!(
-			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Usdc),
-			CcmValidityError::UnsupportedAsset
+			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Sol),
+			CcmValidityError::CfParametersContainsInvalidAccounts
 		);
 
 		// Agg key is blacklisted
@@ -245,8 +262,8 @@ mod test {
 		.try_into()
 		.unwrap();
 		assert_err!(
-			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Usdc),
-			CcmValidityError::UnsupportedAsset
+			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Sol),
+			CcmValidityError::CfParametersContainsInvalidAccounts
 		);
 
 		ccm.cf_parameters = SolCcmAccounts {
@@ -263,8 +280,40 @@ mod test {
 		.try_into()
 		.unwrap();
 		assert_err!(
-			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Usdc),
-			CcmValidityError::UnsupportedAsset
+			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Sol),
+			CcmValidityError::CfParametersContainsInvalidAccounts
 		);
+	}
+
+	#[test]
+	fn only_check_against_solana_chain() {
+		let mut ccm = sol_test_values::ccm_parameter().channel_metadata;
+
+		// Only fails for Solana chain.
+		ccm.message = [0x00; MAX_CCM_MESSAGE_LENGTH_SOL + 1].to_vec().try_into().unwrap();
+		assert_err!(
+			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Sol),
+			CcmValidityError::MessageTooLong
+		);
+		ccm.message = [0x00; MAX_CCM_MESSAGE_LENGTH_USDC + 1].to_vec().try_into().unwrap();
+		assert_err!(
+			SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::SolUsdc),
+			CcmValidityError::MessageTooLong
+		);
+
+		// Always valid on other chains.
+		assert_ok!(SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Eth),);
+		assert_ok!(SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Btc),);
+		assert_ok!(SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Flip),);
+		assert_ok!(SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Usdt),);
+		assert_ok!(SolanaCcmValidityChecker::<MockEnv>::is_valid(&ccm, cf_primitives::Asset::Usdc),);
+		assert_ok!(SolanaCcmValidityChecker::<MockEnv>::is_valid(
+			&ccm,
+			cf_primitives::Asset::ArbUsdc
+		),);
+		assert_ok!(SolanaCcmValidityChecker::<MockEnv>::is_valid(
+			&ccm,
+			cf_primitives::Asset::ArbEth
+		),);
 	}
 }

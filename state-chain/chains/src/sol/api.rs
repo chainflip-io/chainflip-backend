@@ -5,9 +5,9 @@ use codec::{Decode, Encode};
 use frame_support::{
 	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
-use scale_info::{prelude::format, TypeInfo};
+use scale_info::TypeInfo;
 use sp_core::RuntimeDebug;
-use sp_std::{boxed::Box, vec, vec::Vec};
+use sp_std::{vec, vec::Vec};
 
 use crate::{
 	sol::{
@@ -15,9 +15,10 @@ use crate::{
 		SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolCcmAccounts, SolHash, SolMessage,
 		SolTransaction, SolanaCrypto,
 	},
-	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, CcmValidityChecker, Chain, ChainCrypto,
-	ChainEnvironment, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, FetchAssetParams,
-	ForeignChainAddress, SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
+	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, CcmValidityChecker, CcmValidityError,
+	Chain, ChainCrypto, ChainEnvironment, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall,
+	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, Solana,
+	TransferAssetParams, TransferFallback,
 };
 
 use cf_primitives::{EgressId, ForeignChain};
@@ -79,7 +80,7 @@ pub enum SolanaTransactionBuildingError {
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),
 	CannotDecodeCcmCfParam,
-	InvalidCcm,
+	InvalidCcm(CcmValidityError),
 }
 
 impl sp_std::fmt::Display for SolanaTransactionBuildingError {
@@ -273,7 +274,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				transfer_param,
 				e
 			);
-			SolanaTransactionBuildingError::InvalidCcm
+			SolanaTransactionBuildingError::InvalidCcm(e)
 		})?;
 
 		let ccm_accounts = SolCcmAccounts::decode(&mut &cf_parameters[..])
@@ -395,11 +396,11 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		_gas_budget: <Solana as Chain>::ChainAmount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
-	) -> Result<Self, DispatchError> {
+	) -> Result<Self, ExecutexSwapAndCallError> {
 		Self::ccm_transfer(transfer_param, source_chain, source_address, message, cf_parameters)
 			.map_err(|e| {
 				log::error!("Failed to construct Solana CCM transfer transaction! Error: {:?}", e);
-				e.into()
+				ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e)
 			})
 	}
 }

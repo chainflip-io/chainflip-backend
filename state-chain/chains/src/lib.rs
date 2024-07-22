@@ -5,7 +5,10 @@
 
 use core::{fmt::Display, iter::Step};
 
-use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
+use crate::{
+	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
+	sol::api::SolanaTransactionBuildingError,
+};
 pub use address::ForeignChainAddress;
 use address::{
 	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
@@ -492,6 +495,16 @@ pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError>;
 }
 
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
+pub enum ExecutexSwapAndCallError {
+	/// The chain does not support CCM functionality.
+	Unsupported,
+	/// Failed to build CCM for the Solana chain.
+	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
+	/// Some other DispatchError occurred.
+	DispatchError(DispatchError),
+}
+
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		transfer_param: TransferAssetParams<C>,
@@ -500,7 +513,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
-	) -> Result<Self, DispatchError>;
+	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
 pub trait TransferFallback<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -658,13 +671,12 @@ pub struct ChannelRefundParameters {
 	pub min_price: Price,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum CcmValidityError {
 	CannotDecodeCfParameters,
 	MessageTooLong,
 	CfParametersContainsInvalidAccounts,
 	CfParametersContainsTooManyAccounts,
-	UnsupportedAsset,
 }
 
 pub trait CcmValidityChecker {
