@@ -785,6 +785,7 @@ fn testnet_genesis(
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
 			witness_safety_margin: Some(bitcoin_safety_margin),
 			dust_limits: vec![(btc::Asset::Btc, BITCOIN_DUST_LIMIT)],
+			max_swap_retry_duration_blocks: 600,
 		},
 		ethereum_ingress_egress: state_chain_runtime::EthereumIngressEgressConfig {
 			deposit_channel_lifetime: ethereum_deposit_channel_lifetime.into(),
@@ -808,7 +809,7 @@ fn testnet_genesis(
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.
-		liquidity_pools: Default::default(),
+		swapping: Default::default(),
 		bitcoin_vault: Default::default(),
 		polkadot_vault: Default::default(),
 		system: Default::default(),

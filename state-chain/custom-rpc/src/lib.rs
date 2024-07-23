@@ -84,21 +84,8 @@ impl From<RedemptionsInfo> for RpcRedemptionsInfo {
 		Self { total_balance: redemption_info.total_balance.into(), count: redemption_info.count }
 	}
 }
-#[derive(Serialize, Deserialize)]
-pub struct RpcFeeImbalance {
-	pub ethereum: NumberOrHex,
-	pub polkadot: NumberOrHex,
-	pub arbitrum: NumberOrHex,
-}
-impl From<FeeImbalance> for RpcFeeImbalance {
-	fn from(fee_imbalance: FeeImbalance) -> Self {
-		Self {
-			ethereum: fee_imbalance.ethereum.into(),
-			polkadot: fee_imbalance.polkadot.into(),
-			arbitrum: fee_imbalance.arbitrum.into(),
-		}
-	}
-}
+
+pub type RpcFeeImbalance = FeeImbalance<NumberOrHex>;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcFlipSupply {
@@ -136,7 +123,7 @@ impl From<MonitoringData> for RpcMonitoringData {
 		Self {
 			epoch: monitoring_data.epoch.into(),
 			pending_redemptions: monitoring_data.pending_redemptions.into(),
-			fee_imbalance: monitoring_data.fee_imbalance.into(),
+			fee_imbalance: monitoring_data.fee_imbalance.map(|i| (*i).into()),
 			external_chains_height: monitoring_data.external_chains_height,
 			btc_utxos: monitoring_data.btc_utxos,
 			pending_broadcasts: monitoring_data.pending_broadcasts,
@@ -620,6 +607,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<any::AssetMap<U256>>;
+	#[method(name = "lp_total_balances", aliases = ["lp_total_balances"])]
+	fn cf_lp_total_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<any::AssetMap<U256>>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -1087,6 +1080,22 @@ where
 			.and_then(|result| {
 				result
 					.map(|free_balances| free_balances.map(Into::into))
+					.map_err(map_dispatch_error)
+			})
+	}
+
+	fn cf_lp_total_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<any::AssetMap<U256>> {
+		self.client
+			.runtime_api()
+			.cf_lp_total_balances(self.unwrap_or_best(at), account_id)
+			.map_err(to_rpc_error)
+			.and_then(|result| {
+				result
+					.map(|total_balances| total_balances.map(Into::into))
 					.map_err(map_dispatch_error)
 			})
 	}

@@ -5,6 +5,7 @@
 //! This avoids the need to deal with low level Solana core types.
 
 use sol_prim::consts::{
+	LAMPORTS_PER_SIGNATURE, MAX_COMPUTE_UNITS_PER_TRANSACTION, MICROLAMPORTS_PER_LAMPORT,
 	SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
 };
 
@@ -29,6 +30,11 @@ use crate::{
 };
 use sp_std::{vec, vec::Vec};
 
+use super::compute_units_costs::{
+	DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER, MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
+	MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
+};
+
 fn system_program_id() -> SolAddress {
 	SYSTEM_PROGRAM_ID
 }
@@ -41,9 +47,6 @@ fn token_program_id() -> SolAddress {
 	TOKEN_PROGRAM_ID
 }
 pub struct SolanaInstructionBuilder;
-
-/// TODO: Remove when PRO-1479 is completed
-const COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
 
 impl SolanaInstructionBuilder {
 	/// Finalize a Instruction Set. This should be internally called after a instruction set is
@@ -65,7 +68,6 @@ impl SolanaInstructionBuilder {
 			final_instructions
 				.push(ComputeBudgetInstruction::set_compute_unit_price(compute_price));
 		}
-
 		final_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(compute_limit));
 
 		final_instructions.append(&mut instructions);
@@ -261,6 +263,7 @@ impl SolanaInstructionBuilder {
 		agg_key: SolAddress,
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
+		gas_budget: SolAmount,
 	) -> Vec<SolInstruction> {
 		let instructions = vec![
 			SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount),
@@ -280,13 +283,12 @@ impl SolanaInstructionBuilder {
 				.with_remaining_accounts(ccm_accounts.remaining_account_metas()),
 		];
 
-		// TODO: Complete in PRO-1479
 		Self::finalize(
 			instructions,
 			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
-			COMPUTE_LIMIT,
+			Self::calculate_gas_limit(gas_budget, compute_price, SolAsset::Sol),
 		)
 	}
 
@@ -307,6 +309,7 @@ impl SolanaInstructionBuilder {
 		nonce_account: SolAddress,
 		compute_price: SolAmount,
 		token_decimals: u8,
+		gas_budget: SolAmount,
 	) -> Vec<SolInstruction> {
 		let instructions = vec![
 		AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
@@ -340,13 +343,38 @@ impl SolanaInstructionBuilder {
 			sys_var_instructions(),
 		).with_remaining_accounts(ccm_accounts.remaining_account_metas())];
 
-		// TODO: Complete in PRO-1479
 		Self::finalize(
 			instructions,
 			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
-			COMPUTE_LIMIT,
+			Self::calculate_gas_limit(gas_budget, compute_price, SolAsset::SolUsdc),
+		)
+	}
+
+	fn calculate_gas_limit(
+		gas_budget: SolAmount,
+		compute_price: SolAmount,
+		asset: SolAsset,
+	) -> SolComputeLimit {
+		let budget_after_signature = gas_budget.saturating_sub(LAMPORTS_PER_SIGNATURE);
+		if compute_price == 0 {
+			return DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER;
+		}
+		let compute_budget =
+			// Budget is in lamports, compute price is in microlamports/CU
+			sp_std::cmp::min(
+				MAX_COMPUTE_UNITS_PER_TRANSACTION as u128,
+				(budget_after_signature as u128 * MICROLAMPORTS_PER_LAMPORT as u128)
+					/ (compute_price as u128),
+			) as SolComputeLimit;
+
+		sp_std::cmp::max(
+			compute_budget,
+			match asset {
+				SolAsset::Sol => MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
+				SolAsset::SolUsdc => MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
+			},
 		)
 	}
 }
@@ -371,6 +399,9 @@ mod test {
 		consts::{MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL},
 		DerivedAta,
 	};
+
+	// Arbitrary number used for testing
+	const TEST_COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
 
 	fn get_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -466,7 +497,7 @@ mod test {
 		.unwrap();
 
 		// Serialized tx built in `create_fetch_native` test
-		let expected_serialized_tx = hex_literal::hex!("0131fa5abf0d61f42dbe7ebdd7caa7ff0a7eb8045f50d3b2fc9f5c155f7eb3caa05cc4463ad31eff2c6b3b29d57dc21dfc116ac635e6e79be618462bdf8de2420601000509f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19233306d43f017cdb7b1a324afdc62c79317d5b93e2e63b870143344134db9c600606b9a783a1a2f182b11e9663561cde6ebc2a7d83e97922c214e25284519a68800000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004040301060004040000000500090340420f000000000005000502a659000008050700020304158e24658f6c59298c080000000b0c0d3700000000ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("0148d83989bd4eb7bfe89c29af09ffb7e88901cf1065914ec7623382b2257cabc21acdd8d8bc095ca733267f22bbc75ecaed11d3e7774c6b6f87d5146ca1b37c0301000509f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19233306d43f017cdb7b1a324afdc62c79317d5b93e2e63b870143344134db9c600606b9a783a1a2f182b11e9663561cde6ebc2a7d83e97922c214e25284519a68800000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004040301060004040000000500090340420f000000000005000502875a000008050700020304158e24658f6c59298c080000000b0c0d3700000000ff").to_vec();
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}
@@ -488,7 +519,7 @@ mod test {
 		.unwrap();
 
 		// Serialized tx built in `create_fetch_native_in_batch` test
-		let expected_serialized_tx = hex_literal::hex!("01333ef8b9f08da7362862a1975d0657975f3f68bb030bb3b04ff0e4903800587725e2c51ec756550097b7829bc23c505ad4d844ef736f81cb79dd082cdd8f7f040100050bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec457965dbc726e7fe35896f2bf0b9c965ebeb488cb0534aed3a6bb35f6343f503c8c21729498a6919298e0c953bd5fc297329663d413cbaac7799a79bd75f7df47ffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588be00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005060301080004040000000700090340420f0000000000070005028ab100000a050900050406158e24658f6c59298c080000000000000000000000fe0a050900020306158e24658f6c59298c080000000100000000000000ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("019e3bef60c12bbb5ba315e3768a735415d6aea628502c685911e0caf72c1e620e309fa75c7069792bda27eba0ddca79beeb588077c6e34ea51e93fa01a93be3010100050bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec457965dbc726e7fe35896f2bf0b9c965ebeb488cb0534aed3a6bb35f6343f503c8c21729498a6919298e0c953bd5fc297329663d413cbaac7799a79bd75f7df47ffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588be00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005060301080004040000000700090340420f0000000000070005026bb200000a050900050406158e24658f6c59298c080000000000000000000000fe0a050900020306158e24658f6c59298c080000000100000000000000ff").to_vec();
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}
@@ -506,7 +537,7 @@ mod test {
 		.unwrap();
 
 		// Serialized tx built in `create_fetch_tokens` test
-		let expected_serialized_tx = hex_literal::hex!("01de0de0cd6d813901119d688dc8c48a375c783ebd58cae5d9ba1a8b47c856f809215b3480b65056d41daf5a16d1017557dfdfe24170333063f5d5077941072a0c0100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871dd6e0fc50e3b853cb77f36ec4fff9c847d1b12f83ae2535aa98f2bd1d627ad08e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8772b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004050301070004040000000600090340420f0000000000060005026e0901000b0909000c02040a08030516494710642cb0c646080000000000000000000000fe06").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01f6faa1394ebce55db0f4b4887818c48d54d0be2dc4ece0eb6d4e411f1204d629a7115f43aaa9c0e7fb77244f0bc30db744f63ed5e0391730aab43ca8a8ca8d020100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871dd6e0fc50e3b853cb77f36ec4fff9c847d1b12f83ae2535aa98f2bd1d627ad08e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8772b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004050301070004040000000600090340420f0000000000060005024f0a01000b0909000c02040a08030516494710642cb0c646080000000000000000000000fe06").to_vec();
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}
@@ -527,7 +558,7 @@ mod test {
 		.unwrap();
 
 		// Serialized tx built in `create_batch_fetch` test
-		let expected_serialized_tx = hex_literal::hex!("01878ca4444163322f509da27602e25ff8ebdc4d9938b71c1f644f50024112f43924a8804b206435571f228729fe8979e95fbf305d349ce6126be3d3438457500901000912f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19234ba473530acb5fe214bcf1637a95dd9586131636adc3a27365264e64025a91c55268e2506656a8aafc4689443bad81d0ca129f134075303ca77eefefc1b3b395f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871839f5b31e9ce2282c92310f62fa5e69302a0ae2e28ba1b99b0e7d57c10ab84c6bd306154bf886039adbb6f2126a02d730889b6d320507c74f5c0240c8c406454dd6e0fc50e3b853cb77f36ec4fff9c847d1b12f83ae2535aa98f2bd1d627ad08e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee871e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060903010b0004040000000a00090340420f00000000000a000502fe68020010090d001104080e0c070916494710642cb0c646080000000000000000000000fe0610090d000f05080e0c020916494710642cb0c646080000000100000000000000ff0610050d00030609158e24658f6c59298c080000000200000000000000ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("0150c470c3e09a4a75b745c238eeb19bac147b466e83e340dcbdd9eec04cbfad0f6452c138d5bbc9871bae658c145892e77ee330af7c710b465713fc2201dd180e01000912f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19234ba473530acb5fe214bcf1637a95dd9586131636adc3a27365264e64025a91c55268e2506656a8aafc4689443bad81d0ca129f134075303ca77eefefc1b3b395f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871839f5b31e9ce2282c92310f62fa5e69302a0ae2e28ba1b99b0e7d57c10ab84c6bd306154bf886039adbb6f2126a02d730889b6d320507c74f5c0240c8c406454dd6e0fc50e3b853cb77f36ec4fff9c847d1b12f83ae2535aa98f2bd1d627ad08e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee871e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060903010b0004040000000a00090340420f00000000000a000502df69020010090d001104080e0c070916494710642cb0c646080000000000000000000000fe0610090d000f05080e0c020916494710642cb0c646080000000100000000000000ff0610050d00030609158e24658f6c59298c080000000200000000000000ff").to_vec();
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}
@@ -543,7 +574,7 @@ mod test {
 		);
 
 		// Serialized tx built in `create_transfer_native` test
-		let expected_serialized_tx = hex_literal::hex!("01303b85f1ede4c907ddf81d4881812c378dbb09c57ec4260e0871f4edaeaf563b402789edd97ef1e5d871d2ac4a160bd66f33ae62759b3bff9e5076ec4762110d01000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f000000000004000502a3020000030200020c0200000000ca9a3b00000000").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01cd34e19b7d94e6a4c475f6d3b15a568461ddcec9144b00de60defb84bd3b8145fac2ef29643fd015219ae4caeec1664ef8877810e8d2f0cd0da81115915d190301000306f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19231e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090340420f00000000000400050284030000030200020c0200000000ca9a3b00000000").to_vec();
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}
@@ -575,7 +606,7 @@ mod test {
 		);
 
 		// Serialized tx built in `create_transfer_token` test
-		let expected_serialized_tx = hex_literal::hex!("0183480d727ce9fa62271a0d363526e8785609b47c9d73aa4afef4025e111d1864fe80f11f1c8deaec487bea2bcd1aa69a10e084af04be192b72f87f2387e1e30e01000a0ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859ab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301060004040000000500090340420f000000000005000502ba2601000c0600020a09040701010b0708000d030209071136b4eeaf4a557ebc00ca9a3b0000000006").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("013474897b54f54c0cdb96ddd969eafd22d7960742882784621401dae7ad2baeede53bdbc2afc09dbcf11bc31c6c8c0af1a71c1d378ead8655c3718d7f33da3a0b01000a0ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859ab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005040301060004040000000500090340420f0000000000050005029b2701000c0600020a09040701010b0708000d030209071136b4eeaf4a557ebc00ca9a3b0000000006").to_vec();
 
 		test_constructed_instruction_set(instruction_set, expected_serialized_tx);
 	}
@@ -601,6 +632,82 @@ mod test {
 	}
 
 	#[test]
+	fn can_calculate_gas_limit() {
+		const TEST_EGRESS_BUDGET: SolAmount = 500_000;
+		const TEST_COMPUTE_PRICE: SolAmount = 2_000_000;
+
+		let compute_price_lamports = TEST_COMPUTE_PRICE.div_ceil(MICROLAMPORTS_PER_LAMPORT.into());
+		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
+			let mut tx_compute_limit: u32 = SolanaInstructionBuilder::calculate_gas_limit(
+				TEST_EGRESS_BUDGET * compute_price_lamports + LAMPORTS_PER_SIGNATURE,
+				TEST_COMPUTE_PRICE,
+				*asset,
+			);
+			assert_eq!(tx_compute_limit as u64, TEST_EGRESS_BUDGET);
+
+			// Rounded down
+			assert_eq!(
+				SolanaInstructionBuilder::calculate_gas_limit(
+					(TEST_EGRESS_BUDGET + 1) as SolAmount + LAMPORTS_PER_SIGNATURE,
+					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
+					*asset,
+				),
+				SolanaInstructionBuilder::calculate_gas_limit(
+					(TEST_EGRESS_BUDGET + 9) as SolAmount + LAMPORTS_PER_SIGNATURE,
+					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
+					*asset,
+				)
+			);
+			assert_eq!(
+				SolanaInstructionBuilder::calculate_gas_limit(
+					(TEST_EGRESS_BUDGET + 1) as SolAmount * compute_price_lamports +
+						LAMPORTS_PER_SIGNATURE,
+					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
+					*asset,
+				),
+				SolanaInstructionBuilder::calculate_gas_limit(
+					TEST_EGRESS_BUDGET as SolAmount * compute_price_lamports +
+						LAMPORTS_PER_SIGNATURE,
+					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
+					*asset,
+				)
+			);
+
+			// Test SolComputeLimit saturation
+			assert_eq!(
+				SolanaInstructionBuilder::calculate_gas_limit(
+					(SolComputeLimit::MAX as SolAmount) * 2 * compute_price_lamports +
+						LAMPORTS_PER_SIGNATURE,
+					TEST_COMPUTE_PRICE,
+					*asset,
+				),
+				MAX_COMPUTE_UNITS_PER_TRANSACTION
+			);
+
+			// Test upper cap
+			tx_compute_limit = SolanaInstructionBuilder::calculate_gas_limit(
+				MAX_COMPUTE_UNITS_PER_TRANSACTION as u64 * compute_price_lamports * 2,
+				TEST_COMPUTE_PRICE,
+				*asset,
+			);
+			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_TRANSACTION);
+
+			tx_compute_limit =
+				SolanaInstructionBuilder::calculate_gas_limit(TEST_EGRESS_BUDGET, 0, *asset);
+			assert_eq!(tx_compute_limit, DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER);
+		}
+
+		// Test lower cap
+		let mut tx_compute_limit =
+			SolanaInstructionBuilder::calculate_gas_limit(10u64, 1, SolAsset::Sol);
+		assert_eq!(tx_compute_limit, MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER);
+
+		tx_compute_limit =
+			SolanaInstructionBuilder::calculate_gas_limit(10u64, 1, SolAsset::SolUsdc);
+		assert_eq!(tx_compute_limit, MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER);
+	}
+
+	#[test]
 	fn can_create_ccm_native_instruction_set() {
 		let ccm_param = ccm_parameter();
 		let transfer_param = TransferAssetParams::<Solana> {
@@ -622,6 +729,9 @@ mod test {
 			agg_key(),
 			nonce_account(),
 			compute_price(),
+			(TEST_COMPUTE_LIMIT as u128 * compute_price() as u128)
+				.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()) as u64 +
+				LAMPORTS_PER_SIGNATURE,
 		);
 
 		// Serialized tx built in `create_ccm_native_transfer` test
@@ -658,6 +768,9 @@ mod test {
 			nonce_account(),
 			compute_price(),
 			SOL_USDC_DECIMAL,
+			(TEST_COMPUTE_LIMIT as u128 * compute_price() as u128)
+				.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()) as u64 +
+				LAMPORTS_PER_SIGNATURE,
 		);
 
 		// Serialized tx built in `create_ccm_token_transfer` test

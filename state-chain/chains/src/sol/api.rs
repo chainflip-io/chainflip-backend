@@ -250,6 +250,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
+		gas_budget: <Solana as Chain>::ChainAmount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
@@ -299,6 +300,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				agg_key,
 				nonce_account,
 				compute_price,
+				gas_budget,
 			)),
 			SolAsset::SolUsdc => {
 				let ata =
@@ -325,6 +327,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					nonce_account,
 					compute_price,
 					SOL_USDC_DECIMAL,
+					gas_budget,
 				))
 			},
 		}?;
@@ -393,15 +396,22 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: cf_primitives::ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		_gas_budget: <Solana as Chain>::ChainAmount,
+		gas_budget: <Solana as Chain>::ChainAmount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
-		Self::ccm_transfer(transfer_param, source_chain, source_address, message, cf_parameters)
-			.map_err(|e| {
-				log::error!("Failed to construct Solana CCM transfer transaction! Error: {:?}", e);
-				ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e)
-			})
+		Self::ccm_transfer(
+			transfer_param,
+			source_chain,
+			source_address,
+			gas_budget,
+			message,
+			cf_parameters,
+		)
+		.map_err(|e| {
+			log::error!("Failed to construct Solana CCM transfer transaction! Error: {:?}", e);
+			ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e)
+		})
 	}
 }
 

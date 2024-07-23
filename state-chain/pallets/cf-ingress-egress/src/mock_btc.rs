@@ -18,6 +18,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
 		asset_converter::MockAssetConverter,
+		asset_withholding::MockAssetWithholding,
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 		chain_tracking::ChainTracker,
@@ -127,6 +128,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
 	type SwapQueueApi = MockSwapQueueApi;
+	type AssetWithholding = MockAssetWithholding;
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type CcmValidityChecker = AlwaysValid;
 	type SafeMode = MockRuntimeSafeMode;
@@ -136,7 +138,12 @@ impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		ingress_egress: IngressEgressConfig { deposit_channel_lifetime: 100, witness_safety_margin: Some(2), dust_limits: Default::default() },
+		ingress_egress: IngressEgressConfig {
+			deposit_channel_lifetime: 100,
+			witness_safety_margin: Some(2),
+			dust_limits: Default::default(),
+			max_swap_retry_duration_blocks: 600,
+		},
 	},
 	|| {
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Bitcoin>::set_tracked_data(

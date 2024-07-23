@@ -7,8 +7,10 @@ use sp_std::{vec, vec::Vec};
 use sol_prim::{AccountBump, SlotNumber};
 
 use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use frame_support::Parameter;
 use serde::{Deserialize, Serialize};
+use sp_runtime::traits::{MaybeSerializeDeserialize, Member};
 
 use super::{Chain, ChainCrypto};
 
@@ -19,7 +21,9 @@ pub mod instruction_builder;
 pub mod sol_tx_core;
 
 pub use crate::assets::sol::Asset as SolAsset;
+use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
+	consts::{LAMPORTS_PER_SIGNATURE, MICROLAMPORTS_PER_LAMPORT},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
 	Signature as SolSignature,
@@ -45,6 +49,17 @@ impl Chain for Solana {
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+			+ Default,
+	> = assets::sol::AssetMap<T>;
 	type ChainAccount = SolAddress;
 	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
@@ -105,8 +120,6 @@ impl ChainCrypto for SolanaCrypto {
 	}
 }
 
-pub const LAMPORTS_PER_SIGNATURE: SolAmount = 5000u64;
-
 // This is to be used both for ingress/egress estimation and for setting the compute units
 // limit when crafting transactions by the State Chain.
 pub mod compute_units_costs {
@@ -118,12 +131,20 @@ pub mod compute_units_costs {
 	) -> SolComputeLimit {
 		compute_limit_value * 3 / 2
 	}
-	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 300u32;
+
+	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 450u32;
 	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32;
 	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 45_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 50_000u32;
 	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
+
+	// TODO: To tweak in PRO-1501
+	// Default compute units per CCM transfers when priority fee is zero
+	pub const DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER: SolComputeLimit = 1_000_000u32;
+	// Minimum compute units required for CCM transfers to ensure their inclusion
+	pub const MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER: SolComputeLimit = 20_000u32;
+	pub const MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER: SolComputeLimit = 50_000u32;
 }
 
 #[derive(
@@ -158,8 +179,14 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		LAMPORTS_PER_SIGNATURE +
-			(self.priority_fee).saturating_mul(compute_units_per_transfer.into())
+		LAMPORTS_PER_SIGNATURE.saturating_add(
+			// It should never approach overflow but just in case
+			sp_std::cmp::min(
+				SolAmount::MAX as u128,
+				(self.priority_fee as u128 * compute_units_per_transfer as u128)
+					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
+			) as SolAmount,
+		)
 	}
 	fn estimate_ingress_fee(
 		&self,
@@ -175,7 +202,14 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		LAMPORTS_PER_SIGNATURE + (self.priority_fee).saturating_mul(compute_units_per_fetch.into())
+		LAMPORTS_PER_SIGNATURE.saturating_add(
+			// It should never approach overflow but just in case
+			sp_std::cmp::min(
+				SolAmount::MAX as u128,
+				(self.priority_fee as u128 * compute_units_per_fetch as u128)
+					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
+			) as SolAmount,
+		)
 	}
 }
 

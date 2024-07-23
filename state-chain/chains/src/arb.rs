@@ -35,16 +35,27 @@ impl Chain for Arbitrum {
 	type ChainAmount = EthAmount;
 	type TransactionFee = evm::TransactionFee;
 	type TrackedData = ArbitrumTrackedData;
-	type ChainAccount = eth::Address;
 	type ChainAsset = assets::arb::Asset;
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+			+ Default,
+	> = assets::arb::AssetMap<T>;
+	type ChainAccount = eth::Address;
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = evm::DepositDetails;
 	type Transaction = evm::Transaction;
 	type TransactionMetadata = evm::EvmTransactionMetadata;
+	type TransactionRef = H256;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = evm::api::EvmReplayProtection;
-	type TransactionRef = H256;
 }
 
 #[derive(

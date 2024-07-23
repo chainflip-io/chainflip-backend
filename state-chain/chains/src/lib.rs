@@ -54,6 +54,7 @@ pub mod sol;
 
 pub mod address;
 pub mod deposit_channel;
+use cf_primitives::chains::assets::any::GetChainAssetMap;
 pub use deposit_channel::*;
 use strum::IntoEnumIterator;
 pub mod instances;
@@ -212,6 +213,27 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ Into<cf_primitives::ForeignChain>
 		+ IntoEnumIterator
 		+ Unpin;
+
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+			+ Default
+	>: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Copy
+		+ MaybeSerializeDeserialize
+		+ BenchmarkValue
+		+ FullCodec
+		+ Unpin
+		+ Default
+		+ GetChainAssetMap<T, Asset = Self::ChainAsset>;
 
 	type ChainAccount: Member
 		+ Parameter

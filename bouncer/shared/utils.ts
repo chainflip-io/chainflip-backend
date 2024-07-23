@@ -548,13 +548,13 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
       }
       return;
     }
-    await sleep(2000);
+    await sleep(3000);
   }
 
   throw new Error('Failed to observe the fetch');
 }
 
-type EVMEvent = {
+type ContractEvent = {
   name: string;
   address: string;
   txHash: string;
@@ -570,7 +570,7 @@ export async function observeEVMEvent(
   eventParametersExpected: (string | null)[],
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
-): Promise<EVMEvent | undefined> {
+): Promise<ContractEvent | undefined> {
   const web3 = new Web3(getEvmEndpoint(chain));
   const contract = new web3.eth.Contract(contractAbi, destAddress);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
@@ -627,8 +627,8 @@ export async function observeSolanaCcmEvent(
   sourceChain: string,
   sourceAddress: string | null,
   messageMetadata: CcmDepositMetadata,
-): Promise<undefined> {
-  function decodeCfParameters(cfParametersHex: string) {
+): Promise<ContractEvent> {
+  function decodeExpectedCfParameters(cfParametersHex: string) {
     // Convert the hexadecimal string back to a byte array
     const cfParameters = new Uint8Array(
       cfParametersHex
@@ -663,9 +663,7 @@ export async function observeSolanaCcmEvent(
   const cfTesterAddress = new PublicKey(getContractAddress('Solana', 'CFTESTER'));
 
   for (let i = 0; i < 300; i++) {
-    const txSignatures = await connection.getSignaturesForAddress(
-      new PublicKey(getContractAddress('Solana', 'CFTESTER')),
-    );
+    const txSignatures = await connection.getSignaturesForAddress(cfTesterAddress);
     for (const txSignature of txSignatures) {
       const tx = await connection.getTransaction(txSignature.signature);
       if (tx) {
@@ -684,13 +682,14 @@ export async function observeSolanaCcmEvent(
             const {
               remainingAccounts: expectedRemainingAccounts,
               remainingIsWritable: expectedRemainingIsWritable,
-            } = decodeCfParameters(messageMetadata.cfParameters);
+            } = decodeExpectedCfParameters(messageMetadata.cfParameters);
+
             if (
               expectedRemainingIsWritable.length !== event.data.remaining_is_writable.length ||
               expectedRemainingIsWritable.toString() !== event.data.remaining_is_writable.toString()
             ) {
               throw new Error(
-                `Unexpected remaining is writable: ${event.data.remaining_is_writable}, expecting ${expectedRemainingIsWritable}`,
+                `Unexpected remaining account is writable: ${event.data.remaining_is_writable}, expecting ${expectedRemainingIsWritable}`,
               );
             }
 
@@ -703,7 +702,7 @@ export async function observeSolanaCcmEvent(
               expectedRemainingAccounts.toString() !== event.data.remaining_pubkeys.toString()
             ) {
               throw new Error(
-                `Unexpected remaining accounts: ${event.data.remaining_accounts}, expecting ${expectedRemainingAccounts}`,
+                `Unexpected remaining accounts: ${event.data.remaining_pubkeys}, expecting ${expectedRemainingAccounts}`,
               );
             }
 
@@ -719,7 +718,12 @@ export async function observeSolanaCcmEvent(
                 `Unexpected source address: ${event.data.source_address}, expecting empty ${Buffer.from([0])}`,
               );
             }
-            return undefined;
+            return {
+              name: event.name,
+              address: cfTesterAddress.toString(),
+              txHash: txSignature.signature,
+              returnValues: event.data,
+            };
           }
         }
       }
@@ -736,7 +740,7 @@ export async function observeCcmReceived(
   messageMetadata: CcmDepositMetadata,
   sourceAddress?: string,
   stopObserveEvent?: () => boolean,
-): Promise<EVMEvent | undefined> {
+): Promise<ContractEvent | undefined> {
   const destChain = chainFromAsset(destAsset);
   switch (destChain) {
     case 'Ethereum':

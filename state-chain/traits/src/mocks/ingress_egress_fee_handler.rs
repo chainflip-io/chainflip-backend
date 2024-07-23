@@ -13,7 +13,7 @@ impl<C> MockPallet for MockIngressEgressFeeHandler<C> {
 const WITHHELD_FEES: &[u8] = b"WITHHELD_FEES";
 
 impl<C: Chain> MockIngressEgressFeeHandler<C> {
-	pub fn get_withheld_transaction_fees(asset: C::ChainAsset) -> C::ChainAmount {
+	pub fn withheld_assets(asset: C::ChainAsset) -> C::ChainAmount {
 		let asset: cf_primitives::Asset = asset.into();
 		Self::get_storage(WITHHELD_FEES, asset).unwrap_or_default()
 	}

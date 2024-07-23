@@ -17,14 +17,14 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, ForeignChain, NetworkEnvironment,
 };
-use cf_test_utilities::assert_event_sequence;
+use cf_test_utilities::{assert_event_sequence, assert_events_eq};
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
-	AccountRoleRegistry, CcmHandler, Chainflip, SetSafeMode, SwapDepositHandler, SwappingApi,
+	AccountRoleRegistry, AssetConverter, CcmHandler, Chainflip, SetSafeMode, SwapDepositHandler,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -34,7 +34,6 @@ use frame_support::{
 use itertools::Itertools;
 use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
-use sp_runtime::Percent;
 use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
@@ -1189,7 +1188,7 @@ fn process_all_into_stable_swaps_first() {
 
 		// Network fee should only be taken once.
 		let total_amount_after_network_fee =
-			MockSwappingApi::take_network_fee(amount * 4).remaining_amount;
+			Swapping::take_network_fee(amount * 4).remaining_amount;
 		let output_amount = total_amount_after_network_fee / 4;
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(
@@ -1259,7 +1258,7 @@ fn cannot_swap_in_safe_mode() {
 		// No swap is done
 		Swapping::on_finalize(swaps_scheduled_at);
 
-		let retry_at_block = swaps_scheduled_at + SWAP_RETRY_DELAY_BLOCKS as u64;
+		let retry_at_block = swaps_scheduled_at + SwapRetryDelay::<Test>::get();
 		assert_eq!(SwapQueue::<Test>::decode_len(retry_at_block), Some(4));
 
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
@@ -1848,7 +1847,7 @@ fn swap_input_excludes_network_fee() {
 	const FROM_ASSET: Asset = Asset::Usdc;
 	const TO_ASSET: Asset = Asset::Flip;
 	let destination_address: ForeignChainAddress = ForeignChainAddress::Eth(Default::default());
-	const NETWORK_FEE: Percent = Percent::from_percent(1);
+	const NETWORK_FEE: Permill = Permill::from_percent(1);
 
 	NetworkFee::set(NETWORK_FEE);
 
@@ -2147,7 +2146,7 @@ fn swaps_get_retried_after_failure() {
 	let later_swaps = swaps.split_off(2);
 
 	const EXECUTE_AT_BLOCK: u64 = 3;
-	const RETRY_AT_BLOCK: u64 = EXECUTE_AT_BLOCK + SWAP_RETRY_DELAY_BLOCKS as u64;
+	const RETRY_AT_BLOCK: u64 = EXECUTE_AT_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -2382,21 +2381,62 @@ fn test_get_scheduled_swap_legs_fallback() {
 }
 
 #[test]
-fn can_update_multiple_items_at_once() {
+fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
+		const NEW_MAX_SWAP_AMOUNT_BTC: Option<AssetAmount> = Some(100);
+		const NEW_MAX_SWAP_AMOUNT_DOT: Option<AssetAmount> = Some(69);
+		let new_swap_retry_delay = BlockNumberFor::<Test>::from(1234u32);
+		let new_flip_buy_interval = BlockNumberFor::<Test>::from(5678u32);
+
+		// Check that the default values are different from the new ones
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Dot).is_none());
+		assert_ne!(SwapRetryDelay::<Test>::get(), new_swap_retry_delay);
+		assert_ne!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
+
+		// Update all config items at the same time, and updates 2 separate max swap amounts.
 		assert_ok!(Swapping::update_pallet_config(
 			OriginTrait::root(),
 			vec![
-				PalletConfigUpdate::MaximumSwapAmount { asset: Asset::Btc, amount: Some(100) },
-				PalletConfigUpdate::MaximumSwapAmount { asset: Asset::Dot, amount: Some(200) },
+				PalletConfigUpdate::MaximumSwapAmount {
+					asset: Asset::Btc,
+					amount: NEW_MAX_SWAP_AMOUNT_BTC
+				},
+				PalletConfigUpdate::MaximumSwapAmount {
+					asset: Asset::Dot,
+					amount: NEW_MAX_SWAP_AMOUNT_DOT
+				},
+				PalletConfigUpdate::SwapRetryDelay { delay: new_swap_retry_delay },
+				PalletConfigUpdate::FlipBuyInterval { interval: new_flip_buy_interval },
 			]
 			.try_into()
 			.unwrap()
 		));
-		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Btc), Some(100));
-		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Dot), Some(200));
+
+		// Check that the new values were set
+		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Btc), NEW_MAX_SWAP_AMOUNT_BTC);
+		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Dot), NEW_MAX_SWAP_AMOUNT_DOT);
+		assert_eq!(SwapRetryDelay::<Test>::get(), new_swap_retry_delay);
+		assert_eq!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
+
+		// Check that the events were emitted
+		assert_events_eq!(
+			Test,
+			RuntimeEvent::Swapping(crate::Event::MaximumSwapAmountSet {
+				asset: Asset::Btc,
+				amount: NEW_MAX_SWAP_AMOUNT_BTC,
+			}),
+			RuntimeEvent::Swapping(crate::Event::MaximumSwapAmountSet {
+				asset: Asset::Dot,
+				amount: NEW_MAX_SWAP_AMOUNT_DOT,
+			}),
+			RuntimeEvent::Swapping(crate::Event::SwapRetryDelaySet {
+				swap_retry_delay: new_swap_retry_delay
+			}),
+			RuntimeEvent::Swapping(crate::Event::BuyIntervalSet {
+				buy_interval: new_flip_buy_interval
+			})
+		);
 	});
 }
 
@@ -2421,7 +2461,7 @@ fn transaction_fees_are_collected() {
 
 		Swapping::schedule_swap(Asset::Flip, Asset::Eth, AMOUNT, None, SwapType::IngressEgressFee);
 		assert_eq!(
-			MockIngressEgressFeeHandler::<Ethereum>::get_withheld_transaction_fees(
+			MockIngressEgressFeeHandler::<Ethereum>::withheld_assets(
 				cf_chains::assets::eth::GAS_ASSET
 			),
 			0
@@ -2430,7 +2470,7 @@ fn transaction_fees_are_collected() {
 		Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
 		assert_swaps_queue_is_empty();
 		assert_eq!(
-			MockIngressEgressFeeHandler::<Ethereum>::get_withheld_transaction_fees(
+			MockIngressEgressFeeHandler::<Ethereum>::withheld_assets(
 				cf_chains::assets::eth::GAS_ASSET
 			),
 			AMOUNT
@@ -2478,7 +2518,7 @@ fn swap_output_amounts_correctly_account_for_fees() {
 		new_test_ext().execute_with(|| {
 			const SWAPPED_AMOUNT: AssetAmount = 1000;
 
-			let network_fee = Percent::from_percent(1);
+			let network_fee = Permill::from_percent(1);
 			NetworkFee::set(network_fee);
 
 			let expected_output: AssetAmount =
@@ -2506,5 +2546,124 @@ fn swap_output_amounts_correctly_account_for_fees() {
 				);
 			}
 		});
+	}
+}
+
+#[test]
+fn test_buy_back_flip() {
+	new_test_ext().execute_with(|| {
+		const INTERVAL: BlockNumberFor<Test> = 5;
+		const SWAP_AMOUNT: AssetAmount = 1000;
+		const NETWORK_FEE: Permill = Permill::from_percent(2);
+
+		NetworkFee::set(NETWORK_FEE);
+
+		// Get some network fees, just like we did a swap.
+		let NetworkFeeTaken { remaining_amount, network_fee } =
+			Swapping::take_network_fee(SWAP_AMOUNT);
+
+		// Sanity check the network fee.
+		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
+		assert_eq!(network_fee, 20);
+		assert_eq!(remaining_amount + network_fee, SWAP_AMOUNT);
+
+		// The default buy interval is zero. Check that buy back is disabled & on_initialize does
+		// not panic.
+		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
+		Swapping::on_initialize(1);
+		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
+
+		// Set a non-zero buy interval
+		FlipBuyInterval::<Test>::set(INTERVAL);
+
+		// Nothing is bought if we're not at the interval.
+		Swapping::on_initialize(INTERVAL * 3 - 1);
+		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
+
+		// If we're at an interval, we should buy flip.
+		Swapping::on_initialize(INTERVAL * 3);
+		assert_eq!(0, CollectedNetworkFee::<Test>::get());
+		assert_eq!(
+			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS))
+				.first()
+				.expect("Should have scheduled a swap usdc -> flip"),
+			&Swap::new(1, STABLE_ASSET, Asset::Flip, network_fee, None, SwapType::NetworkFee)
+		);
+	});
+}
+
+#[test]
+fn test_network_fee_calculation() {
+	new_test_ext().execute_with(|| {
+		// Show we can never overflow and panic
+		utilities::calculate_network_fee(Permill::from_percent(100), AssetAmount::MAX);
+		// 200 bps (2%) of 100 = 2
+		assert_eq!(utilities::calculate_network_fee(Permill::from_percent(2u32), 100), (98, 2));
+		// 2220 bps = 22 % of 199 = 43,78
+		assert_eq!(
+			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 199),
+			(155, 44)
+		);
+		// 2220 bps = 22 % of 234 = 51,26
+		assert_eq!(
+			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 233),
+			(181, 52)
+		);
+		// 10 bps = 0,1% of 3000 = 3
+		assert_eq!(
+			utilities::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
+			(2997, 3)
+		);
+	});
+}
+
+#[test]
+fn test_calculate_input_for_gas_output() {
+	use cf_chains::assets::eth::Asset as EthereumAsset;
+	const FLIP: EthereumAsset = EthereumAsset::Flip;
+
+	new_test_ext().execute_with(|| {
+		// If swap simulation fails -> no conversion.
+		MockSwappingApi::set_swaps_should_fail(true);
+		assert!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 1000).is_none());
+
+		// Set swap rate to 2 and turn swaps back on.
+		SwapRate::set(2_f64);
+		MockSwappingApi::set_swaps_should_fail(false);
+
+		// Desired output is zero -> trivially ok.
+		assert_eq!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 0), Some(0));
+
+		// Desired output requires 2 swap legs, each with a swap rate of 2. So output should be
+		// 1/4th of input.
+		assert_eq!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 1000), Some(250));
+
+		// Desired output is gas asset, requires 1 swap leg. So output should be 1/2 of input.
+		assert_eq!(
+			Swapping::calculate_input_for_gas_output::<Ethereum>(EthereumAsset::Usdc, 1000),
+			Some(500)
+		);
+
+		// Input is gas asset -> trivially ok.
+		assert_eq!(
+			Swapping::calculate_input_for_gas_output::<Ethereum>(
+				cf_chains::assets::eth::GAS_ASSET,
+				1000
+			),
+			Some(1000)
+		);
+	});
+}
+
+#[test]
+fn test_fee_estimation_basis() {
+	for asset in Asset::all() {
+		if !asset.is_gas_asset() {
+			assert!(
+				utilities::fee_estimation_basis(asset).is_some(),
+	             "No fee estimation cap defined for {:?}. Add one to the fee_estimation_basis function definition.",
+	             asset,
+	         );
+		}
 	}
 }

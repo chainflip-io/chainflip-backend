@@ -3,11 +3,11 @@ use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use codec::MaxEncodedLen;
 use core::marker::PhantomData;
 use frame_support::{
+	sp_runtime::{traits::Member, DispatchError},
 	traits::{OriginTrait, UnfilteredDispatchable},
 	CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
-use sp_runtime::traits::Member;
 
 use crate::Broadcaster;
 
@@ -124,7 +124,7 @@ impl<
 		broadcast_id: BroadcastId,
 		_request_broadcast: bool,
 		_refresh_replay_protection: bool,
-	) -> Result<ThresholdSignatureRequestId, sp_runtime::DispatchError> {
+	) -> Result<ThresholdSignatureRequestId, DispatchError> {
 		Self::put_value(b"RESIGNED_CALLBACKS", broadcast_id);
 		Ok(Self::next_threshold_id())
 	}

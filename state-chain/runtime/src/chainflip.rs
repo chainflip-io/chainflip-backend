@@ -63,6 +63,7 @@ use cf_traits::{
 	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
 	ScheduledEgressDetails,
 };
+
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -330,8 +331,7 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 
 	fn calculate_gas_limit(_call: &SolanaApi<SolEnvironment>) -> Option<U256> {
 		// In non-CCM broadcasts the gas_limit will be adequately set in the transaction
-		// builder. In CCM broadcasts the gas_limit needs to be set according to the gas_budget.
-		// Implementing the logic for CCM is to be done in PRO-1479.
+		// builder. In CCM broadcasts the gas_limit be set in the instruction builder.
 		None
 	}
 

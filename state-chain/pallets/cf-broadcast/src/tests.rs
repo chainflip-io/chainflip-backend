@@ -4,8 +4,7 @@ use crate::{
 	mock::*, AbortedBroadcasts, AwaitingBroadcast, BroadcastData, BroadcastId, Config,
 	DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
 	PalletOffence, PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks,
-	RequestSuccessCallbacks, Timeouts, TransactionFeeDeficit, TransactionMetadata,
-	TransactionOutIdToBroadcastId,
+	RequestSuccessCallbacks, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
@@ -14,11 +13,12 @@ use cf_chains::{
 		MockEthereumTransactionMetadata, MockTransactionBuilder, ETH_TX_FEE,
 		MOCK_TRANSACTION_OUT_ID, MOCK_TX_METADATA,
 	},
-	ChainCrypto, FeeRefundCalculator,
+	ChainCrypto, FeeRefundCalculator, ForeignChain,
 };
 use cf_traits::{
 	mocks::{
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
+		liability_tracker::MockLiabilityTracker,
 		signer_nomination::MockNominator,
 		threshold_signer::MockThresholdSigner,
 	},
@@ -160,17 +160,16 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		let broadcast_data = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).unwrap();
 
-		let nominee = MockNominator::get_last_nominee().unwrap();
-
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
+		assert_eq!(MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()), 0);
 
 		witness_broadcast(tx_out_id);
 
 		let expected_refund = broadcast_data.transaction_payload.return_fee_refund(ETH_TX_FEE);
 
-		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).is_none());
-
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), expected_refund);
+		assert_eq!(
+			MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()),
+			expected_refund
+		);
 
 		assert_eq!(
 			System::events().get(1).expect("an event").event,
@@ -525,9 +524,7 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 		let (tx_out_id, api_call) = api_call(1);
 		initiate_and_sign_broadcast(&api_call, TxType::Normal);
 
-		let nominee = MockNominator::get_last_nominee().unwrap();
-
-		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
+		assert_eq!(MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()), 0);
 
 		witness_broadcast(tx_out_id);
 
@@ -671,7 +668,7 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 			));
 
 			assert_eq!(
-				TransactionFeeDeficit::<Test, Instance1>::get(nominee),
+				MockLiabilityTracker::total_liabilities(ForeignChain::Ethereum.gas_asset()),
 				broadcast_data.transaction_payload.return_fee_refund(ETH_TX_FEE)
 			);
 		});
