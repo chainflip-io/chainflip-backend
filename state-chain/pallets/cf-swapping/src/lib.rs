@@ -3,8 +3,8 @@
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
-	CcmChannelMetadata, CcmDepositMetadata, CcmValidityChecker, ChannelRefundParameters,
-	SwapOrigin, SwapRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, CcmValidityCheck, ChannelRefundParameters, SwapOrigin,
+	SwapRefundParameters,
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId,
@@ -300,7 +300,7 @@ pub mod pallet {
 		type IngressEgressFeeHandler: IngressEgressFeeApi<AnyChain>;
 
 		/// For checking if the CCM message passed in is valid.
-		type CcmValidityChecker: CcmValidityChecker;
+		type CcmValidityChecker: CcmValidityCheck;
 
 		#[pallet::constant]
 		type NetworkFee: Get<Permill>;
@@ -845,12 +845,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			// For ccm messages on the Solana chain, check for validity.
-			if let EncodedAddress::Sol(_) = destination_address {
-				T::CcmValidityChecker::is_valid(
-					&deposit_metadata.channel_metadata,
-					destination_asset,
-				)
+			// Check for the CCM's validity.
+			T::CcmValidityChecker::is_valid(&deposit_metadata.channel_metadata, destination_asset)
 				.map_err(|e| {
 					log::warn!(
 						"Failed to process CCM due to invalid data. Tx hash: {:?}, Error: {:?}",
@@ -859,7 +855,7 @@ pub mod pallet {
 					);
 					Error::<T>::InvalidCcm
 				})?;
-			}
+
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 

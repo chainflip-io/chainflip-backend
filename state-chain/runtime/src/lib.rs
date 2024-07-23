@@ -41,8 +41,8 @@ use cf_chains::{
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	sol::SolanaCrypto,
-	AlwaysValid, Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot,
-	Solana, TransactionBuilder,
+	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
+	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi, NoLimit};
@@ -268,7 +268,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
-	type CcmValidityChecker = cf_chains::sol::ccm_checker::SolanaCcmValidityChecker<SolEnvironment>;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker<SolEnvironment>;
 	type NetworkFee = NetworkFee;
 }
 
@@ -349,7 +349,6 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type SwapQueueApi = Swapping;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
-	type CcmValidityChecker = AlwaysValid;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -373,7 +372,6 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type SwapQueueApi = Swapping;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
-	type CcmValidityChecker = AlwaysValid;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -397,7 +395,6 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type SwapQueueApi = Swapping;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
-	type CcmValidityChecker = AlwaysValid;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -421,7 +418,6 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type SwapQueueApi = Swapping;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
-	type CcmValidityChecker = AlwaysValid;
 	type SafeMode = RuntimeSafeMode;
 }
 
@@ -445,7 +441,6 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type SwapQueueApi = Swapping;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = SolanaLimit;
-	type CcmValidityChecker = cf_chains::sol::ccm_checker::SolanaCcmValidityChecker<SolEnvironment>;
 	type SafeMode = RuntimeSafeMode;
 }
 

@@ -57,6 +57,7 @@ pub mod deposit_channel;
 use cf_primitives::chains::assets::any::GetChainAssetMap;
 pub use deposit_channel::*;
 use strum::IntoEnumIterator;
+pub mod ccm_checker;
 pub mod instances;
 
 pub mod mocks;
@@ -700,7 +701,7 @@ pub enum CcmValidityError {
 	CfParametersContainsInvalidAccounts,
 }
 
-pub trait CcmValidityChecker {
+pub trait CcmValidityCheck {
 	fn is_valid(
 		_ccm: &CcmChannelMetadata,
 		_egress_asset: cf_primitives::Asset,
@@ -710,4 +711,4 @@ pub trait CcmValidityChecker {
 }
 
 pub struct AlwaysValid;
-impl CcmValidityChecker for AlwaysValid {}
+impl CcmValidityCheck for AlwaysValid {}

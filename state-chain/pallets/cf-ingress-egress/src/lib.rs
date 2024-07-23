@@ -26,9 +26,8 @@ use cf_chains::{
 	},
 	assets::any::GetChainAssetMap,
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	CcmValidityChecker, Chain, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall,
-	DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin,
-	TransferAssetParams,
+	Chain, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall, DepositChannel,
+	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, BoostPoolTier, BroadcastId,
@@ -464,9 +463,6 @@ pub mod pallet {
 		type AssetWithholding: AssetWithholding;
 
 		type FetchesTransfersLimitProvider: FetchesTransfersLimitProvider;
-
-		/// For checking if the CCM message passed in is valid.
-		type CcmValidityChecker: CcmValidityChecker;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;

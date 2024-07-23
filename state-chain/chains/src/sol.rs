@@ -16,7 +16,6 @@ use super::{Chain, ChainCrypto};
 
 pub mod api;
 pub mod benchmarking;
-pub mod ccm_checker;
 pub mod instruction_builder;
 pub mod sol_tx_core;
 

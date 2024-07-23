@@ -10,12 +10,12 @@ use sp_core::RuntimeDebug;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
+	ccm_checker::CcmValidityChecker,
 	sol::{
-		ccm_checker::SolanaCcmValidityChecker, instruction_builder::SolanaInstructionBuilder,
-		SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolCcmAccounts, SolHash, SolMessage,
-		SolTransaction, SolanaCrypto,
+		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolApiEnvironment,
+		SolAsset, SolCcmAccounts, SolHash, SolMessage, SolTransaction, SolanaCrypto,
 	},
-	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, CcmValidityChecker, CcmValidityError,
+	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, CcmValidityCheck, CcmValidityError,
 	Chain, ChainCrypto, ChainEnvironment, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall,
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, Solana,
 	TransferAssetParams, TransferFallback,
@@ -255,7 +255,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Verify the validity of the CCM message before building the call.
-		SolanaCcmValidityChecker::<Environment>::is_valid(
+		CcmValidityChecker::<Environment>::is_valid(
 			&CcmChannelMetadata {
 				message: message
 					.clone()
