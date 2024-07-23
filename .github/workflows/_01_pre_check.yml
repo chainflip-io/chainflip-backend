@@ -12,10 +12,21 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NSC_CACHE_PATH: "/cache"
+      volumes:
+        - /cache:/cache # Where the Cache Volume is mounted.
+      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
 
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Setup Rust cache 🦀💰
+        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       - name: Check Format
         run: cargo fmt --all -- --check
@@ -42,10 +53,21 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NSC_CACHE_PATH: "/cache"
+      volumes:
+        - /cache:/cache # Where the Cache Volume is mounted.
+      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
 
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Setup Rust cache 🦀💰
+        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       - name: Check Linting 📝
         run: cargo cf-clippy-ci
