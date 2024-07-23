@@ -102,3 +102,7 @@ jobs:
     uses: ./.github/workflows/_70_post_release.yml
     with:
       network: "sisyphos"
+  upload-engine-shared-libs:
+    needs: [build, build-m2]
+    uses: ./.github/workflows/_61_upload_engine_shared_libs.yml
+    secrets: inherit
