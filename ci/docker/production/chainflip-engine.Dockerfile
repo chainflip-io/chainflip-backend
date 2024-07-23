@@ -28,7 +28,7 @@ RUN chmod +x /usr/local/bin/chainflip-engine \
     && chown -R 1000:1000 /etc/chainflip
 
 RUN apt-get update \
-    && apt-get install -y ca-certificates --no-install-recommends \
+    && apt-get install -y ca-certificates curl jq --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

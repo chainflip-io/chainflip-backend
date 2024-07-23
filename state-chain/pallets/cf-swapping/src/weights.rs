@@ -32,7 +32,6 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_swapping.
 pub trait WeightInfo {
-	fn update_buy_interval() -> Weight;
 	fn request_swap_deposit_address() -> Weight;
 	fn request_swap_deposit_address_with_affiliates() -> Weight;
 	fn withdraw() -> Weight;
@@ -45,16 +44,6 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	/// Storage: `Swapping::FlipBuyInterval` (r:0 w:1)
-	/// Proof: `Swapping::FlipBuyInterval` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_buy_interval() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 6_000_000 picoseconds.
-		Weight::from_parts(7_000_000, 0)
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
 	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
 	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
@@ -212,16 +201,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	/// Storage: `Swapping::FlipBuyInterval` (r:0 w:1)
-	/// Proof: ``Swapping::FlipBuyInterval` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_buy_interval() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 6_000_000 picoseconds.
-		Weight::from_parts(7_000_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
 	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
 	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)

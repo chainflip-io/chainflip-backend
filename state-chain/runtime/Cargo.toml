@@ -39,6 +39,7 @@ cf-traits = { path = '../traits', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles', default-features = false }
+pallet-cf-asset-balances = { path = "../pallets/cf-asset-balances", default-features = false }
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
 pallet-cf-chain-tracking = { path = '../pallets/cf-chain-tracking', default-features = false }
 pallet-cf-emissions = { path = '../pallets/cf-emissions', default-features = false }
@@ -130,6 +131,7 @@ runtime-benchmarks = [
   'frame-system-benchmarking/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
   'pallet-cf-account-roles/runtime-benchmarks',
+  'pallet-cf-asset-balances/runtime-benchmarks',
   'pallet-cf-broadcast/runtime-benchmarks',
   'pallet-cf-chain-tracking/runtime-benchmarks',
   'pallet-cf-emissions/runtime-benchmarks',
@@ -176,6 +178,7 @@ std = [
   'pallet-aura/std',
   'pallet-authorship/std',
   'pallet-cf-account-roles/std',
+  'pallet-cf-asset-balances/std',
   'pallet-cf-broadcast/std',
   'pallet-cf-chain-tracking/std',
   'pallet-cf-emissions/std',
@@ -224,6 +227,7 @@ try-runtime = [
   'frame-system/try-runtime',
   'frame-support/try-runtime',
   'pallet-cf-account-roles/try-runtime',
+  'pallet-cf-asset-balances/try-runtime',
   'pallet-cf-broadcast/try-runtime',
   'pallet-cf-chain-tracking/try-runtime',
   'pallet-cf-emissions/try-runtime',

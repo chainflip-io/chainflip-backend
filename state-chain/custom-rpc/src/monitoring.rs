@@ -1,4 +1,6 @@
-use crate::{to_rpc_error, BlockT, CustomRpc, RpcAccountInfoV2, RpcMonitoringData};
+use crate::{
+	to_rpc_error, BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringData,
+};
 use cf_chains::dot::PolkadotAccountId;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
@@ -6,9 +8,9 @@ use sp_core::{bounded_vec::BoundedVec, ConstU32};
 use state_chain_runtime::{
 	chainflip::Offence,
 	monitoring_apis::{
-		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance,
-		LastRuntimeUpgradeInfo, MonitoringRuntimeApi, OpenDepositChannels, PendingBroadcasts,
-		PendingTssCeremonies, RedemptionsInfo,
+		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, LastRuntimeUpgradeInfo,
+		MonitoringRuntimeApi, OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies,
+		RedemptionsInfo,
 	},
 };
 
@@ -52,7 +54,8 @@ pub trait MonitoringApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<OpenDepositChannels>;
 	#[method(name = "fee_imbalance")]
-	fn cf_fee_imbalance(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<FeeImbalance>;
+	fn cf_fee_imbalance(&self, at: Option<state_chain_runtime::Hash>)
+		-> RpcResult<RpcFeeImbalance>;
 	#[method(name = "build_version")]
 	fn cf_build_version(
 		&self,
@@ -108,9 +111,20 @@ where
 		cf_pending_tss_ceremonies_count -> PendingTssCeremonies,
 		cf_pending_swaps_count -> u32,
 		cf_open_deposit_channels_count -> OpenDepositChannels,
-		cf_fee_imbalance -> FeeImbalance,
 		cf_build_version -> LastRuntimeUpgradeInfo
 	}
+
+	fn cf_fee_imbalance(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcFeeImbalance> {
+		self.client
+			.runtime_api()
+			.cf_fee_imbalance(self.unwrap_or_best(at))
+			.map(|imbalance| imbalance.map(|i| (*i).into()))
+			.map_err(to_rpc_error)
+	}
+
 	fn cf_monitoring_data(
 		&self,
 		at: Option<state_chain_runtime::Hash>,

@@ -30,16 +30,17 @@ use cf_chains::{
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
-	EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, BoostPoolTier, BroadcastId,
+	ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId, SwapId,
 	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
+	impl_pallet_safe_mode,
 	liquidity::{LpBalanceApi, LpDepositHandler},
-	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, BoostApi, Broadcaster,
-	CcmHandler, CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment,
-	GetBlockHeight, IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit, SafeMode,
+	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, AssetWithholding, BoostApi,
+	Broadcaster, CcmHandler, CcmSwapIds, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment,
+	GetBlockHeight, IngressEgressFeeApi, NetworkEnvironmentProvider, OnDeposit,
 	ScheduledEgressDetails, SwapDepositHandler, SwapQueueApi, SwapType,
 };
 use frame_support::{
@@ -49,6 +50,10 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use scale_info::{
+	build::{Fields, Variants},
+	Path, Type,
+};
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -58,8 +63,7 @@ use sp_std::{
 };
 pub use weights::WeightInfo;
 
-/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
-pub const MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
+const DEFAULT_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
@@ -141,48 +145,14 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
 
-#[derive(
-	serde::Serialize,
-	serde::Deserialize,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	Copy,
-	Clone,
-	PartialEq,
-	Eq,
-	RuntimeDebug,
-)]
-#[scale_info(skip_type_params(I))]
-pub struct PalletSafeMode<I: 'static> {
-	pub boost_deposits_enabled: bool,
-	pub add_boost_funds_enabled: bool,
-	pub stop_boosting_enabled: bool,
-	pub deposits_enabled: bool,
-	#[doc(hidden)]
-	#[codec(skip)]
-	#[serde(skip_serializing)]
-	_phantom: PhantomData<I>,
-}
-
-impl<I: 'static> SafeMode for PalletSafeMode<I> {
-	const CODE_RED: Self = PalletSafeMode {
-		boost_deposits_enabled: false,
-		add_boost_funds_enabled: false,
-		stop_boosting_enabled: false,
-		deposits_enabled: false,
-		_phantom: PhantomData,
-	};
-	const CODE_GREEN: Self = PalletSafeMode {
-		boost_deposits_enabled: true,
-		add_boost_funds_enabled: true,
-		stop_boosting_enabled: true,
-		deposits_enabled: true,
-		_phantom: PhantomData,
-	};
+impl_pallet_safe_mode! {
+	PalletSafeMode<I>;
+	boost_deposits_enabled,
+	add_boost_funds_enabled,
+	stop_boosting_enabled,
+	deposits_enabled,
 }
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
@@ -198,21 +168,61 @@ pub struct FailedForeignChainCall {
 }
 
 #[derive(
-	CloneNoBound,
-	RuntimeDebugNoBound,
-	PartialEqNoBound,
-	EqNoBound,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
+	CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, MaxEncodedLen,
 )]
-#[scale_info(skip_type_params(T, I))]
-pub enum PalletConfigUpdate<T: Config<I>, I: 'static = ()> {
+pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
 	ChannelOpeningFee { fee: T::Amount },
 	/// Set the minimum deposit allowed for a particular asset.
 	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
+	/// Set the max allowed value for the number of blocks to keep retrying a swap before it is
+	/// refunded
+	SetMaxSwapRetryDurationBlocks { blocks: BlockNumber },
+}
+
+macro_rules! append_chain_to_name {
+	($name:ident) => {
+		match T::TargetChain::NAME {
+			"Ethereum" => concat!(stringify!($name), "Ethereum"),
+			"Polkadot" => concat!(stringify!($name), "Polkadot"),
+			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
+			"Arbitrum" => concat!(stringify!($name), "Arbitrum"),
+			"Solana" => concat!(stringify!($name), "Solana"),
+			_ => concat!(stringify!($name), "Other"),
+		}
+	};
+}
+
+impl<T, I> TypeInfo for PalletConfigUpdate<T, I>
+where
+	T: Config<I>,
+	I: 'static,
+{
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new(append_chain_to_name!(PalletConfigUpdate), module_path!()))
+			.variant(
+				Variants::new()
+					.variant("ChannelOpeningFee", |v| {
+						v.index(0)
+							.fields(Fields::named().field(|f| f.ty::<T::Amount>().name("fee")))
+					})
+					.variant(append_chain_to_name!(SetMinimumDeposit), |v| {
+						v.index(1).fields(
+							Fields::named()
+								.field(|f| f.ty::<TargetChainAsset<T, I>>().name("asset"))
+								.field(|f| {
+									f.ty::<TargetChainAmount<T, I>>().name("minimum_deposit")
+								}),
+						)
+					})
+					.variant("SetMaxSwapRetryDurationBlocks", |v| {
+						v.index(2)
+							.fields(Fields::named().field(|f| f.ty::<BlockNumber>().name("blocks")))
+					}),
+			)
+	}
 }
 
 #[frame_support::pallet]
@@ -360,6 +370,7 @@ pub mod pallet {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
 		pub dust_limits: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
+		pub max_swap_retry_duration_blocks: BlockNumber,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
@@ -368,6 +379,7 @@ pub mod pallet {
 				deposit_channel_lifetime: Default::default(),
 				witness_safety_margin: None,
 				dust_limits: Default::default(),
+				max_swap_retry_duration_blocks: DEFAULT_SWAP_RETRY_DURATION_BLOCKS,
 			}
 		}
 	}
@@ -381,6 +393,8 @@ pub mod pallet {
 			for (asset, dust_limit) in self.dust_limits.clone() {
 				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
 			}
+
+			MaxSwapRetryDurationBlocks::<T, I>::set(self.max_swap_retry_duration_blocks);
 		}
 	}
 
@@ -451,6 +465,8 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		type SwapQueueApi: SwapQueueApi;
+
+		type AssetWithholding: AssetWithholding;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
@@ -551,11 +567,6 @@ pub mod pallet {
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
 
-	/// Tracks fees withheld from ingresses and egresses.
-	#[pallet::storage]
-	pub type WithheldTransactionFees<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
-
 	/// The fixed fee charged for opening a channel, in Flipperinos.
 	#[pallet::storage]
 	#[pallet::getter(fn channel_opening_fee)]
@@ -566,6 +577,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
+
+	/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
+	#[pallet::storage]
+	pub(super) type MaxSwapRetryDurationBlocks<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumber, ValueQuery, ConstU32<DEFAULT_SWAP_RETRY_DURATION_BLOCKS>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -689,6 +705,9 @@ pub mod pallet {
 		},
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
+		},
+		MaxSwapRetryDurationSet {
+			max_swap_retry_duration_blocks: BlockNumber,
 		},
 	}
 
@@ -1054,6 +1073,12 @@ pub mod pallet {
 						Self::deposit_event(Event::<T, I>::MinimumDepositSet {
 							asset,
 							minimum_deposit,
+						});
+					},
+					PalletConfigUpdate::SetMaxSwapRetryDurationBlocks { blocks } => {
+						MaxSwapRetryDurationBlocks::<T, I>::set(blocks);
+						Self::deposit_event(Event::<T, I>::MaxSwapRetryDurationSet {
+							max_swap_retry_duration_blocks: blocks,
 						});
 					},
 				}
@@ -2000,7 +2025,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	> {
 		if let Some(refund_params) = &refund_params {
 			ensure!(
-				refund_params.retry_duration <= MAX_SWAP_RETRY_DURATION_BLOCKS,
+				refund_params.retry_duration <= MaxSwapRetryDurationBlocks::<T, I>::get(),
 				DispatchError::Other("Retry duration too long")
 			);
 		}
@@ -2040,9 +2065,10 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 		fee: TargetChainAmount<T, I>,
 	) {
 		if !fee.is_zero() {
-			WithheldTransactionFees::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |fees| {
-				fees.saturating_accrue(fee);
-			});
+			T::AssetWithholding::withhold_assets(
+				<T::TargetChain as Chain>::GAS_ASSET.into(),
+				fee.into(),
+			);
 			// Since we credit the fees to the withheld fees, we need to take these from somewhere,
 			// ie. we effectively have transferred them from the vault.
 			DepositBalances::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |tracker| {

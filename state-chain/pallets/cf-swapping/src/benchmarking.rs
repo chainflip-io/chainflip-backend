@@ -8,7 +8,6 @@ use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	sp_runtime::traits::One,
 	traits::{OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
@@ -18,20 +17,6 @@ use frame_system::RawOrigin;
 )]
 mod benchmarks {
 	use super::*;
-
-	#[benchmark]
-	fn update_buy_interval() {
-		let call = Call::<T>::update_buy_interval { new_buy_interval: BlockNumberFor::<T>::one() };
-
-		#[block]
-		{
-			assert_ok!(
-				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
-			);
-		}
-
-		assert_eq!(FlipBuyInterval::<T>::get(), BlockNumberFor::<T>::one());
-	}
 
 	#[benchmark]
 	fn request_swap_deposit_address() {

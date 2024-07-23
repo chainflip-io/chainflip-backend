@@ -6,6 +6,7 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::any, BasisPoints, Beneficiaries, ChannelId};
 use codec::{Decode, Encode};
+use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
 
@@ -95,7 +96,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 			<C as cf_chains::Chain>::ChainBlockNumber,
 			Self::Amount,
 		),
-		sp_runtime::DispatchError,
+		DispatchError,
 	> {
 		let (channel_id, deposit_address, channel_opening_fee) =
 			Self::get_new_deposit_address(SwapOrLp::Lp, source_asset);
@@ -126,7 +127,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		_refund_params: Option<ChannelRefundParameters>,
 	) -> Result<
 		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount),
-		sp_runtime::DispatchError,
+		DispatchError,
 	> {
 		let (channel_id, deposit_address, channel_opening_fee) =
 			Self::get_new_deposit_address(SwapOrLp::Swap, source_asset);

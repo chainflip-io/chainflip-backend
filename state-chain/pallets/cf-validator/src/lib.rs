@@ -749,7 +749,7 @@ pub mod pallet {
 			>>::from_ref(&account_id);
 
 			ensure!(
-				(LastExpiredEpoch::<T>::get()..=CurrentEpoch::<T>::get())
+				(LastExpiredEpoch::<T>::get() + 1..=CurrentEpoch::<T>::get())
 					.all(|epoch| !HistoricalAuthorities::<T>::get(epoch).contains(validator_id)),
 				Error::<T>::StillKeyHolder
 			);
@@ -1010,6 +1010,7 @@ impl<T: Config> Pallet<T> {
 		);
 
 		Self::deposit_event(Event::NewEpoch(new_epoch));
+		T::EpochTransitionHandler::on_new_epoch(new_epoch);
 	}
 
 	fn expire_epoch(epoch: EpochIndex) -> Weight {
