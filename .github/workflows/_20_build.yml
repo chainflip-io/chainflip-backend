@@ -26,10 +26,20 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NSC_CACHE_PATH: "/cache"
+      volumes:
+        - /cache:/cache # Where the Cache Volume is mounted.
+      options: --cap-add=SYS_ADMIN # Required to by nscloud-cache-action to call `mount`.
 
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Setup Rust cache 🦀💰
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: rust
 
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
       - name: Configure Git 🛠️
