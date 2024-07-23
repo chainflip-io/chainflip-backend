@@ -13,7 +13,7 @@ use cf_runtime_upgrade_utilities::VersionedMigration;
 mod weights;
 use crate::{
 	chainflip::{
-		calculate_account_apy, reputation_points_qualification::ReputationPointsQualification,
+		calculate_account_apy,
 		Offence,
 	},
 	monitoring_apis::{
@@ -63,7 +63,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 
-use pallet_cf_reputation::ExclusionList;
+use pallet_cf_reputation::{ExclusionList, ReputationPointsQualification};
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
@@ -221,7 +221,7 @@ impl pallet_cf_validator::Config for Runtime {
 						chainflip::ValidatorRoleQualification,
 						(
 							pallet_cf_validator::QualifyByCfeVersion<Self>,
-							ReputationPointsQualification,
+							ReputationPointsQualification<Self>,
 						),
 					),
 				),

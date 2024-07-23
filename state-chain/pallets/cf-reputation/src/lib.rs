@@ -2,6 +2,27 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+use frame_support::{
+	pallet_prelude::*,
+	sp_runtime::traits::{BlockNumberProvider, Saturating, Zero},
+	traits::{Get, OnKilledAccount},
+};
+use frame_system::pallet_prelude::*;
+use sp_std::{
+	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
+	iter::{self, Iterator},
+	prelude::*,
+};
+
+use cf_traits::{
+	Chainflip, Heartbeat, impl_pallet_safe_mode, NetworkState, offence_reporting::*, QualifyNode,
+	ReputationResetter, Slashing,
+};
+pub use pallet::*;
+pub use reporting_adapter::*;
+pub use reputation::*;
+pub use weights::WeightInfo;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -12,29 +33,7 @@ mod benchmarking;
 mod reporting_adapter;
 mod reputation;
 
-pub use reporting_adapter::*;
-pub use reputation::*;
-
 pub mod weights;
-pub use weights::WeightInfo;
-
-use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::*, Chainflip, Heartbeat, NetworkState, QualifyNode,
-	ReputationResetter, Slashing,
-};
-use frame_support::{
-	pallet_prelude::*,
-	sp_runtime::traits::{BlockNumberProvider, Saturating, Zero},
-	traits::{Get, OnKilledAccount},
-};
-use frame_system::pallet_prelude::*;
-pub use pallet::*;
-use sp_std::{
-	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
-	iter::{self, Iterator},
-	prelude::*,
-};
-
 impl_pallet_safe_mode!(PalletSafeMode; reporting_enabled);
 
 impl<T: Config> ReputationParameters for T {
@@ -83,9 +82,13 @@ pub enum PalletOffence {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
-	use cf_traits::{AccountRoleRegistry, EpochInfo, QualifyNode};
+	use std::cmp::min;
+
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
+
+	use cf_traits::{AccountRoleRegistry, EpochInfo, QualifyNode};
+
+	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -337,6 +340,42 @@ pub mod pallet {
 			} else {
 				false
 			}
+		}
+	}
+
+	pub struct ReputationPointsQualification<T> {
+		phantom: PhantomData<T>,
+	}
+
+	impl<T> QualifyNode<T::ValidatorId> for ReputationPointsQualification<T>
+	where
+		T: Config,
+	{
+		fn is_qualified(validator_id: &T::ValidatorId) -> bool {
+			let mut points =
+				Reputations::<T>::iter_values().map(|r| r.reputation_points).collect::<Vec<_>>();
+
+			debug_assert!(!points.is_empty(), "Validator reputations should never be empty");
+
+			// This should never happen in prod, but just in case it does,
+			// We don't want to crash the system
+			if points.is_empty() {
+				// return true here, since if the set is empty then we can think of all validators
+				// having reputation 0, and by following logic below, this should be above cutoff
+				return true;
+			}
+
+			points.sort_unstable();
+
+			// get the 33rd percentile of reputation points, and min with 0. This way in normal
+			// operating scenarios where there might be a node on 2500 points one on -100 and the
+			// rest on 2880. The cutoff will be 0, and the node on -100 will be disqualified.
+			// note: division by 3 is achieving the similar result as calculating 33rd percentile
+			let cutoff = min(points[points.len() / 3], 0);
+			// We must use >= here to ensure that we don't disqualify all validators. e.g. if all
+			// the validators are at -2880 reputation than the cutoff will be -2880, and all
+			// validators will be disqualified.
+			Reputations::<T>::get(validator_id).reputation_points >= cutoff
 		}
 	}
 
