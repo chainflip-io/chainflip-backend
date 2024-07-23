@@ -652,6 +652,7 @@ mod idl {
 	pub enum IdlType {
 		Bytes,
 		U8,
+		U16,
 		U64,
 		U32,
 		Bool,
@@ -665,6 +666,7 @@ mod idl {
 			match self {
 				IdlType::Bytes => write!(f, "Vec<u8>"),
 				IdlType::U8 => write!(f, "u8"),
+				IdlType::U16 => write!(f, "u16"),
 				IdlType::U64 => write!(f, "u64"),
 				IdlType::U32 => write!(f, "u32"),
 				IdlType::Bool => write!(f, "bool"),
