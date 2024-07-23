@@ -1,13 +1,12 @@
-use core::marker::PhantomData;
-use sol_prim::consts::SOL_USDC_DECIMAL;
-
 use codec::{Decode, Encode};
+use core::marker::PhantomData;
 use frame_support::{
 	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
-use scale_info::TypeInfo;
+use scale_info::{prelude::format, TypeInfo};
+use sol_prim::consts::SOL_USDC_DECIMAL;
 use sp_core::RuntimeDebug;
-use sp_std::{vec, vec::Vec};
+use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
 	ccm_checker::CcmValidityChecker,
