@@ -604,7 +604,7 @@ mod ccm {
 						Asset::Eth,
 						DEPOSIT_AMOUNT - GAS_BUDGET,
 						None,
-						SwapType::CcmPrincipal,
+						[FeeType::NetworkFee],
 					),]
 				);
 			})
@@ -620,7 +620,7 @@ mod ccm {
 						Asset::Eth,
 						GAS_BUDGET,
 						None,
-						SwapType::CcmGas,
+						[FeeType::NetworkFee],
 					),]
 				);
 
@@ -707,7 +707,7 @@ mod ccm {
 						OUTPUT_ASSET,
 						PRINCIPAL_AMOUNT,
 						None,
-						SwapType::CcmPrincipal,
+						[FeeType::NetworkFee],
 					),]
 				);
 			})
@@ -750,7 +750,7 @@ mod ccm {
 						GAS_ASSET,
 						GAS_BUDGET,
 						None,
-						SwapType::CcmGas,
+						[FeeType::NetworkFee]
 					),]
 				);
 			})
@@ -805,7 +805,7 @@ mod ccm {
 						OUTPUT_ASSET,
 						PRINCIPAL_AMOUNT,
 						None,
-						SwapType::CcmPrincipal,
+						[FeeType::NetworkFee]
 					),]
 				);
 			})
@@ -820,7 +820,7 @@ mod ccm {
 						GAS_ASSET,
 						GAS_BUDGET,
 						None,
-						SwapType::CcmGas,
+						[FeeType::NetworkFee]
 					),]
 				);
 			})
@@ -856,7 +856,7 @@ fn swap_by_witnesser_happy_path() {
 		// Verify this swap is accepted and scheduled
 		assert_eq!(
 			SwapQueue::<Test>::get(execute_at),
-			vec![Swap::new(1, 1, INPUT_ASSET, OUTPUT_ASSET, AMOUNT, None, SwapType::Swap,)]
+			vec![Swap::new(1, 1, INPUT_ASSET, OUTPUT_ASSET, AMOUNT, None, [FeeType::NetworkFee],)]
 		);
 
 		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
@@ -899,7 +899,15 @@ fn swap_by_deposit_happy_path() {
 			// Verify this swap is accepted and scheduled
 			assert_eq!(
 				SwapQueue::<Test>::get(SWAP_BLOCK),
-				vec![Swap::new(1, 1, INPUT_ASSET, OUTPUT_ASSET, AMOUNT, None, SwapType::Swap,)]
+				vec![Swap::new(
+					1,
+					1,
+					INPUT_ASSET,
+					OUTPUT_ASSET,
+					AMOUNT,
+					None,
+					[FeeType::NetworkFee],
+				)]
 			);
 
 			assert!(SwapRequests::<Test>::get(SWAP_REQUEST_ID).is_some());
@@ -963,10 +971,10 @@ fn process_all_into_stable_swaps_first() {
 		assert_eq!(
 			SwapQueue::<Test>::get(execute_at),
 			vec![
-				Swap::new(1, 1, Asset::Flip, Asset::Eth, amount, None, SwapType::Swap,),
-				Swap::new(2, 2, Asset::Btc, Asset::Eth, amount, None, SwapType::Swap,),
-				Swap::new(3, 3, Asset::Dot, Asset::Eth, amount, None, SwapType::Swap,),
-				Swap::new(4, 4, Asset::Usdc, Asset::Eth, amount, None, SwapType::Swap),
+				Swap::new(1, 1, Asset::Flip, Asset::Eth, amount, None, [FeeType::NetworkFee]),
+				Swap::new(2, 2, Asset::Btc, Asset::Eth, amount, None, [FeeType::NetworkFee]),
+				Swap::new(3, 3, Asset::Dot, Asset::Eth, amount, None, [FeeType::NetworkFee]),
+				Swap::new(4, 4, Asset::Usdc, Asset::Eth, amount, None, [FeeType::NetworkFee]),
 			]
 		);
 
@@ -1281,7 +1289,7 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 		let execute_at = System::block_number() + u64::from(SWAP_DELAY_BLOCKS);
 		assert_eq!(
 			SwapQueue::<Test>::get(execute_at),
-			vec![Swap::new(1, 1, from, to, max_swap - gas_budget, None, SwapType::CcmPrincipal),]
+			vec![Swap::new(1, 1, from, to, max_swap - gas_budget, None, [FeeType::NetworkFee]),]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), input_amount - max_swap);
 	});
@@ -1323,7 +1331,7 @@ fn swap_excess_are_confiscated_ccm_via_extrinsic() {
 		let execute_at = System::block_number() + u64::from(SWAP_DELAY_BLOCKS);
 		assert_eq!(
 			SwapQueue::<Test>::get(execute_at),
-			vec![Swap::new(1, 1, from, to, max_swap - gas_budget, None, SwapType::CcmPrincipal),]
+			vec![Swap::new(1, 1, from, to, max_swap - gas_budget, None, [FeeType::NetworkFee]),]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), input_amount - max_swap);
 	});
@@ -1358,7 +1366,7 @@ fn swap_excess_are_confiscated_for_swap_via_extrinsic() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(1, 1, from, to, max_swap, None, SwapType::Swap)]
+			vec![Swap::new(1, 1, from, to, max_swap, None, [FeeType::NetworkFee])]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
 	});
@@ -1386,7 +1394,7 @@ fn swap_excess_are_confiscated_for_swap_via_deposit() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(1, 1, from, to, max_swap, None, SwapType::Swap)]
+			vec![Swap::new(1, 1, from, to, max_swap, None, [FeeType::NetworkFee])]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900);
 	});
@@ -1434,9 +1442,9 @@ fn max_swap_amount_can_be_removed() {
 		assert_eq!(
 			SwapQueue::<Test>::get(execute_at),
 			vec![
-				Swap::new(1, 1, from, to, max_swap, None, SwapType::Swap),
+				Swap::new(1, 1, from, to, max_swap, None, [FeeType::NetworkFee]),
 				// New swap takes the full amount.
-				Swap::new(2, 2, from, to, amount, None, SwapType::Swap),
+				Swap::new(2, 2, from, to, amount, None, [FeeType::NetworkFee]),
 			]
 		);
 		// No no funds are confiscated.
@@ -1513,7 +1521,7 @@ fn can_swap_below_max_amount() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(1, 1, from, to, amount, None, SwapType::Swap,),]
+			vec![Swap::new(1, 1, from, to, amount, None, [FeeType::NetworkFee]),]
 		);
 	});
 }
@@ -1545,7 +1553,7 @@ fn can_swap_ccm_below_max_amount() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(execute_at),
-			vec![Swap::new(1, 1, from, to, principal_amount, None, SwapType::CcmPrincipal,),]
+			vec![Swap::new(1, 1, from, to, principal_amount, None, [FeeType::NetworkFee]),]
 		);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
 	});
@@ -1903,7 +1911,7 @@ fn test_get_scheduled_swap_legs() {
 			(5, Asset::Eth, Asset::Flip),
 		]
 		.into_iter()
-		.map(|(id, from, to)| Swap::new(id, id, from, to, INIT_AMOUNT, None, SwapType::Swap))
+		.map(|(id, from, to)| Swap::new(id, id, from, to, INIT_AMOUNT, None, [FeeType::NetworkFee]))
 		.collect();
 
 		SwapRate::set(2f64);
@@ -1965,7 +1973,9 @@ fn test_get_scheduled_swap_legs_fallback() {
 
 		let swaps: Vec<_> = [(1, Asset::Flip, Asset::Eth), (2, Asset::Eth, Asset::Usdc)]
 			.into_iter()
-			.map(|(id, from, to)| Swap::new(id, id, from, to, INIT_AMOUNT, None, SwapType::Swap))
+			.map(|(id, from, to)| {
+				Swap::new(id, id, from, to, INIT_AMOUNT, None, [FeeType::NetworkFee])
+			})
 			.collect();
 
 		// Setting the swap rate to something different from the price so that if the fallback is
@@ -2271,11 +2281,13 @@ fn test_buy_back_flip() {
 		// If we're at an interval, we should buy flip.
 		Swapping::on_initialize(INTERVAL * 3);
 		assert_eq!(0, CollectedNetworkFee::<Test>::get());
+
+		// Note that the network fee will not be charged in this case:
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS))
 				.first()
 				.expect("Should have scheduled a swap usdc -> flip"),
-			&Swap::new(1, 1, STABLE_ASSET, Asset::Flip, network_fee, None, SwapType::NetworkFee)
+			&Swap::new(1, 1, STABLE_ASSET, Asset::Flip, network_fee, None, [],)
 		);
 	});
 }

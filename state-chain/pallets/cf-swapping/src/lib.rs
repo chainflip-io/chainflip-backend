@@ -33,7 +33,11 @@ use sp_arithmetic::{
 	traits::{UniqueSaturatedInto, Zero},
 	Rounding,
 };
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec,
+	vec::Vec,
+};
 #[cfg(test)]
 mod mock;
 
@@ -96,10 +100,6 @@ impl SwapState {
 		self.swap.refund_params.as_ref()
 	}
 
-	fn swap_type(&self) -> &SwapType {
-		&self.swap.swap_type
-	}
-
 	fn update_swap_result(&mut self, direction: SwapLeg, output: AssetAmount) {
 		match direction {
 			SwapLeg::ToStable => {
@@ -137,15 +137,21 @@ impl SwapState {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[repr(u8)]
+#[derive(Clone, PartialOrd, Ord, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+enum FeeType {
+	NetworkFee = 0,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct Swap {
 	swap_id: SwapId,
 	swap_request_id: SwapRequestId,
 	pub from: Asset,
 	pub to: Asset,
 	input_amount: AssetAmount,
+	fees: BTreeSet<FeeType>,
 	refund_params: Option<SwapRefundParameters>,
-	swap_type: SwapType,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -167,9 +173,17 @@ impl Swap {
 		to: Asset,
 		input_amount: AssetAmount,
 		refund_params: Option<SwapRefundParameters>,
-		swap_type: SwapType,
+		fees: impl IntoIterator<Item = FeeType>,
 	) -> Self {
-		Self { swap_id, swap_request_id, from, to, input_amount, swap_type, refund_params }
+		Self {
+			swap_id,
+			swap_request_id,
+			from,
+			to,
+			input_amount,
+			fees: fees.into_iter().collect(),
+			refund_params,
+		}
 	}
 }
 
@@ -1117,32 +1131,33 @@ pub mod pallet {
 		) -> Result<(), BatchExecutionError> {
 			Self::do_group_and_swap(swaps, SwapLeg::ToStable)?;
 
-			// Take NetworkFee for all swaps
+			// Take network fee as required:
 			for swap in swaps.iter_mut() {
 				debug_assert!(
 					swap.stable_amount.is_some(),
 					"All swaps should have Stable amount set here"
 				);
 
-				// Copy some data to avoid holding references:
-				let swap_type = *swap.swap_type();
-				let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
+				let mut stable_amount = swap.stable_amount.unwrap_or_default();
 
-				let stable_amount_copy = *stable_amount;
+				let required_fees = &swap.swap.fees;
+				for fee_type in required_fees {
+					match fee_type {
+						FeeType::NetworkFee => {
+							let NetworkFeeTaken { remaining_amount, network_fee } =
+								Self::take_network_fee(stable_amount);
+							stable_amount = remaining_amount;
+							swap.network_fee_taken = Some(network_fee);
+						},
+						// For now there is only one type of fee in this context, but we we expect
+						// broker fees to be processed here in the future too
+					}
+				}
 
-				let NetworkFeeTaken { remaining_amount, network_fee } =
-					if matches!(swap_type, SwapType::NetworkFee) {
-						// Don't take network fee for network fee swaps
-						NetworkFeeTaken { remaining_amount: stable_amount_copy, network_fee: 0 }
-					} else {
-						Self::take_network_fee(stable_amount_copy)
-					};
-
-				*stable_amount = remaining_amount;
-				swap.network_fee_taken = Some(network_fee);
+				swap.stable_amount = Some(stable_amount);
 
 				if swap.output_asset() == STABLE_ASSET {
-					swap.final_output = Some(remaining_amount);
+					swap.final_output = Some(stable_amount);
 				}
 			}
 
@@ -1463,12 +1478,13 @@ pub mod pallet {
 
 				swap.update_swap_result(direction, swap_output);
 
-				if swap_output == 0 && matches!(swap.swap_type(), SwapType::Swap) {
+				if swap_output == 0 {
 					// This is unlikely but theoretically possible if, for example, the initial swap
 					// input is so small compared to the total bundle size that it rounds down to
 					// zero when we do the division.
 					log::warn!(
-						"Swap {:?} in bundle {{ input: {bundle_input}, output: {bundle_output} }} resulted in swap output of zero.",
+						"Swap {:?} in bundle {{ input: {bundle_input}, output: {bundle_output} }}
+						resulted in swap output of zero.",
 						swap.swap
 					);
 				}
@@ -1492,6 +1508,13 @@ pub mod pallet {
 
 			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
 
+			// Network fee is not charged for network fee swaps:
+			let fees = if matches!(swap_type, SwapType::NetworkFee) {
+				vec![]
+			} else {
+				vec![FeeType::NetworkFee]
+			};
+
 			SwapQueue::<T>::append(
 				execute_at,
 				Swap::new(
@@ -1501,7 +1524,7 @@ pub mod pallet {
 					output_asset,
 					input_amount,
 					refund_params,
-					swap_type,
+					fees,
 				),
 			);
 
