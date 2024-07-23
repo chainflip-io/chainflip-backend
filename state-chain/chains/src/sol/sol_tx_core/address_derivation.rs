@@ -2,7 +2,7 @@
 //! as well as deriving ATA for token operations (such as fetch or transfer).
 
 use cf_primitives::ChannelId;
-use sol_prim::DerivedAta;
+use sol_prim::PdaAndBump;
 
 use crate::sol::{AddressDerivationError, DerivedAddressBuilder, SolAddress};
 use sol_prim::consts::{ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID};
@@ -11,7 +11,7 @@ use sol_prim::consts::{ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID};
 pub fn derive_deposit_address(
 	channel_id: ChannelId,
 	vault_program: SolAddress,
-) -> Result<DerivedAta, AddressDerivationError> {
+) -> Result<PdaAndBump, AddressDerivationError> {
 	let seed = channel_id.to_le_bytes();
 	derive_address(seed, vault_program)
 }
@@ -20,7 +20,7 @@ pub fn derive_deposit_address(
 pub fn derive_associated_token_account(
 	target: SolAddress,
 	mint_pubkey: SolAddress,
-) -> Result<DerivedAta, AddressDerivationError> {
+) -> Result<PdaAndBump, AddressDerivationError> {
 	DerivedAddressBuilder::from_address(ASSOCIATED_TOKEN_PROGRAM_ID)?
 		.chain_seed(target)?
 		.chain_seed(TOKEN_PROGRAM_ID)?
@@ -32,7 +32,7 @@ pub fn derive_associated_token_account(
 pub fn derive_fetch_account(
 	deposit_channel_address: SolAddress,
 	vault_program: SolAddress,
-) -> Result<DerivedAta, AddressDerivationError> {
+) -> Result<PdaAndBump, AddressDerivationError> {
 	derive_address(deposit_channel_address, vault_program)
 }
 
@@ -40,7 +40,7 @@ pub fn derive_fetch_account(
 fn derive_address(
 	seed: impl AsRef<[u8]>,
 	vault_program: SolAddress,
-) -> Result<DerivedAta, AddressDerivationError> {
+) -> Result<PdaAndBump, AddressDerivationError> {
 	DerivedAddressBuilder::from_address(vault_program)?.chain_seed(seed)?.finish()
 }
 
@@ -58,7 +58,7 @@ mod tests {
 
 		assert_eq!(
 			derive_associated_token_account(wallet_address, mint_pubkey).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("BeRexE9vZSdQMNg65PAnhy3rRPUxF6oWsxyNegYxySZD")
 					.unwrap(),
 				bump: 253u8
@@ -74,7 +74,7 @@ mod tests {
 
 		assert_eq!(
 			derive_associated_token_account(pda_address, mint_pubkey).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("DUjCLckPi4g7QAwBEwuFL1whpgY6L9fxwXnqbWvS2pcW")
 					.unwrap(),
 				bump: 251u8
@@ -91,7 +91,7 @@ mod tests {
 
 		assert_eq!(
 			derive_address(channel_0_seed, vault_program).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("JDtAzKWKzQJCiHCfK4PU7qYuE4wChxuqfDqQhRbv6kwX")
 					.unwrap(),
 				bump: 254u8
@@ -99,7 +99,7 @@ mod tests {
 		);
 		assert_eq!(
 			derive_address(channel_1_seed, vault_program).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("32qRitYeor2v7Rb3M2iL8PHkoyqhcoCCqYuWCNKqstN7")
 					.unwrap(),
 				bump: 255u8
@@ -108,7 +108,7 @@ mod tests {
 
 		assert_eq!(
 			derive_address([11u8, 12u8, 13u8, 55u8], vault_program).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("XFmi41e1L9t732KoZdmzMSVige3SjjzsLzk1rW4rhwP")
 					.unwrap(),
 				bump: 255u8
@@ -117,7 +117,7 @@ mod tests {
 
 		assert_eq!(
 			derive_address([1], vault_program).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("5N72J9YQKpky5yFnrWWpFcBQsWpFMK4rW6b2Ue3YmYcu")
 					.unwrap(),
 				bump: 255u8
@@ -126,7 +126,7 @@ mod tests {
 
 		assert_eq!(
 			derive_address([1, 2], vault_program).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("6PkQHEp18NgEDS5ydkgivU4pzTV6sYmoEaHvbbv4un73")
 					.unwrap(),
 				bump: 255u8
@@ -139,7 +139,7 @@ mod tests {
 		let vault_program = sol_test_values::VAULT_PROGRAM;
 		assert_eq!(
 			derive_deposit_address(0u64, vault_program).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("JDtAzKWKzQJCiHCfK4PU7qYuE4wChxuqfDqQhRbv6kwX")
 					.unwrap(),
 				bump: 254u8
@@ -148,7 +148,7 @@ mod tests {
 
 		assert_eq!(
 			derive_deposit_address(1u64, vault_program).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("32qRitYeor2v7Rb3M2iL8PHkoyqhcoCCqYuWCNKqstN7")
 					.unwrap(),
 				bump: 255u8
@@ -162,7 +162,7 @@ mod tests {
 		let derived_account_0 = derive_deposit_address(0u64, vault_program).unwrap();
 		assert_eq!(
 			derive_associated_token_account(derived_account_0.address, token_mint_pubkey).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("7QWupKVHBPUnJpuvdt7uJxXaNWKYpEUAHPG9Rb28aEXS")
 					.unwrap(),
 				bump: 254u8
@@ -172,7 +172,7 @@ mod tests {
 		let derived_account_1 = derive_deposit_address(1u64, vault_program).unwrap();
 		assert_eq!(
 			derive_associated_token_account(derived_account_1.address, token_mint_pubkey).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("9roLwm8U86pj24Hwwzx71AF8axYnSc6U542Bdx5w7FUZ")
 					.unwrap(),
 				bump: 255u8
@@ -200,7 +200,7 @@ mod tests {
 		let deposit_channel = derive_deposit_address(0u64, vault_program).unwrap().address;
 		assert_eq!(
 			derive_fetch_account(deposit_channel, vault_program).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("AS1fDXUeL6dYHKxvyMGyFoqrsN5zPcUsanPDqmvVvFUA")
 					.unwrap(),
 				bump: 255u8
@@ -219,7 +219,7 @@ mod tests {
 
 		assert_eq!(
 			derive_fetch_account(deposit_channel_ata, vault_program).unwrap(),
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("FuNSXye89kBJQXp3rqkcz7oCUd5C5rVUDo7o5CRQ6T2o")
 					.unwrap(),
 				bump: 252u8
