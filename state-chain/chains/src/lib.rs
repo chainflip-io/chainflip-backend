@@ -674,9 +674,8 @@ pub struct ChannelRefundParameters {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum CcmValidityError {
 	CannotDecodeCfParameters,
-	MessageTooLong,
+	CcmIsTooLong,
 	CfParametersContainsInvalidAccounts,
-	CfParametersContainsTooManyAccounts,
 }
 
 pub trait CcmValidityChecker {
