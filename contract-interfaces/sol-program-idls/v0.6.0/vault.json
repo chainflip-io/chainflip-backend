@@ -8,6 +8,88 @@
   },
   "instructions": [
     {
+      "name": "disable_token_support",
+      "discriminator": [
+        72,
+        4,
+        35,
+        144,
+        194,
+        49,
+        71,
+        64
+      ],
+      "accounts": [
+        {
+          "name": "data_account",
+          "writable": true
+        },
+        {
+          "name": "gov_key",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_supported_account",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "enable_token_support",
+      "discriminator": [
+        125,
+        160,
+        180,
+        50,
+        26,
+        27,
+        112,
+        153
+      ],
+      "accounts": [
+        {
+          "name": "data_account",
+          "writable": true
+        },
+        {
+          "name": "gov_key",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_supported_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "min_swap_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "execute_ccm_native_call",
       "discriminator": [
         125,
@@ -92,7 +174,7 @@
         {
           "name": "cf_receiver",
           "docs": [
-            "the aggregate key signature."
+            "without passing the aggregate key signature."
           ]
         },
         {
@@ -221,11 +303,184 @@
         },
         {
           "name": "deposit_channel_associated_token_account",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "deposit_channel_pda"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "token_vault_associated_token_account",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "data_account.token_vault_pda",
+                "account": "DataAccount"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "mint"
@@ -347,6 +602,38 @@
         {
           "name": "expected_upgrade_signer_pda_bump",
           "type": "u8"
+        },
+        {
+          "name": "suspended_vault",
+          "type": "bool"
+        },
+        {
+          "name": "suspended_legacy_swaps",
+          "type": "bool"
+        },
+        {
+          "name": "suspended_event_swaps",
+          "type": "bool"
+        },
+        {
+          "name": "min_native_swap_amount",
+          "type": "u64"
+        },
+        {
+          "name": "max_dst_address_len",
+          "type": "u16"
+        },
+        {
+          "name": "max_ccm_message_len",
+          "type": "u32"
+        },
+        {
+          "name": "max_cf_parameters_len",
+          "type": "u32"
+        },
+        {
+          "name": "max_event_accounts",
+          "type": "u32"
         }
       ]
     },
@@ -447,6 +734,51 @@
       ]
     },
     {
+      "name": "set_program_swaps_parameters",
+      "discriminator": [
+        129,
+        254,
+        31,
+        151,
+        111,
+        149,
+        135,
+        77
+      ],
+      "accounts": [
+        {
+          "name": "data_account",
+          "writable": true
+        },
+        {
+          "name": "gov_key",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "min_native_swap_amount",
+          "type": "u64"
+        },
+        {
+          "name": "max_dst_address_len",
+          "type": "u16"
+        },
+        {
+          "name": "max_ccm_message_len",
+          "type": "u32"
+        },
+        {
+          "name": "max_cf_parameters_len",
+          "type": "u32"
+        },
+        {
+          "name": "max_event_accounts",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "set_suspended_state",
       "discriminator": [
         145,
@@ -471,6 +803,14 @@
       "args": [
         {
           "name": "suspend",
+          "type": "bool"
+        },
+        {
+          "name": "suspend_legacy_swaps",
+          "type": "bool"
+        },
+        {
+          "name": "suspend_event_swaps",
           "type": "bool"
         }
       ]
@@ -500,7 +840,94 @@
         },
         {
           "name": "token_vault_associated_token_account",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "data_account.token_vault_pda",
+                "account": "DataAccount"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "to_token_account",
@@ -595,19 +1022,19 @@
       "args": []
     },
     {
-      "name": "upgrade_vault_program",
+      "name": "upgrade_program",
       "docs": [
         "* ****************************************************************************\n     * *************************** IMPORTANT NOTE *********************************\n     * ****************************************************************************\n     * The signer_pda is the upgrade authority for the vault program. Changing this\n     * logic should be done with caution and understanding the consequences.\n     *\n     *        DO NOT MODIFY THIS WITHOUT UNDERSTANDING THE CONSEQUENCES!\n     * ****************************************************************************\n     * ****************************************************************************"
       ],
       "discriminator": [
-        72,
-        211,
-        76,
-        189,
-        84,
-        176,
-        62,
-        101
+        223,
+        236,
+        39,
+        89,
+        111,
+        204,
+        114,
+        37
       ],
       "accounts": [
         {
@@ -681,16 +1108,16 @@
       "args": []
     },
     {
-      "name": "x_swap_native",
+      "name": "x_swap_native_legacy",
       "discriminator": [
-        163,
-        38,
-        92,
-        226,
-        243,
-        105,
-        141,
-        196
+        97,
+        21,
+        117,
+        255,
+        21,
+        6,
+        232,
+        176
       ],
       "accounts": [
         {
@@ -776,16 +1203,16 @@
       ]
     },
     {
-      "name": "x_swap_token",
+      "name": "x_swap_token_legacy",
       "discriminator": [
-        69,
-        50,
-        252,
-        99,
-        229,
-        83,
-        119,
-        235
+        248,
+        32,
+        195,
+        34,
+        38,
+        180,
+        117,
+        127
       ],
       "accounts": [
         {
@@ -793,7 +1220,94 @@
         },
         {
           "name": "token_vault_associated_token_account",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "data_account.token_vault_pda",
+                "account": "DataAccount"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "from",
@@ -802,6 +1316,9 @@
         {
           "name": "from_token_account",
           "writable": true
+        },
+        {
+          "name": "token_supported_account"
         },
         {
           "name": "token_program",
@@ -907,6 +1424,19 @@
         81,
         100
       ]
+    },
+    {
+      "name": "SupportedToken",
+      "discriminator": [
+        56,
+        162,
+        96,
+        99,
+        193,
+        245,
+        204,
+        108
+      ]
     }
   ],
   "events": [
@@ -963,6 +1493,19 @@
       ]
     },
     {
+      "name": "ProgramSwapsParametersSet",
+      "discriminator": [
+        173,
+        82,
+        238,
+        223,
+        74,
+        121,
+        243,
+        142
+      ]
+    },
+    {
       "name": "Suspended",
       "discriminator": [
         220,
@@ -976,29 +1519,42 @@
       ]
     },
     {
-      "name": "SwapNative",
+      "name": "SwapEvent",
       "discriminator": [
-        155,
-        153,
-        130,
-        43,
-        124,
-        36,
-        21,
-        166
+        64,
+        198,
+        205,
+        232,
+        38,
+        8,
+        113,
+        226
       ]
     },
     {
-      "name": "SwapToken",
+      "name": "TokenSupportDisabled",
       "discriminator": [
-        251,
-        44,
-        110,
-        28,
-        74,
+        35,
+        252,
+        131,
         176,
+        50,
+        103,
+        135,
+        13
+      ]
+    },
+    {
+      "name": "TokenSupportEnabled",
+      "discriminator": [
+        11,
+        203,
+        178,
+        141,
+        170,
         213,
-        137
+        67,
+        234
       ]
     }
   ],
@@ -1047,6 +1603,41 @@
       "code": 6008,
       "name": "InvalidUpgradeSignerPdaBump",
       "msg": "Invalid upgrade signer bump"
+    },
+    {
+      "code": 6009,
+      "name": "SuspendedIxSwaps",
+      "msg": "Instruction swaps are suspended"
+    },
+    {
+      "code": 6010,
+      "name": "SuspendedEventSwaps",
+      "msg": "Event swaps are suspended"
+    },
+    {
+      "code": 6011,
+      "name": "NativeAmountBelowMinimumSwapAmount",
+      "msg": "Native amount below minimum swap amount"
+    },
+    {
+      "code": 6012,
+      "name": "TokenAmountBelowMinimumSwapAmount",
+      "msg": "Token amount below minimum swap amount"
+    },
+    {
+      "code": 6013,
+      "name": "DestinationAddressExceedsMaxLength",
+      "msg": "Destination address exceeds max length"
+    },
+    {
+      "code": 6014,
+      "name": "CfParametersExceedsMaxLength",
+      "msg": "Cf Parameters exceeds max length"
+    },
+    {
+      "code": 6015,
+      "name": "CcmMessageExceedsMaxLength",
+      "msg": "Ccm message exceeds max length"
     }
   ],
   "types": [
@@ -1117,6 +1708,34 @@
           {
             "name": "suspended",
             "type": "bool"
+          },
+          {
+            "name": "suspended_legacy_swaps",
+            "type": "bool"
+          },
+          {
+            "name": "suspended_event_swaps",
+            "type": "bool"
+          },
+          {
+            "name": "min_native_swap_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_dst_address_len",
+            "type": "u16"
+          },
+          {
+            "name": "max_ccm_message_len",
+            "type": "u32"
+          },
+          {
+            "name": "max_cf_parameters_len",
+            "type": "u32"
+          },
+          {
+            "name": "max_event_accounts",
+            "type": "u32"
           }
         ]
       }
@@ -1182,6 +1801,70 @@
       }
     },
     {
+      "name": "ProgramSwapsParametersSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_min_swap_amount",
+            "type": "u64"
+          },
+          {
+            "name": "old_max_dst_address_len",
+            "type": "u16"
+          },
+          {
+            "name": "old_max_ccm_message_len",
+            "type": "u32"
+          },
+          {
+            "name": "old_max_cf_parameters_len",
+            "type": "u32"
+          },
+          {
+            "name": "old_max_event_accounts",
+            "type": "u32"
+          },
+          {
+            "name": "new_min_swap_amount",
+            "type": "u64"
+          },
+          {
+            "name": "new_max_dst_address_len",
+            "type": "u16"
+          },
+          {
+            "name": "new_max_ccm_message_len",
+            "type": "u32"
+          },
+          {
+            "name": "new_max_cf_parameters_len",
+            "type": "u32"
+          },
+          {
+            "name": "new_max_event_accounts",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SupportedToken",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint_pubkey",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_swap_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Suspended",
       "type": {
         "kind": "struct",
@@ -1189,54 +1872,20 @@
           {
             "name": "suspended",
             "type": "bool"
+          },
+          {
+            "name": "suspended_legacy_swaps",
+            "type": "bool"
+          },
+          {
+            "name": "suspended_event_swaps",
+            "type": "bool"
           }
         ]
       }
     },
     {
-      "name": "SwapNative",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "dst_chain",
-            "type": "u32"
-          },
-          {
-            "name": "dst_address",
-            "type": "bytes"
-          },
-          {
-            "name": "dst_token",
-            "type": "u32"
-          },
-          {
-            "name": "amount",
-            "type": "u64"
-          },
-          {
-            "name": "sender",
-            "type": "pubkey"
-          },
-          {
-            "name": "ccm_parameters",
-            "type": {
-              "option": {
-                "defined": {
-                  "name": "CcmParams"
-                }
-              }
-            }
-          },
-          {
-            "name": "cf_parameters",
-            "type": "bytes"
-          }
-        ]
-      }
-    },
-    {
-      "name": "SwapToken",
+      "name": "SwapEvent",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1254,7 +1903,9 @@
           },
           {
             "name": "src_token",
-            "type": "pubkey"
+            "type": {
+              "option": "pubkey"
+            }
           },
           {
             "name": "amount",
@@ -1277,6 +1928,46 @@
           {
             "name": "cf_parameters",
             "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenSupportDisabled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_token_supported",
+            "type": {
+              "defined": {
+                "name": "SupportedToken"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokenSupportEnabled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_token_supported",
+            "type": {
+              "defined": {
+                "name": "SupportedToken"
+              }
+            }
+          },
+          {
+            "name": "new_token_supported",
+            "type": {
+              "defined": {
+                "name": "SupportedToken"
+              }
+            }
           }
         ]
       }

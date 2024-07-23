@@ -223,6 +223,9 @@
           "writable": true
         },
         {
+          "name": "token_supported_account"
+        },
+        {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
@@ -375,6 +378,19 @@
         18,
         233
       ]
+    },
+    {
+      "name": "SupportedToken",
+      "discriminator": [
+        56,
+        162,
+        96,
+        99,
+        193,
+        245,
+        204,
+        108
+      ]
     }
   ],
   "events": [
@@ -441,6 +457,34 @@
           {
             "name": "suspended",
             "type": "bool"
+          },
+          {
+            "name": "suspended_ix_swaps",
+            "type": "bool"
+          },
+          {
+            "name": "suspended_event_swaps",
+            "type": "bool"
+          },
+          {
+            "name": "min_native_swap_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_dst_address_len",
+            "type": "u16"
+          },
+          {
+            "name": "max_ccm_message_len",
+            "type": "u32"
+          },
+          {
+            "name": "max_cf_parameters_len",
+            "type": "u32"
+          },
+          {
+            "name": "max_event_accounts",
+            "type": "u32"
           }
         ]
       }
@@ -483,6 +527,22 @@
             "type": {
               "vec": "bool"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SupportedToken",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token_mint_pubkey",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_swap_amount",
+            "type": "u64"
           }
         ]
       }

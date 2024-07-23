@@ -98,6 +98,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':
           return '8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH';
+        case 'SWAP_ENDPOINT':
+          return '35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
