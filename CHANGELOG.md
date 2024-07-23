@@ -2,6 +2,11 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.4.6] - 2024-07-23
+
+### Fixes
+- Unblock 1.5 release branch due to CI issues on 1.4 release branch.
+
 ## [1.4.5] - 2024-07-01
 
 ### Fixes
