@@ -370,7 +370,6 @@ pub mod pallet {
 			// get the 33rd percentile of reputation points, and min with 0. This way in normal
 			// operating scenarios where there might be a node on 2500 points one on -100 and the
 			// rest on 2880. The cutoff will be 0, and the node on -100 will be disqualified.
-			// note: division by 3 is achieving the similar result as calculating 33rd percentile
 			let cutoff = min(points[points.len() / 3], 0);
 			// We must use >= here to ensure that we don't disqualify all validators. e.g. if all
 			// the validators are at -2880 reputation than the cutoff will be -2880, and all

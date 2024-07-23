@@ -519,25 +519,24 @@ fn should_properly_check_if_validator_is_qualified() {
 		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
 		assert!(ReputationPointsQualification::<Test>::is_qualified(&ALICE));
 
+		// test when network has 3 validators
 		for id in test_set.iter() {
 			ReputationPallet::heartbeat(RuntimeOrigin::signed(*id)).unwrap();
 			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
 		}
 
-		let points = Reputations::<Test>::iter_values()
-			.map(|r| r.reputation_points)
-			.collect::<Vec<_>>();
-		assert_eq!(points.len(), test_set.len());
-
 		// If there are 3 validators and 33rd percentile validator has  lower reputation than the
 		// other (so 1 validator has worse reputation than the other 2, they should not be
 		// considered qualified)
 		ReputationPallet::penalise_offline_authorities(vec![BOB]);
+		assert!(reputation_points(&BOB) < 0);
 		assert_eq!(ReputationPointsQualification::<Test>::is_qualified(&BOB), false);
 
 		// If reputation of other validators is reduced further, make sure that
 		// we don't unnecessarily disqualify validators
 		ReputationPallet::penalise_offline_authorities(vec![EVE]);
+		assert!(reputation_points(&EVE) < 0);
+		assert!(reputation_points(&ALICE) >= 0);
 		for id in test_set.iter() {
 			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
 		}
@@ -568,16 +567,20 @@ fn should_properly_check_if_validator_is_qualified() {
 		ReputationPallet::penalise_offline_authorities(test_set[..one_third].to_vec());
 		// Even though validators misbehaved because previously they sent heartbeat and received
 		// reputation points they are still above 0, so they are all qualified
+		let  current_reputation_of_third_of_validators =
+			REPUTATION_PER_HEARTBEAT - MISSED_HEARTBEAT_PENALTY_POINTS;
+
 		for id in &test_set[..one_third] {
 			assert!(ReputationPointsQualification::<Test>::is_qualified(&id));
+			assert_eq!(reputation_points(&id), current_reputation_of_third_of_validators );
 		}
 
 		// Except poor Eve, they are still disqualified
+		assert!(reputation_points(&EVE) < 0);
 		assert_eq!(ReputationPointsQualification::<Test>::is_qualified(&EVE), false);
 
 		// Slash reputation below 0
-		for _ in 0..3 * (REPUTATION_PER_HEARTBEAT - MISSED_HEARTBEAT_PENALTY_POINTS) /
-			MISSED_HEARTBEAT_PENALTY_POINTS
+		for _ in 0..=current_reputation_of_third_of_validators / MISSED_HEARTBEAT_PENALTY_POINTS + 1
 		{
 			ReputationPallet::penalise_offline_authorities(test_set[..one_third].to_vec());
 		}
@@ -585,6 +588,11 @@ fn should_properly_check_if_validator_is_qualified() {
 		// Now one third of the validators will not be qualified anymore
 		for id in &test_set[..one_third] {
 			assert_eq!(ReputationPointsQualification::<Test>::is_qualified(&id), false);
+		}
+
+		// And rest of them are
+		for id in &test_set[one_third..] {
+			assert!(ReputationPointsQualification::<Test>::is_qualified(&id));
 		}
 	});
 }
