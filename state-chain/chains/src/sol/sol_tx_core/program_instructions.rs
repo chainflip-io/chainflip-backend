@@ -598,6 +598,19 @@ solana_program!(
 			]
 		},
 
+		transfer_vault_upgrade_authority => TransferVaultUpgradeAuthority {
+			args: [],
+			account_metas: [
+				data_account: { signer: false, writable: false },
+				agg_key: { signer: true, writable: false },
+				program_data_address: { signer: false, writable: true },
+				program_address: { signer: false, writable: false },
+				new_authority: { signer: false, writable: false },
+				signer_pda: { signer: false, writable: false },
+				bpf_loader_upgradeable: { signer: false, writable: false },
+			]
+		},
+
 		upgrade_program => UpgradeVaultProgram {
 			args: [],
 			account_metas: [
