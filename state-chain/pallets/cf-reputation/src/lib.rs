@@ -82,7 +82,7 @@ pub enum PalletOffence {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use std::cmp::min;
+	use sp_std::cmp::min;
 
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 
