@@ -8,8 +8,6 @@
 # ╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║         ███████╗╚██████╔╝╚██████╗██║  ██║███████╗██║ ╚████║███████╗   ██║
 #  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝         ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝╚══════╝   ╚═╝
 
-# set -x
-
 export LOCALNET_INIT_DIR=localnet/init
 export WORKFLOW=build-localnet
 export GENESIS_NODES=("bashful" "doc" "dopey")
@@ -35,8 +33,14 @@ if [[ $CI == true ]]; then
   set -x
   additional_docker_compose_up_args="--quiet-pull"
   additional_docker_compose_down_args="--volumes --remove-orphans"
-  export NODE_COUNT="3-node"
-  export SELECTED_NODES="${GENESIS_NODES[@]}"
+  if [[ -z NODE_COUNT ]]; then
+    export NODE_COUNT="1-node"
+  fi
+  if [[ $NODE_COUNT == "1-node" ]]; then
+    export SELECTED_NODES="${GENESIS_NODES[0]}"
+  elif [[ $NODE_COUNT == "3-node" ]]; then
+    export SELECTED_NODES="${GENESIS_NODES[@]}"
+  fi
 else
   additional_docker_compose_up_args=""
   additional_docker_compose_down_args="--volumes --remove-orphans"

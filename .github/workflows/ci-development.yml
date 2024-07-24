@@ -71,6 +71,7 @@ jobs:
     with:
       full_bouncer: false
       ngrok: true
+      node-count: 3
   test-benchmarks:
     needs: [build-benchmarks]
     uses: ./.github/workflows/_41_test_benchmarks.yml
