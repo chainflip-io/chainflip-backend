@@ -97,6 +97,13 @@ pub enum ThresholdCeremonyType {
 	KeygenVerification,
 }
 
+#[derive(Clone, Encode, Decode, TypeInfo, PartialEq, Eq, Default, RuntimeDebug)]
+#[scale_info(skip_type_params(T, I))]
+pub struct SignerAndSignatureResult<T: Config<I>, I: 'static = ()> {
+	pub signer: AggKeyFor<T, I>,
+	pub signature_result: AsyncResult<SignatureResultFor<T, I>>,
+}
+
 /// The current status of a key rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, EnumVariant, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T, I))]
@@ -415,14 +422,9 @@ pub mod pallet {
 
 	/// State of the threshold signature requested.
 	#[pallet::storage]
-	#[pallet::getter(fn signature)]
-	pub type Signature<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat,
-		RequestId,
-		(AggKeyFor<T, I>, AsyncResult<SignatureResultFor<T, I>>),
-		ValueQuery,
-	>;
+	#[pallet::getter(fn signer_and_signature)]
+	pub type SignerAndSignature<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, RequestId, SignerAndSignatureResult<T, I>>;
 
 	/// A map containing lists of ceremony ids that should be retried at the block stored in the
 	/// key.
@@ -847,9 +849,17 @@ pub mod pallet {
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
 						ThresholdCeremonyType::KeygenVerification => {
-							Signature::<T, I>::mutate(request_id, |(_, signature_result)| {
-								*signature_result = AsyncResult::Ready(Err(offenders.clone()))
-							});
+							SignerAndSignature::<T, I>::mutate(
+								request_id,
+								|maybe_signer_and_signature_result| {
+									maybe_signer_and_signature_result.as_mut().map(
+										|signer_and_signature_result| {
+											signer_and_signature_result.signature_result =
+												AsyncResult::Ready(Err(offenders.clone()))
+										},
+									);
+								},
+							);
 							Self::maybe_dispatch_callback(request_id, ceremony_id);
 							Event::<T, I>::ThresholdSignatureFailed {
 								request_id,
@@ -961,8 +971,10 @@ pub mod pallet {
 				attempt_count
 			);
 
-			Signature::<T, I>::mutate(request_id, |(_, signature_result)| {
-				*signature_result = AsyncResult::Ready(Ok(signature))
+			SignerAndSignature::<T, I>::mutate(request_id, |maybe_signer_and_signature_result| {
+				maybe_signer_and_signature_result.as_mut().map(|signer_and_signature_result| {
+					signer_and_signature_result.signature_result = AsyncResult::Ready(Ok(signature))
+				});
 			});
 			Self::maybe_dispatch_callback(request_id, ceremony_id);
 
@@ -1203,15 +1215,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			request_type: request_type.clone(),
 		});
 
-		Signature::<T, I>::insert(
+		SignerAndSignature::<T, I>::insert(
 			request_id,
-			(
-				match request_type {
+			SignerAndSignatureResult {
+				signer: match request_type {
 					RequestType::SpecificKey(key, _) => key,
 					RequestType::KeygenVerification { key, .. } => key,
 				},
-				AsyncResult::Pending,
-			),
+				signature_result: AsyncResult::Pending,
+			},
 		);
 
 		request_id
@@ -1563,7 +1575,15 @@ where
 		on_signature_ready: Self::Callback,
 	) -> Result<(), Self::Error> {
 		ensure!(
-			matches!(Signature::<T, I>::get(request_id).1, AsyncResult::Pending),
+			matches!(
+				SignerAndSignature::<T, I>::get(request_id)
+					.unwrap_or(SignerAndSignatureResult {
+						signer: Default::default(),
+						signature_result: AsyncResult::Void
+					})
+					.signature_result,
+				AsyncResult::Pending
+			),
 			Error::<T, I>::InvalidRequestId
 		);
 		RequestCallback::<T, I>::insert(request_id, on_signature_ready);
@@ -1573,7 +1593,12 @@ where
 	fn signature_result(
 		request_id: RequestId,
 	) -> (AggKeyFor<T, I>, cf_traits::AsyncResult<SignatureResultFor<T, I>>) {
-		Signature::<T, I>::take(request_id)
+		let signer_and_signature =
+			SignerAndSignature::<T, I>::take(request_id).unwrap_or(SignerAndSignatureResult {
+				signer: Default::default(),
+				signature_result: AsyncResult::Void,
+			});
+		(signer_and_signature.signer, signer_and_signature.signature_result)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1582,7 +1607,7 @@ where
 		signature: <T::TargetChainCrypto as ChainCrypto>::ThresholdSignature,
 		signer: AggKeyFor<T, I>,
 	) {
-		Signature::<T, I>::insert(request_id, (signer, AsyncResult::Ready(Ok(signature))));
+		SignerAndSignature::<T, I>::insert(request_id, (signer, AsyncResult::Ready(Ok(signature))));
 	}
 }
 

@@ -1016,7 +1016,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 				}
 		}
 
-		IncomingKeyAndBroadcastId::<T, I>::set(Some((new_key, broadcast_id)));
+		IncomingKeyAndBroadcastId::<T, I>::put((new_key, broadcast_id));
 
 		(broadcast_id, request_id)
 	}

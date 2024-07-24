@@ -227,7 +227,7 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 				_payload: &<EvmCrypto as ChainCrypto>::Payload,
 				maybe_current_on_chain_key: Option<<EvmCrypto as ChainCrypto>::AggKey>
 			) -> bool {
-				maybe_current_on_chain_key.map_or(false, |current_on_chain_key| current_on_chain_key != call.signer().expect("since we are checking whether signature refresh is required, it means there already should be a signature"))
+				maybe_current_on_chain_key.map_or(false, |current_on_chain_key| call.signer().is_some_and(|signer|current_on_chain_key != signer ))
 			}
 
 			/// Calculate the gas limit for a this evm chain's call, using the current gas price.
