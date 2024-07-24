@@ -589,6 +589,8 @@ solana_program!(
 		set_suspended_state => SetSuspendedState {
 			args: [
 				suspend: bool,
+				suspend_legacy_swaps: bool,
+				suspend_event_swaps: bool,
 			],
 			account_metas: [
 				data_account: { signer: false, writable: true },
@@ -596,20 +598,7 @@ solana_program!(
 			]
 		},
 
-		transfer_vault_upgrade_authority => TransferVaultUpgradeAuthority {
-			args: [],
-			account_metas: [
-				data_account: { signer: false, writable: false },
-				agg_key: { signer: true, writable: false },
-				program_data_address: { signer: false, writable: true },
-				program_address: { signer: false, writable: false },
-				new_authority: { signer: false, writable: false },
-				signer_pda: { signer: false, writable: false },
-				bpf_loader_upgradeable: { signer: false, writable: false },
-			]
-		},
-
-		upgrade_vault_program => UpgradeVaultProgram {
+		upgrade_program => UpgradeVaultProgram {
 			args: [],
 			account_metas: [
 				data_account: { signer: false, writable: false },
