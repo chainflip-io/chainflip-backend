@@ -43,7 +43,9 @@ pub const NONCE_ACCOUNT_LENGTH: u64 = 80u64;
 
 pub const SOL_USDC_DECIMAL: u8 = 6u8;
 
-// TODO: Confirm the value
 pub const CCM_BYTES_PER_ACCOUNT: usize = 33usize;
-pub const MAX_CCM_BYTES_USDC: usize = 1_000usize;
-pub const MAX_CCM_BYTES_SOL: usize = 1_000usize;
+// Bytes left that are avaiable for the user when building the native and token ccm transfers.
+// Leaving some bytes for safety (32) but without preventing an extra account to be included.
+// The cf_receiver is accounted as part of the bytes required to build the call.
+pub const MAX_CCM_BYTES_USDC: usize = 673usize; // technically 705
+pub const MAX_CCM_BYTES_SOL: usize = 460usize; // technically 492

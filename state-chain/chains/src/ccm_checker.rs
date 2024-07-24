@@ -21,9 +21,9 @@ impl<Environment: SolanaEnvironment> CcmValidityCheck for CcmValidityChecker<Env
 				.try_into()
 				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
 
-			// Length of CCM = length of message +  total no. accounts in cf_parameter * constant;
-			let ccm_length = ccm.message.len() +
-				(1 + ccm_accounts.remaining_accounts.len()) * CCM_BYTES_PER_ACCOUNT;
+			// Length of CCM = length of message + total no. remaining_accounts * constant;
+			let ccm_length =
+				ccm.message.len() + ccm_accounts.remaining_accounts.len() * CCM_BYTES_PER_ACCOUNT;
 			if ccm_length >
 				match asset {
 					SolAsset::Sol => MAX_CCM_BYTES_SOL,
