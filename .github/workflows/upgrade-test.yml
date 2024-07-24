@@ -225,7 +225,7 @@ jobs:
           echo "/usr/lib before copy of .so files"
           ls -l /usr/lib
           # TODO: Remove this once we have implemented fetching the shared libs in the engine-runner build script
-          wget https://repo.chainflip.io/lib/1_4_6/libchainflip_engine_v1_4_6.so -o /usr/lib/libchainflip_engine_v1_4_6.so
+          curl https://repo.chainflip.io/lib/1_4_6/libchainflip_engine_v1_4_6.so -o /usr/lib/libchainflip_engine_v1_4_6.so
           sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
           sudo cp ./upgrade-to-bins/libchainflip_engine_v*.so /usr/lib/
           echo "/usr/lib after copy of .so files"
