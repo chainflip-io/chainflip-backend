@@ -7,9 +7,7 @@ use cf_amm::{
 };
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
-use cf_traits::{
-	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwappingApi,
-};
+use cf_traits::{impl_pallet_safe_mode, BalanceApi, Chainflip, PoolApi, SwapQueueApi, SwappingApi};
 use core::ops::Range;
 use frame_support::{
 	dispatch::GetDispatchInfo,
@@ -19,6 +17,7 @@ use frame_support::{
 	transactional,
 };
 
+use cf_traits::LpApi;
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -128,7 +127,7 @@ pub mod pallet {
 		range_orders::{self, Liquidity},
 		NewError,
 	};
-	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
+	use cf_traits::AccountRoleRegistry;
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::collections::btree_map::BTreeMap;
 
@@ -252,7 +251,9 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Pallet responsible for managing Liquidity Providers.
-		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
+		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
+
+		type LpApi: LpApi<AccountId = Self::AccountId>;
 
 		type SwapQueueApi: SwapQueueApi;
 
@@ -1529,7 +1530,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		f: F,
 	) -> Result<R, DispatchError> {
-		T::LpBalance::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
+		T::LpApi::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)

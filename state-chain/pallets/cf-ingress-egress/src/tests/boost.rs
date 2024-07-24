@@ -7,7 +7,7 @@ use cf_traits::{
 	mocks::{
 		account_role_registry::MockAccountRoleRegistry, tracked_data_provider::TrackedDataProvider,
 	},
-	AccountRoleRegistry, LpBalanceApi, SafeMode, SetSafeMode,
+	AccountRoleRegistry, BalanceApi, SafeMode, SetSafeMode,
 };
 use frame_support::assert_noop;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};

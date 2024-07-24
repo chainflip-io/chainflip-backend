@@ -8,6 +8,11 @@ use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 
+pub trait BalanceTracker {
+	fn record_network_fee(amount: AssetAmount);
+	fn collected_rejected_funds(asset: Asset, amount: AssetAmount);
+}
+
 pub trait SwapDepositHandler {
 	type AccountId;
 
@@ -30,6 +35,52 @@ pub trait LpDepositHandler {
 	/// Attempt to credit the account with the given asset and amount
 	/// as a result of a liquidity deposit.
 	fn add_deposit(who: &Self::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult;
+}
+
+pub trait LpApi {
+	type AccountId;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(who: &Self::AccountId, address: ForeignChainAddress);
+
+	fn ensure_has_refund_address_for_pair(
+		who: &Self::AccountId,
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> DispatchResult;
+}
+
+pub trait BalanceApi {
+	type AccountId;
+
+	/// Record the network fee.
+	fn record_network_fee(amount: AssetAmount);
+
+	/// Record the rejected funds.
+	fn collected_rejected_funds(asset: Asset, amount: AssetAmount);
+
+	/// Attempt to credit the account with the given asset and amount.
+	fn try_credit_account(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult;
+
+	/// Attempt to debit the account with the given asset and amount.
+	fn try_debit_account(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult;
+
+	/// Record the fees collected by the account.
+	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset);
+
+	/// Returns the asset free balances of the given account.
+	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
+
+	/// Removes all balances of the given account from storage.
+	fn kill_balance(who: &Self::AccountId);
 }
 
 pub trait LpBalanceApi {

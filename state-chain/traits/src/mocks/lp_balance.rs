@@ -1,4 +1,4 @@
-use crate::{LpBalanceApi, LpDepositHandler};
+use crate::{BalanceApi, LpDepositHandler};
 use cf_chains::assets::any::{Asset, AssetMap};
 use cf_primitives::AssetAmount;
 use frame_support::sp_runtime::{
@@ -10,6 +10,8 @@ use frame_support::sp_runtime::{
 use cf_chains::ForeignChainAddress;
 
 use super::{MockPallet, MockPalletStorage};
+
+use crate::LpApi;
 
 pub struct MockBalance;
 
@@ -31,19 +33,8 @@ impl MockPallet for MockBalance {
 
 const FREE_BALANCES: &[u8] = b"FREE_BALANCES";
 
-impl LpBalanceApi for MockBalance {
+impl BalanceApi for MockBalance {
 	type AccountId = u64;
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn register_liquidity_refund_address(_who: &Self::AccountId, _address: ForeignChainAddress) {}
-
-	fn ensure_has_refund_address_for_pair(
-		_who: &Self::AccountId,
-		_base_asset: Asset,
-		_quote_asset: Asset,
-	) -> DispatchResult {
-		Ok(())
-	}
 
 	fn try_credit_account(
 		who: &Self::AccountId,
@@ -87,5 +78,34 @@ impl LpBalanceApi for MockBalance {
 			(asset, Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default())
 		}))
 		.unwrap())
+	}
+
+	fn record_network_fee(_amount: AssetAmount) {
+		unimplemented!()
+	}
+
+	fn collected_rejected_funds(_asset: Asset, _amount: AssetAmount) {
+		unimplemented!()
+	}
+
+	fn kill_balance(_who: &Self::AccountId) {
+		unimplemented!()
+	}
+}
+
+pub struct MockLpApi;
+
+impl LpApi for MockLpApi {
+	type AccountId = u64;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(_: &Self::AccountId, _: ForeignChainAddress) {}
+
+	fn ensure_has_refund_address_for_pair(
+		_who: &Self::AccountId,
+		_base_asset: Asset,
+		_quote_asset: Asset,
+	) -> DispatchResult {
+		Ok(())
 	}
 }

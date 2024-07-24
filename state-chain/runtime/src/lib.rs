@@ -45,11 +45,12 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
-use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi};
+use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, BalanceApi};
 use codec::{alloc::string::ToString, Encode};
 use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
+use pallet_cf_asset_balances::HistoricalEarnedFees;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
@@ -329,7 +330,8 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
-	type LpBalance = LiquidityProvider;
+	type LpBalance = AssetBalances;
+	type LpDepositHandler = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
@@ -351,7 +353,8 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
-	type LpBalance = LiquidityProvider;
+	type LpBalance = AssetBalances;
+	type LpDepositHandler = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
@@ -373,7 +376,8 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
-	type LpBalance = LiquidityProvider;
+	type LpBalance = AssetBalances;
+	type LpDepositHandler = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
@@ -395,7 +399,8 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type TargetChain = Arbitrum;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
-	type LpBalance = LiquidityProvider;
+	type LpBalance = AssetBalances;
+	type LpDepositHandler = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = ArbitrumApi<EvmEnvironment>;
 	type Broadcaster = ArbitrumBroadcaster;
@@ -417,7 +422,8 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type TargetChain = Solana;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
-	type LpBalance = LiquidityProvider;
+	type LpBalance = AssetBalances;
+	type LpDepositHandler = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = cf_chains::sol::api::SolanaApi<chainflip::SolEnvironment>;
 	type Broadcaster = SolanaBroadcaster;
@@ -435,7 +441,8 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type LpBalance = LiquidityProvider;
+	type LpBalance = AssetBalances;
+	type LpApi = LiquidityProvider;
 	type SwapQueueApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = ();
@@ -448,6 +455,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type AddressConverter = ChainAddressConverter;
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
+	type BalanceApi = AssetBalances;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
@@ -1283,10 +1291,10 @@ impl_runtime_apis! {
 				.collect()
 		}
 		fn cf_free_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
-			LiquidityProvider::free_balances(&account_id).map_err(Into::into)
+			AssetBalances::free_balances(&account_id).map_err(Into::into)
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
-			let free_balances = LiquidityProvider::free_balances(&account_id)?;
+			let free_balances = AssetBalances::free_balances(&account_id)?;
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
 			let boost_pools_balances = {
 				AssetMap {
@@ -1634,9 +1642,9 @@ impl_runtime_apis! {
 			LiquidityProviderInfo {
 				refund_addresses,
 				balances: Asset::all().map(|asset|
-					(asset, pallet_cf_lp::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
+					(asset, pallet_cf_asset_balances::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
 				).collect(),
-				earned_fees: AssetMap::from_iter(pallet_cf_lp::HistoricalEarnedFees::<Runtime>::iter_prefix(&account_id)),
+				earned_fees: AssetMap::from_iter(HistoricalEarnedFees::<Runtime>::iter_prefix(&account_id)),
 			}
 		}
 
