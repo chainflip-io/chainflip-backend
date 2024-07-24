@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::{
-	mock::*, AbortedBroadcasts, AwaitingBroadcast, BroadcastData, BroadcastId, Config,
+	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastData, BroadcastId, Config,
 	DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
 	PalletOffence, PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks,
 	RequestSuccessCallbacks, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
@@ -42,7 +42,7 @@ enum Scenario {
 
 enum TxType {
 	Normal,
-	Rotation,
+	Rotation { new_key: AggKey<Test, Instance1> },
 }
 
 thread_local! {
@@ -399,7 +399,7 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 
 			assert_eq!(
 				MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::signature_result(0),
-				AsyncResult::Void
+				(Default::default(), AsyncResult::Void)
 			);
 			assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).is_some());
 			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
@@ -419,7 +419,7 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 			// Verify that we have a new signature request in the pipeline
 			assert_eq!(
 				MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::signature_result(0),
-				AsyncResult::Pending
+				(Default::default(), AsyncResult::Pending)
 			);
 		});
 }
@@ -432,7 +432,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 	new_test_ext().execute_with(|| {
 		let api_call = MockApiCall {
 			payload: Default::default(),
-			sig: Default::default(),
+			signer_and_signature: Default::default(),
 			tx_out_id: MOCK_TRANSACTION_OUT_ID,
 		};
 
@@ -542,7 +542,7 @@ fn callback_is_called_upon_broadcast_failure() {
 	new_test_ext().execute_with(|| {
 		let api_call = MockApiCall {
 			payload: Default::default(),
-			sig: Default::default(),
+			signer_and_signature: Default::default(),
 			tx_out_id: MOCK_TRANSACTION_OUT_ID,
 		};
 		let (broadcast_id, _) =
@@ -689,7 +689,10 @@ fn broadcast_barrier_for_polkadot() {
 			// tx1 emits broadcast request
 			assert_transaction_broadcast_request_event(broadcast_id_1, tx_out_id1);
 
-			let broadcast_id_2 = initiate_and_sign_broadcast(&api_call2, TxType::Rotation);
+			let broadcast_id_2 = initiate_and_sign_broadcast(
+				&api_call2,
+				TxType::Rotation { new_key: Default::default() },
+			);
 			// tx2 emits broadcast request and also pauses any further new broadcast requests
 			assert_transaction_broadcast_request_event(broadcast_id_2, tx_out_id2);
 
@@ -750,7 +753,10 @@ fn broadcast_barrier_for_bitcoin() {
 		// tx1 emits broadcast request
 		assert_transaction_broadcast_request_event(broadcast_id_1, tx_out_id1);
 
-		let broadcast_id_2 = initiate_and_sign_broadcast(&api_call2, TxType::Rotation);
+		let broadcast_id_2 = initiate_and_sign_broadcast(
+			&api_call2,
+			TxType::Rotation { new_key: Default::default() },
+		);
 		// tx2 emits broadcast request and does not pause future broadcasts in bitcoin
 		assert_transaction_broadcast_request_event(broadcast_id_2, tx_out_id2);
 
@@ -785,7 +791,10 @@ fn broadcast_barrier_for_ethereum() {
 			assert_transaction_broadcast_request_event(broadcast_id_2, tx_out_id2);
 
 			// this will put a broadcast barrier at tx2 and tx3. tx3 wont be broadcasted yet
-			let broadcast_id_3 = initiate_and_sign_broadcast(&api_call3, TxType::Rotation);
+			let broadcast_id_3 = initiate_and_sign_broadcast(
+				&api_call3,
+				TxType::Rotation { new_key: Default::default() },
+			);
 
 			// tx3 is ready for broadcast but since there is a broadcast pause, broadcast request is
 			// not issued, the broadcast is rescheduled instead.
@@ -859,7 +868,7 @@ fn broadcast_barrier_for_ethereum() {
 
 fn api_call(i: u8) -> ([u8; 4], MockApiCall<MockEthereumChainCrypto>) {
 	let tx_out_id = [i; 4];
-	(tx_out_id, MockApiCall { tx_out_id, sig: Default::default(), payload: Default::default() })
+	(tx_out_id, MockApiCall { tx_out_id, signer_and_signature: None, payload: Default::default() })
 }
 
 fn assert_transaction_broadcast_request_event(broadcast_id: BroadcastId, tx_out_id: [u8; 4]) {
@@ -881,9 +890,11 @@ fn initiate_and_sign_broadcast(
 		TxType::Normal => <Broadcaster as BroadcasterTrait<
 			<Test as Config<Instance1>>::TargetChain,
 		>>::threshold_sign_and_broadcast((*api_call).clone()),
-		TxType::Rotation => <Broadcaster as BroadcasterTrait<
+		TxType::Rotation { new_key } => <Broadcaster as BroadcasterTrait<
 			<Test as Config<Instance1>>::TargetChain,
-		>>::threshold_sign_and_broadcast_rotation_tx((*api_call).clone()),
+		>>::threshold_sign_and_broadcast_rotation_tx(
+			(*api_call).clone(), new_key
+		),
 	};
 
 	EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));

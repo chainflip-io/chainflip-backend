@@ -68,6 +68,6 @@ impl ApiCall<BitcoinCrypto> for BatchTransfer {
 		self.bitcoin_transaction
 			.signer_and_signatures
 			.as_ref()
-			.map(|(signer, _)| signer.clone())
+			.map(|(signer, _)| (*signer))
 	}
 }

@@ -479,10 +479,10 @@ impl PolkadotExtrinsicBuilder {
 		)
 	}
 
-	pub fn insert_signature_and_signer(
+	pub fn insert_signer_and_signature(
 		&mut self,
-		signature: PolkadotSignature,
 		signer: PolkadotAccountId,
+		signature: PolkadotSignature,
 	) {
 		self.signer_and_signature.replace((signer, signature));
 	}
@@ -491,7 +491,7 @@ impl PolkadotExtrinsicBuilder {
 		self.signer_and_signature.as_ref().map(|(signer, signature)| {
 			PolkadotUncheckedExtrinsic::new_signed(
 				self.extrinsic_call.clone(),
-				signer.clone(),
+				*signer,
 				signature.clone(),
 				self.extra(),
 			)
@@ -1096,12 +1096,13 @@ mod test_polkadot_extrinsics {
 			},
 			test_runtime_call,
 		);
-		extrinsic_builder.insert_signature(keypair_1.sign(
-			&extrinsic_builder.get_signature_payload(
+		extrinsic_builder.insert_signer_and_signature(
+			keypair_1.public_key(),
+			keypair_1.sign(&extrinsic_builder.get_signature_payload(
 				TEST_RUNTIME_VERSION.spec_version,
 				TEST_RUNTIME_VERSION.transaction_version,
-			),
-		));
+			)),
+		);
 
 		assert!(extrinsic_builder.is_signed());
 
@@ -1151,10 +1152,13 @@ mod test_polkadot_extrinsics {
 			test_runtime_call,
 		);
 
-		extrinsic_builder.insert_signature(keypair.sign(&extrinsic_builder.get_signature_payload(
-			TEST_RUNTIME_VERSION.spec_version,
-			TEST_RUNTIME_VERSION.transaction_version,
-		)));
+		extrinsic_builder.insert_signer_and_signature(
+			keypair.public_key(),
+			keypair.sign(&extrinsic_builder.get_signature_payload(
+				TEST_RUNTIME_VERSION.spec_version,
+				TEST_RUNTIME_VERSION.transaction_version,
+			)),
+		);
 
 		let new_replay_protection = PolkadotReplayProtection {
 			nonce: 13,
@@ -1204,12 +1208,14 @@ mod test_polkadot_extrinsics {
 				})),
 			}),
 		);
-		ext.insert_signature(PolkadotPair::from_seed(&RAW_SEED_1).sign(
-			&ext.get_signature_payload(
+		let keypair = PolkadotPair::from_seed(&RAW_SEED_1);
+		ext.insert_signer_and_signature(
+			keypair.public_key(),
+			keypair.sign(&ext.get_signature_payload(
 				TEST_RUNTIME_VERSION.spec_version,
 				TEST_RUNTIME_VERSION.transaction_version,
-			),
-		));
+			)),
+		);
 
 		println!(
 			"Encoded extrinsic: 0x{}",

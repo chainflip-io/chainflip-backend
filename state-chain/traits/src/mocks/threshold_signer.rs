@@ -116,7 +116,11 @@ where
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn insert_signature(request_id: ThresholdSignatureRequestId, signature: C::ThresholdSignature) {
+	fn insert_signature(
+		request_id: ThresholdSignatureRequestId,
+		signature: C::ThresholdSignature,
+		_signer: C::AggKey,
+	) {
 		Self::set_signature_ready(request_id, Ok(signature))
 	}
 }

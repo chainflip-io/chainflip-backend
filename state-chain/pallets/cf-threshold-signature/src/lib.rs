@@ -852,12 +852,12 @@ pub mod pallet {
 							SignerAndSignature::<T, I>::mutate(
 								request_id,
 								|maybe_signer_and_signature_result| {
-									maybe_signer_and_signature_result.as_mut().map(
-										|signer_and_signature_result| {
-											signer_and_signature_result.signature_result =
-												AsyncResult::Ready(Err(offenders.clone()))
-										},
-									);
+									if let Some(signer_and_signature_result) =
+										maybe_signer_and_signature_result.as_mut()
+									{
+										signer_and_signature_result.signature_result =
+											AsyncResult::Ready(Err(offenders.clone()));
+									}
 								},
 							);
 							Self::maybe_dispatch_callback(request_id, ceremony_id);
@@ -972,9 +972,12 @@ pub mod pallet {
 			);
 
 			SignerAndSignature::<T, I>::mutate(request_id, |maybe_signer_and_signature_result| {
-				maybe_signer_and_signature_result.as_mut().map(|signer_and_signature_result| {
-					signer_and_signature_result.signature_result = AsyncResult::Ready(Ok(signature))
-				});
+				if let Some(signer_and_signature_result) =
+					maybe_signer_and_signature_result.as_mut()
+				{
+					signer_and_signature_result.signature_result =
+						AsyncResult::Ready(Ok(signature));
+				}
 			});
 			Self::maybe_dispatch_callback(request_id, ceremony_id);
 
@@ -1607,7 +1610,13 @@ where
 		signature: <T::TargetChainCrypto as ChainCrypto>::ThresholdSignature,
 		signer: AggKeyFor<T, I>,
 	) {
-		SignerAndSignature::<T, I>::insert(request_id, (signer, AsyncResult::Ready(Ok(signature))));
+		SignerAndSignature::<T, I>::insert(
+			request_id,
+			SignerAndSignatureResult {
+				signer,
+				signature_result: AsyncResult::Ready(Ok(signature)),
+			},
+		);
 	}
 }
 

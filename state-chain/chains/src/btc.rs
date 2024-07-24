@@ -789,8 +789,8 @@ impl BitcoinTransaction {
 			)
 			.1;
 
-		for i in 0..self.inputs.len() {
-			if let Some(script_path) = self.inputs[i].deposit_address.script_path.clone() {
+		for (i, input) in self.inputs.iter().enumerate() {
+			if let Some(script_path) = input.deposit_address.script_path.clone() {
 				transaction_bytes.push(NUM_WITNESSES_SCRIPT);
 				transaction_bytes.push(LEN_SIGNATURE);
 				transaction_bytes.extend(signatures[i]);
@@ -1338,7 +1338,10 @@ mod test {
 	#[test]
 	fn test_finalize() {
 		let mut tx = create_test_unsigned_transaction(PreviousOrCurrent::Current);
-		tx.add_signatures(vec![[0u8; 64]]);
+		tx.add_signer_and_signatures(
+			AggKey { previous: None, current: Default::default() },
+			vec![[0u8; 64]],
+		);
 		assert_eq!(tx.finalize(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
 	}
 

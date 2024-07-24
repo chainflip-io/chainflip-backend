@@ -10,6 +10,7 @@ use sp_std::marker::PhantomData;
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(Environment))]
+#[allow(clippy::large_enum_variant)]
 pub enum BitcoinApi<Environment: 'static> {
 	BatchTransfer(batch_transfer::BatchTransfer),
 	#[doc(hidden)]

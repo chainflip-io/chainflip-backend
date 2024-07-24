@@ -335,9 +335,9 @@ pub const MOCK_TX_METADATA: <MockEthereum as Chain>::TransactionMetadata =
 #[scale_info(skip_type_params(C))]
 pub struct MockApiCall<C: ChainCrypto> {
 	pub payload: <C as ChainCrypto>::Payload,
-	pub sig: Option<<C as ChainCrypto>::ThresholdSignature>,
+	pub signer_and_signature:
+		Option<(<C as ChainCrypto>::AggKey, <C as ChainCrypto>::ThresholdSignature)>,
 	pub tx_out_id: <C as ChainCrypto>::TransactionOutId,
-	pub signer: Option<<C as ChainCrypto>::AggKey>,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -345,7 +345,10 @@ impl<C: ChainCrypto> BenchmarkValue for MockApiCall<C> {
 	fn benchmark_value() -> Self {
 		Self {
 			payload: <C as ChainCrypto>::Payload::benchmark_value(),
-			sig: Some(<C as ChainCrypto>::ThresholdSignature::benchmark_value()),
+			signer_and_signature: Some((
+				<C as ChainCrypto>::AggKey::benchmark_value(),
+				<C as ChainCrypto>::ThresholdSignature::benchmark_value(),
+			)),
 			tx_out_id: <C as ChainCrypto>::TransactionOutId::benchmark_value(),
 		}
 	}
@@ -367,7 +370,7 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 		threshold_signature: &<C as ChainCrypto>::ThresholdSignature,
 		signer: <C as ChainCrypto>::AggKey,
 	) -> Self {
-		Self { sig: Some(threshold_signature.clone()), signer: Some(signer), ..self }
+		Self { signer_and_signature: Some((signer, threshold_signature.clone())), ..self }
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
@@ -375,7 +378,7 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 	}
 
 	fn is_signed(&self) -> bool {
-		self.sig.is_some()
+		self.signer_and_signature.is_some()
 	}
 
 	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId {
@@ -387,7 +390,7 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 	}
 
 	fn signer(&self) -> Option<<C as ChainCrypto>::AggKey> {
-		self.signer
+		self.signer_and_signature.as_ref().map(|(signer, _)| *signer)
 	}
 }
 

@@ -440,6 +440,7 @@ where
 	) -> Result<(), Self::Error>;
 
 	/// Attempt to retrieve a requested signature.
+	#[allow(clippy::type_complexity)]
 	fn signature_result(
 		request_id: ThresholdSignatureRequestId,
 	) -> (C::AggKey, AsyncResult<Result<C::ThresholdSignature, Vec<Self::ValidatorId>>>);
@@ -469,6 +470,7 @@ where
 	fn insert_signature(
 		_request_id: ThresholdSignatureRequestId,
 		_signature: C::ThresholdSignature,
+		_signer: C::AggKey,
 	) {
 		unimplemented!();
 	}

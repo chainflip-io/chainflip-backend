@@ -169,7 +169,7 @@ impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<Polkad
 		map_over_api_variants!(
 			self,
 			ref mut call,
-			call.insert_signature_and_signer(threshold_signature.clone(), signer)
+			call.insert_signer_and_signature(signer, threshold_signature.clone())
 		);
 		self
 	}

@@ -328,7 +328,8 @@ mod tests {
 		let threshold_signature =
 			SchnorrVerificationComponents { s: [0u8; 32], k_times_g_address: [0u8; 20] };
 
-		let mut builder = builder.signed(&threshold_signature);
+		let mut builder: EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey> =
+			builder.signed(&threshold_signature, Default::default());
 		assert!(builder.is_signed());
 
 		let new_replay_protection = EvmReplayProtection {
