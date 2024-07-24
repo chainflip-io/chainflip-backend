@@ -15,7 +15,7 @@ use sp_std::{
 };
 
 use cf_traits::{
-	Chainflip, Heartbeat, impl_pallet_safe_mode, NetworkState, offence_reporting::*, QualifyNode,
+	impl_pallet_safe_mode, offence_reporting::*, Chainflip, Heartbeat, NetworkState, QualifyNode,
 	ReputationResetter, Slashing,
 };
 pub use pallet::*;

@@ -12,10 +12,7 @@ pub mod test_runner;
 use cf_runtime_upgrade_utilities::VersionedMigration;
 mod weights;
 use crate::{
-	chainflip::{
-		calculate_account_apy,
-		Offence,
-	},
+	chainflip::{calculate_account_apy, Offence},
 	monitoring_apis::{
 		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance, FlipSupply,
 		LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels, PendingBroadcasts,

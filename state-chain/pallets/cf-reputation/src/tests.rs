@@ -1,11 +1,11 @@
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 
 use cf_traits::{
-	AccountRoleRegistry, EpochInfo,
-	mocks::account_role_registry::MockAccountRoleRegistry, offence_reporting::*, QualifyNode, SafeMode, SetSafeMode,
+	mocks::account_role_registry::MockAccountRoleRegistry, offence_reporting::*,
+	AccountRoleRegistry, EpochInfo, QualifyNode, SafeMode, SetSafeMode,
 };
 
-use crate::{*, mock::*};
+use crate::{mock::*, *};
 
 fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> ReputationPoints {
 	ReputationPallet::reputation(who).reputation_points
@@ -567,17 +567,17 @@ fn should_properly_check_if_validator_is_qualified() {
 		ReputationPallet::penalise_offline_authorities(test_set[..one_third].to_vec());
 		// Even though validators misbehaved because previously they sent heartbeat and received
 		// reputation points they are still above 0, so they are all qualified
-		let  current_reputation_of_third_of_validators =
+		let current_reputation_of_third_of_validators =
 			REPUTATION_PER_HEARTBEAT - MISSED_HEARTBEAT_PENALTY_POINTS;
 
 		for id in &test_set[..one_third] {
 			assert!(ReputationPointsQualification::<Test>::is_qualified(&id));
-			assert_eq!(reputation_points(&id), current_reputation_of_third_of_validators );
+			assert_eq!(reputation_points(&id), current_reputation_of_third_of_validators);
 		}
 
 		// Except poor Eve, they are still disqualified
 		assert!(reputation_points(&EVE) < 0);
-		assert_eq!(ReputationPointsQualification::<Test>::is_qualified(&EVE), false);
+		assert!(!ReputationPointsQualification::<Test>::is_qualified(&EVE));
 
 		// Slash reputation below 0
 		for _ in 0..=current_reputation_of_third_of_validators / MISSED_HEARTBEAT_PENALTY_POINTS + 1
@@ -587,12 +587,12 @@ fn should_properly_check_if_validator_is_qualified() {
 
 		// Now one third of the validators will not be qualified anymore
 		for id in &test_set[..one_third] {
-			assert_eq!(ReputationPointsQualification::<Test>::is_qualified(&id), false);
+			assert!(!ReputationPointsQualification::<Test>::is_qualified(id));
 		}
 
 		// And rest of them are
 		for id in &test_set[one_third..] {
-			assert!(ReputationPointsQualification::<Test>::is_qualified(&id));
+			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
 		}
 	});
 }
