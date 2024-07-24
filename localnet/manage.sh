@@ -142,14 +142,9 @@ build-localnet() {
   rm $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
   ln -s $SOLANA_BASE_PATH/test-ledger/accounts/snapshot/100 $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
 
-  if which solana-test-validator >>$DEBUG_OUTPUT_DESTINATION 2>&1; then
-    echo "☀️ Waiting for Solana node to start"
-    ./localnet/init/scripts/start-solana.sh
-    check_endpoint_health -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1
-  else
-    echo "☀️ Solana not installed, skipping..."
-  fi
-
+  echo "☀️ Waiting for Solana node to start"
+  ./localnet/init/scripts/start-solana.sh
+  check_endpoint_health -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1
 
   echo "🦑 Waiting for Arbitrum nodes to start"
   $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
