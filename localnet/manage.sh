@@ -20,8 +20,8 @@ CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 SOLANA_BASE_PATH="/tmp/solana"
 CHAINFLIP_BASE_PATH="/tmp/chainflip"
-export NODE_COUNT="3"
-
+export NODE_COUNT="3-node"
+export SELECTED_NODES=("${GENESIS_NODES[@]}")
 DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-"$CHAINFLIP_BASE_PATH/debug.log"}
 
 source ./localnet/helper.sh
@@ -75,9 +75,9 @@ get-workflow() {
     echo "❓ Would you like to run a 1 or 3 node network? (Type 1 or 3)"
     read -r NODE_COUNT
     if [[ $NODE_COUNT == "1" ]]; then
-      SELECTED_NODES=("${GENESIS_NODES[0]}")
+      export SELECTED_NODES=("${GENESIS_NODES[0]}")
     elif [[ $NODE_COUNT == "3" ]]; then
-      SELECTED_NODES=("${GENESIS_NODES[@]}")
+      export SELECTED_NODES=("${GENESIS_NODES[@]}")
     else
       echo "❌ Invalid NODE_COUNT value: $NODE_COUNT"
       exit 1
