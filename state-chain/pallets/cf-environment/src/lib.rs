@@ -688,6 +688,17 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
+	/// IMPORTANT: This fn is used to recover an un-used DurableNonce so it's available again.
+	/// ONLY use this if this nonce is un-used.
+	pub fn recover_sol_durable_nonce(durable_nonce: DurableNonceAndAccount) {
+		if SolanaUnAvailableNonceAccounts::<T>::get(durable_nonce.0) == Some(durable_nonce.1) {
+			SolanaUnAvailableNonceAccounts::<T>::remove(durable_nonce.0);
+			SolanaAvailableNonceAccounts::<T>::append(durable_nonce);
+		} else {
+			cf_runtime_utilities::log_or_panic!("Failed to recover durable nonce. The given nonce is not Unavailable, or the Hash provided doesn't match the current storage. This should NEVER happen!");
+		}
+	}
+
 	pub fn get_all_sol_nonce_accounts() -> Vec<DurableNonceAndAccount> {
 		let mut nonce_accounts = SolanaAvailableNonceAccounts::<T>::get();
 		nonce_accounts.extend(&mut SolanaUnAvailableNonceAccounts::<T>::iter());

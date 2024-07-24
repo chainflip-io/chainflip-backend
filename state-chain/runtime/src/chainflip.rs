@@ -46,7 +46,7 @@ use cf_chains::{
 	sol::{
 		api::{
 			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
-			DurableNonceAndAccount, SolanaApi, SolanaEnvironment,
+			DurableNonceAndAccount, RecoverDurableNonce, SolanaApi, SolanaEnvironment,
 		},
 		SolAddress, SolAmount, SolApiEnvironment,
 	},
@@ -537,6 +537,12 @@ impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for SolEnvi
 		} else {
 			Some(nonce_accounts)
 		}
+	}
+}
+
+impl RecoverDurableNonce for SolEnvironment {
+	fn recover_durable_nonce(durable_nonce: DurableNonceAndAccount) {
+		Environment::recover_sol_durable_nonce(durable_nonce);
 	}
 }
 
