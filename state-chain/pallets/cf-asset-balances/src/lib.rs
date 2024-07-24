@@ -1,12 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{AnyChain, ForeignChain, ForeignChainAddress};
+use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AssetWithholding, Chainflip, EgressApi, KeyProvider, LiabilityTracker,
-	ScheduledEgressDetails,
+	impl_pallet_safe_mode, AssetWithholding, BalanceApi, Chainflip, EgressApi, KeyProvider,
+	LiabilityTracker, ScheduledEgressDetails,
 };
 use frame_support::{
 	pallet_prelude::*, sp_runtime::traits::Saturating, storage::transactional::with_storage_layer,
@@ -93,6 +93,10 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Refund amount is too low to cover the egress fees. In this case, the refund is skipped.
 		RefundAmountTooLow,
+		/// The user does not have enough funds.
+		InsufficientBalance,
+		/// The user has reached the maximum balance.
+		BalanceOverflow,
 	}
 
 	#[pallet::event]
@@ -105,12 +109,26 @@ pub mod pallet {
 			amount: AssetAmount,
 		},
 		/// The refund was skipped because of the given reason.
-		RefundSkipped { reason: DispatchError, chain: ForeignChain, address: ForeignChainAddress },
+		RefundSkipped {
+			reason: DispatchError,
+			chain: ForeignChain,
+			address: ForeignChainAddress,
+		},
 		/// The Vault is running a deficit: we owe more than we have set aside for refunds.
 		VaultDeficitDetected {
 			chain: ForeignChain,
 			amount_owed: AssetAmount,
 			available: AssetAmount,
+		},
+		AccountDebited {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount_debited: AssetAmount,
+		},
+		AccountCredited {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount_credited: AssetAmount,
 		},
 	}
 
@@ -127,6 +145,25 @@ pub mod pallet {
 	/// Funds that have been set aside to refund external [Liabilities].
 	#[pallet::storage]
 	pub type WithheldAssets<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+
+	#[pallet::storage]
+	/// Storage for user's free balances/ DoubleMap: (AccountId, Asset) => Balance
+	pub type FreeBalances<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
+
+	#[pallet::storage]
+	/// Historical earned fees for an account.
+	pub type HistoricalEarnedFees<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+
+	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
+	#[pallet::storage]
+	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+
+	/// Fund accrued from rejected swap and CCM calls.
+	#[pallet::storage]
+	pub type CollectedRejectedFunds<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 }
 
@@ -352,5 +389,74 @@ impl<T: Config> AssetWithholding for Pallet<T> {
 	#[cfg(feature = "try-runtime")]
 	fn withheld_assets(asset: Asset) -> AssetAmount {
 		WithheldAssets::<T>::get(asset)
+	}
+}
+
+impl<T: Config> BalanceApi for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn try_credit_account(
+		account_id: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		if amount == 0 {
+			return Ok(())
+		}
+
+		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
+		balance = balance.checked_add(amount).ok_or(Error::<T>::BalanceOverflow)?;
+		FreeBalances::<T>::insert(account_id, asset, balance);
+
+		Self::deposit_event(Event::AccountCredited {
+			account_id: account_id.clone(),
+			asset,
+			amount_credited: amount,
+		});
+		Ok(())
+	}
+
+	fn try_debit_account(
+		account_id: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		if amount == 0 {
+			return Ok(())
+		}
+
+		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
+		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
+		balance = balance.saturating_sub(amount);
+		FreeBalances::<T>::insert(account_id, asset, balance);
+
+		Self::deposit_event(Event::AccountDebited {
+			account_id: account_id.clone(),
+			asset,
+			amount_debited: amount,
+		});
+		Ok(())
+	}
+
+	fn record_fees(account_id: &Self::AccountId, amount: AssetAmount, asset: Asset) {
+		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
+			*balance = balance.saturating_add(amount)
+		});
+	}
+
+	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
+		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset).unwrap_or_default()))
+	}
+
+	fn record_network_fee(amount: AssetAmount) {
+		CollectedNetworkFee::<T>::mutate(|fee| *fee = fee.saturating_add(amount));
+	}
+	fn collected_rejected_funds(asset: Asset, amount: AssetAmount) {
+		CollectedRejectedFunds::<T>::mutate(asset, |fee| *fee = fee.saturating_add(amount));
+	}
+
+	fn kill_balance(who: &Self::AccountId) {
+		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
+		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
 	}
 }

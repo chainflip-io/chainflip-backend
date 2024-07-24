@@ -37,8 +37,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
-	AssetWithholding, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi, EpochInfo,
-	FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, LpBalanceApi,
+	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
+	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
 	LpDepositHandler, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
 	SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
 };
@@ -414,9 +414,9 @@ pub mod pallet {
 		/// representation.
 		type AddressConverter: AddressConverter;
 
-		/// Pallet responsible for managing Liquidity Providers.
-		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>
-			+ LpDepositHandler<AccountId = Self::AccountId>;
+		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
+
+		type LpDepositHandler: LpDepositHandler<AccountId = Self::AccountId>;
 
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain>
@@ -1551,7 +1551,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let action = match action {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
-				T::LpBalance::add_deposit(&lp_account, asset.into(), amount_after_fees.into())?;
+				T::LpDepositHandler::add_deposit(
+					&lp_account,
+					asset.into(),
+					amount_after_fees.into(),
+				)?;
 
 				DepositAction::LiquidityProvision { lp_account }
 			},

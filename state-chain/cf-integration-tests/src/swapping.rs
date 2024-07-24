@@ -27,18 +27,18 @@ use cf_primitives::{
 	GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{Chainflip, EpochInfo, LpBalanceApi, SwapType};
+use cf_traits::{BalanceApi, Chainflip, EpochInfo, SwapType};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
 	traits::{OnFinalize, OnIdle},
 };
+use pallet_cf_asset_balances::HistoricalEarnedFees;
 use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls, RequestFailureCallbacks,
 	RequestSuccessCallbacks,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
-use pallet_cf_lp::HistoricalEarnedFees;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
 use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
 use sp_core::U256;
@@ -47,8 +47,8 @@ use state_chain_runtime::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthTransactionBuilder,
 		EvmEnvironment,
 	},
-	EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, EthereumInstance,
-	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
+	AssetBalances, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
+	EthereumInstance, LiquidityPools, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
 	System, Timestamp, Validator, Weight, Witnesser,
 };
 
@@ -76,16 +76,17 @@ fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price
 }
 
 fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
-	let original_amount =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default();
-	assert_ok!(LiquidityProvider::try_credit_account(account_id, asset, amount));
+	let original_amount = pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset)
+		.unwrap_or_default();
+	assert_ok!(AssetBalances::try_credit_account(account_id, asset, amount));
 	assert_eq!(
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default(),
+		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset)
+			.unwrap_or_default(),
 		original_amount + amount
 	);
 	assert_events_eq!(
 		Runtime,
-		RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountCredited {
+		RuntimeEvent::AssetBalances(pallet_cf_asset_balances::Event::AccountCredited {
 			account_id: account_id.clone(),
 			asset,
 			amount_credited: amount,
@@ -104,7 +105,8 @@ fn set_range_order(
 	liquidity: Liquidity,
 ) {
 	let balances = [base_asset, quote_asset].map(|asset| {
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
+		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset)
+			.unwrap_or_default()
 	});
 	assert_ok!(LiquidityPools::set_range_order(
 		RuntimeOrigin::signed(account_id.clone()),
@@ -115,7 +117,8 @@ fn set_range_order(
 		RangeOrderSize::Liquidity { liquidity },
 	));
 	let new_balances = [base_asset, quote_asset].map(|asset| {
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
+		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset)
+			.unwrap_or_default()
 	});
 
 	assert!(new_balances.into_iter().zip(balances).all(|(new, old)| { new <= old }));
@@ -126,7 +129,7 @@ fn set_range_order(
 		if new_balance < old_balance {
 			assert_events_eq!(
 				Runtime,
-				RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
+				RuntimeEvent::AssetBalances(pallet_cf_asset_balances::Event::AccountDebited {
 					account_id: account_id.clone(),
 					asset,
 					amount_debited: old_balance - new_balance,
@@ -149,9 +152,10 @@ fn set_limit_order(
 	let (asset_pair, order) = pallet_cf_pools::AssetPair::from_swap(sell_asset, buy_asset).unwrap();
 
 	let sell_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
-	let buy_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
+		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, sell_asset)
+			.unwrap_or_default();
+	let buy_balance = pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, buy_asset)
+		.unwrap_or_default();
 	assert_ok!(LiquidityPools::set_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		asset_pair.assets().base,
@@ -162,9 +166,11 @@ fn set_limit_order(
 		sell_amount,
 	));
 	let new_sell_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
+		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, sell_asset)
+			.unwrap_or_default();
 	let new_buy_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
+		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, buy_asset)
+			.unwrap_or_default();
 
 	assert_eq!(new_sell_balance, sell_balance - sell_amount);
 	assert_eq!(new_buy_balance, buy_balance);
@@ -172,7 +178,7 @@ fn set_limit_order(
 	if new_sell_balance < sell_balance {
 		assert_events_eq!(
 			Runtime,
-			RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
+			RuntimeEvent::AssetBalances(pallet_cf_asset_balances::Event::AccountDebited {
 				account_id: account_id.clone(),
 				asset: sell_asset,
 				amount_debited: sell_balance - new_sell_balance,

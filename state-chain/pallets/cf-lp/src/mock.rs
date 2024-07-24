@@ -2,6 +2,7 @@ use crate as pallet_cf_lp;
 use crate::PalletSafeMode;
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
+	assets::any::Asset,
 	AnyChain, Chain, Ethereum,
 };
 use cf_primitives::{chains::assets, AccountId, AssetAmount, ChannelId};
@@ -13,7 +14,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler,
 	},
-	AccountRoleRegistry, BoostApi,
+	AccountRoleRegistry, BalanceApi, BoostApi,
 };
 use frame_support::{
 	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
@@ -24,6 +25,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	Permill,
 };
+use std::{cell::RefCell, collections::BTreeMap};
 
 use sp_std::str::FromStr;
 
@@ -60,6 +62,83 @@ frame_support::construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const SS58Prefix: u8 = 42;
+}
+
+thread_local! {
+	pub static BALANCE_MAP: RefCell<BTreeMap<AccountId, AssetAmount>> = RefCell::new(BTreeMap::new());
+}
+
+pub struct MockBalanceApi;
+
+impl BalanceApi for MockBalanceApi {
+	type AccountId = AccountId;
+
+	fn record_network_fee(_amount: AssetAmount) {}
+
+	fn collected_rejected_funds(_asset: Asset, _amount: AssetAmount) {}
+
+	fn try_credit_account(
+		who: &Self::AccountId,
+		_asset: cf_primitives::Asset,
+		amount: cf_primitives::AssetAmount,
+	) -> frame_support::dispatch::DispatchResult {
+		BALANCE_MAP.with(|balance_map| {
+			let mut balance_map = balance_map.borrow_mut();
+			*balance_map.entry(who.to_owned()).or_default() += amount;
+			Ok(())
+		})
+	}
+
+	fn try_debit_account(
+		who: &Self::AccountId,
+		_asset: cf_primitives::Asset,
+		amount: cf_primitives::AssetAmount,
+	) -> frame_support::dispatch::DispatchResult {
+		BALANCE_MAP.with(|balance_map| {
+			let mut balance_map = balance_map.borrow_mut();
+			let balance = balance_map.entry(who.to_owned()).or_default();
+			*balance = balance.checked_sub(amount).ok_or("Insufficient balance")?;
+			Ok(())
+		})
+	}
+
+	fn record_fees(
+		_who: &Self::AccountId,
+		_amount: cf_primitives::AssetAmount,
+		_asset: cf_primitives::Asset,
+	) {
+	}
+
+	fn free_balances(
+		who: &Self::AccountId,
+	) -> Result<assets::any::AssetMap<cf_primitives::AssetAmount>, sp_runtime::DispatchError> {
+		BALANCE_MAP.with(|balance_map| {
+			Ok(assets::any::AssetMap::try_from_iter(
+				Asset::all().map(|asset| {
+					(asset, balance_map.borrow().get(who).cloned().unwrap_or_default())
+				}),
+			)
+			.unwrap())
+		})
+	}
+
+	fn kill_balance(who: &Self::AccountId) {
+		BALANCE_MAP.with(|balance_map| {
+			balance_map.borrow_mut().remove(who);
+		});
+	}
+}
+
+impl MockBalanceApi {
+	pub fn insert_balance(account: AccountId, amount: AssetAmount) {
+		BALANCE_MAP.with(|balance_map| {
+			balance_map.borrow_mut().insert(account, amount);
+		});
+	}
+
+	pub fn get_balance(account: &AccountId) -> Option<AssetAmount> {
+		BALANCE_MAP.with(|balance_map| balance_map.borrow().get(account).cloned())
+	}
 }
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
@@ -105,6 +184,7 @@ impl crate::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 	type PoolApi = Self;
+	type BalanceApi = MockBalanceApi;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
 	type BoostApi = MockIngressEgressBoostApi;

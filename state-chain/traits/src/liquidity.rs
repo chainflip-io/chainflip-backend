@@ -12,7 +12,7 @@ pub trait LpDepositHandler {
 	fn add_deposit(who: &Self::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult;
 }
 
-pub trait LpBalanceApi {
+pub trait LpApi {
 	type AccountId;
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -26,6 +26,16 @@ pub trait LpBalanceApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> DispatchResult;
+}
+
+pub trait BalanceApi {
+	type AccountId;
+
+	/// Record the network fee.
+	fn record_network_fee(amount: AssetAmount);
+
+	/// Record the rejected funds.
+	fn collected_rejected_funds(asset: Asset, amount: AssetAmount);
 
 	/// Attempt to credit the account with the given asset and amount.
 	fn try_credit_account(
@@ -46,6 +56,9 @@ pub trait LpBalanceApi {
 
 	/// Returns the asset free balances of the given account.
 	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
+
+	/// Removes all balances of the given account from storage.
+	fn kill_balance(who: &Self::AccountId);
 }
 
 pub trait PoolApi {

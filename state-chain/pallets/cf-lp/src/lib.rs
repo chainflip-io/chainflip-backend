@@ -4,13 +4,12 @@
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, BoostApi, Chainflip, DepositApi, EgressApi,
-	LpBalanceApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostApi, Chainflip, DepositApi,
+	EgressApi, LpApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
 };
 
 use sp_std::vec;
 
-use cf_chains::assets::any::AssetMap;
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -75,11 +74,15 @@ pub mod pallet {
 		/// The interface for sweeping funds from pools into free balance
 		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
+		/// The interface to managing balances.
+		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
 		/// The interface to access boosted balances
 		type BoostApi: BoostApi<
 			AccountId = <Self as frame_system::Config>::AccountId,
 			AssetMap = cf_chains::assets::any::AssetMap<AssetAmount>,
 		>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 
@@ -173,16 +176,6 @@ pub mod pallet {
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
-
-	#[pallet::storage]
-	/// Storage for user's free balances/ DoubleMap: (AccountId, Asset) => Balance
-	pub type FreeBalances<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
-
-	#[pallet::storage]
-	/// Historical earned fees for an account.
-	pub type HistoricalEarnedFees<T: Config> =
-		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	/// Stores the registered energency withdrawal address for an Account
 	#[pallet::storage]
@@ -308,8 +301,11 @@ pub mod pallet {
 				}),
 				Error::<T>::OpenOrdersRemaining
 			);
+			T::PoolApi::sweep(&account_id)?;
 			ensure!(
-				Self::free_balances(&account_id)?.iter().all(|(_, amount)| *amount == 0),
+				T::BalanceApi::free_balances(&account_id)?
+					.iter()
+					.all(|(_, amount)| *amount == 0),
 				Error::<T>::FundsRemaining
 			);
 			ensure!(
@@ -319,9 +315,10 @@ pub mod pallet {
 				Error::<T>::BoostedFundsRemaining
 			);
 
-			let _ = FreeBalances::<T>::clear_prefix(&account_id, u32::MAX, None);
 			let _ = LiquidityRefundAddress::<T>::clear_prefix(&account_id, u32::MAX, None);
-			let _ = HistoricalEarnedFees::<T>::clear_prefix(&account_id, u32::MAX, None);
+
+			// Kill the account balances.
+			T::BalanceApi::kill_balance(&account_id);
 
 			T::AccountRoleRegistry::deregister_as_liquidity_provider(&account_id)?;
 
@@ -377,10 +374,12 @@ impl<T: Config> Pallet<T> {
 					T::PoolApi::sweep(&account_id)?;
 
 					// Debit the asset from the account.
-					Self::try_debit_account(&account_id, asset, amount)?;
+					T::BalanceApi::try_debit_account(&account_id, asset, amount)?;
+					// Self::try_debit_account(&account_id, asset, amount)?;
 
 					// Credit the asset to the destination account.
-					Self::try_credit_account(&destination_account, asset, amount)?;
+					T::BalanceApi::try_credit_account(&destination_account, asset, amount)?;
+					// Self::try_credit_account(&destination_account, asset, amount)?;
 
 					Self::deposit_event(Event::AssetTransferred {
 						from: account_id,
@@ -404,7 +403,8 @@ impl<T: Config> Pallet<T> {
 					T::PoolApi::sweep(&account_id)?;
 
 					// Debit the asset from the account.
-					Self::try_debit_account(&account_id, asset, amount)?;
+					// Self::try_debit_account(&account_id, asset, amount)?;
+					T::BalanceApi::try_debit_account(&account_id, asset, amount)?;
 
 					let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
 						T::EgressHandler::schedule_egress(
@@ -437,7 +437,7 @@ impl<T: Config> LpDepositHandler for Pallet<T> {
 		asset: Asset,
 		amount: AssetAmount,
 	) -> frame_support::pallet_prelude::DispatchResult {
-		Self::try_credit_account(account_id, asset, amount)?;
+		T::BalanceApi::try_credit_account(account_id, asset, amount)?;
 
 		Self::deposit_event(Event::LiquidityDepositCredited {
 			account_id: account_id.clone(),
@@ -449,7 +449,7 @@ impl<T: Config> LpDepositHandler for Pallet<T> {
 	}
 }
 
-impl<T: Config> LpBalanceApi for Pallet<T> {
+impl<T: Config> LpApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -474,59 +474,5 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);
 		Ok(())
-	}
-
-	fn try_credit_account(
-		account_id: &Self::AccountId,
-		asset: Asset,
-		amount: AssetAmount,
-	) -> DispatchResult {
-		if amount == 0 {
-			return Ok(())
-		}
-
-		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
-		balance = balance.checked_add(amount).ok_or(Error::<T>::BalanceOverflow)?;
-		FreeBalances::<T>::insert(account_id, asset, balance);
-
-		Self::deposit_event(Event::AccountCredited {
-			account_id: account_id.clone(),
-			asset,
-			amount_credited: amount,
-		});
-		Ok(())
-	}
-
-	fn try_debit_account(
-		account_id: &Self::AccountId,
-		asset: Asset,
-		amount: AssetAmount,
-	) -> DispatchResult {
-		if amount == 0 {
-			return Ok(())
-		}
-
-		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
-		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
-		balance = balance.saturating_sub(amount);
-		FreeBalances::<T>::insert(account_id, asset, balance);
-
-		Self::deposit_event(Event::AccountDebited {
-			account_id: account_id.clone(),
-			asset,
-			amount_debited: amount,
-		});
-		Ok(())
-	}
-
-	fn record_fees(account_id: &Self::AccountId, amount: AssetAmount, asset: Asset) {
-		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
-			*balance = balance.saturating_add(amount)
-		});
-	}
-
-	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
-		T::PoolApi::sweep(who)?;
-		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset).unwrap_or_default()))
 	}
 }
