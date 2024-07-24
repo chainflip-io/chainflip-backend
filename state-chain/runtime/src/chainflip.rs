@@ -8,7 +8,6 @@ pub mod epoch_transition;
 pub mod evm_vault_activator;
 mod missed_authorship_slots;
 mod offences;
-pub mod reputation_points_qualification;
 mod signer_nomination;
 
 use crate::{

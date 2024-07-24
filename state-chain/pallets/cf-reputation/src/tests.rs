@@ -1,6 +1,11 @@
-use crate::{mock::*, *};
-use cf_traits::{offence_reporting::*, EpochInfo, QualifyNode, SafeMode, SetSafeMode};
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+
+use cf_traits::{
+	AccountRoleRegistry, EpochInfo,
+	mocks::account_role_registry::MockAccountRoleRegistry, offence_reporting::*, QualifyNode, SafeMode, SetSafeMode,
+};
+
+use crate::{*, mock::*};
 
 fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> ReputationPoints {
 	ReputationPallet::reputation(who).reputation_points
@@ -321,12 +326,13 @@ fn heartbeats_emitted_in_safe_mode() {
 
 #[cfg(test)]
 mod reporting_adapter_test {
-	use super::*;
 	use frame_support::assert_err;
 	use pallet_grandpa::{
 		EquivocationOffence as GrandpaEquivocationOffence, TimeSlot as GrandpaTimeSlot,
 	};
 	use sp_staking::offence::ReportOffence;
+
+	use super::*;
 
 	type IdentificationTuple = (u64, ());
 
@@ -496,5 +502,97 @@ fn in_safe_mode_you_dont_lose_reputation_for_being_offline() {
 		advance_by_hearbeat_intervals(3);
 		assert!(!ReputationPallet::is_qualified(&BOB));
 		assert_eq!(reputation, reputation_points(&BOB));
+	});
+}
+
+#[test]
+fn should_properly_check_if_validator_is_qualified() {
+	new_test_ext().execute_with(|| {
+		const EVE: u64 = 101;
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&EVE
+		));
+
+		let mut test_set = vec![ALICE, BOB, EVE];
+
+		// single validator is always qualified
+		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
+		assert!(ReputationPointsQualification::<Test>::is_qualified(&ALICE));
+
+		// test when network has 3 validators
+		for id in test_set.iter() {
+			ReputationPallet::heartbeat(RuntimeOrigin::signed(*id)).unwrap();
+			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
+		}
+
+		// If there are 3 validators and 33rd percentile validator has  lower reputation than the
+		// other (so 1 validator has worse reputation than the other 2, they should not be
+		// considered qualified)
+		ReputationPallet::penalise_offline_authorities(vec![BOB]);
+		assert!(reputation_points(&BOB) < 0);
+		assert_eq!(ReputationPointsQualification::<Test>::is_qualified(&BOB), false);
+
+		// If reputation of other validators is reduced further, make sure that
+		// we don't unnecessarily disqualify validators
+		ReputationPallet::penalise_offline_authorities(vec![EVE]);
+		assert!(reputation_points(&EVE) < 0);
+		assert!(reputation_points(&ALICE) >= 0);
+		for id in test_set.iter() {
+			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
+		}
+
+		// Check that updating reputations properly calculates qualifications
+		move_forward_hearbeat_interval_and_submit_heartbeat(ALICE);
+		move_forward_hearbeat_interval_and_submit_heartbeat(BOB);
+
+		assert_eq!(ReputationPointsQualification::<Test>::is_qualified(&EVE), false);
+
+		// Test with a bunch of validators
+
+		for id in 300..500u64 {
+			test_set.push(id);
+
+			assert_ok!(
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&id)
+			);
+			ReputationPallet::heartbeat(RuntimeOrigin::signed(id)).unwrap();
+			assert!(ReputationPointsQualification::<Test>::is_qualified(&id));
+		}
+
+		// just so that ALICE, BOB and EVE are at the end to make testing bit easier
+		test_set.reverse();
+		let one_third = test_set.len() / 3;
+
+		// make one third of validators misbehave
+		ReputationPallet::penalise_offline_authorities(test_set[..one_third].to_vec());
+		// Even though validators misbehaved because previously they sent heartbeat and received
+		// reputation points they are still above 0, so they are all qualified
+		let  current_reputation_of_third_of_validators =
+			REPUTATION_PER_HEARTBEAT - MISSED_HEARTBEAT_PENALTY_POINTS;
+
+		for id in &test_set[..one_third] {
+			assert!(ReputationPointsQualification::<Test>::is_qualified(&id));
+			assert_eq!(reputation_points(&id), current_reputation_of_third_of_validators );
+		}
+
+		// Except poor Eve, they are still disqualified
+		assert!(reputation_points(&EVE) < 0);
+		assert_eq!(ReputationPointsQualification::<Test>::is_qualified(&EVE), false);
+
+		// Slash reputation below 0
+		for _ in 0..=current_reputation_of_third_of_validators / MISSED_HEARTBEAT_PENALTY_POINTS + 1
+		{
+			ReputationPallet::penalise_offline_authorities(test_set[..one_third].to_vec());
+		}
+
+		// Now one third of the validators will not be qualified anymore
+		for id in &test_set[..one_third] {
+			assert_eq!(ReputationPointsQualification::<Test>::is_qualified(&id), false);
+		}
+
+		// And rest of them are
+		for id in &test_set[one_third..] {
+			assert!(ReputationPointsQualification::<Test>::is_qualified(&id));
+		}
 	});
 }
