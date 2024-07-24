@@ -20,7 +20,7 @@ CORE_CONTAINERS="bitcoin geth polkadot redis"
 ARB_CONTAINERS="sequencer staker-unsafe poster"
 SOLANA_BASE_PATH="/tmp/solana"
 CHAINFLIP_BASE_PATH="/tmp/chainflip"
-export NODE_COUNT="3-node"
+export NODE_COUNT="3"
 
 DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-"$CHAINFLIP_BASE_PATH/debug.log"}
 
