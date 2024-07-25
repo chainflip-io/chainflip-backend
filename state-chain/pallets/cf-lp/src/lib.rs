@@ -375,11 +375,9 @@ impl<T: Config> Pallet<T> {
 
 					// Debit the asset from the account.
 					T::BalanceApi::try_debit_account(&account_id, asset, amount)?;
-					// Self::try_debit_account(&account_id, asset, amount)?;
 
 					// Credit the asset to the destination account.
 					T::BalanceApi::try_credit_account(&destination_account, asset, amount)?;
-					// Self::try_credit_account(&destination_account, asset, amount)?;
 
 					Self::deposit_event(Event::AssetTransferred {
 						from: account_id,
@@ -403,7 +401,6 @@ impl<T: Config> Pallet<T> {
 					T::PoolApi::sweep(&account_id)?;
 
 					// Debit the asset from the account.
-					// Self::try_debit_account(&account_id, asset, amount)?;
 					T::BalanceApi::try_debit_account(&account_id, asset, amount)?;
 
 					let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =

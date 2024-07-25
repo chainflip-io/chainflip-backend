@@ -1,12 +1,14 @@
 use cf_chains::{Ethereum, ForeignChain, ForeignChainAddress};
-use cf_primitives::AssetAmount;
+use cf_primitives::{AccountId, AssetAmount};
 use cf_traits::{
 	mocks::egress_handler::MockEgressParameter, AssetWithholding, LiabilityTracker, SetSafeMode,
 };
 
+use crate::FreeBalances;
 use cf_chains::AnyChain;
 use cf_test_utilities::assert_has_event;
-use cf_traits::{mocks::egress_handler::MockEgressHandler, SafeMode};
+use cf_traits::{mocks::egress_handler::MockEgressHandler, BalanceApi, SafeMode};
+use frame_support::{assert_noop, assert_ok};
 
 use crate::{mock::*, ExternalOwner, Liabilities, Pallet, WithheldAssets};
 
@@ -310,4 +312,145 @@ fn can_reconciliate_multiple_chains_at_once() {
 			assert_eq!(WithheldAssets::<Test>::get(asset), 0);
 		});
 	});
+}
+
+pub mod balance_api {
+	use super::*;
+
+	use crate::{CollectedNetworkFee, CollectedRejectedFunds, HistoricalEarnedFees};
+	use cf_primitives::chains::assets::eth;
+
+	#[test]
+	pub fn credit_and_debit() {
+		new_test_ext().execute_with(|| {
+			let alice = AccountId::from([1; 32]);
+			const AMOUNT: u128 = 100;
+			assert_ok!(Pallet::<Test>::try_credit_account(
+				&alice,
+				ForeignChain::Ethereum.gas_asset(),
+				AMOUNT
+			));
+			assert_has_event::<Test>(
+				crate::Event::AccountCredited {
+					account_id: alice.clone(),
+					asset: ForeignChain::Ethereum.gas_asset(),
+					amount_credited: AMOUNT,
+				}
+				.into(),
+			);
+			assert_eq!(
+				FreeBalances::<Test>::get(&alice, ForeignChain::Ethereum.gas_asset()),
+				Some(AMOUNT)
+			);
+			assert_noop!(
+				Pallet::<Test>::try_debit_account(
+					&alice,
+					ForeignChain::Ethereum.gas_asset(),
+					AMOUNT + 10
+				),
+				crate::Error::<Test>::InsufficientBalance
+			);
+			assert_ok!(Pallet::<Test>::try_debit_account(
+				&AccountId::from([1; 32]),
+				ForeignChain::Ethereum.gas_asset(),
+				AMOUNT - 10
+			));
+			assert_eq!(
+				FreeBalances::<Test>::get(
+					AccountId::from([1; 32]),
+					ForeignChain::Ethereum.gas_asset()
+				),
+				Some(10)
+			);
+			assert_has_event::<Test>(
+				crate::Event::AccountDebited {
+					account_id: alice.clone(),
+					asset: ForeignChain::Ethereum.gas_asset(),
+					amount_debited: AMOUNT - 10,
+				}
+				.into(),
+			);
+		});
+	}
+
+	#[test]
+	pub fn kill_balances() {
+		new_test_ext().execute_with(|| {
+			FreeBalances::<Test>::insert(
+				AccountId::from([1; 32]),
+				ForeignChain::Ethereum.gas_asset(),
+				100,
+			);
+			HistoricalEarnedFees::<Test>::insert(
+				AccountId::from([1; 32]),
+				ForeignChain::Ethereum.gas_asset(),
+				100,
+			);
+			Pallet::<Test>::kill_balance(&AccountId::from([1; 32]));
+			assert!(FreeBalances::<Test>::get(
+				AccountId::from([1; 32]),
+				ForeignChain::Ethereum.gas_asset()
+			)
+			.is_none());
+			assert_eq!(
+				HistoricalEarnedFees::<Test>::get(
+					AccountId::from([1; 32]),
+					ForeignChain::Ethereum.gas_asset()
+				),
+				0
+			);
+		});
+	}
+
+	#[test]
+	pub fn record_fees() {
+		new_test_ext().execute_with(|| {
+			Pallet::<Test>::record_fees(
+				&AccountId::from([1; 32]),
+				100,
+				ForeignChain::Ethereum.gas_asset(),
+			);
+			assert_eq!(
+				HistoricalEarnedFees::<Test>::get(
+					AccountId::from([1; 32]),
+					ForeignChain::Ethereum.gas_asset()
+				),
+				100
+			);
+		});
+	}
+
+	#[test]
+	pub fn free_balances() {
+		new_test_ext().execute_with(|| {
+			FreeBalances::<Test>::insert(
+				AccountId::from([1; 32]),
+				ForeignChain::Ethereum.gas_asset(),
+				100,
+			);
+			assert_eq!(
+				Pallet::<Test>::free_balances(&AccountId::from([1; 32])).unwrap().eth,
+				eth::AssetMap { eth: 100, flip: 0, usdc: 0, usdt: 0 }
+			);
+		});
+	}
+
+	#[test]
+	pub fn record_network_fee() {
+		new_test_ext().execute_with(|| {
+			Pallet::<Test>::record_network_fee(100);
+			assert_eq!(CollectedNetworkFee::<Test>::get(), 100);
+		});
+	}
+
+	#[test]
+	pub fn collected_rejected_funds() {
+		new_test_ext().execute_with(|| {
+			Pallet::<Test>::collected_rejected_funds(ForeignChain::Ethereum.gas_asset(), 100);
+			assert_eq!(
+				CollectedRejectedFunds::<Test>::get(ForeignChain::Ethereum.gas_asset()),
+				100
+			);
+		});
+	}
 }

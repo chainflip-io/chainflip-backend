@@ -94,6 +94,7 @@ fn liquidity_providers_can_move_assets_internally() {
 			Asset::Eth,
 			AccountId::from(LP_ACCOUNT_2),
 		));
+
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
 			crate::Event::AssetTransferred {
 				from: AccountId::from(LP_ACCOUNT),
@@ -102,24 +103,6 @@ fn liquidity_providers_can_move_assets_internally() {
 				amount: TRANSFER_AMOUNT,
 			},
 		));
-
-		// TODO: Think about if it's worth checking the balances here. Actually we only test the
-		// mock.
-
-		// Expect the balances to be moved between the LP accounts.
-		// assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth),
-		// Some(900)); assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2),
-		// Asset::Eth), Some(100));
-
-		// let new_balance_origin = FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT),
-		// Asset::Eth) 	.expect("balance exists");
-		// let new_balance_dest = FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2),
-		// Asset::Eth) 	.expect("balance exists");
-
-		// assert!(
-		// 	old_balance_origin + old_balance_dest == new_balance_origin + new_balance_dest,
-		// 	"Balance integrity check failed!"
-		// );
 	});
 }
 
@@ -377,14 +360,3 @@ fn account_registration_and_deregistration() {
 			.all(|(_, amount)| *amount == 0));
 	});
 }
-
-// TODO: Check if this test is still needed.
-// #[test]
-// fn record_fees() {
-// 	new_test_ext().execute_with(|| {
-// 		const LP_ACCOUNT_ID: AccountId = AccountId32::new(LP_ACCOUNT);
-// 		const AMOUNT: AssetAmount = 1_000;
-// 		LiquidityProvider::record_fees(&LP_ACCOUNT_ID, AMOUNT, Asset::Eth);
-// 		assert_eq!(HistoricalEarnedFees::<Test>::get(&LP_ACCOUNT_ID, Asset::Eth), AMOUNT);
-// 	});
-// }

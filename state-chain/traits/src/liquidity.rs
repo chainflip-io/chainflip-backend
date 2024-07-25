@@ -12,15 +12,18 @@ pub trait LpDepositHandler {
 	fn add_deposit(who: &Self::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult;
 }
 
+/// API for interacting with the liquidity provider pallet.
 pub trait LpApi {
 	type AccountId;
 
+	/// Register an address for an given account. This is for benchmarking purposes only.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn register_liquidity_refund_address(
 		who: &Self::AccountId,
 		address: cf_chains::ForeignChainAddress,
 	);
 
+	/// Ensure that the given account has a refund address set for the given asset.
 	fn ensure_has_refund_address_for_pair(
 		who: &Self::AccountId,
 		base_asset: Asset,
@@ -28,6 +31,7 @@ pub trait LpApi {
 	) -> DispatchResult;
 }
 
+/// API for interacting with the asset-balance pallet.
 pub trait BalanceApi {
 	type AccountId;
 
