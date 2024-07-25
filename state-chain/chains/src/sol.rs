@@ -42,8 +42,8 @@ pub const CCM_BYTES_PER_ACCOUNT: usize = 33usize;
 // Bytes left that are available for the user when building the native and token ccm transfers.
 // Leaving some bytes for safety (32) but without preventing an extra account to be included.
 // The cf_receiver is accounted as part of the bytes required to build the call.
-pub const MAX_CCM_BYTES_USDC: usize = 600usize; // technically 705
-pub const MAX_CCM_BYTES_SOL: usize = 400usize; // technically 492
+pub const MAX_CCM_BYTES_USDC: usize = 400usize; // technically 705
+pub const MAX_CCM_BYTES_SOL: usize = 300usize; // technically 492
 
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";

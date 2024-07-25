@@ -126,8 +126,8 @@ function newSolanaCfParameters(maxAccounts: number) {
 
 // Solana CCM-related parameters. These are values in the protocol.
 // Leaving some margin to avoid encoding edge cases
-const maxCcmBytesUsdc = 550;
-const maxCcmBytesSol = 350;
+const maxCcmBytesUsdc = 300;
+const maxCcmBytesSol = 200;
 const bytesPerAccount = 33;
 
 function newCcmMessageAndCfParameters(destAsset: Asset): { message: string; cfParameters: string } {
