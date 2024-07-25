@@ -260,7 +260,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					.clone()
 					.try_into()
 					.expect("This is parsed from bounded vec, therefore the size must fit"),
-				gas_budget: 0,
+				gas_budget: 0, // This value is un-used by Solana
 				cf_parameters: cf_parameters
 					.clone()
 					.try_into()

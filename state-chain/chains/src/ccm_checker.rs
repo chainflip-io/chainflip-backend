@@ -1,11 +1,13 @@
 use crate::{
-	sol::{api::SolanaEnvironment, SolAsset, SolCcmAccounts},
+	sol::{
+		api::SolanaEnvironment, SolAsset, SolCcmAccounts, CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL,
+		MAX_CCM_BYTES_USDC,
+	},
 	CcmChannelMetadata, CcmValidityCheck, CcmValidityError,
 };
 use cf_primitives::{Asset, ForeignChain};
 use codec::Decode;
 use core::marker::PhantomData;
-use sol_prim::consts::{CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC};
 
 pub struct CcmValidityChecker<Environment> {
 	_phantom: PhantomData<Environment>,
@@ -61,7 +63,6 @@ impl<Environment: SolanaEnvironment> CcmValidityCheck for CcmValidityChecker<Env
 mod test {
 	use codec::Encode;
 	use frame_support::{assert_err, assert_ok};
-	use sol_prim::consts::MAX_CCM_BYTES_SOL;
 	use Asset;
 
 	use super::*;
@@ -73,7 +74,7 @@ mod test {
 			},
 			signing_key::SolSigningKey,
 			sol_tx_core::{signer::Signer, sol_test_values},
-			SolAddress, SolAmount, SolApiEnvironment, SolCcmAddress, SolPubkey,
+			SolAddress, SolAmount, SolApiEnvironment, SolCcmAddress, SolPubkey, MAX_CCM_BYTES_SOL,
 		},
 		ChainEnvironment,
 	};

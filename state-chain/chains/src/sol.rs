@@ -37,6 +37,14 @@ pub use sol_tx_core::{
 // tx. Batches of 5 fetches get to ~1000 bytes, max ~1090 for tokens.
 pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 
+pub const CCM_BYTES_PER_ACCOUNT: usize = 33usize;
+
+// Bytes left that are available for the user when building the native and token ccm transfers.
+// Leaving some bytes for safety (32) but without preventing an extra account to be included.
+// The cf_receiver is accounted as part of the bytes required to build the call.
+pub const MAX_CCM_BYTES_USDC: usize = 673usize; // technically 705
+pub const MAX_CCM_BYTES_SOL: usize = 460usize; // technically 492
+
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
