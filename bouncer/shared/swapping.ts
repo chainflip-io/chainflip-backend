@@ -104,7 +104,7 @@ function newSolanaCfParameters() {
   // therefore also depends on the message length. With the limited message < 100 bytes
   // we can ensure we fit 10 accounts but we can fit almost double for native asset.
   const remainingAccounts = [];
-  const numRemainingAccounts = Math.floor(Math.random() * 10) + 1;
+  const numRemainingAccounts = Math.floor(Math.random() * 10);
 
   for (let i = 0; i < numRemainingAccounts; i++) {
     remainingAccounts.push(
