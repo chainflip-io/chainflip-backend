@@ -74,8 +74,8 @@ pub trait SolanaEnvironment:
 /// Once a nonce is actually used, it should ONLY be recovered via Witnessing.
 /// Only use this if you know what you are doing.
 pub trait RecoverDurableNonce {
-	/// Set a unused durable nonce back as available. Returns `true` if successful.
-	fn recover_durable_nonce(durable_nonce: DurableNonceAndAccount) -> bool;
+	/// Set a unused durable nonce back as available.
+	fn recover_durable_nonce(_nonce_account: SolAddress) {}
 }
 
 /// Errors that can arise when building Solana Transactions.
@@ -232,7 +232,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			agg_key,
 			durable_nonce,
 			compute_price,
-		).map_err(|e| {
+		)
+		.map_err(|e| {
 			// Vault Rotation call building NOT transactional - meaning when this fails,
 			// storage is not rolled back. We must recover the durable nonce here,
 			// since it has been taken from storage but not actually used.
@@ -244,9 +245,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				new_agg_key,
 				durable_nonce
 			);
-			if !Environment::recover_durable_nonce(durable_nonce) {
-				log::error!("Failed to recover durable nonce. The given nonce is not Unavailable, or the Hash provided doesn't match the current storage. This should NEVER happen!");
-			}
+			Environment::recover_durable_nonce(durable_nonce.0);
 			e
 		})?;
 
@@ -354,9 +353,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				transfer_param,
 				durable_nonce
 			);
-			if !Environment::recover_durable_nonce(durable_nonce) {
-				log::error!("Failed to recover durable nonce. The given nonce is not Unavailable, or the Hash provided doesn't match the current storage. This should NEVER happen!");
-			}
+			Environment::recover_durable_nonce(durable_nonce.0);
 			e
 		})?;
 

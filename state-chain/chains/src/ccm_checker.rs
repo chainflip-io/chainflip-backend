@@ -122,11 +122,7 @@ mod test {
 		}
 	}
 
-	impl crate::sol::api::RecoverDurableNonce for MockEnv {
-		fn recover_durable_nonce(_durable_nonce: DurableNonceAndAccount) -> bool {
-			true
-		}
-	}
+	impl crate::sol::api::RecoverDurableNonce for MockEnv {}
 
 	impl SolanaEnvironment for MockEnv {}
 

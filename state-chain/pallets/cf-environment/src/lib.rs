@@ -690,13 +690,9 @@ impl<T: Config> Pallet<T> {
 
 	/// IMPORTANT: This fn is used to recover an un-used DurableNonce so it's available again.
 	/// ONLY use this if this nonce is un-used.
-	pub fn recover_sol_durable_nonce(durable_nonce: DurableNonceAndAccount) -> bool {
-		if SolanaUnavailableNonceAccounts::<T>::get(durable_nonce.0) == Some(durable_nonce.1) {
-			SolanaUnavailableNonceAccounts::<T>::remove(durable_nonce.0);
-			SolanaAvailableNonceAccounts::<T>::append(durable_nonce);
-			true
-		} else {
-			false
+	pub fn recover_sol_durable_nonce(nonce_account: SolAddress) {
+		if let Some(hash) = SolanaUnavailableNonceAccounts::<T>::take(nonce_account) {
+			SolanaAvailableNonceAccounts::<T>::append((nonce_account, hash));
 		}
 	}
 

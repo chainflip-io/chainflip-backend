@@ -479,7 +479,7 @@ fn test_recover_unused_durable_nonce() {
 		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([4; 32]), SolHash([40; 32]));
 
 		// Can recover unused Nonce
-		assert!(Environment::recover_sol_durable_nonce((SolAddress([3; 32]), SolHash([30; 32]))));
+		Environment::recover_sol_durable_nonce(SolAddress([3; 32]));
 		assert_eq!(
 			SolanaAvailableNonceAccounts::<Test>::get(),
 			vec![
@@ -493,9 +493,8 @@ fn test_recover_unused_durable_nonce() {
 			vec![(SolAddress([4; 32]), SolHash([40; 32])),]
 		);
 
-		// Cannot recover if the given Nonce doesn't match storage
-		assert!(!Environment::recover_sol_durable_nonce((SolAddress([100; 32]), SolHash([0; 32]))));
-		assert!(!Environment::recover_sol_durable_nonce((SolAddress([4; 32]), SolHash([31; 32]))));
+		// Cannot recover if the given Nonce is "Unavailable"
+		Environment::recover_sol_durable_nonce(SolAddress([100; 32]));
 		assert_eq!(
 			SolanaAvailableNonceAccounts::<Test>::get(),
 			vec![
