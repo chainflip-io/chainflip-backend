@@ -309,7 +309,7 @@ mod test {
 		let mut ccm = sol_test_values::ccm_parameter().channel_metadata;
 
 		// Only fails for Solana chain.
-		ccm.message = [0x00; MAX_CCM_BYTES_USDC].to_vec().try_into().unwrap();
+		ccm.message = [0x00; MAX_CCM_BYTES_SOL].to_vec().try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::<MockEnv>::is_valid(&ccm, Asset::Sol),
 			CcmValidityError::CcmIsTooLong
