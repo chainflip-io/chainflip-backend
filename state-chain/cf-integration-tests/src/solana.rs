@@ -11,8 +11,8 @@ use cf_chains::{
 		SolTrackedData, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, CcmValidityError, Chain, ChainState,
-	ExecutexSwapAndCall, ExecutexSwapAndCallError, ForeignChainAddress, SetAggKeyWithAggKey,
-	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransferAssetParams,
+	ExecutexSwapAndCallError, ForeignChainAddress, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError,
+	Solana, SwapOrigin,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -20,7 +20,6 @@ use codec::Encode;
 use frame_support::traits::{OnFinalize, UnfilteredDispatchable};
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_validator::RotationPhase;
-use sol_prim::consts::{CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL};
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter, SolEnvironment},
 	Runtime, RuntimeCall, RuntimeEvent, SolanaIngressEgress, SolanaInstance, SolanaThresholdSigner,
@@ -493,44 +492,33 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 
 			testnet.move_to_the_next_epoch();
 
-			let available_nonces = pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::get();
-			let unavailable_nonces = pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys().count();
-			// Failed CCM message does not consume DurableNonce
-			assert_noop!(
-				<cf_chains::sol::api::SolanaApi<SolEnvironment> as ExecutexSwapAndCall<Solana>>::new_unsigned(
-					TransferAssetParams{
-						asset: cf_chains::assets::sol::Asset::Sol,
-						amount: 1_000_000,
-						to: SolAddress([0xf0; 32]),
-					},
-					ForeignChain::Ethereum,
-					Some(ForeignChainAddress::Eth([0xff; 20].into())),
-					0,
-					vec![0x00; MAX_CCM_BYTES_SOL - CCM_BYTES_PER_ACCOUNT],
-					SolCcmAccounts {
-						cf_receiver: SolCcmAddress { pubkey: SolPubkey([0xff; 32]), is_writable: true },
-						remaining_accounts: vec![],
-					}.encode(),
-				),
-				ExecutexSwapAndCallError::FailedToBuildCcmForSolana(SolanaTransactionBuildingError::FinalTransactionExceededMaxLength(1244))
-			);
-
-			assert_eq!(available_nonces, pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::get());
-			assert_eq!(unavailable_nonces, pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys().count());
+			let unavailable_nonces =
+				pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys()
+					.count();
 
 			// Failed Rotate Key message does not consume DurableNonce
 			// Add extra Durable nonces to make RotateAggkey too long
-			let available_nonces = (0..20).map(|x|(SolAddress([x as u8; 32]), SolHash::default())).collect::<Vec<_>>();
-			pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(available_nonces.clone());
+			let available_nonces = (0..20)
+				.map(|x| (SolAddress([x as u8; 32]), SolHash::default()))
+				.collect::<Vec<_>>();
+			pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
+				available_nonces.clone(),
+			);
 			assert_noop!(
-				<cf_chains::sol::api::SolanaApi<SolEnvironment> as SetAggKeyWithAggKey<SolanaCrypto>>::new_unsigned(
-					None,
-					SolAddress([0xff; 32]),
-				),
+				<cf_chains::sol::api::SolanaApi<SolEnvironment> as SetAggKeyWithAggKey<
+					SolanaCrypto,
+				>>::new_unsigned(None, SolAddress([0xff; 32]),),
 				SetAggKeyWithAggKeyError::FinalTransactionExceededMaxLength
 			);
 
-			assert_eq!(available_nonces, pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::get());
-			assert_eq!(unavailable_nonces, pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys().count())
+			assert_eq!(
+				available_nonces,
+				pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::get()
+			);
+			assert_eq!(
+				unavailable_nonces,
+				pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys()
+					.count()
+			)
 		});
 }

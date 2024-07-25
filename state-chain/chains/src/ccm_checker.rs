@@ -1,11 +1,13 @@
 use crate::{
-	sol::{api::SolanaEnvironment, SolAsset, SolCcmAccounts},
+	sol::{
+		api::SolanaEnvironment, SolAsset, SolCcmAccounts, CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL,
+		MAX_CCM_BYTES_USDC,
+	},
 	CcmChannelMetadata, CcmValidityCheck, CcmValidityError,
 };
 use cf_primitives::{Asset, ForeignChain};
 use codec::Decode;
 use core::marker::PhantomData;
-use sol_prim::consts::{CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL, MAX_CCM_BYTES_USDC};
 
 pub struct CcmValidityChecker<Environment> {
 	_phantom: PhantomData<Environment>,
@@ -21,9 +23,9 @@ impl<Environment: SolanaEnvironment> CcmValidityCheck for CcmValidityChecker<Env
 				.try_into()
 				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
 
-			// Length of CCM = length of message +  total no. accounts in cf_parameter * constant;
-			let ccm_length = ccm.message.len() +
-				(1 + ccm_accounts.remaining_accounts.len()) * CCM_BYTES_PER_ACCOUNT;
+			// Length of CCM = length of message + total no. remaining_accounts * constant;
+			let ccm_length =
+				ccm.message.len() + ccm_accounts.remaining_accounts.len() * CCM_BYTES_PER_ACCOUNT;
 			if ccm_length >
 				match asset {
 					SolAsset::Sol => MAX_CCM_BYTES_SOL,
@@ -61,7 +63,6 @@ impl<Environment: SolanaEnvironment> CcmValidityCheck for CcmValidityChecker<Env
 mod test {
 	use codec::Encode;
 	use frame_support::{assert_err, assert_ok};
-	use sol_prim::consts::MAX_CCM_BYTES_SOL;
 	use Asset;
 
 	use super::*;
@@ -73,7 +74,7 @@ mod test {
 			},
 			signing_key::SolSigningKey,
 			sol_tx_core::{signer::Signer, sol_test_values},
-			SolAddress, SolAmount, SolApiEnvironment, SolCcmAddress, SolPubkey,
+			SolAddress, SolAmount, SolApiEnvironment, SolCcmAddress, SolPubkey, MAX_CCM_BYTES_SOL,
 		},
 		ChainEnvironment,
 	};
@@ -152,7 +153,7 @@ mod test {
 	#[test]
 	fn can_check_for_ccm_length_sol() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_SOL - CCM_BYTES_PER_ACCOUNT].try_into().unwrap(),
+			message: vec![0x01; MAX_CCM_BYTES_SOL].try_into().unwrap(),
 			gas_budget: 0,
 			cf_parameters: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
@@ -166,8 +167,7 @@ mod test {
 
 		// Length check for Sol
 		let mut invalid_ccm = ccm();
-		invalid_ccm.message =
-			vec![0x01; MAX_CCM_BYTES_SOL - CCM_BYTES_PER_ACCOUNT + 1].try_into().unwrap();
+		invalid_ccm.message = vec![0x01; MAX_CCM_BYTES_SOL + 1].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::<MockEnv>::is_valid(&invalid_ccm, Asset::Sol),
 			CcmValidityError::CcmIsTooLong
@@ -193,7 +193,7 @@ mod test {
 	#[test]
 	fn can_check_for_ccm_length_usdc() {
 		let ccm = || CcmChannelMetadata {
-			message: vec![0x01; MAX_CCM_BYTES_USDC - CCM_BYTES_PER_ACCOUNT].try_into().unwrap(),
+			message: vec![0x01; MAX_CCM_BYTES_USDC].try_into().unwrap(),
 			gas_budget: 0,
 			cf_parameters: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
@@ -207,8 +207,7 @@ mod test {
 
 		// Length check for SolUsdc
 		let mut invalid_ccm = ccm();
-		invalid_ccm.message =
-			vec![0x01; MAX_CCM_BYTES_USDC - CCM_BYTES_PER_ACCOUNT + 1].try_into().unwrap();
+		invalid_ccm.message = vec![0x01; MAX_CCM_BYTES_USDC + 1].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::<MockEnv>::is_valid(&invalid_ccm, Asset::SolUsdc),
 			CcmValidityError::CcmIsTooLong
