@@ -283,8 +283,6 @@ export async function testAllSwaps(swapContext: SwapContext) {
 
   console.log('=== Testing all swaps ===');
 
-  // appendSwap('Dot', 'Btc', testSwap);
-
   Object.values(Assets).forEach((sourceAsset) => {
     Object.values(Assets)
       .filter((destAsset) => sourceAsset !== destAsset)
