@@ -11,7 +11,7 @@
 export LOCALNET_INIT_DIR=localnet/init
 export WORKFLOW=build-localnet
 export GENESIS_NODES=("bashful" "doc" "dopey")
-export REQUIRED_BINARIES="engine-runner chainflip-node"
+export REQUIRED_BINARIES="engine-runner chainflip-node chainflip-broker-api chainflip-lp-api"
 export INIT_CONTAINERS="eth-init solana-init"
 export CORE_CONTAINERS="bitcoin geth polkadot redis"
 export ARB_CONTAINERS="sequencer staker-unsafe poster"
