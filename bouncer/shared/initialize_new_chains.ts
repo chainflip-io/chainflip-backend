@@ -160,8 +160,10 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       programId: solanaVaultProgramId,
     }),
   );
+  await signAndSendTxSol(tx);
 
   // Set nonce authority to the new AggKey
+  tx = new Transaction();
   const numberOfNonceAccounts = 10;
   for (let i = 0; i < numberOfNonceAccounts; i++) {
     // Using the index stringified as the seed ('0', '1', '2' ...)
@@ -183,15 +185,16 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       }),
     );
   }
-  // Set Vault's upgrade authority to upgradeSignerPDa
-  tx.add(
+  await signAndSendTxSol(tx);
+
+  // Set Vault's upgrade authority to upgradeSignerPDa and enable token support
+  tx = new Transaction().add(
     createUpgradeAuthorityInstruction(
       solanaVaultProgramId,
       whaleKeypair.publicKey,
       upgradeSignerPda,
     ),
   );
-  await signAndSendTxSol(tx);
 
   // Add token support
   const enableTokenSupportDiscriminatorString = vaultIdl.instructions.find(
@@ -208,7 +211,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
     solanaVaultProgramId,
   );
 
-  tx = new Transaction().add(
+  tx.add(
     new TransactionInstruction({
       data: Buffer.concat([
         Buffer.from(enableTokenSupportDiscriminator.buffer),
