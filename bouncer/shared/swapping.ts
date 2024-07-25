@@ -105,7 +105,7 @@ function newSolanaCfParameters(maxAccounts: number) {
   ]);
 
   const remainingAccounts = [];
-  const numRemainingAccounts = Math.floor(Math.random() * maxAccounts) + 1;
+  const numRemainingAccounts = Math.floor(Math.random() * maxAccounts);
 
   for (let i = 0; i < numRemainingAccounts; i++) {
     remainingAccounts.push(
@@ -125,9 +125,8 @@ function newSolanaCfParameters(maxAccounts: number) {
 }
 
 // Solana CCM-related parameters. These are values in the protocol.
-// Leaving some margin to avoid encoding edge cases
-const maxCcmBytesUsdc = 625;
-const maxCcmBytesSol = 415;
+const maxCcmBytesUsdc = 673;
+const maxCcmBytesSol = 460;
 const bytesPerAccount = 33;
 
 function newCcmMessageAndCfParameters(destAsset: Asset): { message: string; cfParameters: string } {
