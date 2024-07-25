@@ -4,7 +4,7 @@
 // This command takes two arguments.
 // It will set the minimum deposit amount of the asset defined by the first argument to the value
 // given by the second argument. Using an amount of zero will remove the minimum deposit limitation
-// so that any deposit is allowed. 
+// so that any deposit is allowed.
 //
 // For example: ./commands/set_minimum_deposit.ts ETH 0.01
 // will reject any ETH deposit below 0.01 ETH.
