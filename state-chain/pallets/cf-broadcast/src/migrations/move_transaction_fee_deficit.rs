@@ -6,6 +6,9 @@ use frame_support::pallet_prelude::{ValueQuery, Weight};
 #[cfg(feature = "try-runtime")]
 use cf_primitives::AssetAmount;
 
+#[cfg(feature = "try-runtime")]
+use frame_support::pallet_prelude::DispatchError;
+
 mod old {
 	use super::*;
 

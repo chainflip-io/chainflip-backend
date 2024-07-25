@@ -2,11 +2,13 @@ use crate::Runtime;
 #[cfg(feature = "try-runtime")]
 use cf_primitives::AssetAmount;
 #[cfg(feature = "try-runtime")]
-use frame_support::migrations::VersionedPostUpgradeData;
-use frame_support::traits::{GetStorageVersion, StorageVersion};
+use codec::{Decode, Encode};
 
 #[cfg(feature = "try-runtime")]
-use codec::{Decode, Encode};
+use frame_support::migrations::VersionedPostUpgradeData;
+
+use frame_support::traits::{GetStorageVersion, StorageVersion};
+
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 

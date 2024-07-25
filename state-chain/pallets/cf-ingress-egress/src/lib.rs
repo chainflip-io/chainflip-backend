@@ -36,10 +36,11 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter, AssetWithholding, BoostApi,
-	Broadcaster, Chainflip, DepositApi, EgressApi, EpochInfo, FeePayment, GetBlockHeight,
-	IngressEgressFeeApi, LpBalanceApi, LpDepositHandler, NetworkEnvironmentProvider, OnDeposit,
-	SafeMode, ScheduledEgressDetails, SwapRequestHandler, SwapRequestType,
+	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
+	AssetWithholding, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi, EpochInfo,
+	FeePayment, GetBlockHeight, IngressEgressFeeApi, LpBalanceApi, LpDepositHandler,
+	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapRequestHandler,
+	SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -48,6 +49,10 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use scale_info::{
+	build::{Fields, Variants},
+	Path, Type,
+};
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -141,46 +146,12 @@ impl<C: Chain> CrossChainMessage<C> {
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
 
-#[derive(
-	serde::Serialize,
-	serde::Deserialize,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	Copy,
-	Clone,
-	PartialEq,
-	Eq,
-	RuntimeDebug,
-)]
-#[scale_info(skip_type_params(I))]
-pub struct PalletSafeMode<I: 'static> {
-	pub boost_deposits_enabled: bool,
-	pub add_boost_funds_enabled: bool,
-	pub stop_boosting_enabled: bool,
-	pub deposits_enabled: bool,
-	#[doc(hidden)]
-	#[codec(skip)]
-	#[serde(skip_serializing)]
-	_phantom: PhantomData<I>,
-}
-
-impl<I: 'static> SafeMode for PalletSafeMode<I> {
-	const CODE_RED: Self = PalletSafeMode {
-		boost_deposits_enabled: false,
-		add_boost_funds_enabled: false,
-		stop_boosting_enabled: false,
-		deposits_enabled: false,
-		_phantom: PhantomData,
-	};
-	const CODE_GREEN: Self = PalletSafeMode {
-		boost_deposits_enabled: true,
-		add_boost_funds_enabled: true,
-		stop_boosting_enabled: true,
-		deposits_enabled: true,
-		_phantom: PhantomData,
-	};
+impl_pallet_safe_mode! {
+	PalletSafeMode<I>;
+	boost_deposits_enabled,
+	add_boost_funds_enabled,
+	stop_boosting_enabled,
+	deposits_enabled,
 }
 
 /// Calls to the external chains that has failed to be broadcast/accepted by the target chain.
@@ -196,17 +167,9 @@ pub struct FailedForeignChainCall {
 }
 
 #[derive(
-	CloneNoBound,
-	RuntimeDebugNoBound,
-	PartialEqNoBound,
-	EqNoBound,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
+	CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, MaxEncodedLen,
 )]
-#[scale_info(skip_type_params(T, I))]
-pub enum PalletConfigUpdate<T: Config<I>, I: 'static = ()> {
+pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
 	ChannelOpeningFee { fee: T::Amount },
 	/// Set the minimum deposit allowed for a particular asset.
@@ -214,6 +177,51 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static = ()> {
 	/// Set the max allowed value for the number of blocks to keep retrying a swap before it is
 	/// refunded
 	SetMaxSwapRetryDurationBlocks { blocks: BlockNumber },
+}
+
+macro_rules! append_chain_to_name {
+	($name:ident) => {
+		match T::TargetChain::NAME {
+			"Ethereum" => concat!(stringify!($name), "Ethereum"),
+			"Polkadot" => concat!(stringify!($name), "Polkadot"),
+			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
+			"Arbitrum" => concat!(stringify!($name), "Arbitrum"),
+			"Solana" => concat!(stringify!($name), "Solana"),
+			_ => concat!(stringify!($name), "Other"),
+		}
+	};
+}
+
+impl<T, I> TypeInfo for PalletConfigUpdate<T, I>
+where
+	T: Config<I>,
+	I: 'static,
+{
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new(append_chain_to_name!(PalletConfigUpdate), module_path!()))
+			.variant(
+				Variants::new()
+					.variant("ChannelOpeningFee", |v| {
+						v.index(0)
+							.fields(Fields::named().field(|f| f.ty::<T::Amount>().name("fee")))
+					})
+					.variant(append_chain_to_name!(SetMinimumDeposit), |v| {
+						v.index(1).fields(
+							Fields::named()
+								.field(|f| f.ty::<TargetChainAsset<T, I>>().name("asset"))
+								.field(|f| {
+									f.ty::<TargetChainAmount<T, I>>().name("minimum_deposit")
+								}),
+						)
+					})
+					.variant("SetMaxSwapRetryDurationBlocks", |v| {
+						v.index(2)
+							.fields(Fields::named().field(|f| f.ty::<BlockNumber>().name("blocks")))
+					}),
+			)
+	}
 }
 
 #[frame_support::pallet]
