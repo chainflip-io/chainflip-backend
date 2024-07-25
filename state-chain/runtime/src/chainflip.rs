@@ -541,8 +541,8 @@ impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for SolEnvi
 }
 
 impl RecoverDurableNonce for SolEnvironment {
-	fn recover_durable_nonce(durable_nonce: DurableNonceAndAccount) {
-		Environment::recover_sol_durable_nonce(durable_nonce);
+	fn recover_durable_nonce(durable_nonce: DurableNonceAndAccount) -> bool {
+		Environment::recover_sol_durable_nonce(durable_nonce)
 	}
 }
 

@@ -43,7 +43,8 @@ pub const NONCE_ACCOUNT_LENGTH: u64 = 80u64;
 
 pub const SOL_USDC_DECIMAL: u8 = 6u8;
 
-// TODO: Confirm the value
 pub const CCM_BYTES_PER_ACCOUNT: usize = 33usize;
-pub const MAX_CCM_BYTES_USDC: usize = 1_000usize;
-pub const MAX_CCM_BYTES_SOL: usize = 1_000usize;
+/// Failure mechanism is implemented for CCMs that are too long.
+/// Therefore this limit only needs to be roughly correct.
+pub const MAX_CCM_BYTES_SOL: usize = 750usize; // Exact limit is 738
+pub const MAX_CCM_BYTES_USDC: usize = 530usize; // Exact limit is 525

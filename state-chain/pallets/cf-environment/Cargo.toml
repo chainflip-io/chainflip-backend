@@ -19,7 +19,6 @@ workspace = true
 cf-chains = { path = '../../chains', default-features = false }
 cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
-cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false }
 serde = { default_features = false, version = '1.0.195', features = [
   'alloc',
   'derive',
@@ -62,7 +61,6 @@ std = [
   'sp-std/std',
   'log/std',
   'cf-runtime-upgrade-utilities/std',
-  'cf-runtime-utilities/std',
 ]
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',

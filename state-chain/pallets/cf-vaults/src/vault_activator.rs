@@ -1,5 +1,4 @@
 use super::*;
-use cf_chains::SetAggKeyWithAggKeyError;
 use cf_runtime_utilities::{log_or_panic, StorageDecodeVariant};
 use cf_traits::{GetBlockHeight, StartKeyActivationResult, VaultActivator};
 
@@ -54,10 +53,11 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 					Self::activate_key();
 					vec![StartKeyActivationResult::ActivationTxNotRequired]
 				},
-				Err(SetAggKeyWithAggKeyError::Failed) => {
+				Err(err) => {
 					log_or_panic!(
-						"Unexpected failure during {} vault activation.",
+						"Unexpected failure during {} vault activation. Error: {:?}",
 						<T::Chain as cf_chains::Chain>::NAME,
+						err,
 					);
 					vec![StartKeyActivationResult::ActivationTxFailed]
 				},

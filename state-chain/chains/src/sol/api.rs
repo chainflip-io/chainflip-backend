@@ -1,4 +1,3 @@
-use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_support::{
@@ -75,7 +74,8 @@ pub trait SolanaEnvironment:
 /// Once a nonce is actually used, it should ONLY be recovered via Witnessing.
 /// Only use this if you know what you are doing.
 pub trait RecoverDurableNonce {
-	fn recover_durable_nonce(durable_nonce: DurableNonceAndAccount);
+	/// Set a unused durable nonce back as available. Returns `true` if successful.
+	fn recover_durable_nonce(durable_nonce: DurableNonceAndAccount) -> bool;
 }
 
 /// Errors that can arise when building Solana Transactions.
@@ -232,7 +232,23 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			agg_key,
 			durable_nonce,
 			compute_price,
-		)?;
+		).map_err(|e| {
+			// Vault Rotation call building NOT transactional - meaning when this fails,
+			// storage is not rolled back. We must recover the durable nonce here,
+			// since it has been taken from storage but not actually used.
+			log::error!(
+				"Solana RotateAggKey call building failed. Nonce recovered. Error: {:?}
+				new aggkey: {:?}
+				Nonce recovered: {:?}",
+				e,
+				new_agg_key,
+				durable_nonce
+			);
+			if !Environment::recover_durable_nonce(durable_nonce) {
+				log::error!("Failed to recover durable nonce. The given nonce is not Unavailable, or the Hash provided doesn't match the current storage. This should NEVER happen!");
+			}
+			e
+		})?;
 
 		Ok(Self {
 			call_type: SolanaTransactionType::RotateAggKey,
@@ -330,12 +346,17 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			// CCM call building is NOT transactional - meaning when this fails,
 			// storage is not rolled back. We must recover the durable nonce here,
 			// since it has been taken from storage but not actually used.
-			log_or_panic!(
-				"CCM building failed. Nonce recovered. Transfer param: {:?}, Nonce recovered: {:?}",
+			log::error!(
+				"CCM building failed. Nonce recovered. Error: {:?}
+				Transfer param: {:?}
+				Nonce recovered: {:?}",
+				e,
 				transfer_param,
 				durable_nonce
 			);
-			Environment::recover_durable_nonce(durable_nonce);
+			if !Environment::recover_durable_nonce(durable_nonce) {
+				log::error!("Failed to recover durable nonce. The given nonce is not Unavailable, or the Hash provided doesn't match the current storage. This should NEVER happen!");
+			}
 			e
 		})?;
 
@@ -387,7 +408,7 @@ impl<Env: 'static + SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for Sol
 	) -> Result<Option<Self>, crate::SetAggKeyWithAggKeyError> {
 		Self::rotate_agg_key(new_key).map(Some).map_err(|e| {
 			log::error!("Failed to construct Solana Rotate Agg key transaction! Error: {:?}", e);
-			crate::SetAggKeyWithAggKeyError::Failed
+			crate::SetAggKeyWithAggKeyError::FinalTransactionExceededMaxLength
 		})
 	}
 }

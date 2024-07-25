@@ -429,7 +429,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
-	type ChainApiCall = cf_chains::sol::api::SolanaApi<chainflip::SolEnvironment>;
+	type ChainApiCall = cf_chains::sol::api::SolanaApi<SolEnvironment>;
 	type Broadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;

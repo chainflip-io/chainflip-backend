@@ -122,7 +122,9 @@ mod test {
 	}
 
 	impl crate::sol::api::RecoverDurableNonce for MockEnv {
-		fn recover_durable_nonce(_durable_nonce: DurableNonceAndAccount) {}
+		fn recover_durable_nonce(_durable_nonce: DurableNonceAndAccount) -> bool {
+			true
+		}
 	}
 
 	impl SolanaEnvironment for MockEnv {}
@@ -150,7 +152,7 @@ mod test {
 	#[test]
 	fn can_check_for_ccm_length_sol() {
 		let ccm = || CcmChannelMetadata {
-			message: [0x01; MAX_CCM_BYTES_SOL - CCM_BYTES_PER_ACCOUNT].to_vec().try_into().unwrap(),
+			message: vec![0x01; MAX_CCM_BYTES_SOL - CCM_BYTES_PER_ACCOUNT].try_into().unwrap(),
 			gas_budget: 0,
 			cf_parameters: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
@@ -164,10 +166,8 @@ mod test {
 
 		// Length check for Sol
 		let mut invalid_ccm = ccm();
-		invalid_ccm.message = [0x01; MAX_CCM_BYTES_SOL - CCM_BYTES_PER_ACCOUNT + 1]
-			.to_vec()
-			.try_into()
-			.unwrap();
+		invalid_ccm.message =
+			vec![0x01; MAX_CCM_BYTES_SOL - CCM_BYTES_PER_ACCOUNT + 1].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::<MockEnv>::is_valid(&invalid_ccm, Asset::Sol),
 			CcmValidityError::CcmIsTooLong
@@ -193,10 +193,7 @@ mod test {
 	#[test]
 	fn can_check_for_ccm_length_usdc() {
 		let ccm = || CcmChannelMetadata {
-			message: [0x01; MAX_CCM_BYTES_USDC - CCM_BYTES_PER_ACCOUNT]
-				.to_vec()
-				.try_into()
-				.unwrap(),
+			message: vec![0x01; MAX_CCM_BYTES_USDC - CCM_BYTES_PER_ACCOUNT].try_into().unwrap(),
 			gas_budget: 0,
 			cf_parameters: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
@@ -210,10 +207,8 @@ mod test {
 
 		// Length check for SolUsdc
 		let mut invalid_ccm = ccm();
-		invalid_ccm.message = [0x01; MAX_CCM_BYTES_USDC - CCM_BYTES_PER_ACCOUNT + 1]
-			.to_vec()
-			.try_into()
-			.unwrap();
+		invalid_ccm.message =
+			vec![0x01; MAX_CCM_BYTES_USDC - CCM_BYTES_PER_ACCOUNT + 1].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::<MockEnv>::is_valid(&invalid_ccm, Asset::SolUsdc),
 			CcmValidityError::CcmIsTooLong
@@ -321,12 +316,12 @@ mod test {
 		let mut ccm = sol_test_values::ccm_parameter().channel_metadata;
 
 		// Only fails for Solana chain.
-		ccm.message = [0x00; MAX_CCM_BYTES_USDC].to_vec().try_into().unwrap();
+		ccm.message = vec![0x00; MAX_CCM_BYTES_SOL].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::<MockEnv>::is_valid(&ccm, Asset::Sol),
 			CcmValidityError::CcmIsTooLong
 		);
-		ccm.message = [0x00; MAX_CCM_BYTES_USDC].to_vec().try_into().unwrap();
+		ccm.message = vec![0x00; MAX_CCM_BYTES_USDC].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::<MockEnv>::is_valid(&ccm, Asset::SolUsdc),
 			CcmValidityError::CcmIsTooLong

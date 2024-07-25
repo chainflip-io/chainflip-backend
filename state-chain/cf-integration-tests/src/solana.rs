@@ -7,10 +7,12 @@ use cf_chains::{
 	sol::{
 		api::{SolanaEnvironment, SolanaTransactionBuildingError},
 		sol_tx_core::sol_test_values,
-		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolPubkey, SolTrackedData,
+		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
+		SolTrackedData, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, CcmValidityError, Chain, ChainState,
-	ForeignChainAddress, Solana, SwapOrigin,
+	ExecutexSwapAndCall, ExecutexSwapAndCallError, ForeignChainAddress, SetAggKeyWithAggKey,
+	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -18,6 +20,7 @@ use codec::Encode;
 use frame_support::traits::{OnFinalize, UnfilteredDispatchable};
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_validator::RotationPhase;
+use sol_prim::consts::{CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL};
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter, SolEnvironment},
 	Runtime, RuntimeCall, RuntimeEvent, SolanaIngressEgress, SolanaInstance, SolanaThresholdSigner,
@@ -454,12 +457,80 @@ fn solana_ccm_fails_with_invalid_input() {
 					SolanaInstance,
 				>::CcmEgressInvalid {
 					egress_id: (ForeignChain::Solana, 1u64),
-					error: cf_chains::ExecutexSwapAndCallError::FailedToBuildCcmForSolana(
+					error: ExecutexSwapAndCallError::FailedToBuildCcmForSolana(
 						SolanaTransactionBuildingError::InvalidCcm(
 							CcmValidityError::CfParametersContainsInvalidAccounts
 						)
 					),
 				}),
 			);
+		});
+}
+
+#[test]
+fn failed_ccm_does_not_consume_durable_nonce() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_ok!(RuntimeCall::SolanaVault(
+				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
+			)
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+			testnet.move_to_the_next_epoch();
+
+			setup_sol_environments();
+			register_refund_addresses(&DORIS);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+
+			testnet.move_to_the_next_epoch();
+
+			let available_nonces = pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::get();
+			let unavailable_nonces = pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys().count();
+			// Failed CCM message does not consume DurableNonce
+			assert_noop!(
+				<cf_chains::sol::api::SolanaApi<SolEnvironment> as ExecutexSwapAndCall<Solana>>::new_unsigned(
+					TransferAssetParams{
+						asset: cf_chains::assets::sol::Asset::Sol,
+						amount: 1_000_000,
+						to: SolAddress([0xf0; 32]),
+					},
+					ForeignChain::Ethereum,
+					Some(ForeignChainAddress::Eth([0xff; 20].into())),
+					0,
+					vec![0x00; MAX_CCM_BYTES_SOL - CCM_BYTES_PER_ACCOUNT],
+					SolCcmAccounts {
+						cf_receiver: SolCcmAddress { pubkey: SolPubkey([0xff; 32]), is_writable: true },
+						remaining_accounts: vec![],
+					}.encode(),
+				),
+				ExecutexSwapAndCallError::FailedToBuildCcmForSolana(SolanaTransactionBuildingError::FinalTransactionExceededMaxLength(1244))
+			);
+
+			assert_eq!(available_nonces, pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::get());
+			assert_eq!(unavailable_nonces, pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys().count());
+
+			// Failed Rotate Key message does not consume DurableNonce
+			// Add extra Durable nonces to make RotateAggkey too long
+			let available_nonces = (0..20).map(|x|(SolAddress([x as u8; 32]), SolHash::default())).collect::<Vec<_>>();
+			pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(available_nonces.clone());
+			assert_noop!(
+				<cf_chains::sol::api::SolanaApi<SolEnvironment> as SetAggKeyWithAggKey<SolanaCrypto>>::new_unsigned(
+					None,
+					SolAddress([0xff; 32]),
+				),
+				SetAggKeyWithAggKeyError::FinalTransactionExceededMaxLength
+			);
+
+			assert_eq!(available_nonces, pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::get());
+			assert_eq!(unavailable_nonces, pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys().count())
 		});
 }

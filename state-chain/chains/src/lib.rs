@@ -434,8 +434,10 @@ pub trait ChainEnvironment<
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
 
+#[derive(RuntimeDebug, Clone, PartialEq, Eq)]
 pub enum SetAggKeyWithAggKeyError {
 	Failed,
+	FinalTransactionExceededMaxLength,
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
