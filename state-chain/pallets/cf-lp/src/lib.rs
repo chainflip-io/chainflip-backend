@@ -304,8 +304,7 @@ pub mod pallet {
 
 			ensure!(
 				T::PoolApi::pools().iter().all(|asset_pair| {
-					T::PoolApi::open_order_count(&account_id, asset_pair.base, asset_pair.quote)
-						.unwrap_or_default() == 0
+					T::PoolApi::open_order_count(&account_id, asset_pair).unwrap_or_default() == 0
 				}),
 				Error::<T>::OpenOrdersRemaining
 			);

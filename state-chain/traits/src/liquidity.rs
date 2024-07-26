@@ -77,8 +77,7 @@ pub trait PoolApi {
 	/// Returns the number of open orders for the given account and pair.
 	fn open_order_count(
 		who: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError>;
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
@@ -95,8 +94,7 @@ impl<T: frame_system::Config> PoolApi for T {
 
 	fn open_order_count(
 		_who: &Self::AccountId,
-		_base_asset: Asset,
-		_quote_asset: Asset,
+		_asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
 		Ok(0)
 	}
