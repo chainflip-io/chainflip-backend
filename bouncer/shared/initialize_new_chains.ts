@@ -164,7 +164,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
 
   // Set nonce authority to the new AggKey
   tx = new Transaction();
-  const numberOfNonceAccounts = 8;
+  const numberOfNonceAccounts = 10;
   for (let i = 0; i < numberOfNonceAccounts; i++) {
     // Using the index stringified as the seed ('0', '1', '2' ...)
     const seed = i.toString();
