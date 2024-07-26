@@ -1,3 +1,4 @@
+use cf_amm::common::PoolPairsMap;
 use cf_chains::{
 	address::ForeignChainAddress, assets::any::AssetMap, ChannelRefundParameters,
 	SwapRefundParameters,
@@ -7,6 +8,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
+use sp_std::{vec, vec::Vec};
 
 pub trait SwapDepositHandler {
 	type AccountId;
@@ -75,11 +77,12 @@ pub trait PoolApi {
 	/// Returns the number of open orders for the given account and pair.
 	fn open_order_count(
 		who: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError>;
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
+
+	fn pools() -> Vec<PoolPairsMap<Asset>>;
 }
 
 impl<T: frame_system::Config> PoolApi for T {
@@ -91,13 +94,15 @@ impl<T: frame_system::Config> PoolApi for T {
 
 	fn open_order_count(
 		_who: &Self::AccountId,
-		_base_asset: Asset,
-		_quote_asset: Asset,
+		_asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
 		Ok(0)
 	}
 	fn open_order_balances(_who: &Self::AccountId) -> AssetMap<AssetAmount> {
 		AssetMap::from_fn(|_| 0)
+	}
+	fn pools() -> Vec<PoolPairsMap<Asset>> {
+		vec![]
 	}
 }
 

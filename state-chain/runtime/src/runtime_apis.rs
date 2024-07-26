@@ -274,5 +274,6 @@ decl_runtime_apis!(
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
+		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 	}
 );
