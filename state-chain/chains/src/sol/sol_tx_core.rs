@@ -982,7 +982,7 @@ mod tests {
 			MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
 			TOKEN_PROGRAM_ID,
 		},
-		DerivedAta,
+		PdaAndBump,
 	};
 
 	#[derive(BorshSerialize, BorshDeserialize)]
@@ -1194,7 +1194,7 @@ mod tests {
 		// Deposit channel derived from the Vault address from the seed and the bump
 		assert_eq!(
 			deposit_channel,
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("JDtAzKWKzQJCiHCfK4PU7qYuE4wChxuqfDqQhRbv6kwX")
 					.unwrap(),
 				bump: 254u8
@@ -1202,7 +1202,7 @@ mod tests {
 		);
 		assert_eq!(
 			deposit_channel_ata,
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("7QWupKVHBPUnJpuvdt7uJxXaNWKYpEUAHPG9Rb28aEXS")
 					.unwrap(),
 				bump: 254u8
@@ -1211,7 +1211,7 @@ mod tests {
 		// Historical fetch account derived from the Vault address using the ATA as the seed
 		assert_eq!(
 			deposit_channel_historical_fetch,
-			DerivedAta {
+			PdaAndBump {
 				address: SolAddress::from_str("FuNSXye89kBJQXp3rqkcz7oCUd5C5rVUDo7o5CRQ6T2o")
 					.unwrap(),
 				bump: 252u8

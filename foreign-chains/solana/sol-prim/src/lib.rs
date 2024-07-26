@@ -27,7 +27,7 @@ define_binary!(signature, Signature, crate::consts::SOLANA_SIGNATURE_LEN, "S");
 
 /// Represents a derived Associated Token Account to be used as deposit channels.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct DerivedAta {
+pub struct PdaAndBump {
 	pub address: Address,
 	pub bump: AccountBump,
 }
