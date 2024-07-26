@@ -589,9 +589,9 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwapToEvm('SolUsdc', 'ArbEth', ' sufBudget', 10),
     testGasLimitSwapToSolana('Usdc', 'Sol', ' sufBudget', 10),
     testGasLimitSwapToSolana('Btc', 'Sol', ' sufBudget', 100),
-    testGasLimitSwapToSolana('Dot', 'Sol', ' sufBudget', 100),
-    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' sufBudget', 100),
-    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' sufBudget', 100),
+    testGasLimitSwapToSolana('Dot', 'Sol', ' sufBudget', 10),
+    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' sufBudget', 10),
+    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' sufBudget', 10),
   ];
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to

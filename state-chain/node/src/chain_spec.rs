@@ -101,8 +101,9 @@ pub struct StateChainEnvironment {
 	sol_usdc_token_mint_pubkey: SolAddress,
 	sol_token_vault_pda_account: SolAddress,
 	sol_usdc_token_vault_ata: SolAddress,
-	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 8], /* we inject 8 nonce accounts
-	                                                               * at genesis */
+	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 10], /* we inject 10 nonce
+	                                                                * accounts
+	                                                                * at genesis */
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults

@@ -93,6 +93,14 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			const_address("J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna"),
 			const_hash("Ub9SGgi88Pyrd2ZPRLj6QzsMDf4VCM4U2EBz37f3QWP"),
 		),
+		(
+			const_address("GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55"),
+			const_hash("HgZQKdVeArjJmetoAw4SpYKyzKJh3txaqb7VQe4kJ7tV"),
+		),
+		(
+			const_address("AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv"),
+			const_hash("ZW7wrDEXQe94VrsoG5A6b5iQMEdUPGkc16Vk5rt7pgR"),
+		),
 	],
 };
 
