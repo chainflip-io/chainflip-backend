@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
 use cf_chains::{assets::any::AssetMap, Ethereum};
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, BalancesInfo};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -132,6 +132,11 @@ impl BalanceApi for MockBalance {
 	}
 
 	fn kill_balance(_: &Self::AccountId) {
+		unimplemented!()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn get_balances_info() -> BalancesInfo {
 		unimplemented!()
 	}
 }

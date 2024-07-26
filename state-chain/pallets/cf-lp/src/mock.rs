@@ -5,7 +5,7 @@ use cf_chains::{
 	assets::any::Asset,
 	AnyChain, Chain, Ethereum,
 };
-use cf_primitives::{chains::assets, AccountId, AssetAmount, ChannelId};
+use cf_primitives::{chains::assets, AccountId, AssetAmount, BalancesInfo, ChannelId};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
@@ -126,6 +126,11 @@ impl BalanceApi for MockBalanceApi {
 		BALANCE_MAP.with(|balance_map| {
 			balance_map.borrow_mut().remove(who);
 		});
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn get_balances_info() -> BalancesInfo {
+		unimplemented!()
 	}
 }
 

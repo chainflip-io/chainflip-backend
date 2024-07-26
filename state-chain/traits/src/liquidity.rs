@@ -1,6 +1,6 @@
 use cf_amm::common::PoolPairsMap;
 use cf_chains::assets::any::AssetMap;
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, BalancesInfo};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use sp_std::{vec, vec::Vec};
 
@@ -63,6 +63,10 @@ pub trait BalanceApi {
 
 	/// Removes all balances of the given account from storage.
 	fn kill_balance(who: &Self::AccountId);
+
+	/// Returns all available balance information.
+	#[cfg(feature = "try-runtime")]
+	fn get_balances_info() -> BalancesInfo;
 }
 
 pub trait PoolApi {

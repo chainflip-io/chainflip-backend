@@ -2,7 +2,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{AccountId, Asset, AssetAmount, BalancesInfo};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AssetWithholding, BalanceApi, Chainflip, EgressApi, KeyProvider,
@@ -392,7 +392,11 @@ impl<T: Config> AssetWithholding for Pallet<T> {
 	}
 }
 
-impl<T: Config> BalanceApi for Pallet<T> {
+impl<T: Config> BalanceApi for Pallet<T>
+where
+	Vec<(AccountId, cf_primitives::Asset, u128)>:
+		From<Vec<(<T as frame_system::Config>::AccountId, cf_primitives::Asset, u128)>>,
+{
 	type AccountId = T::AccountId;
 
 	fn try_credit_account(
@@ -458,5 +462,14 @@ impl<T: Config> BalanceApi for Pallet<T> {
 	fn kill_balance(who: &Self::AccountId) {
 		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
 		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn get_balances_info() -> BalancesInfo {
+		let balances = FreeBalances::<T>::iter().collect::<Vec<_>>();
+		let fees = HistoricalEarnedFees::<T>::iter().collect::<Vec<_>>();
+		let network_fee = CollectedNetworkFee::<T>::get();
+		let rejected_funds = CollectedRejectedFunds::<T>::iter().collect::<Vec<_>>();
+		BalancesInfo { network_fee, rejected_funds, balances: balances.into(), fees: fees.into() }
 	}
 }
