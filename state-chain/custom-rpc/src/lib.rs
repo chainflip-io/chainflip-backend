@@ -1,3 +1,5 @@
+#![feature(iterator_try_collect)]
+
 use crate::boost_pool_rpc::BoostPoolFeesRpc;
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
@@ -53,7 +55,9 @@ use std::{
 	marker::PhantomData,
 	sync::Arc,
 };
+mod dynamic_events;
 pub mod monitoring;
+pub use dynamic_events::{DynamicApiClient, DynamicApiServer};
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcEpochState {
@@ -825,22 +829,33 @@ pub trait CustomApi {
 }
 
 /// An RPC extension for the state chain node.
-pub struct CustomRpc<C, B> {
+pub struct CustomRpc<C, B, S> {
 	pub client: Arc<C>,
-	pub _phantom: PhantomData<B>,
+	pub state_backend: Arc<S>,
 	pub executor: Arc<dyn sp_core::traits::SpawnNamed>,
+	pub type_metadata: dynamic_events::EventDecoderCache,
+	pub _phantom: PhantomData<B>,
 }
 
-impl<C, B> CustomRpc<C, B>
+impl<C, B, S> CustomRpc<C, B, S>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: sp_api::ProvideRuntimeApi<B>
-		+ Send
-		+ Sync
-		+ 'static
-		+ HeaderBackend<B>
-		+ BlockchainEvents<B>,
+	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
 {
+	pub fn new(
+		client: Arc<C>,
+		backend: Arc<S>,
+		executor: Arc<dyn sp_core::traits::SpawnNamed>,
+	) -> Self {
+		Self {
+			client,
+			state_backend: backend,
+			executor,
+			type_metadata: Default::default(),
+			_phantom: Default::default(),
+		}
+	}
+
 	fn unwrap_or_best(&self, from_rpc: Option<<B as BlockT>::Hash>) -> B::Hash {
 		from_rpc.unwrap_or_else(|| self.client.info().best_hash)
 	}
@@ -862,7 +877,7 @@ fn map_dispatch_error(e: DispatchErrorWithMessage) -> jsonrpsee::core::Error {
 	})
 }
 
-impl<C, B> CustomApiServer for CustomRpc<C, B>
+impl<C, B, S> CustomApiServer for CustomRpc<C, B, S>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
 	C: sp_api::ProvideRuntimeApi<B>
@@ -872,6 +887,7 @@ where
 		+ HeaderBackend<B>
 		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
+	S: Send + Sync + 'static,
 {
 	fn cf_is_auction_phase(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<bool> {
 		self.client
@@ -1736,7 +1752,7 @@ where
 	}
 }
 
-impl<C, B> CustomRpc<C, B>
+impl<C, B, S> CustomRpc<C, B, S>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
 	C: sp_api::ProvideRuntimeApi<B>
