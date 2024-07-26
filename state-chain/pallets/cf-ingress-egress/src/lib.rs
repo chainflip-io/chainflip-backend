@@ -1519,6 +1519,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount_after_fees: TargetChainAmount<T, I>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) -> Result<DepositAction<T::AccountId>, DispatchError> {
+		let swap_origin = SwapOrigin::DepositChannel {
+			deposit_address: T::AddressConverter::to_encoded_address(
+				<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
+					deposit_address.clone(),
+				),
+			),
+			channel_id,
+			deposit_block_height: block_height.into(),
+		};
+
 		let action = match action {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
 				T::LpBalance::add_deposit(&lp_account, asset.into(), amount_after_fees.into())?;
@@ -1538,15 +1548,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					SwapRequestType::Regular { output_address: destination_address },
 					broker_fees,
 					refund_params,
-					SwapOrigin::DepositChannel {
-						deposit_address: T::AddressConverter::to_encoded_address(
-							<<T::TargetChain as Chain>::ChainAccount as IntoForeignChainAddress<
-								T::TargetChain,
-							>>::into_foreign_chain_address(deposit_address.clone()),
-						),
-						channel_id,
-						deposit_block_height: block_height.into(),
-					},
+					swap_origin,
 				) {
 					DepositAction::Swap { swap_request_id }
 				} else {
@@ -1573,15 +1575,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 					Default::default(),
 					refund_params,
-					SwapOrigin::DepositChannel {
-						deposit_address: T::AddressConverter::to_encoded_address(
-							<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
-								deposit_address.clone(),
-							),
-						),
-						channel_id,
-						deposit_block_height: block_height.into(),
-					},
+					swap_origin,
 				) {
 					DepositAction::CcmTransfer { swap_request_id }
 				} else {

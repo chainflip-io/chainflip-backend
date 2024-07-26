@@ -718,6 +718,14 @@ mod ccm {
 					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 				);
 
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID,
+						..
+					}),
+				);
+
 				assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
 				assert_ccm_egressed(OUTPUT_ASSET, PRINCIPAL_AMOUNT);
@@ -759,6 +767,14 @@ mod ccm {
 				assert_has_matching_event!(
 					Test,
 					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
+				);
+
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+						swap_request_id: SWAP_REQUEST_ID,
+						..
+					}),
 				);
 
 				assert_ccm_egressed(OUTPUT_ASSET, 0);

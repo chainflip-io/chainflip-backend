@@ -599,7 +599,7 @@ pub mod pallet {
 					!CollectedNetworkFee::<T>::get().is_zero()
 				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
+					CollectedNetworkFee::<T>::mutate(|collected_fee| {
 						if Self::init_swap_request(
 							Asset::Usdc,
 							*collected_fee,
@@ -615,10 +615,7 @@ pub mod pallet {
 						}
 
 						collected_fee.set_zero();
-						Ok::<_, DispatchError>(())
-					}) {
-						log::warn!("Unable to swap Network Fee to Flip: {e:?}");
-					}
+					});
 				}
 			}
 			weight_used
@@ -1203,7 +1200,7 @@ pub mod pallet {
 			ccm_deposit_metadata: CcmDepositMetadata,
 		) {
 			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-			// Schedule the given ccm to be egressed and deposit an event.
+
 			if let Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =
 				T::EgressHandler::schedule_egress(
 					output_asset,
@@ -1259,12 +1256,12 @@ pub mod pallet {
 				let swap_request_id = swap.swap.swap_request_id;
 
 				let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
-					log_or_panic!("swap request not found");
+					log_or_panic!("Swap request {swap_request_id} not found");
 					continue;
 				};
 
 				let Some(output_amount) = swap.final_output else {
-					log_or_panic!("Swap is not completed yet!");
+					log_or_panic!("Swap {} is not completed yet!", swap.swap_id());
 					continue;
 				};
 
@@ -1681,7 +1678,7 @@ pub mod pallet {
 
 			let request_type_for_event = match request_type {
 				SwapRequestType::NetworkFee => {
-					let _swap_id = Self::schedule_swap(
+					Self::schedule_swap(
 						input_asset,
 						output_asset,
 						net_amount,
@@ -1704,7 +1701,7 @@ pub mod pallet {
 					SwapRequestTypeEncoded::NetworkFee
 				},
 				SwapRequestType::IngressEgressFee => {
-					let _swap_id = Self::schedule_swap(
+					Self::schedule_swap(
 						input_asset,
 						output_asset,
 						net_amount,
@@ -1823,19 +1820,20 @@ pub mod pallet {
 							principal_swap_amount,
 						);
 
-						let swap_request = SwapRequest {
-							id: request_id,
-							input_asset,
-							output_asset,
-							refund_params: None,
-							state: SwapRequestState::Ccm {
-								state: ccm_state,
-								ccm_deposit_metadata: ccm_deposit_metadata.clone(),
-								output_address,
+						SwapRequests::<T>::insert(
+							request_id,
+							SwapRequest {
+								id: request_id,
+								input_asset,
+								output_asset,
+								refund_params: None,
+								state: SwapRequestState::Ccm {
+									state: ccm_state,
+									ccm_deposit_metadata: ccm_deposit_metadata.clone(),
+									output_address,
+								},
 							},
-						};
-
-						SwapRequests::<T>::insert(request_id, swap_request);
+						);
 					} else {
 						// No swaps are needed, process the CCM outcome immediately:
 						Self::process_ccm_outcome(
