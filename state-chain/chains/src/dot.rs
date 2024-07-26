@@ -419,8 +419,8 @@ pub struct CurrentVaultAndProxy {
 /// The builder for creating and signing polkadot extrinsics, and creating signature payload
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotExtrinsicBuilder {
-	extrinsic_call: PolkadotRuntimeCall,
-	replay_protection: PolkadotReplayProtection,
+	pub extrinsic_call: PolkadotRuntimeCall,
+	pub replay_protection: PolkadotReplayProtection,
 	pub signer_and_signature: Option<(PolkadotPublicKey, PolkadotSignature)>,
 }
 

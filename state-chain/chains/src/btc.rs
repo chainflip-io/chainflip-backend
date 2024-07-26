@@ -692,11 +692,11 @@ impl ScriptPubkey {
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinTransaction {
-	inputs: Vec<Utxo>,
+	pub inputs: Vec<Utxo>,
 	pub outputs: Vec<BitcoinOutput>,
 	pub signer_and_signatures: Option<(AggKey, Vec<Signature>)>,
-	transaction_bytes: Vec<u8>,
-	old_utxo_input_indices: VecDeque<u32>,
+	pub transaction_bytes: Vec<u8>,
+	pub old_utxo_input_indices: VecDeque<u32>,
 }
 
 const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
