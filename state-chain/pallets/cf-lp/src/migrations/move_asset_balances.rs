@@ -1,6 +1,7 @@
 use crate::*;
 use cf_primitives::{AccountId, BalancesInfo};
 use frame_support::traits::OnRuntimeUpgrade;
+use sp_std::vec::Vec;
 
 mod old {
 
