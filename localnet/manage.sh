@@ -8,21 +8,16 @@
 # ╚██████╗██║  ██║██║  ██║██║██║ ╚████║██║     ███████╗██║██║         ███████╗╚██████╔╝╚██████╗██║  ██║███████╗██║ ╚████║███████╗   ██║
 #  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝     ╚══════╝╚═╝╚═╝         ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝╚══════╝   ╚═╝
 
-
-
-LOCALNET_INIT_DIR=localnet/init
-WORKFLOW=build-localnet
-GENESIS_NODES=("bashful" "doc" "dopey")
-SELECTED_NODES=("bashful")
-REQUIRED_BINARIES="engine-runner chainflip-node"
-INIT_CONTAINERS="eth-init solana-init"
-CORE_CONTAINERS="bitcoin geth polkadot redis"
-ARB_CONTAINERS="sequencer staker-unsafe poster"
-SOLANA_BASE_PATH="/tmp/solana"
-CHAINFLIP_BASE_PATH="/tmp/chainflip"
-export NODE_COUNT="1-node"
-
-DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-"$CHAINFLIP_BASE_PATH/debug.log"}
+export LOCALNET_INIT_DIR=localnet/init
+export WORKFLOW=build-localnet
+export GENESIS_NODES=("bashful" "doc" "dopey")
+export REQUIRED_BINARIES="engine-runner chainflip-node chainflip-broker-api chainflip-lp-api"
+export INIT_CONTAINERS="eth-init solana-init"
+export CORE_CONTAINERS="bitcoin geth polkadot redis"
+export ARB_CONTAINERS="sequencer staker-unsafe poster"
+export SOLANA_BASE_PATH="/tmp/solana"
+export CHAINFLIP_BASE_PATH="/tmp/chainflip"
+export DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-"$CHAINFLIP_BASE_PATH/debug.log"}
 
 source ./localnet/helper.sh
 
@@ -38,6 +33,14 @@ if [[ $CI == true ]]; then
   set -x
   additional_docker_compose_up_args="--quiet-pull"
   additional_docker_compose_down_args="--volumes --remove-orphans"
+  if [[ -z NODE_COUNT ]]; then
+    export NODE_COUNT="1-node"
+  fi
+  if [[ $NODE_COUNT == "1-node" ]]; then
+    export SELECTED_NODES="${GENESIS_NODES[0]}"
+  elif [[ $NODE_COUNT == "3-node" ]]; then
+    export SELECTED_NODES="${GENESIS_NODES[@]}"
+  fi
 else
   additional_docker_compose_up_args=""
   additional_docker_compose_down_args="--volumes --remove-orphans"
@@ -73,17 +76,17 @@ get-workflow() {
   done
   if [[ $WORKFLOW =~ build-localnet|recreate ]]; then
     echo "❓ Would you like to run a 1 or 3 node network? (Type 1 or 3)"
-    read -r NODE_COUNT
-    if [[ $NODE_COUNT == "1" ]]; then
-      SELECTED_NODES=("${GENESIS_NODES[0]}")
-    elif [[ $NODE_COUNT == "3" ]]; then
-      SELECTED_NODES=("${GENESIS_NODES[@]}")
+    read -r NODE_COUNT_INPUT
+    if [[ "$NODE_COUNT_INPUT" == "1" ]]; then
+      export SELECTED_NODES="${GENESIS_NODES[0]}"
+    elif [[ "$NODE_COUNT_INPUT" == "3" ]]; then
+      export SELECTED_NODES="${GENESIS_NODES[@]}"
     else
       echo "❌ Invalid NODE_COUNT value: $NODE_COUNT"
       exit 1
     fi
     echo "🎩 You have chosen $NODE_COUNT node(s) network"
-    export NODE_COUNT="$NODE_COUNT-node"
+    export NODE_COUNT="$NODE_COUNT_INPUT-node"
 
     if [[ -z "${BINARY_ROOT_PATH}" ]]; then
       echo "💻 Please provide the location to the binaries you would like to use."
@@ -151,7 +154,6 @@ build-localnet() {
     exit 1
   fi
 
-
   echo "🦑 Waiting for Arbitrum nodes to start"
   $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up $ARB_CONTAINERS $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
   echo "🪄 Deploying L2 Contracts"
@@ -180,7 +182,6 @@ build-localnet() {
       echo "💚 $NODE's chainflip-node is running!"
       ((RPC_PORT++))
   done
-
   NODE_COUNT=$NODE_COUNT \
   BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
   SC_RPC_PORT=$INIT_RPC_PORT \

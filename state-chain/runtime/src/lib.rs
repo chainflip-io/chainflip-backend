@@ -25,6 +25,7 @@ use crate::{
 		SimulatedSwapInformation, ValidatorInfo,
 	},
 };
+
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
@@ -59,7 +60,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 
-use pallet_cf_reputation::ExclusionList;
+use pallet_cf_reputation::{ExclusionList, ReputationPointsQualification};
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
@@ -220,7 +221,10 @@ impl pallet_cf_validator::Config for Runtime {
 					SessionKeysRegistered<Self, pallet_session::Pallet<Self>>,
 					(
 						chainflip::ValidatorRoleQualification,
-						pallet_cf_validator::QualifyByCfeVersion<Self>,
+						(
+							pallet_cf_validator::QualifyByCfeVersion<Self>,
+							ReputationPointsQualification<Self>,
+						),
 					),
 				),
 			),
