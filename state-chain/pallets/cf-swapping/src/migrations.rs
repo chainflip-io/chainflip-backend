@@ -1,10 +1,9 @@
 use crate::Pallet;
-use cf_runtime_upgrade_utilities::VersionedMigration;
+use cf_runtime_upgrade_utilities::{PlaceholderMigration, VersionedMigration};
 mod separate_swap_state;
 mod swapping_redesign;
 
 pub type PalletMigration<T> = (
-	VersionedMigration<Pallet<T>, separate_swap_state::Migration<T>, 3, 4>,
-	VersionedMigration<Pallet<T>, swapping_redesign::Migration<T>, 4, 5>,
-	// Migration 5 -> 6 is in the runtime lib NetworkFeesMigration
+	VersionedMigration<Pallet<T>, swapping_redesign::Migration<T>, 5, 6>,
+    PlaceholderMigration<Pallet<T>, 5>
 );
