@@ -225,6 +225,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 			lp: Option<AccountId32>,
+			filled_orders: bool,
 		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
@@ -273,5 +274,6 @@ decl_runtime_apis!(
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
+		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 	}
 );

@@ -25,6 +25,7 @@ use crate::{
 		SimulatedSwapInformation, ValidatorInfo,
 	},
 };
+
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
@@ -60,7 +61,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 
-use pallet_cf_reputation::ExclusionList;
+use pallet_cf_reputation::{ExclusionList, ReputationPointsQualification};
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
@@ -125,9 +126,10 @@ pub use cf_traits::{
 pub use pallet_cf_validator::SetSizeParameters;
 
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, evm_vault_activator::EvmVaultActivator,
-	BroadcastReadyProvider, BtcEnvironment, ChainAddressConverter, ChainflipHeartbeat,
-	DotEnvironment, EvmEnvironment, SolEnvironment, TokenholderGovernanceBroadcaster,
+	boost_api::IngressEgressBoostApi, epoch_transition::ChainflipEpochTransitions,
+	evm_vault_activator::EvmVaultActivator, BroadcastReadyProvider, BtcEnvironment,
+	ChainAddressConverter, ChainflipHeartbeat, DotEnvironment, EvmEnvironment, SolEnvironment,
+	TokenholderGovernanceBroadcaster,
 };
 use safe_mode::{RuntimeSafeMode, WitnesserCallPermission};
 
@@ -185,7 +187,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 150,
+	spec_version: 160,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -216,7 +218,10 @@ impl pallet_cf_validator::Config for Runtime {
 					SessionKeysRegistered<Self, pallet_session::Pallet<Self>>,
 					(
 						chainflip::ValidatorRoleQualification,
-						pallet_cf_validator::QualifyByCfeVersion<Self>,
+						(
+							pallet_cf_validator::QualifyByCfeVersion<Self>,
+							ReputationPointsQualification<Self>,
+						),
 					),
 				),
 			),
@@ -456,6 +461,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type BalanceApi = AssetBalances;
+	type BoostApi = IngressEgressBoostApi;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
@@ -1139,7 +1145,6 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	MigrationsForV1_5,
-	migrations::move_network_fees::NetworkFeesMigration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1296,15 +1301,7 @@ impl_runtime_apis! {
 		fn cf_lp_total_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
 			let free_balances = AssetBalances::free_balances(&account_id)?;
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
-			let boost_pools_balances = {
-				AssetMap {
-					eth: EthereumIngressEgress::boost_pool_account_balances(&account_id),
-					arb: ArbitrumIngressEgress::boost_pool_account_balances(&account_id),
-					btc: BitcoinIngressEgress::boost_pool_account_balances(&account_id),
-					dot: PolkadotIngressEgress::boost_pool_account_balances(&account_id),
-					sol: SolanaIngressEgress::boost_pool_account_balances(&account_id)
-				}
-			};
+			let boost_pools_balances = IngressEgressBoostApi::boost_pool_account_balances(&account_id);
 			Ok(free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances))
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
@@ -1534,8 +1531,9 @@ impl_runtime_apis! {
 			base_asset: Asset,
 			quote_asset: Asset,
 			lp: Option<AccountId>,
+			filled_orders: bool,
 		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage> {
-			LiquidityPools::pool_orders(base_asset, quote_asset, lp).map_err(Into::into)
+			LiquidityPools::pool_orders(base_asset, quote_asset, lp, filled_orders).map_err(Into::into)
 		}
 
 		fn cf_pool_range_order_liquidity_value(
@@ -1910,6 +1908,10 @@ impl_runtime_apis! {
 
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode {
 			pallet_cf_environment::RuntimeSafeMode::<Runtime>::get()
+		}
+
+		fn cf_pools() -> Vec<PoolPairsMap<Asset>> {
+			LiquidityPools::pools()
 		}
 	}
 

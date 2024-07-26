@@ -127,35 +127,74 @@ macro_rules! impl_runtime_safe_mode {
 /// ```
 #[macro_export]
 macro_rules! impl_pallet_safe_mode {
-	(
-		$pallet_safe_mode:ident; $($flag:ident),+ $(,)?
-	) => {
-		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
-		pub struct $pallet_safe_mode {
-			$(
-				pub $flag: bool,
-			)+
-		}
+    // Case for the non-generic version
+    (
+        $pallet_safe_mode:ident; $($flag:ident),+ $(,)?
+    ) => {
+        #[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
+        pub struct $pallet_safe_mode {
+            $(
+                pub $flag: bool,
+            )+
+        }
 
-		impl Default for $pallet_safe_mode {
-			fn default() -> Self {
-				<Self as $crate::SafeMode>::CODE_GREEN
-			}
-		}
+        impl Default for $pallet_safe_mode {
+            fn default() -> Self {
+                <Self as $crate::SafeMode>::CODE_GREEN
+            }
+        }
 
-		impl $crate::SafeMode for $pallet_safe_mode {
-			const CODE_RED: Self = Self {
-				$(
-					$flag: false
-				),+
-			};
-			const CODE_GREEN: Self = Self {
-				$(
-					$flag: true
-				),+
-			};
-		}
-	}
+        impl $crate::SafeMode for $pallet_safe_mode {
+            const CODE_RED: Self = Self {
+                $(
+                    $flag: false,
+                )+
+            };
+            const CODE_GREEN: Self = Self {
+                $(
+                    $flag: true,
+                )+
+            };
+        }
+    };
+
+    // Case for the generic version
+    (
+        $pallet_safe_mode:ident<$generic:ident>; $($flag:ident),+ $(,)?
+    ) => {
+        #[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
+		#[scale_info(skip_type_params($generic))]
+        pub struct $pallet_safe_mode<$generic: 'static> {
+            $(
+                pub $flag: bool,
+            )+
+            #[doc(hidden)]
+            #[codec(skip)]
+            #[serde(skip_serializing)]
+            _phantom: ::core::marker::PhantomData<$generic>,
+        }
+
+        impl<$generic> Default for $pallet_safe_mode<$generic> {
+            fn default() -> Self {
+                <Self as $crate::SafeMode>::CODE_GREEN
+            }
+        }
+
+        impl<$generic> $crate::SafeMode for $pallet_safe_mode<$generic> {
+            const CODE_RED: Self = Self {
+                $(
+                    $flag: false,
+                )+
+                _phantom: ::core::marker::PhantomData,
+            };
+            const CODE_GREEN: Self = Self {
+                $(
+                    $flag: true,
+                )+
+                _phantom: ::core::marker::PhantomData,
+            };
+        }
+    };
 }
 
 #[cfg(test)]

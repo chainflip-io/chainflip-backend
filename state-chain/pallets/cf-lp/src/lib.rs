@@ -4,7 +4,7 @@
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
-	impl_pallet_safe_mode, liquidity::LpApi, AccountRoleRegistry, BalanceApi, Chainflip,
+	impl_pallet_safe_mode, liquidity::LpApi, AccountRoleRegistry, BalanceApi, BoostApi, Chainflip,
 	DepositApi, EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
 };
 
@@ -77,6 +77,12 @@ pub mod pallet {
 		/// The interface to managing balances.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
+		/// The interface to access boosted balances
+		type BoostApi: BoostApi<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			AssetMap = cf_chains::assets::any::AssetMap<AssetAmount>,
+		>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 
@@ -114,6 +120,8 @@ pub mod pallet {
 		DestinationAccountNotLiquidityProvider,
 		/// The account cannot transfer to itself.
 		CannotTransferToOriginAccount,
+		/// The account still has funds remaining in the boost pools
+		BoostedFundsRemaining,
 	}
 
 	#[pallet::event]
@@ -284,13 +292,12 @@ pub mod pallet {
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::deregister_lp_account())]
 		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
-			const STABLE_ASSET: Asset = Asset::Usdc;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
+			T::PoolApi::sweep(&account_id)?;
 
 			ensure!(
-				Asset::all().filter(|asset| *asset != STABLE_ASSET).all(|asset| {
-					T::PoolApi::open_order_count(&account_id, asset, STABLE_ASSET)
-						.unwrap_or_default() == 0
+				T::PoolApi::pools().iter().all(|asset_pair| {
+					T::PoolApi::open_order_count(&account_id, asset_pair).unwrap_or_default() == 0
 				}),
 				Error::<T>::OpenOrdersRemaining
 			);
@@ -300,6 +307,12 @@ pub mod pallet {
 					.iter()
 					.all(|(_, amount)| *amount == 0),
 				Error::<T>::FundsRemaining
+			);
+			ensure!(
+				T::BoostApi::boost_pool_account_balances(&account_id)
+					.iter()
+					.all(|(_asset, amount)| { *amount == 0 }),
+				Error::<T>::BoostedFundsRemaining
 			);
 
 			// Clear all liquidity refund addresses for the account.

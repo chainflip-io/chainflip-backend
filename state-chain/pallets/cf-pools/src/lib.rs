@@ -988,10 +988,10 @@ impl<T: Config> PoolApi for Pallet<T> {
 
 	fn open_order_count(
 		who: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
-		let pool_orders = Self::pool_orders(base_asset, quote_asset, Some(who.clone()))?;
+		let pool_orders =
+			Self::pool_orders(asset_pair.base, asset_pair.quote, Some(who.clone()), true)?;
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
@@ -1001,10 +1001,11 @@ impl<T: Config> PoolApi for Pallet<T> {
 		let mut result: AssetMap<AssetAmount> = AssetMap::from_fn(|_| 0);
 
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
-			let pool_orders = match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone())) {
-				Ok(orders) => orders,
-				Err(_) => continue,
-			};
+			let pool_orders =
+				match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()), false) {
+					Ok(orders) => orders,
+					Err(_) => continue,
+				};
 			for ask in pool_orders.limit_orders.asks {
 				result[base_asset] = result[base_asset]
 					.saturating_add(ask.sell_amount.saturated_into::<AssetAmount>());
@@ -1028,6 +1029,10 @@ impl<T: Config> PoolApi for Pallet<T> {
 			}
 		}
 		result
+	}
+
+	fn pools() -> Vec<PoolPairsMap<Asset>> {
+		Self::pools()
 	}
 }
 
@@ -1757,6 +1762,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		option_lp: Option<T::AccountId>,
+		filled_orders: bool,
 	) -> Result<PoolOrders<T>, DispatchError> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
@@ -1787,9 +1793,7 @@ impl<T: Config> Pallet<T> {
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
 							.unwrap();
-						if position_info.amount.is_zero() {
-							None
-						} else {
+						if filled_orders || !position_info.amount.is_zero() {
 							Some(LimitOrder {
 								lp: lp.clone(),
 								id: id.into(),
@@ -1798,6 +1802,8 @@ impl<T: Config> Pallet<T> {
 								fees_earned: collected.accumulative_fees,
 								original_sell_amount: collected.original_amount,
 							})
+						} else {
+							None
 						}
 					})
 					.collect()

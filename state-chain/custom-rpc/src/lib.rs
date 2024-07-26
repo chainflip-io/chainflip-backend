@@ -11,8 +11,9 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex,
-	ForeignChain, NetworkEnvironment, SemVer, SwapId,
+	chains::assets::{any, any::AssetMap},
+	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, ForeignChain,
+	NetworkEnvironment, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -46,13 +47,14 @@ use state_chain_runtime::{
 		FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
 	},
 	safe_mode::RuntimeSafeMode,
-	NetworkFee,
+	Hash, NetworkFee,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
 	marker::PhantomData,
 	sync::Arc,
 };
+
 pub mod monitoring;
 
 #[derive(Serialize, Deserialize)]
@@ -704,6 +706,7 @@ pub trait CustomApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 		lp: Option<state_chain_runtime::AccountId>,
+		filled_orders: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>>;
 	#[method(name = "pool_range_order_liquidity_value")]
@@ -735,6 +738,11 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment>;
+	#[method(name = "available_pools")]
+	fn cf_available_pools(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<PoolPairsMap<Asset>>>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 	#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
@@ -1353,11 +1361,18 @@ where
 		base_asset: Asset,
 		quote_asset: Asset,
 		lp: Option<state_chain_runtime::AccountId>,
+		filled_orders: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>> {
 		self.client
 			.runtime_api()
-			.cf_pool_orders(self.unwrap_or_best(at), base_asset, quote_asset, lp)
+			.cf_pool_orders(
+				self.unwrap_or_best(at),
+				base_asset,
+				quote_asset,
+				lp,
+				filled_orders.unwrap_or(false),
+			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
 	}
@@ -1469,13 +1484,21 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment> {
 		Ok(PoolsEnvironment {
-			fees: any::AssetMap::from_fn(|asset| {
-				if asset == Asset::Usdc {
-					None
-				} else {
-					self.cf_pool_info(asset, Asset::Usdc, at).ok().map(Into::into)
-				}
-			}),
+			fees: {
+				let mut map = AssetMap::default();
+				self.client
+					.runtime_api()
+					.cf_pools(self.unwrap_or_best(at))
+					.map_err(to_rpc_error)?
+					.iter()
+					.for_each(|asset_pair| {
+						map[asset_pair.base] = self
+							.cf_pool_info(asset_pair.base, asset_pair.quote, at)
+							.ok()
+							.map(Into::into);
+					});
+				map
+			},
 		})
 	}
 
@@ -1724,6 +1747,13 @@ where
 		self.client
 			.runtime_api()
 			.cf_safe_mode_statuses(self.unwrap_or_best(at))
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_available_pools(&self, at: Option<Hash>) -> RpcResult<Vec<PoolPairsMap<Asset>>> {
+		self.client
+			.runtime_api()
+			.cf_pools(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)
 	}
 }
