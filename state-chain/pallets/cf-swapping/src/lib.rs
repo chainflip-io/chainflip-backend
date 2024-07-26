@@ -629,12 +629,7 @@ pub mod pallet {
 			if !T::SafeMode::get().swaps_enabled {
 				// Since we won't be executing swaps at this block, we need to reschedule them:
 				for swap in swaps_to_execute {
-					Self::deposit_event(Event::<T>::SwapRescheduled {
-						swap_id: swap.swap_id,
-						execute_at: retry_block,
-					});
-
-					SwapQueue::<T>::append(retry_block, swap);
+					Self::reschedule_swap(swap, retry_block);
 				}
 
 				return
@@ -723,13 +718,7 @@ pub mod pallet {
 								_ => {
 									// Either refund parameters not set, or refund block not
 									// reached:
-
-									Self::deposit_event(Event::<T>::SwapRescheduled {
-										swap_id: swap.swap_id,
-										execute_at: retry_block,
-									});
-
-									SwapQueue::<T>::append(retry_block, swap);
+									Self::reschedule_swap(swap, retry_block);
 								},
 							}
 						}
@@ -1534,6 +1523,11 @@ pub mod pallet {
 			});
 
 			swap_id
+		}
+
+		fn reschedule_swap(swap: Swap, execute_at: BlockNumberFor<T>) {
+			Self::deposit_event(Event::<T>::SwapRescheduled { swap_id: swap.swap_id, execute_at });
+			SwapQueue::<T>::append(execute_at, swap);
 		}
 
 		#[transactional]
