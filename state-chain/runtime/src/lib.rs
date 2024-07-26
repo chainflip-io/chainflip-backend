@@ -1182,6 +1182,10 @@ type PalletMigrations = (
 		10,
 		11,
 	>,
+	MigrateApicalls,
+);
+
+type MigrateApicalls = (
 	VersionedMigration<
 		pallet_cf_broadcast::Pallet<Runtime, Instance1>,
 		migrations::migrate_apicalls_to_store_signer::EthMigrateApicallsAndOnChainKey,
