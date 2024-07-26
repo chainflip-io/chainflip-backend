@@ -55,7 +55,7 @@ pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 #[frame_support::pallet]
 pub mod pallet {

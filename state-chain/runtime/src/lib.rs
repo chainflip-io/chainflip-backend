@@ -1182,6 +1182,30 @@ type PalletMigrations = (
 		10,
 		11,
 	>,
+	VersionedMigration<
+		pallet_cf_broadcast::Pallet<Runtime, Instance1>,
+		migrations::migrate_apicalls_to_store_signer::EthMigrateApicallsAndOnChainKey,
+		5,
+		6,
+	>,
+	VersionedMigration<
+		pallet_cf_broadcast::Pallet<Runtime, Instance2>,
+		migrations::migrate_apicalls_to_store_signer::DotMigrateApicallsAndOnChainKey,
+		5,
+		6,
+	>,
+	VersionedMigration<
+		pallet_cf_broadcast::Pallet<Runtime, Instance3>,
+		migrations::migrate_apicalls_to_store_signer::BtcMigrateApicallsAndOnChainKey,
+		5,
+		6,
+	>,
+	VersionedMigration<
+		pallet_cf_broadcast::Pallet<Runtime, Instance4>,
+		migrations::migrate_apicalls_to_store_signer::ArbMigrateApicallsAndOnChainKey,
+		5,
+		6,
+	>,
 );
 
 // TODO: After this  release, remember to un-comment the

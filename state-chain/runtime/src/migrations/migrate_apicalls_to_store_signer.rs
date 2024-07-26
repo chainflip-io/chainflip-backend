@@ -115,42 +115,27 @@ pub mod old {
 	}
 }
 
-pub struct MigrateApicallsAndOnChainKey;
+fn evm_tx_builder_fn<C>(
+	evm_tx_builder: old::EvmTransactionBuilder<C>,
+	current_evm_key: cf_chains::evm::AggKey,
+) -> EvmTransactionBuilder<C> {
+	EvmTransactionBuilder {
+		signer_and_sig_data: evm_tx_builder.sig_data.map(|sig_data| (current_evm_key, sig_data)),
+		replay_protection: evm_tx_builder.replay_protection,
+		call: evm_tx_builder.call,
+	}
+}
 
-impl OnRuntimeUpgrade for MigrateApicallsAndOnChainKey {
+pub struct EthMigrateApicallsAndOnChainKey;
+
+impl OnRuntimeUpgrade for EthMigrateApicallsAndOnChainKey {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let current_evm_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance16>::get(
 			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance16>::get().unwrap(),
 		)
 		.unwrap();
 
-		let current_dot_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance2>::get(
-			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance2>::get().unwrap(),
-		)
-		.unwrap();
-
-		let current_btc_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance3>::get(
-			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance3>::get().unwrap(),
-		)
-		.unwrap();
-
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance1>::put(current_evm_key);
-		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance4>::put(current_evm_key);
-		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance2>::put(current_dot_key);
-		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance3>::put(current_btc_key);
-
-		fn evm_tx_builder_fn<C>(
-			evm_tx_builder: old::EvmTransactionBuilder<C>,
-			current_evm_key: cf_chains::evm::AggKey,
-		) -> EvmTransactionBuilder<C> {
-			EvmTransactionBuilder {
-				signer_and_sig_data: evm_tx_builder
-					.sig_data
-					.map(|sig_data| (current_evm_key, sig_data)),
-				replay_protection: evm_tx_builder.replay_protection,
-				call: evm_tx_builder.call,
-			}
-		}
 
 		pallet_cf_broadcast::PendingApiCalls::<Runtime, Instance1>::translate(
 			|_broadcast_id, old_apicall: old::EthereumApi<EvmEnvironment>| {
@@ -197,31 +182,30 @@ impl OnRuntimeUpgrade for MigrateApicallsAndOnChainKey {
 			},
 		);
 
-		pallet_cf_broadcast::PendingApiCalls::<Runtime, Instance4>::translate(
-			|_broadcast_id, old_apicall: old::ArbitrumApi<EvmEnvironment>| {
-				Some(match old_apicall {
-					old::ArbitrumApi::SetAggKeyWithAggKey(evm_tx_builder) =>
-						ArbitrumApi::SetAggKeyWithAggKey(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
+		Weight::zero()
+	}
 
-					old::ArbitrumApi::AllBatch(evm_tx_builder) =>
-						ArbitrumApi::AllBatch(evm_tx_builder_fn(evm_tx_builder, current_evm_key)),
-					old::ArbitrumApi::ExecutexSwapAndCall(evm_tx_builder) =>
-						ArbitrumApi::ExecutexSwapAndCall(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::ArbitrumApi::TransferFallback(evm_tx_builder) =>
-						ArbitrumApi::TransferFallback(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::ArbitrumApi::_Phantom(..) => unreachable!(),
-				})
-			},
-		);
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		Ok(vec![])
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+		Ok(())
+	}
+}
+
+pub struct DotMigrateApicallsAndOnChainKey;
+
+impl OnRuntimeUpgrade for DotMigrateApicallsAndOnChainKey {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		let current_dot_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance2>::get(
+			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance2>::get().unwrap(),
+		)
+		.unwrap();
+
+		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance2>::put(current_dot_key);
 
 		fn dot_tx_builder_fn(
 			dot_ext_builder: old::PolkadotExtrinsicBuilder,
@@ -263,6 +247,31 @@ impl OnRuntimeUpgrade for MigrateApicallsAndOnChainKey {
 			},
 		);
 
+		Weight::zero()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		Ok(vec![])
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+		Ok(())
+	}
+}
+
+pub struct BtcMigrateApicallsAndOnChainKey;
+
+impl OnRuntimeUpgrade for BtcMigrateApicallsAndOnChainKey {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		let current_btc_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance3>::get(
+			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance3>::get().unwrap(),
+		)
+		.unwrap();
+
+		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance3>::put(current_btc_key);
+
 		pallet_cf_broadcast::PendingApiCalls::<Runtime, Instance3>::translate(
 			|_broadcast_id, old_apicall: old::BitcoinApi<BtcEnvironment>| {
 				Some(match old_apicall {
@@ -288,6 +297,57 @@ impl OnRuntimeUpgrade for MigrateApicallsAndOnChainKey {
 						}),
 
 					old::BitcoinApi::_Phantom(..) => unreachable!(),
+				})
+			},
+		);
+
+		Weight::zero()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		Ok(vec![])
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+		Ok(())
+	}
+}
+
+pub struct ArbMigrateApicallsAndOnChainKey;
+
+impl OnRuntimeUpgrade for ArbMigrateApicallsAndOnChainKey {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		let current_evm_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance16>::get(
+			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance16>::get().unwrap(),
+		)
+		.unwrap();
+
+		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance4>::put(current_evm_key);
+
+		pallet_cf_broadcast::PendingApiCalls::<Runtime, Instance4>::translate(
+			|_broadcast_id, old_apicall: old::ArbitrumApi<EvmEnvironment>| {
+				Some(match old_apicall {
+					old::ArbitrumApi::SetAggKeyWithAggKey(evm_tx_builder) =>
+						ArbitrumApi::SetAggKeyWithAggKey(evm_tx_builder_fn(
+							evm_tx_builder,
+							current_evm_key,
+						)),
+
+					old::ArbitrumApi::AllBatch(evm_tx_builder) =>
+						ArbitrumApi::AllBatch(evm_tx_builder_fn(evm_tx_builder, current_evm_key)),
+					old::ArbitrumApi::ExecutexSwapAndCall(evm_tx_builder) =>
+						ArbitrumApi::ExecutexSwapAndCall(evm_tx_builder_fn(
+							evm_tx_builder,
+							current_evm_key,
+						)),
+					old::ArbitrumApi::TransferFallback(evm_tx_builder) =>
+						ArbitrumApi::TransferFallback(evm_tx_builder_fn(
+							evm_tx_builder,
+							current_evm_key,
+						)),
+					old::ArbitrumApi::_Phantom(..) => unreachable!(),
 				})
 			},
 		);
