@@ -2,7 +2,7 @@ use cf_chains::{
 	address::ForeignChainAddress, assets::any::AssetMap, ChannelRefundParameters,
 	SwapRefundParameters,
 };
-use cf_primitives::{Asset, AssetAmount, Beneficiaries, ChannelId, SwapId};
+use cf_primitives::{Asset, AssetAmount, BalancesInfo, Beneficiaries, ChannelId, SwapId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -85,6 +85,10 @@ pub trait BalanceApi {
 
 	/// Removes all balances of the given account from storage.
 	fn kill_balance(who: &Self::AccountId);
+
+	/// Returns all available balance information.
+	#[cfg(feature = "try-runtime")]
+	fn get_balances_info() -> BalancesInfo;
 }
 pub trait PoolApi {
 	type AccountId;

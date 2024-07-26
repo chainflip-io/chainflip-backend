@@ -1,6 +1,6 @@
 use crate::{BalanceApi, LpDepositHandler};
 use cf_chains::assets::any::{Asset, AssetMap};
-use cf_primitives::AssetAmount;
+use cf_primitives::{AssetAmount, BalancesInfo};
 use frame_support::sp_runtime::{
 	traits::{CheckedSub, Saturating},
 	DispatchError, DispatchResult,
@@ -89,6 +89,11 @@ impl BalanceApi for MockBalance {
 	}
 
 	fn kill_balance(_who: &Self::AccountId) {
+		unimplemented!()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn get_balances_info() -> BalancesInfo {
 		unimplemented!()
 	}
 }
