@@ -147,7 +147,8 @@ build-localnet() {
     ./localnet/init/scripts/start-solana.sh
     check_endpoint_health -s http://localhost:8899 >> $DEBUG_OUTPUT_DESTINATION 2>&1
   else
-    echo "☀️ Solana not installed, skipping..."
+    echo "❌  Solana is not installed, please see https://solana.com/developers/guides/getstarted/setup-local-development#3-install-the-solana-cli"
+    exit 1
   fi
 
 

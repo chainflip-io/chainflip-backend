@@ -589,6 +589,8 @@ solana_program!(
 		set_suspended_state => SetSuspendedState {
 			args: [
 				suspend: bool,
+				suspend_legacy_swaps: bool,
+				suspend_event_swaps: bool,
 			],
 			account_metas: [
 				data_account: { signer: false, writable: true },
@@ -609,7 +611,7 @@ solana_program!(
 			]
 		},
 
-		upgrade_vault_program => UpgradeVaultProgram {
+		upgrade_program => UpgradeVaultProgram {
 			args: [],
 			account_metas: [
 				data_account: { signer: false, writable: false },
@@ -652,6 +654,7 @@ mod idl {
 	pub enum IdlType {
 		Bytes,
 		U8,
+		U16,
 		U64,
 		U32,
 		Bool,
@@ -665,6 +668,7 @@ mod idl {
 			match self {
 				IdlType::Bytes => write!(f, "Vec<u8>"),
 				IdlType::U8 => write!(f, "u8"),
+				IdlType::U16 => write!(f, "u16"),
 				IdlType::U64 => write!(f, "u64"),
 				IdlType::U32 => write!(f, "u32"),
 				IdlType::Bool => write!(f, "bool"),

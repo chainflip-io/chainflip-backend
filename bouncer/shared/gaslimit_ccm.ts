@@ -288,8 +288,8 @@ async function testGasLimitSwapToSolana(
         transaction = await connection.getTransaction(confirmedSignaturesInfo[0].signature, {
           commitment: 'confirmed',
         });
-        console.log(`${tag} Transaction found: ${transaction}`);
         if (transaction !== null) {
+          console.log(`${tag} Transaction found: ${transaction?.meta}`);
           // This doesn't throw an error, for now it's fine to print it.
           if (transaction?.meta?.err === null) {
             throw new Error('Transaction should have reverted');
