@@ -1137,7 +1137,6 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	MigrationsForV1_5,
-	migrations::move_network_fees::NetworkFeesMigration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
