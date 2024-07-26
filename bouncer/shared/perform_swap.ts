@@ -63,7 +63,6 @@ export async function requestNewSwap(
         destAddressEvent.toLowerCase() ===
         encodeDestinationAddress(destAddress, destAsset).toLowerCase();
 
-      // CF Parameters is always set to '' by the SDK for now
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
           event.data.channelMetadata.message === messageMetadata.message &&
@@ -71,9 +70,15 @@ export async function requestNewSwap(
             messageMetadata.gasBudget
         : event.data.channelMetadata === null;
 
-      return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
+      const found =
+        destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
+
+      console.log(`${tag} Waiting for SwapDepositAddressReady ${found}`);
+
+      return found;
     },
   }).event;
+  console.log(`${tag} Awaiting new swap`);
   await newSwap(
     sourceAsset,
     destAsset,
@@ -83,6 +88,7 @@ export async function requestNewSwap(
     boostFeeBps,
   );
 
+  console.log(`${tag} Awaiting addressPromise`);
   const res = (await addressPromise).data;
 
   const depositAddress = res.depositAddress[shortChainFromAsset(sourceAsset)];
