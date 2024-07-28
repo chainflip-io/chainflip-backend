@@ -144,8 +144,7 @@ function newCcmMessage(destAsset: Asset): string {
     case 'Arbitrum':
       return newAbiEncodedMessage();
     case 'Solana':
-      // Random hex string of < 100 bytes
-      return randomAsHex(Math.floor(Math.random() * 100) + 1);
+      return randomAsHex(Math.floor(Math.random() * 90) + 10);
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
   }
