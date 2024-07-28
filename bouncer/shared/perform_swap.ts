@@ -75,7 +75,6 @@ export async function requestNewSwap(
     },
   }).event;
 
-  console.log(`${tag} Awaiting new swap`);
   await newSwap(
     sourceAsset,
     destAsset,
@@ -85,7 +84,6 @@ export async function requestNewSwap(
     boostFeeBps,
   );
 
-  console.log(`${tag} Awaiting addressPromise`);
   const res = (await addressPromise).data;
 
   const depositAddress = res.depositAddress[shortChainFromAsset(sourceAsset)];
