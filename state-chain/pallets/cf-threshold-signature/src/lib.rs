@@ -26,8 +26,8 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::{log_or_panic, EnumVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, CfeMultisigRequest, Chainflip,
-	CurrentEpochIndex, EpochInfo, EpochKey, KeyProvider, KeyRotator, SafeMode, Slashing,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, CfeMultisigRequest,
+	Chainflip, CurrentEpochIndex, EpochInfo, EpochKey, KeyProvider, KeyRotator, Slashing,
 	ThresholdSigner, ThresholdSignerNomination,
 };
 use cfe_events::ThresholdSignatureRequest;
@@ -55,31 +55,9 @@ use weights::WeightInfo;
 /// The type used for counting signing attempts.
 type AttemptCount = AuthorityCount;
 
-#[derive(
-	serde::Serialize,
-	serde::Deserialize,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	Copy,
-	Clone,
-	PartialEq,
-	Eq,
-	RuntimeDebug,
-)]
-#[scale_info(skip_type_params(I))]
-pub struct PalletSafeMode<I: 'static> {
-	pub slashing_enabled: bool,
-	#[doc(hidden)]
-	#[codec(skip)]
-	#[serde(skip_serializing)]
-	_phantom: PhantomData<I>,
-}
-
-impl<I: 'static> SafeMode for PalletSafeMode<I> {
-	const CODE_RED: Self = PalletSafeMode { slashing_enabled: false, _phantom: PhantomData };
-	const CODE_GREEN: Self = PalletSafeMode { slashing_enabled: true, _phantom: PhantomData };
+impl_pallet_safe_mode! {
+	PalletSafeMode<I>;
+	slashing_enabled,
 }
 
 pub type SignatureFor<T, I> =

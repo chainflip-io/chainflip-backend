@@ -63,35 +63,43 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_durable_nonces_and_accounts: [
 		(
 			const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
-			const_hash("Cq9Wwnn5prHaLe4kJsv8gwfevG78FbbqrwuXJeoCcy3F"),
+			const_hash("BcuQnUuMLi7dDGTcW13fPmkf26gZp6cmMycwuzXAPUWq"),
 		),
 		(
 			const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
-			const_hash("78jKw9x4KNWDuyc8cNrSeQrcMF9qno4KBTwL4mANUCPS"),
+			const_hash("CCFc5QptF1HogqCZHCD1HaEzZRunGJvpqJJEnELsoqrH"),
 		),
 		(
 			const_address("HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p"),
-			const_hash("8tqDp26Tc6bbuKbNYnPXaoHievTbSPQjDmM9TVnYCJXf"),
+			const_hash("CjPEYgDoX2PD5sQKg9pJyBzVFPEy6BYHCZtYpE7LKEPu"),
 		),
 		(
 			const_address("HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2"),
-			const_hash("GvVRkjsMnRMeHFrpx5wq4GEGZH3eJW9PbLfVqFjajZ47"),
+			const_hash("HKx2FNX7rsfzat1Nsr83Xq82LZSBnEB3LyzBmEtFGpAy"),
 		),
 		(
 			const_address("GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM"),
-			const_hash("7qzLYSLTigv4MmQRJJCij7La9ZFaxRe7Ai7xx6i8n5mD"),
+			const_hash("92ijUn6xBxFExuazPhspSSzhZXjQqbXmYre4ztNGWLJ9"),
 		),
 		(
 			const_address("EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn"),
-			const_hash("61BZ5VDjGw4SJgfommyZHVBaGKxUwaDUc13VnnuX6L8s"),
+			const_hash("BiHQhh7xY1ZFuEuC2vj9rFsZSXvhWA6FcdNDfBsfENbh"),
 		),
 		(
 			const_address("9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa"),
-			const_hash("F3te41Tm3t9iRR8pZ4a4nrZQxJyB312AKXLB31co8wq4"),
+			const_hash("AtxE1WFQGV1hbxmNmAcN7azMRLjaEyp6wk8Y62swxQEz"),
 		),
 		(
 			const_address("J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna"),
-			const_hash("HKVCQ7mdp6nt4veHEvrUcYBgiWaydEx8cxU9t2p17Rbf"),
+			const_hash("Ub9SGgi88Pyrd2ZPRLj6QzsMDf4VCM4U2EBz37f3QWP"),
+		),
+		(
+			const_address("GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55"),
+			const_hash("HgZQKdVeArjJmetoAw4SpYKyzKJh3txaqb7VQe4kJ7tV"),
+		),
+		(
+			const_address("AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv"),
+			const_hash("ZW7wrDEXQe94VrsoG5A6b5iQMEdUPGkc16Vk5rt7pgR"),
 		),
 	],
 };

@@ -78,10 +78,6 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
   return web3.eth.abi.encodeParameters(typesArray, variables);
 }
 
-function newArbitraryBytes(maxLength: number): string {
-  return randomAsHex(Math.floor(Math.random() * maxLength) + 1);
-}
-
 function newSolanaCfParameters(maxAccounts: number) {
   function arrayToHexString(byteArray: Uint8Array): string {
     return (
@@ -130,6 +126,12 @@ const maxCcmBytesUsdc = 492;
 const bytesPerAccount = 33;
 
 function newCcmMessageAndCfParameters(destAsset: Asset): { message: string; cfParameters: string } {
+  // Generate random bytes. Setting a minimum length of 10 because very short messages can end up
+  // with the SC returning an ASCII character in SwapDepositAddressReady.
+  function newArbitraryBytes(maxLength: number): string {
+    return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
+  }
+
   const destChain = chainFromAsset(destAsset);
   switch (destChain) {
     case 'Ethereum':

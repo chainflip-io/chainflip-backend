@@ -18,8 +18,8 @@ use cf_chains::{
 	RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
 use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
-	Chainflip, EpochInfo, GetBlockHeight, LiabilityTracker, SafeMode, ThresholdSigner,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
+	CfeBroadcastRequest, Chainflip, EpochInfo, GetBlockHeight, LiabilityTracker, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -36,34 +36,12 @@ use frame_support::{
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_set::BTreeSet, marker, marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
-#[derive(
-	serde::Serialize,
-	serde::Deserialize,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	Copy,
-	Clone,
-	PartialEq,
-	Eq,
-	RuntimeDebug,
-)]
-#[scale_info(skip_type_params(I))]
-pub struct PalletSafeMode<I: 'static> {
-	pub retry_enabled: bool,
-	#[doc(hidden)]
-	#[codec(skip)]
-	#[serde(skip_serializing)]
-	_phantom: marker::PhantomData<I>,
-}
-
-impl<I: 'static> SafeMode for PalletSafeMode<I> {
-	const CODE_RED: Self = PalletSafeMode { retry_enabled: false, _phantom: marker::PhantomData };
-	const CODE_GREEN: Self = PalletSafeMode { retry_enabled: true, _phantom: marker::PhantomData };
+impl_pallet_safe_mode! {
+	PalletSafeMode<I>;
+	retry_enabled,
 }
 
 /// The number of broadcast attempts that were made before this one.

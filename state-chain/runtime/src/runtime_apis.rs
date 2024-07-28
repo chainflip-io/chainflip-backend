@@ -225,6 +225,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 			lp: Option<AccountId32>,
+			filled_orders: bool,
 		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
