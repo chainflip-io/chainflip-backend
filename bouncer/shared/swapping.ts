@@ -125,34 +125,43 @@ const maxCcmBytesSol = 705;
 const maxCcmBytesUsdc = 492;
 const bytesPerAccount = 33;
 
-function newCcmMessageAndCfParameters(destAsset: Asset): { message: string; cfParameters: string } {
-  // Generate random bytes. Setting a minimum length of 10 because very short messages can end up
-  // with the SC returning an ASCII character in SwapDepositAddressReady.
-  function newArbitraryBytes(maxLength: number): string {
-    return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
-  }
+// Generate random bytes. Setting a minimum length of 10 because very short messages can end up
+// with the SC returning an ASCII character in SwapDepositAddressReady.
+function newCcmArbitraryBytes(maxLength: number): string {
+  return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
+}
 
+function newCfParameters(destAsset: Asset, message?: string): string {
   const destChain = chainFromAsset(destAsset);
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
       // Cf Parameters should be ignored by the protocol for any chain other than Solana
-      return { message: newAbiEncodedMessage(), cfParameters: newArbitraryBytes(100) };
+      return newCcmArbitraryBytes(100);
     case 'Solana': {
-      const message = newArbitraryBytes(destAsset === 'Sol' ? maxCcmBytesSol : maxCcmBytesUsdc);
-      const messageLength = (message.length - 2) / 2;
-
+      const messageLength = (message!.length - 2) / 2;
       const maxAccounts = Math.floor(
         ((destAsset === 'Sol' ? maxCcmBytesSol : maxCcmBytesUsdc) - messageLength) /
           bytesPerAccount,
       );
+
       // The maximum number of extra accounts that can be passed is limited by the tx size
       // and therefore also depends on the message length.
-      return {
-        message,
-        cfParameters: newSolanaCfParameters(maxAccounts),
-      };
+      return newSolanaCfParameters(maxAccounts);
     }
+    default:
+      throw new Error(`Unsupported chain: ${destChain}`);
+  }
+}
+
+function newCcmMessage(destAsset: Asset): string {
+  const destChain = chainFromAsset(destAsset);
+  switch (destChain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+      return newAbiEncodedMessage();
+    case 'Solana':
+      return newCcmArbitraryBytes(destAsset === 'Sol' ? maxCcmBytesSol : maxCcmBytesUsdc);
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
   }
@@ -165,10 +174,8 @@ export function newCcmMetadata(
   gasBudgetFraction?: number,
   cfParamsArray?: string,
 ) {
-  const ccmData = newCcmMessageAndCfParameters(destAsset);
-
-  const message = ccmMessage ?? ccmData.message;
-  const cfParameters = cfParamsArray ?? ccmData.cfParameters;
+  const message = ccmMessage ?? newCcmMessage(destAsset);
+  const cfParameters = cfParamsArray ?? newCfParameters(destAsset, message);
   const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
