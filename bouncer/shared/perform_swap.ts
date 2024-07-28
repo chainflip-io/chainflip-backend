@@ -70,10 +70,18 @@ export async function requestNewSwap(
             messageMetadata.gasBudget
         : event.data.channelMetadata === null;
 
+      console.log(`${tag} Checking destinationAsset ${event.data.destinationAsset}, ${destAsset}, ${destAssetMatches}`)
+      console.log(`${tag} Checking sourceAsset ${event.data.sourceAsset}, ${sourceAsset}, ${sourceAssetMatches}`)
+      console.log(`${tag} Checking destAddress ${destAddressEvent.toLowerCase()}, ${encodeDestinationAddress(destAddress, destAsset).toLowerCase()}, ${destAddressMatches}`)
+      if (messageMetadata) {
+        console.log(`${tag} Checking channelMetadata.message ${event.data.channelMetadata.message}, ${messageMetadata.message}, ${event.data.channelMetadata.message === messageMetadata.message}`)
+        console.log(`${tag} Checking channelMetadata.gasBudget ${Number(event.data.channelMetadata.gasBudget.replace(/,/g, ''))}, ${messageMetadata.gasBudget}, ${Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) === messageMetadata.gasBudget}`)
+      }
+
       const found =
         destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
 
-      console.log(`${tag} Waiting for SwapDepositAddressReady ${found}`);
+      console.log(`${tag} Checking SwapDepositAddressReady ${found}`);
 
       return found;
     },
