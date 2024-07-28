@@ -67,7 +67,7 @@ export async function requestNewSwap(
         ? event.data.channelMetadata !== null &&
           event.data.channelMetadata.message === messageMetadata.message &&
           Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
-            messageMetadata.gasBudget
+            messageMetadata.gasBudget && event.data.channelMetadata.cfParameters === messageMetadata.cfParameters
         : event.data.channelMetadata === null;
 
       console.log(`${tag} Checking destinationAsset ${event.data.destinationAsset}, ${destAsset}, ${destAssetMatches}`)
