@@ -1668,7 +1668,7 @@ impl_runtime_apis! {
 							total_balance,
 							available_balance,
 							in_use_balance: owed_amount,
-							is_boosting: details.pending_withdrawals.keys().any(|id| *id == account_id),
+							is_withdrawing: details.pending_withdrawals.keys().any(|id| *id == account_id),
 						})
 					}).collect()
 				}),

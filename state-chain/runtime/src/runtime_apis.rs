@@ -120,7 +120,7 @@ pub struct LiquidityProviderBoostPoolInfo {
 	pub total_balance: AssetAmount,
 	pub available_balance: AssetAmount,
 	pub in_use_balance: AssetAmount,
-	pub is_boosting: bool,
+	pub is_withdrawing: bool,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]

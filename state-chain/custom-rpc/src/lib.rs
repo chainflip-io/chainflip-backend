@@ -180,7 +180,7 @@ pub struct RpcLiquidityProviderBoostPoolInfo {
 	pub total_balance: U256,
 	pub available_balance: U256,
 	pub in_use_balance: U256,
-	pub is_boosting: bool,
+	pub is_withdrawing: bool,
 }
 
 impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo {
@@ -191,7 +191,7 @@ impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo
 			total_balance,
 			available_balance,
 			in_use_balance,
-			is_boosting,
+			is_withdrawing,
 		} = info;
 
 		Self {
@@ -199,7 +199,7 @@ impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo
 			total_balance: (*total_balance).into(),
 			available_balance: (*available_balance).into(),
 			in_use_balance: (*in_use_balance).into(),
-			is_boosting: *is_boosting,
+			is_withdrawing: *is_withdrawing,
 		}
 	}
 }
@@ -1993,7 +1993,7 @@ mod test {
 							total_balance: 100_000_000,
 							available_balance: 50_000_000,
 							in_use_balance: 50_000_000,
-							is_boosting: true,
+							is_withdrawing: false,
 						}],
 					},
 					..Default::default()
