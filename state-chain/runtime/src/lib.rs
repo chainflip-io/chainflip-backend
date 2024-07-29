@@ -1162,7 +1162,7 @@ type PalletMigrations = (
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
-	//pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, SolanaInstance>,
+	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -1210,6 +1210,12 @@ type MigrateApicalls = (
 	VersionedMigration<
 		pallet_cf_broadcast::Pallet<Runtime, Instance4>,
 		migrations::migrate_apicalls_to_store_signer::ArbMigrateApicallsAndOnChainKey,
+		5,
+		6,
+	>,
+	VersionedMigration<
+		pallet_cf_broadcast::Pallet<Runtime, Instance5>,
+		migrations::migrate_apicalls_to_store_signer::NoSolUpgrade,
 		5,
 		6,
 	>,
