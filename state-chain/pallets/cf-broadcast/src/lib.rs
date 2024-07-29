@@ -295,6 +295,11 @@ pub mod pallet {
 	pub type IncomingKeyAndBroadcastId<T, I = ()> =
 		StorageValue<_, (AggKey<T, I>, BroadcastId), OptionQuery>;
 
+	/// We need to store the current Onchain key to know when to resign txs in edge cases around a
+	/// rotation. Note that the on chain key is different than the current AggKey stored in
+	/// threshold signature pallet. This is because we rotate the AggKey optimistically which means
+	/// that the key in threshold signature pallet is rotated as soon as the rotation tx is created,
+	/// without waiting for it the tx to actually go through onchain.
 	#[pallet::storage]
 	#[pallet::getter(fn current_on_chain_key)]
 	pub type CurrentOnChainKey<T, I = ()> = StorageValue<_, AggKey<T, I>, OptionQuery>;
