@@ -10,7 +10,7 @@ use cf_chains::{
 use core::time::Duration;
 use utilities::task_scope::Scope;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use base64::Engine;
 
 use super::{
@@ -28,8 +28,9 @@ pub struct SolRetryRpcClient {
 const SOLANA_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
-#[allow(dead_code)]
 const MAX_BROADCAST_RETRIES: Attempt = 10;
+// Retry every 3 seconds
+const RETRY_DELAY: u64 = 3000u64;
 
 impl SolRetryRpcClient {
 	pub async fn new(
@@ -208,9 +209,18 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 				Box::pin(move |client| {
 					let encoded_transaction = encoded_transaction.clone();
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(
-						async move { client.send_transaction(encoded_transaction, config).await },
-					)
+					Box::pin(async move {
+						let tx_signature =
+							client.send_transaction(encoded_transaction, config).await?;
+						tokio::time::sleep(Duration::from_millis(RETRY_DELAY)).await;
+						let signature_statuses =
+							client.get_signature_statuses(&[tx_signature], true).await?;
+						match signature_statuses.value.first().and_then(|status| status.as_ref()) {
+							Some(_) => Ok(tx_signature),
+							None =>
+								Err(anyhow!("Expected a Tx Status to be Some")),
+						}
+					})
 				}),
 				MAX_BROADCAST_RETRIES,
 			)
