@@ -305,13 +305,9 @@ pub mod pallet {
 			// runtime upgrade to go through.
 			cfe_version_restriction: Option<(SemVer, Percent)>,
 			code: Vec<u8>,
-			force: bool,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			if !force {
-				ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
-			}
-
+			ensure!(T::UpgradeCondition::is_satisfied(), Error::<T>::UpgradeConditionsNotMet);
 			if let Some((required_version, percent)) = cfe_version_restriction {
 				ensure!(
 					T::AuthoritiesCfeVersions::percent_authorities_compatible_with_version(
