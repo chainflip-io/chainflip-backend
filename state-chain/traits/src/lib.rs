@@ -618,6 +618,16 @@ pub trait ExecutionCondition {
 	fn is_satisfied() -> bool;
 }
 
+impl<A, B> ExecutionCondition for (A, B)
+where
+	A: ExecutionCondition,
+	B: ExecutionCondition,
+{
+	fn is_satisfied() -> bool {
+		A::is_satisfied() && B::is_satisfied()
+	}
+}
+
 /// Performs a runtime upgrade
 pub trait RuntimeUpgrade {
 	/// Applies the wasm code of a runtime upgrade and returns the
