@@ -1,10 +1,11 @@
 #![cfg(test)]
 
 use crate::{
-	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastData, BroadcastId, Config,
-	DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks,
-	RequestSuccessCallbacks, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
+	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData,
+	BroadcastId, Config, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent,
+	FailedBroadcasters, Instance1, PalletOffence, PendingApiCalls, PendingBroadcasts,
+	RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts, TransactionMetadata,
+	TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
@@ -1342,5 +1343,48 @@ fn threshold_sign_and_refresh_replay_protection() {
 		));
 
 		assert!(MockTransactionBuilder::<MockEthereum, RuntimeCall>::get_refreshed_replay_protection_state(), "Refreshed replay protection has not been refreshed!");
+	});
+}
+
+#[test]
+fn should_release_barriers_correctly_in_case_of_rotation_tx_succeeding_first() {
+	new_test_ext().execute_with(|| {
+		// create a rotation tx and 1 tx before
+		let (broadcast_id_1, tx_id_1) = start_mock_broadcast_tx_out_id(1);
+		let tx_id_2 = [2; 4];
+		let broadcast_id_2 = initiate_and_sign_broadcast(
+			&api_call(2).1,
+			TxType::Rotation { new_key: Default::default() },
+		);
+
+		// the rotation tx should create barriers on both txs
+		let mut expected_barriers = BTreeSet::new();
+		expected_barriers.extend(vec![broadcast_id_1, broadcast_id_2]);
+		assert_eq!(BroadcastBarriers::<Test, Instance1>::get(), expected_barriers);
+
+		// succeed the rotation tx first
+		assert_ok!(Broadcaster::transaction_succeeded(
+			RuntimeOrigin::root(),
+			tx_id_2,
+			Default::default(),
+			ETH_TX_FEE,
+			MOCK_TX_METADATA,
+			Default::default(),
+		));
+
+		// This should not release barriers since the tx before rotation tx is pending
+		assert_eq!(BroadcastBarriers::<Test, Instance1>::get(), expected_barriers);
+
+		// succeeding the first tx will release both barriers
+		assert_ok!(Broadcaster::transaction_succeeded(
+			RuntimeOrigin::root(),
+			tx_id_1,
+			Default::default(),
+			ETH_TX_FEE,
+			MOCK_TX_METADATA,
+			Default::default(),
+		));
+
+		assert_eq!(BroadcastBarriers::<Test, Instance1>::get(), BTreeSet::new());
 	});
 }
