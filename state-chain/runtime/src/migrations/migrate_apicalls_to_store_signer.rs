@@ -177,9 +177,9 @@ impl OnRuntimeUpgrade for EthMigrateApicallsAndOnChainKey {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let current_evm_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance16>::get(
 			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance16>::get()
-				.unwrap_or(Default::default()),
+				.unwrap_or_default(),
 		)
-		.unwrap_or(Default::default());
+		.unwrap_or_default();
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance1>::put(current_evm_key);
 
@@ -255,9 +255,9 @@ impl OnRuntimeUpgrade for DotMigrateApicallsAndOnChainKey {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let current_dot_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance2>::get(
 			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance2>::get()
-				.unwrap_or(Default::default()),
+				.unwrap_or_default(),
 		)
-		.unwrap_or(Default::default());
+		.unwrap_or_default();
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance2>::put(current_dot_key);
 
@@ -335,9 +335,9 @@ impl OnRuntimeUpgrade for BtcMigrateApicallsAndOnChainKey {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let current_btc_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance3>::get(
 			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance3>::get()
-				.unwrap_or(Default::default()),
+				.unwrap_or_default(),
 		)
-		.unwrap_or(Default::default());
+		.unwrap_or_default();
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance3>::put(current_btc_key);
 
@@ -414,9 +414,9 @@ impl OnRuntimeUpgrade for ArbMigrateApicallsAndOnChainKey {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let current_evm_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance16>::get(
 			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance16>::get()
-				.unwrap_or(Default::default()),
+				.unwrap_or_default(),
 		)
-		.unwrap_or(Default::default());
+		.unwrap_or_default();
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance4>::put(current_evm_key);
 
@@ -503,7 +503,7 @@ macro_rules! pre_upgrade {
 		let pending_apicalls =
 			pallet_cf_broadcast::PendingApiCalls::<Runtime, $chain_pallet_instance>::iter()
 				.collect::<Vec<_>>();
-		let current_key = pallet_cf_threshold_signature::Keys::<Runtime, $crypto_pallet_instance>::get(pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, $crypto_pallet_instance>::get().unwrap_or(Default::default())).unwrap_or(Default::default());
+		let current_key = pallet_cf_threshold_signature::Keys::<Runtime, $crypto_pallet_instance>::get(pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, $crypto_pallet_instance>::get().unwrap_or_default()).unwrap_or_default();
 
 		Ok((pending_apicalls, current_key).encode())
 	}};
@@ -518,8 +518,7 @@ macro_rules! post_upgrade {
 				.map_err(|_| DispatchError::Other("Failed to decode old PendingApicalls"))?;
 
 		assert_eq!(
-			CurrentOnChainKey::<Runtime, $chain_pallet_instance>::get()
-				.unwrap_or(Default::default()),
+			CurrentOnChainKey::<Runtime, $chain_pallet_instance>::get().unwrap_or_default(),
 			current_key
 		);
 
@@ -551,7 +550,7 @@ impl OnRuntimeUpgrade for NoSolUpgrade {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
 		Ok(())
 	}
 }

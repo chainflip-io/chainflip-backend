@@ -25,9 +25,8 @@ mod old {
 
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		let current_aggkey =
-			Keys::<T, I>::get(CurrentKeyEpoch::<T, I>::get().unwrap_or(Default::default()))
-				.unwrap_or(Default::default());
+		let current_aggkey = Keys::<T, I>::get(CurrentKeyEpoch::<T, I>::get().unwrap_or_default())
+			.unwrap_or_default();
 
 		old::Signature::<T, I>::drain().for_each(|(request_id, signature_result)| {
 			SignerAndSignature::<T, I>::insert(
@@ -50,9 +49,8 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 			Vec::<(u32, AsyncResult<SignatureResultFor<T, I>>)>::decode(&mut &state[..])
 				.map_err(|_| DispatchError::Other("Failed to decode Signatures"))?;
 
-		let current_aggkey =
-			Keys::<T, I>::get(CurrentKeyEpoch::<T, I>::get().unwrap_or(Default::default()))
-				.unwrap_or(Default::default());
+		let current_aggkey = Keys::<T, I>::get(CurrentKeyEpoch::<T, I>::get().unwrap_or_default())
+			.unwrap_or_default();
 
 		assert_eq!(
 			signatures.len(),
