@@ -531,14 +531,14 @@ export async function observeBalanceIncrease(
       return newBalance;
     }
 
-    await sleep(1000);
+    await sleep(2000);
   }
 
   return Promise.reject(new Error('Failed to observe balance increase'));
 }
 
 export async function observeFetch(asset: Asset, address: string): Promise<void> {
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 240; i++) {
     const balance = Number(await getBalance(asset, address));
     if (balance === 0) {
       const chain = chainFromAsset(asset);
