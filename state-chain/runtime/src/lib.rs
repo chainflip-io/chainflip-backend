@@ -1894,6 +1894,10 @@ impl_runtime_apis! {
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode {
 			pallet_cf_environment::RuntimeSafeMode::<Runtime>::get()
 		}
+
+		fn cf_pools() -> Vec<PoolPairsMap<Asset>> {
+			LiquidityPools::pools()
+		}
 	}
 
 	impl monitoring_apis::MonitoringRuntimeApi<Block> for Runtime {

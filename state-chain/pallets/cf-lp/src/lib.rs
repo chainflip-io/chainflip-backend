@@ -299,14 +299,12 @@ pub mod pallet {
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::deregister_lp_account())]
 		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
-			const STABLE_ASSET: Asset = Asset::Usdc;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 			T::PoolApi::sweep(&account_id)?;
 
 			ensure!(
-				Asset::all().filter(|asset| *asset != STABLE_ASSET).all(|asset| {
-					T::PoolApi::open_order_count(&account_id, asset, STABLE_ASSET)
-						.unwrap_or_default() == 0
+				T::PoolApi::pools().iter().all(|asset_pair| {
+					T::PoolApi::open_order_count(&account_id, asset_pair).unwrap_or_default() == 0
 				}),
 				Error::<T>::OpenOrdersRemaining
 			);
