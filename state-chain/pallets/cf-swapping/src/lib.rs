@@ -1807,7 +1807,8 @@ pub struct NoPendingSwaps<T: Config>(PhantomData<T>);
 
 impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
 	fn is_satisfied() -> bool {
-		SwapQueue::<T>::iter().all(|(_, swaps)| swaps.is_empty())
+		SwapQueue::<T>::iter().all(|(_, swaps)| swaps.is_empty()) &&
+			PendingCcms::<T>::iter().next().is_none()
 	}
 }
 
