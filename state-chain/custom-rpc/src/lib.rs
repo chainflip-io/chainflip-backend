@@ -43,7 +43,8 @@ use state_chain_runtime::{
 	},
 	runtime_apis::{
 		BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage,
-		FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
+		FailingWitnessValidators, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		ValidatorInfo,
 	},
 	safe_mode::RuntimeSafeMode,
 	NetworkFee,
@@ -171,11 +172,34 @@ impl ScheduledSwap {
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AssetWithAmount {
-	#[serde(flatten)]
-	pub asset: Asset,
-	pub amount: AssetAmount,
+#[derive(Serialize, Deserialize)]
+pub struct RpcLiquidityProviderBoostPoolInfo {
+	pub fee_tier: u16,
+	pub total_balance: U256,
+	pub available_balance: U256,
+	pub in_use_balance: U256,
+	pub is_withdrawing: bool,
+}
+
+impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo {
+	fn from(info: &LiquidityProviderBoostPoolInfo) -> Self {
+		// pattern matching to ensure exhaustive use of the fields
+		let LiquidityProviderBoostPoolInfo {
+			fee_tier,
+			total_balance,
+			available_balance,
+			in_use_balance,
+			is_withdrawing,
+		} = info;
+
+		Self {
+			fee_tier: *fee_tier,
+			total_balance: (*total_balance).into(),
+			available_balance: (*available_balance).into(),
+			in_use_balance: (*in_use_balance).into(),
+			is_withdrawing: *is_withdrawing,
+		}
+	}
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -193,7 +217,8 @@ pub enum RpcAccountInfo {
 		balances: any::AssetMap<NumberOrHex>,
 		refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
 		flip_balance: NumberOrHex,
-		earned_fees: any::AssetMap<AssetAmount>,
+		earned_fees: any::AssetMap<U256>,
+		boost_balances: any::AssetMap<Vec<RpcLiquidityProviderBoostPoolInfo>>,
 	},
 	Validator {
 		flip_balance: NumberOrHex,
@@ -242,7 +267,16 @@ impl RpcAccountInfo {
 				.into_iter()
 				.map(|(chain, address)| (chain, address.map(|a| a.to_humanreadable(network))))
 				.collect(),
-			earned_fees: info.earned_fees,
+			earned_fees: info
+				.earned_fees
+				.iter()
+				.map(|(asset, balance)| (asset, (*balance).into()))
+				.collect(),
+			boost_balances: info
+				.boost_balances
+				.iter()
+				.map(|(asset, infos)| (asset, infos.iter().map(|info| info.into()).collect()))
+				.collect(),
 		}
 	}
 
@@ -1929,6 +1963,18 @@ mod test {
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 1u32.into(), usdc: 2u32.into() },
 					sol: sol::AssetMap { sol: 2u32.into() },
+				},
+				boost_balances: any::AssetMap {
+					btc: btc::AssetMap {
+						btc: vec![LiquidityProviderBoostPoolInfo {
+							fee_tier: 5,
+							total_balance: 100_000_000,
+							available_balance: 50_000_000,
+							in_use_balance: 50_000_000,
+							is_withdrawing: false,
+						}],
+					},
+					..Default::default()
 				},
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
