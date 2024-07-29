@@ -949,38 +949,19 @@ fn process_all_into_stable_swaps_first() {
 	new_test_ext().execute_with(|| {
 		let amount = 1_000_000;
 		let encoded_address = EncodedAddress::Eth(Default::default());
-		assert_ok!(Swapping::schedule_swap_from_contract(
-			RuntimeOrigin::root(),
-			Asset::Flip,
-			Asset::Eth,
-			amount,
-			encoded_address.clone(),
-			Default::default(),
-		));
-		assert_ok!(Swapping::schedule_swap_from_contract(
-			RuntimeOrigin::root(),
-			Asset::Btc,
-			Asset::Eth,
-			amount,
-			encoded_address.clone(),
-			Default::default(),
-		));
-		assert_ok!(Swapping::schedule_swap_from_contract(
-			RuntimeOrigin::root(),
-			Asset::Dot,
-			Asset::Eth,
-			amount,
-			encoded_address.clone(),
-			Default::default(),
-		));
-		assert_ok!(Swapping::schedule_swap_from_contract(
-			RuntimeOrigin::root(),
-			Asset::Usdc,
-			Asset::Eth,
-			amount,
-			encoded_address,
-			Default::default(),
-		));
+
+		[Asset::Flip, Asset::Btc, Asset::Dot, Asset::Usdc]
+			.into_iter()
+			.for_each(|asset| {
+				assert_ok!(Swapping::schedule_swap_from_contract(
+					RuntimeOrigin::root(),
+					asset,
+					Asset::Eth,
+					amount,
+					encoded_address.clone(),
+					Default::default(),
+				));
+			});
 
 		let execute_at = System::block_number() + u64::from(SWAP_DELAY_BLOCKS);
 

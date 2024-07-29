@@ -1230,18 +1230,6 @@ pub mod pallet {
 
 		fn process_swap_outcomes(swaps: &[SwapState]) {
 			for swap in swaps {
-				// To be consistent with `swap_output` and `intermediate_amount` (which do
-				// not include the network fee), we report input amount without the network fee
-				// for swaps from STABLE_ASSET:
-				let swap_input = if swap.input_asset() == STABLE_ASSET {
-					swap.stable_amount.unwrap_or_else(|| {
-						log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
-						swap.input_amount()
-					})
-				} else {
-					swap.input_amount()
-				};
-
 				let swap_request_id = swap.swap.swap_request_id;
 
 				let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
@@ -1257,7 +1245,17 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::SwapExecuted {
 					swap_request_id,
 					swap_id: swap.swap_id(),
-					input_amount: swap_input,
+					// To be consistent with `swap_output` and `intermediate_amount` (which do
+					// not include the network fee), we report input amount without the network fee
+					// for swaps from STABLE_ASSET:
+					input_amount: if swap.input_asset() == STABLE_ASSET {
+						swap.stable_amount.unwrap_or_else(|| {
+							log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
+							swap.input_amount()
+						})
+					} else {
+						swap.input_amount()
+					},
 					input_asset: swap.input_asset(),
 					network_fee: swap.network_fee_taken.unwrap_or_default(),
 					output_asset: swap.output_asset(),
