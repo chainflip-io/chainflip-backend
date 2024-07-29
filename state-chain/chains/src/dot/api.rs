@@ -137,6 +137,7 @@ where
 	}
 }
 
+#[macro_export]
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
 		match $self {

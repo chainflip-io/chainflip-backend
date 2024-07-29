@@ -15,9 +15,14 @@ use frame_support::traits::OnRuntimeUpgrade;
 use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
+use cf_chains::ApiCall;
+
+#[cfg(feature = "try-runtime")]
+use codec::Decode;
+#[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
-use sp_std::{vec, vec::Vec};
+use sp_std::vec::Vec;
 
 pub mod old {
 
@@ -26,7 +31,7 @@ pub mod old {
 	use super::*;
 	use cf_chains::{
 		btc::{BitcoinOutput, Utxo},
-		evm::api::{EvmReplayProtection, SigData},
+		evm::api::{EvmCall, EvmReplayProtection, SigData},
 	};
 	use codec::{Decode, Encode, MaxEncodedLen};
 	use dot::{PolkadotReplayProtection, PolkadotRuntimeCall, PolkadotSignature};
@@ -58,6 +63,15 @@ pub mod old {
 		#[codec(skip)]
 		_Phantom(PhantomData<Environment>, Never),
 	}
+	impl<E> EthereumApi<E> {
+		pub fn chain_encoded(&self) -> Vec<u8> {
+			crate::eth_map_over_api_variants_old!(
+				self,
+				tx,
+				tx.call.abi_encoded(&tx.sig_data.unwrap())
+			)
+		}
+	}
 
 	#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(Environment))]
@@ -69,6 +83,15 @@ pub mod old {
 		#[doc(hidden)]
 		#[codec(skip)]
 		_Phantom(PhantomData<Environment>, Never),
+	}
+	impl<E> ArbitrumApi<E> {
+		pub fn chain_encoded(&self) -> Vec<u8> {
+			crate::arb_map_over_api_variants_old!(
+				self,
+				tx,
+				tx.call.abi_encoded(&tx.sig_data.unwrap())
+			)
+		}
 	}
 
 	#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
@@ -88,6 +111,18 @@ pub mod old {
 		#[doc(hidden)]
 		#[codec(skip)]
 		_Phantom(PhantomData<Environment>, Never),
+	}
+
+	impl<E> PolkadotApi<E> {
+		pub fn unwrap(&self) -> PolkadotExtrinsicBuilder {
+			match self {
+				PolkadotApi::BatchFetchAndTransfer(ext) => ext.clone(),
+				PolkadotApi::RotateVaultProxy(ext) => ext.clone(),
+				PolkadotApi::ChangeGovKey(ext) => ext.clone(),
+				PolkadotApi::ExecuteXSwapAndCall(ext) => ext.clone(),
+				PolkadotApi::_Phantom(..) => unreachable!(),
+			}
+		}
 	}
 
 	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -112,6 +147,16 @@ pub mod old {
 		#[doc(hidden)]
 		#[codec(skip)]
 		_Phantom(PhantomData<Environment>, Never),
+	}
+
+	impl<E> BitcoinApi<E> {
+		pub fn unwrap(&self) -> BatchTransfer {
+			match self {
+				BitcoinApi::BatchTransfer(call) => call.clone(),
+
+				BitcoinApi::_Phantom(..) => unreachable!(),
+			}
+		}
 	}
 }
 
@@ -187,12 +232,19 @@ impl OnRuntimeUpgrade for EthMigrateApicallsAndOnChainKey {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(vec![])
+		pre_upgrade!(Instance1, Instance16)
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		Ok(())
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		use cf_chains::evm::AggKey;
+		fn assertion(
+			old_apicall: old::EthereumApi<EvmEnvironment>,
+			new_apicall: EthereumApi<EvmEnvironment>,
+		) -> bool {
+			new_apicall.chain_encoded() == old_apicall.chain_encoded()
+		}
+		post_upgrade!(Instance1, EthereumApi<EvmEnvironment>, AggKey, state, assertion)
 	}
 }
 
@@ -252,12 +304,26 @@ impl OnRuntimeUpgrade for DotMigrateApicallsAndOnChainKey {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(vec![])
+		pre_upgrade!(Instance2, Instance2)
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		Ok(())
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		use cf_chains::dot::PolkadotPublicKey;
+		fn assertion(
+			old_apicall: old::PolkadotApi<DotEnvironment>,
+			new_apicall: PolkadotApi<DotEnvironment>,
+		) -> bool {
+			let new_ext_builder =
+				cf_chains::map_over_api_variants!(new_apicall, ext_builder, ext_builder);
+			let old_ext_builder = old_apicall.unwrap();
+
+			new_ext_builder.extrinsic_call == old_ext_builder.extrinsic_call &&
+				new_ext_builder.replay_protection == old_ext_builder.replay_protection &&
+				new_ext_builder.signer_and_signature.unwrap().1 ==
+					old_ext_builder.signature.unwrap()
+		}
+		post_upgrade!(Instance2, PolkadotApi<DotEnvironment>, PolkadotPublicKey, state, assertion)
 	}
 }
 
@@ -306,12 +372,36 @@ impl OnRuntimeUpgrade for BtcMigrateApicallsAndOnChainKey {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(vec![])
+		pre_upgrade!(Instance3, Instance3)
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		Ok(())
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		use cf_chains::btc::AggKey;
+		fn assertion(
+			old_apicall: old::BitcoinApi<BtcEnvironment>,
+			new_apicall: BitcoinApi<BtcEnvironment>,
+		) -> bool {
+			match new_apicall {
+				BitcoinApi::BatchTransfer(new_batch_transfer) => {
+					let old_batch_transfer = old_apicall.unwrap();
+					new_batch_transfer.change_utxo_key == old_batch_transfer.change_utxo_key &&
+						new_batch_transfer.bitcoin_transaction.inputs ==
+							old_batch_transfer.bitcoin_transaction.inputs &&
+						new_batch_transfer.bitcoin_transaction.outputs ==
+							old_batch_transfer.bitcoin_transaction.outputs &&
+						new_batch_transfer.bitcoin_transaction.transaction_bytes ==
+							old_batch_transfer.bitcoin_transaction.transaction_bytes &&
+						new_batch_transfer.bitcoin_transaction.old_utxo_input_indices ==
+							old_batch_transfer.bitcoin_transaction.old_utxo_input_indices &&
+						new_batch_transfer.bitcoin_transaction.signer_and_signatures.unwrap().1 ==
+							old_batch_transfer.bitcoin_transaction.signatures
+				},
+
+				BitcoinApi::_Phantom(..) => unreachable!(),
+			}
+		}
+		post_upgrade!(Instance3, BitcoinApi<BtcEnvironment>, AggKey, state, assertion)
 	}
 }
 
@@ -357,11 +447,88 @@ impl OnRuntimeUpgrade for ArbMigrateApicallsAndOnChainKey {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(vec![])
+		pre_upgrade!(Instance4, Instance16)
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		Ok(())
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		use cf_chains::evm::AggKey;
+		fn assertion(
+			old_apicall: old::ArbitrumApi<EvmEnvironment>,
+			new_apicall: ArbitrumApi<EvmEnvironment>,
+		) -> bool {
+			new_apicall.chain_encoded() == old_apicall.chain_encoded()
+		}
+		post_upgrade!(Instance4, ArbitrumApi<EvmEnvironment>, AggKey, state, assertion)
 	}
+}
+
+#[macro_export]
+macro_rules! arb_map_over_api_variants_old {
+	( $self:expr, $var:pat_param, $var_attribute:expr $(,)* ) => {
+		match $self {
+			old::ArbitrumApi::SetAggKeyWithAggKey($var) => $var_attribute,
+			old::ArbitrumApi::AllBatch($var) => $var_attribute,
+			old::ArbitrumApi::ExecutexSwapAndCall($var) => $var_attribute,
+			old::ArbitrumApi::TransferFallback($var) => $var_attribute,
+			old::ArbitrumApi::_Phantom(..) => unreachable!(),
+		}
+	};
+}
+
+#[macro_export]
+macro_rules! eth_map_over_api_variants_old {
+	( $self:expr, $var:pat_param, $var_attribute:expr $(,)* ) => {
+		match $self {
+			old::EthereumApi::SetAggKeyWithAggKey($var) => $var_attribute,
+			old::EthereumApi::RegisterRedemption($var) => $var_attribute,
+			old::EthereumApi::UpdateFlipSupply($var) => $var_attribute,
+			old::EthereumApi::SetGovKeyWithAggKey($var) => $var_attribute,
+			old::EthereumApi::SetCommKeyWithAggKey($var) => $var_attribute,
+			old::EthereumApi::AllBatch($var) => $var_attribute,
+			old::EthereumApi::ExecutexSwapAndCall($var) => $var_attribute,
+			old::EthereumApi::TransferFallback($var) => $var_attribute,
+			old::EthereumApi::_Phantom(..) => unreachable!(),
+		}
+	};
+}
+
+#[macro_export]
+macro_rules! pre_upgrade {
+	(  $chain_pallet_instance:ident, $crypto_pallet_instance:ident  ) => {{
+		let pending_apicalls =
+			pallet_cf_broadcast::PendingApiCalls::<Runtime, $chain_pallet_instance>::iter()
+				.collect::<Vec<_>>();
+		let current_key = pallet_cf_threshold_signature::Keys::<Runtime, $crypto_pallet_instance>::get(pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, $crypto_pallet_instance>::get().unwrap()).unwrap();
+
+		Ok((pending_apicalls, current_key).encode())
+	}};
+}
+
+#[macro_export]
+macro_rules! post_upgrade {
+	(  $chain_pallet_instance:ident, $chain_api:ident <$env: ident>, $aggkey:ident, $state:expr, $assertion:ident ) => {{
+		use pallet_cf_broadcast::CurrentOnChainKey;
+		let (pending_apicalls, current_key) =
+			<(Vec<(u32, old::$chain_api<$env>)>, $aggkey)>::decode(&mut &$state[..])
+				.map_err(|_| DispatchError::Other("Failed to decode old PendingApicalls"))?;
+
+		assert_eq!(
+			CurrentOnChainKey::<Runtime, $chain_pallet_instance>::get().unwrap(),
+			current_key
+		);
+
+		pending_apicalls.into_iter().for_each(|(broadcast_id, old_apicall)| {
+			let new_apicall =
+				pallet_cf_broadcast::PendingApiCalls::<Runtime, $chain_pallet_instance>::get(
+					broadcast_id,
+				)
+				.unwrap();
+
+			assert!(new_apicall.signer().unwrap() == current_key);
+			assert!($assertion(old_apicall, new_apicall));
+		});
+
+		Ok(())
+	}};
 }
