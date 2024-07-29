@@ -217,8 +217,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 							client.get_signature_statuses(&[tx_signature], true).await?;
 						match signature_statuses.value.first().and_then(|status| status.as_ref()) {
 							Some(_) => Ok(tx_signature),
-							None =>
-								Err(anyhow!("Expected a Tx Status to be Some")),
+							None => Err(anyhow!("Expected a Tx Status to be Some")),
 						}
 					})
 				}),
