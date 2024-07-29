@@ -1638,35 +1638,38 @@ impl_runtime_apis! {
 				boost_balances: AssetMap::from_fn(|asset| {
 					let pool_details = Self::cf_boost_pool_details(asset);
 
-					(
-						asset,
-						pool_details.into_iter().filter_map(|(fee_tier, details)| {
-							let available_balance = details.available_amounts.into_iter().find_map(|(id, amount)| {
-								if account_id == id {
-									Some(amount)
+					pool_details.into_iter().filter_map(|(fee_tier, details)| {
+						let available_balance = details.available_amounts.into_iter().find_map(|(id, amount)| {
+							if id == account_id {
+								Some(amount)
+							} else {
+								None
+							}
+						}).unwrap_or(0);
+
+						let owed_amount = details.pending_boosts.into_iter().flat_map(|(_, pending_deposits)| {
+							pending_deposits.into_iter().filter_map(|(id, amount)| {
+								if id == account_id {
+									Some(amount.total)
 								} else {
 									None
 								}
-							})?;
-
-							let owed_amount = details.pending_boosts.into_iter().flat_map(|(_, pending_deposits)| {
-								pending_deposits.into_iter().filter_map(|(id, amount)| {
-									if account_id == id {
-										Some(amount.total)
-									} else {
-										None
-									}
-								})
-							}).sum();
-
-							Some(LiquidityProviderBoostPoolInfo {
-								fee_tier,
-								total_balance: available_balance + owed_amount,
-								available_balance,
-								in_use_balance: owed_amount,
 							})
-						}).collect()
-					)
+						}).sum();
+
+						let total_balance = available_balance + owed_amount;
+
+						if total_balance == 0 {
+							return None
+						}
+
+						Some(LiquidityProviderBoostPoolInfo {
+							fee_tier,
+							total_balance,
+							available_balance,
+							in_use_balance: owed_amount,
+						})
+					}).collect()
 				}),
 			}
 		}
