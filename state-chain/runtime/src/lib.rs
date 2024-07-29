@@ -1659,7 +1659,9 @@ impl_runtime_apis! {
 
 						let total_balance = available_balance + owed_amount;
 
-						if total_balance == 0 {
+						let is_boosting = !details.pending_withdrawals.keys().any(|id| *id == account_id);
+
+						if total_balance == 0 && !is_boosting {
 							return None
 						}
 
@@ -1668,6 +1670,7 @@ impl_runtime_apis! {
 							total_balance,
 							available_balance,
 							in_use_balance: owed_amount,
+							is_boosting,
 						})
 					}).collect()
 				}),
