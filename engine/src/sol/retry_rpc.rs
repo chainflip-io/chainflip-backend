@@ -29,8 +29,8 @@ const SOLANA_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 const MAX_BROADCAST_RETRIES: Attempt = 10;
-// Retry every 3 seconds
-const RETRY_DELAY: u64 = 3000u64;
+const GET_STATUS_BROADCAST_DELAY: u64 = 500u64;
+const GET_STATUS_BROADCAST_RETRIES: u64 = 10;
 
 impl SolRetryRpcClient {
 	pub async fn new(
@@ -212,13 +212,30 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 					Box::pin(async move {
 						let tx_signature =
 							client.send_transaction(encoded_transaction, config).await?;
-						tokio::time::sleep(Duration::from_millis(RETRY_DELAY)).await;
-						let signature_statuses =
-							client.get_signature_statuses(&[tx_signature], true).await?;
-						match signature_statuses.value.first().and_then(|status| status.as_ref()) {
-							Some(_) => Ok(tx_signature),
-							None => Err(anyhow!("Expected a Tx Status to be Some")),
+
+						for status_retry in 0..GET_STATUS_BROADCAST_RETRIES {
+							let signature_statuses =
+								client.get_signature_statuses(&[tx_signature], true).await?;
+							match signature_statuses
+								.value
+								.first()
+								.and_then(|status| status.as_ref())
+							{
+								Some(_) => return Ok(tx_signature),
+								None => {
+									// Ignore sleep at last step
+									if status_retry < GET_STATUS_BROADCAST_RETRIES {
+										// Retry twice a second
+										tokio::time::sleep(Duration::from_millis(
+											GET_STATUS_BROADCAST_DELAY,
+										))
+										.await;
+									}
+									continue;
+								},
+							}
 						}
+						Err(anyhow!("Sent transaction signature not found"))
 					})
 				}),
 				MAX_BROADCAST_RETRIES,
