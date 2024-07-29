@@ -12,8 +12,8 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, IngressEgressFeeApi,
-	NetworkFeeTaken, SwapQueueApi, SwapType,
+	impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi, ExecutionCondition,
+	IngressEgressFeeApi, NetworkFeeTaken, SwapQueueApi, SwapType,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1800,6 +1800,14 @@ impl<T: Config> SwapQueueApi for Pallet<T> {
 impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	fn take_flip_to_burn() -> AssetAmount {
 		FlipToBurn::<T>::take()
+	}
+}
+
+pub struct NoPendingSwaps<T: Config>(PhantomData<T>);
+
+impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
+	fn is_satisfied() -> bool {
+		SwapQueue::<T>::iter().all(|(_, swaps)| swaps.is_empty())
 	}
 }
 
