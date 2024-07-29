@@ -229,7 +229,6 @@ fn upgrade_runtime_successfully() {
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			None,
 			DUMMY_WASM_BLOB,
-			false,
 		));
 	});
 }
@@ -243,7 +242,6 @@ fn wrong_upgrade_conditions() {
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 				None,
 				DUMMY_WASM_BLOB,
-				false,
 			),
 			<Error<Test>>::UpgradeConditionsNotMet
 		);
@@ -261,7 +259,6 @@ fn error_during_runtime_upgrade() {
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			None,
 			DUMMY_WASM_BLOB,
-			false,
 		);
 		assert!(result.is_err());
 		assert_err!(result, frame_system::Error::<Test>::FailedToExtractRuntimeVersion);
@@ -280,7 +277,6 @@ fn runtime_upgrade_requires_up_to_date_authorities_cfes() {
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			Some((DESIRED_CFE_VERSION, Percent::from_percent(50))),
 			DUMMY_WASM_BLOB,
-			false,
 		));
 
 		assert_noop!(
@@ -288,7 +284,6 @@ fn runtime_upgrade_requires_up_to_date_authorities_cfes() {
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 				Some((DESIRED_CFE_VERSION, Percent::from_percent(51))),
 				DUMMY_WASM_BLOB,
-				false,
 			),
 			crate::Error::<Test>::NotEnoughAuthoritiesCfesAtTargetVersion
 		);
@@ -306,7 +301,6 @@ fn runtime_upgrade_can_have_no_cfes_version_requirement() {
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 			None,
 			DUMMY_WASM_BLOB,
-			false
 		));
 	});
 }
