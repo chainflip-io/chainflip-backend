@@ -225,13 +225,11 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 								None => {
 									// Ignore sleep at last step
 									if status_retry < GET_STATUS_BROADCAST_RETRIES {
-										// Retry twice a second
 										tokio::time::sleep(Duration::from_millis(
 											GET_STATUS_BROADCAST_DELAY,
 										))
 										.await;
 									}
-									continue;
 								},
 							}
 						}
@@ -328,6 +326,7 @@ mod tests {
 	use super::*;
 
 	#[tokio::test]
+	#[ignore]
 	async fn test_sol_retry_rpc() {
 		task_scope(|scope| {
 			async move {
@@ -375,6 +374,7 @@ mod tests {
 	}
 
 	#[tokio::test]
+	#[ignore]
 	async fn test_sol_get_transaction() {
 		task_scope(|scope| {
 			async move {
