@@ -549,6 +549,7 @@ pub enum SwapOrigin {
 	Vault {
 		tx_hash: TransactionHash,
 	},
+	Internal,
 }
 
 // TODO: PRO-1491

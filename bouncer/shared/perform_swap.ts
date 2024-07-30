@@ -7,12 +7,13 @@ import {
   observeBalanceIncrease,
   observeCcmReceived,
   shortChainFromAsset,
-  observeSwapScheduled,
   observeSwapEvents,
   observeBroadcastSuccess,
   getEncodedSolAddress,
   observeFetch,
   chainFromAsset,
+  observeSwapRequested,
+  SwapRequestType,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swapping';
@@ -122,7 +123,12 @@ export async function doPerformSwap(
 
   if (log) console.log(`${tag} Old balance: ${oldBalance}`);
 
-  const swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, channelId);
+  const swapRequestedHandle = observeSwapRequested(
+    sourceAsset,
+    destAsset,
+    channelId,
+    messageMetadata ? SwapRequestType.Ccm : SwapRequestType.Regular,
+  );
 
   const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
@@ -136,7 +142,7 @@ export async function doPerformSwap(
 
   swapContext?.updateStatus(tag, SwapStatus.Funded);
 
-  await swapScheduledHandle;
+  await swapRequestedHandle;
 
   swapContext?.updateStatus(tag, SwapStatus.SwapScheduled);
 

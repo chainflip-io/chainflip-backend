@@ -118,8 +118,8 @@ pub use cf_primitives::{
 	SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, BoostApi, CcmHandler, Chainflip, EpochInfo, PoolApi, QualifyNode,
-	SessionKeysRegistered, SwappingApi,
+	AccountInfo, BoostApi, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered,
+	SwappingApi,
 };
 // Required for genesis config.
 pub use pallet_cf_validator::SetSizeParameters;
@@ -340,17 +340,15 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
-	type SwapDepositHandler = Swapping;
 	type ChainApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type DepositHandler = chainflip::DepositHandler;
-	type CcmHandler = Swapping;
 	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
-	type SwapQueueApi = Swapping;
+	type SwapRequestHandler = Swapping;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -363,17 +361,15 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
-	type SwapDepositHandler = Swapping;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = PolkadotChainTracking;
-	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
-	type SwapQueueApi = Swapping;
+	type SwapRequestHandler = Swapping;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -386,17 +382,15 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
-	type SwapDepositHandler = Swapping;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = BitcoinChainTracking;
-	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
-	type SwapQueueApi = Swapping;
+	type SwapRequestHandler = Swapping;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -409,17 +403,15 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
-	type SwapDepositHandler = Swapping;
 	type ChainApiCall = ArbitrumApi<EvmEnvironment>;
 	type Broadcaster = ArbitrumBroadcaster;
 	type DepositHandler = chainflip::DepositHandler;
-	type CcmHandler = Swapping;
 	type ChainTracking = ArbitrumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
-	type SwapQueueApi = Swapping;
+	type SwapRequestHandler = Swapping;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -432,17 +424,15 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
-	type SwapDepositHandler = Swapping;
 	type ChainApiCall = cf_chains::sol::api::SolanaApi<chainflip::SolEnvironment>;
 	type Broadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;
 	type ChainTracking = SolanaChainTracking;
-	type CcmHandler = Swapping;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
-	type SwapQueueApi = Swapping;
+	type SwapRequestHandler = Swapping;
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
@@ -451,7 +441,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = LiquidityProvider;
-	type SwapQueueApi = Swapping;
+	type SwapRequestHandler = Swapping;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = ();
 }
@@ -680,7 +670,10 @@ impl pallet_cf_governance::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
-	type UpgradeCondition = pallet_cf_validator::NotDuringRotation<Runtime>;
+	type UpgradeCondition = (
+		pallet_cf_validator::NotDuringRotation<Runtime>,
+		pallet_cf_swapping::NoPendingSwaps<Runtime>,
+	);
 	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 	type CompatibleCfeVersions = Environment;
 	type AuthoritiesCfeVersions = Validator;
@@ -1741,7 +1734,7 @@ impl_runtime_apis! {
 				}
 
 				// There are two swaps for CCM, the principal swap, and the gas amount swap.
-				let Ok(CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset }) = Swapping::principal_and_gas_amounts(deposit_amount, &channel_metadata, source_asset, destination_asset) else {
+				let Ok(CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset }) = pallet_cf_swapping::ccm::principal_and_gas_amounts(deposit_amount, &channel_metadata, source_asset, destination_asset) else {
 					// not a valid CCM
 					return Vec::new();
 				};

@@ -29,7 +29,7 @@ const ZION: AccountId = AccountId::new([0x22; 32]);
 const ALICE: AccountId = AccountId::new([0x33; 32]);
 const BOB: AccountId = AccountId::new([0x44; 32]);
 
-const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5_000 Sol
+const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
 const COMPUTE_PRICE: u64 = 1_000u64;
 
 fn setup_sol_environments() {
@@ -105,8 +105,8 @@ fn schedule_deposit_to_swap(
 		=> true)
 	);
 
-	assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
-		swap_id,
+	assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapRequested {
+		swap_request_id,
 		origin: SwapOrigin::DepositChannel {
 			deposit_address: events_deposit_address,
 			..
@@ -114,7 +114,7 @@ fn schedule_deposit_to_swap(
 		..
 	}) if <Solana as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone())
 		.expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address 
-		=> swap_id)
+		=> swap_request_id)
 }
 
 #[test]

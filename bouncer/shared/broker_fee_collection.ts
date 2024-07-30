@@ -65,11 +65,18 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
     asset === Assets.Dot ? decodeDotAddressForContract(destinationAddress) : destinationAddress;
   const destinationChain = shortChainFromAsset(swapAsset);
   console.log(`${asset} destinationAddress:`, destinationAddress);
-  const observeSwapScheduledEvent = observeEvent(':SwapScheduled', {
-    test: (event) =>
-      event.data.destinationAddress[destinationChain]?.toLowerCase() ===
-      observeDestinationAddress.toLowerCase(),
+  const swapRequestedEventPromise = observeEvent(':SwapRequested', {
+    test: (event) => {
+      const data = event.data;
+
+      const outputAddress = data.requestType.Regular
+        ? data.requestType.Regular.outputAddress[destinationChain]?.toLowerCase()
+        : undefined;
+
+      return outputAddress === observeDestinationAddress.toLowerCase();
+    },
   });
+
   console.log(`Running swap ${asset} -> ${swapAsset}`);
 
   const rawDepositForSwapAmount = swapAssetAmount[asset].toString();
@@ -119,13 +126,13 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   );
 
   // Get values from the swap event
-  const swapScheduledEvent = await observeSwapScheduledEvent.event;
-  const brokerCommission = BigInt(swapScheduledEvent.data.brokerCommission.replace(/,/g, ''));
-  console.log('brokerCommission:', brokerCommission);
+  const swapScheduledEvent = await swapRequestedEventPromise.event;
+  const brokerFee = BigInt(swapScheduledEvent.data.brokerFee.replace(/,/g, ''));
+  console.log('brokerFee:', brokerFee);
 
   // Check that the deposit amount is correct after deducting the deposit fee
   const depositAmountAfterIngressFee = BigInt(
-    swapScheduledEvent.data.depositAmount.replaceAll(',', ''),
+    swapScheduledEvent.data.inputAmount.replaceAll(',', ''),
   );
   const rawDepositForSwapAmountBigInt = amountToFineAmountBigInt(rawDepositForSwapAmount, asset);
   console.log('depositAmount:', depositAmountAfterIngressFee);
@@ -145,7 +152,7 @@ async function testBrokerFees(asset: Asset, seed?: string): Promise<void> {
   console.log('increase:', increase);
   assert.strictEqual(
     increase,
-    brokerCommission,
+    brokerFee,
     `Mismatch between brokerCommission from the swap event and the detected increase. Did some other ${asset} swap happen at the same time as this test?`,
   );
 

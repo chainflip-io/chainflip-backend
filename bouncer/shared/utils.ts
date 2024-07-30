@@ -287,27 +287,28 @@ export function getBtcClient(): Client {
 export type Event = { name: any; data: any; block: number; event_index: number };
 
 export type EgressId = [Chain, number];
-type BroadcastId = [Chain, number];
+type BroadcastChainAndId = [Chain, number];
 // Observe multiple events related to the same swap that could be emitted in the same block
 export async function observeSwapEvents(
   { sourceAsset, destAsset, depositAddress, channelId }: SwapParams,
   api: ApiPromise,
   tag?: string,
-  swapType?: SwapType,
   finalized = false,
-): Promise<BroadcastId | undefined> {
+): Promise<BroadcastChainAndId | undefined> {
   let eventFound = false;
   const subscribeMethod = finalized
     ? api.rpc.chain.subscribeFinalizedHeads
     : api.rpc.chain.subscribeNewHeads;
 
+  const swapRequestedEvent = 'SwapRequested';
   const swapScheduledEvent = 'SwapScheduled';
   const swapExecutedEvent = 'SwapExecuted';
   const swapEgressScheduled = 'SwapEgressScheduled';
   const batchBroadcastRequested = 'BatchBroadcastRequested';
-  let expectedMethod = swapScheduledEvent;
+  let expectedEvent = swapRequestedEvent;
 
-  let swapId = 0;
+  let swapId: number | undefined;
+  let swapRequestId: number | undefined;
   let egressId: EgressId;
   let broadcastId;
 
@@ -315,62 +316,80 @@ export async function observeSwapEvents(
   const unsubscribe: any = await subscribeMethod(async (header) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const events: any[] = await api.query.system.events.at(header.hash);
-    events.forEach((record) => {
-      const { event } = record;
-      if (!eventFound && event.method.includes(expectedMethod)) {
-        const expectedEvent = {
-          data: event.toHuman().data,
-        };
 
-        switch (expectedMethod) {
-          case swapScheduledEvent:
-            if ('DepositChannel' in expectedEvent.data.origin) {
-              if (
-                Number(expectedEvent.data.origin.DepositChannel.channelId) === channelId &&
-                sourceAsset === (expectedEvent.data.sourceAsset as Asset) &&
-                destAsset === (expectedEvent.data.destinationAsset as Asset) &&
-                swapType
-                  ? expectedEvent.data.swapType[swapType] !== undefined
-                  : true &&
-                    depositAddress ===
-                      (Object.values(
-                        expectedEvent.data.origin.DepositChannel.depositAddress,
-                      )[0] as string)
-              ) {
-                expectedMethod = swapExecutedEvent;
-                swapId = expectedEvent.data.swapId;
-                console.log(`${tag} swap scheduled with swapId: ${swapId}`);
-              }
+    // Some events don't appear in the order one might expect (e.g. SwapRequested
+    // comes after SwapScheduled), so as a workaround, we add an other loop to be
+    // able to re-scan events that we already visited:
+    let keepSearching = true;
+
+    while (keepSearching) {
+      keepSearching = false;
+
+      for (const record of events) {
+        const { event } = record;
+        if (eventFound || !event.method.includes(expectedEvent)) {
+          // eslint-disable-next-line no-continue
+          continue;
+        }
+
+        const data = event.toHuman().data;
+
+        switch (expectedEvent) {
+          case swapRequestedEvent: {
+            const channel = data.origin.DepositChannel;
+
+            if (
+              channel &&
+              Number(channel.channelId) === channelId &&
+              Object.values(channel.depositAddress)[0] === depositAddress &&
+              sourceAsset === (data.inputAsset as Asset) &&
+              destAsset === (data.outputAsset as Asset)
+            ) {
+              swapRequestId = data.swapRequestId;
+              expectedEvent = swapScheduledEvent;
+
+              // This ensures that we loop through all events again to find SwapScheduled:
+              keepSearching = true;
             }
+
+            break;
+          }
+          case swapScheduledEvent:
+            if (data.swapRequestId === swapRequestId) {
+              swapId = data.swapId;
+              expectedEvent = swapExecutedEvent;
+            }
+
             break;
           case swapExecutedEvent:
-            if (expectedEvent.data.swapId === swapId) {
-              expectedMethod = swapEgressScheduled;
+            if (data.swapId === swapId) {
+              expectedEvent = swapEgressScheduled;
               console.log(`${tag} swap executed, with id: ${swapId}`);
             }
             break;
           case swapEgressScheduled:
-            if (expectedEvent.data.swapId === swapId) {
-              expectedMethod = batchBroadcastRequested;
-              egressId = expectedEvent.data.egressId as EgressId;
+            if (data.swapRequestId === swapRequestId) {
+              expectedEvent = batchBroadcastRequested;
+              egressId = data.egressId as EgressId;
               console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
             }
             break;
           case batchBroadcastRequested:
-            expectedEvent.data.egressIds.forEach((eventEgressId: EgressId) => {
+            for (const eventEgressId of data.egressIds) {
               if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
-                broadcastId = [egressId[0], Number(expectedEvent.data.broadcastId)] as BroadcastId;
+                broadcastId = [egressId[0], Number(data.broadcastId)] as BroadcastChainAndId;
                 console.log(`${tag} broadcast requested, with id: (${broadcastId})`);
                 eventFound = true;
                 unsubscribe();
+                break;
               }
-            });
+            }
             break;
           default:
             break;
         }
       }
-    });
+    }
   });
   while (!eventFound) {
     if (!api.isConnected) {
@@ -390,21 +409,39 @@ export enum SwapType {
   IngressEgressFee = 'IngressEgressFee',
 }
 
-export async function observeSwapScheduled(
+export enum SwapRequestType {
+  Regular = 'Regular',
+  Ccm = 'Ccm',
+  NetworkFee = 'NetworkFee',
+  IngressEgressFee = 'IngressEgressFee',
+}
+
+function checkRequestTypeMatches(actual: object | string, expected: SwapRequestType) {
+  if (typeof actual === 'object') {
+    return expected in actual;
+  }
+
+  return expected === actual;
+}
+
+export async function observeSwapRequested(
   sourceAsset: Asset,
   destAsset: Asset,
   channelId: number,
-  swapType?: SwapType,
+  swapRequestType: SwapRequestType,
 ) {
   // need to await this to prevent the chainflip api from being disposed prematurely
-  return observeEvent('swapping:SwapScheduled', {
+  return observeEvent('swapping:SwapRequested', {
     test: (event) => {
-      if ('DepositChannel' in event.data.origin) {
-        const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
-        const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
-        const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
-        const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
-        return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
+      const data = event.data;
+
+      if (typeof data.origin === 'object' && 'DepositChannel' in data.origin) {
+        const channelMatches = Number(data.origin.DepositChannel.channelId) === channelId;
+        const sourceAssetMatches = sourceAsset === (data.inputAsset as Asset);
+        const destAssetMatches = destAsset === (data.outputAsset as Asset);
+        const requestTypeMatches = checkRequestTypeMatches(data.requestType, swapRequestType);
+
+        return channelMatches && sourceAssetMatches && destAssetMatches && requestTypeMatches;
       }
       // Otherwise it was a swap scheduled by interacting with the Eth smart contract
       return false;
@@ -412,7 +449,7 @@ export async function observeSwapScheduled(
   }).event;
 }
 
-export async function observeBroadcastSuccess(broadcastId: BroadcastId, testTag?: string) {
+export async function observeBroadcastSuccess(broadcastId: BroadcastChainAndId, testTag?: string) {
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
