@@ -141,10 +141,13 @@ mod test_register_redemption {
 		let expected_msg_hash = register_redemption_runtime.threshold_signature_payload();
 		let runtime_payload = register_redemption_runtime
 			.clone()
-			.signed(&SchnorrVerificationComponents {
-				s: FAKE_SIG,
-				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
-			})
+			.signed(
+				&SchnorrVerificationComponents {
+					s: FAKE_SIG,
+					k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
+				},
+				Default::default(),
+			)
 			.chain_encoded(); // Ensure signing payload isn't modified by signature.
 
 		assert_eq!(register_redemption_runtime.threshold_signature_payload(), expected_msg_hash);
