@@ -7,9 +7,8 @@ use cf_chains::{
 	SwapRefundParameters,
 };
 use cf_primitives::{
-	AccountRole, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId,
-	ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash, BASIS_POINTS_PER_MILLION,
-	STABLE_ASSET,
+	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId, ForeignChain, SwapId,
+	SwapLeg, SwapRequestId, TransactionHash, BASIS_POINTS_PER_MILLION, STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -555,8 +554,6 @@ pub mod pallet {
 		BrokerCommissionBpsTooHigh,
 		/// Brokers should withdraw their earned fees before deregistering.
 		EarnedFeesNotWithdrawn,
-		/// The provided list of broker contains an account which is not registered as Broker
-		AffiliateAccountIsNotABroker,
 		/// Setting the buy interval to zero is not allowed.
 		ZeroBuyIntervalNotAllowed,
 		/// Setting the swap retry delay to zero is not allowed.
@@ -988,13 +985,6 @@ pub mod pallet {
 						.expect("First element, impossible to exceed the maximum size");
 				}
 				for affiliate in &affiliate_fees {
-					ensure!(
-						T::AccountRoleRegistry::has_account_role(
-							&affiliate.account,
-							AccountRole::Broker
-						),
-						Error::<T>::AffiliateAccountIsNotABroker
-					);
 					if affiliate.bps > 0 {
 						beneficiaries
 							.try_push(affiliate.clone())
