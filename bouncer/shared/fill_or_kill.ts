@@ -61,7 +61,9 @@ async function testMinPriceRefund(asset: Asset, amount: number) {
 
   const observeSwapScheduled = observeEvent('swapping:SwapScheduled', {
     test: (event) =>
-      event.data.origin.DepositChannel?.channelId === depositChannelId.toString() &&
+      typeof event.data.origin === 'object' &&
+      'DepositChannel' in event.data.origin &&
+      event.data.origin.DepositChannel.channelId === depositChannelId.toString() &&
       event.data.destinationAddress[shortChainFromAsset(swapAsset)]?.toLowerCase() ===
         observeDestinationAddress.toLowerCase(),
   }).event;
