@@ -8,7 +8,7 @@ use cf_chains::{
 	Solana,
 };
 use core::time::Duration;
-use utilities::task_scope::Scope;
+use utilities::{make_periodic_tick, task_scope::Scope};
 
 use anyhow::{anyhow, Result};
 use base64::Engine;
@@ -213,20 +213,19 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 						let tx_signature =
 							client.send_transaction(encoded_transaction, config).await?;
 
-						for status_retry in 0..GET_STATUS_BROADCAST_RETRIES {
+						let mut poll_interval = make_periodic_tick(
+							Duration::from_millis(GET_STATUS_BROADCAST_DELAY),
+							false,
+						);
+
+						for _ in 0..GET_STATUS_BROADCAST_RETRIES {
+							poll_interval.tick().await;
+
 							let signature_statuses =
 								client.get_signature_statuses(&[tx_signature], true).await?;
-							match signature_statuses.value.first() {
-								Some(_) => return Ok(tx_signature),
-								None => {
-									// Ignore sleep at last step
-									if status_retry < GET_STATUS_BROADCAST_RETRIES {
-										tokio::time::sleep(Duration::from_millis(
-											GET_STATUS_BROADCAST_DELAY,
-										))
-										.await;
-									}
-								},
+
+							if let Some(Some(_)) = signature_statuses.value.first() {
+								return Ok(tx_signature);
 							}
 						}
 						Err(anyhow!("Sent transaction signature not found"))
