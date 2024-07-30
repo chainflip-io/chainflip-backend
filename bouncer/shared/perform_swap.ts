@@ -84,7 +84,7 @@ export async function requestNewSwap(
 
   const depositAddress = res.depositAddress[shortChainFromAsset(sourceAsset)];
   const channelDestAddress = res.destinationAddress[shortChainFromAsset(destAsset)];
-  const channelId = Number(res.channelId);
+  const channelId = Number(res.channelId.replaceAll(',', ''));
 
   if (log) {
     console.log(`${tag} Deposit address: ${depositAddress}`);

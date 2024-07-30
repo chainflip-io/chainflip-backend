@@ -8,6 +8,7 @@ import {
   isWithinOnePercent,
   newAddress,
   observeBalanceIncrease,
+  shortChainFromAsset,
 } from './utils';
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
@@ -55,26 +56,33 @@ async function testMinPriceRefund(asset: Asset, amount: number) {
   const depositAddress = swapRequest.depositAddress;
   const depositChannelId = swapRequest.channelId;
 
+  const observeDestinationAddress =
+    asset === Assets.Dot ? decodeDotAddressForContract(destAddress) : destAddress;
+
   const observeSwapScheduled = observeEvent('swapping:SwapScheduled', {
-    test: (event) => event.data.origin.DepositChannel?.channelId === depositChannelId.toString(),
+    test: (event) =>
+      event.data.origin.DepositChannel?.channelId === depositChannelId.toString() &&
+      event.data.destinationAddress[shortChainFromAsset(swapAsset)]?.toLowerCase() ===
+        observeDestinationAddress.toLowerCase(),
   }).event;
 
   // Deposit the asset
   await send(asset, depositAddress, amount.toString());
   console.log(`Sent ${amount} ${asset} to ${depositAddress}`);
 
-  const swapId = Number((await observeSwapScheduled).data.swapId);
+  const swapScheduledEvent = await observeSwapScheduled;
+  const swapId = Number(swapScheduledEvent.data.swapId.replaceAll(',', ''));
   console.log(`${asset} swap scheduled, swapId: ${swapId}`);
 
   // TODO: Observing after the SwapScheduled event means its possible to miss the events, but we need to the swap id.
   const observeRefundEgressScheduled = observeEvent(`swapping:RefundEgressScheduled`, {
-    test: (event) => Number(event.data.swapId) === swapId,
+    test: (event) => Number(event.data.swapId.replaceAll(',', '')) === swapId,
   }).event;
   const observeSwapExecuted = observeEvent(`swapping:SwapExecuted`, {
-    test: (event) => Number(event.data.swapId) === swapId,
+    test: (event) => Number(event.data.swapId.replaceAll(',', '')) === swapId,
   }).event;
   const observeSwapRescheduled = observeEvent(`swapping:SwapRescheduled`, {
-    test: (event) => Number(event.data.swapId) === swapId,
+    test: (event) => Number(event.data.swapId.replaceAll(',', '')) === swapId,
   }).event;
 
   const firstSwapEvent = await Promise.race([
