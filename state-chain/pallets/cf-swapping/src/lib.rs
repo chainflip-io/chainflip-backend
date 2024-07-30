@@ -639,8 +639,10 @@ pub mod pallet {
 
 				match Self::execute_batch(swaps_to_execute.clone()) {
 					Ok(successful_swaps) => {
-						Self::process_swap_outcomes(&successful_swaps);
-						// Nothing to do here, all swaps are processed for block
+						for swap in successful_swaps {
+							Self::process_swap_outcome(swap);
+						}
+						// Nothing else to do here, all swaps are processed for block
 						return
 					},
 					Err(err) => {
@@ -676,41 +678,12 @@ pub mod pallet {
 
 						for swap in failed_swaps {
 							match swap.refund_params {
-								Some(params)
+								Some(ref params)
 									if BlockNumberFor::<T>::from(params.refund_block) <
 										retry_block =>
 								{
-									// Reached refund block, schedule refund:
-									match T::EgressHandler::schedule_egress(
-										swap.from,
-										swap.input_amount,
-										params.refund_address,
-										None,
-									) {
-										Ok(ScheduledEgressDetails {
-											egress_id,
-											egress_amount,
-											fee_withheld,
-										}) => {
-											Self::deposit_event(
-												Event::<T>::RefundEgressScheduled {
-													swap_request_id: swap.swap_request_id,
-													egress_id,
-													asset: swap.from,
-													amount: egress_amount,
-													egress_fee: fee_withheld,
-												},
-											);
-										},
-										Err(err) => {
-											Self::deposit_event(Event::<T>::RefundEgressIgnored {
-												swap_request_id: swap.swap_request_id,
-												asset: swap.from,
-												amount: swap.input_amount,
-												reason: err.into(),
-											});
-										},
-									}
+									// Reached refund block, process refund:
+									Self::refund_failed_swap(swap);
 								},
 								_ => {
 									// Either refund parameters not set, or refund block not
@@ -1218,151 +1191,181 @@ pub mod pallet {
 			CcmSwapState::GasSwapScheduled { gas_swap_id: swap_id, principal_output_amount }
 		}
 
-		fn process_swap_outcomes(swaps: &[SwapState]) {
-			for swap in swaps {
-				let swap_request_id = swap.swap.swap_request_id;
+		fn refund_failed_swap(swap: Swap) {
+			let swap_request_id = swap.swap_request_id;
 
-				let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
-					log_or_panic!("Swap request {swap_request_id} not found");
-					continue;
-				};
+			let Some(request) = SwapRequests::<T>::take(swap_request_id) else {
+				log_or_panic!("Swap request {swap_request_id} not found");
+				return;
+			};
 
-				let Some(output_amount) = swap.final_output else {
-					log_or_panic!("Swap {} is not completed yet!", swap.swap_id());
-					continue;
-				};
+			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
 
-				Self::deposit_event(Event::<T>::SwapExecuted {
-					swap_request_id,
-					swap_id: swap.swap_id(),
-					// To be consistent with `swap_output` and `intermediate_amount` (which do
-					// not include the network fee), we report input amount without the network fee
-					// for swaps from STABLE_ASSET:
-					input_amount: if swap.input_asset() == STABLE_ASSET {
-						swap.stable_amount.unwrap_or_else(|| {
-							log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
-							swap.input_amount()
-						})
-					} else {
+			let Some(refund_params) = request.refund_params else {
+				log_or_panic!("Trying to refund swap request {swap_request_id}, but missing refund parameters");
+				return;
+			};
+
+			match T::EgressHandler::schedule_egress(
+				swap.from,
+				swap.input_amount,
+				refund_params.refund_address,
+				None,
+			) {
+				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) => {
+					Self::deposit_event(Event::<T>::RefundEgressScheduled {
+						swap_request_id: swap.swap_request_id,
+						egress_id,
+						asset: swap.from,
+						amount: egress_amount,
+						egress_fee: fee_withheld,
+					});
+				},
+				Err(err) => {
+					Self::deposit_event(Event::<T>::RefundEgressIgnored {
+						swap_request_id: swap.swap_request_id,
+						asset: swap.from,
+						amount: swap.input_amount,
+						reason: err.into(),
+					});
+				},
+			}
+		}
+
+		fn process_swap_outcome(swap: SwapState) {
+			let swap_request_id = swap.swap.swap_request_id;
+
+			let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
+				log_or_panic!("Swap request {swap_request_id} not found");
+				return;
+			};
+
+			let Some(output_amount) = swap.final_output else {
+				log_or_panic!("Swap {} is not completed yet!", swap.swap_id());
+				return;
+			};
+
+			Self::deposit_event(Event::<T>::SwapExecuted {
+				swap_request_id,
+				swap_id: swap.swap_id(),
+				// To be consistent with `swap_output` and `intermediate_amount` (which do
+				// not include the network fee), we report input amount without the network fee
+				// for swaps from STABLE_ASSET:
+				input_amount: if swap.input_asset() == STABLE_ASSET {
+					swap.stable_amount.unwrap_or_else(|| {
+						log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
 						swap.input_amount()
-					},
-					input_asset: swap.input_asset(),
-					network_fee: swap.network_fee_taken.unwrap_or_default(),
-					output_asset: swap.output_asset(),
-					output_amount,
-					intermediate_amount: swap.intermediate_amount(),
-				});
+					})
+				} else {
+					swap.input_amount()
+				},
+				input_asset: swap.input_asset(),
+				network_fee: swap.network_fee_taken.unwrap_or_default(),
+				output_asset: swap.output_asset(),
+				output_amount,
+				intermediate_amount: swap.intermediate_amount(),
+			});
 
-				match &mut request.state {
-					SwapRequestState::Ccm { state, ccm_deposit_metadata, output_address } =>
-						match state {
-							CcmSwapState::PrincipalSwapScheduled {
-								principal_swap_id,
-								gas_budget,
-								other_gas_asset,
-							} => {
-								debug_assert!(swap.swap_id() == *principal_swap_id);
+			match &mut request.state {
+				SwapRequestState::Ccm { state, ccm_deposit_metadata, output_address } =>
+					match state {
+						CcmSwapState::PrincipalSwapScheduled {
+							principal_swap_id,
+							gas_budget,
+							other_gas_asset,
+						} => {
+							debug_assert!(swap.swap_id() == *principal_swap_id);
 
-								if let Some(other_gas_asset) = other_gas_asset {
-									*state = Self::schedule_ccm_gas_swap(
-										swap_request_id,
-										request.input_asset,
-										*other_gas_asset,
-										*gas_budget,
-										output_amount,
-									);
+							if let Some(other_gas_asset) = other_gas_asset {
+								*state = Self::schedule_ccm_gas_swap(
+									swap_request_id,
+									request.input_asset,
+									*other_gas_asset,
+									*gas_budget,
+									output_amount,
+								);
 
-									// We are not done with the request, so put it back
-									SwapRequests::<T>::insert(swap_request_id, request);
-								} else {
-									Self::process_ccm_outcome(
-										swap_request_id,
-										request.output_asset,
-										output_address.clone(),
-										output_amount,
-										*gas_budget,
-										ccm_deposit_metadata.clone(),
-									);
-								}
-							},
-							CcmSwapState::GasSwapScheduled {
-								gas_swap_id,
-								principal_output_amount,
-							} => {
-								debug_assert!(swap.swap_id() == *gas_swap_id);
-
+								// We are not done with the request, so put it back
+								SwapRequests::<T>::insert(swap_request_id, request);
+							} else {
 								Self::process_ccm_outcome(
 									swap_request_id,
 									request.output_asset,
 									output_address.clone(),
-									*principal_output_amount,
 									output_amount,
+									*gas_budget,
 									ccm_deposit_metadata.clone(),
 								);
-							},
+							}
 						},
-					SwapRequestState::Regular { output_address } => {
-						Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-						match T::EgressHandler::schedule_egress(
+						CcmSwapState::GasSwapScheduled { gas_swap_id, principal_output_amount } => {
+							debug_assert!(swap.swap_id() == *gas_swap_id);
+
+							Self::process_ccm_outcome(
+								swap_request_id,
+								request.output_asset,
+								output_address.clone(),
+								*principal_output_amount,
+								output_amount,
+								ccm_deposit_metadata.clone(),
+							);
+						},
+					},
+				SwapRequestState::Regular { output_address } => {
+					Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+					match T::EgressHandler::schedule_egress(
+						swap.output_asset(),
+						output_amount,
+						output_address.clone(),
+						None, /* ccm metadata */
+					) {
+						Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) => {
+							Self::deposit_event(Event::<T>::SwapEgressScheduled {
+								swap_request_id: swap.swap.swap_request_id,
+								egress_id,
+								asset: swap.output_asset(),
+								amount: egress_amount,
+								fee: fee_withheld,
+							});
+						},
+						Err(err) => {
+							Self::deposit_event(Event::<T>::SwapEgressIgnored {
+								swap_request_id,
+								asset: swap.output_asset(),
+								amount: output_amount,
+								reason: err.into(),
+							});
+						},
+					};
+				},
+				SwapRequestState::NetworkFee => {
+					Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+					if swap.output_asset() == Asset::Flip {
+						FlipToBurn::<T>::mutate(|total| {
+							total.saturating_accrue(output_amount);
+						});
+					} else {
+						log_or_panic!(
+							"NetworkFee burning should not be in asset: {:?}",
+							swap.output_asset()
+						);
+					}
+				},
+				SwapRequestState::IngressEgressFee => {
+					Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+
+					if swap.output_asset() == ForeignChain::from(swap.output_asset()).gas_asset() {
+						T::IngressEgressFeeHandler::accrue_withheld_fee(
 							swap.output_asset(),
 							output_amount,
-							output_address.clone(),
-							None, /* ccm metadata */
-						) {
-							Ok(ScheduledEgressDetails {
-								egress_id,
-								egress_amount,
-								fee_withheld,
-							}) => {
-								Self::deposit_event(Event::<T>::SwapEgressScheduled {
-									swap_request_id: swap.swap.swap_request_id,
-									egress_id,
-									asset: swap.output_asset(),
-									amount: egress_amount,
-									fee: fee_withheld,
-								});
-							},
-							Err(err) => {
-								Self::deposit_event(Event::<T>::SwapEgressIgnored {
-									swap_request_id,
-									asset: swap.output_asset(),
-									amount: output_amount,
-									reason: err.into(),
-								});
-							},
-						};
-					},
-					SwapRequestState::NetworkFee => {
-						Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-						if swap.output_asset() == Asset::Flip {
-							FlipToBurn::<T>::mutate(|total| {
-								total.saturating_accrue(output_amount);
-							});
-						} else {
-							log_or_panic!(
-								"NetworkFee burning should not be in asset: {:?}",
-								swap.output_asset()
-							);
-						}
-					},
-					SwapRequestState::IngressEgressFee => {
-						Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-
-						if swap.output_asset() ==
-							ForeignChain::from(swap.output_asset()).gas_asset()
-						{
-							T::IngressEgressFeeHandler::accrue_withheld_fee(
-								swap.output_asset(),
-								output_amount,
-							);
-						} else {
-							log_or_panic!(
-								"IngressEgressFee swap should not be to non-gas asset: {:?}",
-								swap.output_asset()
-							);
-						}
-					},
-				}
+						);
+					} else {
+						log_or_panic!(
+							"IngressEgressFee swap should not be to non-gas asset: {:?}",
+							swap.output_asset()
+						);
+					}
+				},
 			}
 		}
 
@@ -1676,7 +1679,6 @@ pub mod pallet {
 						frame_system::Pallet::<T>::block_number().unique_saturated_into();
 					current_block.saturating_add(params.retry_duration)
 				},
-				refund_address: params.refund_address,
 				min_output: u128::try_from(cf_amm::common::output_amount_ceil(
 					input_amount.into(),
 					params.min_price,

@@ -13,11 +13,7 @@ fn new_swap(refund_params: Option<SwapRefundParameters>) -> TestSwapParams {
 }
 
 fn params(refund_block: u32, min_output: AssetAmount) -> SwapRefundParameters {
-	SwapRefundParameters {
-		refund_block,
-		refund_address: ForeignChainAddress::Eth([10; 20].into()),
-		min_output,
-	}
+	SwapRefundParameters { refund_block, min_output }
 }
 
 #[track_caller]
@@ -120,6 +116,12 @@ fn price_limit_is_respected_in_fok_swap() {
 
 #[test]
 fn fok_swap_gets_refunded_due_to_price_limit() {
+	const FOK_SWAP_REQUEST_ID: u64 = 1;
+	const OTHER_SWAP_REQUEST_ID: u64 = 2;
+
+	const FOK_SWAP_ID: u64 = 1;
+	const OTHER_SWAP_ID: u64 = 2;
+
 	const SWAPS_ADDED_BLOCK: u64 = 1;
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
@@ -145,27 +147,41 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
-					swap_id: 1,
+					swap_id: FOK_SWAP_ID,
 					execute_at: SWAP_RETRIED_AT_BLOCK,
 				}),
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 2 }),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: OTHER_SWAP_ID, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: OTHER_SWAP_REQUEST_ID
+				}),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: OTHER_SWAP_REQUEST_ID,
+					..
+				}),
 			);
 		})
 		.then_execute_at_block(SWAP_RETRIED_AT_BLOCK, |_| {})
 		.then_execute_with(|_| {
+			// Swap request should be removed in case of refund
+			assert_eq!(SwapRequests::<Test>::get(FOK_SWAP_REQUEST_ID), None);
 			// Swap should fail here (due to price limit) and be refunded due
 			// to reaching expiry block
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::RefundEgressScheduled { swap_request_id: 1, .. })
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: FOK_SWAP_REQUEST_ID
+				}),
+				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
+					swap_request_id: FOK_SWAP_REQUEST_ID,
+					..
+				})
 			);
 		});
 }
 
 #[test]
 fn fok_swap_gets_refunded_due_to_price_impact_protection() {
+	const FOK_SWAP_REQUEST_ID: u64 = 1;
 	const SWAPS_ADDED_BLOCK: u64 = 1;
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
@@ -204,14 +220,22 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 		})
 		.then_execute_at_block(SWAP_RETRIED_AT_BLOCK, |_| {})
 		.then_execute_with(|_| {
+			// Swap request should be removed in case of refund
+			assert_eq!(SwapRequests::<Test>::get(FOK_SWAP_REQUEST_ID), None);
 			// Swap should fail here (due to price impact protection) and be refunded due
 			// to reaching expiry block
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
-				RuntimeEvent::Swapping(Event::RefundEgressScheduled { swap_request_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: FOK_SWAP_REQUEST_ID
+				}),
+				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
+					swap_request_id: FOK_SWAP_REQUEST_ID,
+					..
+				}),
 				// Non-fok swap will continue to be retried:
-				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: 2, .. })
+				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: 2, .. }),
 			);
 		});
 }

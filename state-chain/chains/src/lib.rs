@@ -671,7 +671,6 @@ impl RetryPolicy for DefaultRetryPolicy {
 )]
 pub struct SwapRefundParameters {
 	pub refund_block: cf_primitives::BlockNumber,
-	pub refund_address: ForeignChainAddress,
 	pub min_output: cf_primitives::AssetAmount,
 }
 
