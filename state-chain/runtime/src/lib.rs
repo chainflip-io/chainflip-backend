@@ -1190,31 +1190,33 @@ type PalletMigrations = (
 
 type MigrateApicalls = (
 	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, Instance1>,
+		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
 		migrations::migrate_apicalls_to_store_signer::EthMigrateApicallsAndOnChainKey,
 		5,
 		6,
 	>,
 	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, Instance2>,
+		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
 		migrations::migrate_apicalls_to_store_signer::DotMigrateApicallsAndOnChainKey,
 		5,
 		6,
 	>,
 	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, Instance3>,
+		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
 		migrations::migrate_apicalls_to_store_signer::BtcMigrateApicallsAndOnChainKey,
 		5,
 		6,
 	>,
 	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, Instance4>,
+		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
 		migrations::migrate_apicalls_to_store_signer::ArbMigrateApicallsAndOnChainKey,
 		5,
 		6,
 	>,
+	// The apicalls migration is not needed for solana since solana is not initizlized yet and so
+	// the storage items do not exist yet.
 	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, Instance5>,
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
 		migrations::migrate_apicalls_to_store_signer::NoSolUpgrade,
 		5,
 		6,
