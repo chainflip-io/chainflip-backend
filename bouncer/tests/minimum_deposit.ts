@@ -11,12 +11,12 @@ async function main() {
     await requestNewSwap('Dot', 'Eth', '0xd92bd8c144b8edba742b07909c04f8b93d875d93')
   ).depositAddress;
   const depositIgnored = observeEvent(':DepositIgnored');
-  await sendDot(depositAddress, "19");
+  await sendDot(depositAddress, '19');
   console.log('Sent 19 DOT');
   await depositIgnored.event;
   console.log('Deposit was ignored');
   const depositSuccess = observeEvent(':DepositFinalised');
-  await sendDot(depositAddress, "21");
+  await sendDot(depositAddress, '21');
   console.log('Sent 21 DOT');
   await depositSuccess.event;
   console.log('Deposit was successful');
