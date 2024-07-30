@@ -69,7 +69,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 		let expected_swap_request_id = SwapRequestId::decode(&mut &state[..]).unwrap();
-		let actual_swap_request_id = SwapIdCounter::<T>::get();
+		let actual_swap_request_id = SwapRequestIdCounter::<T>::get();
 
 		assert_eq!(expected_swap_request_id, actual_swap_request_id, "Swap request id mismatch");
 
