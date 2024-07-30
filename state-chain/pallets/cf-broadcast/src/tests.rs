@@ -1358,8 +1358,7 @@ fn should_release_barriers_correctly_in_case_of_rotation_tx_succeeding_first() {
 		);
 
 		// the rotation tx should create barriers on both txs
-		let mut expected_barriers = BTreeSet::new();
-		expected_barriers.extend(vec![broadcast_id_1, broadcast_id_2]);
+		let expected_barriers: BTreeSet<_> = [broadcast_id_1, broadcast_id_2].into_iter().collect();
 		assert_eq!(BroadcastBarriers::<Test, Instance1>::get(), expected_barriers);
 
 		// succeed the rotation tx first
