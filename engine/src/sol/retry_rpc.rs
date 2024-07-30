@@ -216,7 +216,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 						for status_retry in 0..GET_STATUS_BROADCAST_RETRIES {
 							let signature_statuses =
 								client.get_signature_statuses(&[tx_signature], true).await?;
-							match signature_statuses.value.iter().next() {
+							match signature_statuses.value.first() {
 								Some(_) => return Ok(tx_signature),
 								None => {
 									// Ignore sleep at last step
