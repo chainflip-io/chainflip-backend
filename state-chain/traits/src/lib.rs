@@ -1,11 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "std", feature(option_get_or_insert_default))]
 
 mod async_result;
-pub mod liquidity;
+mod liquidity;
 use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
+mod swapping;
+
+pub use swapping::{SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType};
 
 pub mod mocks;
 pub mod offence_reporting;
@@ -16,12 +20,12 @@ pub use async_result::AsyncResult;
 
 use cf_chains::{
 	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, ChannelRefundParameters, DepositChannel, Ethereum, SwapOrigin,
+	ChainCrypto, ChannelRefundParameters, DepositChannel, Ethereum,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BroadcastId,
 	ChannelId, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain,
-	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
+	Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -222,6 +226,8 @@ pub enum StartKeyActivationResult {
 pub trait EpochTransitionHandler {
 	/// When an epoch has been expired.
 	fn on_expired_epoch(_expired: EpochIndex) {}
+	/// When a new epoch has started.
+	fn on_new_epoch(_new: EpochIndex) {}
 }
 
 pub trait ReputationResetter {
@@ -615,6 +621,16 @@ pub trait ExecutionCondition {
 	fn is_satisfied() -> bool;
 }
 
+impl<A, B> ExecutionCondition for (A, B)
+where
+	A: ExecutionCondition,
+	B: ExecutionCondition,
+{
+	fn is_satisfied() -> bool {
+		A::is_satisfied() && B::is_satisfied()
+	}
+}
+
 /// Performs a runtime upgrade
 pub trait RuntimeUpgrade {
 	/// Applies the wasm code of a runtime upgrade and returns the
@@ -867,41 +883,6 @@ pub trait NetworkEnvironmentProvider {
 	fn get_network_environment() -> NetworkEnvironment;
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-pub struct CcmSwapIds {
-	pub principal_swap_id: Option<SwapId>,
-	pub gas_swap_id: Option<SwapId>,
-}
-
-/// Trait for handling cross chain messages.
-pub trait CcmHandler {
-	/// Triggered when a ccm deposit is made.
-	#[allow(clippy::result_unit_err)]
-	fn on_ccm_deposit(
-		source_asset: Asset,
-		deposit_amount: AssetAmount,
-		destination_asset: Asset,
-		destination_address: ForeignChainAddress,
-		deposit_metadata: CcmDepositMetadata,
-		origin: SwapOrigin,
-		refund_params: Option<ChannelRefundParameters>,
-	) -> Result<CcmSwapIds, ()>;
-}
-
-impl CcmHandler for () {
-	fn on_ccm_deposit(
-		_source_asset: Asset,
-		_deposit_amount: AssetAmount,
-		_destination_asset: Asset,
-		_destination_address: ForeignChainAddress,
-		_deposit_metadata: CcmDepositMetadata,
-		_origin: SwapOrigin,
-		_refund_params: Option<ChannelRefundParameters>,
-	) -> Result<CcmSwapIds, ()> {
-		Err(())
-	}
-}
-
 pub trait OnBroadcastReady<C: Chain> {
 	type ApiCall: ApiCall<C::ChainCrypto>;
 
@@ -953,4 +934,18 @@ pub trait AssetConverter {
 
 pub trait IngressEgressFeeApi<C: Chain> {
 	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
+}
+
+pub trait LiabilityTracker {
+	fn record_liability(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
+
+	#[cfg(feature = "try-runtime")]
+	fn total_liabilities(gas_asset: Asset) -> AssetAmount;
+}
+
+pub trait AssetWithholding {
+	fn withhold_assets(asset: Asset, amount: AssetAmount);
+
+	#[cfg(feature = "try-runtime")]
+	fn withheld_assets(gas_asset: Asset) -> AssetAmount;
 }

@@ -1464,7 +1464,7 @@ dependencies = [
 
 [[package]]
 name = "cf-engine-dylib"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "chainflip-engine",
  "engine-proc-macros",
@@ -1493,6 +1493,7 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-account-roles",
+ "pallet-cf-asset-balances",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
  "pallet-cf-emissions",
@@ -1620,6 +1621,7 @@ dependencies = [
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cfe-events",
@@ -1706,7 +1708,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-api"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1726,6 +1728,7 @@ dependencies = [
  "libp2p-identity 0.2.8",
  "libsecp256k1",
  "pallet-cf-account-roles",
+ "pallet-cf-asset-balances",
  "pallet-cf-environment",
  "pallet-cf-funding",
  "pallet-cf-governance",
@@ -1751,7 +1754,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-broker-api"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "chainflip-api",
@@ -1772,7 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-cli"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "cf-chains",
@@ -1792,7 +1795,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-engine"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "async-broadcast 0.5.1",
@@ -1888,7 +1891,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-ingress-egress-tracker"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1923,7 +1926,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-lp-api"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "cf-primitives",
@@ -1948,7 +1951,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-node"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
@@ -3415,7 +3418,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "engine-proc-macros"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "engine-upgrade-utils",
  "proc-macro2",
@@ -3425,7 +3428,7 @@ dependencies = [
 
 [[package]]
 name = "engine-runner"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -7363,9 +7366,9 @@ dependencies = [
 
 [[package]]
 name = "openssl"
-version = "0.10.63"
+version = "0.10.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15c9d69dd87a29568d4d017cfe8ec518706046a05184e5aea92d0af890b803c8"
+checksum = "9529f4786b70a3e8c61e11179af17ab6188ad8d0ded78c5529441ed39d4bd9c1"
 dependencies = [
  "bitflags 2.4.2",
  "cfg-if",
@@ -7395,9 +7398,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.99"
+version = "0.9.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22e1bf214306098e4832460f797824c05d25aacdf896f64a985fb0fd992454ae"
+checksum = "7f9e8deee91df40a943c71b917e5874b951d32a802526c85721ce3b776c929d6"
 dependencies = [
  "cc",
  "libc",
@@ -7482,6 +7485,30 @@ dependencies = [
  "sp-io 23.0.0",
  "sp-runtime 24.0.0",
  "sp-std 8.0.0",
+]
+
+[[package]]
+name = "pallet-cf-asset-balances"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
+ "cf-test-utilities",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core 21.0.0",
+ "sp-io 23.0.0",
+ "sp-runtime 24.0.0",
+ "sp-std 8.0.0",
+ "utilities",
 ]
 
 [[package]]
@@ -7714,6 +7741,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -12631,7 +12659,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "state-chain-runtime"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "cf-amm",
  "cf-chains",
@@ -12656,6 +12684,7 @@ dependencies = [
  "pallet-aura",
  "pallet-authorship",
  "pallet-cf-account-roles",
+ "pallet-cf-asset-balances",
  "pallet-cf-broadcast",
  "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",

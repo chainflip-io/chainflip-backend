@@ -45,6 +45,7 @@ pub type BasisPoints = u16;
 pub type BroadcastId = u32;
 
 pub type SwapId = u64;
+pub type SwapRequestId = u64;
 
 pub type PrewitnessedDepositId = u64;
 

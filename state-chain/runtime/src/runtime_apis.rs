@@ -115,10 +115,20 @@ pub struct AuctionState {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct LiquidityProviderBoostPoolInfo {
+	pub fee_tier: u16,
+	pub total_balance: AssetAmount,
+	pub available_balance: AssetAmount,
+	pub in_use_balance: AssetAmount,
+	pub is_withdrawing: bool,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
 	pub earned_fees: AssetMap<AssetAmount>,
+	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -225,6 +235,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 			lp: Option<AccountId32>,
+			filled_orders: bool,
 		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
@@ -273,5 +284,6 @@ decl_runtime_apis!(
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
+		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 	}
 );

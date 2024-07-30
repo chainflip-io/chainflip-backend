@@ -37,6 +37,12 @@ jobs:
     with:
       profile: "production"
       binary-subdir: "production"
+  build-m2:
+    uses: ./.github/workflows/_21_build_m2.yml
+    secrets: inherit
+    with:
+      profile: "production"
+      binary-subdir: "production"
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
     needs: [test]
@@ -96,3 +102,7 @@ jobs:
     uses: ./.github/workflows/_70_post_release.yml
     with:
       network: "sisyphos"
+  upload-engine-shared-libs:
+    needs: [build, build-m2]
+    uses: ./.github/workflows/_61_upload_engine_shared_libs.yml
+    secrets: inherit

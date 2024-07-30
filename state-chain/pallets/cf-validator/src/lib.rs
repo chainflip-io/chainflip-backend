@@ -1010,6 +1010,7 @@ impl<T: Config> Pallet<T> {
 		);
 
 		Self::deposit_event(Event::NewEpoch(new_epoch));
+		T::EpochTransitionHandler::on_new_epoch(new_epoch);
 	}
 
 	fn expire_epoch(epoch: EpochIndex) -> Weight {

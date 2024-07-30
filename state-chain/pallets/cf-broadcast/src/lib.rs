@@ -14,12 +14,12 @@ pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
 use cf_chains::{
-	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, RetryPolicy, TransactionBuilder,
-	TransactionMetadata as _,
+	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
+	RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
 use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
-	Chainflip, EpochInfo, GetBlockHeight, SafeMode, ThresholdSigner,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
+	CfeBroadcastRequest, Chainflip, EpochInfo, GetBlockHeight, LiabilityTracker, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -36,34 +36,12 @@ use frame_support::{
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_set::BTreeSet, marker, marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
-#[derive(
-	serde::Serialize,
-	serde::Deserialize,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	Copy,
-	Clone,
-	PartialEq,
-	Eq,
-	RuntimeDebug,
-)]
-#[scale_info(skip_type_params(I))]
-pub struct PalletSafeMode<I: 'static> {
-	pub retry_enabled: bool,
-	#[doc(hidden)]
-	#[codec(skip)]
-	#[serde(skip_serializing)]
-	_phantom: marker::PhantomData<I>,
-}
-
-impl<I: 'static> SafeMode for PalletSafeMode<I> {
-	const CODE_RED: Self = PalletSafeMode { retry_enabled: false, _phantom: marker::PhantomData };
-	const CODE_GREEN: Self = PalletSafeMode { retry_enabled: true, _phantom: marker::PhantomData };
+impl_pallet_safe_mode! {
+	PalletSafeMode<I>;
+	retry_enabled,
 }
 
 /// The number of broadcast attempts that were made before this one.
@@ -74,13 +52,13 @@ pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{AccountRoleRegistry, BroadcastNomination, OnBroadcastReady};
+	use cf_traits::{AccountRoleRegistry, BroadcastNomination, LiabilityTracker, OnBroadcastReady};
 	use frame_support::{pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -209,6 +187,8 @@ pub mod pallet {
 
 		type CfeBroadcastRequest: CfeBroadcastRequest<Self, Self::TargetChain>;
 
+		type LiabilityTracker: LiabilityTracker;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -287,11 +267,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type TransactionMetadata<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, TransactionMetadataFor<T, I>>;
-
-	/// Tracks how much a signer id is owed for paying transaction fees.
-	#[pallet::storage]
-	pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
 
 	/// Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
 	#[pallet::storage]
@@ -546,9 +521,15 @@ pub mod pallet {
 						let to_refund =
 							broadcast_data.transaction_payload.return_fee_refund(tx_fee);
 
-						TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
-							*fee_deficit = fee_deficit.saturating_add(to_refund);
-						});
+						let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
+							T::TargetChain,
+						>>::into_foreign_chain_address(signer_id.clone());
+
+						T::LiabilityTracker::record_liability(
+							address_to_refund,
+							<T::TargetChain as Chain>::GAS_ASSET.into(),
+							to_refund.into(),
+						);
 
 						Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
 							beneficiary: signer_id,

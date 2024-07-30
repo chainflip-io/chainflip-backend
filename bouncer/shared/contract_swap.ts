@@ -137,10 +137,6 @@ export async function performSwapViaContract(
     );
     swapContext?.updateStatus(swapTag, SwapStatus.ContractExecuted);
 
-    if (log) {
-      console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
-    }
-
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(
           sourceAsset,

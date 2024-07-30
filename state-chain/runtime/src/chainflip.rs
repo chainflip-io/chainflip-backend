@@ -1,6 +1,7 @@
 //! Configuration, utilities and helpers for the Chainflip runtime.
 pub mod address_derivation;
 pub mod backup_node_rewards;
+pub mod boost_api;
 pub mod cons_key_rotator;
 pub mod decompose_recompose;
 pub mod epoch_transition;
@@ -56,6 +57,7 @@ use cf_traits::{
 	EpochInfo, Heartbeat, IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit,
 	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
 };
+
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
