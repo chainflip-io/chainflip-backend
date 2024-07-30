@@ -31,8 +31,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, BoostPoolTier, BroadcastId,
-	ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
+	ChannelId, DCAParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -294,6 +294,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DCAParameters>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -303,6 +304,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			channel_metadata: CcmChannelMetadata,
 			refund_params: Option<ChannelRefundParameters>,
+			// TODO: add DCA params
 		},
 	}
 
@@ -1540,6 +1542,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				broker_fees,
 				refund_params,
+				dca_params,
 			} => {
 				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
@@ -1548,6 +1551,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					SwapRequestType::Regular { output_address: destination_address },
 					broker_fees,
 					refund_params,
+					dca_params,
 					swap_origin,
 				) {
 					DepositAction::Swap { swap_request_id }
@@ -1575,6 +1579,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 					Default::default(),
 					refund_params,
+					None, // TODO: allow DCA for CCM
 					swap_origin,
 				) {
 					DepositAction::CcmTransfer { swap_request_id }
@@ -1882,7 +1887,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
 					SwapRequestType::IngressEgressFee,
 					Default::default(),
-					None, /* refund params */
+					None, /* no refund params */
+					None, /* no DCA */
 					SwapOrigin::Internal,
 				) {
 					log_or_panic!("Ingress-egress fee swap should never fail");
@@ -2047,6 +2053,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_address,
 					broker_fees,
 					refund_params,
+					dca_params: None,
 				},
 			},
 			boost_fee,

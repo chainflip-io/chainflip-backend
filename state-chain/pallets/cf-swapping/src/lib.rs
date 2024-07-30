@@ -255,6 +255,26 @@ enum CcmSwapState {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+struct DCAState {
+	remaining_input_amount: AssetAmount,
+	remaining_chunks: u32,
+	accumulated_output_amount: AssetAmount,
+}
+
+impl DCAState {
+	fn prepare_next_chunk(&mut self) -> AssetAmount {
+		let chunk_input_amount = self
+			.remaining_input_amount
+			.checked_div(self.remaining_chunks as u128)
+			.unwrap_or(0);
+		self.remaining_chunks = self.remaining_chunks.saturating_sub(1);
+		self.remaining_input_amount =
+			self.remaining_input_amount.saturating_sub(chunk_input_amount);
+		chunk_input_amount
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 enum SwapRequestState {
 	Ccm {
 		state: CcmSwapState,
@@ -263,6 +283,8 @@ enum SwapRequestState {
 	},
 	Regular {
 		output_address: ForeignChainAddress,
+		// Remove option and use remaining_chunks = 0 instead?
+		dca_state: DCAState,
 	},
 	NetworkFee,
 	IngressEgressFee,
@@ -306,7 +328,7 @@ pub mod pallet {
 	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{
-		Asset, AssetAmount, BasisPoints, EgressId, SwapId, SwapOutput, SwapRequestId,
+		Asset, AssetAmount, BasisPoints, DCAParameters, EgressId, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, ScheduledEgressDetails};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -603,7 +625,8 @@ pub mod pallet {
 							Asset::Flip,
 							SwapRequestType::NetworkFee,
 							Default::default(),
-							None,
+							None, /* no refund */
+							None, /* no DCA */
 							SwapOrigin::Internal,
 						)
 						.is_err()
@@ -808,6 +831,8 @@ pub mod pallet {
 				Default::default(),
 				// NOTE: FoK not yet supported for swaps from the contract
 				None,
+				// NOTE: DCA not yet supported for swaps from the contract
+				None,
 				SwapOrigin::Vault { tx_hash },
 			)
 			.is_err()
@@ -845,6 +870,8 @@ pub mod pallet {
 				},
 				Default::default(),
 				// NOTE: FoK not yet supported for swaps from the contract
+				None,
+				// NOTE: DCA not yet supported for swaps from the contract
 				None,
 				SwapOrigin::Vault { tx_hash },
 			)?;
@@ -1311,32 +1338,59 @@ pub mod pallet {
 							);
 						},
 					},
-				SwapRequestState::Regular { output_address } => {
-					Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-					match T::EgressHandler::schedule_egress(
-						swap.output_asset(),
-						output_amount,
-						output_address.clone(),
-						None, /* ccm metadata */
-					) {
-						Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) => {
-							Self::deposit_event(Event::<T>::SwapEgressScheduled {
-								swap_request_id: swap.swap.swap_request_id,
+				SwapRequestState::Regular { output_address, dca_state } => {
+					if dca_state.remaining_chunks > 0 {
+						let chunk_input_amount = dca_state.prepare_next_chunk();
+						dca_state.accumulated_output_amount += output_amount;
+
+						Self::schedule_swap(
+							request.input_asset,
+							request.output_asset,
+							chunk_input_amount,
+							// TODO: recompute swap params depending on the output amount we got
+							swap.swap.refund_params.clone(),
+							SwapType::Swap,
+							request.id,
+						);
+
+						// Not done with the request, put it back
+						SwapRequests::<T>::insert(swap_request_id, request);
+					} else {
+						debug_assert!(dca_state.remaining_input_amount == 0);
+
+						let total_output_amount =
+							output_amount + dca_state.accumulated_output_amount;
+
+						Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+						match T::EgressHandler::schedule_egress(
+							swap.output_asset(),
+							total_output_amount,
+							output_address.clone(),
+							None, /* ccm metadata */
+						) {
+							Ok(ScheduledEgressDetails {
 								egress_id,
-								asset: swap.output_asset(),
-								amount: egress_amount,
-								fee: fee_withheld,
-							});
-						},
-						Err(err) => {
-							Self::deposit_event(Event::<T>::SwapEgressIgnored {
-								swap_request_id,
-								asset: swap.output_asset(),
-								amount: output_amount,
-								reason: err.into(),
-							});
-						},
-					};
+								egress_amount,
+								fee_withheld,
+							}) => {
+								Self::deposit_event(Event::<T>::SwapEgressScheduled {
+									swap_request_id: swap.swap.swap_request_id,
+									egress_id,
+									asset: swap.output_asset(),
+									amount: egress_amount,
+									fee: fee_withheld,
+								});
+							},
+							Err(err) => {
+								Self::deposit_event(Event::<T>::SwapEgressIgnored {
+									swap_request_id,
+									asset: swap.output_asset(),
+									amount: output_amount,
+									reason: err.into(),
+								});
+							},
+						};
+					}
 				},
 				SwapRequestState::NetworkFee => {
 					Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
@@ -1587,6 +1641,7 @@ pub mod pallet {
 			request_type: SwapRequestType,
 			broker_fees: Beneficiaries<Self::AccountId>,
 			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DCAParameters>,
 			origin: SwapOrigin,
 		) -> Result<SwapRequestId, DispatchError> {
 			let (net_amount, broker_fee) = {
@@ -1730,10 +1785,19 @@ pub mod pallet {
 					);
 				},
 				SwapRequestType::Regular { output_address } => {
+					// No DCA is equivalent to DCA with 1 chunk
+					let mut dca_state = DCAState {
+						remaining_input_amount: net_amount,
+						remaining_chunks: dca_params.map(|p| p.number_of_chunks).unwrap_or(1),
+						accumulated_output_amount: 0,
+					};
+
+					let chunk_input_amount = dca_state.prepare_next_chunk();
+
 					Self::schedule_swap(
 						input_asset,
 						output_asset,
-						net_amount,
+						chunk_input_amount,
 						swap_refund_params.clone(),
 						SwapType::Swap,
 						request_id,
@@ -1748,6 +1812,7 @@ pub mod pallet {
 							refund_params: refund_params.clone(),
 							state: SwapRequestState::Regular {
 								output_address: output_address.clone(),
+								dca_state,
 							},
 						},
 					);

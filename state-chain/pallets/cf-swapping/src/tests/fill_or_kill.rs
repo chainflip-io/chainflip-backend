@@ -8,6 +8,7 @@ fn new_swap(refund_params: Option<SwapRefundParameters>) -> TestSwapParams {
 		output_asset: Asset::Usdc,
 		input_amount: INPUT_AMOUNT,
 		refund_params,
+		dca_params: None,
 		output_address: ForeignChainAddress::Eth([1; 20].into()),
 	}
 }

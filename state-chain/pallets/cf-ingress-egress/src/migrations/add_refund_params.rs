@@ -70,6 +70,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 						destination_address,
 						broker_fees,
 						refund_params: None,
+						dca_params: None,
 					},
 					old::ChannelAction::LiquidityProvision { lp_account } =>
 						ChannelAction::LiquidityProvision { lp_account },

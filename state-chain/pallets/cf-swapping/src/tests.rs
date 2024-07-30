@@ -1,3 +1,4 @@
+mod dca;
 mod fill_or_kill;
 
 use super::*;
@@ -14,7 +15,7 @@ use cf_chains::{
 	AnyChain, CcmChannelMetadata, CcmDepositMetadata, Ethereum,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiary, ForeignChain, NetworkEnvironment,
+	Asset, AssetAmount, BasisPoints, Beneficiary, DCAParameters, ForeignChain, NetworkEnvironment,
 };
 use cf_test_utilities::{assert_event_sequence, assert_events_eq, assert_has_matching_event};
 use cf_traits::{
@@ -53,6 +54,7 @@ struct TestSwapParams {
 	output_asset: Asset,
 	input_amount: AssetAmount,
 	refund_params: Option<SwapRefundParameters>,
+	dca_params: Option<DCAParameters>,
 	output_address: ForeignChainAddress,
 }
 
@@ -65,6 +67,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			output_asset: Asset::Usdc,
 			input_amount: 100,
 			refund_params: None,
+			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
 		},
 		// USDC -> asset
@@ -73,6 +76,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			output_asset: Asset::Usdc,
 			input_amount: 40,
 			refund_params: None,
+			dca_params: None,
 			output_address: ForeignChainAddress::Eth([9; 20].into()),
 		},
 		// Both assets are on the Eth chain
@@ -81,6 +85,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			output_asset: Asset::Eth,
 			input_amount: 500,
 			refund_params: None,
+			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
 		},
 		// Cross chain
@@ -89,6 +94,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			output_asset: Asset::Dot,
 			input_amount: 600,
 			refund_params: None,
+			dca_params: None,
 			output_address: ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([4; 32])),
 		},
 	]
@@ -111,6 +117,7 @@ fn assert_failed_ccm(
 			output_address: destination_address.clone()
 		},
 		Default::default(),
+		None,
 		None,
 		SwapOrigin::Vault { tx_hash: Default::default() },
 	)
@@ -150,6 +157,7 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 					swap.input_amount.into(),
 				)),
 			}),
+			swap.dca_params.clone(),
 			SwapOrigin::Vault { tx_hash: Default::default() },
 		));
 	}
@@ -266,6 +274,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			Asset::Dot,
 			SwapRequestType::Regular { output_address: ForeignChainAddress::Eth([2; 20].into()) },
 			Default::default(),
+			None,
 			None,
 			SwapOrigin::Vault { tx_hash: Default::default() },
 		));
@@ -527,6 +536,7 @@ mod ccm {
 			},
 			Default::default(),
 			None,
+			None,
 			origin.clone(),
 		));
 
@@ -601,6 +611,7 @@ mod ccm {
 						output_address: ForeignChainAddress::Eth(Default::default())
 					},
 					Default::default(),
+					None,
 					None,
 					SwapOrigin::Vault { tx_hash: Default::default() },
 				));
@@ -1128,6 +1139,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				},
 				Default::default(),
 				None,
+				None,
 				SwapOrigin::Vault { tx_hash: Default::default() },
 			));
 
@@ -1282,6 +1294,7 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 				output_address: ForeignChainAddress::Eth(Default::default())
 			},
 			Default::default(),
+			None,
 			None,
 			SwapOrigin::Vault { tx_hash: Default::default() },
 		));
@@ -1483,6 +1496,7 @@ fn input_amount_excludes_network_fee() {
 				SwapRequestType::Regular { output_address: output_address.clone() },
 				bounded_vec![],
 				None,
+				None,
 				SwapOrigin::Vault { tx_hash: Default::default() },
 			));
 		})
@@ -1579,6 +1593,7 @@ fn swap_with_custom_broker_fee(
 		to,
 		SwapRequestType::Regular { output_address: ForeignChainAddress::Eth(Default::default()) },
 		broker_fees,
+		None,
 		None,
 		SwapOrigin::DepositChannel {
 			deposit_address: MockAddressConverter::to_encoded_address(ForeignChainAddress::Eth(
@@ -2098,6 +2113,7 @@ fn network_fee_swap_gets_burnt() {
 				SwapRequestType::NetworkFee,
 				Default::default(),
 				None,
+				None,
 				SwapOrigin::Internal
 			));
 
@@ -2141,6 +2157,7 @@ fn transaction_fees_are_collected() {
 				OUTPUT_ASSET,
 				SwapRequestType::IngressEgressFee,
 				Default::default(),
+				None,
 				None,
 				SwapOrigin::Internal
 			));
@@ -2235,6 +2252,7 @@ fn swap_output_amounts_correctly_account_for_fees() {
 						output_address: ForeignChainAddress::Eth(H160::zero())
 					},
 					Default::default(),
+					None,
 					None,
 					SwapOrigin::Vault { tx_hash: Default::default() }
 				));
