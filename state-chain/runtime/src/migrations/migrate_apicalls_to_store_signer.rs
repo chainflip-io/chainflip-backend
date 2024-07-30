@@ -176,9 +176,10 @@ pub struct EthMigrateApicallsAndOnChainKey;
 impl OnRuntimeUpgrade for EthMigrateApicallsAndOnChainKey {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let current_evm_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance16>::get(
-			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance16>::get().unwrap(),
+			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance16>::get()
+				.unwrap_or_default(),
 		)
-		.unwrap();
+		.unwrap_or_default();
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance1>::put(current_evm_key);
 
@@ -253,9 +254,10 @@ pub struct DotMigrateApicallsAndOnChainKey;
 impl OnRuntimeUpgrade for DotMigrateApicallsAndOnChainKey {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let current_dot_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance2>::get(
-			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance2>::get().unwrap(),
+			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance2>::get()
+				.unwrap_or_default(),
 		)
-		.unwrap();
+		.unwrap_or_default();
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance2>::put(current_dot_key);
 
@@ -332,9 +334,10 @@ pub struct BtcMigrateApicallsAndOnChainKey;
 impl OnRuntimeUpgrade for BtcMigrateApicallsAndOnChainKey {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let current_btc_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance3>::get(
-			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance3>::get().unwrap(),
+			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance3>::get()
+				.unwrap_or_default(),
 		)
-		.unwrap();
+		.unwrap_or_default();
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance3>::put(current_btc_key);
 
@@ -410,9 +413,10 @@ pub struct ArbMigrateApicallsAndOnChainKey;
 impl OnRuntimeUpgrade for ArbMigrateApicallsAndOnChainKey {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		let current_evm_key = pallet_cf_threshold_signature::Keys::<Runtime, Instance16>::get(
-			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance16>::get().unwrap(),
+			pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, Instance16>::get()
+				.unwrap_or_default(),
 		)
-		.unwrap();
+		.unwrap_or_default();
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance4>::put(current_evm_key);
 
