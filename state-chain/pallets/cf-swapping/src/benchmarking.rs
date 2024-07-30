@@ -148,11 +148,12 @@ mod benchmarks {
 			),
 			vec![Swap::new(
 				1,
+				1,
 				Asset::Usdc,
 				Asset::Eth,
 				deposit_amount,
 				None,
-				SwapType::Swap(ForeignChainAddress::benchmark_value()),
+				[FeeType::NetworkFee],
 			)]
 		);
 	}
@@ -187,10 +188,7 @@ mod benchmarks {
 			SwapQueue::<T>::get(
 				<frame_system::Pallet<T>>::block_number() + SWAP_DELAY_BLOCKS.into()
 			),
-			vec![
-				Swap::new(1, Asset::Usdc, Asset::Eth, 1_000 - 1, None, SwapType::CcmPrincipal(1),),
-				Swap::new(2, Asset::Usdc, Asset::Eth, 1, None, SwapType::CcmGas(1),)
-			]
+			vec![Swap::new(1, 1, Asset::Usdc, Asset::Eth, 1_000 - 1, None, [FeeType::NetworkFee],),]
 		);
 	}
 

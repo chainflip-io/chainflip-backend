@@ -545,6 +545,7 @@ pub enum SwapOrigin {
 	Vault {
 		tx_hash: TransactionHash,
 	},
+	Internal,
 }
 
 pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;

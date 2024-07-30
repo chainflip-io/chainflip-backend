@@ -1,13 +1,14 @@
 import Web3 from 'web3';
-import { InternalAsset as Asset, InternalAssets as Assets, Chain } from '@chainflip/cli';
+import { InternalAsset as Asset, Chain } from '@chainflip/cli';
 import { newCcmMetadata, prepareSwap } from './swapping';
 import {
   chainFromAsset,
   chainGasAsset,
   getEvmEndpoint,
   observeCcmReceived,
-  observeSwapScheduled,
+  observeSwapRequested,
   sleep,
+  SwapRequestType,
   SwapType,
 } from './utils';
 import { requestNewSwap } from './perform_swap';
@@ -92,37 +93,47 @@ async function testGasLimitSwap(
     messageMetadata,
   );
 
-  const swapScheduledHandle = observeSwapScheduled(
+  const swapRequestedHandle = observeSwapRequested(
     sourceAsset,
     destAsset,
     channelId,
-    SwapType.CcmPrincipal,
+    SwapRequestType.Ccm,
   );
 
-  let gasSwapScheduledHandle;
+  const reqIdToPrincipalSwapId: { [key: string]: string } = {};
+  const reqIdToGasSwapId: { [key: string]: string } = {};
+  const swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
+    test: (event) => {
+      const data = event.data;
 
-  if (chainGasAsset(destChain as Chain) !== sourceAsset) {
-    gasSwapScheduledHandle = observeSwapScheduled(
-      sourceAsset,
-      destChain === 'Ethereum' ? Assets.Eth : Assets.ArbEth,
-      channelId,
-      SwapType.CcmGas,
-    );
-  }
+      switch (data.swapType) {
+        case SwapType.CcmPrincipal:
+          reqIdToPrincipalSwapId[data.swapRequestId] = data.swapId;
+          break;
+        case SwapType.CcmGas:
+          reqIdToGasSwapId[data.swapRequestId] = data.swapId;
+          break;
+        default:
+        // not interested in other swap types here
+      }
+      return false;
+    },
+    abortable: true,
+  });
 
   // SwapExecuted is emitted at the same time as swapScheduled so we can't wait for swapId to be known.
   const swapIdToEgressAmount: { [key: string]: string } = {};
   const swapExecutedHandle = observeEvent('swapping:SwapExecuted', {
     test: (event) => {
-      swapIdToEgressAmount[event.data.swapId] = event.data.egressAmount;
+      swapIdToEgressAmount[event.data.swapId] = event.data.outputAmount;
       return false;
     },
     abortable: true,
   });
-  const swapIdToEgressId: { [key: string]: string } = {};
+  const swapRequestIdToEgressId: { [key: string]: string } = {};
   const swapEgressHandle = observeEvent('swapping:SwapEgressScheduled', {
     test: (event) => {
-      swapIdToEgressId[event.data.swapId] = event.data.egressId;
+      swapRequestIdToEgressId[event.data.swapRequestId] = event.data.egressId;
       return false;
     },
     abortable: true,
@@ -155,18 +166,22 @@ async function testGasLimitSwap(
 
   await send(sourceAsset, depositAddress);
 
-  const swapId = (await swapScheduledHandle).data.swapId;
+  const swapRequestId = (await swapRequestedHandle).data.swapRequestId;
 
   while (
     !(
-      swapId in swapIdToEgressAmount &&
-      swapId in swapIdToEgressId &&
-      swapIdToEgressId[swapId] in egressIdToBroadcastId &&
-      egressIdToBroadcastId[swapIdToEgressId[swapId]] in broadcastIdToTxPayload
+      swapRequestId in reqIdToPrincipalSwapId &&
+      reqIdToPrincipalSwapId[swapRequestId] in swapIdToEgressAmount &&
+      swapRequestId in swapRequestIdToEgressId &&
+      swapRequestIdToEgressId[swapRequestId] in egressIdToBroadcastId &&
+      egressIdToBroadcastId[swapRequestIdToEgressId[swapRequestId]] in broadcastIdToTxPayload
     )
   ) {
     await sleep(3000);
   }
+
+  const egressId = swapRequestIdToEgressId[swapRequestId];
+  const broadcastId = egressIdToBroadcastId[egressId];
 
   console.log(`${tag} Swap events found`);
 
@@ -174,12 +189,14 @@ async function testGasLimitSwap(
   swapEgressHandle.stop();
   ccmBroadcastHandle.stop();
   broadcastRequesthandle.stop();
+  swapScheduledHandle.stop();
 
   await Promise.all([
     swapExecutedHandle.event,
     swapEgressHandle.event,
     ccmBroadcastHandle.event,
     broadcastRequesthandle.event,
+    swapScheduledHandle.event,
   ]);
 
   console.log(`${tag} Awaited all the handles`);
@@ -189,15 +206,13 @@ async function testGasLimitSwap(
   if (chainGasAsset(destChain as Chain) === sourceAsset) {
     egressBudgetAmount = messageMetadata.gasBudget;
   } else {
-    const {
-      data: { swapId: gasSwapId },
-    } = await gasSwapScheduledHandle!;
+    const gasSwapId = reqIdToGasSwapId[swapRequestId];
     egressBudgetAmount = Number(swapIdToEgressAmount[gasSwapId].replace(/,/g, ''));
   }
 
   console.log(`${tag} Egress budget amount: ${egressBudgetAmount}`);
 
-  const txPayload = broadcastIdToTxPayload[egressIdToBroadcastId[swapIdToEgressId[swapId]]];
+  const txPayload = broadcastIdToTxPayload[broadcastId];
   const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
   const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
 
@@ -232,14 +247,10 @@ async function testGasLimitSwap(
       `${tag} Gas budget of ${gasLimitBudget} is too low. Expecting BroadcastAborted event.`,
     );
     await observeEvent(`${destChain.toLowerCase()}Broadcaster:BroadcastAborted`, {
-      test: (event) => event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]],
+      test: (event) => event.data.broadcastId === broadcastId,
     }).event;
     stopObservingCcmReceived = true;
-    console.log(
-      `${tag} Broadcast Aborted found! broadcastId: ${
-        egressIdToBroadcastId[swapIdToEgressId[swapId]]
-      }`,
-    );
+    console.log(`${tag} Broadcast Aborted found! broadcastId: ${broadcastId}`);
   } else if (minGasLimitRequired + BASE_GAS_OVERHEAD_BUFFER[destChain] < gasLimitBudget) {
     console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
 
@@ -248,8 +259,7 @@ async function testGasLimitSwap(
       `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`,
       {
         test: (event) => {
-          const aborted =
-            event.data.broadcastId === egressIdToBroadcastId[swapIdToEgressId[swapId]];
+          const aborted = event.data.broadcastId === broadcastId;
           if (aborted) {
             console.log(
               `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${
