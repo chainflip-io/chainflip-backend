@@ -384,7 +384,7 @@ mod tests {
 				let signature_status = retry_client
 				.get_signature_statuses(
 					&[signature],
-					true
+					false
 				).await;
 
 				let confirmation_status = signature_status.value.first().and_then(Option::as_ref).and_then(|ts| ts.confirmation_status.as_ref()).expect("Expected confirmation_status to be Some");
