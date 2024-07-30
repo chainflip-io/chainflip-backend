@@ -127,16 +127,6 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AccountDebited {
-			account_id: T::AccountId,
-			asset: Asset,
-			amount_debited: AssetAmount,
-		},
-		AccountCredited {
-			account_id: T::AccountId,
-			asset: Asset,
-			amount_credited: AssetAmount,
-		},
 		LiquidityDepositAddressReady {
 			channel_id: ChannelId,
 			asset: Asset,

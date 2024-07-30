@@ -66,7 +66,7 @@ export async function depositLiquidity(
 
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
   console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
-  eventHandle = observeEvent('liquidityProvider:AccountCredited', {
+  eventHandle = observeEvent('assetBalances:AccountCredited', {
     test: (event) =>
       event.data.asset === ccy &&
       event.data.accountId === lp.address &&
