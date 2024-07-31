@@ -137,6 +137,7 @@ where
 	}
 }
 
+#[macro_export]
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
 		match $self {
@@ -164,11 +165,12 @@ impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<Polkad
 	fn signed(
 		mut self,
 		threshold_signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature,
+		signer: <PolkadotCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		map_over_api_variants!(
 			self,
 			ref mut call,
-			call.insert_signature(threshold_signature.clone())
+			call.insert_signer_and_signature(signer, threshold_signature.clone())
 		);
 		self
 	}
@@ -198,6 +200,11 @@ impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<Polkad
 			call,
 			call.refresh_replay_protection(E::replay_protection(false))
 		)
+	}
+
+	fn signer(&self) -> Option<<PolkadotCrypto as ChainCrypto>::AggKey> {
+		map_over_api_variants!(self, call, call.signer_and_signature.clone())
+			.map(|(signer, _)| signer)
 	}
 }
 
