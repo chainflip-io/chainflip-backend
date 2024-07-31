@@ -2080,18 +2080,18 @@ impl_runtime_apis! {
 			swaps.iter().fold(0u32, |acc, elem| acc + elem.1.len() as u32)
 		}
 		fn cf_open_deposit_channels_count() -> OpenDepositChannels {
-			let eth_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, EthereumInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
-			let btc_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, BitcoinInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
-			let dot_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, PolkadotInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, PolkadotInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
-			let arb_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, ArbitrumInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
-			let sol_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
+			fn open_channels<I: 'static>() -> u32
+				where Runtime: pallet_cf_chain_tracking::Config<I> + pallet_cf_ingress_egress::Config<I, TargetChain=<Runtime as pallet_cf_chain_tracking::Config<I>>::TargetChain>
+			{
+					pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, I>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, I>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32
+			}
 
 			OpenDepositChannels{
-				ethereum: eth_channels,
-				bitcoin: btc_channels,
-				polkadot: dot_channels,
-				arbitrum: arb_channels,
-				solana: sol_channels,
+				ethereum: open_channels::<EthereumInstance>(),
+				bitcoin: open_channels::<BitcoinInstance>(),
+				polkadot: open_channels::<PolkadotInstance>(),
+				arbitrum: open_channels::<ArbitrumInstance>(),
+				solana: open_channels::<SolanaInstance>(),
 			}
 		}
 		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount> {
