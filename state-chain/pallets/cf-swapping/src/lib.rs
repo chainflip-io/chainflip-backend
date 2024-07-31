@@ -1234,37 +1234,41 @@ pub mod pallet {
 			};
 
 			// In case of DCA, there may be extra input that we need to refund
-			let remaining_input_amount = match request.state {
-				SwapRequestState::Regular { dca_state, .. } => dca_state.remaining_input_amount,
-				_ => 0,
+			match request.state {
+				SwapRequestState::Regular {
+					dca_state: DCAState { remaining_input_amount, accumulated_output_amount, .. },
+					output_address,
+				} => {
+					Self::egress_for_swap(
+						request.id,
+						swap.input_amount + remaining_input_amount,
+						request.input_asset,
+						refund_params.refund_address,
+						true, /* refund */
+					);
+
+					if accumulated_output_amount > 0 {
+						Self::egress_for_swap(
+							swap.swap_request_id,
+							accumulated_output_amount,
+							request.output_asset,
+							output_address,
+							false, /* refund */
+						);
+					}
+				},
+				SwapRequestState::Ccm { output_address: _, .. } => {
+					// TODO: add remaining DCA input to the refunded amount:
+					Self::egress_for_swap(
+						request.id,
+						swap.input_amount,
+						request.input_asset,
+						refund_params.refund_address,
+						true, /* refund */
+					);
+				},
+				_ => {},
 			};
-
-			let refund_amount = swap.input_amount + remaining_input_amount;
-
-			match T::EgressHandler::schedule_egress(
-				swap.from,
-				refund_amount,
-				refund_params.refund_address,
-				None,
-			) {
-				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) => {
-					Self::deposit_event(Event::<T>::RefundEgressScheduled {
-						swap_request_id: swap.swap_request_id,
-						egress_id,
-						asset: swap.from,
-						amount: egress_amount,
-						egress_fee: fee_withheld,
-					});
-				},
-				Err(err) => {
-					Self::deposit_event(Event::<T>::RefundEgressIgnored {
-						swap_request_id: swap.swap_request_id,
-						asset: swap.from,
-						amount: swap.input_amount,
-						reason: err.into(),
-					});
-				},
-			}
 		}
 
 		fn process_swap_outcome(swap: SwapState) {
@@ -1366,38 +1370,15 @@ pub mod pallet {
 					} else {
 						debug_assert!(dca_state.remaining_input_amount == 0);
 
-						let total_output_amount =
-							output_amount + dca_state.accumulated_output_amount;
-
 						Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-						match T::EgressHandler::schedule_egress(
+
+						Self::egress_for_swap(
+							swap_request_id,
+							output_amount + dca_state.accumulated_output_amount,
 							swap.output_asset(),
-							total_output_amount,
 							output_address.clone(),
-							None, /* ccm metadata */
-						) {
-							Ok(ScheduledEgressDetails {
-								egress_id,
-								egress_amount,
-								fee_withheld,
-							}) => {
-								Self::deposit_event(Event::<T>::SwapEgressScheduled {
-									swap_request_id: swap.swap.swap_request_id,
-									egress_id,
-									asset: swap.output_asset(),
-									amount: egress_amount,
-									fee: fee_withheld,
-								});
-							},
-							Err(err) => {
-								Self::deposit_event(Event::<T>::SwapEgressIgnored {
-									swap_request_id,
-									asset: swap.output_asset(),
-									amount: output_amount,
-									reason: err.into(),
-								});
-							},
-						};
+							false, /* refund */
+						);
 					}
 				},
 				SwapRequestState::NetworkFee => {
@@ -1637,6 +1618,53 @@ pub mod pallet {
 			});
 			NetworkFeeTaken { remaining_amount: remaining, network_fee: fee }
 		}
+
+		fn egress_for_swap(
+			swap_request_id: SwapRequestId,
+			amount: AssetAmount,
+			asset: Asset,
+			address: ForeignChainAddress,
+			refund: bool,
+		) {
+			match T::EgressHandler::schedule_egress(
+				asset, amount, address, None, /* ccm metadata */
+			) {
+				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
+					if refund {
+						Self::deposit_event(Event::<T>::RefundEgressScheduled {
+							swap_request_id,
+							egress_id,
+							asset,
+							amount: egress_amount,
+							egress_fee: fee_withheld,
+						});
+					} else {
+						Self::deposit_event(Event::<T>::SwapEgressScheduled {
+							swap_request_id,
+							egress_id,
+							asset,
+							amount: egress_amount,
+							fee: fee_withheld,
+						});
+					},
+				Err(err) =>
+					if refund {
+						Self::deposit_event(Event::<T>::RefundEgressIgnored {
+							swap_request_id,
+							asset,
+							amount,
+							reason: err.into(),
+						});
+					} else {
+						Self::deposit_event(Event::<T>::SwapEgressIgnored {
+							swap_request_id,
+							asset,
+							amount,
+							reason: err.into(),
+						});
+					},
+			};
+		}
 	}
 
 	impl<T: Config> SwapRequestHandler for Pallet<T> {
@@ -1733,22 +1761,6 @@ pub mod pallet {
 				origin: origin.clone(),
 			});
 
-			// Now that we know input amount, we can calculate the minimum output amount:
-			let swap_refund_params = refund_params.clone().map(|params| SwapRefundParameters {
-				refund_block: {
-					use sp_arithmetic::traits::UniqueSaturatedInto;
-					// In practice block number always fits in u32:
-					let current_block: u32 =
-						frame_system::Pallet::<T>::block_number().unique_saturated_into();
-					current_block.saturating_add(params.retry_duration)
-				},
-				min_output: u128::try_from(cf_amm::common::output_amount_ceil(
-					input_amount.into(),
-					params.min_price,
-				))
-				.unwrap_or(u128::MAX),
-			});
-
 			match request_type {
 				SwapRequestType::NetworkFee => {
 					Self::schedule_swap(
@@ -1802,11 +1814,20 @@ pub mod pallet {
 
 					let chunk_input_amount = dca_state.prepare_next_chunk();
 
+					let swap_refund_params = refund_params.as_ref().map(|params| {
+						utilities::calculate_swap_refund_parameters(
+							params,
+							// In practice block number always fits in u32:
+							frame_system::Pallet::<T>::block_number().unique_saturated_into(),
+							chunk_input_amount.into(),
+						)
+					});
+
 					Self::schedule_swap(
 						input_asset,
 						output_asset,
 						chunk_input_amount,
-						swap_refund_params.clone(),
+						swap_refund_params,
 						SwapType::Swap,
 						request_id,
 					);
@@ -1817,7 +1838,7 @@ pub mod pallet {
 							id: request_id,
 							input_asset,
 							output_asset,
-							refund_params: refund_params.clone(),
+							refund_params,
 							state: SwapRequestState::Regular {
 								output_address: output_address.clone(),
 								dca_state,
@@ -1862,11 +1883,20 @@ pub mod pallet {
 
 					// See if princial swap is needed, schedule it first if so:
 					if input_asset != output_asset && !principal_swap_amount.is_zero() {
+						let swap_refund_params = refund_params.as_ref().map(|params| {
+							utilities::calculate_swap_refund_parameters(
+								params,
+								// In practice block number always fits in u32:
+								frame_system::Pallet::<T>::block_number().unique_saturated_into(),
+								principal_swap_amount.into(),
+							)
+						});
+
 						let swap_id = Self::schedule_swap(
 							input_asset,
 							output_asset,
 							principal_swap_amount,
-							swap_refund_params.clone(),
+							swap_refund_params,
 							SwapType::CcmPrincipal,
 							request_id,
 						);
@@ -1992,10 +2022,11 @@ impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
 		SwapQueue::<T>::iter().all(|(_, swaps)| swaps.is_empty())
 	}
 }
-pub mod utilities {
+
+pub(crate) mod utilities {
 	use super::*;
 
-	pub fn calculate_network_fee(
+	pub(crate) fn calculate_network_fee(
 		fee_percentage: Permill,
 		input: AssetAmount,
 	) -> (AssetAmount, AssetAmount) {
@@ -2009,7 +2040,7 @@ pub mod utilities {
 	///
 	/// The value should be large enough to allow a good estimation of the fee, but small enough
 	/// to not exhaust the pool liquidity.
-	pub fn fee_estimation_basis(asset: Asset) -> Option<u128> {
+	pub(crate) fn fee_estimation_basis(asset: Asset) -> Option<u128> {
 		use cf_primitives::FLIPPERINOS_PER_FLIP;
 		/// 20 Dollars.
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
@@ -2020,6 +2051,21 @@ pub mod utilities {
 			Asset::Usdt => Some(USD_ESTIMATION_CAP),
 			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
 			_ => None,
+		}
+	}
+
+	pub(super) fn calculate_swap_refund_parameters(
+		params: &ChannelRefundParameters,
+		deposit_block: u32,
+		input_amount: AssetAmount,
+	) -> SwapRefundParameters {
+		SwapRefundParameters {
+			refund_block: deposit_block.saturating_add(params.retry_duration),
+			min_output: u128::try_from(cf_amm::common::output_amount_ceil(
+				input_amount.into(),
+				params.min_price,
+			))
+			.unwrap_or(u128::MAX),
 		}
 	}
 }
