@@ -273,8 +273,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_sol_devnet() {
-		// init_test_logger();
-
 		let sol_rpc_client = SolRpcClient::new(
 			SecretUrl::from("https://api.devnet.solana.com".to_string()),
 			Some(SolHash::from_str("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG").unwrap()),
