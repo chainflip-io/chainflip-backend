@@ -1180,23 +1180,14 @@ pub mod pallet {
 		) {
 			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
 
-			if let Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =
-				T::EgressHandler::schedule_egress(
-					output_asset,
-					principal_amount,
-					output_address,
-					Some((ccm_deposit_metadata, gas_amount)),
-				) {
-				Self::deposit_event(Event::<T>::SwapEgressScheduled {
-					swap_request_id,
-					egress_id,
-					asset: output_asset,
-					amount: egress_amount,
-					fee: fee_withheld,
-				});
-			} else {
-				log_or_panic!("CCM egress scheduling should never fail.");
-			}
+			Self::egress_for_swap(
+				swap_request_id,
+				principal_amount,
+				output_asset,
+				output_address,
+				Some((ccm_deposit_metadata, gas_amount)),
+				false, /* refund */
+			);
 		}
 
 		fn schedule_ccm_gas_swap(
@@ -1233,26 +1224,30 @@ pub mod pallet {
 				return;
 			};
 
-			// In case of DCA, there may be extra input that we need to refund
 			match request.state {
 				SwapRequestState::Regular {
 					dca_state: DCAState { remaining_input_amount, accumulated_output_amount, .. },
 					output_address,
 				} => {
+					// Refund the failed swap and any unused input amount:
 					Self::egress_for_swap(
 						request.id,
 						swap.input_amount + remaining_input_amount,
 						request.input_asset,
 						refund_params.refund_address,
+						None, /* ccm */
 						true, /* refund */
 					);
 
+					// In case of DCA we may have partially swapped and now have some output asset
+					// to egress to the output address:
 					if accumulated_output_amount > 0 {
 						Self::egress_for_swap(
 							swap.swap_request_id,
 							accumulated_output_amount,
 							request.output_asset,
 							output_address,
+							None,  /* ccm */
 							false, /* refund */
 						);
 					}
@@ -1264,10 +1259,15 @@ pub mod pallet {
 						swap.input_amount,
 						request.input_asset,
 						refund_params.refund_address,
+						None, /* ccm */
 						true, /* refund */
 					);
 				},
-				_ => {},
+				non_refundable_request => {
+					log_or_panic!(
+						"Refund for swap request is not supported: {non_refundable_request:?}"
+					);
+				},
 			};
 		}
 
@@ -1377,6 +1377,7 @@ pub mod pallet {
 							output_amount + dca_state.accumulated_output_amount,
 							swap.output_asset(),
 							output_address.clone(),
+							None,  /* ccm */
 							false, /* refund */
 						);
 					}
@@ -1624,11 +1625,12 @@ pub mod pallet {
 			amount: AssetAmount,
 			asset: Asset,
 			address: ForeignChainAddress,
+			ccm_gas_and_metadata: Option<(CcmDepositMetadata, AssetAmount)>,
 			refund: bool,
 		) {
-			match T::EgressHandler::schedule_egress(
-				asset, amount, address, None, /* ccm metadata */
-			) {
+			let is_ccm_swap = ccm_gas_and_metadata.is_some();
+
+			match T::EgressHandler::schedule_egress(asset, amount, address, ccm_gas_and_metadata) {
 				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
 					if refund {
 						Self::deposit_event(Event::<T>::RefundEgressScheduled {
@@ -1647,7 +1649,11 @@ pub mod pallet {
 							fee: fee_withheld,
 						});
 					},
-				Err(err) =>
+				Err(err) => {
+					if is_ccm_swap {
+						log_or_panic!("CCM egress scheduling should never fail.");
+					}
+
 					if refund {
 						Self::deposit_event(Event::<T>::RefundEgressIgnored {
 							swap_request_id,
@@ -1662,7 +1668,8 @@ pub mod pallet {
 							amount,
 							reason: err.into(),
 						});
-					},
+					}
+				},
 			};
 		}
 	}
