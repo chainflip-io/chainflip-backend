@@ -340,7 +340,11 @@ pub trait ApiCall<C: ChainCrypto>: Parameter {
 	fn threshold_signature_payload(&self) -> <C as ChainCrypto>::Payload;
 
 	/// Add the threshold signature to the api call.
-	fn signed(self, threshold_signature: &<C as ChainCrypto>::ThresholdSignature) -> Self;
+	fn signed(
+		self,
+		threshold_signature: &<C as ChainCrypto>::ThresholdSignature,
+		signer: <C as ChainCrypto>::AggKey,
+	) -> Self;
 
 	/// Construct the signed call, encoded according to the chain's native encoding.
 	///
@@ -355,6 +359,9 @@ pub trait ApiCall<C: ChainCrypto>: Parameter {
 
 	/// Refresh the replay protection data.
 	fn refresh_replay_protection(&mut self);
+
+	/// Returns the signer of this Apicall
+	fn signer(&self) -> Option<<C as ChainCrypto>::AggKey>;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
@@ -378,6 +385,7 @@ where
 	fn requires_signature_refresh(
 		call: &Call,
 		payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		maybe_current_onchain_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
 	) -> bool;
 
 	/// Calculate the Units of gas that is allowed to make this call.

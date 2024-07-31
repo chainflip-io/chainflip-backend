@@ -40,7 +40,10 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 					// reporting back the request_id of the tss such that we can complete the
 					// rotation when that request is completed
 					let (_, tss_request_id) =
-						T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(activation_call);
+						T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(
+							activation_call,
+							new_public_key,
+						);
 					// since vaults are activated only when the tss completes we need to initiate
 					// the activation
 					PendingVaultActivation::<T, I>::put(

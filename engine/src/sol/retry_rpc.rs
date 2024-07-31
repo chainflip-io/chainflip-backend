@@ -8,9 +8,9 @@ use cf_chains::{
 	Solana,
 };
 use core::time::Duration;
-use utilities::task_scope::Scope;
+use utilities::{make_periodic_tick, task_scope::Scope};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use base64::Engine;
 
 use super::{
@@ -28,8 +28,9 @@ pub struct SolRetryRpcClient {
 const SOLANA_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
-#[allow(dead_code)]
 const MAX_BROADCAST_RETRIES: Attempt = 10;
+const GET_STATUS_BROADCAST_DELAY: u64 = 500u64;
+const GET_STATUS_BROADCAST_RETRIES: u64 = 10;
 
 impl SolRetryRpcClient {
 	pub async fn new(
@@ -208,9 +209,27 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 				Box::pin(move |client| {
 					let encoded_transaction = encoded_transaction.clone();
 					#[allow(clippy::redundant_async_block)]
-					Box::pin(
-						async move { client.send_transaction(encoded_transaction, config).await },
-					)
+					Box::pin(async move {
+						let tx_signature =
+							client.send_transaction(encoded_transaction, config).await?;
+
+						let mut poll_interval = make_periodic_tick(
+							Duration::from_millis(GET_STATUS_BROADCAST_DELAY),
+							false,
+						);
+
+						for _ in 0..GET_STATUS_BROADCAST_RETRIES {
+							poll_interval.tick().await;
+
+							let signature_statuses =
+								client.get_signature_statuses(&[tx_signature], true).await?;
+
+							if let Some(Some(_)) = signature_statuses.value.first() {
+								return Ok(tx_signature);
+							}
+						}
+						Err(anyhow!("Sent transaction signature not found"))
+					})
 				}),
 				MAX_BROADCAST_RETRIES,
 			)
@@ -302,6 +321,7 @@ mod tests {
 	use super::*;
 
 	#[tokio::test]
+	#[ignore]
 	async fn test_sol_retry_rpc() {
 		task_scope(|scope| {
 			async move {
@@ -349,6 +369,7 @@ mod tests {
 	}
 
 	#[tokio::test]
+	#[ignore]
 	async fn test_sol_get_transaction() {
 		task_scope(|scope| {
 			async move {

@@ -324,8 +324,12 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 		self.transaction.message().clone()
 	}
 
-	fn signed(mut self, signature: &<SolanaCrypto as ChainCrypto>::ThresholdSignature) -> Self {
-		self.transaction.signatures = vec![*signature];
+	fn signed(
+		mut self,
+		threshold_signature: &<SolanaCrypto as ChainCrypto>::ThresholdSignature,
+		_signer: <SolanaCrypto as ChainCrypto>::AggKey,
+	) -> Self {
+		self.transaction.signatures = vec![*threshold_signature];
 		self
 	}
 
@@ -342,6 +346,10 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		todo!()
+	}
+
+	fn signer(&self) -> Option<<SolanaCrypto as ChainCrypto>::AggKey> {
 		todo!()
 	}
 }
