@@ -16,6 +16,7 @@ pub struct ExternalChainsBlockHeight {
 	pub bitcoin: u64,
 	pub ethereum: u64,
 	pub polkadot: u64,
+	pub solana: u64,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct BtcUtxos {
@@ -43,12 +44,14 @@ pub struct PendingBroadcasts {
 	pub bitcoin: u32,
 	pub polkadot: u32,
 	pub arbitrum: u32,
+	pub solana: u32,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct PendingTssCeremonies {
 	pub evm: u32,
 	pub bitcoin: u32,
 	pub polkadot: u32,
+	pub solana: u32,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct OpenDepositChannels {
@@ -56,6 +59,7 @@ pub struct OpenDepositChannels {
 	pub bitcoin: u32,
 	pub polkadot: u32,
 	pub arbitrum: u32,
+	pub solana: u32,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct FeeImbalance<A> {
@@ -63,6 +67,7 @@ pub struct FeeImbalance<A> {
 	pub polkadot: VaultImbalance<A>,
 	pub arbitrum: VaultImbalance<A>,
 	pub bitcoin: VaultImbalance<A>,
+	pub solana: VaultImbalance<A>,
 }
 
 impl<A> FeeImbalance<A> {
@@ -72,6 +77,7 @@ impl<A> FeeImbalance<A> {
 			polkadot: self.polkadot.map(&f),
 			arbitrum: self.arbitrum.map(&f),
 			bitcoin: self.bitcoin.map(&f),
+			solana: self.solana.map(&f),
 		}
 	}
 }

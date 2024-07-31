@@ -2003,11 +2003,13 @@ impl_runtime_apis! {
 			let btc = pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get().unwrap();
 			let eth = pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get().unwrap();
 			let dot = pallet_cf_chain_tracking::CurrentChainState::<Runtime, PolkadotInstance>::get().unwrap();
+			let sol = pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::get().unwrap();
 
 			ExternalChainsBlockHeight {
 				bitcoin: btc.block_height,
 				ethereum: eth.block_height,
 				polkadot: dot.block_height.into(),
+				solana: sol.block_height,
 			}
 		}
 
@@ -2062,6 +2064,7 @@ impl_runtime_apis! {
 				bitcoin: pallet_cf_broadcast::PendingBroadcasts::<Runtime, BitcoinInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 				polkadot: pallet_cf_broadcast::PendingBroadcasts::<Runtime, PolkadotInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 				arbitrum: pallet_cf_broadcast::PendingBroadcasts::<Runtime, ArbitrumInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
+				solana: pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 			}
 		}
 		fn cf_pending_tss_ceremonies_count() -> PendingTssCeremonies {
@@ -2069,6 +2072,7 @@ impl_runtime_apis! {
 				evm: pallet_cf_threshold_signature::PendingCeremonies::<Runtime, EvmInstance>::iter().collect::<Vec<_>>().len() as u32,
 				bitcoin: pallet_cf_threshold_signature::PendingCeremonies::<Runtime, BitcoinInstance>::iter().collect::<Vec<_>>().len() as u32,
 				polkadot: pallet_cf_threshold_signature::PendingCeremonies::<Runtime, PolkadotInstance>::iter().collect::<Vec<_>>().len() as u32,
+				solana: pallet_cf_threshold_signature::PendingCeremonies::<Runtime, SolanaInstance>::iter().collect::<Vec<_>>().len() as u32,
 			}
 		}
 		fn cf_pending_swaps_count() -> u32 {
@@ -2080,12 +2084,14 @@ impl_runtime_apis! {
 			let btc_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, BitcoinInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, BitcoinInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
 			let dot_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, PolkadotInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, PolkadotInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
 			let arb_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, ArbitrumInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
+			let sol_channels: u32 = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter().filter(|(_key, elem)| elem.expires_at > pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::get().unwrap().block_height).collect::<Vec<_>>().len() as u32;
 
 			OpenDepositChannels{
 				ethereum: eth_channels,
 				bitcoin: btc_channels,
 				polkadot: dot_channels,
 				arbitrum: arb_channels,
+				solana: sol_channels,
 			}
 		}
 		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount> {
@@ -2094,6 +2100,7 @@ impl_runtime_apis! {
 				polkadot: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Polkadot.gas_asset()),
 				arbitrum: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Arbitrum.gas_asset()),
 				bitcoin: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Bitcoin.gas_asset()),
+				solana: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Solana.gas_asset()),
 			}
 		}
 		fn cf_build_version() -> LastRuntimeUpgradeInfo {
