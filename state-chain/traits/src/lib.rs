@@ -440,9 +440,10 @@ where
 	) -> Result<(), Self::Error>;
 
 	/// Attempt to retrieve a requested signature.
+	#[allow(clippy::type_complexity)]
 	fn signature_result(
 		request_id: ThresholdSignatureRequestId,
-	) -> AsyncResult<Result<C::ThresholdSignature, Vec<Self::ValidatorId>>>;
+	) -> (C::AggKey, AsyncResult<Result<C::ThresholdSignature, Vec<Self::ValidatorId>>>);
 
 	/// Request a signature and register a callback for when the signature is available.
 	///
@@ -469,6 +470,7 @@ where
 	fn insert_signature(
 		_request_id: ThresholdSignatureRequestId,
 		_signature: C::ThresholdSignature,
+		_signer: C::AggKey,
 	) {
 		unimplemented!();
 	}
@@ -525,6 +527,7 @@ pub trait Broadcaster<C: Chain> {
 	/// specifically for a rotation tx..
 	fn threshold_sign_and_broadcast_rotation_tx(
 		api_call: Self::ApiCall,
+		new_key: <<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Request a new threshold signature for a previously aborted broadcast's payload, optionally

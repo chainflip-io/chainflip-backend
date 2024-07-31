@@ -44,7 +44,7 @@ mod test {
 	fn migration_test() {
 		const ID: u32 = 42;
 		const API_CALL: MockApiCall<MockEthereumChainCrypto> =
-			MockApiCall { payload: [b'p'; 4], sig: None, tx_out_id: [b't'; 4] };
+			MockApiCall { payload: [b'p'; 4], signer_and_signature: None, tx_out_id: [b't'; 4] };
 
 		const SIG: MockThresholdSignature<
 			<MockEthereumChainCrypto as ChainCrypto>::AggKey,
