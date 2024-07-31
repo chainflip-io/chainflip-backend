@@ -1233,9 +1233,17 @@ pub mod pallet {
 				return;
 			};
 
+			// In case of DCA, there may be extra input that we need to refund
+			let remaining_input_amount = match request.state {
+				SwapRequestState::Regular { dca_state, .. } => dca_state.remaining_input_amount,
+				_ => 0,
+			};
+
+			let refund_amount = swap.input_amount + remaining_input_amount;
+
 			match T::EgressHandler::schedule_egress(
 				swap.from,
-				swap.input_amount,
+				refund_amount,
 				refund_params.refund_address,
 				None,
 			) {
