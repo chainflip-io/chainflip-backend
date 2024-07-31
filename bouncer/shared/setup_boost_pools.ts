@@ -1,4 +1,4 @@
-import { InternalAssets as Assets, chainConstants, getInternalAsset } from '@chainflip/cli';
+import { InternalAssets as Assets, chainConstants, getInternalAsset, Chains } from '@chainflip/cli';
 import {
   ingressEgressPalletForChain,
   chainFromAsset,
@@ -76,21 +76,22 @@ export async function setupBoostPools(): Promise<void> {
   console.log('=== Creating Boost Pools ===');
   const boostPoolCreationPromises: Promise<void>[] = [];
 
-  for (const chain in chainConstants) {
-    if (Object.prototype.hasOwnProperty.call(chainConstants, chain)) {
-      console.log(`Creating boost pools for all ${chain} assets`);
-      const newPools: BoostPoolId[] = [];
+  for (const chain of Object.values(Chains)) {
+    console.log(`Creating boost pools for all ${chain} assets`);
+    const newPools: BoostPoolId[] = [];
 
-      for (const asset of chainConstants[chain as keyof typeof chainConstants].assets) {
-        for (const tier of boostPoolTiers) {
-          if (tier <= 0) {
-            throw new Error(`Invalid tier value: ${tier}`);
-          }
-          newPools.push({ asset: getInternalAsset({ asset, chain }), tier });
+    for (const asset of chainConstants[chain].assets) {
+      for (const tier of boostPoolTiers) {
+        if (tier <= 0) {
+          throw new Error(`Invalid tier value: ${tier}`);
         }
+        newPools.push({
+          asset: getInternalAsset({ asset, chain }),
+          tier,
+        });
       }
-      boostPoolCreationPromises.push(createBoostPools(newPools));
     }
+    boostPoolCreationPromises.push(createBoostPools(newPools));
   }
   await Promise.all(boostPoolCreationPromises);
 
