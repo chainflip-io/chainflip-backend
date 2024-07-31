@@ -171,8 +171,12 @@ impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> A
 		map_over_api_variants!(self, call, call.threshold_signature_payload())
 	}
 
-	fn signed(self, threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature) -> Self {
-		map_over_api_variants!(self, call, call.signed(threshold_signature).into())
+	fn signed(
+		self,
+		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
+		signer: <EvmCrypto as ChainCrypto>::AggKey,
+	) -> Self {
+		map_over_api_variants!(self, call, call.signed(threshold_signature, signer).into())
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
@@ -193,6 +197,10 @@ impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> A
 			call,
 			call.refresh_replay_protection(E::replay_protection(E::key_manager_address()))
 		)
+	}
+
+	fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {
+		map_over_api_variants!(self, call, call.signer_and_sig_data).map(|(signer, _)| signer)
 	}
 }
 

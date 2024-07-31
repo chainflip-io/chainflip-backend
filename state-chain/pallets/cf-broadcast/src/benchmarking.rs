@@ -27,8 +27,10 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 	);
 	PendingApiCalls::<T, I>::insert(
 		broadcast_id,
-		ApiCallFor::<T, I>::benchmark_value()
-			.signed(&ThresholdSignatureFor::<T, I>::benchmark_value()),
+		ApiCallFor::<T, I>::benchmark_value().signed(
+			&ThresholdSignatureFor::<T, I>::benchmark_value(),
+			AggKey::<T, I>::benchmark_value(),
+		),
 	);
 	PendingBroadcasts::<T, I>::append(broadcast_id);
 }
@@ -41,6 +43,7 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 	T::ThresholdSigner::insert_signature(
 		threshold_request_id,
 		ThresholdSignatureFor::<T, I>::benchmark_value(),
+		AggKey::<T, I>::benchmark_value(),
 	);
 	Call::<T, I>::on_signature_ready {
 		threshold_request_id,
