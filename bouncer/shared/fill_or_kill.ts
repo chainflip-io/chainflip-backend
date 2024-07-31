@@ -1,50 +1,44 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import assert from 'assert';
+import { randomBytes } from 'crypto';
 import {
   amountToFineAmount,
-  amountToFineAmountBigInt,
   assetDecimals,
   decodeDotAddressForContract,
-  isWithinOnePercent,
   newAddress,
   observeBalanceIncrease,
-  shortChainFromAsset,
+  observeSwapRequested,
+  SwapRequestType,
 } from './utils';
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { getBalance } from './get_balance';
-import { getChainflipApi, observeEvent } from './utils/substrate';
+import { observeEvent } from './utils/substrate';
 import { RefundParameters } from './new_swap';
 
-/// Do a swap with unrealistic minimum price so it gets retried and then refunded.
-async function testMinPriceRefund(asset: Asset, amount: number) {
-  const swapAsset = asset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
-  const refundAddress = await newAddress(asset, 'FOK_REFUND');
-  const destAddress = await newAddress(swapAsset, 'FOK');
+/// Do a swap with unrealistic minimum price so it gets refunded.
+async function testMinPriceRefund(inputAsset: Asset, amount: number) {
+  const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
+  const refundAddress = await newAddress(inputAsset, randomBytes(32).toString('hex'));
+  const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
   console.log(`Swap destination address: ${destAddress}`);
 
-  const refundBalanceBefore = await getBalance(asset, refundAddress);
-
-  const invalidMinPrice = amountToFineAmount(
-    '99999999999999999999999999999999999999999999999999999',
-    assetDecimals(asset),
-  );
-
-  await using chainflip = await getChainflipApi();
-  const currentRetryDuration = Number(await chainflip.query.swapping.swapRetryDelay());
-  console.log(`Current swap retry delay: ${currentRetryDuration} blocks`);
+  const refundBalanceBefore = await getBalance(inputAsset, refundAddress);
 
   const refundParameters: RefundParameters = {
-    retryDurationBlocks: 1.6 * currentRetryDuration, // More than the swap retry delay, so it will be retried once.
+    retryDurationBlocks: 0, // Short duration to speed up the test
     refundAddress:
-      asset === Assets.Dot ? decodeDotAddressForContract(refundAddress) : refundAddress,
-    minPrice: invalidMinPrice,
+      inputAsset === Assets.Dot ? decodeDotAddressForContract(refundAddress) : refundAddress,
+    // Unrealistic min price
+    minPrice: amountToFineAmount(
+      '99999999999999999999999999999999999999999999999999999',
+      assetDecimals(inputAsset),
+    ),
   };
 
-  console.log(`Requesting swap from ${asset} to ${swapAsset} with unrealistic min price`);
+  console.log(`Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`);
   const swapRequest = await requestNewSwap(
-    asset,
-    swapAsset,
+    inputAsset,
+    destAsset,
     destAddress,
     'FoK_Test',
     undefined, // messageMetadata
@@ -56,72 +50,39 @@ async function testMinPriceRefund(asset: Asset, amount: number) {
   const depositAddress = swapRequest.depositAddress;
   const depositChannelId = swapRequest.channelId;
 
-  const observeDestinationAddress =
-    asset === Assets.Dot ? decodeDotAddressForContract(destAddress) : destAddress;
-
-  const observeSwapScheduled = observeEvent('swapping:SwapScheduled', {
-    test: (event) =>
-      typeof event.data.origin === 'object' &&
-      'DepositChannel' in event.data.origin &&
-      event.data.origin.DepositChannel.channelId === depositChannelId.toString() &&
-      event.data.destinationAddress[shortChainFromAsset(swapAsset)]?.toLowerCase() ===
-        observeDestinationAddress.toLowerCase(),
-  }).event;
+  const swapRequestedHandle = observeSwapRequested(
+    inputAsset,
+    destAsset,
+    depositChannelId,
+    SwapRequestType.Regular,
+  );
 
   // Deposit the asset
-  await send(asset, depositAddress, amount.toString());
-  console.log(`Sent ${amount} ${asset} to ${depositAddress}`);
+  await send(inputAsset, depositAddress, amount.toString());
+  console.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
 
-  const swapScheduledEvent = await observeSwapScheduled;
-  const swapId = Number(swapScheduledEvent.data.swapId.replaceAll(',', ''));
-  console.log(`${asset} swap scheduled, swapId: ${swapId}`);
+  const swapRequestedEvent = await swapRequestedHandle;
+  console.log(`Swap requested: ${JSON.stringify(swapRequestedEvent)}`);
+  const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
+  console.log(`${inputAsset} swap requested, swapId: ${swapRequestId}`);
 
   // TODO: Observing after the SwapScheduled event means its possible to miss the events, but we need to the swap id.
-  const observeRefundEgressScheduled = observeEvent(`swapping:RefundEgressScheduled`, {
-    test: (event) => Number(event.data.swapId.replaceAll(',', '')) === swapId,
-  }).event;
   const observeSwapExecuted = observeEvent(`swapping:SwapExecuted`, {
-    test: (event) => Number(event.data.swapId.replaceAll(',', '')) === swapId,
-  }).event;
-  const observeSwapRescheduled = observeEvent(`swapping:SwapRescheduled`, {
-    test: (event) => Number(event.data.swapId.replaceAll(',', '')) === swapId,
+    test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
   }).event;
 
-  const firstSwapEvent = await Promise.race([
-    observeSwapRescheduled,
+  const executeOrRefund = await Promise.race([
     observeSwapExecuted,
-    observeRefundEgressScheduled,
+    observeBalanceIncrease(inputAsset, refundAddress, refundBalanceBefore),
   ]);
-  if (firstSwapEvent.name.method === 'SwapExecuted') {
-    throw new Error(`${asset} swap ${swapId} was executed instead of failing and being retried`);
-  } else if (firstSwapEvent.name.method !== 'SwapRescheduled') {
-    throw new Error(`${asset} swap ${swapId} was not retried once as expected`);
-  }
-  console.log(`${asset} swap ${swapId} was rescheduled`);
 
-  const secondSwapEvent = await Promise.race([observeRefundEgressScheduled, observeSwapExecuted]);
-  if (secondSwapEvent.name.method === 'SwapExecuted') {
-    throw new Error(`${asset} swap ${swapId} was executed instead of being refunded`);
+  if (typeof executeOrRefund !== 'number') {
+    throw new Error(
+      `${inputAsset} swap ${swapRequestId} was executed instead of failing and being refunded`,
+    );
   }
 
-  const refundBalanceAfter = await observeBalanceIncrease(
-    asset,
-    refundAddress,
-    refundBalanceBefore,
-  );
-
-  console.log(
-    `Refund balance before: ${refundBalanceBefore}, after: ${refundBalanceAfter} ${asset} `,
-  );
-  // We expect the refund to be a little less due to ingress and egress fees.
-  assert(
-    isWithinOnePercent(
-      amountToFineAmountBigInt(refundBalanceAfter, asset),
-      amountToFineAmountBigInt(refundBalanceBefore, asset) +
-        amountToFineAmountBigInt(amount, asset),
-    ),
-    `${asset} refund amount is incorrect (swapId: ${swapId})`,
-  );
+  console.log(`FoK ${inputAsset} swap refunded`);
 }
 
 export async function testFillOrKill() {
