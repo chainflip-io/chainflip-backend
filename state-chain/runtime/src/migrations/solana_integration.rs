@@ -3,7 +3,8 @@ use cf_chains::{
 	instances::{
 		ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance, SolanaInstance,
 	},
-	sol::{SolApiEnvironment, SolHash},
+	sol::{SolApiEnvironment, SolHash, SolTrackedData},
+	ChainState,
 };
 use cf_traits::SafeMode;
 use cf_utilities::bs58_array;
@@ -240,7 +241,10 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 		pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
 			durable_nonces_and_accounts,
 		);
-
+		pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::put(ChainState {
+			block_height: 0,
+			tracked_data: SolTrackedData { priority_fee: 100000u32.into() },
+		});
 		Weight::zero()
 	}
 
