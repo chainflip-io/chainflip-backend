@@ -1651,6 +1651,32 @@ pub mod pallet {
 				swap_amount
 			};
 
+			Self::deposit_event(Event::<T>::SwapRequested {
+				swap_request_id: request_id,
+				input_asset,
+				input_amount,
+				output_asset,
+				broker_fee,
+				request_type: match &request_type {
+					SwapRequestType::NetworkFee => SwapRequestTypeEncoded::NetworkFee,
+					SwapRequestType::IngressEgressFee => SwapRequestTypeEncoded::IngressEgressFee,
+					SwapRequestType::Regular { output_address } =>
+						SwapRequestTypeEncoded::Regular {
+							output_address: T::AddressConverter::to_encoded_address(
+								output_address.clone(),
+							),
+						},
+					SwapRequestType::Ccm { output_address, ccm_deposit_metadata } =>
+						SwapRequestTypeEncoded::Ccm {
+							output_address: T::AddressConverter::to_encoded_address(
+								output_address.clone(),
+							),
+							ccm_deposit_metadata: ccm_deposit_metadata.clone(),
+						},
+				},
+				origin: origin.clone(),
+			});
+
 			// Now that we know input amount, we can calculate the minimum output amount:
 			let swap_refund_params = refund_params.clone().map(|params| SwapRefundParameters {
 				refund_block: {
@@ -1668,7 +1694,7 @@ pub mod pallet {
 				.unwrap_or(u128::MAX),
 			});
 
-			let request_type_for_event = match request_type {
+			match request_type {
 				SwapRequestType::NetworkFee => {
 					Self::schedule_swap(
 						input_asset,
@@ -1689,8 +1715,6 @@ pub mod pallet {
 							state: SwapRequestState::NetworkFee,
 						},
 					);
-
-					SwapRequestTypeEncoded::NetworkFee
 				},
 				SwapRequestType::IngressEgressFee => {
 					Self::schedule_swap(
@@ -1712,8 +1736,6 @@ pub mod pallet {
 							state: SwapRequestState::IngressEgressFee,
 						},
 					);
-
-					SwapRequestTypeEncoded::IngressEgressFee
 				},
 				SwapRequestType::Regular { output_address } => {
 					Self::schedule_swap(
@@ -1737,10 +1759,6 @@ pub mod pallet {
 							},
 						},
 					);
-
-					SwapRequestTypeEncoded::Regular {
-						output_address: T::AddressConverter::to_encoded_address(output_address),
-					}
 				},
 				SwapRequestType::Ccm { ccm_deposit_metadata, output_address } => {
 					let encoded_destination_address =
@@ -1768,6 +1786,11 @@ pub mod pallet {
 									deposit_metadata: ccm_deposit_metadata.clone(),
 									origin: origin.clone(),
 								});
+
+								Self::deposit_event(Event::<T>::SwapRequestCompleted {
+									swap_request_id: request_id,
+								});
+
 								return Err(DispatchError::Other("Invalid CCM parameters"));
 							},
 						};
@@ -1837,23 +1860,8 @@ pub mod pallet {
 							ccm_deposit_metadata.clone(),
 						);
 					}
-
-					SwapRequestTypeEncoded::Ccm {
-						output_address: encoded_destination_address,
-						ccm_deposit_metadata,
-					}
 				},
 			};
-
-			Self::deposit_event(Event::<T>::SwapRequested {
-				swap_request_id: request_id,
-				input_asset,
-				input_amount,
-				output_asset,
-				broker_fee,
-				request_type: request_type_for_event,
-				origin: origin.clone(),
-			});
 
 			Ok(request_id)
 		}
