@@ -269,6 +269,11 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
+          if lsof -Pi :8899 -sTCP:LISTEN -t >/dev/null ; then
+              echo "Solana node is running fine"
+          else
+              echo "No process is listening on port 8899. Solana node is probably dead"
+          fi
           ./commands/setup_sol_vault.ts
           ./tests/all_concurrent_tests.ts
 
