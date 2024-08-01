@@ -46,9 +46,6 @@ mod benchmarks {
 			Asset::Eth,
 			cf_chains::address::EncodedAddress::benchmark_value(),
 		);
-
-		// TODO: Fix it!
-		// assert_eq!(FreeBalances::<T>::get(&caller, Asset::Eth), Some(0));
 	}
 
 	#[benchmark]
