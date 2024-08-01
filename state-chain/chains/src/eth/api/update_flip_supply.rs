@@ -76,10 +76,13 @@ mod test_update_flip_supply {
 
 		let runtime_payload = update_flip_supply_runtime
 			.clone()
-			.signed(&SchnorrVerificationComponents {
-				s: FAKE_SIG,
-				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
-			})
+			.signed(
+				&SchnorrVerificationComponents {
+					s: FAKE_SIG,
+					k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
+				},
+				Default::default(),
+			)
 			.chain_encoded();
 
 		// Ensure signing payload isn't modified by signature.

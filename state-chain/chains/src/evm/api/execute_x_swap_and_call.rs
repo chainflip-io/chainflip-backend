@@ -146,10 +146,13 @@ mod test_execute_x_swap_and_execute {
 		let expected_msg_hash = function_runtime.threshold_signature_payload();
 		let runtime_payload = function_runtime
 			.clone()
-			.signed(&SchnorrVerificationComponents {
-				s: FAKE_SIG,
-				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
-			})
+			.signed(
+				&SchnorrVerificationComponents {
+					s: FAKE_SIG,
+					k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
+				},
+				Default::default(),
+			)
 			.chain_encoded();
 
 		// Ensure signing payload isn't modified by signature.

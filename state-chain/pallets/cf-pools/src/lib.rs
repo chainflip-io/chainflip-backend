@@ -7,7 +7,9 @@ use cf_amm::{
 };
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
-use cf_traits::{impl_pallet_safe_mode, BalanceApi, Chainflip, PoolApi, SwapQueueApi, SwappingApi};
+use cf_traits::{
+	impl_pallet_safe_mode, BalanceApi, Chainflip, PoolApi, SwapRequestHandler, SwappingApi,
+};
 use core::ops::Range;
 use frame_support::{
 	dispatch::GetDispatchInfo,
@@ -255,7 +257,7 @@ pub mod pallet {
 
 		type LpApi: LpApi<AccountId = Self::AccountId>;
 
-		type SwapQueueApi: SwapQueueApi;
+		type SwapRequestHandler: SwapRequestHandler;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;

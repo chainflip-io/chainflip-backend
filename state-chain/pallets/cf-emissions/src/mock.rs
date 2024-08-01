@@ -131,6 +131,7 @@ impl ApiCall<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 	fn signed(
 		self,
 		_threshold_signature: &<MockEthereumChainCrypto as ChainCrypto>::ThresholdSignature,
+		_signer: <MockEthereumChainCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		unimplemented!()
 	}
@@ -148,6 +149,10 @@ impl ApiCall<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
+
+	fn signer(&self) -> Option<<MockEthereumChainCrypto as ChainCrypto>::AggKey> {
 		unimplemented!()
 	}
 }

@@ -692,11 +692,11 @@ impl ScriptPubkey {
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinTransaction {
-	inputs: Vec<Utxo>,
+	pub inputs: Vec<Utxo>,
 	pub outputs: Vec<BitcoinOutput>,
-	signatures: Vec<Signature>,
-	transaction_bytes: Vec<u8>,
-	old_utxo_input_indices: VecDeque<u32>,
+	pub signer_and_signatures: Option<(AggKey, Vec<Signature>)>,
+	pub transaction_bytes: Vec<u8>,
+	pub old_utxo_input_indices: VecDeque<u32>,
 }
 
 const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
@@ -745,17 +745,25 @@ impl BitcoinTransaction {
 		transaction_bytes.push(SEGWIT_MARKER);
 		transaction_bytes.push(SEGWIT_FLAG);
 		extend_with_inputs_outputs(&mut transaction_bytes, &inputs, &outputs);
-		Self { inputs, outputs, signatures: vec![], transaction_bytes, old_utxo_input_indices }
+		Self {
+			inputs,
+			outputs,
+			signer_and_signatures: None,
+			transaction_bytes,
+			old_utxo_input_indices,
+		}
 	}
 
-	pub fn add_signatures(&mut self, signatures: Vec<Signature>) {
+	pub fn add_signer_and_signatures(&mut self, signer: AggKey, signatures: Vec<Signature>) {
 		debug_assert_eq!(signatures.len(), self.inputs.len());
-		self.signatures = signatures;
+		self.signer_and_signatures = Some((signer, signatures));
 	}
 
 	pub fn is_signed(&self) -> bool {
-		self.signatures.len() == self.inputs.len() &&
-			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
+		self.signer_and_signatures.as_ref().is_some_and(|(_, signatures)| {
+			signatures.len() == self.inputs.len() &&
+				!signatures.iter().any(|signature| signature == &[0u8; 64])
+		})
 	}
 
 	pub fn txid(&self) -> Hash {
@@ -774,11 +782,18 @@ impl BitcoinTransaction {
 
 		let mut transaction_bytes = self.transaction_bytes;
 
-		for i in 0..self.inputs.len() {
-			if let Some(script_path) = self.inputs[i].deposit_address.script_path.clone() {
+		let signatures = self
+			.signer_and_signatures
+			.expect(
+				"this function is only called after the tx is signed so signatures should exist",
+			)
+			.1;
+
+		for (i, input) in self.inputs.iter().enumerate() {
+			if let Some(script_path) = input.deposit_address.script_path.clone() {
 				transaction_bytes.push(NUM_WITNESSES_SCRIPT);
 				transaction_bytes.push(LEN_SIGNATURE);
-				transaction_bytes.extend(self.signatures[i]);
+				transaction_bytes.extend(signatures[i]);
 				transaction_bytes.extend(script_path.unlock_script.btc_serialize());
 				// Length of tweaked pubkey + leaf version
 				transaction_bytes.push(33u8);
@@ -787,7 +802,7 @@ impl BitcoinTransaction {
 			} else {
 				transaction_bytes.push(NUM_WITNESSES_KEY);
 				transaction_bytes.push(LEN_SIGNATURE);
-				transaction_bytes.extend(self.signatures[i]);
+				transaction_bytes.extend(signatures[i]);
 			}
 		}
 		transaction_bytes.extend(LOCKTIME);
@@ -1323,7 +1338,10 @@ mod test {
 	#[test]
 	fn test_finalize() {
 		let mut tx = create_test_unsigned_transaction(PreviousOrCurrent::Current);
-		tx.add_signatures(vec![[0u8; 64]]);
+		tx.add_signer_and_signatures(
+			AggKey { previous: None, current: Default::default() },
+			vec![[0u8; 64]],
+		);
 		assert_eq!(tx.finalize(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
 	}
 

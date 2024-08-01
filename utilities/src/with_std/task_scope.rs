@@ -15,7 +15,12 @@
 //! the scope's tasks panic or return an error, the scope will cancel all remaining tasks, and end
 //! by respectively panicking or returning the error.
 //!
-//! For the public functions in this module, if they are used unsafely the code will not compile.
+//! Note we do not enforce that task async closures are `'static`. This provides a lot of
+//! flexibility, but makes this utility unsound by rust's definition. Specifically it is undefined
+//! behaviour to `forget` a future returned from `task_scope`. This cannot "normally" be achieved
+//! without explicitly calling `forget`, but there are other methods, such as using a cycle of smart
+//! pointers, that can inadvertently cause memory leaks, and therefore cause any objects contained
+//! in it to be forgotten / not dropped.
 //!
 //! # Usage
 //!

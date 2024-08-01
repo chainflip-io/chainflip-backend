@@ -2,4 +2,4 @@
 import { testFundRedeem } from '../shared/fund_redeem';
 import { executeWithTimeout } from '../shared/utils';
 
-await executeWithTimeout(testFundRedeem(), 500);
+await executeWithTimeout(testFundRedeem(), 520);

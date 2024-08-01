@@ -10,6 +10,7 @@ import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
 import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
 import { testBoostingSwap } from '../shared/boost';
 import { observeBadEvent } from '../shared/utils/substrate';
+import { testFillOrKill } from '../shared/fill_or_kill';
 
 const swapContext = new SwapContext();
 
@@ -37,6 +38,7 @@ async function runAllConcurrentTests() {
     testLpApi(),
     testBrokerFeeCollection(),
     testBoostingSwap(),
+    testFillOrKill(),
   ];
 
   // Tests that only work if there is more than one node

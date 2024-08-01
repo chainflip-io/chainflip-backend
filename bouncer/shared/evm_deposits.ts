@@ -14,7 +14,8 @@ import {
   assetDecimals,
   chainContractId,
   assetContractId,
-  observeSwapScheduled,
+  observeSwapRequested,
+  SwapRequestType,
 } from '../shared/utils';
 import { signAndSendTxEvm } from './send_evm';
 import { getCFTesterAbi } from './contract_interfaces';
@@ -53,7 +54,7 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
   const observingSwapScheduled = observeBadEvent('swapping:SwapScheduled', {
     test: (event) => {
-      if ('DepositChannel' in event.data.origin) {
+      if (typeof event.data.origin === 'object' && 'DepositChannel' in event.data.origin) {
         const channelMatches =
           Number(event.data.origin.DepositChannel.channelId) === swapParams.channelId;
         const assetMatches = sourceAsset === (event.data.sourceAsset as Asset);
@@ -104,9 +105,10 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   );
 
   let eventCounter = 0;
-  const observingEvent = observeEvent('swapping:SwapScheduled', {
+  const observingEvent = observeEvent('swapping:SwapRequested', {
     test: (event) => {
       if (
+        typeof event.data.origin === 'object' &&
         'Vault' in event.data.origin &&
         event.data.origin.Vault.txHash === receipt.transactionHash
       ) {
@@ -141,19 +143,31 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
   );
   const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
 
-  let swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, swapParams.channelId);
+  {
+    const swapRequestedHandle = observeSwapRequested(
+      sourceAsset,
+      destAsset,
+      swapParams.channelId,
+      SwapRequestType.Regular,
+    );
 
-  await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+    await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+    await swapRequestedHandle;
+  }
 
-  // Wait for SC to schedule a swap
-  await swapScheduledHandle;
-
-  // Do another deposit. Regardless of the fetch having been bradcasted or not, another swap
+  // Do another deposit. Regardless of the fetch having been broadcasted or not, another swap
   // should be scheduled when we deposit again.
-  swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, swapParams.channelId);
+  {
+    const swapRequestedHandle = observeSwapRequested(
+      sourceAsset,
+      destAsset,
+      swapParams.channelId,
+      SwapRequestType.Regular,
+    );
 
-  await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
-  await swapScheduledHandle;
+    await send(sourceAsset, swapParams.depositAddress, defaultAssetAmounts(sourceAsset));
+    await swapRequestedHandle;
+  }
 }
 
 export async function testEvmDeposits() {

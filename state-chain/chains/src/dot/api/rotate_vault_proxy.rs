@@ -88,7 +88,10 @@ mod test_rotate_vault_proxy {
 			"
 			)
 		);
-		builder.insert_signature(keypair_old_proxy.sign(&payload));
+		builder.insert_signer_and_signature(
+			keypair_old_proxy.public_key(),
+			keypair_old_proxy.sign(&payload),
+		);
 		assert!(builder.is_signed());
 	}
 }

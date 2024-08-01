@@ -51,6 +51,7 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	fn signed(
 		self,
 		threshold_signature: &<SolanaCrypto as ChainCrypto>::ThresholdSignature,
+		_signer: <SolanaCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		Self::ApiCall { threshold_signature: *threshold_signature }
 	}
@@ -68,6 +69,10 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		todo!()
+	}
+
+	fn signer(&self) -> Option<<SolanaCrypto as ChainCrypto>::AggKey> {
 		todo!()
 	}
 }

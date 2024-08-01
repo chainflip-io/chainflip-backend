@@ -402,16 +402,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			)
 			.await?;
 		let (_tx_hash, events, header, ..) = self
-			.submit_signed_extrinsic_with_dry_run(if affiliate_fees.is_empty() {
-				pallet_cf_swapping::Call::request_swap_deposit_address {
-					source_asset,
-					destination_asset,
-					destination_address,
-					broker_commission,
-					channel_metadata,
-					boost_fee: boost_fee.unwrap_or_default(),
-				}
-			} else {
+			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
 					destination_asset,
@@ -434,8 +425,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 							})
 						})
 						.transpose()?,
-				}
-			})
+				},
+			)
 			.await?
 			.until_in_block()
 			.await?;

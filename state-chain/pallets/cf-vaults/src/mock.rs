@@ -102,6 +102,7 @@ impl ApiCall<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 	fn signed(
 		self,
 		_threshold_signature: &<<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
+		_signer: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		unimplemented!()
 	}
@@ -121,6 +122,10 @@ impl ApiCall<MockEthereumChainCrypto> for MockSetAggKeyWithAggKey {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
+
+	fn signer(&self) -> Option<<MockEthereumChainCrypto as ChainCrypto>::AggKey> {
 		unimplemented!()
 	}
 }

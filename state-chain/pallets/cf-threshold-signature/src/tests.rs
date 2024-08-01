@@ -180,7 +180,9 @@ fn happy_path_no_callback() {
 
 			// Signature is available
 			assert!(matches!(
-				EvmThresholdSigner::signature(request_context.request_id),
+				EvmThresholdSigner::signer_and_signature(request_context.request_id)
+					.unwrap()
+					.signature_result,
 				AsyncResult::Ready(..)
 			));
 
@@ -213,12 +215,11 @@ fn happy_path_with_callback() {
 
 			// Signature has been consumed.
 			assert!(
-				matches!(
-					EvmThresholdSigner::signature(request_context.request_id),
-					AsyncResult::Void
-				),
-				"Expected Void, got {:?}",
-				EvmThresholdSigner::signature(request_context.request_id)
+				EvmThresholdSigner::signer_and_signature(request_context.request_id).is_none(),
+				"Expected None, got {:?}",
+				EvmThresholdSigner::signer_and_signature(request_context.request_id)
+					.unwrap()
+					.signature_result
 			);
 		});
 }
@@ -1763,7 +1764,7 @@ mod key_rotation {
 			assert_eq!(MockVaultActivator::status(), AsyncResult::Pending);
 
 			// Request is complete
-			assert_eq!(EvmThresholdSigner::signature(4), AsyncResult::Void);
+			assert_eq!(EvmThresholdSigner::signer_and_signature(4), None);
 
 			// Proceed to complete activation
 			EvmThresholdSigner::status();

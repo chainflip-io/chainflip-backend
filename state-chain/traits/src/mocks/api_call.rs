@@ -42,7 +42,11 @@ impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
 		unimplemented!()
 	}
 
-	fn signed(self, _threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature) -> Self {
+	fn signed(
+		self,
+		_threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
+		_signer: <EvmCrypto as ChainCrypto>::AggKey,
+	) -> Self {
 		unimplemented!()
 	}
 
@@ -59,6 +63,10 @@ impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
+
+	fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {
 		unimplemented!()
 	}
 }
@@ -200,6 +208,7 @@ impl ApiCall<BitcoinCrypto> for MockBitcoinApiCall<MockBtcEnvironment> {
 	fn signed(
 		self,
 		_threshold_signature: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature,
+		_signer: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		unimplemented!()
 	}
@@ -217,6 +226,10 @@ impl ApiCall<BitcoinCrypto> for MockBitcoinApiCall<MockBtcEnvironment> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
+
+	fn signer(&self) -> Option<<BitcoinCrypto as ChainCrypto>::AggKey> {
 		unimplemented!()
 	}
 }

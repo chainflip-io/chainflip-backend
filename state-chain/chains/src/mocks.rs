@@ -335,7 +335,8 @@ pub const MOCK_TX_METADATA: <MockEthereum as Chain>::TransactionMetadata =
 #[scale_info(skip_type_params(C))]
 pub struct MockApiCall<C: ChainCrypto> {
 	pub payload: <C as ChainCrypto>::Payload,
-	pub sig: Option<<C as ChainCrypto>::ThresholdSignature>,
+	pub signer_and_signature:
+		Option<(<C as ChainCrypto>::AggKey, <C as ChainCrypto>::ThresholdSignature)>,
 	pub tx_out_id: <C as ChainCrypto>::TransactionOutId,
 }
 
@@ -344,7 +345,10 @@ impl<C: ChainCrypto> BenchmarkValue for MockApiCall<C> {
 	fn benchmark_value() -> Self {
 		Self {
 			payload: <C as ChainCrypto>::Payload::benchmark_value(),
-			sig: Some(<C as ChainCrypto>::ThresholdSignature::benchmark_value()),
+			signer_and_signature: Some((
+				<C as ChainCrypto>::AggKey::benchmark_value(),
+				<C as ChainCrypto>::ThresholdSignature::benchmark_value(),
+			)),
 			tx_out_id: <C as ChainCrypto>::TransactionOutId::benchmark_value(),
 		}
 	}
@@ -361,8 +365,12 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 		self.payload.clone()
 	}
 
-	fn signed(self, threshold_signature: &<C as ChainCrypto>::ThresholdSignature) -> Self {
-		Self { sig: Some(threshold_signature.clone()), ..self }
+	fn signed(
+		self,
+		threshold_signature: &<C as ChainCrypto>::ThresholdSignature,
+		signer: <C as ChainCrypto>::AggKey,
+	) -> Self {
+		Self { signer_and_signature: Some((signer, threshold_signature.clone())), ..self }
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
@@ -370,7 +378,7 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 	}
 
 	fn is_signed(&self) -> bool {
-		self.sig.is_some()
+		self.signer_and_signature.is_some()
 	}
 
 	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId {
@@ -379,6 +387,10 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 
 	fn refresh_replay_protection(&mut self) {
 		REFRESHED_REPLAY_PROTECTION.with(|is_valid| *is_valid.borrow_mut() = true)
+	}
+
+	fn signer(&self) -> Option<<C as ChainCrypto>::AggKey> {
+		self.signer_and_signature.as_ref().map(|(signer, _)| *signer)
 	}
 }
 
@@ -415,6 +427,7 @@ impl<C: Chain<Transaction = MockTransaction>, Call: ApiCall<C::ChainCrypto>>
 	fn requires_signature_refresh(
 		_call: &Call,
 		_payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		_maybe_current_on_chain_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
 	) -> bool {
 		REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow())
 	}
