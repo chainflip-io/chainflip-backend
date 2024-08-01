@@ -114,7 +114,7 @@ async function testLiquidityDeposit() {
   );
 
   // Send funds to the deposit address and watch for deposit event
-  const observeAccountCreditedEvent = observeEvent('liquidityProvider:AccountCredited', {
+  const observeAccountCreditedEvent = observeEvent('assetBalances:AccountCredited', {
     test: (event) =>
       event.data.asset === testAsset &&
       isWithinOnePercent(
@@ -153,7 +153,7 @@ async function testTransferAsset() {
 
   const getLpBalance = async (account: string) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((await chainflip.query.liquidityProvider.freeBalances(account, testAsset)) as any)
+    ((await chainflip.query.assetBalances.freeBalances(account, testAsset)) as any)
       .unwrapOrDefault()
       .toBigInt();
 
