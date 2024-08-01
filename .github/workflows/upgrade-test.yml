@@ -280,6 +280,13 @@ jobs:
         run: |
           cat /tmp/chainflip/*/chainflip-engine.*log
 
+      - name: Print solana logs ☀️
+        if: always()
+        continue-on-error: true
+        run: |
+          cat /tmp/solana/*.log
+          cat /tmp/solana/test-ledger/validator.log
+
       - name: Print new pre-upgrade chainflip-engine logs 🚗
         if: always()
         # In the case of a compatible upgrade, we don't expect any logs here
