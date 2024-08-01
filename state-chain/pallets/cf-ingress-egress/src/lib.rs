@@ -1786,6 +1786,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn expiry_and_recycle_block_height(
 	) -> (TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>)
 	{
+		// Goals:
+		// 1. When chain tracking reaches a particular block number, we want to be able to process
+		//   that block immediately on the CFE.
+		// 2. The CFE's need to have a consistent view of what we want to witness (channels) in
+		//    order to
+		//   come to consensus.
+
+		// We open deposit channels for the block after the current chain tracking block, so that
+		// the set of channels open at the *current chain tracking* block does not change after
+		// chain tracking reaches that block. This achieves the second goal. We achieve the first
+		// goal by using this in conjunction with waiting until the chain tracking reaches a
+		// particular block before we process it on the CFE.
+
+		// This relates directly to the code in
+		// `engine/src/witness/common/chunked_chain_source/chunked_by_vault/deposit_addresses.rs`
+		// and `engine/src/witness/common/chunked_chain_source/chunked_by_vault/monitored_items.rs`
 		let current_height =
 			T::ChainTracking::get_block_height() + <T::TargetChain as Chain>::WITNESS_PERIOD;
 		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(current_height));
