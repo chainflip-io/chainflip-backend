@@ -494,7 +494,7 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			fee: AssetAmount,
+			egress_fee: AssetAmount,
 		},
 		RefundEgressScheduled {
 			swap_request_id: SwapRequestId,
@@ -1646,7 +1646,7 @@ pub mod pallet {
 							egress_id,
 							asset,
 							amount: egress_amount,
-							fee: fee_withheld,
+							egress_fee: fee_withheld,
 						});
 					},
 				Err(err) => {
