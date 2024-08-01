@@ -497,7 +497,8 @@ fn can_process_ccm_deposit() {
 
 		assert_eq!(
 			DepositChannelLookup::<Test, ()>::get(deposit_address).unwrap().opened_at,
-			BlockHeightProvider::<MockEthereum>::get_block_height()
+			BlockHeightProvider::<MockEthereum>::get_block_height() +
+				<MockEthereum as Chain>::WITNESS_PERIOD
 		);
 
 		// Making a deposit should trigger CcmHandler.
