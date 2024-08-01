@@ -1786,7 +1786,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn expiry_and_recycle_block_height(
 	) -> (TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>, TargetChainBlockNumber<T, I>)
 	{
-		let current_height = T::ChainTracking::get_block_height();
+		let current_height =
+			T::ChainTracking::get_block_height() + <T::TargetChain as Chain>::WITNESS_PERIOD;
 		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(current_height));
 
 		let lifetime = DepositChannelLifetime::<T, I>::get();
