@@ -44,8 +44,9 @@ on:
         required: false
         default: true
 env:
-  SOLANA_VERSION: v1.18.17
   FORCE_COLOR: 1
+  SOLANA_VERSION: v1.18.17
+  NODE_COUNT: "1-node"
 
 permissions:
   packages: read
@@ -275,7 +276,7 @@ jobs:
           rm -rf $SOLANA_BASE_PATH/solana-ledger.tar.gz
           echo "🐛 Fix solana symlink issue ..."
           rm $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
-          ln -s $SOLANA_BASE_PATH/test-ledger/accounts/snapshot/100 $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
+          ln -s $ /test-ledger/accounts/snapshot/100 $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
           ./localnet/init/scripts/start-solana.sh
           sleep 30
 
