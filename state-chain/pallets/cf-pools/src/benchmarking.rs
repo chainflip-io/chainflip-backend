@@ -4,7 +4,7 @@ use super::*;
 use cf_amm::common::price_at_tick;
 use cf_chains::ForeignChainAddress;
 use cf_primitives::{AccountRole, Asset};
-use cf_traits::{AccountRoleRegistry, LpBalanceApi};
+use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
@@ -22,7 +22,7 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 		ForeignChainAddress::Dot(Default::default()),
 		ForeignChainAddress::Btc(cf_chains::btc::ScriptPubkey::P2PKH(Default::default())),
 	] {
-		T::LpBalance::register_liquidity_refund_address(&caller, address);
+		T::LpApi::register_liquidity_refund_address(&caller, address);
 	}
 	caller
 }
