@@ -196,6 +196,7 @@ fn request_swap_success_with_valid_parameters() {
 			0,
 			Default::default(),
 			None,
+			None,
 		));
 	});
 }
@@ -297,6 +298,7 @@ fn expect_swap_id_to_be_emitted() {
 				None,
 				0,
 				Default::default(),
+				None,
 				None,
 			));
 
@@ -451,6 +453,7 @@ fn rejects_invalid_swap_deposit() {
 				0,
 				Default::default(),
 				None,
+				None,
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
 		);
@@ -465,6 +468,7 @@ fn rejects_invalid_swap_deposit() {
 				Some(ccm),
 				0,
 				Default::default(),
+				None,
 				None,
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
@@ -599,6 +603,7 @@ mod ccm {
 					Some(request_ccm),
 					0,
 					Default::default(),
+					None,
 					None,
 				));
 
@@ -1282,7 +1287,8 @@ fn swap_excess_are_confiscated_ccm_via_deposit() {
 			Some(request_ccm),
 			0,
 			Default::default(),
-			None
+			None,
+			None,
 		));
 
 		assert_ok!(Swapping::init_swap_request(
@@ -1713,6 +1719,7 @@ fn broker_bps_is_limited() {
 				0,
 				Default::default(),
 				None,
+				None,
 			),
 			Error::<Test>::BrokerCommissionBpsTooHigh
 		);
@@ -1898,6 +1905,8 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 			min_price: 100.into(),
 		};
 
+		let dca_parameters = DCAParameters { number_of_chunks: 5, swap_interval: 2 };
+
 		const BOOST_FEE: u16 = 100;
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 			RuntimeOrigin::signed(ALICE),
@@ -1909,14 +1918,16 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 			BOOST_FEE,
 			Default::default(),
 			Some(refund_parameters.clone()),
+			Some(dca_parameters.clone()),
 		));
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
 				boost_fee: BOOST_FEE,
 				refund_parameters: Some(ref refund_params_in_event),
+				dca_parameters: Some(ref dca_params_in_event),
 				..
-			}) if refund_params_in_event == &refund_parameters
+			}) if refund_params_in_event == &refund_parameters && dca_params_in_event == &dca_parameters
 		);
 	});
 }

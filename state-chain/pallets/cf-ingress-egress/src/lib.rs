@@ -2027,6 +2027,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
 		refund_params: Option<ChannelRefundParameters>,
+		dca_params: Option<DCAParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
@@ -2042,10 +2043,10 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			&broker_id,
 			source_asset,
 			match channel_metadata {
-				Some(msg) => ChannelAction::CcmTransfer {
+				Some(channel_metadata) => ChannelAction::CcmTransfer {
 					destination_asset,
 					destination_address,
-					channel_metadata: msg,
+					channel_metadata,
 					refund_params,
 				},
 				None => ChannelAction::Swap {
@@ -2053,7 +2054,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_address,
 					broker_fees,
 					refund_params,
-					dca_params: None,
+					dca_params,
 				},
 			},
 			boost_fee,

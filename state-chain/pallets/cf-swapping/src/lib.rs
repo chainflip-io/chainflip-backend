@@ -462,6 +462,7 @@ pub mod pallet {
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
 			refund_parameters: Option<ChannelRefundParameters>,
+			dca_parameters: Option<DCAParameters>,
 		},
 		/// A swap is scheduled for the first time
 		SwapScheduled {
@@ -754,7 +755,9 @@ pub mod pallet {
 				channel_metadata,
 				boost_fee,
 				Default::default(),
-				// This extrinsic is for backwards compatibility and does not support FoK
+				// This extrinsic is for backwards compatibility and does not support new
+				// features like FoK or DCA
+				None,
 				None,
 			)
 		}
@@ -975,6 +978,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
 			refund_parameters: Option<ChannelRefundParameters>,
+			dca_parameters: Option<DCAParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			let (beneficiaries, total_bps) = {
@@ -1017,6 +1021,7 @@ pub mod pallet {
 					channel_metadata.clone(),
 					boost_fee,
 					refund_parameters.clone(),
+					dca_parameters.clone(),
 				)?;
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
@@ -1032,6 +1037,7 @@ pub mod pallet {
 				channel_opening_fee,
 				affiliate_fees,
 				refund_parameters,
+				dca_parameters,
 			});
 
 			Ok(())

@@ -189,6 +189,7 @@ mod tests {
 						destination_address: output_address.clone(),
 						broker_fees: Default::default(),
 						refund_params: None,
+						dca_params: None,
 					},
 					boost_fee: 0,
 				})

@@ -269,6 +269,7 @@ fn basic_pool_setup_provision_and_swap() {
 				0u16,
 				Default::default(),
 				None,
+				None,
 			));
 
 			let deposit_address =
@@ -391,6 +392,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Some(message),
 			0u16,
 			Default::default(),
+			None,
 			None,
 		));
 

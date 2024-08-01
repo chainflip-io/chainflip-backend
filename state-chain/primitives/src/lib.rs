@@ -344,7 +344,7 @@ pub struct Beneficiary<Id> {
 	pub bps: BasisPoints,
 }
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct DCAParameters {
 	/// The number of individual swaps to be executed
 	pub number_of_chunks: u32,
