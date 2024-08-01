@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
 import axios from 'axios';
-import { InternalAsset as Asset, Asset as SDKAsset, Chain, getInternalAsset } from '@chainflip/cli';
+import { InternalAsset as Asset, Asset as RpcAsset, Chain, getInternalAsset } from '@chainflip/cli';
 import bitcoin from 'bitcoinjs-lib';
 import { Tapleaf } from 'bitcoinjs-lib/src/types';
 import * as ecc from 'tiny-secp256k1';
@@ -43,12 +43,12 @@ type AmountChange = null | {
 
 type LimitOrderResponse = {
   base_asset: {
-    chain: string;
-    asset: Asset;
+    chain: Chain;
+    asset: RpcAsset;
   };
   quote_asset: {
-    chain: string;
-    asset: Asset;
+    chain: Chain;
+    asset: RpcAsset;
   };
   side: string;
   id: number;
@@ -104,8 +104,8 @@ function price2tick(price: number): number {
 export function assetFromStateChainAsset(
   stateChainAsset:
     | {
-        asset: Asset | string;
-        chain: Chain | string;
+        asset: RpcAsset;
+        chain: Chain;
       }
     | string,
 ): Asset {
@@ -115,7 +115,7 @@ export function assetFromStateChainAsset(
   }
 
   return getInternalAsset({
-    asset: stateChainAsset.asset as SDKAsset,
+    asset: stateChainAsset.asset as RpcAsset,
     chain: stateChainAsset.chain as Chain,
   });
 }

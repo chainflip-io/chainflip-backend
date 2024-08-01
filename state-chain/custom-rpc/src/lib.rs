@@ -418,6 +418,8 @@ pub struct FundingEnvironment {
 pub struct SwappingEnvironment {
 	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
 	network_fee_hundredth_pips: Permill,
+	swap_retry_delay_blocks: u32,
+	max_swap_retry_duration_blocks: HashMap<ForeignChain, u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1497,6 +1499,17 @@ where
 					.map(|option| option.map(Into::into))
 			})?,
 			network_fee_hundredth_pips: NetworkFee::get(),
+			swap_retry_delay_blocks: runtime_api
+				.cf_swap_retry_delay_blocks(hash)
+				.map_err(to_rpc_error)?,
+			max_swap_retry_duration_blocks: ForeignChain::iter()
+				.map(|chain| {
+					runtime_api
+						.cf_max_swap_retry_duration_blocks(hash, chain)
+						.map(|duration| (chain, duration))
+						.map_err(to_rpc_error)
+				})
+				.collect::<Result<HashMap<_, _>, _>>()?,
 		})
 	}
 
@@ -2049,6 +2062,14 @@ mod test {
 					sol: sol::AssetMap { sol: None, usdc: None },
 				},
 				network_fee_hundredth_pips: Permill::from_percent(100),
+				swap_retry_delay_blocks: 5,
+				max_swap_retry_duration_blocks: HashMap::from([
+					(ForeignChain::Bitcoin, 600),
+					(ForeignChain::Ethereum, 600),
+					(ForeignChain::Polkadot, 600),
+					(ForeignChain::Arbitrum, 600),
+					(ForeignChain::Solana, 600),
+				]),
 			},
 			ingress_egress: IngressEgressEnvironment {
 				minimum_deposit_amounts: any::AssetMap {

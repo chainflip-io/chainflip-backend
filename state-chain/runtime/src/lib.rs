@@ -1732,6 +1732,21 @@ impl_runtime_apis! {
 			pallet_cf_funding::RedemptionTax::<Runtime>::get()
 		}
 
+		fn cf_swap_retry_delay_blocks() -> u32 {
+			pallet_cf_swapping::SwapRetryDelay::<Runtime>::get()
+		}
+
+		fn cf_max_swap_retry_duration_blocks(chain: ForeignChain) -> u32 {
+			match chain {
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, BitcoinInstance>::get(),
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, EthereumInstance>::get(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, PolkadotInstance>::get(),
+				ForeignChain::Arbitrum => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, ArbitrumInstance>::get(),
+				ForeignChain::Solana => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, SolanaInstance>::get(),
+			}
+
+		}
+
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
 		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
 		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Side) -> Vec<AssetAmount> {
