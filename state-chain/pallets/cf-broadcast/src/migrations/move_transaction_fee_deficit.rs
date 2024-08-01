@@ -2,7 +2,10 @@ use crate::*;
 use frame_support::traits::OnRuntimeUpgrade;
 
 use cf_primitives::AssetAmount;
-use frame_support::pallet_prelude::{DispatchError, ValueQuery, Weight};
+use frame_support::pallet_prelude::{ValueQuery, Weight};
+
+#[cfg(feature = "try-runtime")]
+use frame_support::pallet_prelude::DispatchError;
 
 mod old {
 	use super::*;

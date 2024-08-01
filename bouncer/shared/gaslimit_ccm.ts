@@ -288,8 +288,8 @@ async function testGasLimitSwapToSolana(
         transaction = await connection.getTransaction(confirmedSignaturesInfo[0].signature, {
           commitment: 'confirmed',
         });
-        console.log(`${tag} Transaction found: ${transaction}`);
         if (transaction !== null) {
+          console.log(`${tag} Transaction found: ${transaction?.meta}`);
           // This doesn't throw an error, for now it's fine to print it.
           if (transaction?.meta?.err === null) {
             throw new Error('Transaction should have reverted');
@@ -589,9 +589,9 @@ export async function testGasLimitCcmSwaps() {
     testGasLimitSwapToEvm('SolUsdc', 'ArbEth', ' sufBudget', 10),
     testGasLimitSwapToSolana('Usdc', 'Sol', ' sufBudget', 10),
     testGasLimitSwapToSolana('Btc', 'Sol', ' sufBudget', 100),
-    testGasLimitSwapToSolana('Dot', 'Sol', ' sufBudget', 100),
-    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' sufBudget', 100),
-    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' sufBudget', 100),
+    testGasLimitSwapToSolana('Dot', 'Sol', ' sufBudget', 10),
+    testGasLimitSwapToSolana('ArbUsdc', 'SolUsdc', ' sufBudget', 10),
+    testGasLimitSwapToSolana('Eth', 'SolUsdc', ' sufBudget', 10),
   ];
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to

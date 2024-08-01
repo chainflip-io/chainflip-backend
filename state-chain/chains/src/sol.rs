@@ -22,7 +22,7 @@ pub mod sol_tx_core;
 pub use crate::assets::sol::Asset as SolAsset;
 use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
-	consts::{LAMPORTS_PER_SIGNATURE, MICROLAMPORTS_PER_LAMPORT},
+	consts::{LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
 	Signature as SolSignature,
@@ -40,10 +40,10 @@ pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 pub const CCM_BYTES_PER_ACCOUNT: usize = 33usize;
 
 // Bytes left that are available for the user when building the native and token ccm transfers.
-// Leaving some bytes for safety (32) but without preventing an extra account to be included.
+// Leaving some bytes for safety but without preventing an extra account to be included.
 // The cf_receiver is accounted as part of the bytes required to build the call.
-pub const MAX_CCM_BYTES_USDC: usize = 673usize; // technically 705
-pub const MAX_CCM_BYTES_SOL: usize = 460usize; // technically 492
+pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 527usize; // 705 bytes left
+pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 740usize; // 492 bytes left
 
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";

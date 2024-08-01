@@ -5,6 +5,7 @@ import {
   SystemProgram,
   Transaction,
   TransactionInstruction,
+  LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import { getContractAddress, getSolWhaleKeyPair, encodeSolAddress } from '../shared/utils';
 import { sendSol, signAndSendTxSol } from '../shared/send_sol';
@@ -45,6 +46,24 @@ export async function initializeArbitrumContracts(
     })
     .encodeABI();
   await signAndSendTxEvm('Arbitrum', keyManagerAddress, '0', txData);
+}
+
+function numberToBuffer(bytes: number, number: number): Buffer {
+  const buf = Buffer.alloc(bytes);
+  if (bytes === 2) {
+    buf.writeUInt16LE(number, 0);
+  } else if (bytes === 4) {
+    buf.writeUInt32LE(number, 0);
+  } else {
+    throw new Error('Unsupported byte length');
+  }
+  return buf;
+}
+
+function bigNumberToU64Buffer(number: bigint): Buffer {
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64LE(number, 0);
+  return buf;
 }
 
 export async function initializeSolanaPrograms(solClient: Connection, solKey: string) {
@@ -99,10 +118,10 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vaultIdl: any = await getSolanaVaultIdl();
 
-  const discriminatorString = vaultIdl.instructions.find(
+  const initializeDiscriminatorString = vaultIdl.instructions.find(
     (instruction: { name: string }) => instruction.name === 'initialize',
   ).discriminator;
-  const discriminator = new Uint8Array(discriminatorString.map(Number));
+  const initializeDiscriminator = new Uint8Array(initializeDiscriminatorString.map(Number));
 
   const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
@@ -114,16 +133,24 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   await sendSol(solKey, '100');
 
   // Initialize Vault program
-  const tx = new Transaction().add(
+  let tx = new Transaction().add(
     new TransactionInstruction({
       data: Buffer.concat([
-        Buffer.from(discriminator.buffer),
+        Buffer.from(initializeDiscriminator.buffer),
         solKeyBuffer,
-        solKeyBuffer,
+        whaleKeypair.publicKey.toBuffer(), // govkey
         tokenVaultPda.toBuffer(),
         Buffer.from([253]), // tokenVaultPda bump
         upgradeSignerPda.toBuffer(),
         Buffer.from([255]), // upgradeSignerPda bump
+        Buffer.from([0]), // suspendedVault (false)
+        Buffer.from([1]), // suspendedLegacySwaps (true)
+        Buffer.from([0]), // suspendedEventSwaps (false)
+        bigNumberToU64Buffer(5n * (BigInt(LAMPORTS_PER_SOL) / 10n)), // minNativeSwapAmount
+        numberToBuffer(2, 64), // maxDstAddressLen
+        numberToBuffer(4, 10000), // maxCcmMessageLen
+        numberToBuffer(4, 1000), // maxCfParametersLen
+        numberToBuffer(4, 500), // max_event_accounts
       ]),
       keys: [
         { pubkey: dataAccount, isSigner: false, isWritable: true },
@@ -133,9 +160,11 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       programId: solanaVaultProgramId,
     }),
   );
+  await signAndSendTxSol(tx);
 
   // Set nonce authority to the new AggKey
-  const numberOfNonceAccounts = 8;
+  tx = new Transaction();
+  const numberOfNonceAccounts = 10;
   for (let i = 0; i < numberOfNonceAccounts; i++) {
     // Using the index stringified as the seed ('0', '1', '2' ...)
     const seed = i.toString();
@@ -156,13 +185,47 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
       }),
     );
   }
-  // Set Vault's upgrade authority to upgradeSignerPDa
-  tx.add(
+  await signAndSendTxSol(tx);
+
+  // Set Vault's upgrade authority to upgradeSignerPDa and enable token support
+  tx = new Transaction().add(
     createUpgradeAuthorityInstruction(
       solanaVaultProgramId,
       whaleKeypair.publicKey,
       upgradeSignerPda,
     ),
+  );
+
+  // Add token support
+  const enableTokenSupportDiscriminatorString = vaultIdl.instructions.find(
+    (instruction: { name: string }) => instruction.name === 'enable_token_support',
+  ).discriminator;
+  const enableTokenSupportDiscriminator = new Uint8Array(
+    enableTokenSupportDiscriminatorString.map(Number),
+  );
+
+  const solUsdcMintPubkey = new PublicKey(getContractAddress('Solana', 'SolUsdc'));
+
+  const [tokenSupportedAccount] = PublicKey.findProgramAddressSync(
+    [solUsdcMintPubkey.toBuffer()],
+    solanaVaultProgramId,
+  );
+
+  tx.add(
+    new TransactionInstruction({
+      data: Buffer.concat([
+        Buffer.from(enableTokenSupportDiscriminator.buffer),
+        bigNumberToU64Buffer(5n * 10n ** 6n), // minTokenSwapAmount
+      ]),
+      keys: [
+        { pubkey: dataAccount, isSigner: false, isWritable: true },
+        { pubkey: whaleKeypair.publicKey, isSigner: true, isWritable: false },
+        { pubkey: tokenSupportedAccount, isSigner: false, isWritable: true },
+        { pubkey: solUsdcMintPubkey, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      programId: solanaVaultProgramId,
+    }),
   );
   await signAndSendTxSol(tx);
 }

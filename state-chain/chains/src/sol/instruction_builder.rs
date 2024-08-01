@@ -415,7 +415,10 @@ mod test {
 		TransferAssetParams,
 	};
 
-	use sol_prim::{consts::SOL_USDC_DECIMAL, DerivedAta};
+	use sol_prim::{
+		consts::{MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL},
+		PdaAndBump,
+	};
 
 	// Arbitrary number used for testing
 	const TEST_COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
@@ -425,7 +428,7 @@ mod test {
 		asset: SolAsset,
 	) -> crate::FetchAssetParams<Solana> {
 		let channel_id = channel_id.unwrap_or(923_601_931u64);
-		let DerivedAta { address, bump } =
+		let PdaAndBump { address, bump } =
 			derive_deposit_address(channel_id, api_env().vault_program).unwrap();
 
 		crate::FetchAssetParams {

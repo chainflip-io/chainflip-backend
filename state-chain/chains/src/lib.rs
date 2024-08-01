@@ -710,6 +710,3 @@ pub trait CcmValidityCheck {
 		Ok(())
 	}
 }
-
-pub struct AlwaysValid;
-impl CcmValidityCheck for AlwaysValid {}
