@@ -613,7 +613,7 @@ pub mod pallet {
 
 	/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
 	#[pallet::storage]
-	pub(super) type MaxSwapRetryDurationBlocks<T: Config<I>, I: 'static = ()> =
+	pub type MaxSwapRetryDurationBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumber, ValueQuery, ConstU32<DEFAULT_SWAP_RETRY_DURATION_BLOCKS>>;
 
 	#[pallet::event]
