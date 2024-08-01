@@ -270,7 +270,7 @@ jobs:
         run: |
           export SOLANA_BASE_PATH="/tmp/solana"
           mkdir -p $SOLANA_BASE_PATH
-          docker-compose -f localnet/docker-compose.yml -p "chainflip-localnet" up solana-init --quiet-pull
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up solana-init --quiet-pull
           tar -xzf $SOLANA_BASE_PATH/solana-ledger.tar.gz -C $SOLANA_BASE_PATH
           rm -rf $SOLANA_BASE_PATH/solana-ledger.tar.gz
           echo "🐛 Fix solana symlink issue ..."
