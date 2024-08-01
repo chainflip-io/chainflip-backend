@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@chainflip/cli':
-        specifier: 1.4.0-solana.11
-        version: 1.4.0-solana.11(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.8.0(bufferutil@4.0.8)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)
+        specifier: 1.5.0-solana.0
+        version: 1.5.0-solana.0(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.8.0(bufferutil@4.0.8)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)
       '@coral-xyz/anchor':
         specifier: ^0.30.1
         version: 0.30.1(bufferutil@4.0.8)(utf-8-validate@5.0.10)
@@ -136,8 +136,8 @@ packages:
   '@chainflip/bitcoin@0.2.2':
     resolution: {integrity: sha512-45WfB9VTeAltbAz1GscDcYJISx3kUDY0e3R6a02X5+EbsMsZzaqyCeEFRWTvzsYeRewTB69VEHY5+7jJos7Q5g==}
 
-  '@chainflip/cli@1.4.0-solana.11':
-    resolution: {integrity: sha512-7GDs01hgPlP3l37JR+LTA1dzLlzmFrgSNHkXcZTWX1MvdihIVwLRsKLsLGTCS/Kh3yGsX9uS+zb6GOO8oFO52g==}
+  '@chainflip/cli@1.5.0-solana.0':
+    resolution: {integrity: sha512-UdujKQRQ+dHgrlYOfnFr2/mDTxVSKmiCAiwln1WJ9BZmmP4H67vi7tOB0LTUTYL8mk4+RZxYU8kyZ+Evmx1zUg==}
     hasBin: true
     peerDependencies:
       axios: ^1.x
@@ -146,11 +146,11 @@ packages:
   '@chainflip/rpc@1.4.10':
     resolution: {integrity: sha512-JUxCM1OK/G14WNFuxFzZ7zLA+jTj4Yuy9J/ttF0MUehlqpo203A/DTkPKH4hAYgkwTqjs2IuxrCTpggTi5cnSA==}
 
-  '@chainflip/utils@0.2.1':
-    resolution: {integrity: sha512-LeAGM+rTf2YUBA5FVrIWTwoGsvzh7/6wMsF48T1DgNXu9GNy859+BPWCEP5zPiLCukGS8qpSEKYN1Pt7ChJreg==}
-
   '@chainflip/utils@0.3.0':
     resolution: {integrity: sha512-csW8E3lRcSG1udN/kgsOhjZ7bfRrSbgv8Hdh/pzjM+VjQ6Hh46/LuiZHeQR0rQMimfG+lu2Afxk4jeRXRGFWTg==}
+
+  '@chainflip/utils@0.4.0':
+    resolution: {integrity: sha512-OuMFlgbIbyJ1Kt39zytfGh4HZ5dVY25/a3qb0c1K137+QmhdOuF+R7QSkFPqYAfDG4KhGRqo0rgUtEpaEEcSKA==}
 
   '@coral-xyz/anchor-errors@0.30.1':
     resolution: {integrity: sha512-9Mkradf5yS5xiLWrl9WrpjqOrAV+/W2RQHDlbnAZBivoGpOs1ECjoDCkVk4aRG8ZdiFiB8zQEVlxf+8fKkmSfQ==}
@@ -3109,11 +3109,11 @@ snapshots:
 
   '@chainflip/bitcoin@0.2.2': {}
 
-  '@chainflip/cli@1.4.0-solana.11(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.8.0(bufferutil@4.0.8)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)':
+  '@chainflip/cli@1.5.0-solana.0(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.8.0(bufferutil@4.0.8)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)':
     dependencies:
       '@chainflip/bitcoin': 0.2.2
       '@chainflip/rpc': 1.4.10
-      '@chainflip/utils': 0.2.1
+      '@chainflip/utils': 0.4.0
       axios: 1.7.2
       ethers: 6.8.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       ioredis: 5.4.1
@@ -3130,9 +3130,9 @@ snapshots:
       '@chainflip/utils': 0.3.0
       zod: 3.23.8
 
-  '@chainflip/utils@0.2.1': {}
-
   '@chainflip/utils@0.3.0': {}
+
+  '@chainflip/utils@0.4.0': {}
 
   '@coral-xyz/anchor-errors@0.30.1': {}
 
