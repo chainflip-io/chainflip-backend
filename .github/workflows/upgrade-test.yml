@@ -44,6 +44,7 @@ on:
         required: false
         default: true
 env:
+  SOLANA_VERSION: v1.18.17
   FORCE_COLOR: 1
 
 permissions:
@@ -261,6 +262,22 @@ jobs:
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.RELEASE_VERSION }}"
 
+      - name: Install solana ☀️
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
+
+      - name: Start Solana node ☀️
+        run: |
+          export SOLANA_BASE_PATH="/tmp/solana"
+          mkdir -p $SOLANA_BASE_PATH
+          tar -xzf $SOLANA_BASE_PATH/solana-ledger.tar.gz -C $SOLANA_BASE_PATH
+          rm -rf $SOLANA_BASE_PATH/solana-ledger.tar.gz
+          echo "🐛 Fix solana symlink issue ..."
+          rm $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
+          ln -s $SOLANA_BASE_PATH/test-ledger/accounts/snapshot/100 $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
+          ./localnet/init/scripts/start-solana.sh
+          check_endpoint_health -s http://localhost:8899
+
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
         id: post-upgrade-bouncer
@@ -269,11 +286,6 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          if lsof -Pi :8899 -sTCP:LISTEN -t >/dev/null ; then
-              echo "Solana node is running fine"
-          else
-              echo "No process is listening on port 8899. Solana node is probably dead"
-          fi
           ./commands/setup_sol_vault.ts
           ./tests/all_concurrent_tests.ts
 
