@@ -27,7 +27,7 @@ pub use weights::WeightInfo;
 
 use cf_chains::address::EncodedAddress;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
