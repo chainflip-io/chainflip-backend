@@ -284,5 +284,7 @@ decl_runtime_apis!(
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
+		fn cf_swap_retry_delay_blocks() -> u32;
+		fn cf_max_swap_retry_duration_blocks(chain: ForeignChain) -> u32;
 	}
 );
