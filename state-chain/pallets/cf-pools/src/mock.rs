@@ -124,9 +124,6 @@ impl BalanceApi for MockBalance {
 		unimplemented!()
 	}
 
-	fn record_network_fee(_: u128) {
-		unimplemented!()
-	}
 	fn collected_rejected_funds(_: cf_primitives::Asset, _: u128) {
 		unimplemented!()
 	}

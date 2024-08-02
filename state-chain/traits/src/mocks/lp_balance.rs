@@ -80,10 +80,6 @@ impl BalanceApi for MockBalance {
 		.unwrap())
 	}
 
-	fn record_network_fee(_amount: AssetAmount) {
-		unimplemented!()
-	}
-
 	fn collected_rejected_funds(_asset: Asset, _amount: AssetAmount) {
 		unimplemented!()
 	}

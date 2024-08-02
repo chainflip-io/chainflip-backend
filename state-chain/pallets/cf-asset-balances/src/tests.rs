@@ -317,7 +317,7 @@ fn can_reconciliate_multiple_chains_at_once() {
 pub mod balance_api {
 	use super::*;
 
-	use crate::{CollectedNetworkFee, CollectedRejectedFunds, HistoricalEarnedFees};
+	use crate::{CollectedRejectedFunds, HistoricalEarnedFees};
 	use cf_primitives::chains::assets::eth;
 
 	#[test]
@@ -432,14 +432,6 @@ pub mod balance_api {
 				Pallet::<Test>::free_balances(&AccountId::from([1; 32])).unwrap().eth,
 				eth::AssetMap { eth: 100, flip: 0, usdc: 0, usdt: 0 }
 			);
-		});
-	}
-
-	#[test]
-	pub fn record_network_fee() {
-		new_test_ext().execute_with(|| {
-			Pallet::<Test>::record_network_fee(100);
-			assert_eq!(CollectedNetworkFee::<Test>::get(), 100);
 		});
 	}
 

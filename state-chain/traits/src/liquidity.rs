@@ -35,9 +35,6 @@ pub trait LpApi {
 pub trait BalanceApi {
 	type AccountId;
 
-	/// Record the network fee.
-	fn record_network_fee(amount: AssetAmount);
-
 	/// Record the rejected funds.
 	fn collected_rejected_funds(asset: Asset, amount: AssetAmount);
 

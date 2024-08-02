@@ -157,10 +157,6 @@ pub mod pallet {
 	pub type HistoricalEarnedFees<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
-	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
-	#[pallet::storage]
-	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
-
 	/// Fund accrued from rejected swap and CCM calls.
 	#[pallet::storage]
 	pub type CollectedRejectedFunds<T: Config> =
@@ -452,9 +448,6 @@ where
 		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset).unwrap_or_default()))
 	}
 
-	fn record_network_fee(amount: AssetAmount) {
-		CollectedNetworkFee::<T>::mutate(|fee| *fee = fee.saturating_add(amount));
-	}
 	fn collected_rejected_funds(asset: Asset, amount: AssetAmount) {
 		CollectedRejectedFunds::<T>::mutate(asset, |fee| *fee = fee.saturating_add(amount));
 	}
@@ -468,8 +461,7 @@ where
 	fn get_balances_info() -> BalancesInfo {
 		let balances = FreeBalances::<T>::iter().collect::<Vec<_>>();
 		let fees = HistoricalEarnedFees::<T>::iter().collect::<Vec<_>>();
-		let network_fee = CollectedNetworkFee::<T>::get();
 		let rejected_funds = CollectedRejectedFunds::<T>::iter().collect::<Vec<_>>();
-		BalancesInfo { network_fee, rejected_funds, balances: balances.into(), fees: fees.into() }
+		BalancesInfo { rejected_funds, balances: balances.into(), fees: fees.into() }
 	}
 }
