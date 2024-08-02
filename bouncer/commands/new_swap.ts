@@ -61,7 +61,7 @@ async function newSwapCommand() {
             demandOption: false,
           })
           .option('refundDuration', {
-            describe: 'Fill or kill duration in blocks to retry swap before refunding',
+            describe: 'Fill or kill duration in blocks to retry the swap before refunding',
             type: 'number',
             demandOption: false,
             default: 0,
@@ -74,11 +74,11 @@ async function newSwapCommand() {
     throw new Error('Must specify both refundAddress and minimumPrice when using refund options');
   }
   const refundParameters: RefundParameters | undefined =
-    args.refundAddress !== undefined
+    args.refundAddress !== undefined && args.minPrice !== undefined
       ? {
           retryDurationBlocks: args.refundDuration,
           refundAddress: args.refundAddress,
-          minPrice: args.minPrice ? args.minPrice : '0',
+          minPrice: args.minPrice,
         }
       : undefined;
 
