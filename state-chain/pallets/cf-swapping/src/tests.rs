@@ -1905,7 +1905,7 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 			min_price: 100.into(),
 		};
 
-		let dca_parameters = DCAParameters { number_of_chunks: 5, swap_interval: 2 };
+		let dca_parameters = DCAParameters { number_of_chunks: 5, chunk_interval: 2 };
 
 		const BOOST_FEE: u16 = 100;
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(

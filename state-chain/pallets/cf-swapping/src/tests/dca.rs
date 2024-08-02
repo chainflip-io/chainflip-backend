@@ -36,7 +36,7 @@ fn dca_happy_path() {
 			assert_eq!(System::block_number(), INITIAL_BLOCK);
 
 			insert_swaps(&[params(
-				Some(DCAParameters { number_of_chunks: 2, swap_interval: SWAP_INTERVAL }),
+				Some(DCAParameters { number_of_chunks: 2, chunk_interval: SWAP_INTERVAL }),
 				None,
 			)]);
 
@@ -120,7 +120,7 @@ fn dca_single_chunk() {
 			assert_eq!(System::block_number(), INITIAL_BLOCK);
 
 			insert_swaps(&[params(
-				Some(DCAParameters { number_of_chunks: 1, swap_interval: SWAP_INTERVAL }),
+				Some(DCAParameters { number_of_chunks: 1, chunk_interval: SWAP_INTERVAL }),
 				None,
 			)]);
 
@@ -185,7 +185,7 @@ fn dca_with_fok_full_refund() {
 			insert_swaps(&[params(
 				Some(DCAParameters {
 					number_of_chunks: NUMBER_OF_CHUNKS,
-					swap_interval: SWAP_INTERVAL,
+					chunk_interval: SWAP_INTERVAL,
 				}),
 				Some(SwapRefundParameters {
 					refund_block: REFUND_BLOCK as u32,
@@ -265,7 +265,7 @@ fn dca_with_fok_partial_refund() {
 			insert_swaps(&[params(
 				Some(DCAParameters {
 					number_of_chunks: NUMBER_OF_CHUNKS,
-					swap_interval: SWAP_INTERVAL,
+					chunk_interval: SWAP_INTERVAL,
 				}),
 				Some(SwapRefundParameters {
 					refund_block: REFUND_BLOCK as u32,
@@ -363,7 +363,7 @@ fn dca_with_fok_fully_executed() {
 			insert_swaps(&[params(
 				Some(DCAParameters {
 					number_of_chunks: NUMBER_OF_CHUNKS,
-					swap_interval: SWAP_INTERVAL,
+					chunk_interval: SWAP_INTERVAL,
 				}),
 				Some(SwapRefundParameters {
 					refund_block: CHUNK_2_BLOCK as u32,

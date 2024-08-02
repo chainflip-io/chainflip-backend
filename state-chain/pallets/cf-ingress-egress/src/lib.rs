@@ -144,7 +144,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -304,7 +304,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			channel_metadata: CcmChannelMetadata,
 			refund_params: Option<ChannelRefundParameters>,
-			// TODO: add DCA params
+			dca_params: Option<DCAParameters>,
 		},
 	}
 
@@ -1564,6 +1564,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_address,
 				channel_metadata,
 				refund_params,
+				dca_params: _,
 			} => {
 				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
@@ -2032,9 +2033,9 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		if let Some(refund_params) = &refund_params {
+		if let Some(params) = &refund_params {
 			ensure!(
-				refund_params.retry_duration <= MaxSwapRetryDurationBlocks::<T, I>::get(),
+				params.retry_duration <= MaxSwapRetryDurationBlocks::<T, I>::get(),
 				DispatchError::Other("Retry duration too long")
 			);
 		}
@@ -2048,6 +2049,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 					destination_address,
 					channel_metadata,
 					refund_params,
+					dca_params,
 				},
 				None => ChannelAction::Swap {
 					destination_asset,

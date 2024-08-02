@@ -77,6 +77,7 @@ mod benchmarks {
 			channel_metadata: None,
 			refund_parameters: None,
 			affiliate_fees,
+			dca_parameters: None,
 		};
 
 		#[block]
