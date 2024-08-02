@@ -9,7 +9,6 @@ pub mod runtime_apis;
 pub mod safe_mode;
 #[cfg(feature = "std")]
 pub mod test_runner;
-use cf_runtime_upgrade_utilities::VersionedMigration;
 mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
@@ -25,7 +24,6 @@ use crate::{
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
 	},
 };
-
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
@@ -46,6 +44,7 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
+use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi, NoLimit};
 use codec::{alloc::string::ToString, Encode};
 use core::ops::Range;
@@ -1140,7 +1139,7 @@ type AllMigrations = (
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
-	MigrationsForV1_5,
+	MigrationsForV1_6,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1181,56 +1180,20 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
-	// TODO: After this migration is run, remember to un-comment the
-	// Solana-specific pallet migrations.
+);
+
+// TODO: After this  release, remember to un-comment the
+// Arbitrum-specific pallet migrations.
+type MigrationsForV1_6 = (
 	VersionedMigration<
 		pallet_cf_environment::Pallet<Runtime>,
 		migrations::solana_integration::SolanaIntegration,
 		11,
 		12,
 	>,
-	MigrateApicalls,
+	migrations::housekeeping::Migration,
+	migrations::reap_old_accounts::Migration,
 );
-
-type MigrateApicalls = (
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
-		migrations::migrate_apicalls_to_store_signer::EthMigrateApicallsAndOnChainKey,
-		5,
-		6,
-	>,
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
-		migrations::migrate_apicalls_to_store_signer::DotMigrateApicallsAndOnChainKey,
-		5,
-		6,
-	>,
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
-		migrations::migrate_apicalls_to_store_signer::BtcMigrateApicallsAndOnChainKey,
-		5,
-		6,
-	>,
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
-		migrations::migrate_apicalls_to_store_signer::ArbMigrateApicallsAndOnChainKey,
-		5,
-		6,
-	>,
-	// The apicalls migration is not needed for solana since solana is not initizlized yet and so
-	// the storage items do not exist yet.
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		migrations::migrate_apicalls_to_store_signer::NoSolUpgrade,
-		5,
-		6,
-	>,
-);
-
-// TODO: After this  release, remember to un-comment the
-// Arbitrum-specific pallet migrations.
-type MigrationsForV1_5 =
-	(migrations::housekeeping::Migration, migrations::reap_old_accounts::Migration);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
