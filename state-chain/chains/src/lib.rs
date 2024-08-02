@@ -709,11 +709,18 @@ pub enum CcmValidityError {
 	CfParametersContainsInvalidAccounts,
 }
 
+#[derive(Clone, Debug)]
+pub enum DecodedCfParameters {
+	Sol(SolCcmAccounts),
+	// We could also return cf_parameters as is
+	Other(),
+}
+
 pub trait CcmValidityCheck {
 	fn is_valid(
 		_ccm: &CcmChannelMetadata,
 		_egress_asset: cf_primitives::Asset,
-	) -> Result<(), CcmValidityError> {
+	) -> Result<DecodedCfParameters, CcmValidityError> {
 		Ok(())
 	}
 }

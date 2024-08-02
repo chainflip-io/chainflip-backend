@@ -3,18 +3,11 @@ use crate::{
 		SolAsset, SolCcmAccounts, SolPubkey, CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL,
 		MAX_CCM_BYTES_USDC,
 	},
-	CcmChannelMetadata, CcmValidityCheck, CcmValidityError,
+	CcmChannelMetadata, CcmValidityCheck, CcmValidityError, DecodedCfParameters,
 };
 use cf_primitives::{Asset, ForeignChain};
 use codec::Decode;
 use sp_std::vec::Vec;
-
-#[derive(Clone, Debug)]
-pub enum DecodedCfParameters {
-	Sol(SolCcmAccounts),
-	// We could also return cf_parameters as is
-	Other(),
-}
 
 pub struct CcmValidityChecker;
 
