@@ -4,11 +4,6 @@ use cf_primitives::{Asset, AssetAmount, BalancesInfo, Beneficiaries, ChannelId, 
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use sp_std::{vec, vec::Vec};
 
-pub trait BalanceTracker {
-	fn record_network_fee(amount: AssetAmount);
-	fn collected_rejected_funds(asset: Asset, amount: AssetAmount);
-}
-
 pub trait SwapDepositHandler {
 	type AccountId;
 
@@ -55,9 +50,6 @@ pub trait LpApi {
 /// API for interacting with the asset-balance pallet.
 pub trait BalanceApi {
 	type AccountId;
-
-	/// Record the network fee.
-	fn record_network_fee(amount: AssetAmount);
 
 	/// Record the rejected funds.
 	fn collected_rejected_funds(asset: Asset, amount: AssetAmount);

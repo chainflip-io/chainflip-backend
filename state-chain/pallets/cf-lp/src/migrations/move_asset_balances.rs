@@ -29,9 +29,6 @@ mod old {
 	>;
 
 	#[frame_support::storage_alias]
-	pub type CollectedNetworkFee<T: Config> = StorageValue<Pallet<T>, AssetAmount, ValueQuery>;
-
-	#[frame_support::storage_alias]
 	pub type CollectedRejectedFunds<T: Config> =
 		StorageMap<Pallet<T>, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 }
@@ -44,7 +41,6 @@ where
 		From<Vec<(<T as frame_system::Config>::AccountId, cf_primitives::Asset, u128)>>,
 {
 	fn on_runtime_upgrade() -> Weight {
-		T::BalanceApi::record_network_fee(old::CollectedNetworkFee::<T>::take());
 		for (account, asset, amount) in old::FreeBalances::<T>::drain() {
 			let _ = T::BalanceApi::try_credit_account(&account, asset, amount);
 		}
@@ -60,7 +56,6 @@ where
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let balances = BalancesInfo {
-			network_fee: old::CollectedNetworkFee::<T>::get(),
 			rejected_funds: old::CollectedRejectedFunds::<T>::iter().collect::<Vec<_>>(),
 			balances: old::FreeBalances::<T>::iter().collect::<Vec<_>>().into(),
 			fees: old::HistoricalEarnedFees::<T>::iter().collect::<Vec<_>>().into(),
