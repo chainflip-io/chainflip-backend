@@ -12,7 +12,7 @@ use sol_prim::consts::{
 
 use crate::{
 	sol::{
-		api::{DurableNonceAndAccount, SolanaTransactionBuildingError},
+		api::SolanaTransactionBuildingError,
 		compute_units_costs::{
 			compute_limit_with_buffer, BASE_COMPUTE_UNITS_PER_TX, COMPUTE_UNITS_PER_FETCH_NATIVE,
 			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_ROTATION,
@@ -57,15 +57,13 @@ impl SolanaInstructionBuilder {
 	/// Returns the finished Instruction Set to construct the SolTransaction.
 	fn finalize(
 		mut instructions: Vec<SolInstruction>,
-		durable_nonce: DurableNonceAndAccount,
+		nonce_account: SolPubkey,
 		agg_key: SolPubkey,
 		compute_price: SolAmount,
 		compute_limit: SolComputeLimit,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
-		let mut final_instructions = vec![SystemProgramInstruction::advance_nonce_account(
-			&durable_nonce.0.into(),
-			&agg_key,
-		)];
+		let mut final_instructions =
+			vec![SystemProgramInstruction::advance_nonce_account(&nonce_account, &agg_key)];
 
 		if compute_price > 0 {
 			final_instructions
@@ -76,11 +74,8 @@ impl SolanaInstructionBuilder {
 		final_instructions.append(&mut instructions);
 
 		// Test serialize the final transaction to obtain its length.
-		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
-			&final_instructions,
-			Some(&agg_key),
-			&durable_nonce.1.into(),
-		));
+		let transaction =
+			SolTransaction::new_unsigned(SolMessage::new(&final_instructions, Some(&agg_key)));
 
 		let mock_serialized_tx = transaction
 			.clone()
@@ -102,7 +97,7 @@ impl SolanaInstructionBuilder {
 		fetch_params: Vec<FetchAssetParams<Solana>>,
 		sol_api_environment: SolApiEnvironment,
 		agg_key: SolAddress,
-		durable_nonce: DurableNonceAndAccount,
+		nonce_account: SolAddress,
 		compute_price: SolAmount,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
 		let mut compute_limit: SolComputeLimit = BASE_COMPUTE_UNITS_PER_TX;
@@ -161,7 +156,7 @@ impl SolanaInstructionBuilder {
 
 		Self::finalize(
 			instructions,
-			durable_nonce,
+			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
 			compute_limit_with_buffer(compute_limit),
@@ -174,7 +169,7 @@ impl SolanaInstructionBuilder {
 		amount: SolAmount,
 		to: SolAddress,
 		agg_key: SolAddress,
-		durable_nonce: DurableNonceAndAccount,
+		nonce_account: SolAddress,
 		compute_price: SolAmount,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
 		let instructions =
@@ -182,7 +177,7 @@ impl SolanaInstructionBuilder {
 
 		Self::finalize(
 			instructions,
-			durable_nonce,
+			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
 			compute_limit_with_buffer(
@@ -202,7 +197,7 @@ impl SolanaInstructionBuilder {
 		token_vault_ata: SolAddress,
 		token_mint_pubkey: SolAddress,
 		agg_key: SolAddress,
-		durable_nonce: DurableNonceAndAccount,
+		nonce_account: SolAddress,
 		compute_price: SolAmount,
 		token_decimals: u8,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
@@ -228,7 +223,7 @@ impl SolanaInstructionBuilder {
 
 		Self::finalize(
 			instructions,
-			durable_nonce,
+			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
 			compute_limit_with_buffer(BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_TOKEN),
@@ -242,7 +237,7 @@ impl SolanaInstructionBuilder {
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
 		agg_key: SolAddress,
-		durable_nonce: DurableNonceAndAccount,
+		nonce_account: SolAddress,
 		compute_price: SolAmount,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
 		let mut instructions = vec![VaultProgram::with_id(vault_program).rotate_agg_key(
@@ -262,7 +257,7 @@ impl SolanaInstructionBuilder {
 
 		Self::finalize(
 			instructions,
-			durable_nonce,
+			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
 			compute_limit_with_buffer(COMPUTE_UNITS_PER_ROTATION),
@@ -280,7 +275,7 @@ impl SolanaInstructionBuilder {
 		vault_program: SolAddress,
 		vault_program_data_account: SolAddress,
 		agg_key: SolAddress,
-		durable_nonce: DurableNonceAndAccount,
+		nonce_account: SolAddress,
 		compute_price: SolAmount,
 		gas_budget: SolAmount,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
@@ -304,7 +299,7 @@ impl SolanaInstructionBuilder {
 
 		Self::finalize(
 			instructions,
-			durable_nonce,
+			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
 			Self::calculate_gas_limit(gas_budget, compute_price, SolAsset::Sol),
@@ -325,7 +320,7 @@ impl SolanaInstructionBuilder {
 		token_vault_ata: SolAddress,
 		token_mint_pubkey: SolAddress,
 		agg_key: SolAddress,
-		durable_nonce: DurableNonceAndAccount,
+		nonce_account: SolAddress,
 		compute_price: SolAmount,
 		token_decimals: u8,
 		gas_budget: SolAmount,
@@ -364,7 +359,7 @@ impl SolanaInstructionBuilder {
 
 		Self::finalize(
 			instructions,
-			durable_nonce,
+			nonce_account.into(),
 			agg_key.into(),
 			compute_price,
 			Self::calculate_gas_limit(gas_budget, compute_price, SolAsset::SolUsdc),
@@ -408,7 +403,7 @@ mod test {
 		sol::{
 			signing_key::SolSigningKey,
 			sol_tx_core::{address_derivation::derive_deposit_address, sol_test_values::*},
-			SolanaDepositFetchId,
+			SolHash, SolanaDepositFetchId,
 		},
 		TransferAssetParams,
 	};
@@ -435,8 +430,12 @@ mod test {
 		}
 	}
 
-	fn durable_nonce() -> DurableNonceAndAccount {
-		(NONCE_ACCOUNTS[0], TEST_DURABLE_NONCE)
+	fn nonce_account() -> SolAddress {
+		NONCE_ACCOUNTS[0]
+	}
+
+	fn nonce_hash() -> SolHash {
+		TEST_DURABLE_NONCE
 	}
 
 	fn api_env() -> SolApiEnvironment {
@@ -463,11 +462,11 @@ mod test {
 		expected_serialized_tx: Vec<u8>,
 	) {
 		// Obtain required info from Chain Environment
-		let durable_nonce = durable_nonce();
+		let nonce_hash = nonce_hash();
 		let agg_key_keypair = SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap();
 
 		// Construct the Transaction and sign it
-		transaction.sign(&[&agg_key_keypair], durable_nonce.1.into());
+		transaction.sign(&[&agg_key_keypair], nonce_hash.into());
 
 		// println!("{:?}", tx);
 		let serialized_tx = transaction
@@ -494,7 +493,7 @@ mod test {
 			vec![get_fetch_params(None, SOL)],
 			api_env(),
 			agg_key(),
-			durable_nonce(),
+			nonce_account(),
 			compute_price(),
 		)
 		.unwrap();
@@ -516,7 +515,7 @@ mod test {
 			vec![fetch_param_0, fetch_param_1],
 			api_env(),
 			agg_key(),
-			durable_nonce(),
+			nonce_account(),
 			compute_price(),
 		)
 		.unwrap();
@@ -534,7 +533,7 @@ mod test {
 			vec![get_fetch_params(Some(0u64), USDC)],
 			api_env(),
 			agg_key(),
-			durable_nonce(),
+			nonce_account(),
 			compute_price(),
 		)
 		.unwrap();
@@ -555,7 +554,7 @@ mod test {
 			],
 			api_env(),
 			agg_key(),
-			durable_nonce(),
+			nonce_account(),
 			compute_price(),
 		)
 		.unwrap();
@@ -572,7 +571,7 @@ mod test {
 			TRANSFER_AMOUNT,
 			TRANSFER_TO_ACCOUNT,
 			agg_key(),
-			durable_nonce(),
+			nonce_account(),
 			compute_price(),
 		)
 		.unwrap();
@@ -604,7 +603,7 @@ mod test {
 			env.usdc_token_vault_ata,
 			env.usdc_token_mint_pubkey,
 			agg_key(),
-			durable_nonce(),
+			nonce_account(),
 			compute_price(),
 			SOL_USDC_DECIMAL,
 		)
@@ -626,7 +625,7 @@ mod test {
 			env.vault_program,
 			env.vault_program_data_account,
 			agg_key(),
-			durable_nonce(),
+			nonce_account(),
 			compute_price(),
 		)
 		.unwrap();
@@ -733,7 +732,7 @@ mod test {
 			env.vault_program,
 			env.vault_program_data_account,
 			agg_key(),
-			durable_nonce(),
+			nonce_account(),
 			compute_price(),
 			(TEST_COMPUTE_LIMIT as u128 * compute_price() as u128)
 				.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()) as u64 +
@@ -772,7 +771,7 @@ mod test {
 			env.usdc_token_vault_ata,
 			env.usdc_token_mint_pubkey,
 			agg_key(),
-			durable_nonce(),
+			nonce_account(),
 			compute_price(),
 			SOL_USDC_DECIMAL,
 			(TEST_COMPUTE_LIMIT as u128 * compute_price() as u128)
@@ -794,7 +793,7 @@ mod test {
 			[get_fetch_params(None, SOL); 28].to_vec(),
 			api_env(),
 			agg_key(),
-			durable_nonce(),
+			nonce_account(),
 			compute_price(),
 		));
 
@@ -803,7 +802,7 @@ mod test {
 				[get_fetch_params(None, SOL); 29].to_vec(),
 				api_env(),
 				agg_key(),
-				durable_nonce(),
+				nonce_account(),
 				compute_price(),
 			),
 			SolanaTransactionBuildingError::FinalTransactionExceededMaxLength(1261)
