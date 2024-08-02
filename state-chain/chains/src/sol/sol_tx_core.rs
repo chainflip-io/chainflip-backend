@@ -867,6 +867,7 @@ impl FromStr for Hash {
 }
 
 /// Values used for testing purposes
+#[cfg(test)]
 pub mod sol_test_values {
 	use crate::{
 		sol::{
