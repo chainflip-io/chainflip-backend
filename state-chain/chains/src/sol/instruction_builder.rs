@@ -407,9 +407,7 @@ mod test {
 	use crate::{
 		sol::{
 			signing_key::SolSigningKey,
-			sol_tx_core::{
-				address_derivation::derive_deposit_address, signer::Signer, sol_test_values::*,
-			},
+			sol_tx_core::{address_derivation::derive_deposit_address, sol_test_values::*},
 			SolanaDepositFetchId,
 		},
 		TransferAssetParams,
@@ -435,13 +433,6 @@ mod test {
 			deposit_fetch_id: SolanaDepositFetchId { channel_id, address, bump },
 			asset,
 		}
-	}
-
-	fn agg_key() -> SolAddress {
-		SolSigningKey::from_bytes(&RAW_KEYPAIR)
-			.expect("Key pair generation must succeed")
-			.pubkey()
-			.into()
 	}
 
 	fn durable_nonce() -> DurableNonceAndAccount {

@@ -870,8 +870,8 @@ impl FromStr for Hash {
 pub mod sol_test_values {
 	use crate::{
 		sol::{
-			SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolCcmAddress, SolComputeLimit,
-			SolHash,
+			signing_key::SolSigningKey, sol_tx_core::signer::Signer, SolAddress, SolAmount,
+			SolAsset, SolCcmAccounts, SolCcmAddress, SolComputeLimit, SolHash,
 		},
 		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
 	};
@@ -950,6 +950,10 @@ pub mod sol_test_values {
 					.expect("Test data cannot be too long"), // Extra addresses
 			},
 		}
+	}
+
+	pub fn agg_key() -> SolAddress {
+		SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap().pubkey().into()
 	}
 }
 

@@ -9,7 +9,7 @@ use sp_core::RuntimeDebug;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
-	ccm_checker::CcmValidityChecker,
+	ccm_checker::{check_ccm_for_blacklisted_accounts, CcmValidityChecker},
 	sol::{
 		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolApiEnvironment,
 		SolAsset, SolCcmAccounts, SolHash, SolTransaction, SolanaCrypto,
@@ -265,7 +265,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Verify the validity of the CCM message before building the call.
-		CcmValidityChecker::<Environment>::is_valid(
+		CcmValidityChecker::is_valid(
 			&CcmChannelMetadata {
 				message: message
 					.clone()
@@ -279,20 +279,21 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			},
 			transfer_param.asset.into(),
 		)
-		.map_err(|e| {
-			log::warn!(
-				"Failed to build CCM API call. Transfer param: {:?}, Error: {:?}",
-				transfer_param,
-				e
-			);
-			SolanaTransactionBuildingError::InvalidCcm(e)
-		})?;
+		.map_err(SolanaTransactionBuildingError::InvalidCcm)?;
 
 		let ccm_accounts = SolCcmAccounts::decode(&mut &cf_parameters[..])
 			.map_err(|_| SolanaTransactionBuildingError::CannotDecodeCcmCfParam)?;
 
 		let sol_api_environment = Environment::api_environment()?;
 		let agg_key = Environment::current_agg_key()?;
+
+		// Ensure the CCM parameters do not contain blacklisted accounts.
+		check_ccm_for_blacklisted_accounts(
+			&ccm_accounts,
+			vec![sol_api_environment.token_vault_pda_account.into(), agg_key.into()],
+		)
+		.map_err(SolanaTransactionBuildingError::InvalidCcm)?;
+
 		let durable_nonce = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
@@ -428,7 +429,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			cf_parameters,
 		)
 		.map_err(|e| {
-			log::error!("Failed to construct Solana CCM transfer transaction! Error: {:?}", e);
+			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {:?}", e);
 			ExecutexSwapAndCallError::FailedToBuildCcmForSolana(e)
 		})
 	}
