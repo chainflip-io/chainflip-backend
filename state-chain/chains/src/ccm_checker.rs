@@ -7,6 +7,7 @@ use crate::{
 };
 use cf_primitives::{Asset, ForeignChain};
 use codec::Decode;
+use sp_std::vec::Vec;
 
 pub struct CcmValidityChecker;
 
