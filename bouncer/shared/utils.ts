@@ -296,7 +296,7 @@ export async function observeSwapEvents(
   tag?: string,
   finalized = false,
 ): Promise<BroadcastChainAndId | undefined> {
-  let eventFound = false;
+  let broadcastEventFound = false;
   const subscribeMethod = finalized
     ? api.rpc.chain.subscribeFinalizedHeads
     : api.rpc.chain.subscribeNewHeads;
@@ -318,81 +318,69 @@ export async function observeSwapEvents(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const events: any[] = await api.query.system.events.at(header.hash);
 
-    // Some events don't appear in the order one might expect (e.g. SwapRequested
-    // comes after SwapScheduled), so as a workaround, we add an other loop to be
-    // able to re-scan events that we already visited:
-    let keepSearching = true;
+    for (const record of events) {
+      const { event } = record;
+      if (broadcastEventFound || !event.method.includes(expectedEvent)) {
+        // eslint-disable-next-line no-continue
+        continue;
+      }
 
-    while (keepSearching) {
-      keepSearching = false;
+      const data = event.toHuman().data;
 
-      for (const record of events) {
-        const { event } = record;
-        if (eventFound || !event.method.includes(expectedEvent)) {
-          // eslint-disable-next-line no-continue
-          continue;
-        }
+      switch (expectedEvent) {
+        case swapRequestedEvent: {
+          const channel = data.origin.DepositChannel;
 
-        const data = event.toHuman().data;
-
-        switch (expectedEvent) {
-          case swapRequestedEvent: {
-            const channel = data.origin.DepositChannel;
-
-            if (
-              channel &&
-              Number(channel.channelId) === channelId &&
-              Object.values(channel.depositAddress)[0] === depositAddress &&
-              sourceAsset === (data.inputAsset as Asset) &&
-              destAsset === (data.outputAsset as Asset)
-            ) {
-              swapRequestId = data.swapRequestId;
-              expectedEvent = swapScheduledEvent;
-
-              // This ensures that we loop through all events again to find SwapScheduled:
-              keepSearching = true;
-            }
-
-            break;
+          if (
+            channel &&
+            Number(channel.channelId) === channelId &&
+            Object.values(channel.depositAddress)[0] === depositAddress &&
+            sourceAsset === (data.inputAsset as Asset) &&
+            destAsset === (data.outputAsset as Asset)
+          ) {
+            swapRequestId = data.swapRequestId;
+            expectedEvent = swapScheduledEvent;
           }
-          case swapScheduledEvent:
-            if (data.swapRequestId === swapRequestId) {
-              swapId = data.swapId;
-              expectedEvent = swapExecutedEvent;
-            }
 
-            break;
-          case swapExecutedEvent:
-            if (data.swapId === swapId) {
-              expectedEvent = swapEgressScheduled;
-              console.log(`${tag} swap executed, with id: ${swapId}`);
-            }
-            break;
-          case swapEgressScheduled:
-            if (data.swapRequestId === swapRequestId) {
-              expectedEvent = batchBroadcastRequested;
-              egressId = data.egressId as EgressId;
-              console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
-            }
-            break;
-          case batchBroadcastRequested:
-            for (const eventEgressId of data.egressIds) {
-              if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
-                broadcastId = [egressId[0], Number(data.broadcastId)] as BroadcastChainAndId;
-                console.log(`${tag} broadcast requested, with id: (${broadcastId})`);
-                eventFound = true;
-                unsubscribe();
-                break;
-              }
-            }
-            break;
-          default:
-            break;
+          break;
         }
+        case swapScheduledEvent:
+          if (data.swapRequestId === swapRequestId) {
+            swapId = data.swapId;
+            expectedEvent = swapExecutedEvent;
+          }
+
+          break;
+        case swapExecutedEvent:
+          if (data.swapId === swapId) {
+            expectedEvent = swapEgressScheduled;
+            console.log(`${tag} swap executed, with id: ${swapId}`);
+          }
+          break;
+        case swapEgressScheduled:
+          if (data.swapRequestId === swapRequestId) {
+            expectedEvent = batchBroadcastRequested;
+            egressId = data.egressId as EgressId;
+            console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
+          }
+          break;
+        case batchBroadcastRequested:
+          for (const eventEgressId of data.egressIds) {
+            if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
+              broadcastId = [egressId[0], Number(data.broadcastId)] as BroadcastChainAndId;
+              console.log(`${tag} broadcast requested, with id: (${broadcastId})`);
+              broadcastEventFound = true;
+              unsubscribe();
+              break;
+            }
+          }
+          break;
+        default:
+          break;
       }
     }
   });
-  while (!eventFound) {
+  while (!broadcastEventFound) {
     if (!api.isConnected) {
       throw new Error('API is not connected');
     }

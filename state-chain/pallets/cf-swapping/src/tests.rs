@@ -116,12 +116,17 @@ fn assert_failed_ccm(
 	)
 	.is_err());
 
-	System::assert_last_event(RuntimeEvent::Swapping(Event::CcmFailed {
-		reason,
-		destination_address: MockAddressConverter::to_encoded_address(destination_address),
-		deposit_metadata: ccm,
-		origin: SwapOrigin::Vault { tx_hash: Default::default() },
-	}));
+	assert_event_sequence!(
+		Test,
+		RuntimeEvent::Swapping(Event::SwapRequested { .. }),
+		RuntimeEvent::Swapping(Event::CcmFailed {
+			reason: ref reason_in_event,
+			destination_address: ref address_in_event,
+			deposit_metadata: ref metadata_in_event,
+			..
+		}) if reason_in_event == &reason && address_in_event == &MockAddressConverter::to_encoded_address(destination_address) && metadata_in_event == &ccm,
+		RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
+	);
 }
 
 fn insert_swaps(swaps: &[TestSwapParams]) {
@@ -302,6 +307,7 @@ fn expect_swap_id_to_be_emitted() {
 					channel_id: 0,
 					..
 				}),
+				RuntimeEvent::Swapping(Event::SwapRequested { swap_request_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::SwapScheduled {
 					swap_request_id: 1,
 					swap_id: 1,
@@ -396,6 +402,8 @@ fn reject_invalid_ccm_deposit() {
 			CcmFailReason::UnsupportedForTargetChain,
 		);
 
+		System::reset_events();
+
 		assert_failed_ccm(
 			Asset::Eth,
 			1_000_000,
@@ -404,6 +412,9 @@ fn reject_invalid_ccm_deposit() {
 			ccm.clone(),
 			CcmFailReason::UnsupportedForTargetChain,
 		);
+
+		System::reset_events();
+
 		assert_failed_ccm(
 			Asset::Eth,
 			gas_budget - 1,
