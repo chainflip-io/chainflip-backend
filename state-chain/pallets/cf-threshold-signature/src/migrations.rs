@@ -1,9 +1,4 @@
 use crate::Pallet;
-use cf_runtime_upgrade_utilities::{PlaceholderMigration, VersionedMigration};
+use cf_runtime_upgrade_utilities::PlaceholderMigration;
 
-pub mod migrate_signature_to_include_signer;
-
-pub type PalletMigration<T, I> = (
-	VersionedMigration<Pallet<T, I>, migrate_signature_to_include_signer::Migration<T, I>, 5, 6>,
-	PlaceholderMigration<Pallet<T, I>, 6>,
-);
+pub type PalletMigration<T, I> = PlaceholderMigration<Pallet<T, I>, 6>;
