@@ -1630,6 +1630,7 @@ dependencies = [
 name = "cf-traits"
 version = "0.1.0"
 dependencies = [
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cfe-events",
@@ -7709,6 +7710,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",

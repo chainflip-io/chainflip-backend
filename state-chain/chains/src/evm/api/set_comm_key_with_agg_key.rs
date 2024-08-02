@@ -63,10 +63,13 @@ mod test_set_comm_key_with_agg_key {
 		assert_eq!(
 			// Our encoding:
 			tx_builder
-				.signed(&SchnorrVerificationComponents {
-					s: FAKE_SIG,
-					k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
-				})
+				.signed(
+					&SchnorrVerificationComponents {
+						s: FAKE_SIG,
+						k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
+					},
+					Default::default()
+				)
 				.chain_encoded(),
 			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			key_manager

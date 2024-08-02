@@ -8,7 +8,7 @@ use cf_amm::{
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_traits::{
-	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwappingApi,
+	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapRequestHandler, SwappingApi,
 };
 use core::ops::Range;
 use frame_support::{
@@ -254,7 +254,7 @@ pub mod pallet {
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
 
-		type SwapQueueApi: SwapQueueApi;
+		type SwapRequestHandler: SwapRequestHandler;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -987,10 +987,10 @@ impl<T: Config> PoolApi for Pallet<T> {
 
 	fn open_order_count(
 		who: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
-		let pool_orders = Self::pool_orders(base_asset, quote_asset, Some(who.clone()), true)?;
+		let pool_orders =
+			Self::pool_orders(asset_pair.base, asset_pair.quote, Some(who.clone()), true)?;
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
@@ -1028,6 +1028,10 @@ impl<T: Config> PoolApi for Pallet<T> {
 			}
 		}
 		result
+	}
+
+	fn pools() -> Vec<PoolPairsMap<Asset>> {
+		Self::pools()
 	}
 }
 

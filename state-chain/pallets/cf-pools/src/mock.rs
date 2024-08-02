@@ -1,8 +1,9 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
-use cf_chains::assets::any::AssetMap;
+use cf_chains::{assets::any::AssetMap, Ethereum};
 use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, mocks::swap_queue_api::MockSwapQueueApi,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
+	mocks::{egress_handler::MockEgressHandler, swap_request_api::MockSwapRequestHandler},
 	AccountRoleRegistry, LpBalanceApi,
 };
 use frame_support::{derive_impl, parameter_types};
@@ -146,7 +147,7 @@ impl_mock_runtime_safe_mode!(pools: PalletSafeMode);
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = MockBalance;
-	type SwapQueueApi = MockSwapQueueApi;
+	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 }

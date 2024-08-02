@@ -4,8 +4,8 @@
 use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
-	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, BoostApi, Chainflip,
-	DepositApi, EgressApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
+	impl_pallet_safe_mode, AccountRoleRegistry, BoostApi, Chainflip, DepositApi, EgressApi,
+	LpBalanceApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
 };
 
 use sp_std::vec;
@@ -299,14 +299,12 @@ pub mod pallet {
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::deregister_lp_account())]
 		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
-			const STABLE_ASSET: Asset = Asset::Usdc;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
 			T::PoolApi::sweep(&account_id)?;
 
 			ensure!(
-				Asset::all().filter(|asset| *asset != STABLE_ASSET).all(|asset| {
-					T::PoolApi::open_order_count(&account_id, asset, STABLE_ASSET)
-						.unwrap_or_default() == 0
+				T::PoolApi::pools().iter().all(|asset_pair| {
+					T::PoolApi::open_order_count(&account_id, asset_pair).unwrap_or_default() == 0
 				}),
 				Error::<T>::OpenOrdersRemaining
 			);

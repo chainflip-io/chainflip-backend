@@ -7,13 +7,11 @@ use crate::{
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MaxSwapRetryDurationBlocks, MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode,
 	PrewitnessedDepositIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
-	TargetChainAccount,
 };
 use cf_chains::{
-	address::{AddressConverter, IntoForeignChainAddress},
 	evm::{DepositDetails, EvmFetchId},
 	mocks::MockEthereum,
-	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
+	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall,
 	TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
@@ -21,18 +19,16 @@ use cf_test_utilities::{assert_events_eq, assert_has_event};
 use cf_traits::{
 	mocks::{
 		self,
-		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
 		block_height_provider::BlockHeightProvider,
-		ccm_handler::{CcmRequest, MockCcmHandler},
 		chain_tracking::ChainTracker,
 		funding_info::MockFundingInfo,
-		swap_queue_api::{MockSwap, MockSwapQueueApi},
+		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
 	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
-	ScheduledEgressDetails, SwapType,
+	ScheduledEgressDetails, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_ok,
@@ -483,76 +479,6 @@ fn test_refund_parameter_validation() {
 				}),
 			),
 			DispatchError::Other("Retry duration too long")
-		);
-	});
-}
-
-#[test]
-fn can_process_ccm_deposit() {
-	new_test_ext().execute_with(|| {
-		let from_asset = eth::Asset::Flip;
-		let to_asset = Asset::Eth;
-		let destination_address = ForeignChainAddress::Eth(Default::default());
-		let channel_metadata = CcmChannelMetadata {
-			message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
-			gas_budget: 1_000,
-			cf_parameters: vec![].try_into().unwrap(),
-		};
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: None,
-			channel_metadata: channel_metadata.clone(),
-		};
-		let amount = 5_000;
-
-		// Register swap deposit with CCM
-
-		let (_, deposit_address, ..) = IngressEgress::request_swap_deposit_address(
-			from_asset,
-			to_asset,
-			destination_address.clone(),
-			Default::default(),
-			1,
-			Some(channel_metadata),
-			0,
-			None,
-		)
-		.unwrap();
-
-		let deposit_address: TargetChainAccount<Test, _> = deposit_address.try_into().unwrap();
-
-		assert_eq!(
-			DepositChannelLookup::<Test, ()>::get(deposit_address).unwrap().opened_at,
-			BlockHeightProvider::<MockEthereum>::get_block_height()
-		);
-
-		// Making a deposit should trigger CcmHandler.
-		assert_ok!(IngressEgress::process_single_deposit(
-			deposit_address,
-			from_asset,
-			amount,
-			Default::default(),
-			Default::default()
-		));
-		assert_eq!(
-			MockCcmHandler::get_ccm_requests(),
-			vec![CcmRequest {
-				source_asset: from_asset.into(),
-				deposit_amount: amount,
-				destination_asset: to_asset,
-				destination_address,
-				deposit_metadata: ccm,
-				origin: SwapOrigin::DepositChannel {
-					deposit_address:
-						MockAddressConverter::to_encoded_address(
-							<<Ethereum as Chain>::ChainAccount as IntoForeignChainAddress<
-								Ethereum,
-							>>::into_foreign_chain_address(deposit_address),
-						),
-					channel_id: 1,
-					deposit_block_height: Default::default()
-				}
-			}]
 		);
 	});
 }
@@ -1652,7 +1578,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(
 		// Should not schedule a swap because it is already the gas asset, but should withhold the
 		// fee immediately.
 		test_function(eth::Asset::Eth);
-		assert!(MockSwapQueueApi::get_swap_queue().is_empty());
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 		assert_eq!(
 			MockAssetWithholding::withheld_assets(ForeignChain::Ethereum.gas_asset()),
@@ -1666,25 +1592,25 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(
 		test_function(eth::Asset::Usdt);
 
 		assert_eq!(
-			MockSwapQueueApi::get_swap_queue(),
+			MockSwapRequestHandler::<Test>::get_swap_requests(),
 			vec![
-				MockSwap {
-					from: cf_primitives::Asset::Flip,
-					to: cf_primitives::Asset::Eth,
-					amount: GAS_FEE,
-					swap_type: SwapType::IngressEgressFee
+				MockSwapRequest {
+					input_asset: cf_primitives::Asset::Flip,
+					output_asset: cf_primitives::Asset::Eth,
+					input_amount: GAS_FEE,
+					swap_type: SwapRequestType::IngressEgressFee
 				},
-				MockSwap {
-					from: cf_primitives::Asset::Usdc,
-					to: cf_primitives::Asset::Eth,
-					amount: GAS_FEE,
-					swap_type: SwapType::IngressEgressFee
+				MockSwapRequest {
+					input_asset: cf_primitives::Asset::Usdc,
+					output_asset: cf_primitives::Asset::Eth,
+					input_amount: GAS_FEE,
+					swap_type: SwapRequestType::IngressEgressFee
 				},
-				MockSwap {
-					from: cf_primitives::Asset::Usdt,
-					to: cf_primitives::Asset::Eth,
-					amount: GAS_FEE,
-					swap_type: SwapType::IngressEgressFee
+				MockSwapRequest {
+					input_asset: cf_primitives::Asset::Usdt,
+					output_asset: cf_primitives::Asset::Eth,
+					input_amount: GAS_FEE,
+					swap_type: SwapRequestType::IngressEgressFee
 				}
 			]
 		);

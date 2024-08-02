@@ -21,6 +21,7 @@ cf-amm = { path = '../../amm', default-features = false }
 cf-chains = { path = '../../chains', default-features = false }
 cf-primitives = { path = '../../primitives', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
 
@@ -58,6 +59,7 @@ std = [
   'cf-chains/std',
   'cf-primitives/std',
   'cf-runtime-upgrade-utilities/std',
+  'cf-runtime-utilities/std',
   'cf-traits/std',
   'cf-utilities/std',
   'codec/std',
