@@ -1832,7 +1832,7 @@ pub mod pallet {
 							params,
 							// In practice block number always fits in u32:
 							frame_system::Pallet::<T>::block_number().unique_saturated_into(),
-							chunk_input_amount.into(),
+							chunk_input_amount,
 						)
 					});
 
@@ -1901,7 +1901,7 @@ pub mod pallet {
 								params,
 								// In practice block number always fits in u32:
 								frame_system::Pallet::<T>::block_number().unique_saturated_into(),
-								principal_swap_amount.into(),
+								principal_swap_amount,
 							)
 						});
 
