@@ -263,6 +263,10 @@ jobs:
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.RELEASE_VERSION }}"
 
+      - name: Install node dependencies 📦
+        working-directory: bouncer
+        run: pnpm install
+
       - name: Install solana ☀️
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
@@ -279,7 +283,6 @@ jobs:
           echo "🐛 Fix solana symlink issue ..."
           rm $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
           ln -s $SOLANA_BASE_PATH/test-ledger/accounts/snapshot/100 $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
-          which solana-test-validator
           ./localnet/init/scripts/start-solana.sh
           sleep 30
 
