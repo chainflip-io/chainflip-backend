@@ -9,14 +9,11 @@ use cf_primitives::{Asset, ForeignChain};
 use codec::Decode;
 use sp_std::vec::Vec;
 
-#[derive(
-	Clone,
-	Debug,
-)]
+#[derive(Clone, Debug)]
 pub enum DecodedCfParameters {
 	Sol(SolCcmAccounts),
-	// We could also just not return anything
-	Other(Vec<u8>),
+	// We could also return cf_parameters as is
+	Other(),
 }
 
 pub struct CcmValidityChecker;
@@ -48,7 +45,7 @@ impl CcmValidityCheck for CcmValidityChecker {
 
 				Ok(DecodedCfParameters::Sol(ccm_accounts))
 			},
-			_ => Ok(DecodedCfParameters::Other(ccm.cf_parameters.clone())),
+			_ => Ok(DecodedCfParameters::Other()),
 		}
 	}
 }
