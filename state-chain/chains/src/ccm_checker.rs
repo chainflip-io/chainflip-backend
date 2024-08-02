@@ -9,32 +9,46 @@ use cf_primitives::{Asset, ForeignChain};
 use codec::Decode;
 use sp_std::vec::Vec;
 
+#[derive(
+	Clone,
+	Debug,
+)]
+pub enum DecodedCfParameters {
+	Sol(SolCcmAccounts),
+	// We could also just not return anything
+	Other(Vec<u8>),
+}
+
 pub struct CcmValidityChecker;
 
 impl CcmValidityCheck for CcmValidityChecker {
-	fn is_valid(ccm: &CcmChannelMetadata, egress_asset: Asset) -> Result<(), CcmValidityError> {
-		if ForeignChain::from(egress_asset) == ForeignChain::Solana {
-			// Check if the cf_parameter can be decoded
-			let ccm_accounts = SolCcmAccounts::decode(&mut &ccm.cf_parameters.clone()[..])
-				.map_err(|_| CcmValidityError::CannotDecodeCfParameters)?;
-			let asset: SolAsset = egress_asset
-				.try_into()
-				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
+	fn is_valid(
+		ccm: &CcmChannelMetadata,
+		egress_asset: Asset,
+	) -> Result<DecodedCfParameters, CcmValidityError> {
+		match ForeignChain::from(egress_asset) {
+			ForeignChain::Solana => {
+				// Check if the cf_parameter can be decoded
+				let ccm_accounts = SolCcmAccounts::decode(&mut &ccm.cf_parameters.clone()[..])
+					.map_err(|_| CcmValidityError::CannotDecodeCfParameters)?;
+				let asset: SolAsset = egress_asset.try_into().expect(
+					"Only Solana chain's asset will be checked. This conversion must succeed.",
+				);
 
-			// Length of CCM = length of message + total no. remaining_accounts * constant;
-			let ccm_length =
-				ccm.message.len() + ccm_accounts.remaining_accounts.len() * CCM_BYTES_PER_ACCOUNT;
-			if ccm_length >
-				match asset {
-					SolAsset::Sol => MAX_CCM_BYTES_SOL,
-					SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
-				} {
-				return Err(CcmValidityError::CcmIsTooLong)
-			}
+				// Length of CCM = length of message + total no. remaining_accounts * constant;
+				let ccm_length = ccm.message.len() +
+					ccm_accounts.remaining_accounts.len() * CCM_BYTES_PER_ACCOUNT;
+				if ccm_length >
+					match asset {
+						SolAsset::Sol => MAX_CCM_BYTES_SOL,
+						SolAsset::SolUsdc => MAX_CCM_BYTES_USDC,
+					} {
+					return Err(CcmValidityError::CcmIsTooLong)
+				}
 
-			Ok(())
-		} else {
-			Ok(())
+				Ok(DecodedCfParameters::Sol(ccm_accounts))
+			},
+			_ => Ok(DecodedCfParameters::Other(ccm.cf_parameters.clone())),
 		}
 	}
 }

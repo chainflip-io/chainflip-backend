@@ -254,7 +254,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Verify the validity of the CCM message before building the call.
-		CcmValidityChecker::is_valid(
+		let decoded_accounts = CcmValidityChecker::is_valid(
 			&CcmChannelMetadata {
 				message: message
 					.clone()
@@ -269,6 +269,12 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			transfer_param.asset.into(),
 		)
 		.map_err(SolanaTransactionBuildingError::InvalidCcm)?;
+
+		let ccm_accounts = if let DecodedCfParameters::Sol(accounts) = decoded_accounts {
+			accounts
+		} else {
+			return Err(SolanaTransactionBuildingError::CannotDecodeCcmCfParam);
+		};
 
 		let ccm_accounts = SolCcmAccounts::decode(&mut &cf_parameters[..])
 			.map_err(|_| SolanaTransactionBuildingError::CannotDecodeCcmCfParam)?;
