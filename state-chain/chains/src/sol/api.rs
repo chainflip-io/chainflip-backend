@@ -12,12 +12,12 @@ use crate::{
 	ccm_checker::{check_ccm_for_blacklisted_accounts, CcmValidityChecker},
 	sol::{
 		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolApiEnvironment,
-		SolAsset, SolCcmAccounts, SolHash, SolMessage, SolTransaction, SolanaCrypto,
+		SolAsset, SolHash, SolMessage, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, CcmValidityCheck, CcmValidityError,
-	Chain, ChainCrypto, ChainEnvironment, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall,
-	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, Solana,
-	TransferAssetParams, TransferFallback,
+	Chain, ChainCrypto, ChainEnvironment, ConsolidateCall, ConsolidationError, DecodedCfParameters,
+	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
+	SetAggKeyWithAggKey, Solana, TransferAssetParams, TransferFallback,
 };
 
 use cf_primitives::{EgressId, ForeignChain};
@@ -275,9 +275,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		} else {
 			return Err(SolanaTransactionBuildingError::CannotDecodeCcmCfParam);
 		};
-
-		let ccm_accounts = SolCcmAccounts::decode(&mut &cf_parameters[..])
-			.map_err(|_| SolanaTransactionBuildingError::CannotDecodeCcmCfParam)?;
 
 		let sol_api_environment = Environment::api_environment()?;
 		let agg_key = Environment::current_agg_key()?;

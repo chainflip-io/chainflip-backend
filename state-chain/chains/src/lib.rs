@@ -7,7 +7,7 @@ use core::{fmt::Display, iter::Step};
 
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
-	sol::api::SolanaTransactionBuildingError,
+	sol::{api::SolanaTransactionBuildingError, SolCcmAccounts},
 };
 pub use address::ForeignChainAddress;
 use address::{
@@ -721,6 +721,6 @@ pub trait CcmValidityCheck {
 		_ccm: &CcmChannelMetadata,
 		_egress_asset: cf_primitives::Asset,
 	) -> Result<DecodedCfParameters, CcmValidityError> {
-		Ok(())
+		Ok(DecodedCfParameters::Other())
 	}
 }

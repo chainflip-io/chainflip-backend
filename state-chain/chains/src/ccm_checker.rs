@@ -82,10 +82,8 @@ mod test {
 			cf_parameters: vec![0x01, 0x02, 0x03, 0x04, 0x05].try_into().unwrap(),
 		};
 
-		assert_err!(
-			CcmValidityChecker::is_valid(&ccm, Asset::Sol),
-			CcmValidityError::CannotDecodeCfParameters
-		);
+		let result = CcmValidityChecker::is_valid(&ccm, Asset::Sol);
+		assert!(matches!(result, Err(CcmValidityError::CannotDecodeCfParameters)));
 	}
 
 	#[test]
@@ -106,10 +104,8 @@ mod test {
 		// Length check for Sol
 		let mut invalid_ccm = ccm();
 		invalid_ccm.message = [0x01; MAX_CCM_BYTES_SOL + 1].to_vec().try_into().unwrap();
-		assert_err!(
-			CcmValidityChecker::is_valid(&invalid_ccm, Asset::Sol),
-			CcmValidityError::CcmIsTooLong
-		);
+		let result = CcmValidityChecker::is_valid(&invalid_ccm, Asset::Sol);
+		assert!(matches!(result, Err(CcmValidityError::CcmIsTooLong)));
 
 		let mut invalid_ccm = ccm();
 		invalid_ccm.cf_parameters = SolCcmAccounts {
@@ -122,10 +118,9 @@ mod test {
 		.encode()
 		.try_into()
 		.unwrap();
-		assert_err!(
-			CcmValidityChecker::is_valid(&invalid_ccm, Asset::Sol),
-			CcmValidityError::CcmIsTooLong
-		);
+
+		let result = CcmValidityChecker::is_valid(&invalid_ccm, Asset::Sol);
+		assert!(matches!(result, Err(CcmValidityError::CcmIsTooLong)));
 	}
 
 	#[test]
@@ -146,10 +141,9 @@ mod test {
 		// Length check for SolUsdc
 		let mut invalid_ccm = ccm();
 		invalid_ccm.message = [0x01; MAX_CCM_BYTES_USDC + 1].to_vec().try_into().unwrap();
-		assert_err!(
-			CcmValidityChecker::is_valid(&invalid_ccm, Asset::SolUsdc),
-			CcmValidityError::CcmIsTooLong
-		);
+
+		let result = CcmValidityChecker::is_valid(&invalid_ccm, Asset::SolUsdc);
+		assert!(matches!(result, Err(CcmValidityError::CcmIsTooLong)));
 
 		let mut invalid_ccm = ccm();
 		invalid_ccm.cf_parameters = SolCcmAccounts {
@@ -162,10 +156,9 @@ mod test {
 		.encode()
 		.try_into()
 		.unwrap();
-		assert_err!(
-			CcmValidityChecker::is_valid(&invalid_ccm, Asset::SolUsdc),
-			CcmValidityError::CcmIsTooLong
-		);
+
+		let result = CcmValidityChecker::is_valid(&invalid_ccm, Asset::SolUsdc);
+		assert!(matches!(result, Err(CcmValidityError::CcmIsTooLong)));
 	}
 
 	#[test]
@@ -174,12 +167,13 @@ mod test {
 
 		// Only fails for Solana chain.
 		ccm.message = [0x00; MAX_CCM_BYTES_SOL + 1].to_vec().try_into().unwrap();
-		assert_err!(CcmValidityChecker::is_valid(&ccm, Asset::Sol), CcmValidityError::CcmIsTooLong);
+
+		let result = CcmValidityChecker::is_valid(&ccm, Asset::Sol);
+		assert!(matches!(result, Err(CcmValidityError::CcmIsTooLong)));
+
 		ccm.message = [0x00; MAX_CCM_BYTES_USDC + 1].to_vec().try_into().unwrap();
-		assert_err!(
-			CcmValidityChecker::is_valid(&ccm, Asset::SolUsdc),
-			CcmValidityError::CcmIsTooLong
-		);
+		let result = CcmValidityChecker::is_valid(&ccm, Asset::SolUsdc);
+		assert!(matches!(result, Err(CcmValidityError::CcmIsTooLong)));
 
 		// Always valid on other chains.
 		assert_ok!(CcmValidityChecker::is_valid(&ccm, Asset::Eth),);
