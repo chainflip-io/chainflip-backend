@@ -270,6 +270,7 @@ jobs:
       - name: Start Solana node ☀️
         run: |
           set -x
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           export SOLANA_BASE_PATH="/tmp/solana"
           mkdir -p $SOLANA_BASE_PATH
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up solana-init --quiet-pull
@@ -278,6 +279,7 @@ jobs:
           echo "🐛 Fix solana symlink issue ..."
           rm $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
           ln -s $SOLANA_BASE_PATH/test-ledger/accounts/snapshot/100 $SOLANA_BASE_PATH/test-ledger/snapshot/100/accounts_hardlinks/account_path_0
+          which solana-test-validator
           ./localnet/init/scripts/start-solana.sh
           sleep 30
 
