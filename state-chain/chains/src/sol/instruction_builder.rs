@@ -417,13 +417,6 @@ mod test {
 		}
 	}
 
-	fn agg_key() -> SolAddress {
-		SolSigningKey::from_bytes(&RAW_KEYPAIR)
-			.expect("Key pair generation must succeed")
-			.pubkey()
-			.into()
-	}
-
 	fn nonce_account() -> SolAddress {
 		NONCE_ACCOUNTS[0]
 	}
