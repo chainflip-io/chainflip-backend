@@ -32,12 +32,11 @@ fn assert_swaps_scheduled_for_block(swap_ids: &[SwapId], expected_block_number: 
 
 #[test]
 fn both_fok_and_regular_swaps_succeed_first_try() {
-	const SWAPS_ADDED_BLOCK: u64 = 1;
-	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = SWAPS_ADDED_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), SWAPS_ADDED_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			insert_swaps(&vec![
 				new_swap(None),
@@ -62,15 +61,14 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 
 #[test]
 fn price_limit_is_respected_in_fok_swap() {
-	const SWAPS_ADDED_BLOCK: u64 = 1;
-	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = SWAPS_ADDED_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 
 	const HIGH_MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * 2;
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), SWAPS_ADDED_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			insert_swaps(&vec![
 				new_swap(None),
@@ -120,15 +118,14 @@ fn price_limit_is_respected_in_fok_swap() {
 
 #[test]
 fn fok_swap_gets_refunded_due_to_price_limit() {
-	const SWAPS_ADDED_BLOCK: u64 = 1;
-	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = SWAPS_ADDED_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 	// The swap will be refunded after the first retry:
 	const SWAP_REFUND_AT_BLOCK: u32 = SWAP_RETRIED_AT_BLOCK as u32;
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), SWAPS_ADDED_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			// Min output for swap 1 is too high to be executed:
 			const MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * 2;
@@ -166,15 +163,14 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 
 #[test]
 fn fok_swap_gets_refunded_due_to_price_impact_protection() {
-	const SWAPS_ADDED_BLOCK: u64 = 1;
-	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = SWAPS_ADDED_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 	// The swap will be refunded after the first retry:
 	const SWAP_REFUND_AT_BLOCK: u32 = SWAP_RETRIED_AT_BLOCK as u32;
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), SWAPS_ADDED_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			// FoK swap 1 should fail and will eventually be refunded
 			insert_swaps(&[new_swap(Some(params(SWAP_REFUND_AT_BLOCK, INPUT_AMOUNT)))]);
@@ -218,12 +214,11 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 
 #[test]
 fn fok_test_zero_refund_duration() {
-	const SWAPS_ADDED_BLOCK: u64 = 1;
-	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = SWAPS_ADDED_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), SWAPS_ADDED_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			assert_ok!(Swapping::init_swap_request(
 				Asset::Eth,
