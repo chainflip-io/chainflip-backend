@@ -220,6 +220,7 @@ jobs:
         env:
           BINARY_ROOT_PATH: ./latest-release-bins
           DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.*log
+          PATH: "/root/.local/share/solana/install/active_release/bin:$PATH"
         run: |
           git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
           set -x
