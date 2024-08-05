@@ -2,9 +2,12 @@ import { getSolConnection } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { initializeSolanaChain, initializeSolanaPrograms } from './initialize_new_chains';
 import { observeEvent } from './utils/substrate';
+import { createLpPool } from './create_lp_pool';
+import { depositLiquidity } from './deposit_liquidity';
+import { rangeOrder } from './range_order';
 
-// This cuts out the pieces of arb activation from `bouncer/commands/setup_vaults.ts`
-// So we can use it for the upgrade test.
+// This cuts out the pieces of sol activation from `bouncer/commands/setup_vaults.ts`
+// so we can use it for the upgrade test.
 export async function setupSolVault(): Promise<void> {
   const solClient = getSolConnection();
 
@@ -29,8 +32,24 @@ export async function setupSolVault(): Promise<void> {
   );
 
   console.log('Waiting for new epoch...');
-  await observeEvent('validator:NewEpoch');
+  await observeEvent('validator:NewEpoch').event;
 
   console.log('=== New Epoch ===');
-  console.log('=== Solana Vault Setup completed ===');
+
+  // Step 5
+  console.log('=== Setting up for swaps ===');
+
+  await Promise.all([createLpPool('Sol', 100), createLpPool('SolUsdc', 1)]);
+
+  console.log('LP Pools created');
+
+  await Promise.all([depositLiquidity('Sol', 1000), depositLiquidity('SolUsdc', 1000000)]);
+
+  console.log('Liquidity provided');
+
+  await Promise.all([rangeOrder('Sol', 1000 * 0.9999), rangeOrder('SolUsdc', 1000000 * 0.9999)]);
+
+  console.log('Range orders placed');
+
+  console.log('=== Swaps Setup completed ===');
 }
