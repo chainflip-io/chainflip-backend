@@ -29,7 +29,7 @@ export async function setupSolVault(): Promise<void> {
   );
 
   console.log('Waiting for new epoch...');
-  await observeEvent('validator:NewEpoch');
+  await observeEvent('validator:NewEpoch').event;
 
   console.log('=== New Epoch ===');
   console.log('=== Solana Vault Setup completed ===');
