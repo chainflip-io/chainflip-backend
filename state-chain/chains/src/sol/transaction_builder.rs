@@ -813,6 +813,26 @@ mod test {
 	}
 
 	#[test]
+	fn can_create_set_gov_key_with_agg_key() {
+		let new_gov_key = NEW_AGG_KEY;
+		let env = api_env();
+		let transaction = SolanaTransactionBuilder::set_gov_key_with_agg_key(
+			new_gov_key,
+			env.vault_program,
+			env.vault_program_data_account,
+			agg_key(),
+			durable_nonce(),
+			compute_price(),
+		)
+		.unwrap();
+
+		// Serialized tx built in `set_gov_key_with_agg_key` test
+		let expected_serialized_tx = hex_literal::hex!("01e68b952350bb2bf6fbf87364ad259d8bd488c20b828c52491417e5df3db7178c6ae9f934dbf27f67c19b22b297416f486da0257efbfb829e0cdce0e4557ccf0401000407f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0917eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19200000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030302050004040000000400090340420f000000000004000502e4570000060201002842403a280f4bd7a26744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
+
+		test_constructed_transaction(transaction, expected_serialized_tx);
+	}
+
+	#[test]
 	fn transactions_above_max_lengths_will_fail() {
 		// with 28 Fetches, the length is 1232 <= 1232
 		assert_ok!(SolanaTransactionBuilder::fetch_from(
