@@ -275,10 +275,6 @@ jobs:
             --localnet_init ./../localnet/init \
             --oldVersion "${{ env.RELEASE_VERSION }}"
 
-      - name: Install node dependencies 📦
-        working-directory: bouncer
-        run: pnpm install
-
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
         id: post-upgrade-bouncer
