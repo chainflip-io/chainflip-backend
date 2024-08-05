@@ -254,6 +254,8 @@ jobs:
           cd bouncer
           pnpm install --frozen-lockfile
           ./run.sh
+          # TODO: Temporary to discard the fixes above
+          git reset --hard
 
       # we need to be sure that when this fails, we catch the error, any panics etc. that occur
       # TODO: Run swaps simultaneously to the upgrade - we could do that inside the `upgrade_network` command itself.
