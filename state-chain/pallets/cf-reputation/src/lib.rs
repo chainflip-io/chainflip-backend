@@ -9,14 +9,15 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 use sp_std::{
-	collections::{btree_set::BTreeSet, vec_deque::VecDeque},
+	cmp::min,
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque},
 	iter::{self, Iterator},
 	prelude::*,
 };
 
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::*, Chainflip, Heartbeat, NetworkState, QualifyNode,
-	ReputationResetter, Slashing,
+	impl_pallet_safe_mode, offence_reporting::*, Chainflip, EpochInfo, Heartbeat, NetworkState,
+	QualifyNode, ReputationResetter, Slashing,
 };
 pub use pallet::*;
 pub use reporting_adapter::*;
@@ -82,11 +83,10 @@ pub enum PalletOffence {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use sp_std::cmp::min;
 
 	use frame_support::sp_runtime::traits::BlockNumberProvider;
 
-	use cf_traits::{AccountRoleRegistry, EpochInfo, QualifyNode};
+	use cf_traits::AccountRoleRegistry;
 
 	use super::*;
 
@@ -329,65 +329,6 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> QualifyNode<T::ValidatorId> for Pallet<T> {
-		/// A node is considered online, and therefore qualified if fewer than
-		/// [T::HeartbeatBlockInterval] blocks have elapsed since their last heartbeat submission.
-		fn is_qualified(validator_id: &T::ValidatorId) -> bool {
-			use frame_support::sp_runtime::traits::Saturating;
-			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
-				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
-					T::HeartbeatBlockInterval::get()
-			} else {
-				false
-			}
-		}
-	}
-
-	pub struct ReputationPointsQualification<T> {
-		phantom: PhantomData<T>,
-	}
-
-	impl<T> QualifyNode<T::ValidatorId> for ReputationPointsQualification<T>
-	where
-		T: Config,
-	{
-		fn is_qualified(validator_id: &T::ValidatorId) -> bool {
-			let mut points =
-				Reputations::<T>::iter_values().map(|r| r.reputation_points).collect::<Vec<_>>();
-
-			debug_assert!(!points.is_empty(), "Validator reputations should never be empty");
-
-			// This should never happen in prod, but just in case it does,
-			// We don't want to crash the system
-			if points.is_empty() {
-				// return true here, since if the set is empty then we can think of all validators
-				// having reputation 0, and by following logic below, this should be above cutoff
-				return true;
-			}
-
-			points.sort_unstable();
-
-			// get the 33rd percentile of reputation points, and min with 0. This way in normal
-			// operating scenarios where there might be a node on 2500 points one on -100 and the
-			// rest on 2880. The cutoff will be 0, and the node on -100 will be disqualified.
-			let cutoff = min(points[points.len() / 3], 0);
-			// We must use >= here to ensure that we don't disqualify all validators. e.g. if all
-			// the validators are at -2880 reputation than the cutoff will be -2880, and all
-			// validators will be disqualified.
-			Reputations::<T>::get(validator_id).reputation_points >= cutoff
-		}
-	}
-
-	impl<T: Config> Pallet<T> {
-		/// Partitions the authorities based on whether they are considered online or offline.
-		pub fn current_network_state() -> NetworkState<T::ValidatorId> {
-			let (online, offline) =
-				T::EpochInfo::current_authorities().into_iter().partition(Self::is_qualified);
-
-			NetworkState { online, offline }
-		}
-	}
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub accrual_ratio: (ReputationPoints, BlockNumberFor<T>),
@@ -421,6 +362,85 @@ pub mod pallet {
 				LastHeartbeat::<T>::insert(node, current_block_number);
 			}
 		}
+	}
+}
+
+pub struct HeartbeatQualification<T>(PhantomData<T>);
+
+impl<T: Config> QualifyNode<T::ValidatorId> for HeartbeatQualification<T> {
+	/// A node is considered online, and therefore qualified if fewer than
+	/// [T::HeartbeatBlockInterval] blocks have elapsed since their last heartbeat submission.
+	fn is_qualified(validator_id: &T::ValidatorId) -> bool {
+		if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
+			frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
+				T::HeartbeatBlockInterval::get()
+		} else {
+			false
+		}
+	}
+}
+
+pub struct ReputationPointsQualification<T>(PhantomData<T>);
+
+impl<T: Config> ReputationPointsQualification<T> {
+	fn reputation_qualification_cutoff(mut points: Vec<i32>) -> i32 {
+		debug_assert!(!points.is_empty(), "Validator reputations should never be empty");
+
+		// This should never happen in prod, but just in case it does, avoid panicking in
+		// `select_nth_unstable`.
+		if points.is_empty() {
+			// Return zero here, since if the set is empty then we can think of all validators
+			// having reputation 0, and by default, all validators (even those with no explicit
+			// reputation) will be qualified.
+			0
+		} else {
+			// Get the lower 33rd percentil value of reputation points, and min with 0. This way in
+			// normal operating scenarios where there might be a node on 2500 points one on -100 and
+			// the rest on 2880. The cutoff will be 0, and the node on -100 will be disqualified.
+			let index = points.len() / 3;
+			let (_lower, cutoff, _greater) = points.select_nth_unstable(index);
+			min(*cutoff, 0)
+		}
+	}
+}
+
+impl<T> QualifyNode<T::ValidatorId> for ReputationPointsQualification<T>
+where
+	T: Config,
+{
+	fn is_qualified(validator_id: &T::ValidatorId) -> bool {
+		let cutoff = Self::reputation_qualification_cutoff(
+			Reputations::<T>::iter_values().map(|r| r.reputation_points).collect::<Vec<_>>(),
+		);
+
+		// We must use >= here to ensure that we don't disqualify all validators. e.g. if all
+		// the validators are at -2880 reputation than the cutoff will be -2880, and all
+		// validators will be disqualified.
+		Reputations::<T>::get(validator_id).reputation_points >= cutoff
+	}
+
+	fn take_qualified(validators: BTreeSet<T::ValidatorId>) -> BTreeSet<T::ValidatorId> {
+		let reputations = Reputations::<T>::iter()
+			.map(|(id, ReputationTracker { reputation_points, .. })| (id, reputation_points))
+			.collect::<BTreeMap<_, _>>();
+
+		let cutoff = Self::reputation_qualification_cutoff(reputations.values().copied().collect());
+
+		validators
+			.into_iter()
+			.filter(|id| reputations.get(id).copied().unwrap_or_default() >= cutoff)
+			.collect()
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// Partitions the authorities based on whether they are considered online or offline.
+	pub fn current_network_state() -> NetworkState<T::ValidatorId> {
+		let (online, offline) = T::EpochInfo::current_authorities()
+			.into_iter()
+			.partition(HeartbeatQualification::<T>::is_qualified);
+
+		NetworkState { online, offline }
 	}
 }
 
@@ -476,7 +496,7 @@ impl<T: Config, L: OffenceList<T>> QualifyNode<T::ValidatorId> for ExclusionList
 		!Pallet::<T>::validators_suspended_for(L::OFFENCES).contains(validator_id)
 	}
 
-	fn filter_unqualified(validators: BTreeSet<T::ValidatorId>) -> BTreeSet<T::ValidatorId> {
+	fn take_qualified(validators: BTreeSet<T::ValidatorId>) -> BTreeSet<T::ValidatorId> {
 		validators
 			.difference(&Pallet::<T>::validators_suspended_for(L::OFFENCES))
 			.cloned()
