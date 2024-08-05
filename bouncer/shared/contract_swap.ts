@@ -85,6 +85,7 @@ export async function performSwapViaContract(
   swapTag = '',
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
+  log = true,
 ): Promise<ContractSwapParams> {
   const tag = swapTag ?? '';
 
@@ -118,10 +119,12 @@ export async function performSwapViaContract(
     swapContext?.updateStatus(swapTag, SwapStatus.ContractApproved);
 
     const oldBalance = await getBalance(destAsset, destAddress);
-    console.log(`${tag} Old balance: ${oldBalance}`);
-    console.log(
-      `${tag} Executing (${sourceAsset}) contract swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
-    );
+    if (log) {
+      console.log(`${tag} Old balance: ${oldBalance}`);
+      console.log(
+        `${tag} Executing (${sourceAsset}) contract swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
+      );
+    }
 
     // To uniquely identify the contractSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
@@ -134,8 +137,6 @@ export async function performSwapViaContract(
       messageMetadata,
     );
     swapContext?.updateStatus(swapTag, SwapStatus.ContractExecuted);
-
-    console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(
@@ -151,7 +152,9 @@ export async function performSwapViaContract(
       observeBalanceIncrease(destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
-    console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    if (log) {
+      console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    }
     swapContext?.updateStatus(swapTag, SwapStatus.Success);
     return {
       sourceAsset,

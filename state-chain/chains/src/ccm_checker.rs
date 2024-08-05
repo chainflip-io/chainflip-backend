@@ -3,15 +3,45 @@ use crate::{
 		SolAsset, SolCcmAccounts, SolPubkey, CCM_BYTES_PER_ACCOUNT, MAX_CCM_BYTES_SOL,
 		MAX_CCM_BYTES_USDC,
 	},
-	CcmChannelMetadata, CcmValidityCheck, CcmValidityError,
+	CcmChannelMetadata,
 };
 use cf_primitives::{Asset, ForeignChain};
-use codec::Decode;
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
+use sp_std::vec::Vec;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum CcmValidityError {
+	CannotDecodeCfParameters,
+	CcmIsTooLong,
+	CfParametersContainsInvalidAccounts,
+}
+
+pub trait CcmValidityCheck {
+	fn check_and_decode(
+		_ccm: &CcmChannelMetadata,
+		_egress_asset: cf_primitives::Asset,
+	) -> Result<DecodedCfParameters, CcmValidityError> {
+		Ok(DecodedCfParameters::NotRequired)
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DecodedCfParameters {
+	Solana(SolCcmAccounts),
+	NotRequired,
+}
 
 pub struct CcmValidityChecker;
 
 impl CcmValidityCheck for CcmValidityChecker {
-	fn is_valid(ccm: &CcmChannelMetadata, egress_asset: Asset) -> Result<(), CcmValidityError> {
+	/// Checks to see if a given CCM is valid. Currently this only applies to Solana chain.
+	/// For Solana Chain: Performs decoding of the `cf_parameter`, and checks the expected length.
+	/// Returns the decoded `cf_parameter`.
+	fn check_and_decode(
+		ccm: &CcmChannelMetadata,
+		egress_asset: Asset,
+	) -> Result<DecodedCfParameters, CcmValidityError> {
 		if ForeignChain::from(egress_asset) == ForeignChain::Solana {
 			// Check if the cf_parameter can be decoded
 			let ccm_accounts = SolCcmAccounts::decode(&mut &ccm.cf_parameters.clone()[..])
@@ -31,9 +61,9 @@ impl CcmValidityCheck for CcmValidityChecker {
 				return Err(CcmValidityError::CcmIsTooLong)
 			}
 
-			Ok(())
+			Ok(DecodedCfParameters::Solana(ccm_accounts))
 		} else {
-			Ok(())
+			Ok(DecodedCfParameters::NotRequired)
 		}
 	}
 }
@@ -66,7 +96,10 @@ mod test {
 	#[test]
 	fn can_verify_valid_ccm() {
 		let ccm = sol_test_values::ccm_parameter().channel_metadata;
-		assert_ok!(CcmValidityChecker::is_valid(&ccm, Asset::Sol));
+		assert_eq!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol),
+			Ok(DecodedCfParameters::Solana(sol_test_values::ccm_accounts()))
+		);
 	}
 
 	#[test]
@@ -78,7 +111,7 @@ mod test {
 		};
 
 		assert_err!(
-			CcmValidityChecker::is_valid(&ccm, Asset::Sol),
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol),
 			CcmValidityError::CannotDecodeCfParameters
 		);
 	}
@@ -96,13 +129,13 @@ mod test {
 			.try_into()
 			.unwrap(),
 		};
-		assert_ok!(CcmValidityChecker::is_valid(&ccm(), Asset::Sol));
+		assert_ok!(CcmValidityChecker::check_and_decode(&ccm(), Asset::Sol));
 
 		// Length check for Sol
 		let mut invalid_ccm = ccm();
 		invalid_ccm.message = vec![0x01; MAX_CCM_BYTES_SOL + 1].try_into().unwrap();
 		assert_err!(
-			CcmValidityChecker::is_valid(&invalid_ccm, Asset::Sol),
+			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::Sol),
 			CcmValidityError::CcmIsTooLong
 		);
 
@@ -118,7 +151,7 @@ mod test {
 		.try_into()
 		.unwrap();
 		assert_err!(
-			CcmValidityChecker::is_valid(&invalid_ccm, Asset::Sol),
+			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::Sol),
 			CcmValidityError::CcmIsTooLong
 		);
 	}
@@ -136,13 +169,13 @@ mod test {
 			.try_into()
 			.unwrap(),
 		};
-		assert_ok!(CcmValidityChecker::is_valid(&ccm(), Asset::SolUsdc));
+		assert_ok!(CcmValidityChecker::check_and_decode(&ccm(), Asset::SolUsdc));
 
 		// Length check for SolUsdc
 		let mut invalid_ccm = ccm();
 		invalid_ccm.message = vec![0x01; MAX_CCM_BYTES_USDC + 1].try_into().unwrap();
 		assert_err!(
-			CcmValidityChecker::is_valid(&invalid_ccm, Asset::SolUsdc),
+			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::SolUsdc),
 			CcmValidityError::CcmIsTooLong
 		);
 
@@ -158,7 +191,7 @@ mod test {
 		.try_into()
 		.unwrap();
 		assert_err!(
-			CcmValidityChecker::is_valid(&invalid_ccm, Asset::SolUsdc),
+			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::SolUsdc),
 			CcmValidityError::CcmIsTooLong
 		);
 	}
@@ -169,21 +202,45 @@ mod test {
 
 		// Only fails for Solana chain.
 		ccm.message = [0x00; MAX_CCM_BYTES_SOL + 1].to_vec().try_into().unwrap();
-		assert_err!(CcmValidityChecker::is_valid(&ccm, Asset::Sol), CcmValidityError::CcmIsTooLong);
+		assert_err!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol),
+			CcmValidityError::CcmIsTooLong
+		);
 		ccm.message = [0x00; MAX_CCM_BYTES_USDC + 1].to_vec().try_into().unwrap();
 		assert_err!(
-			CcmValidityChecker::is_valid(&ccm, Asset::SolUsdc),
+			CcmValidityChecker::check_and_decode(&ccm, Asset::SolUsdc),
 			CcmValidityError::CcmIsTooLong
 		);
 
 		// Always valid on other chains.
-		assert_ok!(CcmValidityChecker::is_valid(&ccm, Asset::Eth),);
-		assert_ok!(CcmValidityChecker::is_valid(&ccm, Asset::Btc),);
-		assert_ok!(CcmValidityChecker::is_valid(&ccm, Asset::Flip),);
-		assert_ok!(CcmValidityChecker::is_valid(&ccm, Asset::Usdt),);
-		assert_ok!(CcmValidityChecker::is_valid(&ccm, Asset::Usdc),);
-		assert_ok!(CcmValidityChecker::is_valid(&ccm, Asset::ArbUsdc),);
-		assert_ok!(CcmValidityChecker::is_valid(&ccm, Asset::ArbEth),);
+		assert_ok!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Eth),
+			DecodedCfParameters::NotRequired
+		);
+		assert_ok!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Btc),
+			DecodedCfParameters::NotRequired
+		);
+		assert_ok!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Flip),
+			DecodedCfParameters::NotRequired
+		);
+		assert_ok!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Usdt),
+			DecodedCfParameters::NotRequired
+		);
+		assert_ok!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::Usdc),
+			DecodedCfParameters::NotRequired
+		);
+		assert_ok!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::ArbUsdc),
+			DecodedCfParameters::NotRequired
+		);
+		assert_ok!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::ArbEth),
+			DecodedCfParameters::NotRequired
+		);
 	}
 
 	#[test]

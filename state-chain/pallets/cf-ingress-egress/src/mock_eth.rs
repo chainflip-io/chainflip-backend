@@ -21,12 +21,10 @@ use cf_traits::{
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
 		broadcaster::MockBroadcaster,
-		ccm_handler::MockCcmHandler,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
-		swap_deposit_handler::MockSwapDepositHandler,
-		swap_queue_api::MockSwapQueueApi,
+		swap_request_api::MockSwapRequestHandler,
 	},
 	DepositApi, NetworkEnvironmentProvider, OnDeposit,
 };
@@ -118,18 +116,16 @@ impl crate::Config for Test {
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
 	type LpBalance = MockBalance;
-	type SwapDepositHandler =
-		MockSwapDepositHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
 	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
-	type CcmHandler = MockCcmHandler;
 	type ChainTracking = ChainTracker<Ethereum>;
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
-	type SwapQueueApi = MockSwapQueueApi;
+	type SwapRequestHandler =
+		MockSwapRequestHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
 	type AssetWithholding = MockAssetWithholding;
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;

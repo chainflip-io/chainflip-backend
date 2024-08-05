@@ -80,6 +80,7 @@ impl ApiCall<PolkadotCrypto> for MockCreatePolkadotVault {
 	fn signed(
 		self,
 		_threshold_signature: &<<Polkadot as Chain>::ChainCrypto as cf_chains::ChainCrypto>::ThresholdSignature,
+		_signer: <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		unimplemented!()
 	}
@@ -94,6 +95,9 @@ impl ApiCall<PolkadotCrypto> for MockCreatePolkadotVault {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
+	fn signer(&self) -> Option<<PolkadotCrypto as ChainCrypto>::AggKey> {
 		unimplemented!()
 	}
 }

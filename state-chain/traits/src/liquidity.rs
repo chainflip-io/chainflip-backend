@@ -1,28 +1,8 @@
-use cf_chains::{
-	address::ForeignChainAddress, assets::any::AssetMap, ChannelRefundParameters,
-	SwapRefundParameters,
-};
-use cf_primitives::{Asset, AssetAmount, Beneficiaries, ChannelId, SwapId};
-use codec::{Decode, Encode, MaxEncodedLen};
+use cf_amm::common::PoolPairsMap;
+use cf_chains::assets::any::AssetMap;
+use cf_primitives::{Asset, AssetAmount};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
-use frame_system::pallet_prelude::BlockNumberFor;
-use scale_info::TypeInfo;
-
-pub trait SwapDepositHandler {
-	type AccountId;
-
-	fn schedule_swap_from_channel(
-		deposit_address: ForeignChainAddress,
-		deposit_block_height: u64,
-		from: Asset,
-		to: Asset,
-		amount: AssetAmount,
-		destination_address: ForeignChainAddress,
-		broker_commission: Beneficiaries<Self::AccountId>,
-		refund_params: Option<ChannelRefundParameters>,
-		channel_id: ChannelId,
-	) -> SwapId;
-}
+use sp_std::{vec, vec::Vec};
 
 pub trait LpDepositHandler {
 	type AccountId;
@@ -36,7 +16,10 @@ pub trait LpBalanceApi {
 	type AccountId;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_liquidity_refund_address(who: &Self::AccountId, address: ForeignChainAddress);
+	fn register_liquidity_refund_address(
+		who: &Self::AccountId,
+		address: cf_chains::ForeignChainAddress,
+	);
 
 	fn ensure_has_refund_address_for_pair(
 		who: &Self::AccountId,
@@ -75,11 +58,12 @@ pub trait PoolApi {
 	/// Returns the number of open orders for the given account and pair.
 	fn open_order_count(
 		who: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError>;
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
+
+	fn pools() -> Vec<PoolPairsMap<Asset>>;
 }
 
 impl<T: frame_system::Config> PoolApi for T {
@@ -91,13 +75,15 @@ impl<T: frame_system::Config> PoolApi for T {
 
 	fn open_order_count(
 		_who: &Self::AccountId,
-		_base_asset: Asset,
-		_quote_asset: Asset,
+		_asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
 		Ok(0)
 	}
 	fn open_order_balances(_who: &Self::AccountId) -> AssetMap<AssetAmount> {
 		AssetMap::from_fn(|_| 0)
+	}
+	fn pools() -> Vec<PoolPairsMap<Asset>> {
+		vec![]
 	}
 }
 
@@ -112,43 +98,6 @@ pub trait SwappingApi {
 		to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError>;
-}
-
-pub trait SwapQueueApi {
-	type BlockNumber;
-
-	/// Add a swap to the internal swapping queue with the default block delay. Return swap_id along
-	/// with the block at which the swap is scheduled to be executed.
-	fn schedule_swap(
-		from: Asset,
-		to: Asset,
-		amount: AssetAmount,
-		refund_params: Option<SwapRefundParameters>,
-		swap_type: SwapType,
-	) -> (u64, Self::BlockNumber);
-}
-
-impl<T: frame_system::Config> SwapQueueApi for T {
-	type BlockNumber = BlockNumberFor<T>;
-
-	fn schedule_swap(
-		_from: Asset,
-		_to: Asset,
-		_amount: AssetAmount,
-		_refund_params: Option<SwapRefundParameters>,
-		_swap_type: SwapType,
-	) -> (u64, Self::BlockNumber) {
-		(0, Self::BlockNumber::default())
-	}
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SwapType {
-	Swap(ForeignChainAddress),
-	CcmPrincipal(SwapId),
-	CcmGas(SwapId),
-	NetworkFee,
-	IngressEgressFee,
 }
 
 pub trait BoostApi {

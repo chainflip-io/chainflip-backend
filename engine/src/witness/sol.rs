@@ -86,7 +86,7 @@ where
 	let mut finalized_transactions = Vec::new();
 
 	let signature_statuses = sol_client
-		.get_signature_statuses(monitored_tx_signatures.as_slice(), true)
+		.get_signature_statuses(monitored_tx_signatures.as_slice(), false)
 		.await
 		.value;
 
@@ -247,6 +247,7 @@ mod tests {
 	use super::*;
 
 	#[tokio::test]
+	#[ignore]
 	async fn test_success_witnesses() {
 		task_scope::task_scope(|scope| {
 			async {

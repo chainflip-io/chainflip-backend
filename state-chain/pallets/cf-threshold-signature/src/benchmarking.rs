@@ -303,6 +303,7 @@ mod benchmarks {
 		<Pallet<T, I> as ThresholdSigner<T::TargetChainCrypto>>::insert_signature(
 			request_id,
 			SignatureFor::<T, I>::benchmark_value(),
+			AggKeyFor::<T, I>::benchmark_value(),
 		);
 		let call = Call::<T, I>::on_keygen_verification_result {
 			keygen_ceremony_id: CEREMONY_ID,

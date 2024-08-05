@@ -9,15 +9,18 @@ use sp_core::RuntimeDebug;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
-	ccm_checker::{check_ccm_for_blacklisted_accounts, CcmValidityChecker},
+	ccm_checker::{
+		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker, CcmValidityError,
+		DecodedCfParameters,
+	},
 	sol::{
 		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolApiEnvironment,
-		SolAsset, SolCcmAccounts, SolHash, SolTransaction, SolanaCrypto,
+		SolAsset, SolHash, SolTransaction, SolanaCrypto,
 	},
-	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, CcmValidityCheck, CcmValidityError,
-	Chain, ChainCrypto, ChainEnvironment, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall,
-	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, Solana,
-	TransferAssetParams, TransferFallback,
+	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, Chain, ChainCrypto, ChainEnvironment,
+	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
+	FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, Solana, TransferAssetParams,
+	TransferFallback,
 };
 
 use cf_primitives::{EgressId, ForeignChain};
@@ -87,7 +90,6 @@ pub enum SolanaTransactionBuildingError {
 	NoNonceAccountsSet,
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),
-	CannotDecodeCcmCfParam,
 	InvalidCcm(CcmValidityError),
 	FailedToSerializeFinalTransaction,
 	FinalTransactionExceededMaxLength(u32),
@@ -264,8 +266,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
-		// Verify the validity of the CCM message before building the call.
-		CcmValidityChecker::is_valid(
+		// For extra safety, re-verify the validity of the CCM message here
+		// and extract the decoded `ccm_accounts` from `cf_parameters`.
+		let decoded_cf_params = CcmValidityChecker::check_and_decode(
 			&CcmChannelMetadata {
 				message: message
 					.clone()
@@ -281,8 +284,14 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		)
 		.map_err(SolanaTransactionBuildingError::InvalidCcm)?;
 
-		let ccm_accounts = SolCcmAccounts::decode(&mut &cf_parameters[..])
-			.map_err(|_| SolanaTransactionBuildingError::CannotDecodeCcmCfParam)?;
+		// Always expects the `DecodedCfParameters::Solana(..)` variant of the decoded cf params.
+		let ccm_accounts = if let DecodedCfParameters::Solana(ccm_accounts) = decoded_cf_params {
+			Ok(ccm_accounts)
+		} else {
+			Err(SolanaTransactionBuildingError::InvalidCcm(
+				CcmValidityError::CannotDecodeCfParameters,
+			))
+		}?;
 
 		let sol_api_environment = Environment::api_environment()?;
 		let agg_key = Environment::current_agg_key()?;
@@ -371,8 +380,12 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 		self.transaction.message().clone()
 	}
 
-	fn signed(mut self, signature: &<SolanaCrypto as ChainCrypto>::ThresholdSignature) -> Self {
-		self.transaction.signatures = vec![*signature];
+	fn signed(
+		mut self,
+		threshold_signature: &<SolanaCrypto as ChainCrypto>::ThresholdSignature,
+		_signer: <SolanaCrypto as ChainCrypto>::AggKey,
+	) -> Self {
+		self.transaction.signatures = vec![*threshold_signature];
 		self
 	}
 
@@ -389,6 +402,10 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		todo!()
+	}
+
+	fn signer(&self) -> Option<<SolanaCrypto as ChainCrypto>::AggKey> {
 		todo!()
 	}
 }

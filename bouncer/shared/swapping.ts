@@ -265,6 +265,7 @@ export async function testSwapViaContract(
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
   tagSuffix?: string,
+  log = true,
 ) {
   const { destAddress, tag } = await prepareSwap(
     sourceAsset,
@@ -282,6 +283,7 @@ export async function testSwapViaContract(
     tag,
     messageMetadata,
     swapContext,
+    log,
   );
 }
 

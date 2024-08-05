@@ -9,8 +9,9 @@ import {
   getEvmEndpoint,
   getSolConnection,
   observeCcmReceived,
-  observeSwapScheduled,
+  observeSwapRequested,
   sleep,
+  SwapRequestType,
   SwapType,
 } from './utils';
 import { requestNewSwap } from './perform_swap';
@@ -126,37 +127,47 @@ async function trackGasLimitSwap(
     messageMetadata,
   );
 
-  const swapScheduledHandle = observeSwapScheduled(
+  const swapRequestedHandle = observeSwapRequested(
     sourceAsset,
     destAsset,
     channelId,
-    SwapType.CcmPrincipal,
+    SwapRequestType.Ccm,
   );
 
-  let gasSwapScheduledHandle;
+  const reqIdToPrincipalSwapId: { [key: string]: string } = {};
+  const reqIdToGasSwapId: { [key: string]: string } = {};
+  const swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
+    test: (event) => {
+      const data = event.data;
 
-  if (chainGasAsset(destChain) !== sourceAsset) {
-    gasSwapScheduledHandle = observeSwapScheduled(
-      sourceAsset,
-      chainGasAsset(destChain),
-      channelId,
-      SwapType.CcmGas,
-    );
-  }
+      switch (data.swapType) {
+        case SwapType.CcmPrincipal:
+          reqIdToPrincipalSwapId[data.swapRequestId] = data.swapId;
+          break;
+        case SwapType.CcmGas:
+          reqIdToGasSwapId[data.swapRequestId] = data.swapId;
+          break;
+        default:
+        // not interested in other swap types here
+      }
+      return false;
+    },
+    abortable: true,
+  });
 
   // SwapExecuted is emitted at the same time as swapScheduled so we can't wait for swapId to be known.
   const swapIdToEgressAmount: { [key: string]: string } = {};
   const swapExecutedHandle = observeEvent('swapping:SwapExecuted', {
     test: (event) => {
-      swapIdToEgressAmount[event.data.swapId] = event.data.egressAmount;
+      swapIdToEgressAmount[event.data.swapId] = event.data.outputAmount;
       return false;
     },
     abortable: true,
   });
-  const swapIdToEgressId: { [key: string]: string } = {};
+  const swapRequestIdToEgressId: { [key: string]: string } = {};
   const swapEgressHandle = observeEvent('swapping:SwapEgressScheduled', {
     test: (event) => {
-      swapIdToEgressId[event.data.swapId] = event.data.egressId;
+      swapRequestIdToEgressId[event.data.swapRequestId] = event.data.egressId;
       return false;
     },
     abortable: true,
@@ -189,18 +200,22 @@ async function trackGasLimitSwap(
 
   await send(sourceAsset, depositAddress);
 
-  const swapId = (await swapScheduledHandle).data.swapId;
+  const swapRequestId = (await swapRequestedHandle).data.swapRequestId;
 
   while (
     !(
-      swapId in swapIdToEgressAmount &&
-      swapId in swapIdToEgressId &&
-      swapIdToEgressId[swapId] in egressIdToBroadcastId &&
-      egressIdToBroadcastId[swapIdToEgressId[swapId]] in broadcastIdToTxPayload
+      swapRequestId in reqIdToPrincipalSwapId &&
+      reqIdToPrincipalSwapId[swapRequestId] in swapIdToEgressAmount &&
+      swapRequestId in swapRequestIdToEgressId &&
+      swapRequestIdToEgressId[swapRequestId] in egressIdToBroadcastId &&
+      egressIdToBroadcastId[swapRequestIdToEgressId[swapRequestId]] in broadcastIdToTxPayload
     )
   ) {
     await sleep(3000);
   }
+
+  const egressId = swapRequestIdToEgressId[swapRequestId];
+  const broadcastId = egressIdToBroadcastId[egressId];
 
   console.log(`${tag} Swap events found`);
 
@@ -208,12 +223,14 @@ async function trackGasLimitSwap(
   swapEgressHandle.stop();
   ccmBroadcastHandle.stop();
   broadcastRequesthandle.stop();
+  swapScheduledHandle.stop();
 
   await Promise.all([
     swapExecutedHandle.event,
     swapEgressHandle.event,
     ccmBroadcastHandle.event,
     broadcastRequesthandle.event,
+    swapScheduledHandle.event,
   ]);
 
   let egressBudgetAmount;
@@ -221,14 +238,10 @@ async function trackGasLimitSwap(
   if (chainGasAsset(destChain) === sourceAsset) {
     egressBudgetAmount = messageMetadata.gasBudget;
   } else {
-    const {
-      data: { swapId: gasSwapId },
-    } = await gasSwapScheduledHandle!;
+    const gasSwapId = reqIdToGasSwapId[swapRequestId];
     egressBudgetAmount = Number(swapIdToEgressAmount[gasSwapId].replace(/,/g, ''));
   }
 
-  const egressId = swapIdToEgressId[swapId];
-  const broadcastId = egressIdToBroadcastId[egressId];
   const txPayload = broadcastIdToTxPayload[broadcastId];
   return { tag, destAddress, egressBudgetAmount, broadcastId, txPayload };
 }

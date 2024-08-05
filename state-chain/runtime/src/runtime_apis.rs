@@ -115,10 +115,20 @@ pub struct AuctionState {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct LiquidityProviderBoostPoolInfo {
+	pub fee_tier: u16,
+	pub total_balance: AssetAmount,
+	pub available_balance: AssetAmount,
+	pub in_use_balance: AssetAmount,
+	pub is_withdrawing: bool,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
 	pub earned_fees: AssetMap<AssetAmount>,
+	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -274,5 +284,8 @@ decl_runtime_apis!(
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
+		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
+		fn cf_swap_retry_delay_blocks() -> u32;
+		fn cf_max_swap_retry_duration_blocks(chain: ForeignChain) -> u32;
 	}
 );

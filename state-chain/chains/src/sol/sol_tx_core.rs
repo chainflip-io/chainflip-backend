@@ -785,7 +785,7 @@ impl From<Hash> for SolHash {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CcmAddress {
 	pub pubkey: Pubkey,
 	pub is_writable: bool,
@@ -800,7 +800,7 @@ impl From<CcmAddress> for AccountMeta {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct CcmAccounts {
 	pub cf_receiver: CcmAddress,
 	pub remaining_accounts: Vec<CcmAddress>,
@@ -867,6 +867,7 @@ impl FromStr for Hash {
 }
 
 /// Values used for testing purposes
+#[cfg(any(test, feature = "runtime-integration-tests"))]
 pub mod sol_test_values {
 	use crate::{
 		sol::{

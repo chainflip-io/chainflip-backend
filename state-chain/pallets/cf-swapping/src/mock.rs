@@ -1,7 +1,7 @@
 use core::cell::Cell;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
-use cf_chains::{AnyChain, CcmValidityCheck};
+use cf_chains::{ccm_checker::CcmValidityCheck, AnyChain};
 use cf_primitives::{Asset, AssetAmount};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
