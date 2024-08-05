@@ -583,13 +583,17 @@ pub trait WaivedFees {
 }
 
 /// Qualify what is considered as a potential authority for the network
+///
+/// Note that when implementing this, it is sufficient to implement is_qualified. However, if
+/// there is a high fixed cost to check if a single node is qualified (for example if we need to
+/// compute some precondition or criterion), it is recommended to implement take_qualified as well.
 pub trait QualifyNode<Id: Ord> {
 	/// Is the node qualified to be an authority and meet our expectations of one
 	fn is_qualified(validator_id: &Id) -> bool;
 
 	/// Filter out the unqualified nodes from a list of potential nodes.
-	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
-		validators.into_iter().filter(|v| !Self::is_qualified(v)).collect()
+	fn take_qualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
+		validators.into_iter().filter(|v| Self::is_qualified(v)).collect()
 	}
 }
 
@@ -613,8 +617,8 @@ where
 		A::is_qualified(validator_id) && B::is_qualified(validator_id)
 	}
 
-	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
-		B::filter_unqualified(A::filter_unqualified(validators))
+	fn take_qualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
+		B::take_qualified(A::take_qualified(validators))
 	}
 }
 
