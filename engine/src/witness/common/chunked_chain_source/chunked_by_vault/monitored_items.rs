@@ -30,7 +30,7 @@ fn is_header_ready<Inner: ChunkedByVault>(
 	index: Inner::Index,
 	chain_state: &ChainState<Inner::Chain>,
 ) -> bool {
-	index < chain_state.block_height
+	index <= chain_state.block_height
 }
 
 /// This helps ensure a set of items we want to witness are consistent for each block across all
