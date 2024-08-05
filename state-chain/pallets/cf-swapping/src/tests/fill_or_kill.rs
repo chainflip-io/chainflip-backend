@@ -33,7 +33,7 @@ fn assert_swaps_scheduled_for_block(swap_ids: &[SwapId], expected_block_number: 
 #[test]
 fn both_fok_and_regular_swaps_succeed_first_try() {
 	const SWAPS_ADDED_BLOCK: u64 = 1;
-	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = SWAPS_ADDED_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -63,7 +63,7 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 #[test]
 fn price_limit_is_respected_in_fok_swap() {
 	const SWAPS_ADDED_BLOCK: u64 = 1;
-	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = SWAPS_ADDED_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 
 	const HIGH_MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * 2;
@@ -121,7 +121,7 @@ fn price_limit_is_respected_in_fok_swap() {
 #[test]
 fn fok_swap_gets_refunded_due_to_price_limit() {
 	const SWAPS_ADDED_BLOCK: u64 = 1;
-	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = SWAPS_ADDED_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 	// The swap will be refunded after the first retry:
 	const SWAP_REFUND_AT_BLOCK: u32 = SWAP_RETRIED_AT_BLOCK as u32;
@@ -167,7 +167,7 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 #[test]
 fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 	const SWAPS_ADDED_BLOCK: u64 = 1;
-	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = SWAPS_ADDED_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 	// The swap will be refunded after the first retry:
 	const SWAP_REFUND_AT_BLOCK: u32 = SWAP_RETRIED_AT_BLOCK as u32;
@@ -212,6 +212,49 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled { swap_request_id: 1, .. }),
 				// Non-fok swap will continue to be retried:
 				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: 2, .. })
+			);
+		});
+}
+
+#[test]
+fn fok_test_zero_refund_duration() {
+	const SWAPS_ADDED_BLOCK: u64 = 1;
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = SWAPS_ADDED_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_eq!(System::block_number(), SWAPS_ADDED_BLOCK);
+
+			assert_ok!(Swapping::init_swap_request(
+				Asset::Eth,
+				INPUT_AMOUNT,
+				Asset::Usdc,
+				SwapRequestType::Regular {
+					output_address: ForeignChainAddress::Eth([1; 20].into())
+				},
+				bounded_vec![Beneficiary { account: 0u64, bps: 2 }],
+				Some(ChannelRefundParameters {
+					// Set the retry duration to 0 blocks
+					retry_duration: 0,
+					refund_address: ForeignChainAddress::Eth([10; 20].into()),
+					min_price: U256::zero(),
+				}),
+				SwapOrigin::Vault { tx_hash: Default::default() },
+			));
+
+			assert_swaps_scheduled_for_block(&[1], SWAPS_SCHEDULED_FOR_BLOCK);
+		})
+		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {
+			// This simulates not having enough liquidity/triggering price impact protection
+			MockSwappingApi::set_swaps_should_fail(true);
+		})
+		.then_execute_with(|_| {})
+		.then_execute_with(|_| {
+			// The swap should fail and be refunded immediately instead of being retried
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+				RuntimeEvent::Swapping(Event::RefundEgressScheduled { swap_request_id: 1, .. }),
 			);
 		});
 }
