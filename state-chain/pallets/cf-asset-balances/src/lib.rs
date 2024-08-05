@@ -26,8 +26,7 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
-pub const MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH: usize = 50;
-pub const MAX_REFUNDED_VALIDATORS_ARB_ETH_PER_EPOCH: usize = 50;
+pub const RECONCILIATION_LIMIT: usize = 50;
 pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -164,26 +163,17 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn stop_refunding(chain: ForeignChain, number_or_refunds: usize) -> bool {
-		match chain {
-			ForeignChain::Ethereum => number_or_refunds >= MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH,
-			ForeignChain::Arbitrum =>
-				number_or_refunds >= MAX_REFUNDED_VALIDATORS_ARB_ETH_PER_EPOCH,
-			_ => false,
-		}
-	}
-
-	// Reconciles the amount owed with the amount available for distribution.
-	//
-	// The owed and available amount are mutated in place.
-	//
-	// For Ethereum and Arbitrum, we expect to the validators and pay out via egress to their
-	// accounts. For Polkadot, we expect to pay out to the current AggKey account.
-	// For Bitcoin and Solana, the vault pays the fees directly so we don't need to egress
-	// anything.
-	//
-	// Note that we refund to accounts atomically (we never partially refund an account), whereas
-	// refunds to vaults or aggkeys can be made incrementally.
+	/// Reconciles the amount owed with the amount available for distribution.
+	///
+	/// The owed and available amount are mutated in place.
+	///
+	/// For Ethereum and Arbitrum, we expect to the validators and pay out via egress to their
+	/// accounts. For Polkadot, we expect to pay out to the current AggKey account.
+	/// For Bitcoin and Solana, the vault pays the fees directly so we don't need to egress
+	/// anything.
+	///
+	/// Note that we refund to accounts atomically (we never partially refund an account), whereas
+	/// refunds to vaults or aggkeys can be made incrementally.
 	fn reconcile(
 		chain: ForeignChain,
 		owner: &ExternalOwner,
@@ -272,11 +262,8 @@ impl<T: Config> Pallet<T> {
 					Liabilities::<T>::take(chain.gas_asset()).into_iter().collect::<Vec<_>>();
 				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(*amount));
 
-				for (refund_counter, (destination, amount)) in owed_assets.iter_mut().enumerate() {
+				for (destination, amount) in owed_assets.iter_mut().take(RECONCILIATION_LIMIT) {
 					debug_assert!(*amount > 0);
-					if Self::stop_refunding(chain, refund_counter) {
-						break;
-					}
 					match Self::reconcile(chain, destination, amount, total_withheld) {
 						Err(_) | Ok(_) if *total_withheld == 0 => {
 							break;

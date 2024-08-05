@@ -180,21 +180,29 @@ pub fn refund_validators_polkadot() {
 #[test]
 pub fn max_refunds_per_epoch() {
 	new_test_ext().execute_with(|| {
-		for i in 0..crate::MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH + 2 {
+		const NUM_EXTRA_VALIDATORS: usize = 2;
+		const GAS_PAID: u128 = 100;
+		for i in 0..crate::RECONCILIATION_LIMIT + NUM_EXTRA_VALIDATORS {
 			payed_gas(
 				ForeignChain::Ethereum,
-				100,
+				GAS_PAID,
 				ForeignChainAddress::Eth(sp_core::H160([i as u8; 20])),
 			);
 		}
 		assert_eq!(
 			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()),
-			(100 * (crate::MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH as u128 + 2))
+			(GAS_PAID * (crate::RECONCILIATION_LIMIT + NUM_EXTRA_VALIDATORS) as u128)
 		);
 		Pallet::<Test>::trigger_reconciliation();
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 200);
+		assert_eq!(
+			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()),
+			GAS_PAID * NUM_EXTRA_VALIDATORS as u128
+		);
 		assert!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()) > 0);
-		assert_eq!(Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).len(), 2);
+		assert_eq!(
+			Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).len(),
+			NUM_EXTRA_VALIDATORS
+		);
 		Pallet::<Test>::trigger_reconciliation();
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 0);
 		assert_eq!(Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).len(), 0);
@@ -204,11 +212,12 @@ pub fn max_refunds_per_epoch() {
 #[test]
 pub fn do_not_refund_if_amount_is_too_low() {
 	new_test_ext().execute_with(|| {
-		const REFUND_AMOUNT: u128 = 10;
-		payed_gas(ForeignChain::Ethereum, REFUND_AMOUNT, ETH_ADDR_1.clone());
+		const EGRESS_FEE: u128 = 10;
+		const GAS_PAID: u128 = EGRESS_FEE * (crate::REFUND_FEE_MULTIPLE - 1);
+		payed_gas(ForeignChain::Ethereum, GAS_PAID, ETH_ADDR_1.clone());
 
-		MockEgressHandler::<Ethereum>::set_fee(REFUND_AMOUNT * 2);
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), REFUND_AMOUNT);
+		MockEgressHandler::<Ethereum>::set_fee(EGRESS_FEE);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), GAS_PAID);
 
 		Pallet::<Test>::trigger_reconciliation();
 
@@ -221,11 +230,11 @@ pub fn do_not_refund_if_amount_is_too_low() {
 			.into(),
 		);
 
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), REFUND_AMOUNT);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), GAS_PAID);
 		assert_eq!(
 			Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset())
 				.get(&ExternalOwner::Account(ETH_ADDR_1)),
-			Some(&REFUND_AMOUNT)
+			Some(&GAS_PAID)
 		);
 
 		assert_egress(0, None);
