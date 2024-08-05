@@ -140,7 +140,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		// Lookup environment variables, such as aggkey and durable nonce.
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
-		let (nonce_account, _nonce_hash) = Environment::nonce_account()?;
+		let durable_nonce = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
 		// Build the transaction
@@ -148,7 +148,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			fetch_params,
 			sol_api_environment,
 			agg_key,
-			nonce_account,
+			durable_nonce,
 			compute_price,
 		)?;
 
@@ -170,13 +170,13 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		transfer_params
 			.into_iter()
 			.map(|(transfer_param, egress_id)| {
-				let (nonce_account, _nonce_hash) = Environment::nonce_account()?;
+				let durable_nonce = Environment::nonce_account()?;
 				let transaction = match transfer_param.asset {
 					SolAsset::Sol => SolanaInstructionBuilder::transfer_native(
 						transfer_param.amount,
 						transfer_param.to,
 						agg_key,
-						nonce_account,
+						durable_nonce,
 						compute_price,
 					),
 					SolAsset::SolUsdc => {
@@ -196,7 +196,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							sol_api_environment.usdc_token_vault_ata,
 							sol_api_environment.usdc_token_mint_pubkey,
 							agg_key,
-							nonce_account,
+							durable_nonce,
 							compute_price,
 							SOL_USDC_DECIMAL,
 						)
@@ -220,7 +220,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
 		let nonce_accounts = Environment::all_nonce_accounts()?;
-		let (nonce_account, _nonce_hash) = Environment::nonce_account()?;
+		let durable_nonce = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
 		// Build the transaction
@@ -230,7 +230,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			sol_api_environment.vault_program,
 			sol_api_environment.vault_program_data_account,
 			agg_key,
-			nonce_account,
+			durable_nonce,
 			compute_price,
 		)
 		.map_err(|e| {
@@ -243,9 +243,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				Nonce recovered: {:?}",
 				e,
 				new_agg_key,
-				nonce_account
+				durable_nonce
 			);
-			Environment::recover_durable_nonce(nonce_account);
+			Environment::recover_durable_nonce(durable_nonce.0);
 			e
 		})?;
 
@@ -294,7 +294,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		)
 		.map_err(SolanaTransactionBuildingError::InvalidCcm)?;
 
-		let (nonce_account, _nonce_hash) = Environment::nonce_account()?;
+		let durable_nonce = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
 		// Build the transaction
@@ -309,7 +309,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				sol_api_environment.vault_program,
 				sol_api_environment.vault_program_data_account,
 				agg_key,
-				nonce_account,
+				durable_nonce,
 				compute_price,
 				gas_budget,
 			),
@@ -335,7 +335,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					sol_api_environment.usdc_token_vault_ata,
 					sol_api_environment.usdc_token_mint_pubkey,
 					agg_key,
-					nonce_account,
+					durable_nonce,
 					compute_price,
 					SOL_USDC_DECIMAL,
 					gas_budget,
@@ -352,9 +352,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				Nonce recovered: {:?}",
 				e,
 				transfer_param,
-				nonce_account
+				durable_nonce
 			);
-			Environment::recover_durable_nonce(nonce_account);
+			Environment::recover_durable_nonce(durable_nonce.0);
 			e
 		})?;
 
