@@ -16,7 +16,8 @@ use crate::{
 		compute_units_costs::{
 			compute_limit_with_buffer, BASE_COMPUTE_UNITS_PER_TX, COMPUTE_UNITS_PER_FETCH_NATIVE,
 			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_ROTATION,
-			COMPUTE_UNITS_PER_TRANSFER_NATIVE, COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+			COMPUTE_UNITS_PER_SET_GOV_KEY, COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+			COMPUTE_UNITS_PER_TRANSFER_TOKEN,
 		},
 		sol_tx_core::{
 			address_derivation::{derive_associated_token_account, derive_fetch_account},
@@ -417,7 +418,7 @@ impl SolanaTransactionBuilder {
 			durable_nonce,
 			agg_key.into(),
 			compute_price,
-			compute_limit_with_buffer(COMPUTE_UNITS_PER_ROTATION),
+			compute_limit_with_buffer(COMPUTE_UNITS_PER_SET_GOV_KEY),
 		)
 	}
 }
