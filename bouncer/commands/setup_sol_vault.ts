@@ -8,9 +8,9 @@ import { executeWithTimeout } from '../shared/utils';
 import { setupSolVault } from '../shared/setup_sol_vault';
 
 async function main(): Promise<void> {
-  console.log('=== Setup Sol Vault ===');
+  console.log('=== Setup Sol Vault and Swaps ===');
   await setupSolVault();
-  console.log('=== Setup Sol Vault complete ===');
+  console.log('=== Setup Sol Vault and Swaps complete ===');
 }
 
 await executeWithTimeout(main(), 240);
