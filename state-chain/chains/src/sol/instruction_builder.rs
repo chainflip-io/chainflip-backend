@@ -276,7 +276,7 @@ impl SolanaInstructionBuilder {
 					vault_program_data_account,
 					agg_key,
 					to,
-					ccm_accounts.cf_receiver.clone(),
+					ccm_accounts.cf_receiver,
 					system_program_id(),
 					sys_var_instructions(),
 				)
@@ -337,7 +337,7 @@ impl SolanaInstructionBuilder {
 			vault_program_data_account,
 			agg_key,
 			ata,
-			ccm_accounts.cf_receiver.clone(),
+			ccm_accounts.cf_receiver,
 			token_program_id(),
 			token_mint_pubkey,
 			sys_var_instructions(),
@@ -415,13 +415,6 @@ mod test {
 			deposit_fetch_id: SolanaDepositFetchId { channel_id, address, bump },
 			asset,
 		}
-	}
-
-	fn agg_key() -> SolAddress {
-		SolSigningKey::from_bytes(&RAW_KEYPAIR)
-			.expect("Key pair generation must succeed")
-			.pubkey()
-			.into()
 	}
 
 	fn nonce_account() -> SolAddress {

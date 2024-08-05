@@ -273,6 +273,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 }
 

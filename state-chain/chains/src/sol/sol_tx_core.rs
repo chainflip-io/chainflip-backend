@@ -785,10 +785,10 @@ impl From<Hash> for SolHash {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CcmAddress {
-	pubkey: Pubkey,
-	is_writable: bool,
+	pub pubkey: Pubkey,
+	pub is_writable: bool,
 }
 
 impl From<CcmAddress> for AccountMeta {
@@ -800,7 +800,7 @@ impl From<CcmAddress> for AccountMeta {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct CcmAccounts {
 	pub cf_receiver: CcmAddress,
 	pub remaining_accounts: Vec<CcmAddress>,
@@ -867,11 +867,12 @@ impl FromStr for Hash {
 }
 
 /// Values used for testing purposes
+#[cfg(any(test, feature = "runtime-integration-tests"))]
 pub mod sol_test_values {
 	use crate::{
 		sol::{
-			SolAddress, SolAmount, SolAsset, SolCcmAccounts, SolCcmAddress, SolComputeLimit,
-			SolHash,
+			signing_key::SolSigningKey, sol_tx_core::signer::Signer, SolAddress, SolAmount,
+			SolAsset, SolCcmAccounts, SolCcmAddress, SolComputeLimit, SolHash,
 		},
 		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
 	};
@@ -950,6 +951,10 @@ pub mod sol_test_values {
 					.expect("Test data cannot be too long"), // Extra addresses
 			},
 		}
+	}
+
+	pub fn agg_key() -> SolAddress {
+		SolSigningKey::from_bytes(&RAW_KEYPAIR).unwrap().pubkey().into()
 	}
 }
 

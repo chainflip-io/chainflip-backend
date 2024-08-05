@@ -78,7 +78,7 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
   return web3.eth.abi.encodeParameters(typesArray, variables);
 }
 
-function newSolanaCfParameters() {
+function newSolanaCfParameters(maxAccounts: number) {
   function arrayToHexString(byteArray: Uint8Array): string {
     return (
       '0x' +
@@ -100,11 +100,8 @@ function newSolanaCfParameters() {
     cfReceiver.is_writable ? 1 : 0,
   ]);
 
-  // The maximum number of accounts that can be passed is limited by the tx size and
-  // therefore also depends on the message length. With the limited message < 100 bytes
-  // we can ensure we fit 10 accounts but we can fit almost double for native asset.
   const remainingAccounts = [];
-  const numRemainingAccounts = Math.floor(Math.random() * 10);
+  const numRemainingAccounts = Math.floor(Math.random() * maxAccounts);
 
   for (let i = 0; i < numRemainingAccounts; i++) {
     remainingAccounts.push(
@@ -123,15 +120,35 @@ function newSolanaCfParameters() {
   return arrayToHexString(cfParameters);
 }
 
-function newCfParameters(destAsset: Asset): string {
+// Solana CCM-related parameters. These are values in the protocol.
+const maxCcmBytesSol = 705;
+const maxCcmBytesUsdc = 492;
+const bytesPerAccount = 33;
+
+// Generate random bytes. Setting a minimum length of 10 because very short messages can end up
+// with the SC returning an ASCII character in SwapDepositAddressReady.
+function newCcmArbitraryBytes(maxLength: number): string {
+  return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
+}
+
+function newCfParameters(destAsset: Asset, message?: string): string {
   const destChain = chainFromAsset(destAsset);
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
-      // Protocol shouldn't do anything with it.
-      return newAbiEncodedMessage();
-    case 'Solana':
-      return newSolanaCfParameters();
+      // Cf Parameters should be ignored by the protocol for any chain other than Solana
+      return newCcmArbitraryBytes(100);
+    case 'Solana': {
+      const messageLength = (message!.length - 2) / 2;
+      const maxAccounts = Math.floor(
+        ((destAsset === 'Sol' ? maxCcmBytesSol : maxCcmBytesUsdc) - messageLength) /
+          bytesPerAccount,
+      );
+
+      // The maximum number of extra accounts that can be passed is limited by the tx size
+      // and therefore also depends on the message length.
+      return newSolanaCfParameters(maxAccounts);
+    }
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
   }
@@ -144,7 +161,7 @@ function newCcmMessage(destAsset: Asset): string {
     case 'Arbitrum':
       return newAbiEncodedMessage();
     case 'Solana':
-      return randomAsHex(Math.floor(Math.random() * 90) + 10);
+      return newCcmArbitraryBytes(destAsset === 'Sol' ? maxCcmBytesSol : maxCcmBytesUsdc);
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
   }
@@ -158,7 +175,7 @@ export function newCcmMetadata(
   cfParamsArray?: string,
 ) {
   const message = ccmMessage ?? newCcmMessage(destAsset);
-  const cfParameters = cfParamsArray ?? newCfParameters(destAsset);
+  const cfParameters = cfParamsArray ?? newCfParameters(destAsset, message);
   const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(

@@ -5,7 +5,10 @@
 
 use core::{fmt::Display, iter::Step};
 
-use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
+use crate::{
+	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
+	sol::api::SolanaTransactionBuildingError,
+};
 pub use address::ForeignChainAddress;
 use address::{
 	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
@@ -54,6 +57,7 @@ pub mod deposit_channel;
 use cf_primitives::chains::assets::any::GetChainAssetMap;
 pub use deposit_channel::*;
 use strum::IntoEnumIterator;
+pub mod ccm_checker;
 pub mod instances;
 
 pub mod mocks;
@@ -522,6 +526,16 @@ pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError>;
 }
 
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
+pub enum ExecutexSwapAndCallError {
+	/// The chain does not support CCM functionality.
+	Unsupported,
+	/// Failed to build CCM for the Solana chain.
+	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
+	/// Some other DispatchError occurred.
+	DispatchError(DispatchError),
+}
+
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		transfer_param: TransferAssetParams<C>,
@@ -530,7 +544,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
-	) -> Result<Self, DispatchError>;
+	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
 pub trait TransferFallback<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -560,7 +574,6 @@ pub enum SwapOrigin {
 	Internal,
 }
 
-// TODO: PRO-1491
 pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
 pub const MAX_CCM_CF_PARAM_LENGTH: u32 = 1_000;
 

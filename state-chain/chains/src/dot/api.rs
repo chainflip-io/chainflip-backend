@@ -129,8 +129,8 @@ where
 		_gas_budget: <Polkadot as Chain>::ChainAmount,
 		_message: Vec<u8>,
 		_cf_parameters: Vec<u8>,
-	) -> Result<Self, DispatchError> {
-		Err(DispatchError::Other("Not implemented"))
+	) -> Result<Self, ExecutexSwapAndCallError> {
+		Err(ExecutexSwapAndCallError::Unsupported)
 	}
 }
 

@@ -3,7 +3,8 @@ use core::marker::PhantomData;
 use cf_chains::{
 	btc::BitcoinCrypto, evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Bitcoin, Chain,
 	ChainCrypto, ChainEnvironment, ConsolidationError, Ethereum, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, TransferAssetParams, TransferFallback,
+	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
+	TransferFallback,
 };
 use cf_primitives::{chains::assets, EgressId, ForeignChain};
 use codec::{Decode, Encode};
@@ -149,9 +150,9 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
 		_cf_parameters: Vec<u8>,
-	) -> Result<Self, DispatchError> {
+	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
-			Err(DispatchError::CannotLookup)
+			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
 		} else {
 			Ok(Self::ExecutexSwapAndCall(MockEthExecutexSwapAndCall {
 				nonce: Default::default(),
@@ -281,9 +282,9 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		gas_budget: <Bitcoin as Chain>::ChainAmount,
 		message: Vec<u8>,
 		_cf_parameters: Vec<u8>,
-	) -> Result<Self, DispatchError> {
+	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockBtcEnvironment::lookup(transfer_param.asset).is_none() {
-			Err(DispatchError::CannotLookup)
+			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
 		} else {
 			Ok(Self::ExecutexSwapAndCall(MockBtcExecutexSwapAndCall {
 				transfer_param,
