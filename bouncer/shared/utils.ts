@@ -413,29 +413,6 @@ export async function observeSwapScheduled(
   }).event;
 }
 
-export async function observeSwapRequested(
-  sourceAsset: Asset,
-  destAsset: Asset,
-  channelId: number,
-) {
-  // need to await this to prevent the chainflip api from being disposed prematurely
-  return observeEvent('swapping:SwapRequested', {
-    test: (event) => {
-      const data = event.data;
-
-      if (typeof data.origin === 'object' && 'DepositChannel' in data.origin) {
-        const channelMatches = Number(data.origin.DepositChannel.channelId) === channelId;
-        const sourceAssetMatches = sourceAsset === (data.inputAsset as Asset);
-        const destAssetMatches = destAsset === (data.outputAsset as Asset);
-
-        return channelMatches && sourceAssetMatches && destAssetMatches;
-      }
-      // Otherwise it was a swap scheduled by interacting with the Eth smart contract
-      return false;
-    },
-  }).event;
-}
-
 export async function observeBroadcastSuccess(broadcastId: BroadcastId, testTag?: string) {
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];

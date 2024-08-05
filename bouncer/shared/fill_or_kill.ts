@@ -6,7 +6,7 @@ import {
   decodeDotAddressForContract,
   newAddress,
   observeBalanceIncrease,
-  observeSwapRequested,
+  observeSwapScheduled,
 } from './utils';
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
@@ -49,20 +49,20 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
   const depositAddress = swapRequest.depositAddress;
   const depositChannelId = swapRequest.channelId;
 
-  const swapRequestedHandle = observeSwapRequested(inputAsset, destAsset, depositChannelId);
+  const swapScheduledHandle = observeSwapScheduled(inputAsset, destAsset, depositChannelId);
 
   // Deposit the asset
   await send(inputAsset, depositAddress, amount.toString());
   console.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
 
-  const swapRequestedEvent = await swapRequestedHandle;
-  console.log(`Swap requested: ${JSON.stringify(swapRequestedEvent)}`);
-  const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
-  console.log(`${inputAsset} swap requested, swapId: ${swapRequestId}`);
+  const swapScheduledEvent = await swapScheduledHandle;
+  console.log(`Swap scheduled: ${JSON.stringify(swapScheduledEvent)}`);
+  const swapId = Number(swapScheduledEvent.data.swapId.replaceAll(',', ''));
+  console.log(`${inputAsset} swap scheduled, swapId: ${swapId}`);
 
   // TODO: Observing after the SwapScheduled event means its possible to miss the events, but we need to the swap id.
   const observeSwapExecuted = observeEvent(`swapping:SwapExecuted`, {
-    test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
+    test: (event) => Number(event.data.swapId.replaceAll(',', '')) === swapId,
   }).event;
 
   const executeOrRefund = await Promise.race([
@@ -72,7 +72,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
 
   if (typeof executeOrRefund !== 'number') {
     throw new Error(
-      `${inputAsset} swap ${swapRequestId} was executed instead of failing and being refunded`,
+      `${inputAsset} swap ${swapId} was executed instead of failing and being refunded`,
     );
   }
 
