@@ -14,8 +14,8 @@ use crate::{
 		DecodedCfParameters,
 	},
 	sol::{
-		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolApiEnvironment,
-		SolAsset, SolHash, SolMessage, SolTransaction, SolanaCrypto,
+		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
+		SolAsset, SolHash, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, Chain, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
@@ -46,6 +46,7 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<ComputePrice, SolAmount>
 	+ ChainEnvironment<DurableNonce, DurableNonceAndAccount>
 	+ ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>>
+	+ RecoverDurableNonce
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
 		Self::lookup(ComputePrice).ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
@@ -56,7 +57,7 @@ pub trait SolanaEnvironment:
 			.ok_or(SolanaTransactionBuildingError::CannotLookupApiEnvironment)
 	}
 
-	fn nonce_account() -> Result<(SolAddress, SolHash), SolanaTransactionBuildingError> {
+	fn nonce_account() -> Result<DurableNonceAndAccount, SolanaTransactionBuildingError> {
 		Self::lookup(DurableNonce).ok_or(SolanaTransactionBuildingError::NoAvailableNonceAccount)
 	}
 
@@ -72,6 +73,14 @@ pub trait SolanaEnvironment:
 	}
 }
 
+/// IMPORTANT: This should only be used if the nonce has not been used to sign a transaction.
+/// Once a nonce is actually used, it should ONLY be recovered via Witnessing.
+/// Only use this if you know what you are doing.
+pub trait RecoverDurableNonce {
+	/// Set a unused durable nonce back as available.
+	fn recover_durable_nonce(_nonce_account: SolAddress) {}
+}
+
 /// Errors that can arise when building Solana Transactions.
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum SolanaTransactionBuildingError {
@@ -82,6 +91,8 @@ pub enum SolanaTransactionBuildingError {
 	NoAvailableNonceAccount,
 	FailedToDeriveAddress(crate::sol::AddressDerivationError),
 	InvalidCcm(CcmValidityError),
+	FailedToSerializeFinalTransaction,
+	FinalTransactionExceededMaxLength(u32),
 }
 
 impl sp_std::fmt::Display for SolanaTransactionBuildingError {
@@ -131,22 +142,17 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		// Lookup environment variables, such as aggkey and durable nonce.
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
-		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
+		let durable_nonce = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
-		// Build the instruction_set
-		let instruction_set = SolanaInstructionBuilder::fetch_from(
+		// Build the transaction
+		let transaction = SolanaTransactionBuilder::fetch_from(
 			fetch_params,
 			sol_api_environment,
 			agg_key,
-			nonce_account,
+			durable_nonce,
 			compute_price,
 		)?;
-		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
-			&instruction_set,
-			Some(&agg_key.into()),
-			&durable_nonce.into(),
-		));
 
 		Ok(Self {
 			call_type: SolanaTransactionType::BatchFetch,
@@ -166,13 +172,13 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		transfer_params
 			.into_iter()
 			.map(|(transfer_param, egress_id)| {
-				let (nonce_account, durable_nonce) = Environment::nonce_account()?;
-				let transfer_instruction_set = match transfer_param.asset {
-					SolAsset::Sol => SolanaInstructionBuilder::transfer_native(
+				let durable_nonce = Environment::nonce_account()?;
+				let transaction = match transfer_param.asset {
+					SolAsset::Sol => SolanaTransactionBuilder::transfer_native(
 						transfer_param.amount,
 						transfer_param.to,
 						agg_key,
-						nonce_account,
+						durable_nonce,
 						compute_price,
 					),
 					SolAsset::SolUsdc => {
@@ -182,7 +188,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							sol_api_environment.usdc_token_mint_pubkey,
 						)
 						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-						SolanaInstructionBuilder::transfer_token(
+						SolanaTransactionBuilder::transfer_token(
 							ata.address,
 							transfer_param.amount,
 							transfer_param.to,
@@ -192,21 +198,17 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							sol_api_environment.usdc_token_vault_ata,
 							sol_api_environment.usdc_token_mint_pubkey,
 							agg_key,
-							nonce_account,
+							durable_nonce,
 							compute_price,
 							SOL_USDC_DECIMAL,
 						)
 					},
-				};
+				}?;
 
 				Ok((
 					Self {
 						call_type: SolanaTransactionType::Transfer,
-						transaction: SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
-							&transfer_instruction_set,
-							Some(&agg_key.into()),
-							&durable_nonce.into(),
-						)),
+						transaction,
 						_phantom: Default::default(),
 					},
 					vec![egress_id],
@@ -220,25 +222,34 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
 		let nonce_accounts = Environment::all_nonce_accounts()?;
-		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
+		let durable_nonce = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
-		// Build the instruction_set
-		let instruction_set = SolanaInstructionBuilder::rotate_agg_key(
+		// Build the transaction
+		let transaction = SolanaTransactionBuilder::rotate_agg_key(
 			new_agg_key,
 			nonce_accounts,
 			sol_api_environment.vault_program,
 			sol_api_environment.vault_program_data_account,
 			agg_key,
-			nonce_account,
+			durable_nonce,
 			compute_price,
-		);
-
-		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
-			&instruction_set,
-			Some(&agg_key.into()),
-			&durable_nonce.into(),
-		));
+		)
+		.map_err(|e| {
+			// Vault Rotation call building NOT transactional - meaning when this fails,
+			// storage is not rolled back. We must recover the durable nonce here,
+			// since it has been taken from storage but not actually used.
+			log::error!(
+				"Solana RotateAggKey call building failed. Nonce recovered. Error: {:?}
+				new aggkey: {:?}
+				Nonce recovered: {:?}",
+				e,
+				new_agg_key,
+				durable_nonce
+			);
+			Environment::recover_durable_nonce(durable_nonce.0);
+			e
+		})?;
 
 		Ok(Self {
 			call_type: SolanaTransactionType::RotateAggKey,
@@ -292,12 +303,12 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		)
 		.map_err(SolanaTransactionBuildingError::InvalidCcm)?;
 
-		let (nonce_account, durable_nonce) = Environment::nonce_account()?;
+		let durable_nonce = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
 
-		// Build the instruction_set
-		let instruction_set = match transfer_param.asset {
-			SolAsset::Sol => Ok(SolanaInstructionBuilder::ccm_transfer_native(
+		// Build the transaction
+		let transaction = match transfer_param.asset {
+			SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
 				transfer_param.amount,
 				transfer_param.to,
 				source_chain,
@@ -307,10 +318,10 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				sol_api_environment.vault_program,
 				sol_api_environment.vault_program_data_account,
 				agg_key,
-				nonce_account,
+				durable_nonce,
 				compute_price,
 				gas_budget,
-			)),
+			),
 			SolAsset::SolUsdc => {
 				let ata =
 					crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
@@ -319,7 +330,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					)
 					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
-				Ok(SolanaInstructionBuilder::ccm_transfer_token(
+				SolanaTransactionBuilder::ccm_transfer_token(
 					ata.address,
 					transfer_param.amount,
 					transfer_param.to,
@@ -333,19 +344,28 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					sol_api_environment.usdc_token_vault_ata,
 					sol_api_environment.usdc_token_mint_pubkey,
 					agg_key,
-					nonce_account,
+					durable_nonce,
 					compute_price,
 					SOL_USDC_DECIMAL,
 					gas_budget,
-				))
+				)
 			},
-		}?;
-
-		let transaction = SolTransaction::new_unsigned(SolMessage::new_with_blockhash(
-			&instruction_set,
-			Some(&agg_key.into()),
-			&durable_nonce.into(),
-		));
+		}
+		.map_err(|e| {
+			// CCM call building is NOT transactional - meaning when this fails,
+			// storage is not rolled back. We must recover the durable nonce here,
+			// since it has been taken from storage but not actually used.
+			log::error!(
+				"CCM building failed. Nonce recovered. Error: {:?}
+				Transfer param: {:?}
+				Nonce recovered: {:?}",
+				e,
+				transfer_param,
+				durable_nonce
+			);
+			Environment::recover_durable_nonce(durable_nonce.0);
+			e
+		})?;
 
 		Ok(Self {
 			call_type: SolanaTransactionType::CcmTransfer,
@@ -403,7 +423,7 @@ impl<Env: 'static + SolanaEnvironment> SetAggKeyWithAggKey<SolanaCrypto> for Sol
 	) -> Result<Option<Self>, crate::SetAggKeyWithAggKeyError> {
 		Self::rotate_agg_key(new_key).map(Some).map_err(|e| {
 			log::error!("Failed to construct Solana Rotate Agg key transaction! Error: {:?}", e);
-			crate::SetAggKeyWithAggKeyError::Failed
+			crate::SetAggKeyWithAggKeyError::FinalTransactionExceededMaxLength
 		})
 	}
 }

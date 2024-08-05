@@ -119,7 +119,7 @@ mod test {
 	#[test]
 	fn can_check_for_ccm_length_sol() {
 		let ccm = || CcmChannelMetadata {
-			message: [0x01; MAX_CCM_BYTES_SOL].to_vec().try_into().unwrap(),
+			message: vec![0x01; MAX_CCM_BYTES_SOL].try_into().unwrap(),
 			gas_budget: 0,
 			cf_parameters: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
@@ -133,7 +133,7 @@ mod test {
 
 		// Length check for Sol
 		let mut invalid_ccm = ccm();
-		invalid_ccm.message = [0x01; MAX_CCM_BYTES_SOL + 1].to_vec().try_into().unwrap();
+		invalid_ccm.message = vec![0x01; MAX_CCM_BYTES_SOL + 1].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::Sol),
 			CcmValidityError::CcmIsTooLong
@@ -159,7 +159,7 @@ mod test {
 	#[test]
 	fn can_check_for_ccm_length_usdc() {
 		let ccm = || CcmChannelMetadata {
-			message: [0x01; MAX_CCM_BYTES_USDC].to_vec().try_into().unwrap(),
+			message: vec![0x01; MAX_CCM_BYTES_USDC].try_into().unwrap(),
 			gas_budget: 0,
 			cf_parameters: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
@@ -173,7 +173,7 @@ mod test {
 
 		// Length check for SolUsdc
 		let mut invalid_ccm = ccm();
-		invalid_ccm.message = [0x01; MAX_CCM_BYTES_USDC + 1].to_vec().try_into().unwrap();
+		invalid_ccm.message = vec![0x01; MAX_CCM_BYTES_USDC + 1].try_into().unwrap();
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&invalid_ccm, Asset::SolUsdc),
 			CcmValidityError::CcmIsTooLong

@@ -212,7 +212,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn solana_unavailable_nonce_accounts)]
-	pub type SolanaUnAvailableNonceAccounts<T> =
+	pub type SolanaUnavailableNonceAccounts<T> =
 		StorageMap<_, Blake2_128Concat, SolAddress, SolHash>;
 
 	#[pallet::storage]
@@ -458,7 +458,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			if let Some(_nonce) = SolanaUnAvailableNonceAccounts::<T>::take(nonce_account) {
+			if let Some(_nonce) = SolanaUnavailableNonceAccounts::<T>::take(nonce_account) {
 				SolanaAvailableNonceAccounts::<T>::append((nonce_account, durable_nonce));
 				Self::deposit_event(Event::<T>::DurableNonceSetForAccount {
 					nonce_account,
@@ -683,14 +683,22 @@ impl<T: Config> Pallet<T> {
 			nonce_and_accounts.pop()
 		});
 		nonce_and_account.map(|(account, nonce)| {
-			SolanaUnAvailableNonceAccounts::<T>::insert(account, nonce);
+			SolanaUnavailableNonceAccounts::<T>::insert(account, nonce);
 			(account, nonce)
 		})
 	}
 
+	/// IMPORTANT: This fn is used to recover an un-used DurableNonce so it's available again.
+	/// ONLY use this if this nonce is un-used.
+	pub fn recover_sol_durable_nonce(nonce_account: SolAddress) {
+		if let Some(hash) = SolanaUnavailableNonceAccounts::<T>::take(nonce_account) {
+			SolanaAvailableNonceAccounts::<T>::append((nonce_account, hash));
+		}
+	}
+
 	pub fn get_all_sol_nonce_accounts() -> Vec<DurableNonceAndAccount> {
 		let mut nonce_accounts = SolanaAvailableNonceAccounts::<T>::get();
-		nonce_accounts.extend(&mut SolanaUnAvailableNonceAccounts::<T>::iter());
+		nonce_accounts.extend(&mut SolanaUnavailableNonceAccounts::<T>::iter());
 		nonce_accounts
 	}
 

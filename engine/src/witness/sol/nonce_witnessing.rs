@@ -57,7 +57,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			let state_chain_client = state_chain_client.clone();
 			async move {
 				let nonce_accounts: HashMap<SolAddress, SolHash> = state_chain_client
-					.storage_map::<pallet_cf_environment::SolanaUnAvailableNonceAccounts<
+					.storage_map::<pallet_cf_environment::SolanaUnavailableNonceAccounts<
 						state_chain_runtime::Runtime,
 					>, _>(state_chain_client.latest_finalized_block().hash)
 					.await
