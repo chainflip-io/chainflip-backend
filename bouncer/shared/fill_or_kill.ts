@@ -7,7 +7,6 @@ import {
   newAddress,
   observeBalanceIncrease,
   observeSwapRequested,
-  SwapRequestType,
 } from './utils';
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
@@ -50,12 +49,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
   const depositAddress = swapRequest.depositAddress;
   const depositChannelId = swapRequest.channelId;
 
-  const swapRequestedHandle = observeSwapRequested(
-    inputAsset,
-    destAsset,
-    depositChannelId,
-    SwapRequestType.Regular,
-  );
+  const swapRequestedHandle = observeSwapRequested(inputAsset, destAsset, depositChannelId);
 
   // Deposit the asset
   await send(inputAsset, depositAddress, amount.toString());
