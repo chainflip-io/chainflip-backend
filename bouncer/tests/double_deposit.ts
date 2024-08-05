@@ -34,9 +34,9 @@ async function main(): Promise<void> {
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
   await sendEvmNative('Ethereum', ethIngressKey, '10');
 
-  await observeEvent('liquidityProvider:AccountCredited').event;
+  await observeEvent('assetBalances:AccountCredited').event;
   await sendEvmNative('Ethereum', ethIngressKey, '10');
-  await observeEvent('liquidityProvider:AccountCredited').event;
+  await observeEvent('assetBalances:AccountCredited').event;
 }
 
 runWithTimeout(main(), 120000).catch((error) => {

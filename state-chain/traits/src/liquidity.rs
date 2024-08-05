@@ -1,8 +1,24 @@
 use cf_amm::common::PoolPairsMap;
-use cf_chains::assets::any::AssetMap;
-use cf_primitives::{Asset, AssetAmount};
+use cf_chains::{address::ForeignChainAddress, assets::any::AssetMap, ChannelRefundParameters};
+use cf_primitives::{Asset, AssetAmount, BalancesInfo, Beneficiaries, ChannelId, SwapId};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use sp_std::{vec, vec::Vec};
+
+pub trait SwapDepositHandler {
+	type AccountId;
+
+	fn schedule_swap_from_channel(
+		deposit_address: ForeignChainAddress,
+		deposit_block_height: u64,
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		destination_address: ForeignChainAddress,
+		broker_commission: Beneficiaries<Self::AccountId>,
+		refund_params: Option<ChannelRefundParameters>,
+		channel_id: ChannelId,
+	) -> SwapId;
+}
 
 pub trait LpDepositHandler {
 	type AccountId;
@@ -12,20 +28,31 @@ pub trait LpDepositHandler {
 	fn add_deposit(who: &Self::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult;
 }
 
-pub trait LpBalanceApi {
+/// API for interacting with the liquidity provider pallet.
+pub trait LpApi {
 	type AccountId;
 
+	/// Register an address for an given account. This is for benchmarking purposes only.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn register_liquidity_refund_address(
 		who: &Self::AccountId,
 		address: cf_chains::ForeignChainAddress,
 	);
 
+	/// Ensure that the given account has a refund address set for the given asset.
 	fn ensure_has_refund_address_for_pair(
 		who: &Self::AccountId,
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> DispatchResult;
+}
+
+/// API for interacting with the asset-balance pallet.
+pub trait BalanceApi {
+	type AccountId;
+
+	/// Record the rejected funds.
+	fn collected_rejected_funds(asset: Asset, amount: AssetAmount);
 
 	/// Attempt to credit the account with the given asset and amount.
 	fn try_credit_account(
@@ -46,8 +73,14 @@ pub trait LpBalanceApi {
 
 	/// Returns the asset free balances of the given account.
 	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
-}
 
+	/// Removes all balances of the given account from storage.
+	fn kill_balance(who: &Self::AccountId);
+
+	/// Returns all available balance information.
+	#[cfg(feature = "try-runtime")]
+	fn get_balances_info() -> BalancesInfo;
+}
 pub trait PoolApi {
 	type AccountId;
 
