@@ -3,7 +3,8 @@
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
-	CcmChannelMetadata, CcmDepositMetadata, CcmValidityCheck, ChannelRefundParameters, SwapOrigin,
+	ccm_checker::CcmValidityCheck,
+	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters, SwapOrigin,
 	SwapRefundParameters,
 };
 use cf_primitives::{
@@ -865,15 +866,18 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Check for the CCM's validity.
-			T::CcmValidityChecker::is_valid(&deposit_metadata.channel_metadata, destination_asset)
-				.map_err(|e| {
-					log::warn!(
-						"Failed to process CCM due to invalid data. Tx hash: {:?}, Error: {:?}",
-						tx_hash,
-						e
-					);
-					Error::<T>::InvalidCcm
-				})?;
+			let _ = T::CcmValidityChecker::check_and_decode(
+				&deposit_metadata.channel_metadata,
+				destination_asset,
+			)
+			.map_err(|e| {
+				log::warn!(
+					"Failed to process CCM due to invalid data. Tx hash: {:?}, Error: {:?}",
+					tx_hash,
+					e
+				);
+				Error::<T>::InvalidCcm
+			})?;
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
@@ -1022,14 +1026,16 @@ pub mod pallet {
 				let destination_chain: ForeignChain = destination_asset.into();
 				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
 
-				T::CcmValidityChecker::is_valid(ccm, destination_asset).map_err(|e| {
-					log::warn!(
-						"Failed to open channel due to invalid CCM. Broker: {:?}, Error: {:?}",
-						broker,
-						e
-					);
-					Error::<T>::InvalidCcm
-				})?;
+				let _ = T::CcmValidityChecker::check_and_decode(ccm, destination_asset).map_err(
+					|e| {
+						log::warn!(
+							"Failed to open channel due to invalid CCM. Broker: {:?}, Error: {:?}",
+							broker,
+							e
+						);
+						Error::<T>::InvalidCcm
+					},
+				)?;
 			}
 
 			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =

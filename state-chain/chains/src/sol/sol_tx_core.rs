@@ -785,7 +785,7 @@ impl From<Hash> for SolHash {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CcmAddress {
 	pub pubkey: Pubkey,
 	pub is_writable: bool,
@@ -800,7 +800,7 @@ impl From<CcmAddress> for AccountMeta {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone)]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct CcmAccounts {
 	pub cf_receiver: CcmAddress,
 	pub remaining_accounts: Vec<CcmAddress>,

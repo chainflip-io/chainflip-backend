@@ -4,13 +4,14 @@ use super::*;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
 	assets::any::Asset,
+	ccm_checker::CcmValidityError,
 	sol::{
 		api::{SolanaEnvironment, SolanaTransactionBuildingError},
 		sol_tx_core::sol_test_values,
 		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolPubkey, SolTrackedData,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, CcmValidityError, Chain, ChainState,
-	ForeignChainAddress, Solana, SwapOrigin,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ForeignChainAddress, Solana,
+	SwapOrigin,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
