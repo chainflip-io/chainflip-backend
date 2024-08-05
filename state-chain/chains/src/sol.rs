@@ -70,11 +70,12 @@ impl Chain for Solana {
 	type ChainAccount = SolAddress;
 	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
-	type DepositDetails = (); //todo
+	type DepositDetails = ();
 	type Transaction = SolTransaction;
-	type TransactionMetadata = (); //todo
-	type ReplayProtectionParams = (); //todo
-	type ReplayProtection = (); //todo
+	type TransactionMetadata = ();
+	// There is no need for replay protection on Solana since it uses blockhashes.
+	type ReplayProtectionParams = ();
+	type ReplayProtection = ();
 	type TransactionRef = SolSignature;
 }
 
