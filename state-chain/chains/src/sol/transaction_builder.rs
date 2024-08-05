@@ -396,6 +396,30 @@ impl SolanaTransactionBuilder {
 			},
 		)
 	}
+
+	/// Create an instruction set to set the current GovKey with the agg key.
+	pub fn set_gov_key_with_agg_key(
+		new_gov_key: SolAddress,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		agg_key: SolAddress,
+		durable_nonce: DurableNonceAndAccount,
+		compute_price: SolAmount,
+	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+		let instructions = vec![VaultProgram::with_id(vault_program).set_gov_key_with_agg_key(
+			new_gov_key.into(),
+			vault_program_data_account,
+			agg_key,
+		)];
+
+		Self::build(
+			instructions,
+			durable_nonce,
+			agg_key.into(),
+			compute_price,
+			compute_limit_with_buffer(COMPUTE_UNITS_PER_ROTATION),
+		)
+	}
 }
 
 #[cfg(test)]
