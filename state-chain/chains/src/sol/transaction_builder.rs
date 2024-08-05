@@ -47,15 +47,15 @@ fn sys_var_instructions() -> SolAddress {
 fn token_program_id() -> SolAddress {
 	TOKEN_PROGRAM_ID
 }
-pub struct SolanaInstructionBuilder;
+pub struct SolanaTransactionBuilder;
 
-impl SolanaInstructionBuilder {
+impl SolanaTransactionBuilder {
 	/// Finalize a Instruction Set. This should be internally called after a instruction set is
 	/// complete. This will add some extra instruction required for the integrity of the Solana
 	/// Transaction.
 	///
 	/// Returns the finished Instruction Set to construct the SolTransaction.
-	fn finalize(
+	fn build(
 		mut instructions: Vec<SolInstruction>,
 		durable_nonce: DurableNonceAndAccount,
 		agg_key: SolPubkey,
@@ -159,7 +159,7 @@ impl SolanaInstructionBuilder {
 			})
 			.collect::<Result<Vec<_>, SolanaTransactionBuildingError>>()?;
 
-		Self::finalize(
+		Self::build(
 			instructions,
 			durable_nonce,
 			agg_key.into(),
@@ -180,7 +180,7 @@ impl SolanaInstructionBuilder {
 		let instructions =
 			vec![SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount)];
 
-		Self::finalize(
+		Self::build(
 			instructions,
 			durable_nonce,
 			agg_key.into(),
@@ -226,7 +226,7 @@ impl SolanaInstructionBuilder {
 			),
 		];
 
-		Self::finalize(
+		Self::build(
 			instructions,
 			durable_nonce,
 			agg_key.into(),
@@ -260,7 +260,7 @@ impl SolanaInstructionBuilder {
 			)
 		}));
 
-		Self::finalize(
+		Self::build(
 			instructions,
 			durable_nonce,
 			agg_key.into(),
@@ -302,7 +302,7 @@ impl SolanaInstructionBuilder {
 				.with_remaining_accounts(ccm_accounts.remaining_account_metas()),
 		];
 
-		Self::finalize(
+		Self::build(
 			instructions,
 			durable_nonce,
 			agg_key.into(),
@@ -362,7 +362,7 @@ impl SolanaInstructionBuilder {
 			sys_var_instructions(),
 		).with_remaining_accounts(ccm_accounts.remaining_account_metas())];
 
-		Self::finalize(
+		Self::build(
 			instructions,
 			durable_nonce,
 			agg_key.into(),
@@ -490,7 +490,7 @@ mod test {
 	#[test]
 	fn can_create_fetch_native_transaction() {
 		// Construct the batch fetch instruction set
-		let transaction = SolanaInstructionBuilder::fetch_from(
+		let transaction = SolanaTransactionBuilder::fetch_from(
 			vec![get_fetch_params(None, SOL)],
 			api_env(),
 			agg_key(),
@@ -512,7 +512,7 @@ mod test {
 		let fetch_param_1 = get_fetch_params(Some(1), SOL);
 
 		// Construct the batch fetch instruction set
-		let transaction = SolanaInstructionBuilder::fetch_from(
+		let transaction = SolanaTransactionBuilder::fetch_from(
 			vec![fetch_param_0, fetch_param_1],
 			api_env(),
 			agg_key(),
@@ -530,7 +530,7 @@ mod test {
 	#[test]
 	fn can_create_fetch_token_transaction() {
 		// Construct the fetch instruction set
-		let transaction = SolanaInstructionBuilder::fetch_from(
+		let transaction = SolanaTransactionBuilder::fetch_from(
 			vec![get_fetch_params(Some(0u64), USDC)],
 			api_env(),
 			agg_key(),
@@ -547,7 +547,7 @@ mod test {
 
 	#[test]
 	fn can_create_fetch_mixed_asset_multiple_transaction() {
-		let transaction = SolanaInstructionBuilder::fetch_from(
+		let transaction = SolanaTransactionBuilder::fetch_from(
 			vec![
 				get_fetch_params(Some(0u64), USDC),
 				get_fetch_params(Some(1u64), USDC),
@@ -568,7 +568,7 @@ mod test {
 
 	#[test]
 	fn can_create_transfer_native_transaction() {
-		let transaction = SolanaInstructionBuilder::transfer_native(
+		let transaction = SolanaTransactionBuilder::transfer_native(
 			TRANSFER_AMOUNT,
 			TRANSFER_TO_ACCOUNT,
 			agg_key(),
@@ -594,7 +594,7 @@ mod test {
 			)
 			.unwrap();
 
-		let transaction = SolanaInstructionBuilder::transfer_token(
+		let transaction = SolanaTransactionBuilder::transfer_token(
 			to_pubkey_ata.address,
 			TRANSFER_AMOUNT,
 			to_pubkey,
@@ -620,7 +620,7 @@ mod test {
 	fn can_rotate_agg_key() {
 		let new_agg_key = NEW_AGG_KEY;
 		let env = api_env();
-		let transaction = SolanaInstructionBuilder::rotate_agg_key(
+		let transaction = SolanaTransactionBuilder::rotate_agg_key(
 			new_agg_key,
 			nonce_accounts(),
 			env.vault_program,
@@ -644,7 +644,7 @@ mod test {
 
 		let compute_price_lamports = TEST_COMPUTE_PRICE.div_ceil(MICROLAMPORTS_PER_LAMPORT.into());
 		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
-			let mut tx_compute_limit: u32 = SolanaInstructionBuilder::calculate_gas_limit(
+			let mut tx_compute_limit: u32 = SolanaTransactionBuilder::calculate_gas_limit(
 				TEST_EGRESS_BUDGET * compute_price_lamports + LAMPORTS_PER_SIGNATURE,
 				TEST_COMPUTE_PRICE,
 				*asset,
@@ -653,25 +653,25 @@ mod test {
 
 			// Rounded down
 			assert_eq!(
-				SolanaInstructionBuilder::calculate_gas_limit(
+				SolanaTransactionBuilder::calculate_gas_limit(
 					(TEST_EGRESS_BUDGET + 1) as SolAmount + LAMPORTS_PER_SIGNATURE,
 					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
 					*asset,
 				),
-				SolanaInstructionBuilder::calculate_gas_limit(
+				SolanaTransactionBuilder::calculate_gas_limit(
 					(TEST_EGRESS_BUDGET + 9) as SolAmount + LAMPORTS_PER_SIGNATURE,
 					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
 					*asset,
 				)
 			);
 			assert_eq!(
-				SolanaInstructionBuilder::calculate_gas_limit(
+				SolanaTransactionBuilder::calculate_gas_limit(
 					(TEST_EGRESS_BUDGET + 1) as SolAmount * compute_price_lamports +
 						LAMPORTS_PER_SIGNATURE,
 					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
 					*asset,
 				),
-				SolanaInstructionBuilder::calculate_gas_limit(
+				SolanaTransactionBuilder::calculate_gas_limit(
 					TEST_EGRESS_BUDGET as SolAmount * compute_price_lamports +
 						LAMPORTS_PER_SIGNATURE,
 					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
@@ -681,7 +681,7 @@ mod test {
 
 			// Test SolComputeLimit saturation
 			assert_eq!(
-				SolanaInstructionBuilder::calculate_gas_limit(
+				SolanaTransactionBuilder::calculate_gas_limit(
 					(SolComputeLimit::MAX as SolAmount) * 2 * compute_price_lamports +
 						LAMPORTS_PER_SIGNATURE,
 					TEST_COMPUTE_PRICE,
@@ -691,7 +691,7 @@ mod test {
 			);
 
 			// Test upper cap
-			tx_compute_limit = SolanaInstructionBuilder::calculate_gas_limit(
+			tx_compute_limit = SolanaTransactionBuilder::calculate_gas_limit(
 				MAX_COMPUTE_UNITS_PER_TRANSACTION as u64 * compute_price_lamports * 2,
 				TEST_COMPUTE_PRICE,
 				*asset,
@@ -699,17 +699,17 @@ mod test {
 			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_TRANSACTION);
 
 			tx_compute_limit =
-				SolanaInstructionBuilder::calculate_gas_limit(TEST_EGRESS_BUDGET, 0, *asset);
+				SolanaTransactionBuilder::calculate_gas_limit(TEST_EGRESS_BUDGET, 0, *asset);
 			assert_eq!(tx_compute_limit, DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER);
 		}
 
 		// Test lower cap
 		let mut tx_compute_limit =
-			SolanaInstructionBuilder::calculate_gas_limit(10u64, 1, SolAsset::Sol);
+			SolanaTransactionBuilder::calculate_gas_limit(10u64, 1, SolAsset::Sol);
 		assert_eq!(tx_compute_limit, MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER);
 
 		tx_compute_limit =
-			SolanaInstructionBuilder::calculate_gas_limit(10u64, 1, SolAsset::SolUsdc);
+			SolanaTransactionBuilder::calculate_gas_limit(10u64, 1, SolAsset::SolUsdc);
 		assert_eq!(tx_compute_limit, MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER);
 	}
 
@@ -723,7 +723,7 @@ mod test {
 		};
 		let env = api_env();
 
-		let transaction = SolanaInstructionBuilder::ccm_transfer_native(
+		let transaction = SolanaTransactionBuilder::ccm_transfer_native(
 			transfer_param.amount,
 			transfer_param.to,
 			ccm_param.source_chain,
@@ -758,7 +758,7 @@ mod test {
 		)
 		.unwrap();
 
-		let transaction = SolanaInstructionBuilder::ccm_transfer_token(
+		let transaction = SolanaTransactionBuilder::ccm_transfer_token(
 			to_ata.address,
 			TRANSFER_AMOUNT,
 			to,
@@ -790,7 +790,7 @@ mod test {
 	#[test]
 	fn transactions_above_max_lengths_will_fail() {
 		// with 28 Fetches, the length is 1232 <= 1232
-		assert_ok!(SolanaInstructionBuilder::fetch_from(
+		assert_ok!(SolanaTransactionBuilder::fetch_from(
 			[get_fetch_params(None, SOL); 28].to_vec(),
 			api_env(),
 			agg_key(),
@@ -799,7 +799,7 @@ mod test {
 		));
 
 		assert_err!(
-			SolanaInstructionBuilder::fetch_from(
+			SolanaTransactionBuilder::fetch_from(
 				[get_fetch_params(None, SOL); 29].to_vec(),
 				api_env(),
 				agg_key(),

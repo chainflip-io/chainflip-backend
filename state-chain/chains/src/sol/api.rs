@@ -14,7 +14,7 @@ use crate::{
 		DecodedCfParameters,
 	},
 	sol::{
-		instruction_builder::SolanaInstructionBuilder, SolAddress, SolAmount, SolApiEnvironment,
+		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
 		SolAsset, SolHash, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, Chain, ChainCrypto, ChainEnvironment,
@@ -146,7 +146,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 
 		// Build the transaction
-		let transaction = SolanaInstructionBuilder::fetch_from(
+		let transaction = SolanaTransactionBuilder::fetch_from(
 			fetch_params,
 			sol_api_environment,
 			agg_key,
@@ -174,7 +174,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			.map(|(transfer_param, egress_id)| {
 				let durable_nonce = Environment::nonce_account()?;
 				let transaction = match transfer_param.asset {
-					SolAsset::Sol => SolanaInstructionBuilder::transfer_native(
+					SolAsset::Sol => SolanaTransactionBuilder::transfer_native(
 						transfer_param.amount,
 						transfer_param.to,
 						agg_key,
@@ -188,7 +188,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 							sol_api_environment.usdc_token_mint_pubkey,
 						)
 						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-						SolanaInstructionBuilder::transfer_token(
+						SolanaTransactionBuilder::transfer_token(
 							ata.address,
 							transfer_param.amount,
 							transfer_param.to,
@@ -226,7 +226,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 
 		// Build the transaction
-		let transaction = SolanaInstructionBuilder::rotate_agg_key(
+		let transaction = SolanaTransactionBuilder::rotate_agg_key(
 			new_agg_key,
 			nonce_accounts,
 			sol_api_environment.vault_program,
@@ -308,7 +308,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		// Build the transaction
 		let transaction = match transfer_param.asset {
-			SolAsset::Sol => SolanaInstructionBuilder::ccm_transfer_native(
+			SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
 				transfer_param.amount,
 				transfer_param.to,
 				source_chain,
@@ -330,7 +330,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					)
 					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
-				SolanaInstructionBuilder::ccm_transfer_token(
+				SolanaTransactionBuilder::ccm_transfer_token(
 					ata.address,
 					transfer_param.amount,
 					transfer_param.to,
