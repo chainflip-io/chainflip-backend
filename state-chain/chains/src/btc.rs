@@ -31,7 +31,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use sp_io::hashing::sha2_256;
-use sp_runtime::traits::{MaybeSerializeDeserialize, Member};
+use sp_runtime::traits::Member;
 use sp_std::{vec, vec::Vec};
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
@@ -231,15 +231,7 @@ impl Chain for Bitcoin {
 	type TrackedData = BitcoinTrackedData;
 	type ChainAsset = assets::btc::Asset;
 	type ChainAssetMap<
-		T: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ BenchmarkValue
-			+ FullCodec
-			+ Unpin
-			+ Default,
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::btc::AssetMap<T>;
 	type ChainAccount = ScriptPubkey;
 	type DepositFetchId = BitcoinFetchId;
