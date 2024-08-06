@@ -272,7 +272,7 @@ type Observer<T> = {
 
 type AbortableObserver<T> = {
   stop: () => void;
-  event: Promise<Event<T>[] | null>;
+  events: Promise<Event<T>[] | null>;
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -323,7 +323,7 @@ export function observeEvents<T = any>(
 
   if (!controller) return { events: findEvent() } as Observer<T>;
 
-  return { stop: () => controller.abort(), event: findEvent() } as AbortableObserver<T>;
+  return { stop: () => controller.abort(), events: findEvent() } as AbortableObserver<T>;
 }
 
 type SingleEventAbortableObserver<T> = {
@@ -355,6 +355,21 @@ export function observeEvent<T = any>(
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
 ): SingleEventObserver<T> | SingleEventAbortableObserver<T> {
+  if (abortable) {
+    const observer = observeEvents(eventName, {
+      chain,
+      test,
+      finalized,
+      historicCheckBlocks,
+      abortable,
+    });
+
+    return {
+      stop: () => observer.stop(),
+      event: observer.events.then((events) => events?.[0]),
+    } as SingleEventAbortableObserver<T>;
+  }
+
   const observer = observeEvents(eventName, {
     chain,
     test,
@@ -362,13 +377,6 @@ export function observeEvent<T = any>(
     historicCheckBlocks,
     abortable,
   });
-
-  if (abortable) {
-    return {
-      stop: () => observer.stop(),
-      event: observer.events.then((events) => events[0]),
-    } as SingleEventAbortableObserver<T>;
-  }
 
   return {
     // TODO JAMIE: It this working?
