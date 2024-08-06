@@ -16,7 +16,8 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner, System, Validator, YEAR,
+	SolanaBroadcaster, SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner, System,
+	Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -593,7 +594,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(()),
 			ForeignChain::Arbitrum => Err(()),
-			ForeignChain::Solana => todo!(),
+			ForeignChain::Solana =>
+				Self::broadcast_gov_key::<Solana, SolanaBroadcaster>(maybe_old_key, new_key),
 		}
 	}
 
@@ -605,7 +607,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
 			ForeignChain::Arbitrum => false,
-			ForeignChain::Solana => todo!(),
+			ForeignChain::Solana =>
+				Self::is_govkey_compatible::<<Solana as Chain>::ChainCrypto>(key),
 		}
 	}
 }

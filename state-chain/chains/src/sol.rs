@@ -70,11 +70,12 @@ impl Chain for Solana {
 	type ChainAccount = SolAddress;
 	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
-	type DepositDetails = (); //todo
+	type DepositDetails = ();
 	type Transaction = SolTransaction;
-	type TransactionMetadata = (); //todo
-	type ReplayProtectionParams = (); //todo
-	type ReplayProtection = (); //todo
+	type TransactionMetadata = ();
+	// There is no need for replay protection on Solana since it uses blockhashes.
+	type ReplayProtectionParams = ();
+	type ReplayProtection = ();
 	type TransactionRef = SolSignature;
 }
 
@@ -145,6 +146,7 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 45_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 50_000u32;
 	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
+	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 
 	// TODO: To tweak in PRO-1501
 	// Default compute units per CCM transfers when priority fee is zero

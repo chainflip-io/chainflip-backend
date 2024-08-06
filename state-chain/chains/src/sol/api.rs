@@ -19,8 +19,8 @@ use crate::{
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, Chain, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
-	FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, Solana, TransferAssetParams,
-	TransferFallback,
+	FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, SetGovKeyWithAggKey, Solana,
+	TransferAssetParams, TransferFallback,
 };
 
 use cf_primitives::{EgressId, ForeignChain};
@@ -122,6 +122,7 @@ pub enum SolanaTransactionType {
 	Transfer,
 	RotateAggKey,
 	CcmTransfer,
+	SetGovKeyWithAggKey,
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
@@ -142,8 +143,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		// Lookup environment variables, such as aggkey and durable nonce.
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
-		let durable_nonce = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
+		let durable_nonce = Environment::nonce_account()?;
 
 		// Build the transaction
 		let transaction = SolanaTransactionBuilder::fetch_from(
@@ -222,8 +223,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
 		let nonce_accounts = Environment::all_nonce_accounts()?;
-		let durable_nonce = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
+		let durable_nonce = Environment::nonce_account()?;
 
 		// Build the transaction
 		let transaction = SolanaTransactionBuilder::rotate_agg_key(
@@ -303,8 +304,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		)
 		.map_err(SolanaTransactionBuildingError::InvalidCcm)?;
 
-		let durable_nonce = Environment::nonce_account()?;
 		let compute_price = Environment::compute_price()?;
+		let durable_nonce = Environment::nonce_account()?;
 
 		// Build the transaction
 		let transaction = match transfer_param.asset {
@@ -470,5 +471,46 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
 	fn new_unsigned(_transfer_param: TransferAssetParams<Solana>) -> Result<Self, DispatchError> {
 		Err(DispatchError::Other("Solana does not support TransferFallback."))
+	}
+}
+
+impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for SolanaApi<Environment> {
+	fn new_unsigned(
+		_maybe_old_key: Option<<SolanaCrypto as ChainCrypto>::GovKey>,
+		new_gov_key: <SolanaCrypto as ChainCrypto>::GovKey,
+	) -> Result<Self, ()> {
+		// Lookup environment variables, such as aggkey and durable nonce.
+		let agg_key = Environment::current_agg_key().map_err(|_e| ())?;
+		let sol_api_environment = Environment::api_environment().map_err(|_e| ())?;
+		let compute_price = Environment::compute_price().map_err(|_e| ())?;
+		let durable_nonce = Environment::nonce_account().map_err(|_e| ())?;
+
+		// Build the transaction
+		let transaction = SolanaTransactionBuilder::set_gov_key_with_agg_key(
+			new_gov_key,
+			sol_api_environment.vault_program,
+			sol_api_environment.vault_program_data_account,
+			agg_key,
+			durable_nonce,
+			compute_price,
+		)
+		.map_err(|e| {
+			// SetGovKeyWithAggKey call building NOT transactional - meaning when this fails,
+			// storage is not rolled back. We must recover the durable nonce here,
+			// since it has been taken from storage but not actually used.
+			log::error!(
+				"Solana SetGovKeyWithAggKey call building failed. Nonce recovered. Error: {:?}
+				Nonce recovered: {:?}",
+				e,
+				durable_nonce
+			);
+			Environment::recover_durable_nonce(durable_nonce.0);
+		})?;
+
+		Ok(Self {
+			call_type: SolanaTransactionType::SetGovKeyWithAggKey,
+			transaction,
+			_phantom: Default::default(),
+		})
 	}
 }

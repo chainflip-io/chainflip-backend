@@ -16,7 +16,8 @@ use crate::{
 		compute_units_costs::{
 			compute_limit_with_buffer, BASE_COMPUTE_UNITS_PER_TX, COMPUTE_UNITS_PER_FETCH_NATIVE,
 			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_ROTATION,
-			COMPUTE_UNITS_PER_TRANSFER_NATIVE, COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+			COMPUTE_UNITS_PER_SET_GOV_KEY, COMPUTE_UNITS_PER_TRANSFER_NATIVE,
+			COMPUTE_UNITS_PER_TRANSFER_TOKEN,
 		},
 		sol_tx_core::{
 			address_derivation::{derive_associated_token_account, derive_fetch_account},
@@ -394,6 +395,30 @@ impl SolanaTransactionBuilder {
 				SolAsset::Sol => MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
 				SolAsset::SolUsdc => MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
 			},
+		)
+	}
+
+	/// Create an instruction set to set the current GovKey with the agg key.
+	pub fn set_gov_key_with_agg_key(
+		new_gov_key: SolAddress,
+		vault_program: SolAddress,
+		vault_program_data_account: SolAddress,
+		agg_key: SolAddress,
+		durable_nonce: DurableNonceAndAccount,
+		compute_price: SolAmount,
+	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+		let instructions = vec![VaultProgram::with_id(vault_program).set_gov_key_with_agg_key(
+			new_gov_key.into(),
+			vault_program_data_account,
+			agg_key,
+		)];
+
+		Self::build(
+			instructions,
+			durable_nonce,
+			agg_key.into(),
+			compute_price,
+			compute_limit_with_buffer(COMPUTE_UNITS_PER_SET_GOV_KEY),
 		)
 	}
 }
@@ -783,6 +808,26 @@ mod test {
 
 		// Serialized tx built in `create_ccm_token_transfer` test
 		let expected_serialized_tx = hex_literal::hex!("01b129476ffae4b80e116ceb457e9da19236c663373bc52d4e7cb5973429fb6157f74ac71e3168a286d7df90a1e259872cb64db6ee84fd6b44d504f529a5e8ea0c01000c11f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec46167417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed48e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517187bd16635dad40455fdc2c0c124c68f215675a5dbbacb5f0800000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8731e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5ab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890006050301080004040000000600090340420f000000000006000502e09304000e0600020c0b050901010d070a001004020b091136b4eeaf4a557ebc00ca9a3b00000000060d080a000203090b070f346cb8a27b9fdeaa230100000014000000ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000").to_vec();
+
+		test_constructed_transaction(transaction, expected_serialized_tx);
+	}
+
+	#[test]
+	fn can_create_set_gov_key_with_agg_key() {
+		let new_gov_key = NEW_AGG_KEY;
+		let env = api_env();
+		let transaction = SolanaTransactionBuilder::set_gov_key_with_agg_key(
+			new_gov_key,
+			env.vault_program,
+			env.vault_program_data_account,
+			agg_key(),
+			durable_nonce(),
+			compute_price(),
+		)
+		.unwrap();
+
+		// Serialized tx built in `set_gov_key_with_agg_key` test
+		let expected_serialized_tx = hex_literal::hex!("01e68b952350bb2bf6fbf87364ad259d8bd488c20b828c52491417e5df3db7178c6ae9f934dbf27f67c19b22b297416f486da0257efbfb829e0cdce0e4557ccf0401000407f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0917eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19200000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030302050004040000000400090340420f000000000004000502e4570000060201002842403a280f4bd7a26744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
