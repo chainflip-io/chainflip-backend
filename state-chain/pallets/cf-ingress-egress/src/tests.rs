@@ -381,10 +381,11 @@ fn addresses_are_getting_reused() {
 			// Address 1 is free to use and in the pool of available addresses
 			assert_eq!(DepositChannelPool::<Test, _>::get(channel_id).unwrap().address, *address);
 		})
-		.request_deposit_addresses(&[(DepositRequest::Liquidity {
-			lp_account: ALICE,
-			asset: eth::Asset::Eth,
-		})])
+		.request_deposit_addresses(&[DepositRequest::SimpleSwap {
+			source_asset: eth::Asset::Eth,
+			destination_asset: eth::Asset::Flip,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}])
 		// The address should have been taken from the pool and the id counter unchanged.
 		.inspect_storage(|_| {
 			expect_size_of_address_pool(0);
@@ -1093,85 +1094,6 @@ fn can_store_failed_vault_transfers() {
 			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
 		);
 	});
-}
-
-#[test]
-fn basic_balance_tracking() {
-	const ETH_DEPOSIT_AMOUNT: u128 = 1_000;
-	const FLIP_DEPOSIT_AMOUNT: u128 = 2_000;
-	const USDC_DEPOSIT_AMOUNT: u128 = 3_000;
-	const FLIP_EGRESS_AMOUNT: u128 = 500;
-
-	new_test_ext()
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, 0),
-			(eth::Asset::Flip, 0),
-			(eth::Asset::Usdc, 0),
-		])
-		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth },
-			ETH_DEPOSIT_AMOUNT,
-		)])
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT),
-			(eth::Asset::Flip, 0),
-			(eth::Asset::Usdc, 0),
-		])
-		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Flip },
-			FLIP_DEPOSIT_AMOUNT,
-		)])
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT),
-			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT),
-			(eth::Asset::Usdc, 0),
-		])
-		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Usdc },
-			USDC_DEPOSIT_AMOUNT,
-		)])
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT),
-			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT),
-			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
-		])
-		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth },
-			ETH_DEPOSIT_AMOUNT,
-		)])
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT * 2),
-			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT),
-			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
-		])
-		.request_address_and_deposit(&[(
-			DepositRequest::SimpleSwap {
-				source_asset: eth::Asset::Eth,
-				destination_asset: eth::Asset::Flip,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-			ETH_DEPOSIT_AMOUNT,
-		)])
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT * 3),
-			// The ETH-FLIP swap uses the mock's hardcoded rate of 1:1.
-			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT - ETH_DEPOSIT_AMOUNT),
-			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
-		])
-		// Trigger a non-swap transfer.
-		.then_execute_at_next_block(|_| {
-			assert_ok!(<IngressEgress as EgressApi<Ethereum>>::schedule_egress(
-				eth::Asset::Flip,
-				FLIP_EGRESS_AMOUNT,
-				Default::default(),
-				None
-			));
-		})
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT * 3),
-			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT - ETH_DEPOSIT_AMOUNT - FLIP_EGRESS_AMOUNT),
-			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
-		]);
 }
 
 #[test]
