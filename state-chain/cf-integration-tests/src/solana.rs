@@ -12,11 +12,11 @@ use cf_chains::{
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
 		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
-		SolTrackedData, SolanaCrypto,
+		SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ExecutexSwapAndCallError,
-	ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError,
-	Solana, SwapOrigin, TransactionBuilder,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ExecutexSwapAndCallError, ForeignChainAddress,
+	RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin,
+	TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -25,10 +25,11 @@ use codec::Encode;
 use frame_support::traits::{OnFinalize, UnfilteredDispatchable};
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_validator::RotationPhase;
+use sp_runtime::FixedU128;
 use state_chain_runtime::{
 	chainflip::{
-		address_derivation::AddressDerivation, ChainAddressConverter, SolEnvironment,
-		SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
+		address_derivation::AddressDerivation, solana_elections, ChainAddressConverter,
+		SolEnvironment, SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
 	},
 	Runtime, RuntimeCall, RuntimeEvent, SolanaIngressEgress, SolanaInstance, SolanaThresholdSigner,
 	Swapping,
@@ -57,11 +58,12 @@ fn setup_sol_environments() {
 		usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 	});
 
-	// SolanaChainTracking::ChainState
-	pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::set(Some(ChainState {
-		block_height: 0,
-		tracked_data: SolTrackedData { priority_fee: COMPUTE_PRICE },
-	}));
+	pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::internally_initialize(
+		(/* chain tracking */ Default::default(), /* priority_fee */ COMPUTE_PRICE, ()),
+		((), solana_elections::SolanaFeeSettings { fee_multiplier: FixedU128::from_u32(1u32) }, ()),
+		((), (), ()),
+	)
+	.unwrap();
 
 	// Environment::AvailableDurableNonces
 	pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(

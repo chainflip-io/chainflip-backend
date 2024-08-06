@@ -5,7 +5,7 @@ use crate::{
 };
 use codec::{FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
-use sp_runtime::traits::{MaybeSerializeDeserialize, Member};
+use sp_runtime::traits::Member;
 
 use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
@@ -25,15 +25,7 @@ impl Chain for AnyChain {
 	type TrackedData = ();
 	type ChainAsset = assets::any::Asset;
 	type ChainAssetMap<
-		T: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ BenchmarkValue
-			+ FullCodec
-			+ Unpin
-			+ Default,
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::any::AssetMap<T>;
 	type ChainAccount = ForeignChainAddress;
 	type DepositFetchId = ChannelId;

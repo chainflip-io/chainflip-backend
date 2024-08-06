@@ -223,20 +223,16 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 			+ Parameter
 			+ MaxEncodedLen
 			+ Copy
-			+ MaybeSerializeDeserialize
 			+ BenchmarkValue
 			+ FullCodec
 			+ Unpin
-			+ Default
 	>: Member
 		+ Parameter
 		+ MaxEncodedLen
 		+ Copy
-		+ MaybeSerializeDeserialize
 		+ BenchmarkValue
 		+ FullCodec
 		+ Unpin
-		+ Default
 		+ GetChainAssetMap<T, Asset = Self::ChainAsset>;
 
 	type ChainAccount: Member

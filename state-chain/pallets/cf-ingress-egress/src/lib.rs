@@ -39,8 +39,8 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
 	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
 	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
-	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapLimitsProvider,
-	SwapRequestHandler, SwapRequestType,
+	IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit, PoolApi,
+	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -351,6 +351,12 @@ pub mod pallet {
 
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
+
+		/// Sets if the pallet should automatically manage the closing of channels.
+		const MANAGE_CHANNEL_LIFETIME: bool;
+
+		/// A hook to tell witnesses to start witnessing an opened channel.
+		type IngressSource: IngressSource<Chain = Self::TargetChain>;
 
 		/// Marks which chain this pallet is interacting with.
 		type TargetChain: Chain + Get<ForeignChain>;
@@ -694,65 +700,31 @@ pub mod pallet {
 				.unwrap_or_default()
 				.saturated_into::<usize>();
 
-			let addresses_to_recycle =
-				DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
-					if recycle_queue.is_empty() {
-						vec![]
-					} else {
-						Self::take_recyclable_addresses(
-							recycle_queue,
-							maximum_addresses_to_recycle,
-							T::ChainTracking::get_block_height(),
-						)
-					}
-				});
-
-			// Add weight for the DepositChannelRecycleBlocks read/write plus the
-			// DepositChannelLookup read/writes in the for loop below
-			used_weight = used_weight.saturating_add(
-				frame_support::weights::constants::RocksDbWeight::get().reads_writes(
-					(addresses_to_recycle.len() + 1) as u64,
-					(addresses_to_recycle.len() + 1) as u64,
-				),
-			);
-
-			for address in addresses_to_recycle.iter() {
-				if let Some(DepositChannelDetails { deposit_channel, boost_status, .. }) =
-					DepositChannelLookup::<T, I>::take(address)
-				{
-					if let Some(state) = deposit_channel.state.maybe_recycle() {
-						DepositChannelPool::<T, I>::insert(
-							deposit_channel.channel_id,
-							DepositChannel { state, ..deposit_channel },
-						);
-						used_weight = used_weight.saturating_add(
-							frame_support::weights::constants::RocksDbWeight::get()
-								.reads_writes(0, 1),
-						);
-					}
-
-					if let BoostStatus::Boosted { prewitnessed_deposit_id, pools, .. } =
-						boost_status
-					{
-						for pool_tier in pools {
-							BoostPools::<T, I>::mutate(deposit_channel.asset, pool_tier, |pool| {
-								if let Some(pool) = pool {
-									let affected_boosters_count =
-										pool.process_deposit_as_lost(prewitnessed_deposit_id);
-									used_weight.saturating_accrue(
-										T::WeightInfo::process_deposit_as_lost(
-											affected_boosters_count as u32,
-										),
-									);
-								} else {
-									log_or_panic!(
-										"Pool must exist: ({pool_tier:?}, {:?})",
-										deposit_channel.asset
-									);
-								}
-							});
+			if T::MANAGE_CHANNEL_LIFETIME {
+				let addresses_to_recycle =
+					DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
+						if recycle_queue.is_empty() {
+							vec![]
+						} else {
+							Self::take_recyclable_addresses(
+								recycle_queue,
+								maximum_addresses_to_recycle,
+								T::ChainTracking::get_block_height(),
+							)
 						}
-					}
+					});
+
+				// Add weight for the DepositChannelRecycleBlocks read/write plus the
+				// DepositChannelLookup read/writes in the for loop below
+				used_weight = used_weight.saturating_add(
+					frame_support::weights::constants::RocksDbWeight::get().reads_writes(
+						(addresses_to_recycle.len() + 1) as u64,
+						(addresses_to_recycle.len() + 1) as u64,
+					),
+				);
+
+				for address in addresses_to_recycle {
+					Self::recycle_channel(&mut used_weight, address);
 				}
 			}
 			used_weight
@@ -1103,12 +1075,84 @@ pub mod pallet {
 	}
 }
 
+impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
+	type Chain = T::TargetChain;
+
+	fn on_ingress(
+		channel: <Self::Chain as Chain>::ChainAccount,
+		asset: <Self::Chain as Chain>::ChainAsset,
+		amount: <Self::Chain as Chain>::ChainAmount,
+		block_number: <Self::Chain as Chain>::ChainBlockNumber,
+		details: <Self::Chain as Chain>::DepositDetails,
+	) {
+		Self::process_single_deposit(channel.clone(), asset, amount, details.clone(), block_number)
+			.unwrap_or_else(|e| {
+				Self::deposit_event(Event::<T, I>::DepositWitnessRejected {
+					reason: e,
+					deposit_witness: DepositWitness {
+						deposit_address: channel,
+						asset,
+						amount,
+						deposit_details: details,
+					},
+				});
+			});
+	}
+
+	fn on_ingress_reverted(
+		_channel: <Self::Chain as Chain>::ChainAccount,
+		_asset: <Self::Chain as Chain>::ChainAsset,
+		_amount: <Self::Chain as Chain>::ChainAmount,
+	) {
+	}
+
+	fn on_channel_closed(channel: <Self::Chain as Chain>::ChainAccount) {
+		Self::recycle_channel(&mut Weight::zero(), channel);
+	}
+}
+
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {
+		if let Some(DepositChannelDetails { deposit_channel, boost_status, .. }) =
+			DepositChannelLookup::<T, I>::take(address)
+		{
+			if let Some(state) = deposit_channel.state.maybe_recycle() {
+				DepositChannelPool::<T, I>::insert(
+					deposit_channel.channel_id,
+					DepositChannel { state, ..deposit_channel },
+				);
+				*used_weight = used_weight.saturating_add(
+					frame_support::weights::constants::RocksDbWeight::get().reads_writes(0, 1),
+				);
+			}
+
+			if let BoostStatus::Boosted { prewitnessed_deposit_id, pools, .. } = boost_status {
+				for pool_tier in pools {
+					BoostPools::<T, I>::mutate(deposit_channel.asset, pool_tier, |pool| {
+						if let Some(pool) = pool {
+							let affected_boosters_count =
+								pool.process_deposit_as_lost(prewitnessed_deposit_id);
+							used_weight.saturating_accrue(T::WeightInfo::process_deposit_as_lost(
+								affected_boosters_count as u32,
+							));
+						} else {
+							log_or_panic!(
+								"Pool must exist: ({pool_tier:?}, {:?})",
+								deposit_channel.asset
+							);
+						}
+					});
+				}
+			}
+		}
+	}
+
 	fn take_recyclable_addresses(
 		channel_recycle_blocks: &mut ChannelRecycleQueue<T, I>,
 		maximum_addresses_to_take: usize,
 		current_block_height: TargetChainBlockNumber<T, I>,
 	) -> Vec<TargetChainAccount<T, I>> {
+		channel_recycle_blocks.sort_by_key(|(block, _)| *block);
 		let partition_point = sp_std::cmp::min(
 			channel_recycle_blocks.partition_point(|(block, _)| *block <= current_block_height),
 			maximum_addresses_to_take,
@@ -1806,7 +1850,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let (current_height, expiry_height, recycle_height) =
 			Self::expiry_and_recycle_block_height();
 
-		DepositChannelRecycleBlocks::<T, I>::append((recycle_height, deposit_address.clone()));
+		if T::MANAGE_CHANNEL_LIFETIME {
+			DepositChannelRecycleBlocks::<T, I>::append((recycle_height, deposit_address.clone()));
+		}
 
 		DepositChannelLookup::<T, I>::insert(
 			&deposit_address,
@@ -1819,6 +1865,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				boost_status: BoostStatus::NotBoosted,
 			},
 		);
+		<T::IngressSource as IngressSource>::open_channel(
+			deposit_address.clone(),
+			source_asset,
+			expiry_height,
+		)?;
 
 		Ok((channel_id, deposit_address, expiry_height, channel_opening_fee))
 	}
