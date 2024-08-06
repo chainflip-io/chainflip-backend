@@ -406,6 +406,7 @@ pub struct IngressEgressEnvironment {
 	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 	pub egress_dust_limits: any::AssetMap<NumberOrHex>,
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
+	pub max_swap_retry_duration_blocks: HashMap<ForeignChain, u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -419,7 +420,6 @@ pub struct SwappingEnvironment {
 	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
 	network_fee_hundredth_pips: Permill,
 	swap_retry_delay_blocks: u32,
-	max_swap_retry_duration_blocks: HashMap<ForeignChain, u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1443,6 +1443,7 @@ where
 
 		let mut witness_safety_margins = HashMap::new();
 		let mut channel_opening_fees = HashMap::new();
+		let mut max_swap_retry_duration_blocks = HashMap::new();
 
 		for chain in ForeignChain::iter() {
 			witness_safety_margins.insert(
@@ -1452,6 +1453,12 @@ where
 			channel_opening_fees.insert(
 				chain,
 				runtime_api.cf_channel_opening_fee(hash, chain).map_err(to_rpc_error)?.into(),
+			);
+			max_swap_retry_duration_blocks.insert(
+				chain,
+				runtime_api
+					.cf_max_swap_retry_duration_blocks(hash, chain)
+					.map_err(to_rpc_error)?,
 			);
 		}
 
@@ -1482,6 +1489,7 @@ where
 					.map(Into::into)
 			})?,
 			channel_opening_fees,
+			max_swap_retry_duration_blocks,
 		})
 	}
 
@@ -1502,14 +1510,6 @@ where
 			swap_retry_delay_blocks: runtime_api
 				.cf_swap_retry_delay_blocks(hash)
 				.map_err(to_rpc_error)?,
-			max_swap_retry_duration_blocks: ForeignChain::iter()
-				.map(|chain| {
-					runtime_api
-						.cf_max_swap_retry_duration_blocks(hash, chain)
-						.map(|duration| (chain, duration))
-						.map_err(to_rpc_error)
-				})
-				.collect::<Result<HashMap<_, _>, _>>()?,
 		})
 	}
 
@@ -2063,13 +2063,6 @@ mod test {
 				},
 				network_fee_hundredth_pips: Permill::from_percent(100),
 				swap_retry_delay_blocks: 5,
-				max_swap_retry_duration_blocks: HashMap::from([
-					(ForeignChain::Bitcoin, 600),
-					(ForeignChain::Ethereum, 600),
-					(ForeignChain::Polkadot, 600),
-					(ForeignChain::Arbitrum, 600),
-					(ForeignChain::Solana, 600),
-				]),
 			},
 			ingress_egress: IngressEgressEnvironment {
 				minimum_deposit_amounts: any::AssetMap {
@@ -2133,6 +2126,13 @@ mod test {
 					(ForeignChain::Polkadot, 1000u32.into()),
 					(ForeignChain::Arbitrum, 1000u32.into()),
 					(ForeignChain::Solana, 1000u32.into()),
+				]),
+				max_swap_retry_duration_blocks: HashMap::from([
+					(ForeignChain::Bitcoin, 600),
+					(ForeignChain::Ethereum, 600),
+					(ForeignChain::Polkadot, 600),
+					(ForeignChain::Arbitrum, 600),
+					(ForeignChain::Solana, 600),
 				]),
 			},
 			funding: FundingEnvironment {
