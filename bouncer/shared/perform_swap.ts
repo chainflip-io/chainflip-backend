@@ -9,6 +9,9 @@ import {
   shortChainFromAsset,
   observeSwapEvents,
   observeBroadcastSuccess,
+  getEncodedSolAddress,
+  observeFetch,
+  chainFromAsset,
   observeSwapRequested,
   SwapRequestType,
 } from '../shared/utils';
@@ -21,6 +24,8 @@ function encodeDestinationAddress(address: string, destAsset: Asset): string {
 
   if (destAddress && destAsset === 'Dot') {
     destAddress = encodeAddress(destAddress);
+  } else if (shortChainFromAsset(destAsset) === 'Sol') {
+    destAddress = getEncodedSolAddress(destAddress);
   }
 
   return destAddress;
@@ -60,17 +65,18 @@ export async function requestNewSwap(
         destAddressEvent.toLowerCase() ===
         encodeDestinationAddress(destAddress, destAsset).toLowerCase();
 
-      // CF Parameters is always set to '' by the SDK for now
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
           event.data.channelMetadata.message === messageMetadata.message &&
           Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
-            messageMetadata.gasBudget
+            messageMetadata.gasBudget &&
+          event.data.channelMetadata.cfParameters === messageMetadata.cfParameters
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
     },
   }).event;
+
   await newSwap(
     sourceAsset,
     destAsset,
@@ -149,6 +155,12 @@ export async function doPerformSwap(
       observeBalanceIncrease(destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
+
+    const chain = chainFromAsset(sourceAsset);
+    if (chain !== 'Bitcoin' && chain !== 'Polkadot') {
+      if (log) console.log(`${tag} Waiting deposit fetch ${depositAddress}`);
+      await observeFetch(sourceAsset, depositAddress);
+    }
 
     if (log) console.log(`${tag} Swap success! New balance: ${newBalance}!`);
     swapContext?.updateStatus(tag, SwapStatus.Success);

@@ -208,14 +208,14 @@ impl FeeEstimationApi<MockEthereum> for MockTrackedData {
 		&self,
 		_asset: <MockEthereum as Chain>::ChainAsset,
 	) -> <MockEthereum as Chain>::ChainAmount {
-		todo!()
+		unimplemented!("Unused for now.")
 	}
 
 	fn estimate_egress_fee(
 		&self,
 		_asset: <MockEthereum as Chain>::ChainAsset,
 	) -> <MockEthereum as Chain>::ChainAmount {
-		todo!("Unused for now.")
+		unimplemented!("Unused for now.")
 	}
 }
 

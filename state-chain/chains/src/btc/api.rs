@@ -63,8 +63,11 @@ where
 {
 	fn new_unsigned(
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
-		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
-	) -> Result<Self, AllBatchError> {
+		transfer_params: Vec<(TransferAssetParams<Bitcoin>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids): (Vec<TransferAssetParams<Bitcoin>>, Vec<EgressId>) =
+			transfer_params.into_iter().unzip();
+
 		let agg_key @ AggKey { current, .. } =
 			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(AllBatchError::AggKeyNotSet)?;
 		let bitcoin_change_script =
@@ -96,12 +99,15 @@ where
 			});
 		}
 
-		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
-			&agg_key,
-			agg_key.current,
-			selected_input_utxos,
-			btc_outputs,
-		)))
+		Ok(vec![(
+			Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
+				&agg_key,
+				agg_key.current,
+				selected_input_utxos,
+				btc_outputs,
+			)),
+			egress_ids,
+		)])
 	}
 }
 
@@ -134,8 +140,9 @@ impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for Bitc
 		_source_address: Option<ForeignChainAddress>,
 		_gas_budget: <Bitcoin as Chain>::ChainAmount,
 		_message: Vec<u8>,
-	) -> Result<Self, DispatchError> {
-		Err(DispatchError::Other("Bitcoin's ExecutexSwapAndCall is not supported."))
+		_cf_parameters: Vec<u8>,
+	) -> Result<Self, ExecutexSwapAndCallError> {
+		Err(ExecutexSwapAndCallError::Unsupported)
 	}
 }
 

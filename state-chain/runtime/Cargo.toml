@@ -58,6 +58,7 @@ pallet-cf-validator = { path = '../pallets/cf-validator', default-features = fal
 pallet-cf-vaults = { path = '../pallets/cf-vaults', default-features = false }
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false }
 pallet-cf-cfe-interface = { path = '../pallets/cf-cfe-interface', default_features = false }
+sol-prim = { path = '../../foreign-chains/solana/sol-prim' }
 
 # SCALE
 codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [

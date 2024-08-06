@@ -952,3 +952,15 @@ pub trait AssetWithholding {
 	#[cfg(feature = "try-runtime")]
 	fn withheld_assets(gas_asset: Asset) -> AssetAmount;
 }
+
+pub trait FetchesTransfersLimitProvider {
+	fn maybe_transfers_limit() -> Option<usize> {
+		None
+	}
+	fn maybe_fetches_limit() -> Option<usize> {
+		None
+	}
+}
+
+pub struct NoLimit;
+impl FetchesTransfersLimitProvider for NoLimit {}

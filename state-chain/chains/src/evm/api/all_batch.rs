@@ -205,7 +205,7 @@ mod test_all_batch {
 
 	#[test]
 	fn batch_all_fetches() {
-		let all_batch: EthereumApi<MockEnvironment> = AllBatch::new_unsigned(
+		let all_batch: Vec<(EthereumApi<MockEnvironment>, Vec<EgressId>)> = AllBatch::new_unsigned(
 			vec![
 				FetchAssetParams {
 					deposit_fetch_id: EvmFetchId::Fetch(eth::Address::from_low_u64_be(CHANNEL_ID)),
@@ -224,9 +224,10 @@ mod test_all_batch {
 		)
 		.unwrap();
 
-		assert!(matches!(all_batch, EthereumApi::AllBatch(..)));
-		let tx_builder = match all_batch {
-			EthereumApi::AllBatch(tx_builder) => tx_builder,
+		assert_eq!(all_batch.len(), 1usize);
+		assert!(matches!(all_batch[0].0, EthereumApi::AllBatch(..)));
+		let tx_builder = match &all_batch[0].0 {
+			EthereumApi::AllBatch(tx_builder) => tx_builder.clone(),
 			_ => unreachable!(),
 		};
 		assert_eq!(tx_builder.chain_id(), CHAIN_ID);
