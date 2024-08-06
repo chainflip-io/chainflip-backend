@@ -22,7 +22,7 @@ use cf_traits::{
 		lp_balance::MockBalance,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	NetworkEnvironmentProvider, OnDeposit,
+	DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
 use sp_core::H256;
@@ -107,6 +107,8 @@ impl_mock_runtime_safe_mode! { ingress_egress_bitcoin: PalletSafeMode<()> }
 impl pallet_cf_ingress_egress::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	const MANAGE_CHANNEL_LIFETIME: bool = true;
+	type IngressSource = DummyIngressSource<Bitcoin>;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;

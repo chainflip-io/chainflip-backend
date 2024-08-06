@@ -26,7 +26,7 @@ use cf_traits::{
 		lp_balance::MockBalance,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	DepositApi, NetworkEnvironmentProvider, OnDeposit,
+	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
 use frame_system as system;
@@ -112,6 +112,8 @@ impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<()> }
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	const MANAGE_CHANNEL_LIFETIME: bool = false;
+	type IngressSource = DummyIngressSource<Ethereum>;
 	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;

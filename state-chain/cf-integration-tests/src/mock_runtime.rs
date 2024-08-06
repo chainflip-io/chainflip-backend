@@ -10,7 +10,7 @@ use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
 	AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumVaultConfig, EmissionsConfig,
 	EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
-	ReputationConfig, SessionConfig, SolanaChainTrackingConfig, SolanaVaultConfig, ValidatorConfig,
+	ReputationConfig, SessionConfig, SolanaVaultConfig, ValidatorConfig,
 };
 
 use cf_chains::{
@@ -18,8 +18,7 @@ use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
 	dot::{PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	sol::SolTrackedData,
-	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
+	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use state_chain_runtime::{
 	BitcoinChainTrackingConfig, EthereumChainTrackingConfig, PolkadotChainTrackingConfig,
@@ -255,12 +254,6 @@ impl ExtBuilder {
 					},
 				},
 			},
-			solana_chain_tracking: SolanaChainTrackingConfig {
-				init_chain_state: ChainState::<Solana> {
-					block_height: 0,
-					tracked_data: SolTrackedData { priority_fee: 100000u32.into() },
-				},
-			},
 			bitcoin_threshold_signer: Default::default(),
 			evm_threshold_signer: EvmThresholdSignerConfig {
 				key: Some(ethereum_vault_key),
@@ -282,6 +275,7 @@ impl ExtBuilder {
 			ethereum_ingress_egress: Default::default(),
 			arbitrum_ingress_egress: Default::default(),
 			solana_ingress_egress: Default::default(),
+			solana_elections: Default::default(),
 		})
 	}
 }

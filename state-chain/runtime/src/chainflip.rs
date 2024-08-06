@@ -9,6 +9,7 @@ pub mod evm_vault_activator;
 mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
+pub mod solana_elections;
 
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
@@ -524,8 +525,7 @@ impl ChainEnvironment<CurrentAggKey, SolAddress> for SolEnvironment {
 
 impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
 	fn lookup(_s: ComputePrice) -> Option<u64> {
-		SolanaChainTracking::chain_state()
-			.map(|chain_state: ChainState<Solana>| chain_state.tracked_data.priority_fee)
+		SolanaChainTracking::priority_fee()
 	}
 }
 
