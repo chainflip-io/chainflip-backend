@@ -64,7 +64,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
   const swapRequestedEvent = await swapRequestedHandle;
   console.log(`Swap requested: ${JSON.stringify(swapRequestedEvent)}`);
   const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
-  console.log(`${inputAsset} swap requested, swapId: ${swapRequestId}`);
+  console.log(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
   // TODO: Observing after the SwapScheduled event means its possible to miss the events, but we need to the swap id.
   const observeSwapExecuted = observeEvent(`swapping:SwapExecuted`, {

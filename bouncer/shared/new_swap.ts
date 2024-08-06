@@ -15,6 +15,11 @@ export interface RefundParameters {
   minPrice: string;
 }
 
+export interface DCAParameters {
+  numberOfChunks: number;
+  chunkInterval: number;
+}
+
 export async function newSwap(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -23,6 +28,7 @@ export async function newSwap(
   brokerCommissionBps = defaultCommissionBps,
   boostFeeBps = 0,
   refundParameters?: RefundParameters,
+  dcaParameters?: DCAParameters,
 ): Promise<void> {
   const destinationAddress =
     destAsset === 'Dot' ? decodeDotAddressForContract(destAddress) : destAddress;
@@ -47,6 +53,7 @@ export async function newSwap(
           commissionBps: brokerCommissionBps,
           maxBoostFeeBps: boostFeeBps,
           refundParameters,
+          dcaParameters,
         },
         {
           url: brokerUrl,

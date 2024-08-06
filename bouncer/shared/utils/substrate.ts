@@ -172,36 +172,66 @@ async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortS
 }
 
 const subscribeHeads = getCachedDisposable(
-  async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
+  async ({
+    chain,
+    finalized = false,
+    historicCheckBlocks = 0,
+  }: {
+    chain: SubstrateChain;
+    finalized?: boolean;
+    historicCheckBlocks?: number;
+  }) => {
     // prepare a stack for cleanup
     const stack = new AsyncDisposableStack();
     const api = stack.use(await apiMap[chain]());
     // take the correct substrate API
 
+    const subject = new Subject<Event[]>();
+
+    // iterate over all the events, reshaping them for the consumer
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mapEvents = function mapEvent(events: any[], blockNumber: number): Event[] {
+      return events.map(({ event }, index) => ({
+        name: { section: event.section, method: event.method },
+        data: event.toHuman().data,
+        block: blockNumber,
+        eventIndex: index,
+      }));
+    };
+
+    if (historicCheckBlocks > 0) {
+      const latestHeader = await api.rpc.chain.getHeader();
+      const latestBlockNumber = latestHeader.number.toNumber();
+      console.log(`${chain} chain at block ${latestBlockNumber}`);
+      const startAtBlock =
+        latestBlockNumber - historicCheckBlocks > 0 ? latestBlockNumber - historicCheckBlocks : 0;
+
+      for (let i = startAtBlock; i < latestBlockNumber; i++) {
+        const blockHash = await api.rpc.chain.getBlockHash(i);
+        const historicApi = await api.at(blockHash);
+        console.log(`Historic check Block ${i}`);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
+
+        subject.next(mapEvents(rawEvents, i));
+      }
+    }
+
     // subscribe to the correct head based on the finalized flag
     const subscribe = finalized
       ? api.rpc.chain.subscribeFinalizedHeads
       : api.rpc.chain.subscribeNewHeads;
-    const subject = new Subject<Event[]>();
 
     const unsubscribe = await subscribe(async (header) => {
       const historicApi = await api.at(header.hash);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
-      const events: Event[] = [];
 
-      // iterate over all the events, reshaping them for the consumer
-      rawEvents.forEach(({ event }, index) => {
-        events.push({
-          name: { section: event.section, method: event.method },
-          data: event.toHuman().data,
-          block: header.number.toNumber(),
-          eventIndex: index,
-        });
-      });
+      console.log(`Checking New Block ${header.number.toNumber()}`);
 
-      subject.next(events);
+      subject.next(mapEvents(rawEvents, header.number.toNumber()));
     });
 
     // automatic cleanup!
@@ -223,6 +253,7 @@ interface BaseOptions<T> {
   chain?: SubstrateChain;
   test?: EventTest<T>;
   finalized?: boolean;
+  historicCheckBlocks?: number;
 }
 
 interface Options<T> extends BaseOptions<T> {
@@ -236,56 +267,115 @@ interface AbortableOptions<T> extends BaseOptions<T> {
 type EventName = `${string}:${string}`;
 
 type Observer<T> = {
-  event: Promise<Event<T>>;
+  events: Promise<Event<T>[]>;
 };
 
 type AbortableObserver<T> = {
   stop: () => void;
-  event: Promise<Event<T> | null>;
+  event: Promise<Event<T>[] | null>;
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export function observeEvent<T = any>(eventName: EventName): Observer<T>;
-export function observeEvent<T = any>(eventName: EventName, opts: Options<T>): Observer<T>;
-export function observeEvent<T = any>(
+export function observeEvents<T = any>(eventName: EventName): Observer<T>;
+export function observeEvents<T = any>(eventName: EventName, opts: Options<T>): Observer<T>;
+export function observeEvents<T = any>(
   eventName: EventName,
   opts: AbortableOptions<T>,
 ): AbortableObserver<T>;
-export function observeEvent<T = any>(
+export function observeEvents<T = any>(
   eventName: EventName,
   {
     chain = 'chainflip',
     test = () => true,
     finalized = false,
+    historicCheckBlocks = 0,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
 
   const controller = abortable ? new AbortController() : undefined;
+  const foundEvents: Event[] = [];
 
   const findEvent = async () => {
-    await using subscription = await subscribeHeads({ chain, finalized });
+    await using subscription = await subscribeHeads({ chain, finalized, historicCheckBlocks });
     const it = observableToIterable(subscription.observable, controller?.signal);
     for await (const events of it) {
       for (const event of events) {
+        if (event.name.method.includes(expectedMethod)) {
+          console.log(
+            `Found event ${event.name.section}:${event.name.method} ${JSON.stringify(event.data)}`,
+          );
+        }
         if (
           event.name.section.includes(expectedSection) &&
           event.name.method.includes(expectedMethod) &&
           test(event)
         ) {
-          return event as Event<T>;
+          console.log(`found matching event`);
+          foundEvents.push(event);
         }
       }
     }
 
-    return null;
+    return foundEvents;
   };
 
-  if (!controller) return { event: findEvent() } as Observer<T>;
+  if (!controller) return { events: findEvent() } as Observer<T>;
 
   return { stop: () => controller.abort(), event: findEvent() } as AbortableObserver<T>;
 }
+
+type SingleEventAbortableObserver<T> = {
+  stop: () => void;
+  event: Promise<Event<T> | null>;
+};
+
+type SingleEventObserver<T> = {
+  event: Promise<Event<T>>;
+};
+
+export function observeEvent<T = any>(eventName: EventName): SingleEventObserver<T>;
+export function observeEvent<T = any>(
+  eventName: EventName,
+  opts: Options<T>,
+): SingleEventObserver<T>;
+export function observeEvent<T = any>(
+  eventName: EventName,
+  opts: AbortableOptions<T>,
+): SingleEventAbortableObserver<T>;
+
+export function observeEvent<T = any>(
+  eventName: EventName,
+  {
+    chain = 'chainflip',
+    test = () => true,
+    finalized = false,
+    historicCheckBlocks = 0,
+    abortable = false,
+  }: Options<T> | AbortableOptions<T> = {},
+): SingleEventObserver<T> | SingleEventAbortableObserver<T> {
+  const observer = observeEvents(eventName, {
+    chain,
+    test,
+    finalized,
+    historicCheckBlocks,
+    abortable,
+  });
+
+  if (abortable) {
+    return {
+      stop: () => observer.stop(),
+      event: observer.events.then((events) => events[0]),
+    } as SingleEventAbortableObserver<T>;
+  }
+
+  return {
+    // TODO JAMIE: It this working?
+    event: observer.events.then((events) => events[0]),
+  } as SingleEventObserver<T>;
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function observeBadEvent<T = any>(
   eventName: EventName,
