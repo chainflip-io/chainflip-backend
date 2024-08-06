@@ -45,14 +45,18 @@ where
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Arbitrum>>,
-		transfer_params: Vec<TransferAssetParams<Arbitrum>>,
-	) -> Result<Self, AllBatchError> {
-		Ok(Self::AllBatch(evm_all_batch_builder(
-			fetch_params,
-			transfer_params,
-			E::token_address,
-			E::replay_protection(E::vault_address()),
-		)?))
+		transfer_params: Vec<(TransferAssetParams<Arbitrum>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids) = transfer_params.iter().cloned().unzip();
+		Ok(vec![(
+			Self::AllBatch(evm_all_batch_builder(
+				fetch_params,
+				transfer_params,
+				E::token_address,
+				E::replay_protection(E::vault_address()),
+			)?),
+			egress_ids,
+		)])
 	}
 }
 
@@ -66,9 +70,11 @@ where
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Arbitrum as Chain>::ChainAmount,
 		message: Vec<u8>,
-	) -> Result<Self, DispatchError> {
+		_cf_parameters: Vec<u8>,
+	) -> Result<Self, ExecutexSwapAndCallError> {
 		let transfer_param = EncodableTransferAssetParams {
-			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			asset: E::token_address(transfer_param.asset)
+				.ok_or(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))?,
 			to: transfer_param.to,
 			amount: transfer_param.amount,
 		};

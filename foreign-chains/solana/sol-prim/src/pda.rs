@@ -1,9 +1,11 @@
+use codec::{Decode, Encode};
 use digest::Digest;
+use scale_info::TypeInfo;
 use sha2::Sha256;
 
-use crate::{address::Address, consts};
+use crate::{address::Address, consts, AccountBump, PdaAndBump};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "std-error", derive(thiserror::Error))]
 pub enum PdaError {
@@ -60,8 +62,8 @@ impl Pda {
 		Ok(self)
 	}
 
-	pub fn finish(self) -> Result<(Address, u8), PdaError> {
-		for bump in (0..=u8::MAX).rev() {
+	pub fn finish(self) -> Result<PdaAndBump, PdaError> {
+		for bump in (0..=AccountBump::MAX).rev() {
 			let digest = self
 				.hasher
 				.clone()
@@ -71,7 +73,7 @@ impl Pda {
 				.finalize();
 			if !bytes_are_curve_point(digest) {
 				let address = Address(digest.into());
-				let pda = (address, bump);
+				let pda = PdaAndBump { address, bump };
 				return Ok(pda)
 			}
 		}

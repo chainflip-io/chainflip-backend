@@ -1,15 +1,21 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(step_trait)]
 #![feature(extract_if)]
+#![feature(split_array)]
 
 use core::{fmt::Display, iter::Step};
 
-use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
+use crate::{
+	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
+	sol::api::SolanaTransactionBuildingError,
+};
 pub use address::ForeignChainAddress;
 use address::{
 	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
 };
-use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, Price, TransactionHash};
+use cf_primitives::{
+	AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TransactionHash,
+};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -51,6 +57,7 @@ pub mod deposit_channel;
 use cf_primitives::chains::assets::any::GetChainAssetMap;
 pub use deposit_channel::*;
 use strum::IntoEnumIterator;
+pub mod ccm_checker;
 pub mod instances;
 
 pub mod mocks;
@@ -435,8 +442,10 @@ pub trait ChainEnvironment<
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
 
+#[derive(RuntimeDebug, Clone, PartialEq, Eq)]
 pub enum SetAggKeyWithAggKeyError {
 	Failed,
+	FinalTransactionExceededMaxLength,
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
@@ -515,8 +524,18 @@ pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<C>>,
-		transfer_params: Vec<TransferAssetParams<C>>,
-	) -> Result<Self, AllBatchError>;
+		transfer_params: Vec<(TransferAssetParams<C>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError>;
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
+pub enum ExecutexSwapAndCallError {
+	/// The chain does not support CCM functionality.
+	Unsupported,
+	/// Failed to build CCM for the Solana chain.
+	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
+	/// Some other DispatchError occurred.
+	DispatchError(DispatchError),
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -526,7 +545,8 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
-	) -> Result<Self, DispatchError>;
+		cf_parameters: Vec<u8>,
+	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
 pub trait TransferFallback<C: Chain>: ApiCall<C::ChainCrypto> {

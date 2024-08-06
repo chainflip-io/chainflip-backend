@@ -62,6 +62,7 @@ export async function executeContractSwap(
       ccmMetadata: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
+        cfParameters: messageMetadata.cfParameters,
       },
     } as ExecuteSwapParams,
     networkOptions,

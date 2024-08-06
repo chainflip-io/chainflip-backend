@@ -125,7 +125,7 @@ impl ApiCall<EvmCrypto> for MockRegisterRedemption {
 	fn transaction_out_id(
 		&self,
 	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
-		todo!()
+		unimplemented!()
 	}
 
 	fn refresh_replay_protection(&mut self) {
