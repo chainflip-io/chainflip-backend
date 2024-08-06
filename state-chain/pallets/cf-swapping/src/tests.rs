@@ -1,6 +1,8 @@
 mod dca;
 mod fill_or_kill;
 
+use std::sync::LazyLock;
+
 use super::*;
 use crate::{
 	mock::{RuntimeEvent, *},
@@ -39,6 +41,10 @@ use sp_std::iter;
 const GAS_BUDGET: AssetAmount = 1_000u128;
 const SWAP_REQUEST_ID: u64 = 1;
 const INIT_BLOCK: u64 = 1;
+const BROKER_FEE_BPS: u16 = 2;
+
+static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
+	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
 
 fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
 	assert_ok!(Swapping::update_pallet_config(
@@ -56,6 +62,7 @@ struct TestSwapParams {
 	refund_params: Option<SwapRefundParameters>,
 	dca_params: Option<DCAParameters>,
 	output_address: ForeignChainAddress,
+	is_ccm: bool,
 }
 
 // Returns some test data
@@ -69,6 +76,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			refund_params: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
+			is_ccm: false,
 		},
 		// USDC -> asset
 		TestSwapParams {
@@ -78,6 +86,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			refund_params: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([9; 20].into()),
+			is_ccm: false,
 		},
 		// Both assets are on the Eth chain
 		TestSwapParams {
@@ -87,6 +96,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			refund_params: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
+			is_ccm: false,
 		},
 		// Cross chain
 		TestSwapParams {
@@ -96,6 +106,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 			refund_params: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([4; 32])),
+			is_ccm: false,
 		},
 	]
 }
@@ -140,12 +151,25 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 	use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 
 	for (broker_id, swap) in swaps.iter().enumerate() {
+		let request_type = if swap.is_ccm {
+			SwapRequestType::Ccm {
+				output_address: swap.output_address.clone(),
+				ccm_deposit_metadata: CcmDepositMetadata {
+					source_chain: ForeignChain::Ethereum,
+					source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+					channel_metadata: generate_ccm_channel(),
+				},
+			}
+		} else {
+			SwapRequestType::Regular { output_address: swap.output_address.clone() }
+		};
+
 		assert_ok!(Swapping::init_swap_request(
 			swap.input_asset,
 			swap.input_amount,
 			swap.output_asset,
-			SwapRequestType::Regular { output_address: swap.output_address.clone() },
-			bounded_vec![Beneficiary { account: broker_id as u64, bps: 2 }],
+			request_type,
+			bounded_vec![Beneficiary { account: broker_id as u64, bps: BROKER_FEE_BPS }],
 			swap.refund_params.clone().map(|params| ChannelRefundParameters {
 				retry_duration: params
 					.refund_block
@@ -526,7 +550,7 @@ mod ccm {
 	#[track_caller]
 	fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) {
 		let ccm_deposit_metadata = generate_ccm_deposit();
-		let output_address = ForeignChainAddress::Eth(Default::default());
+		let output_address = (*EVM_OUTPUT_ADDRESS).clone();
 		let encoded_output_address =
 			MockAddressConverter::to_encoded_address(output_address.clone());
 		let origin = SwapOrigin::Vault { tx_hash: Default::default() };
@@ -559,7 +583,7 @@ mod ccm {
 	}
 
 	#[track_caller]
-	fn assert_ccm_egressed(asset: Asset, principal_amount: AssetAmount) {
+	pub(super) fn assert_ccm_egressed(asset: Asset, principal_amount: AssetAmount) {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Swapping(Event::<Test>::SwapEgressScheduled {
@@ -573,7 +597,7 @@ mod ccm {
 			vec![MockEgressParameter::Ccm {
 				asset,
 				amount: principal_amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: (*EVM_OUTPUT_ADDRESS).clone(),
 				message: vec![0x01].try_into().unwrap(),
 				cf_parameters: vec![].try_into().unwrap(),
 				gas_budget: GAS_BUDGET,
@@ -832,7 +856,7 @@ mod ccm {
 					INPUT_ASSET,
 					PRINCIPAL_AMOUNT + GAS_BUDGET,
 					OUTPUT_ASSET,
-					EncodedAddress::Eth(Default::default()),
+					MockAddressConverter::to_encoded_address((*EVM_OUTPUT_ADDRESS).clone()),
 					ccm.clone(),
 					Default::default(),
 				));

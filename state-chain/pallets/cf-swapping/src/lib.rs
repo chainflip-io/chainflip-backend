@@ -1,4 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+// lazy_cell has been stabilized in a newer version of rust
+// (feature directive can be removed once we upgrade)
+#![feature(lazy_cell)]
 
 use cf_amm::common::Side;
 use cf_chains::{
@@ -242,20 +245,15 @@ pub struct CcmSwapAmounts {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-enum CcmSwapState {
-	PrincipalSwapScheduled {
-		principal_swap_id: SwapId,
-		gas_budget: AssetAmount,
-		other_gas_asset: Option<Asset>,
-	},
-	GasSwapScheduled {
-		gas_swap_id: SwapId,
-		principal_output_amount: AssetAmount,
-	},
+enum GasSwapState {
+	OutputReady { gas_budget: AssetAmount },
+	Scheduled { gas_swap_id: SwapId },
+	ToBeScheduled { gas_budget: AssetAmount, other_gas_asset: Asset },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 struct DCAState {
+	scheduled_chunk_swap_id: Option<SwapId>,
 	remaining_input_amount: AssetAmount,
 	remaining_chunks: u32,
 	accumulated_output_amount: AssetAmount,
@@ -277,13 +275,13 @@ impl DCAState {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 enum SwapRequestState {
 	Ccm {
-		state: CcmSwapState,
+		gas_swap_state: GasSwapState,
 		ccm_deposit_metadata: CcmDepositMetadata,
 		output_address: ForeignChainAddress,
+		dca_state: DCAState,
 	},
 	Regular {
 		output_address: ForeignChainAddress,
-		// Remove option and use remaining_chunks = 0 instead?
 		dca_state: DCAState,
 	},
 	NetworkFee,
@@ -1201,9 +1199,8 @@ pub mod pallet {
 			input_asset: Asset,
 			gas_asset: Asset,
 			gas_budget: AssetAmount,
-			principal_output_amount: AssetAmount,
-		) -> CcmSwapState {
-			let swap_id = Self::schedule_swap(
+		) -> GasSwapState {
+			let gas_swap_id = Self::schedule_swap(
 				input_asset,
 				gas_asset,
 				gas_budget,
@@ -1212,7 +1209,7 @@ pub mod pallet {
 				request_id,
 			);
 
-			CcmSwapState::GasSwapScheduled { gas_swap_id: swap_id, principal_output_amount }
+			GasSwapState::Scheduled { gas_swap_id }
 		}
 
 		fn refund_failed_swap(swap: Swap) {
@@ -1312,50 +1309,81 @@ pub mod pallet {
 			});
 
 			match &mut request.state {
-				SwapRequestState::Ccm { state, ccm_deposit_metadata, output_address } =>
-					match state {
-						CcmSwapState::PrincipalSwapScheduled {
-							principal_swap_id,
-							gas_budget,
-							other_gas_asset,
-						} => {
-							debug_assert!(swap.swap_id() == *principal_swap_id);
-
-							if let Some(other_gas_asset) = other_gas_asset {
-								*state = Self::schedule_ccm_gas_swap(
-									swap_request_id,
-									request.input_asset,
-									*other_gas_asset,
-									*gas_budget,
-									output_amount,
-								);
-
-								// We are not done with the request, so put it back
-								SwapRequests::<T>::insert(swap_request_id, request);
-							} else {
-								Self::process_ccm_outcome(
-									swap_request_id,
-									request.output_asset,
-									output_address.clone(),
-									output_amount,
-									*gas_budget,
-									ccm_deposit_metadata.clone(),
+				SwapRequestState::Ccm {
+					gas_swap_state,
+					ccm_deposit_metadata,
+					output_address,
+					dca_state,
+				} => {
+					let is_gas_swap = match gas_swap_state {
+						GasSwapState::Scheduled { gas_swap_id }
+							if *gas_swap_id == swap.swap_id() =>
+							true,
+						_ => {
+							if dca_state.scheduled_chunk_swap_id != Some(swap.swap_id()) {
+								log_or_panic!(
+									"Executed swap with unexpected id {} for swap request {swap_request_id}", swap.swap_id()
 								);
 							}
-						},
-						CcmSwapState::GasSwapScheduled { gas_swap_id, principal_output_amount } => {
-							debug_assert!(swap.swap_id() == *gas_swap_id);
 
-							Self::process_ccm_outcome(
-								swap_request_id,
-								request.output_asset,
-								output_address.clone(),
-								*principal_output_amount,
-								output_amount,
-								ccm_deposit_metadata.clone(),
-							);
+							false
 						},
-					},
+					};
+
+					if is_gas_swap {
+						*gas_swap_state = GasSwapState::OutputReady { gas_budget: output_amount };
+					} else {
+						// The executed swap must be for the principal amount:
+						dca_state.accumulated_output_amount += output_amount;
+
+						// Schedule any remaining DCA chunks:
+						dca_state.scheduled_chunk_swap_id = if dca_state.remaining_chunks > 0 {
+							let chunk_input_amount = dca_state.prepare_next_chunk();
+
+							let swap_id = Self::schedule_swap(
+								request.input_asset,
+								request.output_asset,
+								chunk_input_amount,
+								swap.swap.refund_params.clone(),
+								SwapType::CcmPrincipal,
+								swap_request_id,
+							);
+
+							Some(swap_id)
+						} else {
+							None
+						};
+
+						// See if we still need to schedule the gas swap
+						if let GasSwapState::ToBeScheduled { gas_budget, other_gas_asset } =
+							gas_swap_state
+						{
+							*gas_swap_state = Self::schedule_ccm_gas_swap(
+								swap_request_id,
+								request.input_asset,
+								*other_gas_asset,
+								*gas_budget,
+							);
+						}
+					}
+
+					// Process outcome if there aren't any more scheduled swaps,
+					// otherwise put the request state back:
+					if let (GasSwapState::OutputReady { gas_budget }, None) =
+						(gas_swap_state, dca_state.scheduled_chunk_swap_id)
+					{
+						Self::process_ccm_outcome(
+							swap_request_id,
+							request.output_asset,
+							output_address.clone(),
+							dca_state.accumulated_output_amount,
+							*gas_budget,
+							ccm_deposit_metadata.clone(),
+						);
+					} else {
+						SwapRequests::<T>::insert(swap_request_id, request);
+					}
+				},
 				SwapRequestState::Regular { output_address, dca_state } => {
 					if dca_state.remaining_chunks > 0 {
 						let chunk_input_amount = dca_state.prepare_next_chunk();
@@ -1818,13 +1846,13 @@ pub mod pallet {
 					);
 				},
 				SwapRequestType::Regular { output_address } => {
-					// No DCA is equivalent to DCA with 1 chunk
 					let mut dca_state = DCAState {
+						scheduled_chunk_swap_id: None,
 						remaining_input_amount: net_amount,
+						// No DCA is equivalent to DCA with 1 chunk
 						remaining_chunks: dca_params.map(|p| p.number_of_chunks).unwrap_or(1),
 						accumulated_output_amount: 0,
 					};
-
 					let chunk_input_amount = dca_state.prepare_next_chunk();
 
 					let swap_refund_params = refund_params.as_ref().map(|params| {
@@ -1836,7 +1864,7 @@ pub mod pallet {
 						)
 					});
 
-					Self::schedule_swap(
+					let swap_id = Self::schedule_swap(
 						input_asset,
 						output_asset,
 						chunk_input_amount,
@@ -1844,6 +1872,8 @@ pub mod pallet {
 						SwapType::Swap,
 						request_id,
 					);
+
+					dca_state.scheduled_chunk_swap_id = Some(swap_id);
 
 					SwapRequests::<T>::insert(
 						request_id,
@@ -1894,25 +1924,36 @@ pub mod pallet {
 							},
 						};
 
-					// See if princial swap is needed, schedule it first if so:
+					// See if principal swap is needed, schedule it first if so:
 					if input_asset != output_asset && !principal_swap_amount.is_zero() {
+						let mut dca_state = DCAState {
+							scheduled_chunk_swap_id: None,
+							remaining_input_amount: principal_swap_amount,
+							// No DCA is equivalent to DCA with 1 chunk
+							remaining_chunks: dca_params.map(|p| p.number_of_chunks).unwrap_or(1),
+							accumulated_output_amount: 0,
+						};
+						let chunk_input_amount = dca_state.prepare_next_chunk();
+
 						let swap_refund_params = refund_params.as_ref().map(|params| {
 							utilities::calculate_swap_refund_parameters(
 								params,
 								// In practice block number always fits in u32:
 								frame_system::Pallet::<T>::block_number().unique_saturated_into(),
-								principal_swap_amount,
+								chunk_input_amount,
 							)
 						});
 
 						let swap_id = Self::schedule_swap(
 							input_asset,
 							output_asset,
-							principal_swap_amount,
+							chunk_input_amount,
 							swap_refund_params,
 							SwapType::CcmPrincipal,
 							request_id,
 						);
+
+						dca_state.scheduled_chunk_swap_id = Some(swap_id);
 
 						SwapRequests::<T>::insert(
 							request_id,
@@ -1922,25 +1963,25 @@ pub mod pallet {
 								output_asset,
 								refund_params: refund_params.clone(),
 								state: SwapRequestState::Ccm {
-									state: CcmSwapState::PrincipalSwapScheduled {
-										principal_swap_id: swap_id,
-										gas_budget,
-										other_gas_asset,
+									gas_swap_state: if let Some(other_gas_asset) = other_gas_asset {
+										GasSwapState::ToBeScheduled { gas_budget, other_gas_asset }
+									} else {
+										GasSwapState::OutputReady { gas_budget }
 									},
 									ccm_deposit_metadata: ccm_deposit_metadata.clone(),
 									output_address: output_address.clone(),
+									dca_state,
 								},
 							},
 						);
 					// See if gas swap is needed, schedule it immediately if so
 					// (since there is no principal swap in this case):
 					} else if let Some(other_gas_asset) = other_gas_asset {
-						let ccm_state = Self::schedule_ccm_gas_swap(
+						let gas_swap_state = Self::schedule_ccm_gas_swap(
 							request_id,
 							input_asset,
 							other_gas_asset,
 							gas_budget,
-							principal_swap_amount,
 						);
 
 						SwapRequests::<T>::insert(
@@ -1951,9 +1992,15 @@ pub mod pallet {
 								output_asset,
 								refund_params: None,
 								state: SwapRequestState::Ccm {
-									state: ccm_state,
+									gas_swap_state,
 									ccm_deposit_metadata: ccm_deposit_metadata.clone(),
 									output_address,
+									dca_state: DCAState {
+										scheduled_chunk_swap_id: None,
+										remaining_input_amount: 0,
+										remaining_chunks: 0,
+										accumulated_output_amount: principal_swap_amount,
+									},
 								},
 							},
 						);

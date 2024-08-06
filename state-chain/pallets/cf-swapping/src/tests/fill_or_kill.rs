@@ -10,6 +10,7 @@ fn new_swap(refund_params: Option<SwapRefundParameters>) -> TestSwapParams {
 		refund_params,
 		dca_params: None,
 		output_address: ForeignChainAddress::Eth([1; 20].into()),
+		is_ccm: false,
 	}
 }
 
