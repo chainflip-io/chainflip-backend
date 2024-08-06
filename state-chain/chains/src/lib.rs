@@ -4,7 +4,7 @@
 #![feature(split_array)]
 
 use core::{fmt::Display, iter::Step};
-use std::marker::PhantomData;
+use sp_std::marker::PhantomData;
 
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},

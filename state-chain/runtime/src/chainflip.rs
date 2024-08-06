@@ -363,6 +363,9 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 			}) {
 				Some(signer) => {
 					let mut modified_call = (*call).clone();
+					// the unwraps should be safe because we are in the code where on chain key
+					// already exists (see above) and so thecurrent_key_epoch should also exist and
+					// so should the corresponding key,
 					let current_aggkey = SolanaThresholdSigner::keys(
 						SolanaThresholdSigner::current_key_epoch().unwrap(),
 					)
