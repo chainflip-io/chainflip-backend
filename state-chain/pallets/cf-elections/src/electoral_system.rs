@@ -10,30 +10,41 @@ use crate::{
 	CorruptStorageError, ElectionIdentifier,
 };
 
-/// A trait that describes a method of coming to consensus on some aspect of an external chain.
+/// A trait that describes a method of coming to consensus on some aspect of an external chain, and
+/// how that consensus should be processed.
 ///
-/// Implementations of this trait should *NEVER* directly access the storage of the election pallet,
-/// and only access it through the passed-in accessors.
+/// Implementations of this trait should *NEVER* directly access the storage of the elections
+/// pallet, and only access it through the passed-in accessors.
 pub trait ElectoralSystem: 'static {
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
-	/// synchronised and therefore should only be used by the ElectoralSystem, and not consumed by
-	/// the engine.
+	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
+	/// by the engine.
+	///
+	/// Also note that if this state is changed that will not cause election's consensus to be
+	/// retested.
 	type ElectoralUnsynchronisedState: Parameter + Member + MaybeSerializeDeserialize;
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
-	/// synchronised and therefore should only be used by the ElectoralSystem, and not consumed by
-	/// the engine.
+	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
+	/// by the engine.
+	///
+	/// Also note that if this state is changed that will not cause election's consensus to be
+	/// retested.
 	type ElectoralUnsynchronisedStateMapKey: Parameter + Member;
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
-	/// synchronised and therefore should only be used by the ElectoralSystem, and not consumed by
-	/// the engine.
+	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
+	/// by the engine.
+	///
+	/// Also note that if this state is changed that will not cause election's consensus to be
+	/// retested.
 	type ElectoralUnsynchronisedStateMapValue: Parameter + Member;
 
 	/// Settings of the electoral system. These can be changed at any time by governance, and
-	/// are not synchronised with elections, and therefore there is not universal mapping from
+	/// are not synchronised with elections, and therefore there is not a universal mapping from
 	/// elections to these settings values. Therefore it should only be used for internal
 	/// state, i.e. the engines should not consume this data.
 	///
-	/// Also note that if these settings are changed that will not cause election's to be retested.
+	/// Also note that if these settings are changed that will not cause election's consensus to be
+	/// retested.
 	type ElectoralUnsynchronisedSettings: Parameter + Member + MaybeSerializeDeserialize;
 
 	/// Settings of the electoral system. These settings are synchronised with
@@ -43,11 +54,12 @@ pub trait ElectoralSystem: 'static {
 
 	/// Extra data stored along with the UniqueMonotonicIdentifier as part of the
 	/// ElectionIdentifier. This is used by composite electoral systems to identify which variant of
-	/// election it is working with.
+	/// election it is working with, without needing to reading in further election
+	/// state/properties/etc.
 	type ElectionIdentifierExtra: Parameter + Member + Copy + Eq + Ord;
 
-	/// The properties of a single election, typically describing which block the election is
-	/// associated with and what needs to be witnessed.
+	/// The properties of a single election, for example this could describe which block of the
+	/// external chain the election is associated with and what needs to be witnessed.
 	type ElectionProperties: Parameter + Member;
 
 	/// Per-election state needed by the ElectoralSystem. This state is not synchronised across
@@ -65,17 +77,19 @@ pub trait ElectoralSystem: 'static {
 
 	/// Custom parameters for `on_finalize`. Used to communicate information like the latest chain
 	/// tracking block to the electoral system. While it gives more flexibility to use a generic
-	/// type here, instead of an associated type, I want to avoid spreading additional generics
+	/// type here, instead of an associated type, particularly as it would allow `on_finalize` to
+	/// take trait instead of a specific type, I want to avoid spreading additional generics
 	/// throughout the rest of the code. As an alternative, you can use dynamic dispatch (i.e.
 	/// Box<dyn ...>) to achieve much the same affect.
 	type OnFinalizeContext;
 
 	/// Custom return of the `on_finalize` callback. This can be used to communicate any information
-	/// you may want to the caller.
+	/// you want to the caller.
 	type OnFinalizeReturn;
 
 	/// This is not used by the pallet, but is used to tell a validator that it should attempt
-	/// to vote in a given Election. It returns the time until you should vote.
+	/// to vote in a given Election. Validators are expected to call this indirectly via RPC once
+	/// per state-chain block, for each active election.
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_identifier_with_extra: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
@@ -85,7 +99,12 @@ pub trait ElectoralSystem: 'static {
 	}
 
 	/// This is used in the vote extrinsic to disallow a validator from providing votes that do not
-	/// pass this check.
+	/// pass this check. It is guaranteed that any vote values provided to `vote_properties`, or
+	/// `check_consensus` have past this check.
+	///
+	/// You should *NEVER* update the epoch during this call. And in general updating any other
+	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
+	/// function.
 	fn is_vote_valid<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_identifier: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
@@ -96,6 +115,10 @@ pub trait ElectoralSystem: 'static {
 
 	/// This is called every time a vote occurs. It associates the vote with a `Properties`
 	/// value.
+	///
+	/// You should *NEVER* update the epoch during this call. And in general updating any other
+	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
+	/// function.
 	fn vote_properties(
 		election_identifier: ElectionIdentifierOf<Self>,
 		previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
@@ -114,7 +137,9 @@ pub trait ElectoralSystem: 'static {
 	/// part of the Election pallet's `on_finalize` callback when the Election's votes or state have
 	/// changed since the previous call.
 	///
-	/// You should *NEVER* update the epoch during this call.
+	/// You should *NEVER* update the epoch during this call. And in general updating any other
+	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
+	/// function.
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		election_identifier: ElectionIdentifierOf<Self>,
 		electoral_access: &ElectionAccess,
@@ -145,18 +170,25 @@ pub type BitmapComponentOf<E: ElectoralSystem> =
 pub type VotePropertiesOf<E: ElectoralSystem> =
 	<<E as ElectoralSystem>::Vote as VoteStorage>::Properties;
 
-pub(crate) mod access {
-	//! This module contains a set of traits used to access the details of elections. Notably these
-	//! don't allow access to the `Vote` details directly, which are passed directly as needed to
-	//! `ElectoralSystem` trait. Their access is handled like this so it easier to simulate the
-	//! existence of votes, without having to write custom implementations of these traits. This is
-	//! useful to allow validators to simulate the existence of votes in pending extrinics.
+mod access {
+	//! This module contains a set of interfaces used to access the details of elections. These
+	//! traits abstract the underlying substrate storage items, thereby allowing ElectoralSystem's
+	//! to be arbitrarily composed while still allowing each to be written in isolation, wihtout
+	//! needing konwledge of how it will be composed.
 	//!
-	//! We also restrict access to `Vote` details as the underlying storage does not strictly
-	//! guarantee that all votes are from current authorities.
+	//! Also some of the storage items are lazily maintained, and so accessing them directly would
+	//! provide inaccurate values. For example we don't allow access to the `Vote` details directly,
+	//! which are passed directly as needed to `ElectoralSystem` trait. As the underlying storage
+	//! does not strictly guarantee that all votes in the storage are from current authorities. Also
+	//! this abstraction provides benefits like being able to easily test ElectoralSystem's without
+	//! needing the full substrate infrastructure, and allowing cheap simulation of the existence of
+	//! votes which could be useful for implementing the intended engine simulation mode.
+	//!
+	//! The traits in this module are split into immutable (Read) and mutable (Write) access traits,
+	//! to allow the pallet to at restrict write access when it should be done, to help ensure
+	//! correct ElectoralSystem implementation.
 
-	use super::{CorruptStorageError, ElectoralSystem};
-	use crate::ElectionIdentifierOf;
+	use super::{CorruptStorageError, ElectionIdentifierOf, ElectoralSystem};
 
 	/// Represents the current consensus, and how it has changed since it was last checked (i.e.
 	/// 'check_consensus' was called).
@@ -178,6 +210,7 @@ pub(crate) mod access {
 		None,
 	}
 	impl<Consensus> ConsensusStatus<Consensus> {
+		/// Apply a closure to each `Consensus` value.
 		pub fn try_map<T, E, F: Fn(Consensus) -> Result<T, E>>(
 			self,
 			f: F,
@@ -231,20 +264,27 @@ pub(crate) mod access {
 
 	/// A trait allowing write access to the details about a single election
 	pub trait ElectionWriteAccess: ElectionReadAccess {
+		/// Sets a new `state` value for the election. This will invalid the current Consensus, and
+		/// thereby force it to be recalculated, when `check_consensus` is next called. We do this
+		/// to ensure that in situations where `check_consensus` depends on the `state` that we will
+		/// correctly recalculate the consensus if needed.
 		fn set_state(
 			&mut self,
 			state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
 		) -> Result<(), CorruptStorageError>;
 		fn clear_votes(&mut self);
 		fn delete(self);
-		/// This will change the `ElectionIdentifierExtra` of the election, and allows you to
-		/// optionally change the properties. Note the `extra` must be strictöy greater than
-		/// previous, this function will return `Err` if it is not. This ensures that all
-		/// `ES::ElectionIdentifierExtra` ever used by a particular election are unique. The purpose
-		/// of this function to in effect allow the deletion and recreation of an election so you
-		/// can change its `Properties`, while efficiently transferring the existing election's vote
-		/// to the new election. The only difference is that here the elections settings will not be
-		/// updated to the latest. Any not yet on-chain authority votes will be invalidated by this.
+		/// This will change the `ElectionIdentifierExtra` value of the election, and allows you to
+		/// optionally change the properties. Note the `extra` must be strictly greater than the
+		/// previous value of this election, this function will return `Err` if it is not. This
+		/// ensures that all `ES::ElectionIdentifierExtra` ever used by a particular election are
+		/// unique. The purpose of this function to in effect allow the deletion and recreation of
+		/// an election so you can change its `Properties`, while efficiently transferring the
+		/// existing election's votes to the new election. The only difference is that here the
+		/// elections `Settings` will not be updated to the latest. This could create a problem if
+		/// you never delete elections, as old `Settings` values will be stored until any elections
+		/// referencing them are deleted. Any not yet on-chain authority votes will be invalidated
+		/// by this.
 		fn refresh(
 			&mut self,
 			extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
@@ -316,6 +356,8 @@ pub(crate) mod access {
 			&mut self,
 			unsynchronised_state: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 		) -> Result<(), CorruptStorageError>;
+
+		/// Inserts or removes a value from the unsynchronised state map of the electoral system.
 		fn set_unsynchronised_state_map(
 			&mut self,
 			key: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
@@ -324,6 +366,10 @@ pub(crate) mod access {
 			>,
 		) -> Result<(), CorruptStorageError>;
 
+		/// Allows you to mutate the unsynchronised state. This is more efficient than a read
+		/// (`unsynchronised_state`) and then a write (`set_unsynchronised_state`) in the case of
+		/// composite ElectoralSystems, as a write from one of the sub-ElectoralSystems internally
+		/// will require an additional read. Therefore this function should be preferred.
 		fn mutate_unsynchronised_state<
 			T,
 			F: for<'a> FnOnce(
