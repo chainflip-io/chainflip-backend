@@ -7,7 +7,7 @@ use sp_std::vec::Vec;
 
 use crate::{
 	vote_storage::{AuthorityVote, VoteStorage},
-	CorruptStorageError, ElectionIdentifierOf,
+	CorruptStorageError, ElectionIdentifier,
 };
 
 /// A trait that describes a method of coming to consensus on some aspect of an external chain.
@@ -127,6 +127,9 @@ pub trait ElectoralSystem: 'static {
 	) -> Result<Option<Self::Consensus>, CorruptStorageError>;
 }
 
+#[allow(type_alias_bounds)]
+pub type ElectionIdentifierOf<E: ElectoralSystem> =
+	ElectionIdentifier<<E as ElectoralSystem>::ElectionIdentifierExtra>;
 #[allow(type_alias_bounds)]
 pub type AuthorityVoteOf<E: ElectoralSystem> = AuthorityVote<
 	<<E as ElectoralSystem>::Vote as VoteStorage>::PartialVote,

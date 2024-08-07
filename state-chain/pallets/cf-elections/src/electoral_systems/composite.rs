@@ -60,13 +60,13 @@ macro_rules! generate_electoral_system_tuple_impls {
                     ElectoralWriteAccess,
                     AuthorityVoteOf,
                     VotePropertiesOf,
+                    ElectionIdentifierOf,
                 },
                 vote_storage::{
                     AuthorityVote,
                     VoteStorage
                 },
                 ElectionIdentifier,
-                ElectionIdentifierOf,
             };
             use crate::vote_storage::composite::$module::CompositeVoteStorageEnum;
 

@@ -128,9 +128,9 @@ pub mod pallet {
 	use access_impls::{ElectionAccess, ElectoralAccess};
 	use bitmap_components::ElectionBitmapComponents;
 	use electoral_system::{
-		AuthorityVoteOf, ConsensusStatus, ElectionReadAccess, ElectionWriteAccess,
-		ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess, IndividualComponentOf,
-		VotePropertiesOf,
+		AuthorityVoteOf, ConsensusStatus, ElectionIdentifierOf, ElectionReadAccess,
+		ElectionWriteAccess, ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess,
+		IndividualComponentOf, VotePropertiesOf,
 	};
 	use frame_support::{sp_runtime::traits::BlockNumberProvider, StorageDoubleMap as _};
 	use itertools::Itertools;
@@ -171,9 +171,6 @@ pub mod pallet {
 			&self.1
 		}
 	}
-	#[allow(type_alias_bounds)]
-	pub type ElectionIdentifierOf<E: ElectoralSystem> =
-		ElectionIdentifier<<E as ElectoralSystem>::ElectionIdentifierExtra>;
 
 	/// The hash of the original `SharedData` information, used retrieve the original information.
 	#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
