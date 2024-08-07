@@ -36,39 +36,54 @@
 //! (`PartialVote`), as long as alteast one other validator does provide the matching full vote
 //! data. Note the `PartialVote` is not restricted to only being the hash of the full vote.
 //!
-//! This diagram shows how an authrities vote is formulated, and split up so it can be stored:
+//! This diagram shows how an authority's vote is formulated, and split up so it can be stored:
 //!
-//!          ┌────────────────┐                                                        
-//!          │                │                                                        
-//!          │   Vote─────────┼──────────────────────────────┐                         
-//!          │   │            │                              │                         
-//!          │   │            │                              │                         
-//!      ┌───┤   │            │                              │                         
-//!      │   │   ▼            │                              │                         
-//!      │   │   PartialVote  │                              │                         
-//!      │   │   │            │                              │                         
-//!      │   └───┼────────────┘                              │                         
-//!      │       │                                           │                         
-//!      │       ▼                                           │                         
-//!      │       Components──────────────┐                   │                         
-//!      │       │                       │                   │                         
-//!      │   ┌───┼───────────────────────┼───────────────────┼────────────┐             
-//!      │   │   │                       │                   │            │             
-//!      │   │   ▼                       ▼                   ▼            │             
-//!      │   │   IndividualComponent     BitmapComponent     SharedData/s │             
-//!      │   │   (Zero or one)           (Zero or one)       (Any number) │             
-//!      │   │                                                            │             
-//!      │   └───┬────────────────────────────────────────────────────────┘             
-//!      │       │                                                                     
-//!      │       │                                                                     
-//!      │       │                                                                     
-//!      │       │                                                                     
-//!      │       └─────► How the pallet stores a vote.                                  
-//!      │                                                                             
-//!      │                                                                             
-//!      │                                                                             
-//!      └─────────────► "AuthorityVote", i.e. the formats in which an authority may provide a vote.
+//!     ┌─────────────────────────────────────────────────────────────────┐
+//!     │   Key:                                                          │
+//!     │                                                                 │
+//!     │   A ──(N)───► B : A contains/is constructed from <N> B values   │
+//!     │                                                                 │
+//!     │   A ─ (N)─ ─► B : A references <N> B values by hash             │
+//!     │                                                                 │
+//!     └─────────────────────────────────────────────────────────────────┘
 //!
+//!      ┌──────────────────────────────────────────────────────┐
+//!      │ The formats in which an authority may provide a vote.│
+//!      └─┬──────────────────┬─────────────────────────────────┘
+//!        │┼────────────────┼│
+//!        ││                ││
+//!        ││   Vote─────────┼┼─────────────────────────────┐
+//!        ││   │            ││                             │
+//!        ││  (1)           ││                             │
+//!        ││   │            ││                             │
+//!        ││   ▼            ││                             │
+//!        ││   PartialVote  ││                             │
+//!        ││   │            ││                             │
+//!        │┼───┼────────────┼│                             │
+//!        └────┼─────────────┘                             │
+//!             │                                           │
+//!             ▼                                           │
+//!             Components──────────────┐                   │
+//!             │                       │                   │
+//!             │                       │                   │
+//!          (0 or 1)                (0 or 1)              (0+)
+//!             │                       │                   │
+//!             │                       │                   │
+//!         ┌───┼───────────────────────┼───────────────────┼─────────────────────────┐
+//!         │┼──┼───────────────────────┼───────────────────┼────────────────────────┼│
+//!         ││  │                       │                   │                        ││
+//!         ││  ▼                       ▼                   ▼                        ││
+//!         ││  IndividualComponent     BitmapComponent     SharedData               ││
+//!         ││  │                       │                   ▲   ▲                    ││
+//!         ││                                                                       ││
+//!         ││  │                       └ ─ ─ ─ ─(0+) ─ ─ ─ ┘   │                    ││
+//!         ││                                                                       ││
+//!         ││  └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─(0+) ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘                    ││
+//!         ││                                                                       ││
+//!         │┼───────────────────────────────────────────────────────────────────────┼│
+//!         └───────────┼────────────────────────────┼────────────────────────────────┘
+//!                     │How the pallet stores votes.│
+//!                     └────────────────────────────┘
 //!
 //! - "SharedData" is shared between authority votes, so if 150 different validator votes when
 //!   "split up" contain the same SharedData, only one copy of that SharedData will be stored. A
