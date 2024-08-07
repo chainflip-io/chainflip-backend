@@ -9,7 +9,7 @@ pub mod runtime_apis;
 pub mod safe_mode;
 #[cfg(feature = "std")]
 pub mod test_runner;
-use cf_runtime_upgrade_utilities::{NoopRuntimeUpgrade, VersionedMigration};
+use cf_runtime_upgrade_utilities::VersionedMigration;
 mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
@@ -1186,7 +1186,10 @@ type PalletMigrations = (
 		11,
 	>,
 	MigrateApicalls,
-	SolChainState,
+	migrations::spec_versioned_migration::SpecVersionedMigration<
+		migrations::solana_integration::SolanaChainState,
+		151,
+	>,
 );
 
 type MigrateApicalls = (
@@ -1221,39 +1224,6 @@ type MigrateApicalls = (
 		migrations::migrate_apicalls_to_store_signer::NoSolUpgrade,
 		5,
 		6,
-	>,
-);
-
-type SolChainState = (
-	VersionedMigration<
-		pallet_cf_chain_tracking::Pallet<Runtime, EthereumInstance>,
-		NoopRuntimeUpgrade,
-		3,
-		4,
-	>,
-	VersionedMigration<
-		pallet_cf_chain_tracking::Pallet<Runtime, PolkadotInstance>,
-		NoopRuntimeUpgrade,
-		3,
-		4,
-	>,
-	VersionedMigration<
-		pallet_cf_chain_tracking::Pallet<Runtime, BitcoinInstance>,
-		NoopRuntimeUpgrade,
-		3,
-		4,
-	>,
-	VersionedMigration<
-		pallet_cf_chain_tracking::Pallet<Runtime, ArbitrumInstance>,
-		NoopRuntimeUpgrade,
-		3,
-		4,
-	>,
-	VersionedMigration<
-		pallet_cf_chain_tracking::Pallet<Runtime, SolanaInstance>,
-		migrations::solana_integration::SolanaChainState,
-		3,
-		4,
 	>,
 );
 
