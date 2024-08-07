@@ -51,43 +51,49 @@ pub(super) mod old {
 	>;
 }
 
+mod next {
+	pub use crate::migrations::add_broker_fee_to_ccm::old::*;
+}
+
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
-		DepositChannelLookup::<T, I>::translate(|_, details: old::DepositChannelDetails<T, I>| {
-			Some(DepositChannelDetails {
-				deposit_channel: details.deposit_channel,
-				opened_at: details.opened_at,
-				expires_at: details.expires_at,
-				action: match details.action {
-					old::ChannelAction::Swap {
-						destination_asset,
-						destination_address,
-						broker_fees,
-					} => ChannelAction::Swap {
-						destination_asset,
-						destination_address,
-						broker_fees,
-						refund_params: None,
+		next::DepositChannelLookup::<T, I>::translate(
+			|_, details: old::DepositChannelDetails<T, I>| {
+				Some(next::DepositChannelDetails {
+					deposit_channel: details.deposit_channel,
+					opened_at: details.opened_at,
+					expires_at: details.expires_at,
+					action: match details.action {
+						old::ChannelAction::Swap {
+							destination_asset,
+							destination_address,
+							broker_fees,
+						} => next::ChannelAction::Swap {
+							destination_asset,
+							destination_address,
+							broker_fees,
+							refund_params: None,
+						},
+						old::ChannelAction::LiquidityProvision { lp_account } =>
+							next::ChannelAction::LiquidityProvision { lp_account },
+						old::ChannelAction::CcmTransfer {
+							destination_asset,
+							destination_address,
+							channel_metadata,
+						} => next::ChannelAction::CcmTransfer {
+							destination_asset,
+							destination_address,
+							channel_metadata,
+							refund_params: None,
+						},
 					},
-					old::ChannelAction::LiquidityProvision { lp_account } =>
-						ChannelAction::LiquidityProvision { lp_account },
-					old::ChannelAction::CcmTransfer {
-						destination_asset,
-						destination_address,
-						channel_metadata,
-					} => ChannelAction::CcmTransfer {
-						destination_asset,
-						destination_address,
-						channel_metadata,
-						refund_params: None,
-					},
-				},
-				boost_fee: details.boost_fee,
-				boost_status: details.boost_status,
-			})
-		});
+					boost_fee: details.boost_fee,
+					boost_status: details.boost_status,
+				})
+			},
+		);
 
 		Weight::zero()
 	}
@@ -177,13 +183,13 @@ mod tests {
 			Migration::<Test, ()>::on_runtime_upgrade();
 
 			assert_eq!(
-				DepositChannelLookup::<Test, ()>::get(input_address_1),
-				Some(DepositChannelDetails::<Test, _> {
+				next::DepositChannelLookup::<Test, ()>::get(input_address_1),
+				Some(next::DepositChannelDetails::<Test, _> {
 					deposit_channel: mock_deposit_channel(),
 					opened_at: Default::default(),
 					expires_at: Default::default(),
 					boost_status: BoostStatus::NotBoosted,
-					action: ChannelAction::Swap {
+					action: next::ChannelAction::Swap {
 						destination_asset: Asset::Flip,
 						destination_address: output_address.clone(),
 						broker_fees: Default::default(),
@@ -193,13 +199,13 @@ mod tests {
 				})
 			);
 			assert_eq!(
-				DepositChannelLookup::<Test, ()>::get(input_address_2),
-				Some(DepositChannelDetails::<Test, _> {
+				next::DepositChannelLookup::<Test, ()>::get(input_address_2),
+				Some(next::DepositChannelDetails::<Test, _> {
 					deposit_channel: mock_deposit_channel(),
 					opened_at: Default::default(),
 					expires_at: Default::default(),
 					boost_status: BoostStatus::NotBoosted,
-					action: ChannelAction::CcmTransfer {
+					action: next::ChannelAction::CcmTransfer {
 						destination_asset: Asset::Flip,
 						destination_address: output_address.clone(),
 						channel_metadata: CcmChannelMetadata {

@@ -891,6 +891,8 @@ pub struct CcmSwapIds {
 
 /// Trait for handling cross chain messages.
 pub trait CcmHandler {
+	type AccountId;
+
 	/// Triggered when a ccm deposit is made.
 	#[allow(clippy::result_unit_err)]
 	fn on_ccm_deposit(
@@ -898,6 +900,7 @@ pub trait CcmHandler {
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
+		broker_commission: Beneficiaries<Self::AccountId>,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
 		refund_params: Option<ChannelRefundParameters>,
@@ -905,11 +908,13 @@ pub trait CcmHandler {
 }
 
 impl CcmHandler for () {
+	type AccountId = ();
 	fn on_ccm_deposit(
 		_source_asset: Asset,
 		_deposit_amount: AssetAmount,
 		_destination_asset: Asset,
 		_destination_address: ForeignChainAddress,
+		_broker_commission: Beneficiaries<Self::AccountId>,
 		_deposit_metadata: CcmDepositMetadata,
 		_origin: SwapOrigin,
 		_refund_params: Option<ChannelRefundParameters>,
