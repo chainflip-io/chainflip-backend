@@ -1,10 +1,10 @@
 use crate::{
 	electoral_system::{
-		AuthorityVoteOf, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
+		AuthorityVoteOf, ElectionIdentifierOf, ElectionReadAccess, ElectionWriteAccess,
+		ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifierOf,
+	CorruptStorageError,
 };
 use cf_primitives::AuthorityCount;
 use cf_utilities::{all_same, success_threshold_from_share_count};
