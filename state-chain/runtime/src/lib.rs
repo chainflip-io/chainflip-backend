@@ -1785,7 +1785,7 @@ impl_runtime_apis! {
 				}
 
 				// There are two swaps for CCM, the principal swap, and the gas amount swap.
-				let Ok(CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset }) = Swapping::principal_and_gas_amounts(deposit_amount, &channel_metadata, source_asset, destination_asset) else {
+				let Ok(CcmSwapAmounts { principal_deposit_amount, gas_budget, other_gas_asset }) = Swapping::principal_and_gas_amounts(deposit_amount, &channel_metadata, source_asset, destination_asset) else {
 					// not a valid CCM
 					return Vec::new();
 				};
@@ -1793,7 +1793,7 @@ impl_runtime_apis! {
 				let mut ccm_swaps = Vec::new();
 				if destination_asset == to {
 					// the principal swap is in the requested direction.
-					ccm_swaps.push(principal_swap_amount);
+					ccm_swaps.push(principal_deposit_amount);
 				}
 
 				if let Some(gas_asset) = other_gas_asset {

@@ -219,7 +219,7 @@ pub(crate) struct CcmSwap {
 }
 
 pub struct CcmSwapAmounts {
-	pub principal_swap_amount: AssetAmount,
+	pub principal_deposit_amount: AssetAmount,
 	pub gas_budget: AssetAmount,
 	// if the gas asset is different to the input asset, it will require a swap
 	pub other_gas_asset: Option<Asset>,
@@ -848,6 +848,7 @@ pub mod pallet {
 				deposit_amount,
 				destination_asset,
 				destination_address_internal,
+				Default::default(), // No broker fee on contract swaps.
 				deposit_metadata,
 				SwapOrigin::Vault { tx_hash },
 				// NOTE: FoK not yet supported for swaps from the contract
@@ -1263,7 +1264,7 @@ pub mod pallet {
 			destination_asset: Asset,
 		) -> Result<CcmSwapAmounts, CcmFailReason> {
 			let gas_budget = channel_metadata.gas_budget;
-			let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
+			let principal_deposit_amount = deposit_amount.saturating_sub(gas_budget);
 
 			let destination_chain: ForeignChain = destination_asset.into();
 			if !destination_chain.ccm_support() {
@@ -1280,7 +1281,7 @@ pub mod pallet {
 				Some(output_gas_asset)
 			};
 
-			Ok(CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset })
+			Ok(CcmSwapAmounts { principal_deposit_amount, gas_budget, other_gas_asset })
 		}
 
 		// The address and the asset being sent or withdrawn must be compatible.
@@ -1572,11 +1573,14 @@ pub mod pallet {
 	}
 
 	impl<T: Config> CcmHandler for Pallet<T> {
+		type AccountId = T::AccountId;
+
 		fn on_ccm_deposit(
 			source_asset: Asset,
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
+			broker_commission: Beneficiaries<Self::AccountId>,
 			deposit_metadata: CcmDepositMetadata,
 			origin: SwapOrigin,
 			// TODO: CCM should use refund params
@@ -1587,7 +1591,7 @@ pub mod pallet {
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
 
-			let CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset } =
+			let CcmSwapAmounts { principal_deposit_amount, gas_budget, other_gas_asset } =
 				match Self::principal_and_gas_amounts(
 					deposit_amount,
 					&deposit_metadata.channel_metadata,
@@ -1618,6 +1622,14 @@ pub mod pallet {
 
 			let mut swap_output = CcmSwapOutput::default();
 
+			// Permill maxes out at 100% so this is safe.
+			let fee: u128 = Permill::from_parts(
+				broker_commission.iter().fold(0, |acc, entry| acc + entry.bps) as u32 *
+					BASIS_POINTS_PER_MILLION,
+			) * principal_deposit_amount;
+
+			let principal_swap_amount = principal_deposit_amount.saturating_sub(fee);
+
 			let principal_swap_id =
 				if source_asset == destination_asset || principal_swap_amount.is_zero() {
 					swap_output.principal = Some(principal_swap_amount);
@@ -1633,13 +1645,13 @@ pub mod pallet {
 					Self::deposit_event(Event::<T>::SwapScheduled {
 						swap_id,
 						source_asset,
-						deposit_amount: principal_swap_amount,
+						deposit_amount: principal_deposit_amount,
 						destination_asset,
 						destination_address: encoded_destination_address.clone(),
 						origin: origin.clone(),
 						swap_type: SwapType::CcmPrincipal(ccm_id),
-						broker_commission: None,
-						broker_fee: None,
+						broker_commission: Some(fee),
+						broker_fee: Some(fee),
 						execute_at,
 					});
 					Some(swap_id)
