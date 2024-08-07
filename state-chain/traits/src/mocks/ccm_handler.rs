@@ -3,7 +3,7 @@ use cf_chains::{
 	address::ForeignChainAddress, CcmDepositMetadata, ChannelRefundParameters, SwapOrigin,
 };
 
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, Beneficiaries};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 
@@ -32,11 +32,13 @@ impl MockCcmHandler {
 }
 
 impl CcmHandler for MockCcmHandler {
+	type AccountId = u64;
 	fn on_ccm_deposit(
 		source_asset: Asset,
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
+		_broker_commission: Beneficiaries<Self::AccountId>,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
 		_refund_params: Option<ChannelRefundParameters>,

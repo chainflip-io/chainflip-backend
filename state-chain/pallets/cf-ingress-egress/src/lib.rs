@@ -144,7 +144,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
 
 #[derive(
 	serde::Serialize,
@@ -335,6 +335,7 @@ pub mod pallet {
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
+			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
 			refund_params: Option<ChannelRefundParameters>,
 		},
@@ -464,7 +465,7 @@ pub mod pallet {
 		type SwapDepositHandler: SwapDepositHandler<AccountId = Self::AccountId>;
 
 		/// Handler for Cross Chain Messages.
-		type CcmHandler: CcmHandler;
+		type CcmHandler: CcmHandler<AccountId = Self::AccountId>;
 
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain>
@@ -1588,6 +1589,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
+				broker_fees,
 				channel_metadata,
 				refund_params,
 			} => {
@@ -1597,6 +1599,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						amount_after_fees.into(),
 						destination_asset,
 						destination_address,
+						broker_fees,
 						CcmDepositMetadata {
 							source_chain: asset.into(),
 							source_address: None,
@@ -2087,6 +2090,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				Some(msg) => ChannelAction::CcmTransfer {
 					destination_asset,
 					destination_address,
+					broker_fees,
 					channel_metadata: msg,
 					refund_params,
 				},
