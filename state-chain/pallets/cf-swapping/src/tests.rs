@@ -356,12 +356,12 @@ fn expect_swap_id_to_be_emitted() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: 1,
 					egress_id: (ForeignChain::Ethereum, 1),
 					..
-				})
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
 			);
 		});
 }
@@ -728,6 +728,14 @@ mod ccm {
 			// CCM should be immediately egressed:
 			assert_ccm_egressed(OUTPUT_ASSET, PRINCIPAL_AMOUNT);
 
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SWAP_REQUEST_ID,
+					..
+				}),
+			);
+
 			assert_eq!(CollectedRejectedFunds::<Test>::get(INPUT_ASSET), 0);
 			assert_eq!(CollectedRejectedFunds::<Test>::get(OUTPUT_ASSET), 0);
 		});
@@ -1049,37 +1057,37 @@ fn process_all_into_stable_swaps_first() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
-			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_request_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
 				amount,
 				..
 			}) if amount == output_amount,
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_request_id: 2,
 				egress_id: (ForeignChain::Ethereum, 2),
 				amount,
 				..
 			}) if amount == output_amount,
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_request_id: 3,
 				egress_id: (ForeignChain::Ethereum, 3),
 				amount,
 				..
 			}) if amount == output_amount,
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_request_id: 4,
 				egress_id: (ForeignChain::Ethereum, 4),
 				amount,
 				..
 			}) if amount == output_amount,
+			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 		);
 	});
 }
@@ -1237,16 +1245,16 @@ fn can_handle_swaps_with_zero_outputs() {
 					output_amount: 0,
 					..
 				}),
-				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::SwapEgressIgnored { swap_request_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: 2,
 					output_asset: Asset::Eth,
 					output_amount: 0,
 					..
 				}),
-				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 2 }),
 				RuntimeEvent::Swapping(Event::SwapEgressIgnored { swap_request_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 2 }),
 			);
 
 			// Swaps are not egressed when output is 0.
@@ -1794,11 +1802,11 @@ fn swaps_are_executed_according_to_execute_at_field() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
-				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
-				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 2 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 2 }),
 			);
 		})
 		.then_execute_at_next_block(|_| {
@@ -1809,11 +1817,11 @@ fn swaps_are_executed_according_to_execute_at_field() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
-				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 3 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 3, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 3 }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
-				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 4 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 4, .. }),
+				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted { swap_request_id: 4 }),
 			);
 		});
 }
@@ -1897,11 +1905,11 @@ fn swaps_get_retried_after_failure() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 3 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 3, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 3 }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 4 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 4, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 4 }),
 			);
 		})
 		.then_execute_at_block(RETRY_AT_BLOCK, |_| {})
@@ -1911,11 +1919,11 @@ fn swaps_get_retried_after_failure() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 2 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 2 }),
 			);
 		});
 }

@@ -1174,26 +1174,6 @@ pub mod pallet {
 			}
 		}
 
-		fn process_ccm_outcome(
-			swap_request_id: SwapRequestId,
-			output_asset: Asset,
-			output_address: ForeignChainAddress,
-			principal_amount: AssetAmount,
-			gas_amount: AssetAmount,
-			ccm_deposit_metadata: CcmDepositMetadata,
-		) {
-			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-
-			Self::egress_for_swap(
-				swap_request_id,
-				principal_amount,
-				output_asset,
-				output_address,
-				Some((ccm_deposit_metadata, gas_amount)),
-				false, /* refund */
-			);
-		}
-
 		fn schedule_ccm_gas_swap(
 			request_id: SwapRequestId,
 			input_asset: Asset,
@@ -1308,7 +1288,7 @@ pub mod pallet {
 				intermediate_amount: swap.intermediate_amount(),
 			});
 
-			match &mut request.state {
+			let request_completed = match &mut request.state {
 				SwapRequestState::Ccm {
 					gas_swap_state,
 					ccm_deposit_metadata,
@@ -1372,16 +1352,18 @@ pub mod pallet {
 					if let (GasSwapState::OutputReady { gas_budget }, None) =
 						(gas_swap_state, dca_state.scheduled_chunk_swap_id)
 					{
-						Self::process_ccm_outcome(
+						Self::egress_for_swap(
 							swap_request_id,
+							dca_state.accumulated_output_amount,
 							request.output_asset,
 							output_address.clone(),
-							dca_state.accumulated_output_amount,
-							*gas_budget,
-							ccm_deposit_metadata.clone(),
+							Some((ccm_deposit_metadata.clone(), *gas_budget)),
+							false, /* refund */
 						);
+
+						true
 					} else {
-						SwapRequests::<T>::insert(swap_request_id, request);
+						false
 					}
 				},
 				SwapRequestState::Regular { output_address, dca_state } => {
@@ -1399,12 +1381,9 @@ pub mod pallet {
 							request.id,
 						);
 
-						// Not done with the request, put it back
-						SwapRequests::<T>::insert(swap_request_id, request);
+						false
 					} else {
 						debug_assert!(dca_state.remaining_input_amount == 0);
-
-						Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
 
 						Self::egress_for_swap(
 							swap_request_id,
@@ -1414,10 +1393,11 @@ pub mod pallet {
 							None,  /* ccm */
 							false, /* refund */
 						);
+
+						true
 					}
 				},
 				SwapRequestState::NetworkFee => {
-					Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
 					if swap.output_asset() == Asset::Flip {
 						FlipToBurn::<T>::mutate(|total| {
 							total.saturating_accrue(output_amount);
@@ -1428,10 +1408,9 @@ pub mod pallet {
 							swap.output_asset()
 						);
 					}
+					true
 				},
 				SwapRequestState::IngressEgressFee => {
-					Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-
 					if swap.output_asset() == ForeignChain::from(swap.output_asset()).gas_asset() {
 						T::IngressEgressFeeHandler::accrue_withheld_fee(
 							swap.output_asset(),
@@ -1443,7 +1422,15 @@ pub mod pallet {
 							swap.output_asset()
 						);
 					}
+
+					true
 				},
+			};
+
+			if request_completed {
+				Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+			} else {
+				SwapRequests::<T>::insert(swap_request_id, request);
 			}
 		}
 
@@ -2006,13 +1993,17 @@ pub mod pallet {
 						);
 					} else {
 						// No swaps are needed, process the CCM outcome immediately:
-						Self::process_ccm_outcome(
+						Self::deposit_event(Event::<T>::SwapRequestCompleted {
+							swap_request_id: request_id,
+						});
+
+						Self::egress_for_swap(
 							request_id,
+							principal_swap_amount,
 							output_asset,
 							output_address,
-							principal_swap_amount,
-							gas_budget,
-							ccm_deposit_metadata.clone(),
+							Some((ccm_deposit_metadata, gas_budget)),
+							false, /* refund */
 						);
 					}
 				},

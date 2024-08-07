@@ -102,14 +102,14 @@ fn dca_happy_path() {
 					output_amount: CHUNK_AMOUNT,
 					..
 				}),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
-				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					amount: TOTAL_OUTPUT_AMOUNT,
 					..
-				})
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SWAP_REQUEST_ID
+				}),
 			);
 		});
 }
@@ -161,14 +161,14 @@ fn dca_single_chunk() {
 					output_amount: NET_AMOUNT,
 					..
 				}),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
-				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					asset: OUTPUT_ASSET,
 					amount: NET_AMOUNT,
 					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SWAP_REQUEST_ID
 				})
 			);
 		});
@@ -452,15 +452,15 @@ fn dca_with_fok_fully_executed() {
 					output_amount: CHUNK_AMOUNT,
 					..
 				}),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID
-				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					asset: OUTPUT_ASSET,
 					// full amount should be egressed:
 					amount: NET_AMOUNT,
 					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SWAP_REQUEST_ID
 				}),
 			);
 		});
@@ -556,6 +556,10 @@ fn dca_with_ccm_happy_path() {
 					output_amount: GAS_BUDGET,
 					..
 				}),
+			);
+
+			assert_has_matching_event!(
+				Test,
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: SWAP_REQUEST_ID
 				}),

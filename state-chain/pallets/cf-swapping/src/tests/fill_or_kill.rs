@@ -58,20 +58,20 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: REGULAR_SWAP_ID, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: REGULAR_REQUEST_ID
-				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: REGULAR_REQUEST_ID,
 					..
 				}),
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: FOK_SWAP_ID, .. }),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: FOK_REQUEST_ID
+					swap_request_id: REGULAR_REQUEST_ID
 				}),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: FOK_SWAP_ID, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: FOK_REQUEST_ID,
 					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: FOK_REQUEST_ID
 				}),
 			);
 		});
@@ -117,11 +117,11 @@ fn price_limit_is_respected_in_fok_swap() {
 					execute_at: SWAP_RETRIED_AT_BLOCK
 				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: REGULAR_SWAP_ID, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: FOK_SWAP_2_ID, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 3 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 3, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 3 }),
 			);
 
 			assert_eq!(SwapQueue::<Test>::get(SWAP_RETRIED_AT_BLOCK).len(), 1);
@@ -134,8 +134,8 @@ fn price_limit_is_respected_in_fok_swap() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: FOK_SWAP_1_ID, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 2 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 2 }),
 			);
 
 			assert_eq!(SwapQueue::<Test>::get(SWAP_RETRIED_AT_BLOCK).len(), 0);
@@ -182,12 +182,12 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 					execute_at: SWAP_RETRIED_AT_BLOCK,
 				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: OTHER_SWAP_ID, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: OTHER_SWAP_REQUEST_ID
-				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: OTHER_SWAP_REQUEST_ID,
 					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: OTHER_SWAP_REQUEST_ID
 				}),
 			);
 		})
@@ -205,7 +205,7 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: FOK_SWAP_REQUEST_ID,
 					..
-				})
+				}),
 			);
 		});
 }
