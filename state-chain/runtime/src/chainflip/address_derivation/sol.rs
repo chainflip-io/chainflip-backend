@@ -1,44 +1,36 @@
 use cf_chains::{
-	address::AddressDerivationApi, assets::sol::Asset, sol::DerivedAddressBuilder, Solana,
+	address::{AddressDerivationApi, AddressDerivationError},
+	sol::{api::SolanaEnvironment, sol_tx_core::address_derivation::derive_deposit_address},
+	Solana,
 };
 
-use crate::Environment;
-
 use super::AddressDerivation;
+use crate::SolEnvironment;
 
 impl AddressDerivationApi<Solana> for AddressDerivation {
 	fn generate_address(
 		source_asset: <Solana as cf_chains::Chain>::ChainAsset,
 		channel_id: cf_primitives::ChannelId,
-	) -> Result<
-		<Solana as cf_chains::Chain>::ChainAccount,
-		cf_chains::address::AddressDerivationError,
-	> {
-		let (address, _) = <Self as AddressDerivationApi<Solana>>::generate_address_and_state(
-			source_asset,
-			channel_id,
-		)?;
-		Ok(address)
+	) -> Result<<Solana as cf_chains::Chain>::ChainAccount, AddressDerivationError> {
+		<Self as AddressDerivationApi<Solana>>::generate_address_and_state(source_asset, channel_id)
+			.map(|(address, _state)| address)
 	}
 
 	fn generate_address_and_state(
-		source_asset: <Solana as cf_chains::Chain>::ChainAsset,
+		_source_asset: <Solana as cf_chains::Chain>::ChainAsset,
 		channel_id: cf_primitives::ChannelId,
 	) -> Result<
 		(
 			<Solana as cf_chains::Chain>::ChainAccount,
 			<Solana as cf_chains::Chain>::DepositChannelState,
 		),
-		cf_chains::address::AddressDerivationError,
+		AddressDerivationError,
 	> {
-		let vault_address = Environment::sol_vault_address();
-		match source_asset {
-			Asset::Sol => {
-				let (pda, _bump) = DerivedAddressBuilder::from_address(vault_address)?
-					.chain_seed(channel_id.to_le_bytes())?
-					.finish()?;
-				Ok((pda, ()))
-			},
-		}
+		let api_env = SolEnvironment::api_environment()
+			.map_err(|_| AddressDerivationError::MissingSolanaApiEnvironment)?;
+
+		derive_deposit_address(channel_id, api_env.vault_program)
+			.map(|derived_ata| (derived_ata.address, derived_ata.bump))
+			.map_err(AddressDerivationError::SolanaDerivationError)
 	}
 }

@@ -406,6 +406,7 @@ pub struct IngressEgressEnvironment {
 	pub witness_safety_margins: HashMap<ForeignChain, Option<u64>>,
 	pub egress_dust_limits: any::AssetMap<NumberOrHex>,
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
+	pub max_swap_retry_duration_blocks: HashMap<ForeignChain, u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -419,7 +420,6 @@ pub struct SwappingEnvironment {
 	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
 	network_fee_hundredth_pips: Permill,
 	swap_retry_delay_blocks: u32,
-	max_swap_retry_duration_blocks: HashMap<ForeignChain, u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1443,6 +1443,7 @@ where
 
 		let mut witness_safety_margins = HashMap::new();
 		let mut channel_opening_fees = HashMap::new();
+		let mut max_swap_retry_duration_blocks = HashMap::new();
 
 		for chain in ForeignChain::iter() {
 			witness_safety_margins.insert(
@@ -1452,6 +1453,12 @@ where
 			channel_opening_fees.insert(
 				chain,
 				runtime_api.cf_channel_opening_fee(hash, chain).map_err(to_rpc_error)?.into(),
+			);
+			max_swap_retry_duration_blocks.insert(
+				chain,
+				runtime_api
+					.cf_max_swap_retry_duration_blocks(hash, chain)
+					.map_err(to_rpc_error)?,
 			);
 		}
 
@@ -1482,6 +1489,7 @@ where
 					.map(Into::into)
 			})?,
 			channel_opening_fees,
+			max_swap_retry_duration_blocks,
 		})
 	}
 
@@ -1502,14 +1510,6 @@ where
 			swap_retry_delay_blocks: runtime_api
 				.cf_swap_retry_delay_blocks(hash)
 				.map_err(to_rpc_error)?,
-			max_swap_retry_duration_blocks: ForeignChain::iter()
-				.map(|chain| {
-					runtime_api
-						.cf_max_swap_retry_duration_blocks(hash, chain)
-						.map(|duration| (chain, duration))
-						.map_err(to_rpc_error)
-				})
-				.collect::<Result<HashMap<_, _>, _>>()?,
 		})
 	}
 
@@ -1950,6 +1950,7 @@ mod test {
 					(Asset::ArbEth, 0),
 					(Asset::ArbUsdc, 0),
 					(Asset::Sol, 0),
+					(Asset::SolUsdc, 0),
 				]
 			}
 		))
@@ -1986,6 +1987,7 @@ mod test {
 					(Asset::ArbEth, 1),
 					(Asset::ArbUsdc, 2),
 					(Asset::Sol, 3),
+					(Asset::SolUsdc, 4),
 				],
 				earned_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1997,7 +1999,7 @@ mod test {
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 1u32.into(), usdc: 2u32.into() },
-					sol: sol::AssetMap { sol: 2u32.into() },
+					sol: sol::AssetMap { sol: 2u32.into(), usdc: 4u32.into() },
 				},
 				boost_balances: any::AssetMap {
 					btc: btc::AssetMap {
@@ -2057,17 +2059,10 @@ mod test {
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: None },
 					arb: arb::AssetMap { eth: None, usdc: Some(0u32.into()) },
-					sol: sol::AssetMap { sol: None },
+					sol: sol::AssetMap { sol: None, usdc: None },
 				},
 				network_fee_hundredth_pips: Permill::from_percent(100),
 				swap_retry_delay_blocks: 5,
-				max_swap_retry_duration_blocks: HashMap::from([
-					(ForeignChain::Bitcoin, 600),
-					(ForeignChain::Ethereum, 600),
-					(ForeignChain::Polkadot, 600),
-					(ForeignChain::Arbitrum, 600),
-					(ForeignChain::Solana, 600),
-				]),
 			},
 			ingress_egress: IngressEgressEnvironment {
 				minimum_deposit_amounts: any::AssetMap {
@@ -2080,7 +2075,7 @@ mod test {
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
-					sol: sol::AssetMap { sol: 0u32.into() },
+					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 				},
 				ingress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -2092,7 +2087,7 @@ mod test {
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
-					sol: sol::AssetMap { sol: Some(0u32.into()) },
+					sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None },
 				},
 				egress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -2104,7 +2099,7 @@ mod test {
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
-					sol: sol::AssetMap { sol: Some(1u32.into()) },
+					sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None },
 				},
 				witness_safety_margins: HashMap::from([
 					(ForeignChain::Bitcoin, Some(3u64)),
@@ -2123,7 +2118,7 @@ mod test {
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
-					sol: sol::AssetMap { sol: 0u32.into() },
+					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 				},
 				channel_opening_fees: HashMap::from([
 					(ForeignChain::Bitcoin, 0u32.into()),
@@ -2131,6 +2126,13 @@ mod test {
 					(ForeignChain::Polkadot, 1000u32.into()),
 					(ForeignChain::Arbitrum, 1000u32.into()),
 					(ForeignChain::Solana, 1000u32.into()),
+				]),
+				max_swap_retry_duration_blocks: HashMap::from([
+					(ForeignChain::Bitcoin, 600),
+					(ForeignChain::Ethereum, 600),
+					(ForeignChain::Polkadot, 600),
+					(ForeignChain::Arbitrum, 600),
+					(ForeignChain::Solana, 600),
 				]),
 			},
 			funding: FundingEnvironment {
@@ -2158,7 +2160,7 @@ mod test {
 						btc: btc::AssetMap { btc: Some(pool_info) },
 						dot: dot::AssetMap { dot: Some(pool_info) },
 						arb: arb::AssetMap { eth: Some(pool_info), usdc: Some(pool_info) },
-						sol: sol::AssetMap { sol: Some(pool_info) },
+						sol: sol::AssetMap { sol: Some(pool_info), usdc: None },
 					},
 				}
 			},

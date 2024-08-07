@@ -16,7 +16,8 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	SolanaIngressEgress, System, Validator, YEAR,
+	SolanaBroadcaster, SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner, System,
+	Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -44,7 +45,13 @@ use cf_chains::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
-	sol::{api::SolanaApi, SolanaCrypto},
+	sol::{
+		api::{
+			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
+			DurableNonceAndAccount, RecoverDurableNonce, SolanaApi, SolanaEnvironment,
+		},
+		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto,
+	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
@@ -56,8 +63,9 @@ use cf_primitives::{
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	EpochInfo, Heartbeat, IngressEgressFeeApi, Issuance, KeyProvider, OnBroadcastReady, OnDeposit,
-	QualifyNode, RewardsDistribution, RuntimeUpgrade, ScheduledEgressDetails,
+	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
+	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	ScheduledEgressDetails,
 };
 
 use codec::{Decode, Encode};
@@ -316,22 +324,35 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 pub struct SolanaTransactionBuilder;
 impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransactionBuilder {
 	fn build_transaction(
-		_signed_call: &SolanaApi<SolEnvironment>,
+		signed_call: &SolanaApi<SolEnvironment>,
 	) -> <Solana as Chain>::Transaction {
-		todo!()
+		signed_call.transaction.clone()
 	}
+
 	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
-		todo!()
+		// It would only make sense to refresh the priority fee here but that would require
+		// resigning. To not have two valid transactions we'd need to resign with the same
+		// already used nonce which is unnecessarily cumbersome and not worth it. Having too
+		// low fees might delay its inclusion but the transaction will remain valid.
 	}
+
 	fn calculate_gas_limit(_call: &SolanaApi<SolEnvironment>) -> Option<U256> {
-		todo!()
+		// In non-CCM broadcasts the gas_limit will be adequately set in the transaction
+		// builder. In CCM broadcasts the gas_limit be set in the instruction builder.
+		None
 	}
+
 	fn requires_signature_refresh(
 		_call: &SolanaApi<SolEnvironment>,
 		_payload: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		_maybe_current_onchain_key: Option<<SolanaCrypto as ChainCrypto>::AggKey>,
 	) -> bool {
-		todo!()
+		// We use Durable Nonce mechanism to avoid the 150 blocks expiry period and so
+		// transactions won't expire. Then, the only reason to resign would be if the
+		// payload has been updated or the aggKey has been updated (key rotation).
+		// The payload won't be refreshed, as explained above, and the the broadcast
+		// barrier prevents a transaction from requiring to be resigned by a new aggKey.
+		false
 	}
 }
 
@@ -490,6 +511,51 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct SolEnvironment;
 
+impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for SolEnvironment {
+	fn lookup(_s: ApiEnvironment) -> Option<SolApiEnvironment> {
+		Some(Environment::solana_api_environment())
+	}
+}
+
+impl ChainEnvironment<CurrentAggKey, SolAddress> for SolEnvironment {
+	fn lookup(_s: CurrentAggKey) -> Option<SolAddress> {
+		let epoch = SolanaThresholdSigner::current_key_epoch()?;
+		SolanaThresholdSigner::keys(epoch)
+	}
+}
+
+impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
+	fn lookup(_s: ComputePrice) -> Option<u64> {
+		SolanaChainTracking::chain_state()
+			.map(|chain_state: ChainState<Solana>| chain_state.tracked_data.priority_fee)
+	}
+}
+
+impl ChainEnvironment<DurableNonce, DurableNonceAndAccount> for SolEnvironment {
+	fn lookup(_s: DurableNonce) -> Option<DurableNonceAndAccount> {
+		Environment::get_sol_nonce_and_account()
+	}
+}
+
+impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for SolEnvironment {
+	fn lookup(_s: AllNonceAccounts) -> Option<Vec<DurableNonceAndAccount>> {
+		let nonce_accounts = Environment::get_all_sol_nonce_accounts();
+		if nonce_accounts.is_empty() {
+			None
+		} else {
+			Some(nonce_accounts)
+		}
+	}
+}
+
+impl RecoverDurableNonce for SolEnvironment {
+	fn recover_durable_nonce(nonce_account: SolAddress) {
+		Environment::recover_sol_durable_nonce(nonce_account)
+	}
+}
+
+impl SolanaEnvironment for SolEnvironment {}
+
 pub struct TokenholderGovernanceBroadcaster;
 
 impl TokenholderGovernanceBroadcaster {
@@ -530,7 +596,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(()),
 			ForeignChain::Arbitrum => Err(()),
-			ForeignChain::Solana => todo!(),
+			ForeignChain::Solana =>
+				Self::broadcast_gov_key::<Solana, SolanaBroadcaster>(maybe_old_key, new_key),
 		}
 	}
 
@@ -542,7 +609,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
 			ForeignChain::Arbitrum => false,
-			ForeignChain::Solana => todo!(),
+			ForeignChain::Solana =>
+				Self::is_govkey_compatible::<<Solana as Chain>::ChainCrypto>(key),
 		}
 	}
 }
@@ -817,3 +885,22 @@ impl_ingress_egress_fee_api_for_anychain!(
 	(Arbitrum, ArbitrumIngressEgress),
 	(Solana, SolanaIngressEgress)
 );
+
+pub struct SolanaLimit;
+impl FetchesTransfersLimitProvider for SolanaLimit {
+	fn maybe_transfers_limit() -> Option<usize> {
+		// we need to leave one nonce for the fetch tx and one nonce reserved for rotation tx since
+		// rotation tx can fail to build if all nonce accounts are occupied
+		Some(Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(2))
+	}
+
+	fn maybe_fetches_limit() -> Option<usize> {
+		// only fetch if we have more than once nonce account available since one nonce nonce is
+		// reserved for rotations. See above
+		Some(if Environment::get_number_of_available_sol_nonce_accounts() > 1 {
+			cf_chains::sol::MAX_SOL_FETCHES_PER_TX
+		} else {
+			0
+		})
+	}
+}

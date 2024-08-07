@@ -1,9 +1,9 @@
-use super::sol_tx_building_blocks::{Instruction, Pubkey, COMPUTE_BUDGET_PROGRAM};
+use super::Instruction;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::vec;
-use core::str::FromStr;
+use sol_prim::consts::COMPUTE_BUDGET_PROGRAM;
 
 /// Compute Budget Instructions
 #[derive(BorshDeserialize, BorshSerialize, Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -27,7 +27,7 @@ impl ComputeBudgetInstruction {
 	/// Create a `ComputeBudgetInstruction::RequestHeapFrame` `Instruction`
 	pub fn request_heap_frame(bytes: u32) -> Instruction {
 		Instruction::new_with_borsh(
-			Pubkey::from_str(COMPUTE_BUDGET_PROGRAM).unwrap(),
+			COMPUTE_BUDGET_PROGRAM.into(),
 			&Self::RequestHeapFrame(bytes),
 			vec![],
 		)
@@ -36,7 +36,7 @@ impl ComputeBudgetInstruction {
 	/// Create a `ComputeBudgetInstruction::SetComputeUnitLimit` `Instruction`
 	pub fn set_compute_unit_limit(units: u32) -> Instruction {
 		Instruction::new_with_borsh(
-			Pubkey::from_str(COMPUTE_BUDGET_PROGRAM).unwrap(),
+			COMPUTE_BUDGET_PROGRAM.into(),
 			&Self::SetComputeUnitLimit(units),
 			vec![],
 		)
@@ -45,7 +45,7 @@ impl ComputeBudgetInstruction {
 	/// Create a `ComputeBudgetInstruction::SetComputeUnitPrice` `Instruction`
 	pub fn set_compute_unit_price(micro_lamports: u64) -> Instruction {
 		Instruction::new_with_borsh(
-			Pubkey::from_str(COMPUTE_BUDGET_PROGRAM).unwrap(),
+			COMPUTE_BUDGET_PROGRAM.into(),
 			&Self::SetComputeUnitPrice(micro_lamports),
 			vec![],
 		)
@@ -54,7 +54,7 @@ impl ComputeBudgetInstruction {
 	/// Create a `ComputeBudgetInstruction::SetLoadedAccountsDataSizeLimit` `Instruction`
 	pub fn set_loaded_accounts_data_size_limit(bytes: u32) -> Instruction {
 		Instruction::new_with_borsh(
-			Pubkey::from_str(COMPUTE_BUDGET_PROGRAM).unwrap(),
+			COMPUTE_BUDGET_PROGRAM.into(),
 			&Self::SetLoadedAccountsDataSizeLimit(bytes),
 			vec![],
 		)

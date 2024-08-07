@@ -114,7 +114,10 @@ export function assetFromStateChainAsset(
     return (stateChainAsset.charAt(0) + stateChainAsset.slice(1).toLowerCase()) as Asset;
   }
 
-  return getInternalAsset(stateChainAsset);
+  return getInternalAsset({
+    asset: stateChainAsset.asset as RpcAsset,
+    chain: stateChainAsset.chain as Chain,
+  });
 }
 
 async function playLp(asset: Asset, price: number, liquidity: number) {

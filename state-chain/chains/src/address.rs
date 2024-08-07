@@ -24,6 +24,7 @@ pub enum AddressDerivationError {
 	MissingPolkadotVault,
 	MissingBitcoinVault,
 	BitcoinChannelIdTooLarge,
+	MissingSolanaApiEnvironment,
 	SolanaDerivationError(sol::AddressDerivationError),
 }
 
@@ -79,6 +80,21 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Sol(_) => ForeignChain::Solana,
 		}
 	}
+	pub fn to_source_address(self) -> Vec<u8> {
+		match self {
+			ForeignChainAddress::Eth(source_address) => source_address.0.to_vec(),
+			ForeignChainAddress::Arb(source_address) => source_address.0.to_vec(),
+			ForeignChainAddress::Sol(source_address) => source_address.0.to_vec(),
+			ForeignChainAddress::Dot(source_address) => source_address.aliased_ref().to_vec(),
+			ForeignChainAddress::Btc(_) => {
+				cf_runtime_utilities::log_or_panic!(
+					"Bitcoin should not be used as a source address as the encoding depends on the
+				network",
+				);
+				sp_std::vec::Vec::new()
+			},
+		}
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
@@ -87,7 +103,7 @@ pub enum EncodedAddress {
 	Dot([u8; 32]),
 	Btc(Vec<u8>),
 	Arb([u8; 20]),
-	Sol([u8; crate::sol::consts::SOLANA_ADDRESS_SIZE]),
+	Sol([u8; sol_prim::consts::SOLANA_ADDRESS_LEN]),
 }
 
 pub trait AddressConverter: Sized {

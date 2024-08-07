@@ -6,6 +6,7 @@
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
+	ccm_checker::CcmValidityCheck,
 	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters, SwapOrigin,
 	SwapRefundParameters,
 };
@@ -371,6 +372,9 @@ pub mod pallet {
 
 		type IngressEgressFeeHandler: IngressEgressFeeApi<AnyChain>;
 
+		/// For checking if the CCM message passed in is valid.
+		type CcmValidityChecker: CcmValidityCheck;
+
 		#[pallet::constant]
 		type NetworkFee: Get<Permill>;
 	}
@@ -575,6 +579,8 @@ pub mod pallet {
 		BrokerCommissionBpsTooHigh,
 		/// Brokers should withdraw their earned fees before deregistering.
 		EarnedFeesNotWithdrawn,
+		/// Failed to open deposit channel because the CCM message is invalid.
+		InvalidCcm,
 		/// Setting the buy interval to zero is not allowed.
 		ZeroBuyIntervalNotAllowed,
 		/// Setting the swap retry delay to zero is not allowed.
@@ -858,6 +864,20 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
+			// Check for the CCM's validity.
+			let _ = T::CcmValidityChecker::check_and_decode(
+				&deposit_metadata.channel_metadata,
+				destination_asset,
+			)
+			.map_err(|e| {
+				log::warn!(
+					"Failed to process CCM due to invalid data. Tx hash: {:?}, Error: {:?}",
+					tx_hash,
+					e
+				);
+				Error::<T>::InvalidCcm
+			})?;
+
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
@@ -1004,9 +1024,20 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			if channel_metadata.is_some() {
+			if let Some(ccm) = channel_metadata.as_ref() {
 				let destination_chain: ForeignChain = destination_asset.into();
 				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
+
+				let _ = T::CcmValidityChecker::check_and_decode(ccm, destination_asset).map_err(
+					|e| {
+						log::warn!(
+							"Failed to open channel due to invalid CCM. Broker: {:?}, Error: {:?}",
+							broker,
+							e
+						);
+						Error::<T>::InvalidCcm
+					},
+				)?;
 			}
 
 			let (channel_id, deposit_address, expiry_height, channel_opening_fee) =
@@ -2101,6 +2132,7 @@ pub(crate) mod utilities {
 			Asset::Usdc => Some(USD_ESTIMATION_CAP),
 			Asset::Usdt => Some(USD_ESTIMATION_CAP),
 			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
+			Asset::SolUsdc => Some(USD_ESTIMATION_CAP),
 			_ => None,
 		}
 	}

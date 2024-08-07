@@ -538,7 +538,10 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 		ForeignChain::Arbitrum => EncodedAddress::Arb(clean_hex_address(address)?),
-		ForeignChain::Solana => EncodedAddress::Sol(SolAddress::from_str(address)?.into()),
+		ForeignChain::Solana => match SolAddress::from_str(address) {
+			Ok(sol_address) => EncodedAddress::Sol(sol_address.into()),
+			Err(_) => EncodedAddress::Sol(clean_hex_address(address)?),
+		},
 	})
 }
 
@@ -725,6 +728,22 @@ mod tests {
 				.unwrap_err()
 				.to_string(),
 				anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
+			);
+		}
+
+		#[test]
+		fn test_sol_address_decoding() {
+			assert_eq!(
+				clean_foreign_chain_address(
+					ForeignChain::Solana,
+					"HGgUaHpsmZpB3pcYt8PE89imca6BQBRqYtbVQQqsso3o"
+				)
+				.unwrap(),
+				clean_foreign_chain_address(
+					ForeignChain::Solana,
+					"0xf1bf5683e0bfb6fffacb2d8d3641faa0008b65cc296c26ec80aee5a71ddf294a"
+				)
+				.unwrap(),
 			);
 		}
 	}

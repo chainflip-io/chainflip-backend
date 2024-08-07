@@ -3,7 +3,9 @@ use super::{get_account_id_from_seed, StateChainEnvironment};
 use cf_chains::{dot::RuntimeVersion, sol::SolAddress};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
 use sc_service::ChainType;
+use sol_prim::consts::{const_address, const_hash};
 use sp_core::{sr25519, H256};
+use utilities::bs58_array;
 
 pub struct Config;
 
@@ -44,7 +46,62 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 10000, transaction_version: 25 },
-	sol_vault_address: SolAddress([0; 32]), // TODO: fill in the valid Solana address,
+	sol_genesis_hash: None,
+	sol_vault_program: SolAddress(bs58_array("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf")),
+	sol_vault_program_data_account: SolAddress(bs58_array(
+		"wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc",
+	)),
+	sol_usdc_token_mint_pubkey: SolAddress(bs58_array(
+		"24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p",
+	)),
+	sol_token_vault_pda_account: SolAddress(bs58_array(
+		"CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d",
+	)),
+	sol_usdc_token_vault_ata: SolAddress(bs58_array(
+		"GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd",
+	)),
+	sol_durable_nonces_and_accounts: [
+		(
+			const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
+			const_hash("BcuQnUuMLi7dDGTcW13fPmkf26gZp6cmMycwuzXAPUWq"),
+		),
+		(
+			const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
+			const_hash("CCFc5QptF1HogqCZHCD1HaEzZRunGJvpqJJEnELsoqrH"),
+		),
+		(
+			const_address("HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p"),
+			const_hash("CjPEYgDoX2PD5sQKg9pJyBzVFPEy6BYHCZtYpE7LKEPu"),
+		),
+		(
+			const_address("HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2"),
+			const_hash("HKx2FNX7rsfzat1Nsr83Xq82LZSBnEB3LyzBmEtFGpAy"),
+		),
+		(
+			const_address("GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM"),
+			const_hash("92ijUn6xBxFExuazPhspSSzhZXjQqbXmYre4ztNGWLJ9"),
+		),
+		(
+			const_address("EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn"),
+			const_hash("BiHQhh7xY1ZFuEuC2vj9rFsZSXvhWA6FcdNDfBsfENbh"),
+		),
+		(
+			const_address("9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa"),
+			const_hash("AtxE1WFQGV1hbxmNmAcN7azMRLjaEyp6wk8Y62swxQEz"),
+		),
+		(
+			const_address("J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna"),
+			const_hash("Ub9SGgi88Pyrd2ZPRLj6QzsMDf4VCM4U2EBz37f3QWP"),
+		),
+		(
+			const_address("GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55"),
+			const_hash("HgZQKdVeArjJmetoAw4SpYKyzKJh3txaqb7VQe4kJ7tV"),
+		),
+		(
+			const_address("AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv"),
+			const_hash("ZW7wrDEXQe94VrsoG5A6b5iQMEdUPGkc16Vk5rt7pgR"),
+		),
+	],
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
