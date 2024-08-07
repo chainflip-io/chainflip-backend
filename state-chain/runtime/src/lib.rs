@@ -1153,12 +1153,12 @@ type PalletMigrations = (
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, ArbitrumInstance>,
-	// pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, SolanaInstance>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, ArbitrumInstance>,
-	// pallet_cf_vaults::migrations::PalletMigration<Runtime, SolanaInstance>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -1177,14 +1177,14 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
-	// TODO: After this migration is run, remember to un-comment the
-	// Solana-specific pallet migrations.
+	// TODO: Delete these after 1.5 is released
 	VersionedMigration<
 		pallet_cf_environment::Pallet<Runtime>,
 		migrations::solana_integration::SolanaIntegration,
 		10,
 		11,
 	>,
+	migrations::solana_integration::SolanaChainState,
 	MigrateApicalls,
 );
 
@@ -1223,8 +1223,6 @@ type MigrateApicalls = (
 	>,
 );
 
-// TODO: After this  release, remember to un-comment the
-// Arbitrum-specific pallet migrations.
 type MigrationsForV1_5 =
 	(migrations::housekeeping::Migration, migrations::reap_old_accounts::Migration);
 
