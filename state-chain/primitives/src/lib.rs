@@ -345,7 +345,7 @@ pub struct Beneficiary<Id> {
 }
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct DCAParameters {
+pub struct DcaParameters {
 	/// The number of individual swaps to be executed
 	pub number_of_chunks: u32,
 	/// The interval in blocks between each swap.

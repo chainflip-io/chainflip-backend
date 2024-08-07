@@ -1,6 +1,6 @@
 use crate::{swapping::SwapRequestType, EgressApi, SwapRequestHandler};
 use cf_chains::{Chain, ChannelRefundParameters, SwapOrigin};
-use cf_primitives::{Asset, AssetAmount, Beneficiaries, DCAParameters, SwapRequestId};
+use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
@@ -45,7 +45,7 @@ where
 		swap_type: SwapRequestType,
 		_broker_fees: Beneficiaries<Self::AccountId>,
 		_refund_params: Option<ChannelRefundParameters>,
-		_dca_params: Option<DCAParameters>,
+		_dca_params: Option<DcaParameters>,
 		_origin: SwapOrigin,
 	) -> Result<SwapRequestId, DispatchError> {
 		Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<Vec<MockSwapRequest>>| {

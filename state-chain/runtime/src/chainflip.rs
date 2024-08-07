@@ -51,7 +51,7 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DCAParameters,
+	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
@@ -588,7 +588,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints,
 				refund_parameters: Option<ChannelRefundParameters>,
-				dca_parameters: Option<DCAParameters>,
+				dca_parameters: Option<DcaParameters>,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
 					$(

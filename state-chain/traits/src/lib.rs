@@ -24,7 +24,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BroadcastId,
-	ChannelId, DCAParameters, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance,
+	ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance,
 	ForeignChain, Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -722,7 +722,7 @@ pub trait DepositApi<C: Chain> {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
 		refund_params: Option<ChannelRefundParameters>,
-		dca_params: Option<DCAParameters>,
+		dca_params: Option<DcaParameters>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
 

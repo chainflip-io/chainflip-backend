@@ -1,8 +1,7 @@
 use super::*;
 
 const INPUT_AMOUNT: AssetAmount = 40_000;
-const INITIAL_BLOCK: u64 = 1;
-const SWAP_INTERVAL: u32 = 2;
+const CHUNK_INTERVAL: u32 = 2;
 const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 const NET_AMOUNT: AssetAmount = INPUT_AMOUNT - BROKER_FEE;
 
@@ -10,7 +9,7 @@ const INPUT_ASSET: Asset = Asset::Usdc;
 const OUTPUT_ASSET: Asset = Asset::Eth;
 
 fn params(
-	dca_params: Option<DCAParameters>,
+	dca_params: Option<DcaParameters>,
 	refund_params: Option<SwapRefundParameters>,
 	is_ccm: bool,
 ) -> TestSwapParams {
@@ -28,7 +27,7 @@ fn params(
 #[test]
 fn dca_happy_path() {
 	const CHUNK_1_BLOCK: u64 = 3;
-	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_INTERVAL as u64;
+	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
 
 	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / 2;
 
@@ -37,10 +36,10 @@ fn dca_happy_path() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INITIAL_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			insert_swaps(&[params(
-				Some(DCAParameters { number_of_chunks: 2, chunk_interval: SWAP_INTERVAL }),
+				Some(DcaParameters { number_of_chunks: 2, chunk_interval: CHUNK_INTERVAL }),
 				None,
 				false,
 			)]);
@@ -122,10 +121,10 @@ fn dca_single_chunk() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INITIAL_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			insert_swaps(&[params(
-				Some(DCAParameters { number_of_chunks: 1, chunk_interval: SWAP_INTERVAL }),
+				Some(DcaParameters { number_of_chunks: 1, chunk_interval: CHUNK_INTERVAL }),
 				None,
 				false,
 			)]);
@@ -186,12 +185,12 @@ fn dca_with_fok_full_refund() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INITIAL_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			insert_swaps(&[params(
-				Some(DCAParameters {
+				Some(DcaParameters {
 					number_of_chunks: NUMBER_OF_CHUNKS,
-					chunk_interval: SWAP_INTERVAL,
+					chunk_interval: CHUNK_INTERVAL,
 				}),
 				Some(SwapRefundParameters {
 					refund_block: REFUND_BLOCK as u32,
@@ -255,11 +254,11 @@ fn dca_with_fok_full_refund() {
 #[test]
 fn dca_with_fok_partial_refund() {
 	const CHUNK_1_BLOCK: u64 = 3;
-	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_INTERVAL as u64;
+	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
 	const NUMBER_OF_CHUNKS: u32 = 4;
 	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
 
-	// The test will be stet up as to execute one chunk only and refund the rest
+	// The test will be set up as to execute one chunk only and refund the rest
 	const REFUNDED_AMOUNT: AssetAmount = NET_AMOUNT - CHUNK_AMOUNT;
 
 	// Allow for one retry for good measure:
@@ -267,12 +266,12 @@ fn dca_with_fok_partial_refund() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INITIAL_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			insert_swaps(&[params(
-				Some(DCAParameters {
+				Some(DcaParameters {
 					number_of_chunks: NUMBER_OF_CHUNKS,
-					chunk_interval: SWAP_INTERVAL,
+					chunk_interval: CHUNK_INTERVAL,
 				}),
 				Some(SwapRefundParameters {
 					refund_block: REFUND_BLOCK as u32,
@@ -332,7 +331,8 @@ fn dca_with_fok_partial_refund() {
 		})
 		.then_execute_with(|_| {
 			// Swap should fail after the first retry and result in a
-			// refund of the full input amount (rather than that of a chunk)
+			// refund of the remaining amount and egress of the already
+			// executed amount.
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
 			assert_event_sequence!(
@@ -360,18 +360,18 @@ fn dca_with_fok_partial_refund() {
 fn dca_with_fok_fully_executed() {
 	const CHUNK_1_BLOCK: u64 = 3;
 	const CHUNK_1_RETRY_BLOCK: u64 = CHUNK_1_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
-	const CHUNK_2_BLOCK: u64 = CHUNK_1_RETRY_BLOCK + SWAP_INTERVAL as u64;
+	const CHUNK_2_BLOCK: u64 = CHUNK_1_RETRY_BLOCK + CHUNK_INTERVAL as u64;
 	const NUMBER_OF_CHUNKS: u32 = 2;
 	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INITIAL_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			insert_swaps(&[params(
-				Some(DCAParameters {
+				Some(DcaParameters {
 					number_of_chunks: NUMBER_OF_CHUNKS,
-					chunk_interval: SWAP_INTERVAL,
+					chunk_interval: CHUNK_INTERVAL,
 				}),
 				Some(SwapRefundParameters {
 					refund_block: CHUNK_2_BLOCK as u32,
@@ -469,7 +469,7 @@ fn dca_with_fok_fully_executed() {
 #[test]
 fn dca_with_ccm_happy_path() {
 	const CHUNK_1_BLOCK: u64 = 3;
-	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_INTERVAL as u64;
+	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
 
 	const PRINCIPAL_AMOUNT: AssetAmount = NET_AMOUNT - GAS_BUDGET;
 
@@ -477,10 +477,10 @@ fn dca_with_ccm_happy_path() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INITIAL_BLOCK);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 
 			insert_swaps(&[params(
-				Some(DCAParameters { number_of_chunks: 2, chunk_interval: SWAP_INTERVAL }),
+				Some(DcaParameters { number_of_chunks: 2, chunk_interval: CHUNK_INTERVAL }),
 				None,
 				true,
 			)]);

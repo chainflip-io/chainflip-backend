@@ -10,7 +10,7 @@ use cf_chains::{
 	CcmChannelMetadata, ChannelRefundParameters, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{BlockNumber, DCAParameters, NetworkEnvironment, Price};
+use cf_primitives::{BlockNumber, DcaParameters, NetworkEnvironment, Price};
 use futures::FutureExt;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
@@ -392,7 +392,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Affiliates<AccountId32>,
 		refund_parameters: Option<RefundParameters>,
-		dca_parameters: Option<DCAParameters>,
+		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
 		let destination_address =
 			destination_address.try_parse_to_encoded_address(destination_asset.into())?;

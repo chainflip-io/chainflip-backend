@@ -33,6 +33,12 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 	const SWAPS_ADDED_BLOCK: u64 = 1;
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
 
+	const REGULAR_SWAP_ID: u64 = 1;
+	const FOK_SWAP_ID: u64 = 2;
+
+	const REGULAR_REQUEST_ID: u64 = 1;
+	const FOK_REQUEST_ID: u64 = 2;
+
 	new_test_ext()
 		.execute_with(|| {
 			assert_eq!(System::block_number(), SWAPS_ADDED_BLOCK);
@@ -42,18 +48,31 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 				new_swap(Some(params(SWAPS_SCHEDULED_FOR_BLOCK as u32, INPUT_AMOUNT))),
 			]);
 
-			assert_swaps_scheduled_for_block(&[1, 2], SWAPS_SCHEDULED_FOR_BLOCK);
+			assert_swaps_scheduled_for_block(
+				&[REGULAR_SWAP_ID, FOK_SWAP_ID],
+				SWAPS_SCHEDULED_FOR_BLOCK,
+			);
 		})
 		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {})
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 1, .. }),
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 2 }),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: REGULAR_SWAP_ID, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: REGULAR_REQUEST_ID
+				}),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: REGULAR_REQUEST_ID,
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: FOK_SWAP_ID, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: FOK_REQUEST_ID
+				}),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: FOK_REQUEST_ID,
+					..
+				}),
 			);
 		});
 }
@@ -66,6 +85,10 @@ fn price_limit_is_respected_in_fok_swap() {
 
 	const HIGH_MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * 2;
 
+	const REGULAR_SWAP_ID: u64 = 1;
+	const FOK_SWAP_1_ID: u64 = 2;
+	const FOK_SWAP_2_ID: u64 = 3;
+
 	new_test_ext()
 		.execute_with(|| {
 			assert_eq!(System::block_number(), SWAPS_ADDED_BLOCK);
@@ -76,7 +99,10 @@ fn price_limit_is_respected_in_fok_swap() {
 				new_swap(Some(params(SWAP_RETRIED_AT_BLOCK as u32, INPUT_AMOUNT))),
 			]);
 
-			assert_swaps_scheduled_for_block(&[1, 2, 3], SWAPS_SCHEDULED_FOR_BLOCK);
+			assert_swaps_scheduled_for_block(
+				&[REGULAR_SWAP_ID, FOK_SWAP_1_ID, FOK_SWAP_2_ID],
+				SWAPS_SCHEDULED_FOR_BLOCK,
+			);
 		})
 		.then_execute_at_block(3u64, |_| {})
 		.then_execute_with(|_| {
@@ -87,13 +113,13 @@ fn price_limit_is_respected_in_fok_swap() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
-					swap_id: 2,
+					swap_id: FOK_SWAP_1_ID,
 					execute_at: SWAP_RETRIED_AT_BLOCK
 				}),
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: REGULAR_SWAP_ID, .. }),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 1, .. }),
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: FOK_SWAP_2_ID, .. }),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 3 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 3, .. }),
 			);
@@ -107,7 +133,7 @@ fn price_limit_is_respected_in_fok_swap() {
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: FOK_SWAP_1_ID, .. }),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 2 }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 2, .. }),
 			);
@@ -140,7 +166,10 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 			// However, swap 2 is non-FoK and should still be executed:
 			insert_swaps(&[new_swap(None)]);
 
-			assert_swaps_scheduled_for_block(&[1, 2], SWAPS_SCHEDULED_FOR_BLOCK);
+			assert_swaps_scheduled_for_block(
+				&[FOK_SWAP_ID, OTHER_SWAP_ID],
+				SWAPS_SCHEDULED_FOR_BLOCK,
+			);
 		})
 		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {})
 		.then_execute_with(|_| {
@@ -190,6 +219,9 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 	// The swap will be refunded after the first retry:
 	const SWAP_REFUND_AT_BLOCK: u32 = SWAP_RETRIED_AT_BLOCK as u32;
 
+	const FOK_SWAP_ID: u64 = 1;
+	const REGULAR_SWAP_ID: u64 = 2;
+
 	new_test_ext()
 		.execute_with(|| {
 			assert_eq!(System::block_number(), SWAPS_ADDED_BLOCK);
@@ -199,7 +231,10 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 			// Non-FoK swap 2 will fail together with swap 1, but should be retried indefinitely
 			insert_swaps(&[new_swap(None)]);
 
-			assert_swaps_scheduled_for_block(&[1, 2], SWAPS_SCHEDULED_FOR_BLOCK);
+			assert_swaps_scheduled_for_block(
+				&[FOK_SWAP_ID, REGULAR_SWAP_ID],
+				SWAPS_SCHEDULED_FOR_BLOCK,
+			);
 		})
 		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {
 			// This simulates not having enough liquidity/triggering price impact protection
@@ -211,11 +246,11 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
-					swap_id: 1,
+					swap_id: FOK_SWAP_ID,
 					execute_at: SWAP_RETRIED_AT_BLOCK,
 				}),
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
-					swap_id: 2,
+					swap_id: REGULAR_SWAP_ID,
 					execute_at: SWAP_RETRIED_AT_BLOCK,
 				})
 			);
@@ -237,7 +272,7 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 					..
 				}),
 				// Non-fok swap will continue to be retried:
-				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: REGULAR_SWAP_ID, .. }),
 			);
 		});
 }

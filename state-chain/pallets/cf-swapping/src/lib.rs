@@ -252,14 +252,14 @@ enum GasSwapState {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-struct DCAState {
+struct DcaState {
 	scheduled_chunk_swap_id: Option<SwapId>,
 	remaining_input_amount: AssetAmount,
 	remaining_chunks: u32,
 	accumulated_output_amount: AssetAmount,
 }
 
-impl DCAState {
+impl DcaState {
 	fn prepare_next_chunk(&mut self) -> AssetAmount {
 		let chunk_input_amount = self
 			.remaining_input_amount
@@ -278,11 +278,11 @@ enum SwapRequestState {
 		gas_swap_state: GasSwapState,
 		ccm_deposit_metadata: CcmDepositMetadata,
 		output_address: ForeignChainAddress,
-		dca_state: DCAState,
+		dca_state: DcaState,
 	},
 	Regular {
 		output_address: ForeignChainAddress,
-		dca_state: DCAState,
+		dca_state: DcaState,
 	},
 	NetworkFee,
 	IngressEgressFee,
@@ -326,7 +326,7 @@ pub mod pallet {
 	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{
-		Asset, AssetAmount, BasisPoints, DCAParameters, EgressId, SwapId, SwapOutput, SwapRequestId,
+		Asset, AssetAmount, BasisPoints, DcaParameters, EgressId, SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, ScheduledEgressDetails};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -460,7 +460,7 @@ pub mod pallet {
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
 			refund_parameters: Option<ChannelRefundParameters>,
-			dca_parameters: Option<DCAParameters>,
+			dca_parameters: Option<DcaParameters>,
 		},
 		/// A swap is scheduled for the first time
 		SwapScheduled {
@@ -976,7 +976,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
 			refund_parameters: Option<ChannelRefundParameters>,
-			dca_parameters: Option<DCAParameters>,
+			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			let (beneficiaries, total_bps) = {
@@ -1220,16 +1220,16 @@ pub mod pallet {
 				return;
 			};
 
-			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
-
 			let Some(refund_params) = request.refund_params else {
 				log_or_panic!("Trying to refund swap request {swap_request_id}, but missing refund parameters");
 				return;
 			};
 
+			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
+
 			match request.state {
 				SwapRequestState::Regular {
-					dca_state: DCAState { remaining_input_amount, accumulated_output_amount, .. },
+					dca_state: DcaState { remaining_input_amount, accumulated_output_amount, .. },
 					output_address,
 				} => {
 					// Refund the failed swap and any unused input amount:
@@ -1660,13 +1660,13 @@ pub mod pallet {
 			asset: Asset,
 			address: ForeignChainAddress,
 			ccm_gas_and_metadata: Option<(CcmDepositMetadata, AssetAmount)>,
-			refund: bool,
+			is_refund: bool,
 		) {
 			let is_ccm_swap = ccm_gas_and_metadata.is_some();
 
 			match T::EgressHandler::schedule_egress(asset, amount, address, ccm_gas_and_metadata) {
 				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
-					if refund {
+					if is_refund {
 						Self::deposit_event(Event::<T>::RefundEgressScheduled {
 							swap_request_id,
 							egress_id,
@@ -1688,7 +1688,7 @@ pub mod pallet {
 						log_or_panic!("CCM egress scheduling should never fail.");
 					}
 
-					if refund {
+					if is_refund {
 						Self::deposit_event(Event::<T>::RefundEgressIgnored {
 							swap_request_id,
 							asset,
@@ -1718,7 +1718,7 @@ pub mod pallet {
 			request_type: SwapRequestType,
 			broker_fees: Beneficiaries<Self::AccountId>,
 			refund_params: Option<ChannelRefundParameters>,
-			dca_params: Option<DCAParameters>,
+			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin,
 		) -> Result<SwapRequestId, DispatchError> {
 			let (net_amount, broker_fee) = {
@@ -1846,7 +1846,7 @@ pub mod pallet {
 					);
 				},
 				SwapRequestType::Regular { output_address } => {
-					let mut dca_state = DCAState {
+					let mut dca_state = DcaState {
 						scheduled_chunk_swap_id: None,
 						remaining_input_amount: net_amount,
 						// No DCA is equivalent to DCA with 1 chunk
@@ -1926,7 +1926,7 @@ pub mod pallet {
 
 					// See if principal swap is needed, schedule it first if so:
 					if input_asset != output_asset && !principal_swap_amount.is_zero() {
-						let mut dca_state = DCAState {
+						let mut dca_state = DcaState {
 							scheduled_chunk_swap_id: None,
 							remaining_input_amount: principal_swap_amount,
 							// No DCA is equivalent to DCA with 1 chunk
@@ -1995,7 +1995,7 @@ pub mod pallet {
 									gas_swap_state,
 									ccm_deposit_metadata: ccm_deposit_metadata.clone(),
 									output_address,
-									dca_state: DCAState {
+									dca_state: DcaState {
 										scheduled_chunk_swap_id: None,
 										remaining_input_amount: 0,
 										remaining_chunks: 0,

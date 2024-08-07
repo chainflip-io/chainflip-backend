@@ -17,7 +17,7 @@ use cf_chains::{
 	AnyChain, CcmChannelMetadata, CcmDepositMetadata, Ethereum,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiary, DCAParameters, ForeignChain, NetworkEnvironment,
+	Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters, ForeignChain, NetworkEnvironment,
 };
 use cf_test_utilities::{assert_event_sequence, assert_events_eq, assert_has_matching_event};
 use cf_traits::{
@@ -60,7 +60,7 @@ struct TestSwapParams {
 	output_asset: Asset,
 	input_amount: AssetAmount,
 	refund_params: Option<SwapRefundParameters>,
-	dca_params: Option<DCAParameters>,
+	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
 }
@@ -1929,7 +1929,7 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 			min_price: 100.into(),
 		};
 
-		let dca_parameters = DCAParameters { number_of_chunks: 5, chunk_interval: 2 };
+		let dca_parameters = DcaParameters { number_of_chunks: 5, chunk_interval: 2 };
 
 		const BOOST_FEE: u16 = 100;
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(

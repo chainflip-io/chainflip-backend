@@ -31,7 +31,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, BoostPoolTier, BroadcastId,
-	ChannelId, DCAParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
 	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -294,7 +294,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			refund_params: Option<ChannelRefundParameters>,
-			dca_params: Option<DCAParameters>,
+			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -304,7 +304,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			channel_metadata: CcmChannelMetadata,
 			refund_params: Option<ChannelRefundParameters>,
-			dca_params: Option<DCAParameters>,
+			dca_params: Option<DcaParameters>,
 		},
 	}
 
@@ -1564,7 +1564,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_address,
 				channel_metadata,
 				refund_params,
-				dca_params: _,
+				dca_params,
 			} => {
 				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
@@ -1580,7 +1580,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 					Default::default(),
 					refund_params,
-					None, // TODO: allow DCA for CCM
+					dca_params,
 					swap_origin,
 				) {
 					DepositAction::CcmTransfer { swap_request_id }
@@ -2028,7 +2028,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
 		refund_params: Option<ChannelRefundParameters>,
-		dca_params: Option<DCAParameters>,
+		dca_params: Option<DcaParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
