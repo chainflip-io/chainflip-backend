@@ -1186,10 +1186,7 @@ type PalletMigrations = (
 		11,
 	>,
 	MigrateApicalls,
-	migrations::spec_versioned_migration::SpecVersionedMigration<
-		migrations::solana_integration::SolanaChainState,
-		151,
-	>,
+	migrations::solana_integration::SolanaChainState,
 );
 
 type MigrateApicalls = (
