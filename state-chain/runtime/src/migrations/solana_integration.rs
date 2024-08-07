@@ -111,3 +111,33 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 		Ok(())
 	}
 }
+
+pub struct SolanaChainState;
+
+impl OnRuntimeUpgrade for SolanaChainState {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		if pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::get().is_none() {
+			pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::put(
+				cf_chains::ChainState {
+					block_height: 0,
+					tracked_data: cf_chains::sol::SolTrackedData { priority_fee: 100000u32.into() },
+				},
+			);
+		}
+		Weight::zero()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		Ok(vec![])
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+		frame_support::ensure!(
+			pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::get().is_some(),
+			"Chain state not set",
+		);
+		Ok(())
+	}
+}
