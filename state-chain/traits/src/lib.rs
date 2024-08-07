@@ -964,3 +964,45 @@ pub trait FetchesTransfersLimitProvider {
 
 pub struct NoLimit;
 impl FetchesTransfersLimitProvider for NoLimit {}
+
+pub trait IngressSink {
+	type Chain: Chain;
+
+	fn on_ingress(
+		channel: <Self::Chain as Chain>::ChainAccount,
+		asset: <Self::Chain as Chain>::ChainAsset,
+		amount: <Self::Chain as Chain>::ChainAmount,
+		block_number: <Self::Chain as Chain>::ChainBlockNumber,
+		details: <Self::Chain as Chain>::DepositDetails,
+	);
+	fn on_ingress_reverted(
+		channel: <Self::Chain as Chain>::ChainAccount,
+		asset: <Self::Chain as Chain>::ChainAsset,
+		amount: <Self::Chain as Chain>::ChainAmount,
+	);
+	fn on_channel_closed(channel: <Self::Chain as Chain>::ChainAccount);
+}
+
+pub trait IngressSource {
+	type Chain: Chain;
+
+	fn open_channel(
+		channel: <Self::Chain as Chain>::ChainAccount,
+		asset: <Self::Chain as Chain>::ChainAsset,
+		close_block: <Self::Chain as Chain>::ChainBlockNumber,
+	) -> DispatchResult;
+}
+pub struct DummyIngressSource<TargetChain: Chain> {
+	_phantom: core::marker::PhantomData<TargetChain>,
+}
+impl<TargetChain: Chain> IngressSource for DummyIngressSource<TargetChain> {
+	type Chain = TargetChain;
+
+	fn open_channel(
+		_channel: <Self::Chain as Chain>::ChainAccount,
+		_asset: <Self::Chain as Chain>::ChainAsset,
+		_close_block: <Self::Chain as Chain>::ChainBlockNumber,
+	) -> DispatchResult {
+		Ok(())
+	}
+}

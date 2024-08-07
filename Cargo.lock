@@ -1504,6 +1504,7 @@ dependencies = [
  "pallet-cf-asset-balances",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
+ "pallet-cf-elections",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",
@@ -5432,6 +5433,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7539,6 +7549,25 @@ dependencies = [
  "sp-io 23.0.0",
  "sp-runtime 24.0.0",
  "sp-std 8.0.0",
+]
+
+[[package]]
+name = "pallet-cf-elections"
+version = "0.1.0"
+dependencies = [
+ "bitvec",
+ "cf-chains",
+ "cf-primitives",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "itertools 0.13.0",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core 21.0.0",
+ "sp-std 8.0.0",
+ "utilities",
 ]
 
 [[package]]
@@ -12657,6 +12686,7 @@ dependencies = [
  "pallet-cf-broadcast",
  "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",
+ "pallet-cf-elections",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",

@@ -10,7 +10,7 @@ use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculat
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
 use serde::{Deserialize, Serialize};
-use sp_runtime::traits::{MaybeSerializeDeserialize, Member};
+use sp_runtime::traits::Member;
 
 use super::{Chain, ChainCrypto};
 
@@ -57,15 +57,7 @@ impl Chain for Solana {
 	type TrackedData = SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
 	type ChainAssetMap<
-		T: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ BenchmarkValue
-			+ FullCodec
-			+ Unpin
-			+ Default,
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::sol::AssetMap<T>;
 	type ChainAccount = SolAddress;
 	type DepositFetchId = SolanaDepositFetchId;

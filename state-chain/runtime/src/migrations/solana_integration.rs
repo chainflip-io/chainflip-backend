@@ -1,14 +1,13 @@
-use crate::Runtime;
+use crate::{chainflip::solana_elections, Runtime};
 use cf_chains::{
 	instances::SolanaInstance,
-	sol::{SolApiEnvironment, SolHash, SolTrackedData},
-	ChainState,
+	sol::{SolApiEnvironment, SolHash},
 };
 use cf_utilities::bs58_array;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sol_prim::consts::{const_address, const_hash};
 #[cfg(feature = "try-runtime")]
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, FixedU128};
 use sp_std::vec;
 
 pub struct SolanaIntegration;
@@ -169,10 +168,21 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 		pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
 			durable_nonces_and_accounts,
 		);
-		pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::put(ChainState {
-			block_height: 0,
-			tracked_data: SolTrackedData { priority_fee: 100000u32.into() },
-		});
+		// Ignore errors as it is not dangerous if the pallet fails to initialize (TODO possible
+		// makes sense to emit an event though?)
+		let _result = pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::internally_initialize(
+			(
+				/* chain tracking */ Default::default(),
+				/* priority_fee */ 100000u32.into(),
+				(),
+			),
+			(
+				(),
+				solana_elections::SolanaFeeSettings { fee_multiplier: FixedU128::from_u32(1u32) },
+				(),
+			),
+			((), (), ()),
+		);
 		Weight::zero()
 	}
 

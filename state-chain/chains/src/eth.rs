@@ -42,15 +42,7 @@ impl Chain for Ethereum {
 	type TrackedData = EthereumTrackedData;
 	type ChainAsset = assets::eth::Asset;
 	type ChainAssetMap<
-		T: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ BenchmarkValue
-			+ FullCodec
-			+ Unpin
-			+ Default,
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::eth::AssetMap<T>;
 	type ChainAccount = evm::Address;
 	type DepositFetchId = EvmFetchId;

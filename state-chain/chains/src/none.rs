@@ -27,15 +27,7 @@ impl Chain for NoneChain {
 	type ReplayProtection = ();
 	type TransactionRef = ();
 	type ChainAssetMap<
-		T: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ BenchmarkValue
-			+ FullCodec
-			+ Unpin
-			+ Default,
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = AssetMap<T>;
 }
 

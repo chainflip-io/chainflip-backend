@@ -295,9 +295,9 @@ pub mod pallet {
 			let mut authorities_cache = BTreeMap::new();
 			for (epoch, call_hash) in WitnessDeadline::<T>::take(n) {
 				if let Some(votes) = Votes::<T>::get(epoch, call_hash) {
-					let authorities = authorities_cache.entry(epoch).or_insert_with(|| {
-						T::EpochInfo::authorities_at_epoch(epoch).into_iter().collect::<Vec<_>>()
-					});
+					let authorities = authorities_cache
+						.entry(epoch)
+						.or_insert_with(|| T::EpochInfo::authorities_at_epoch(epoch));
 					let failed_witnessers = BitVec::<u8, Msb0>::from_vec(votes)
 						.into_iter()
 						.enumerate()
