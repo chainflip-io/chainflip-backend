@@ -156,11 +156,6 @@ pub mod pallet {
 	/// Historical earned fees for an account.
 	pub type HistoricalEarnedFees<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
-
-	/// Fund accrued from rejected swap and CCM calls.
-	#[pallet::storage]
-	pub type CollectedRejectedFunds<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 }
 
 impl<T: Config> Pallet<T> {
@@ -453,10 +448,6 @@ where
 		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset).unwrap_or_default()))
 	}
 
-	fn collected_rejected_funds(asset: Asset, amount: AssetAmount) {
-		CollectedRejectedFunds::<T>::mutate(asset, |fee| *fee = fee.saturating_add(amount));
-	}
-
 	fn kill_account(who: &Self::AccountId) {
 		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
 		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
@@ -466,8 +457,7 @@ where
 	fn get_balances_info() -> BalancesInfo {
 		let balances = FreeBalances::<T>::iter().collect::<Vec<_>>();
 		let fees = HistoricalEarnedFees::<T>::iter().collect::<Vec<_>>();
-		let rejected_funds = CollectedRejectedFunds::<T>::iter().collect::<Vec<_>>();
-		BalancesInfo { rejected_funds, balances: balances.into(), fees: fees.into() }
+		BalancesInfo { balances: balances.into(), fees: fees.into() }
 	}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {

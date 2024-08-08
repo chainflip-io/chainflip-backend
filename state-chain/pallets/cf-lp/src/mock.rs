@@ -73,8 +73,6 @@ pub struct MockBalanceApi;
 impl BalanceApi for MockBalanceApi {
 	type AccountId = AccountId;
 
-	fn collected_rejected_funds(_asset: Asset, _amount: AssetAmount) {}
-
 	fn try_credit_account(
 		who: &Self::AccountId,
 		_asset: cf_primitives::Asset,

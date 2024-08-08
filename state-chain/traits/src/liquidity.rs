@@ -35,9 +35,6 @@ pub trait LpApi {
 pub trait BalanceApi {
 	type AccountId;
 
-	/// Record the rejected funds.
-	fn collected_rejected_funds(asset: Asset, amount: AssetAmount);
-
 	/// Attempt to credit the account with the given asset and amount.
 	fn try_credit_account(
 		who: &Self::AccountId,

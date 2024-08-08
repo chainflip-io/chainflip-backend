@@ -80,10 +80,6 @@ impl BalanceApi for MockBalance {
 		.unwrap())
 	}
 
-	fn collected_rejected_funds(_asset: Asset, _amount: AssetAmount) {
-		unimplemented!()
-	}
-
 	fn kill_account(_who: &Self::AccountId) {
 		unimplemented!()
 	}

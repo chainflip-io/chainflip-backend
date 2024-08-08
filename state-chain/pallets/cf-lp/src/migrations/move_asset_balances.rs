@@ -47,16 +47,12 @@ where
 		for (account, asset, amount) in old::HistoricalEarnedFees::<T>::drain() {
 			T::BalanceApi::record_fees(&account, amount, asset);
 		}
-		for (asset, amount) in old::CollectedRejectedFunds::<T>::drain() {
-			T::BalanceApi::collected_rejected_funds(asset, amount);
-		}
 		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let balances = BalancesInfo {
-			rejected_funds: old::CollectedRejectedFunds::<T>::iter().collect::<Vec<_>>(),
 			balances: old::FreeBalances::<T>::iter().collect::<Vec<_>>().into(),
 			fees: old::HistoricalEarnedFees::<T>::iter().collect::<Vec<_>>().into(),
 		};

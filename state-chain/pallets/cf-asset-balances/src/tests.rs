@@ -317,7 +317,7 @@ fn can_reconciliate_multiple_chains_at_once() {
 pub mod balance_api {
 	use super::*;
 
-	use crate::{CollectedRejectedFunds, HistoricalEarnedFees};
+	use crate::HistoricalEarnedFees;
 	use cf_primitives::chains::assets::eth;
 
 	#[test]
@@ -431,17 +431,6 @@ pub mod balance_api {
 			assert_eq!(
 				Pallet::<Test>::free_balances(&AccountId::from([1; 32])).unwrap().eth,
 				eth::AssetMap { eth: 100, flip: 0, usdc: 0, usdt: 0 }
-			);
-		});
-	}
-
-	#[test]
-	pub fn collected_rejected_funds() {
-		new_test_ext().execute_with(|| {
-			Pallet::<Test>::collected_rejected_funds(ForeignChain::Ethereum.gas_asset(), 100);
-			assert_eq!(
-				CollectedRejectedFunds::<Test>::get(ForeignChain::Ethereum.gas_asset()),
-				100
 			);
 		});
 	}

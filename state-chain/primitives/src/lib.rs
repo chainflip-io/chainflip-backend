@@ -313,7 +313,6 @@ impl core::fmt::Display for NetworkEnvironment {
 
 #[derive(Encode, Decode)]
 pub struct BalancesInfo {
-	pub rejected_funds: Vec<(Asset, AssetAmount)>,
 	pub balances: Vec<(AccountId, Asset, AssetAmount)>,
 	pub fees: Vec<(AccountId, Asset, AssetAmount)>,
 }

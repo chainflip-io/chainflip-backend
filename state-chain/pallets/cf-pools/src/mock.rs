@@ -124,10 +124,6 @@ impl BalanceApi for MockBalance {
 		unimplemented!()
 	}
 
-	fn collected_rejected_funds(_: cf_primitives::Asset, _: u128) {
-		unimplemented!()
-	}
-
 	fn kill_account(_: &Self::AccountId) {
 		unimplemented!()
 	}
