@@ -79,7 +79,8 @@ where
 		}
 
 		electoral_access.new_election(
-			0,
+			Default::default(), /* We use the lowest value, so we can refresh the elections the
+			                     * maximum number of times */
 			[(channel, channel_details)].into_iter().collect(),
 			Default::default(),
 		)?;
@@ -243,6 +244,8 @@ where
 				} else {
 					election_access.set_state(pending_ingress_totals)?;
 					election_access.refresh(
+						// This value is meaningless. We increment as it is required to use a new
+						// higher value to refresh the election.
 						election_identifier.extra().checked_add(1).ok_or(CorruptStorageError)?,
 						channels,
 					)?;

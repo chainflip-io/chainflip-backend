@@ -283,7 +283,7 @@ mod access {
 		/// existing election's votes to the new election. The only difference is that here the
 		/// elections `Settings` will not be updated to the latest. This could create a problem if
 		/// you never delete elections, as old `Settings` values will be stored until any elections
-		/// referencing them are deleted. Any not yet on-chain authority votes will be invalidated
+		/// referencing them are deleted. Any in-flight authority votes will be invalidated
 		/// by this.
 		fn refresh(
 			&mut self,
