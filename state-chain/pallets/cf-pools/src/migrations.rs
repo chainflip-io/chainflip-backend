@@ -1,7 +1,12 @@
 use crate::Pallet;
-use cf_runtime_upgrade_utilities::PlaceholderMigration;
+use cf_runtime_upgrade_utilities::{PlaceholderMigration, VersionedMigration};
 
-pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 4>;
+pub mod move_network_fees;
+
+pub type PalletMigration<T> = (
+	VersionedMigration<Pallet<T>, move_network_fees::Migration<T>, 4, 5>,
+	PlaceholderMigration<Pallet<T>, 5>,
+);
 
 #[cfg(feature = "try-runtime")]
 pub mod old {
