@@ -11,8 +11,9 @@ use cf_chains::{
 	SwapRefundParameters,
 };
 use cf_primitives::{
-	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId, ForeignChain, SwapId,
-	SwapLeg, SwapRequestId, TransactionHash, BASIS_POINTS_PER_MILLION, STABLE_ASSET,
+	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId, DcaParameters,
+	ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash, BASIS_POINTS_PER_MILLION,
+	STABLE_ASSET,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -257,10 +258,25 @@ struct DcaState {
 	scheduled_chunk_swap_id: Option<SwapId>,
 	remaining_input_amount: AssetAmount,
 	remaining_chunks: u32,
+	chunk_interval: u32,
 	accumulated_output_amount: AssetAmount,
 }
 
 impl DcaState {
+	// Create initial DCA state; if no dca parameters provided (for non-DCA swaps),
+	// this creates state equivalent to 1 chunk DCA
+	fn new(input_amount: AssetAmount, params: Option<DcaParameters>) -> DcaState {
+		DcaState {
+			scheduled_chunk_swap_id: None,
+			remaining_input_amount: input_amount,
+			remaining_chunks: params.as_ref().map(|p| p.number_of_chunks).unwrap_or(1),
+			// Chunk interval won't be used for non-DCA swaps but seems nicer to
+			// set a reasonable default than unwrap Option when it is needed:
+			chunk_interval: params.as_ref().map(|p| p.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS),
+			accumulated_output_amount: 0,
+		}
+	}
+
 	fn prepare_next_chunk(&mut self) -> AssetAmount {
 		let chunk_input_amount = self
 			.remaining_input_amount
@@ -1218,6 +1234,7 @@ pub mod pallet {
 				None, // FoK does not apply to gas swaps
 				SwapType::CcmGas,
 				request_id,
+				SWAP_DELAY_BLOCKS.into(),
 			);
 
 			GasSwapState::Scheduled { gas_swap_id }
@@ -1358,6 +1375,7 @@ pub mod pallet {
 								swap.swap.refund_params.clone(),
 								SwapType::CcmPrincipal,
 								swap_request_id,
+								dca_state.chunk_interval.into(),
 							);
 
 							Some(swap_id)
@@ -1410,6 +1428,7 @@ pub mod pallet {
 							swap.swap.refund_params.clone(),
 							SwapType::Swap,
 							request.id,
+							dca_state.chunk_interval.into(),
 						);
 
 						false
@@ -1573,13 +1592,14 @@ pub mod pallet {
 			refund_params: Option<SwapRefundParameters>,
 			swap_type: SwapType,
 			swap_request_id: SwapRequestId,
+			delay_blocks: BlockNumberFor<T>,
 		) -> SwapId {
 			let swap_id = SwapIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
 				*id
 			});
 
-			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
+			let execute_at = frame_system::Pallet::<T>::block_number() + delay_blocks;
 
 			// Network fee is not charged for network fee swaps:
 			let fees = if matches!(swap_type, SwapType::NetworkFee) {
@@ -1829,6 +1849,7 @@ pub mod pallet {
 						None,
 						SwapType::NetworkFee,
 						request_id,
+						SWAP_DELAY_BLOCKS.into(),
 					);
 
 					SwapRequests::<T>::insert(
@@ -1850,6 +1871,7 @@ pub mod pallet {
 						None,
 						SwapType::IngressEgressFee,
 						request_id,
+						SWAP_DELAY_BLOCKS.into(),
 					);
 
 					SwapRequests::<T>::insert(
@@ -1864,13 +1886,7 @@ pub mod pallet {
 					);
 				},
 				SwapRequestType::Regular { output_address } => {
-					let mut dca_state = DcaState {
-						scheduled_chunk_swap_id: None,
-						remaining_input_amount: net_amount,
-						// No DCA is equivalent to DCA with 1 chunk
-						remaining_chunks: dca_params.map(|p| p.number_of_chunks).unwrap_or(1),
-						accumulated_output_amount: 0,
-					};
+					let mut dca_state = DcaState::new(net_amount, dca_params);
 					let chunk_input_amount = dca_state.prepare_next_chunk();
 
 					let swap_refund_params = refund_params.as_ref().map(|params| {
@@ -1889,6 +1905,7 @@ pub mod pallet {
 						swap_refund_params,
 						SwapType::Swap,
 						request_id,
+						SWAP_DELAY_BLOCKS.into(),
 					);
 
 					dca_state.scheduled_chunk_swap_id = Some(swap_id);
@@ -1944,13 +1961,7 @@ pub mod pallet {
 
 					// See if principal swap is needed, schedule it first if so:
 					if input_asset != output_asset && !principal_swap_amount.is_zero() {
-						let mut dca_state = DcaState {
-							scheduled_chunk_swap_id: None,
-							remaining_input_amount: principal_swap_amount,
-							// No DCA is equivalent to DCA with 1 chunk
-							remaining_chunks: dca_params.map(|p| p.number_of_chunks).unwrap_or(1),
-							accumulated_output_amount: 0,
-						};
+						let mut dca_state = DcaState::new(principal_swap_amount, dca_params);
 						let chunk_input_amount = dca_state.prepare_next_chunk();
 
 						let swap_refund_params = refund_params.as_ref().map(|params| {
@@ -1969,6 +1980,7 @@ pub mod pallet {
 							swap_refund_params,
 							SwapType::CcmPrincipal,
 							request_id,
+							SWAP_DELAY_BLOCKS.into(),
 						);
 
 						dca_state.scheduled_chunk_swap_id = Some(swap_id);
@@ -2017,6 +2029,7 @@ pub mod pallet {
 										scheduled_chunk_swap_id: None,
 										remaining_input_amount: 0,
 										remaining_chunks: 0,
+										chunk_interval: SWAP_DELAY_BLOCKS,
 										accumulated_output_amount: principal_swap_amount,
 									},
 								},

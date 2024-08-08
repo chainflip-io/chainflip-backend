@@ -1,7 +1,7 @@
 use super::*;
 
 const INPUT_AMOUNT: AssetAmount = 40_000;
-const CHUNK_INTERVAL: u32 = 2;
+const CHUNK_INTERVAL: u32 = 3;
 const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 const NET_AMOUNT: AssetAmount = INPUT_AMOUNT - BROKER_FEE;
 
@@ -471,6 +471,10 @@ fn dca_with_ccm_happy_path() {
 	const CHUNK_1_BLOCK: u64 = 3;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
 
+	// NOTE: gas swap is scheduled immediately after the first chunk,
+	// and we apply the default swap delay to them (rather than chunk interval)
+	const GAS_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
 	const PRINCIPAL_AMOUNT: AssetAmount = NET_AMOUNT - GAS_BUDGET;
 
 	const CHUNK_AMOUNT: AssetAmount = PRINCIPAL_AMOUNT / 2;
@@ -530,8 +534,21 @@ fn dca_with_ccm_happy_path() {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 3,
 					input_amount: GAS_BUDGET,
-					execute_at: CHUNK_2_BLOCK,
+					execute_at: GAS_BLOCK,
 					swap_type: SwapType::CcmGas,
+					..
+				}),
+			);
+		})
+		.then_execute_at_block(GAS_BLOCK, |_| {})
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: 3,
+					input_amount: GAS_BUDGET,
+					output_amount: GAS_BUDGET,
 					..
 				}),
 			);
@@ -540,20 +557,13 @@ fn dca_with_ccm_happy_path() {
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
-			assert_event_sequence!(
+			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 2,
 					input_amount: CHUNK_AMOUNT,
 					output_amount: CHUNK_AMOUNT,
-					..
-				}),
-				RuntimeEvent::Swapping(Event::SwapExecuted {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 3,
-					input_amount: GAS_BUDGET,
-					output_amount: GAS_BUDGET,
 					..
 				}),
 			);
