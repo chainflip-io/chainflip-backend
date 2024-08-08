@@ -4,6 +4,13 @@ use crate::PendingApiCalls;
 
 pub struct Migration<T, I>(sp_std::marker::PhantomData<(T, I)>);
 
+#[cfg(feature = "try-runtime")]
+use codec::{Decode, Encode};
+#[cfg(feature = "try-runtime")]
+use sp_runtime::DispatchError;
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
+
 mod old {
 	use cf_primitives::BroadcastId;
 	use frame_support::Twox64Concat;
@@ -15,17 +22,32 @@ mod old {
 		Pallet<T, I>,
 		Twox64Concat,
 		BroadcastId,
+		// the threshold signature data is migrated to this new ApiCall in
+		// `migrate_apicalls_to_store_signer` which is run from storage version 3->4
 		(ApiCallFor<T, I>, ThresholdSignatureFor<T, I>),
 	>;
 }
 
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		Ok((old::ThresholdSignatureData::<T, I>::iter().count() as u32).encode())
+	}
+
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		for (id, (api_call, _sig)) in old::ThresholdSignatureData::<T, I>::drain() {
 			PendingApiCalls::<T, I>::insert(id, api_call);
 		}
 
 		Default::default()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let old_count = <u32>::decode(&mut &state[..]).expect("Failed to decode count");
+		let new_count = PendingApiCalls::<T, I>::iter().count() as u32;
+		assert_eq!(old_count, new_count, "Migration failed: counts do not match");
+		Ok(())
 	}
 }
 

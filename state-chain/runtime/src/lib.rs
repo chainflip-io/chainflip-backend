@@ -1162,6 +1162,8 @@ type PalletMigrations = (
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, SolanaInstance>,
+	// TODO: Remove this after 1.5.1 is released
+	MigrateApicalls,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -1185,41 +1187,40 @@ type PalletMigrations = (
 		11,
 	>,
 	migrations::solana_integration::SolanaChainState,
-	MigrateApicalls,
 );
 
 type MigrateApicalls = (
 	VersionedMigration<
 		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
 		migrations::migrate_apicalls_to_store_signer::EthMigrateApicallsAndOnChainKey,
-		5,
-		6,
+		3,
+		4,
 	>,
 	VersionedMigration<
 		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
 		migrations::migrate_apicalls_to_store_signer::DotMigrateApicallsAndOnChainKey,
-		5,
-		6,
+		3,
+		4,
 	>,
 	VersionedMigration<
 		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
 		migrations::migrate_apicalls_to_store_signer::BtcMigrateApicallsAndOnChainKey,
-		5,
-		6,
+		3,
+		4,
 	>,
 	VersionedMigration<
 		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
 		migrations::migrate_apicalls_to_store_signer::ArbMigrateApicallsAndOnChainKey,
-		5,
-		6,
+		3,
+		4,
 	>,
 	// The apicalls migration is not needed for solana since solana is not initizlized yet and so
 	// the storage items do not exist yet.
 	VersionedMigration<
 		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
 		migrations::migrate_apicalls_to_store_signer::NoSolUpgrade,
-		5,
-		6,
+		3,
+		4,
 	>,
 );
 
