@@ -376,7 +376,7 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 								current_aggkey.into()
 						}
 					}
-					RequiresSignatureRefresh::True(Some(call.clone()))
+					RequiresSignatureRefresh::True(Some(modified_call.clone()))
 				},
 				None => RequiresSignatureRefresh::False,
 			}
