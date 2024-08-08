@@ -1816,7 +1816,7 @@ pub mod pallet {
 							},
 						};
 
-					// See if princial swap is needed, schedule it first if so:
+					// See if principal swap is needed, schedule it first if so:
 					if input_asset != output_asset && !principal_swap_amount.is_zero() {
 						let swap_id = Self::schedule_swap(
 							input_asset,
