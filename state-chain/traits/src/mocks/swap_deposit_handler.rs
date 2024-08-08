@@ -19,7 +19,7 @@ where
 		amount: AssetAmount,
 		destination_address: ForeignChainAddress,
 		_broker_commission: Beneficiaries<Self::AccountId>,
-		_refund_params: Option<ChannelRefundParameters>,
+		_refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		_channel_id: ChannelId,
 	) -> SwapId {
 		let _ = E::schedule_egress(

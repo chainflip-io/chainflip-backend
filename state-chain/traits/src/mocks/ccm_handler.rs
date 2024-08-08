@@ -41,7 +41,7 @@ impl CcmHandler for MockCcmHandler {
 		_broker_commission: Beneficiaries<Self::AccountId>,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
-		_refund_params: Option<ChannelRefundParameters>,
+		_refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 	) -> Result<CcmSwapIds, ()> {
 		<Self as MockPalletStorage>::mutate_value(CCM_HANDLER_PREFIX, |ccm_requests| {
 			if ccm_requests.is_none() {

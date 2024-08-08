@@ -2269,7 +2269,7 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 				boost_fee: BOOST_FEE,
 				refund_parameters: Some(ref refund_params_in_event),
 				..
-			}) if refund_params_in_event == &refund_parameters
+			}) if *refund_params_in_event == refund_parameters.map_address(MockAddressConverter::to_encoded_address)
 		);
 	});
 }

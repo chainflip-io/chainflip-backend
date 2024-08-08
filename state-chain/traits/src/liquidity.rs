@@ -19,7 +19,7 @@ pub trait SwapDepositHandler {
 		amount: AssetAmount,
 		destination_address: ForeignChainAddress,
 		broker_commission: Beneficiaries<Self::AccountId>,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		channel_id: ChannelId,
 	) -> SwapId;
 }
