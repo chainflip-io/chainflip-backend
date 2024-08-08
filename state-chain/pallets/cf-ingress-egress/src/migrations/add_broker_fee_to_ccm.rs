@@ -99,11 +99,14 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(vec![])
+		Ok((old::DepositChannelLookup::<T, I>::iter().count() as u32).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let old_count = <u32>::decode(&mut &state[..]).expect("Failed to decode count");
+		let new_count = DepositChannelLookup::<T, I>::iter().count() as u32;
+		assert_eq!(old_count, new_count, "Migration failed: counts do not match");
 		Ok(())
 	}
 }
