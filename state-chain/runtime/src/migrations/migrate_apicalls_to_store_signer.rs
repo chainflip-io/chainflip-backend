@@ -11,7 +11,8 @@ use cf_chains::{
 	},
 };
 use dot::{api::PolkadotApi, PolkadotExtrinsicBuilder};
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::{traits::OnRuntimeUpgrade, Twox64Concat};
+use pallet_cf_broadcast::ThresholdSignatureFor;
 use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
@@ -24,6 +25,22 @@ use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::{vec, vec::Vec};
 
+pub mod next {
+
+	use pallet_cf_broadcast::ApiCallFor;
+
+	use super::*;
+
+	// This is deleted in the 5->6 migration on the broadcast pallet
+	#[frame_support::storage_alias]
+	pub type ThresholdSignatureData<T: pallet_cf_broadcast::Config<I>, I: 'static> = StorageMap<
+		pallet_cf_broadcast::Pallet<T, I>,
+		Twox64Concat,
+		BroadcastId,
+		(ApiCallFor<T, I>, ThresholdSignatureFor<T, I>),
+	>;
+}
+
 pub mod old {
 
 	use sp_std::collections::vec_deque::VecDeque;
@@ -31,11 +48,14 @@ pub mod old {
 	use super::*;
 	use cf_chains::{
 		btc::{BitcoinOutput, Utxo},
+		dot::{PolkadotReplayProtection, PolkadotRuntimeCall, PolkadotSignature},
 		evm::api::{EvmCall, EvmReplayProtection, SigData},
 	};
 	use codec::{Decode, Encode, MaxEncodedLen};
-	use dot::{PolkadotReplayProtection, PolkadotRuntimeCall, PolkadotSignature};
-	use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
+	use frame_support::{
+		CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound, Twox64Concat,
+	};
+
 	use scale_info::TypeInfo;
 	use sp_core::RuntimeDebug;
 
@@ -158,6 +178,59 @@ pub mod old {
 			}
 		}
 	}
+
+	pub mod btc {
+		use super::*;
+
+		#[frame_support::storage_alias]
+		pub type ThresholdSignatureData<T: Config<BitcoinInstance>, BitcoinInstance> = StorageMap<
+			BitcoinBroadcaster,
+			Twox64Concat,
+			BroadcastId,
+			// Note: Using the old bitcoin api
+			(BitcoinApi<BtcEnvironment>, ThresholdSignatureFor<T, BitcoinInstance>),
+		>;
+	}
+
+	pub mod eth {
+
+		use super::*;
+
+		#[frame_support::storage_alias]
+		pub type ThresholdSignatureData<T: Config<EthereumInstance>, EthereumInstance> = StorageMap<
+			EthereumBroadcaster,
+			Twox64Concat,
+			BroadcastId,
+			// Note: Using the old ethereum api
+			(EthereumApi<EvmEnvironment>, ThresholdSignatureFor<T, EthereumInstance>),
+		>;
+	}
+
+	pub mod dot {
+		use super::*;
+
+		#[frame_support::storage_alias]
+		pub type ThresholdSignatureData<T: Config<PolkadotInstance>, PolkadotInstance> = StorageMap<
+			PolkadotBroadcaster,
+			Twox64Concat,
+			BroadcastId,
+			// Note: Using the old polkadot api
+			(PolkadotApi<DotEnvironment>, ThresholdSignatureFor<T, PolkadotInstance>),
+		>;
+	}
+
+	pub mod arb {
+		use super::*;
+
+		#[frame_support::storage_alias]
+		pub type ThresholdSignatureData<T: Config<ArbitrumInstance>, ArbitrumInstance> = StorageMap<
+			ArbitrumBroadcaster,
+			Twox64Concat,
+			BroadcastId,
+			// Note: Using the old arbitrum api
+			(ArbitrumApi<EvmEnvironment>, ThresholdSignatureFor<T, ArbitrumInstance>),
+		>;
+	}
 }
 
 fn evm_tx_builder_fn<C>(
@@ -183,48 +256,55 @@ impl OnRuntimeUpgrade for EthMigrateApicallsAndOnChainKey {
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance1>::put(current_evm_key);
 
-		pallet_cf_broadcast::PendingApiCalls::<Runtime, Instance1>::translate(
-			|_broadcast_id, old_apicall: old::EthereumApi<EvmEnvironment>| {
-				Some(match old_apicall {
-					old::EthereumApi::SetAggKeyWithAggKey(evm_tx_builder) =>
-						EthereumApi::SetAggKeyWithAggKey(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::EthereumApi::RegisterRedemption(evm_tx_builder) =>
-						EthereumApi::RegisterRedemption(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::EthereumApi::UpdateFlipSupply(evm_tx_builder) =>
-						EthereumApi::UpdateFlipSupply(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::EthereumApi::SetGovKeyWithAggKey(evm_tx_builder) =>
-						EthereumApi::SetGovKeyWithAggKey(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::EthereumApi::SetCommKeyWithAggKey(evm_tx_builder) =>
-						EthereumApi::SetCommKeyWithAggKey(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::EthereumApi::AllBatch(evm_tx_builder) =>
-						EthereumApi::AllBatch(evm_tx_builder_fn(evm_tx_builder, current_evm_key)),
-					old::EthereumApi::ExecutexSwapAndCall(evm_tx_builder) =>
-						EthereumApi::ExecutexSwapAndCall(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::EthereumApi::TransferFallback(evm_tx_builder) =>
-						EthereumApi::TransferFallback(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::EthereumApi::_Phantom(..) => unreachable!(),
-				})
+		next::ThresholdSignatureData::<Runtime, Instance1>::translate_values(
+			|(old_apicall, sig): (
+				old::EthereumApi<EvmEnvironment>,
+				ThresholdSignatureFor<Runtime, Instance1>,
+			)| {
+				Some((
+					match old_apicall {
+						old::EthereumApi::SetAggKeyWithAggKey(evm_tx_builder) =>
+							EthereumApi::SetAggKeyWithAggKey(evm_tx_builder_fn(
+								evm_tx_builder,
+								current_evm_key,
+							)),
+						old::EthereumApi::RegisterRedemption(evm_tx_builder) =>
+							EthereumApi::RegisterRedemption(evm_tx_builder_fn(
+								evm_tx_builder,
+								current_evm_key,
+							)),
+						old::EthereumApi::UpdateFlipSupply(evm_tx_builder) =>
+							EthereumApi::UpdateFlipSupply(evm_tx_builder_fn(
+								evm_tx_builder,
+								current_evm_key,
+							)),
+						old::EthereumApi::SetGovKeyWithAggKey(evm_tx_builder) =>
+							EthereumApi::SetGovKeyWithAggKey(evm_tx_builder_fn(
+								evm_tx_builder,
+								current_evm_key,
+							)),
+						old::EthereumApi::SetCommKeyWithAggKey(evm_tx_builder) =>
+							EthereumApi::SetCommKeyWithAggKey(evm_tx_builder_fn(
+								evm_tx_builder,
+								current_evm_key,
+							)),
+						old::EthereumApi::AllBatch(evm_tx_builder) => EthereumApi::AllBatch(
+							evm_tx_builder_fn(evm_tx_builder, current_evm_key),
+						),
+						old::EthereumApi::ExecutexSwapAndCall(evm_tx_builder) =>
+							EthereumApi::ExecutexSwapAndCall(evm_tx_builder_fn(
+								evm_tx_builder,
+								current_evm_key,
+							)),
+						old::EthereumApi::TransferFallback(evm_tx_builder) =>
+							EthereumApi::TransferFallback(evm_tx_builder_fn(
+								evm_tx_builder,
+								current_evm_key,
+							)),
+						old::EthereumApi::_Phantom(..) => unreachable!(),
+					},
+					sig,
+				))
 			},
 		);
 
@@ -233,7 +313,7 @@ impl OnRuntimeUpgrade for EthMigrateApicallsAndOnChainKey {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		pre_upgrade!(Instance1, Instance16)
+		pre_upgrade!(Instance1, Instance16, eth)
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -274,30 +354,38 @@ impl OnRuntimeUpgrade for DotMigrateApicallsAndOnChainKey {
 			}
 		}
 
-		pallet_cf_broadcast::PendingApiCalls::<Runtime, Instance2>::translate(
-			|_broadcast_id, old_apicall: old::PolkadotApi<DotEnvironment>| {
-				Some(match old_apicall {
-					old::PolkadotApi::BatchFetchAndTransfer(dot_ext_builder) =>
-						PolkadotApi::BatchFetchAndTransfer(dot_tx_builder_fn(
-							dot_ext_builder,
-							current_dot_key,
-						)),
+		next::ThresholdSignatureData::<Runtime, Instance2>::translate_values(
+			|(old_apicall, sig): (
+				old::PolkadotApi<DotEnvironment>,
+				ThresholdSignatureFor<Runtime, Instance2>,
+			)| {
+				Some((
+					match old_apicall {
+						old::PolkadotApi::BatchFetchAndTransfer(dot_ext_builder) =>
+							PolkadotApi::BatchFetchAndTransfer(dot_tx_builder_fn(
+								dot_ext_builder,
+								current_dot_key,
+							)),
 
-					old::PolkadotApi::RotateVaultProxy(dot_ext_builder) =>
-						PolkadotApi::RotateVaultProxy(dot_tx_builder_fn(
-							dot_ext_builder,
-							current_dot_key,
-						)),
-					old::PolkadotApi::ChangeGovKey(dot_ext_builder) => PolkadotApi::ChangeGovKey(
-						dot_tx_builder_fn(dot_ext_builder, current_dot_key),
-					),
-					old::PolkadotApi::ExecuteXSwapAndCall(dot_ext_builder) =>
-						PolkadotApi::ExecuteXSwapAndCall(dot_tx_builder_fn(
-							dot_ext_builder,
-							current_dot_key,
-						)),
-					old::PolkadotApi::_Phantom(..) => unreachable!(),
-				})
+						old::PolkadotApi::RotateVaultProxy(dot_ext_builder) =>
+							PolkadotApi::RotateVaultProxy(dot_tx_builder_fn(
+								dot_ext_builder,
+								current_dot_key,
+							)),
+						old::PolkadotApi::ChangeGovKey(dot_ext_builder) =>
+							PolkadotApi::ChangeGovKey(dot_tx_builder_fn(
+								dot_ext_builder,
+								current_dot_key,
+							)),
+						old::PolkadotApi::ExecuteXSwapAndCall(dot_ext_builder) =>
+							PolkadotApi::ExecuteXSwapAndCall(dot_tx_builder_fn(
+								dot_ext_builder,
+								current_dot_key,
+							)),
+						old::PolkadotApi::_Phantom(..) => unreachable!(),
+					},
+					sig,
+				))
 			},
 		);
 
@@ -306,7 +394,7 @@ impl OnRuntimeUpgrade for DotMigrateApicallsAndOnChainKey {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		pre_upgrade!(Instance2, Instance2)
+		pre_upgrade!(Instance2, Instance2, dot)
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -322,8 +410,8 @@ impl OnRuntimeUpgrade for DotMigrateApicallsAndOnChainKey {
 
 			new_ext_builder.extrinsic_call == old_ext_builder.extrinsic_call &&
 				new_ext_builder.replay_protection == old_ext_builder.replay_protection &&
-				new_ext_builder.signer_and_signature.unwrap().1 ==
-					old_ext_builder.signature.unwrap()
+				new_ext_builder.signer_and_signature.expect("signer and sig").1 ==
+					old_ext_builder.signature.expect("signature")
 		}
 		post_upgrade!(Instance2, PolkadotApi<DotEnvironment>, PolkadotPublicKey, state, assertion)
 	}
@@ -341,32 +429,38 @@ impl OnRuntimeUpgrade for BtcMigrateApicallsAndOnChainKey {
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance3>::put(current_btc_key);
 
-		pallet_cf_broadcast::PendingApiCalls::<Runtime, Instance3>::translate(
-			|_broadcast_id, old_apicall: old::BitcoinApi<BtcEnvironment>| {
-				Some(match old_apicall {
-					old::BitcoinApi::BatchTransfer(old_batch_transfer) =>
-						BitcoinApi::BatchTransfer(BatchTransfer {
-							bitcoin_transaction: BitcoinTransaction {
-								inputs: old_batch_transfer.bitcoin_transaction.inputs,
-								outputs: old_batch_transfer.bitcoin_transaction.outputs,
-								transaction_bytes: old_batch_transfer
-									.bitcoin_transaction
-									.transaction_bytes,
-								old_utxo_input_indices: old_batch_transfer
-									.bitcoin_transaction
-									.old_utxo_input_indices,
-								// The signature here is a valid signature since this storage item
-								// only stores signed calls
-								signer_and_signatures: Some((
-									current_btc_key,
-									old_batch_transfer.bitcoin_transaction.signatures,
-								)),
-							},
-							change_utxo_key: old_batch_transfer.change_utxo_key,
-						}),
+		next::ThresholdSignatureData::<Runtime, Instance3>::translate_values(
+			|(old_apicall, sig): (
+				old::BitcoinApi<BtcEnvironment>,
+				ThresholdSignatureFor<Runtime, Instance3>,
+			)| {
+				Some((
+					match old_apicall {
+						old::BitcoinApi::BatchTransfer(old_batch_transfer) =>
+							BitcoinApi::BatchTransfer(BatchTransfer {
+								bitcoin_transaction: BitcoinTransaction {
+									inputs: old_batch_transfer.bitcoin_transaction.inputs,
+									outputs: old_batch_transfer.bitcoin_transaction.outputs,
+									transaction_bytes: old_batch_transfer
+										.bitcoin_transaction
+										.transaction_bytes,
+									old_utxo_input_indices: old_batch_transfer
+										.bitcoin_transaction
+										.old_utxo_input_indices,
+									// The signature here is a valid signature since this storage
+									// item only stores signed calls
+									signer_and_signatures: Some((
+										current_btc_key,
+										old_batch_transfer.bitcoin_transaction.signatures,
+									)),
+								},
+								change_utxo_key: old_batch_transfer.change_utxo_key,
+							}),
 
-					old::BitcoinApi::_Phantom(..) => unreachable!(),
-				})
+						old::BitcoinApi::_Phantom(..) => unreachable!(),
+					},
+					sig,
+				))
 			},
 		);
 
@@ -375,7 +469,7 @@ impl OnRuntimeUpgrade for BtcMigrateApicallsAndOnChainKey {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		pre_upgrade!(Instance3, Instance3)
+		pre_upgrade!(Instance3, Instance3, btc)
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -397,8 +491,11 @@ impl OnRuntimeUpgrade for BtcMigrateApicallsAndOnChainKey {
 							old_batch_transfer.bitcoin_transaction.transaction_bytes &&
 						new_batch_transfer.bitcoin_transaction.old_utxo_input_indices ==
 							old_batch_transfer.bitcoin_transaction.old_utxo_input_indices &&
-						new_batch_transfer.bitcoin_transaction.signer_and_signatures.unwrap().1 ==
-							old_batch_transfer.bitcoin_transaction.signatures
+						new_batch_transfer
+							.bitcoin_transaction
+							.signer_and_signatures
+							.expect("post check bitcoin")
+							.1 == old_batch_transfer.bitcoin_transaction.signatures
 				},
 
 				BitcoinApi::_Phantom(..) => unreachable!(),
@@ -420,29 +517,36 @@ impl OnRuntimeUpgrade for ArbMigrateApicallsAndOnChainKey {
 
 		pallet_cf_broadcast::CurrentOnChainKey::<Runtime, Instance4>::put(current_evm_key);
 
-		pallet_cf_broadcast::PendingApiCalls::<Runtime, Instance4>::translate(
-			|_broadcast_id, old_apicall: old::ArbitrumApi<EvmEnvironment>| {
-				Some(match old_apicall {
-					old::ArbitrumApi::SetAggKeyWithAggKey(evm_tx_builder) =>
-						ArbitrumApi::SetAggKeyWithAggKey(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
+		next::ThresholdSignatureData::<Runtime, Instance4>::translate_values(
+			|(old_apicall, sig): (
+				old::ArbitrumApi<BtcEnvironment>,
+				ThresholdSignatureFor<Runtime, Instance4>,
+			)| {
+				Some((
+					match old_apicall {
+						old::ArbitrumApi::SetAggKeyWithAggKey(evm_tx_builder) =>
+							ArbitrumApi::SetAggKeyWithAggKey(evm_tx_builder_fn(
+								evm_tx_builder,
+								current_evm_key,
+							)),
 
-					old::ArbitrumApi::AllBatch(evm_tx_builder) =>
-						ArbitrumApi::AllBatch(evm_tx_builder_fn(evm_tx_builder, current_evm_key)),
-					old::ArbitrumApi::ExecutexSwapAndCall(evm_tx_builder) =>
-						ArbitrumApi::ExecutexSwapAndCall(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::ArbitrumApi::TransferFallback(evm_tx_builder) =>
-						ArbitrumApi::TransferFallback(evm_tx_builder_fn(
-							evm_tx_builder,
-							current_evm_key,
-						)),
-					old::ArbitrumApi::_Phantom(..) => unreachable!(),
-				})
+						old::ArbitrumApi::AllBatch(evm_tx_builder) => ArbitrumApi::AllBatch(
+							evm_tx_builder_fn(evm_tx_builder, current_evm_key),
+						),
+						old::ArbitrumApi::ExecutexSwapAndCall(evm_tx_builder) =>
+							ArbitrumApi::ExecutexSwapAndCall(evm_tx_builder_fn(
+								evm_tx_builder,
+								current_evm_key,
+							)),
+						old::ArbitrumApi::TransferFallback(evm_tx_builder) =>
+							ArbitrumApi::TransferFallback(evm_tx_builder_fn(
+								evm_tx_builder,
+								current_evm_key,
+							)),
+						old::ArbitrumApi::_Phantom(..) => unreachable!(),
+					},
+					sig,
+				))
 			},
 		);
 
@@ -451,7 +555,7 @@ impl OnRuntimeUpgrade for ArbMigrateApicallsAndOnChainKey {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		pre_upgrade!(Instance4, Instance16)
+		pre_upgrade!(Instance4, Instance16, arb)
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -499,13 +603,14 @@ macro_rules! eth_map_over_api_variants_old {
 
 #[macro_export]
 macro_rules! pre_upgrade {
-	(  $chain_pallet_instance:ident, $crypto_pallet_instance:ident  ) => {{
-		let pending_apicalls =
-			pallet_cf_broadcast::PendingApiCalls::<Runtime, $chain_pallet_instance>::iter()
-				.collect::<Vec<_>>();
-		let current_key = pallet_cf_threshold_signature::Keys::<Runtime, $crypto_pallet_instance>::get(pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, $crypto_pallet_instance>::get().unwrap()).unwrap();
+	(  $chain_pallet_instance:ident, $crypto_pallet_instance:ident, $path_to_old:ident  ) => {{
 
-		Ok((pending_apicalls, current_key).encode())
+		let old_api_calls = old::$path_to_old::ThresholdSignatureData::<Runtime, $chain_pallet_instance>::iter()
+			.map(|(id, (api_call, _sig))| (id, api_call))
+			.collect::<Vec<_>>();
+		let current_key = pallet_cf_threshold_signature::Keys::<Runtime, $crypto_pallet_instance>::get(pallet_cf_threshold_signature::CurrentKeyEpoch::<Runtime, $crypto_pallet_instance>::get().expect("current key epoch")).expect("threshold keys");
+
+		Ok((old_api_calls, current_key).encode())
 	}};
 }
 
@@ -513,23 +618,21 @@ macro_rules! pre_upgrade {
 macro_rules! post_upgrade {
 	(  $chain_pallet_instance:ident, $chain_api:ident <$env: ident>, $aggkey:ident, $state:expr, $assertion:ident ) => {{
 		use pallet_cf_broadcast::CurrentOnChainKey;
-		let (pending_apicalls, current_key) =
-			<(Vec<(u32, old::$chain_api<$env>)>, $aggkey)>::decode(&mut &$state[..])
+		let (old_threshold_sig_datas, current_key) =
+			<(Vec<(BroadcastId, old::$chain_api<$env>)>, $aggkey)>::decode(&mut &$state[..])
 				.map_err(|_| DispatchError::Other("Failed to decode old PendingApicalls"))?;
 
 		assert_eq!(
-			CurrentOnChainKey::<Runtime, $chain_pallet_instance>::get().unwrap(),
+			CurrentOnChainKey::<Runtime, $chain_pallet_instance>::get().expect("on chain key"),
 			current_key
 		);
 
-		pending_apicalls.into_iter().for_each(|(broadcast_id, old_apicall)| {
-			let new_apicall =
-				pallet_cf_broadcast::PendingApiCalls::<Runtime, $chain_pallet_instance>::get(
-					broadcast_id,
-				)
-				.unwrap();
+		old_threshold_sig_datas.into_iter().for_each(|(broadcast_id, old_apicall)| {
+			let (new_apicall, _sig) =
+				next::ThresholdSignatureData::<Runtime, $chain_pallet_instance>::get(broadcast_id)
+					.expect("next threshold sig data");
 
-			assert!(new_apicall.signer().unwrap() == current_key);
+			assert!(new_apicall.signer().expect("signer new apicall") == current_key);
 			assert!($assertion(old_apicall, new_apicall));
 		});
 
