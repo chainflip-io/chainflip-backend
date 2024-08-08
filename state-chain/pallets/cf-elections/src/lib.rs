@@ -814,7 +814,6 @@ pub mod pallet {
 			_phantom: core::marker::PhantomData<(T, I)>,
 		}
 		impl<T: Config<I>, I: 'static> ElectionBitmapComponents<T, I> {
-			// TODO: Consider replacing with "guard" pattern.
 			fn inner_with<
 				const ALWAYS_STORE_AFTER_CLOSURE: bool,
 				R,
