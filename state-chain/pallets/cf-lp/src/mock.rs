@@ -122,7 +122,7 @@ impl BalanceApi for MockBalanceApi {
 		})
 	}
 
-	fn kill_balance(who: &Self::AccountId) {
+	fn kill_account(who: &Self::AccountId) {
 		BALANCE_MAP.with(|balance_map| {
 			balance_map.borrow_mut().remove(who);
 		});
@@ -131,6 +131,10 @@ impl BalanceApi for MockBalanceApi {
 	#[cfg(feature = "try-runtime")]
 	fn get_balances_info() -> BalancesInfo {
 		unimplemented!()
+	}
+
+	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
+		todo!()
 	}
 }
 

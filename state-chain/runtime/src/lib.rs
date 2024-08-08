@@ -270,6 +270,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type FeePayment = Flip;
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
 	type NetworkFee = NetworkFee;
+	type BalanceApi = AssetBalances;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
