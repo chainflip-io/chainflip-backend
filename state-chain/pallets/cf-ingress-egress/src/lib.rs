@@ -144,7 +144,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -1187,7 +1187,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset,
 					deposit_address,
 					deposit_fetch_id,
-					amount: _amount,
+					..
 				} => {
 					fetch_params.push(FetchAssetParams {
 						deposit_fetch_id: deposit_fetch_id.expect("Checked in extract_if"),
