@@ -7,7 +7,8 @@ use cf_utilities::bs58_array;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sol_prim::consts::{const_address, const_hash};
 #[cfg(feature = "try-runtime")]
-use sp_runtime::{DispatchError, FixedU128};
+use sp_runtime::DispatchError;
+use sp_runtime::FixedU128;
 use sp_std::vec;
 
 pub struct SolanaIntegration;
