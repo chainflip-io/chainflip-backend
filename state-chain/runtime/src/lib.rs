@@ -277,6 +277,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type IngressEgressFeeHandler = chainflip::IngressEgressFeeHandler;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type NetworkFee = NetworkFee;
+	type BalanceApi = AssetBalances;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {

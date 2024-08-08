@@ -84,13 +84,17 @@ impl BalanceApi for MockBalance {
 		unimplemented!()
 	}
 
-	fn kill_balance(_who: &Self::AccountId) {
+	fn kill_account(_who: &Self::AccountId) {
 		unimplemented!()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn get_balances_info() -> BalancesInfo {
 		unimplemented!()
+	}
+
+	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
+		todo!()
 	}
 }
 

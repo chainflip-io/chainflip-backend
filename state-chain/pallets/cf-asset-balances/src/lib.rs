@@ -428,7 +428,12 @@ where
 		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
 		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
 		balance = balance.saturating_sub(amount);
-		FreeBalances::<T>::insert(account_id, asset, balance);
+
+		if balance == 0 {
+			FreeBalances::<T>::remove(account_id, asset);
+		} else {
+			FreeBalances::<T>::insert(account_id, asset, balance);
+		}
 
 		Self::deposit_event(Event::AccountDebited {
 			account_id: account_id.clone(),
@@ -452,7 +457,7 @@ where
 		CollectedRejectedFunds::<T>::mutate(asset, |fee| *fee = fee.saturating_add(amount));
 	}
 
-	fn kill_balance(who: &Self::AccountId) {
+	fn kill_account(who: &Self::AccountId) {
 		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
 		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
 	}
@@ -463,5 +468,9 @@ where
 		let fees = HistoricalEarnedFees::<T>::iter().collect::<Vec<_>>();
 		let rejected_funds = CollectedRejectedFunds::<T>::iter().collect::<Vec<_>>();
 		BalancesInfo { rejected_funds, balances: balances.into(), fees: fees.into() }
+	}
+
+	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
+		FreeBalances::<T>::get(who, asset).unwrap_or_default()
 	}
 }

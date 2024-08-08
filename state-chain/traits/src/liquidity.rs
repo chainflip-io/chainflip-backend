@@ -58,8 +58,11 @@ pub trait BalanceApi {
 	/// Returns the asset free balances of the given account.
 	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
 
-	/// Removes all balances of the given account from storage.
-	fn kill_balance(who: &Self::AccountId);
+	/// Returns the balance of the given account for the given asset.
+	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount;
+
+	/// Removes the account from the balance storage.
+	fn kill_account(who: &Self::AccountId);
 
 	/// Returns all available balance information.
 	#[cfg(feature = "try-runtime")]

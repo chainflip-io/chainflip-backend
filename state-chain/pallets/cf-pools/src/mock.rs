@@ -4,7 +4,7 @@ use cf_primitives::{Asset, AssetAmount, BalancesInfo};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		egress_handler::MockEgressHandler, lp_balance::MockLpApi,
+		balance_api::MockLpApi, egress_handler::MockEgressHandler,
 		swap_request_api::MockSwapRequestHandler,
 	},
 	AccountRoleRegistry, BalanceApi,
@@ -128,13 +128,17 @@ impl BalanceApi for MockBalance {
 		unimplemented!()
 	}
 
-	fn kill_balance(_: &Self::AccountId) {
+	fn kill_account(_: &Self::AccountId) {
 		unimplemented!()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn get_balances_info() -> BalancesInfo {
 		unimplemented!()
+	}
+
+	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
+		todo!()
 	}
 }
 

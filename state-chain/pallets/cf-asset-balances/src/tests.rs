@@ -374,7 +374,7 @@ pub mod balance_api {
 	}
 
 	#[test]
-	pub fn kill_balances() {
+	pub fn kill_accounts() {
 		new_test_ext().execute_with(|| {
 			FreeBalances::<Test>::insert(
 				AccountId::from([1; 32]),
@@ -386,7 +386,7 @@ pub mod balance_api {
 				ForeignChain::Ethereum.gas_asset(),
 				100,
 			);
-			Pallet::<Test>::kill_balance(&AccountId::from([1; 32]));
+			Pallet::<Test>::kill_account(&AccountId::from([1; 32]));
 			assert!(FreeBalances::<Test>::get(
 				AccountId::from([1; 32]),
 				ForeignChain::Ethereum.gas_asset()

@@ -308,7 +308,7 @@ pub mod pallet {
 			let _ = LiquidityRefundAddress::<T>::clear_prefix(&account_id, u32::MAX, None);
 
 			// Kill the account balances.
-			T::BalanceApi::kill_balance(&account_id);
+			T::BalanceApi::kill_account(&account_id);
 
 			T::AccountRoleRegistry::deregister_as_liquidity_provider(&account_id)?;
 
