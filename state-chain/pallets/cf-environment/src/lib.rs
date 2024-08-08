@@ -106,7 +106,7 @@ pub mod pallet {
 		/// Eth is not an Erc20 token, so its address can't be updated.
 		EthAddressNotUpdateable,
 		/// The nonce account is currently not being used or does not exist.
-		NonceAccountNotBeingUsedOrDoesntExist,
+		NonceAccountNotBeingUsedOrDoesNotExist,
 	}
 
 	#[pallet::pallet]
@@ -449,7 +449,6 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [NonceAccountNotBeingUsedOrDoesntExist](Error::NonceAccountNotBeingUsedOrDoesntExist)
 		#[pallet::call_index(7)]
-		// Todo
 		#[pallet::weight(Weight::zero())]
 		pub fn update_sol_nonce(
 			origin: OriginFor<T>,
@@ -458,7 +457,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			if let Some(_nonce) = SolanaUnavailableNonceAccounts::<T>::take(nonce_account) {
+			if SolanaUnavailableNonceAccounts::<T>::take(nonce_account).is_some() {
 				SolanaAvailableNonceAccounts::<T>::append((nonce_account, durable_nonce));
 				Self::deposit_event(Event::<T>::DurableNonceSetForAccount {
 					nonce_account,
@@ -466,8 +465,59 @@ pub mod pallet {
 				});
 				Ok(().into())
 			} else {
-				Err(Error::<T>::NonceAccountNotBeingUsedOrDoesntExist.into())
+				Err(Error::<T>::NonceAccountNotBeingUsedOrDoesNotExist.into())
 			}
+		}
+
+		/// Allows Governance to recover a used Nonce.
+		/// If a Hash is supplied as well, update the associated Durable Hash as well.
+		/// Requires Governance Origin.
+		///
+		/// ## Events
+		///
+		/// - [DurableNonceSetForAccount](Event::DurableNonceSetForAccount)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::call_index(8)]
+		#[pallet::weight(Weight::zero())]
+		pub fn force_recover_sol_nonce(
+			origin: OriginFor<T>,
+			nonce_account: SolAddress,
+			durable_nonce: Option<SolHash>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			let new_hash =
+				// If Nonce account is currently Unavailable - reset it as Available again.
+				if let Some(current_hash) = SolanaUnavailableNonceAccounts::<T>::take(nonce_account) {
+					let new_hash = durable_nonce.unwrap_or(current_hash);
+					SolanaAvailableNonceAccounts::<T>::append((nonce_account, new_hash));
+					Ok(new_hash)
+				} else if let Some(new_hash) = durable_nonce {
+					// If the Nonce account is currently Available, update its Hash (therefore the Hash must be passed in)
+					SolanaAvailableNonceAccounts::<T>::try_mutate(|durable_nonces|{
+						durable_nonces
+							.iter()
+							.position(|(account, _)|*account == nonce_account)
+							.map(|idx| {
+								durable_nonces[idx] = (nonce_account, new_hash);
+								new_hash
+							})
+							.ok_or::<DispatchError>(Error::<T>::NonceAccountNotBeingUsedOrDoesNotExist.into())
+					})
+				} else {
+					// The Nonce account currently isn't being used, or no Hash is given when it's required.
+					Err(Error::<T>::NonceAccountNotBeingUsedOrDoesNotExist.into())
+				}?;
+
+			Self::deposit_event(Event::<T>::DurableNonceSetForAccount {
+				nonce_account,
+				durable_nonce: new_hash,
+			});
+
+			Ok(().into())
 		}
 	}
 

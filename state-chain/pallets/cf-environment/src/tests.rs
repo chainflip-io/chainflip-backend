@@ -8,7 +8,7 @@ use cf_chains::{
 	sol::{SolAddress, SolHash},
 };
 use cf_traits::SafeMode;
-use frame_support::{assert_ok, traits::OriginTrait};
+use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 
 use crate::{
 	mock::*, BitcoinAvailableUtxos, ConsolidationParameters, RuntimeSafeMode, SafeModeUpdate,
@@ -361,16 +361,16 @@ fn test_consolidation_change_amount() {
 fn test_sol_nonces_and_accounts_usage() {
 	new_test_ext().execute_with(|| {
 		SolanaAvailableNonceAccounts::<Test>::set(vec![
-			(SolAddress([1; 32]), SolHash([10; 32])),
-			(SolAddress([2; 32]), SolHash([20; 32])),
-			(SolAddress([3; 32]), SolHash([30; 32])),
-			(SolAddress([4; 32]), SolHash([40; 32])),
-			(SolAddress([5; 32]), SolHash([50; 32])),
+			(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+			(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+			(SolAddress([3u8; 32]), SolHash([30u8; 32])),
+			(SolAddress([4u8; 32]), SolHash([40u8; 32])),
+			(SolAddress([5u8; 32]), SolHash([50u8; 32])),
 		]);
 
 		// Use one nonce
 		let (account1, nonce1) = Environment::get_sol_nonce_and_account().unwrap();
-		assert_eq!((account1, nonce1), (SolAddress([5; 32]), SolHash([50; 32])));
+		assert_eq!((account1, nonce1), (SolAddress([5u8; 32]), SolHash([50u8; 32])));
 		assert_eq!(SolanaUnavailableNonceAccounts::<Test>::get(account1).unwrap(), nonce1);
 		assert_eq!(
 			SolanaUnavailableNonceAccounts::<Test>::iter_keys().collect::<Vec<_>>().len(),
@@ -379,7 +379,7 @@ fn test_sol_nonces_and_accounts_usage() {
 
 		// use second nonce
 		let (account2, nonce2) = Environment::get_sol_nonce_and_account().unwrap();
-		assert_eq!((account2, nonce2), (SolAddress([4; 32]), SolHash([40; 32])));
+		assert_eq!((account2, nonce2), (SolAddress([4u8; 32]), SolHash([40u8; 32])));
 		assert_eq!(SolanaUnavailableNonceAccounts::<Test>::get(account2).unwrap(), nonce2);
 		assert_eq!(
 			SolanaUnavailableNonceAccounts::<Test>::iter_keys().collect::<Vec<_>>().len(),
@@ -387,7 +387,8 @@ fn test_sol_nonces_and_accounts_usage() {
 		);
 
 		// put back the first nonce account with a new nonce
-		Environment::update_sol_nonce(RuntimeOrigin::root(), account1, SolHash([100; 32])).unwrap();
+		Environment::update_sol_nonce(RuntimeOrigin::root(), account1, SolHash([100u8; 32]))
+			.unwrap();
 		assert_eq!(SolanaUnavailableNonceAccounts::<Test>::get(account1), None);
 		assert_eq!(
 			SolanaUnavailableNonceAccounts::<Test>::iter_keys().collect::<Vec<_>>().len(),
@@ -396,15 +397,16 @@ fn test_sol_nonces_and_accounts_usage() {
 		assert_eq!(
 			SolanaAvailableNonceAccounts::<Test>::get(),
 			vec![
-				(SolAddress([1; 32]), SolHash([10; 32])),
-				(SolAddress([2; 32]), SolHash([20; 32])),
-				(SolAddress([3; 32]), SolHash([30; 32])),
-				(SolAddress([5; 32]), SolHash([100; 32])),
+				(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+				(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+				(SolAddress([3u8; 32]), SolHash([30u8; 32])),
+				(SolAddress([5u8; 32]), SolHash([100u8; 32])),
 			]
 		);
 
 		// put back the second nonce account with a new nonce
-		Environment::update_sol_nonce(RuntimeOrigin::root(), account2, SolHash([200; 32])).unwrap();
+		Environment::update_sol_nonce(RuntimeOrigin::root(), account2, SolHash([200u8; 32]))
+			.unwrap();
 		assert_eq!(SolanaUnavailableNonceAccounts::<Test>::get(account2), None);
 		assert_eq!(
 			SolanaUnavailableNonceAccounts::<Test>::iter_keys().collect::<Vec<_>>().len(),
@@ -413,11 +415,11 @@ fn test_sol_nonces_and_accounts_usage() {
 		assert_eq!(
 			SolanaAvailableNonceAccounts::<Test>::get(),
 			vec![
-				(SolAddress([1; 32]), SolHash([10; 32])),
-				(SolAddress([2; 32]), SolHash([20; 32])),
-				(SolAddress([3; 32]), SolHash([30; 32])),
-				(SolAddress([5; 32]), SolHash([100; 32])),
-				(SolAddress([4; 32]), SolHash([200; 32])),
+				(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+				(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+				(SolAddress([3u8; 32]), SolHash([30u8; 32])),
+				(SolAddress([5u8; 32]), SolHash([100u8; 32])),
+				(SolAddress([4u8; 32]), SolHash([200u8; 32])),
 			]
 		);
 	});
@@ -428,13 +430,13 @@ fn test_get_all_nonce_accounts() {
 	new_test_ext().execute_with(|| {
 		// insert some available nonces
 		SolanaAvailableNonceAccounts::<Test>::set(vec![
-			(SolAddress([1; 32]), SolHash([10; 32])),
-			(SolAddress([2; 32]), SolHash([20; 32])),
+			(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+			(SolAddress([2u8; 32]), SolHash([20u8; 32])),
 		]);
 
 		// insert some unavailable nonces
-		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([7; 32]), SolHash([70; 32]));
-		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([8; 32]), SolHash([80; 32]));
+		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([7u8; 32]), SolHash([70u8; 32]));
+		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([8u8; 32]), SolHash([80u8; 32]));
 
 		// get_all_sol_nonce_accounts should get all available and unavailable nonce accounts
 		let mut nonces_and_accounts = Environment::get_all_sol_nonce_accounts();
@@ -442,10 +444,10 @@ fn test_get_all_nonce_accounts() {
 		assert_eq!(
 			nonces_and_accounts,
 			vec![
-				(SolAddress([1; 32]), SolHash([10; 32])),
-				(SolAddress([2; 32]), SolHash([20; 32])),
-				(SolAddress([7; 32]), SolHash([70; 32])),
-				(SolAddress([8; 32]), SolHash([80; 32])),
+				(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+				(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+				(SolAddress([7u8; 32]), SolHash([70u8; 32])),
+				(SolAddress([8u8; 32]), SolHash([80u8; 32])),
 			]
 		);
 
@@ -453,17 +455,17 @@ fn test_get_all_nonce_accounts() {
 		assert_eq!(
 			SolanaAvailableNonceAccounts::<Test>::get(),
 			vec![
-				(SolAddress([1; 32]), SolHash([10; 32])),
-				(SolAddress([2; 32]), SolHash([20; 32])),
+				(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+				(SolAddress([2u8; 32]), SolHash([20u8; 32])),
 			]
 		);
 		assert_eq!(
-			SolanaUnavailableNonceAccounts::<Test>::get(SolAddress([7; 32])).unwrap(),
-			SolHash([70; 32])
+			SolanaUnavailableNonceAccounts::<Test>::get(SolAddress([7u8; 32])).unwrap(),
+			SolHash([70u8; 32])
 		);
 		assert_eq!(
-			SolanaUnavailableNonceAccounts::<Test>::get(SolAddress([8; 32])).unwrap(),
-			SolHash([80; 32])
+			SolanaUnavailableNonceAccounts::<Test>::get(SolAddress([8u8; 32])).unwrap(),
+			SolHash([80u8; 32])
 		);
 	});
 }
@@ -472,40 +474,167 @@ fn test_get_all_nonce_accounts() {
 fn test_recover_unused_durable_nonce() {
 	new_test_ext().execute_with(|| {
 		SolanaAvailableNonceAccounts::<Test>::set(vec![
+			(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+			(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+		]);
+		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([3u8; 32]), SolHash([30u8; 32]));
+		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([4u8; 32]), SolHash([40u8; 32]));
+
+		// Can recover unused Nonce
+		Environment::recover_sol_durable_nonce(SolAddress([3u8; 32]));
+		assert_eq!(
+			SolanaAvailableNonceAccounts::<Test>::get(),
+			vec![
+				(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+				(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+				(SolAddress([3u8; 32]), SolHash([30u8; 32])),
+			]
+		);
+		assert_eq!(
+			SolanaUnavailableNonceAccounts::<Test>::iter().collect::<Vec<_>>(),
+			vec![(SolAddress([4u8; 32]), SolHash([40u8; 32])),]
+		);
+
+		// Cannot recover if the given Nonce is "Unavailable"
+		Environment::recover_sol_durable_nonce(SolAddress([100u8; 32]));
+		assert_eq!(
+			SolanaAvailableNonceAccounts::<Test>::get(),
+			vec![
+				(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+				(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+				(SolAddress([3u8; 32]), SolHash([30u8; 32])),
+			]
+		);
+		assert_eq!(
+			SolanaUnavailableNonceAccounts::<Test>::iter().collect::<Vec<_>>(),
+			vec![(SolAddress([4u8; 32]), SolHash([40u8; 32])),]
+		);
+	});
+}
+
+#[test]
+fn test_governance_recover_unavailable_sol_durable_nonce() {
+	new_test_ext().execute_with(|| {
+		SolanaAvailableNonceAccounts::<Test>::set(vec![
+			(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+			(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+		]);
+		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([3u8; 32]), SolHash([30u8; 32]));
+		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([4u8; 32]), SolHash([40u8; 32]));
+
+		// When Hash is not supplied: Recover the Nonce with original Hash.
+		assert_ok!(Environment::force_recover_sol_nonce(
+			RuntimeOrigin::root(),
+			SolAddress([3u8; 32]),
+			None,
+		));
+
+		assert_eq!(
+			SolanaAvailableNonceAccounts::<Test>::get(),
+			vec![
+				(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+				(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+				(SolAddress([3u8; 32]), SolHash([30u8; 32])),
+			]
+		);
+		assert_eq!(SolanaUnavailableNonceAccounts::<Test>::get(SolAddress([30u8; 32])), None);
+		assert_eq!(
+			SolanaUnavailableNonceAccounts::<Test>::get(SolAddress([4u8; 32])),
+			Some(SolHash([40u8; 32]))
+		);
+
+		// When Hash is supplied: Recover the Nonce with the given Hash.
+		assert_ok!(Environment::force_recover_sol_nonce(
+			RuntimeOrigin::root(),
+			SolAddress([4u8; 32]),
+			Some(SolHash([100u8; 32])),
+		));
+
+		assert_eq!(
+			SolanaAvailableNonceAccounts::<Test>::get(),
+			vec![
+				(SolAddress([1u8; 32]), SolHash([10u8; 32])),
+				(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+				(SolAddress([3u8; 32]), SolHash([30u8; 32])),
+				(SolAddress([4u8; 32]), SolHash([100u8; 32])),
+			]
+		);
+		assert_eq!(SolanaUnavailableNonceAccounts::<Test>::get(SolAddress([4u8; 32])), None);
+	});
+}
+
+#[test]
+fn test_governance_recover_available_sol_durable_nonce() {
+	new_test_ext().execute_with(|| {
+		SolanaAvailableNonceAccounts::<Test>::set(vec![
+			(SolAddress([1; 32]), SolHash([10; 32])),
+			(SolAddress([2; 32]), SolHash([20; 32])),
+		]);
+
+		// Case 1: Hash is supplied: Update with the given Hash.
+		assert_ok!(Environment::force_recover_sol_nonce(
+			RuntimeOrigin::root(),
+			SolAddress([1u8; 32]),
+			Some(SolHash([100u8; 32])),
+		));
+
+		assert_eq!(
+			SolanaAvailableNonceAccounts::<Test>::get(),
+			vec![
+				(SolAddress([1u8; 32]), SolHash([100u8; 32])),
+				(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+			]
+		);
+		assert_eq!(SolanaUnavailableNonceAccounts::<Test>::get(SolAddress([1u8; 32])), None);
+
+		// Case 2: Hash is not supplied: Return an error
+		assert_noop!(
+			Environment::force_recover_sol_nonce(
+				RuntimeOrigin::root(),
+				SolAddress([1u8; 32]),
+				None,
+			),
+			crate::Error::<Test>::NonceAccountNotBeingUsedOrDoesNotExist
+		);
+
+		assert_eq!(
+			SolanaAvailableNonceAccounts::<Test>::get(),
+			vec![
+				(SolAddress([1u8; 32]), SolHash([100u8; 32])),
+				(SolAddress([2u8; 32]), SolHash([20u8; 32])),
+			]
+		);
+		assert_eq!(SolanaUnavailableNonceAccounts::<Test>::get(SolAddress([1u8; 32])), None);
+	});
+}
+
+#[test]
+fn cannot_governance_recover_unused_sol_durable_nonce() {
+	new_test_ext().execute_with(|| {
+		SolanaAvailableNonceAccounts::<Test>::set(vec![
 			(SolAddress([1; 32]), SolHash([10; 32])),
 			(SolAddress([2; 32]), SolHash([20; 32])),
 		]);
 		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([3; 32]), SolHash([30; 32]));
 		SolanaUnavailableNonceAccounts::<Test>::insert(SolAddress([4; 32]), SolHash([40; 32]));
 
-		// Can recover unused Nonce
-		Environment::recover_sol_durable_nonce(SolAddress([3; 32]));
-		assert_eq!(
-			SolanaAvailableNonceAccounts::<Test>::get(),
-			vec![
-				(SolAddress([1; 32]), SolHash([10; 32])),
-				(SolAddress([2; 32]), SolHash([20; 32])),
-				(SolAddress([3; 32]), SolHash([30; 32])),
-			]
-		);
-		assert_eq!(
-			SolanaUnavailableNonceAccounts::<Test>::iter().collect::<Vec<_>>(),
-			vec![(SolAddress([4; 32]), SolHash([40; 32])),]
+		// Cannot update Durable Nonces that do not exist.
+		assert_noop!(
+			Environment::force_recover_sol_nonce(
+				RuntimeOrigin::root(),
+				SolAddress([5u8; 32]),
+				None,
+			),
+			crate::Error::<Test>::NonceAccountNotBeingUsedOrDoesNotExist
 		);
 
-		// Cannot recover if the given Nonce is "Unavailable"
-		Environment::recover_sol_durable_nonce(SolAddress([100; 32]));
-		assert_eq!(
-			SolanaAvailableNonceAccounts::<Test>::get(),
-			vec![
-				(SolAddress([1; 32]), SolHash([10; 32])),
-				(SolAddress([2; 32]), SolHash([20; 32])),
-				(SolAddress([3; 32]), SolHash([30; 32])),
-			]
-		);
-		assert_eq!(
-			SolanaUnavailableNonceAccounts::<Test>::iter().collect::<Vec<_>>(),
-			vec![(SolAddress([4; 32]), SolHash([40; 32])),]
+		assert_noop!(
+			Environment::force_recover_sol_nonce(
+				RuntimeOrigin::root(),
+				SolAddress([5u8; 32]),
+				Some(SolHash([100; 32])),
+			),
+			crate::Error::<Test>::NonceAccountNotBeingUsedOrDoesNotExist
 		);
 	});
 }
