@@ -7564,6 +7564,7 @@ dependencies = [
  "frame-system",
  "itertools 0.13.0",
  "parity-scale-codec",
+ "rand 0.8.5",
  "scale-info",
  "sp-core 21.0.0",
  "sp-std 8.0.0",
