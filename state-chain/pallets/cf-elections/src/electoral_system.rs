@@ -102,6 +102,12 @@ pub trait ElectoralSystem: 'static {
 	/// pass this check. It is guaranteed that any vote values provided to
 	/// `generate_vote_properties`, or `check_consensus` have past this check.
 	///
+	/// We only pass the `PartialVote` into the validity check, instead of the `AuthorityVote` or
+	/// `Vote`, to ensure the check's logic is consistent regardless of if the authority provides a
+	/// `Vote` or `PartialVote`. If the check was different depending on if the authority voted with
+	/// a `PartialVote` or `Vote`, then check only guarantees of the intersection of the two
+	/// variations.
+	///
 	/// You should *NEVER* update the epoch during this call. And in general updating any other
 	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
 	/// function.
