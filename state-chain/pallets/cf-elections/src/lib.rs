@@ -132,11 +132,15 @@ pub mod pallet {
 		ElectionWriteAccess, ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess,
 		IndividualComponentOf, VotePropertiesOf,
 	};
-	use frame_support::{sp_runtime::traits::BlockNumberProvider, StorageDoubleMap as _};
+	use frame_support::{
+		sp_runtime::traits::BlockNumberProvider, storage::bounded_btree_map::BoundedBTreeMap,
+		StorageDoubleMap as _,
+	};
 	use itertools::Itertools;
 	use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 	use vote_storage::{AuthorityVote, VoteComponents, VoteStorage};
 
+	pub const MAXIMUM_VOTES_PER_EXTRINSIC: u32 = 16;
 	const BLOCKS_BETWEEN_CLEANUP: u64 = 128;
 
 	/// A unique identifier for an election.
@@ -1081,100 +1085,107 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
 		pub fn vote(
 			origin: OriginFor<T>,
-			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
-			authority_vote: AuthorityVoteOf<T::ElectoralSystem>,
+			authority_votes: BoundedBTreeMap<
+				ElectionIdentifierOf<T::ElectoralSystem>,
+				AuthorityVoteOf<T::ElectoralSystem>,
+				ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
+			>,
 		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_current_authority(origin)?;
 			ensure!(IncludedAuthorities::<T, I>::contains_key(&authority), Error::<T, I>::Excluded);
-			let unique_monotonic_identifier = Self::ensure_election_exists(election_identifier)?;
 
-			let (partial_vote, option_vote) = match authority_vote {
-				AuthorityVote::PartialVote(partial_vote) => {
-					(partial_vote, None)
-				},
-				AuthorityVote::Vote(vote) => {
-					(
-						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
-							&vote,
-							|shared_data| SharedDataHash::of(&shared_data)
-						),
-						Some(vote)
-					)
-				},
-			};
+			for (election_identifier, authority_vote) in authority_votes {
+				let unique_monotonic_identifier =
+					Self::ensure_election_exists(election_identifier)?;
 
-			ensure!(
-				Self::with_electoral_access(
-					|electoral_access| -> Result<_, CorruptStorageError> {
-						<T::ElectoralSystem as ElectoralSystem>::is_vote_valid(
-							election_identifier,
-							&electoral_access.election(election_identifier)?,
-							&partial_vote,
+				let (partial_vote, option_vote) = match authority_vote {
+					AuthorityVote::PartialVote(partial_vote) => {
+						(partial_vote, None)
+					},
+					AuthorityVote::Vote(vote) => {
+						(
+							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
+								&vote,
+								|shared_data| SharedDataHash::of(&shared_data)
+							),
+							Some(vote)
 						)
-					}
-				)?,
-				Error::<T, I>::InvalidVote
-			);
+					},
+				};
 
-			Self::handle_corrupt_storage(Self::take_vote_and_then(
-				epoch_index,
-				unique_monotonic_identifier,
-				&authority,
-				authority_index,
-				|option_existing_vote, election_bitmap_components| {
-					let components = <<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::partial_vote_into_components(
-						<T::ElectoralSystem as ElectoralSystem>::generate_vote_properties(
-							election_identifier,
-							option_existing_vote,
-							&partial_vote,
-						)?,
-						partial_vote
-					)?;
+				ensure!(
+					Self::with_electoral_access(
+						|electoral_access| -> Result<_, CorruptStorageError> {
+							<T::ElectoralSystem as ElectoralSystem>::is_vote_valid(
+								election_identifier,
+								&electoral_access.election(election_identifier)?,
+								&partial_vote,
+							)
+						}
+					)?,
+					Error::<T, I>::InvalidVote
+				);
 
-					let block_number = frame_system::Pallet::<T>::current_block_number();
-					if let Some(bitmap_component) = components.bitmap_component {
-						// Store bitmap component and update shared data reference counts
-						election_bitmap_components.add(
-							authority_index,
-							bitmap_component,
-							unique_monotonic_identifier,
-							block_number,
+				Self::handle_corrupt_storage(Self::take_vote_and_then(
+					epoch_index,
+					unique_monotonic_identifier,
+					&authority,
+					authority_index,
+					|option_existing_vote, election_bitmap_components| {
+						let components = <<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::partial_vote_into_components(
+							<T::ElectoralSystem as ElectoralSystem>::generate_vote_properties(
+								election_identifier,
+								option_existing_vote,
+								&partial_vote,
+							)?,
+							partial_vote
 						)?;
-					}
-					if let Some((properties, individual_component)) =
-						components.individual_component
-					{
-						// Update shared data reference counts
-						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_individual_component(
-							&individual_component,
-							|shared_data_hash| Self::add_shared_data_reference(shared_data_hash, unique_monotonic_identifier, block_number),
-						);
-						// Store individual component
-						IndividualComponents::<T, I>::set(
-							unique_monotonic_identifier,
-							authority.clone(),
-							Some((properties, individual_component)),
-						);
-					}
 
-					Ok(())
-				},
-			))?;
+						let block_number = frame_system::Pallet::<T>::current_block_number();
+						if let Some(bitmap_component) = components.bitmap_component {
+							// Store bitmap component and update shared data reference counts
+							election_bitmap_components.add(
+								authority_index,
+								bitmap_component,
+								unique_monotonic_identifier,
+								block_number,
+							)?;
+						}
+						if let Some((properties, individual_component)) =
+							components.individual_component
+						{
+							// Update shared data reference counts
+							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_individual_component(
+								&individual_component,
+								|shared_data_hash| Self::add_shared_data_reference(shared_data_hash, unique_monotonic_identifier, block_number),
+							);
+							// Store individual component
+							IndividualComponents::<T, I>::set(
+								unique_monotonic_identifier,
+								authority.clone(),
+								Some((properties, individual_component)),
+							);
+						}
 
-			// Insert any `SharedData` provided as part of the `Vote`.
-			if let Some(vote) = option_vote {
-				<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_vote(
-					vote,
-					|shared_data| Self::inner_provide_shared_data(shared_data),
-				)
-				.inspect_err(|error| {
-					// Should be impossible for SharedData to be unreferenced
-					// (`UnreferencedSharedData`) here, but with poor `VoteStorage` impls it
-					// could happen. Particularly if the `VoteStorage` visit functions do not
-					// consistently provide the same data/hashes, i.e. are non-deterministic, or
-					// base their behaviour on mutable values not passed to them.
-					debug_assert!(false, "{error:?}");
-				})?;
+						Ok(())
+					},
+				))?;
+
+				// Insert any `SharedData` provided as part of the `Vote`.
+				if let Some(vote) = option_vote {
+					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_vote(
+						vote,
+						|shared_data| Self::inner_provide_shared_data(shared_data),
+					)
+					.inspect_err(|error| {
+						// Should be impossible for SharedData to be unreferenced
+						// (`UnreferencedSharedData`) here, but with poor `VoteStorage` impls it
+						// could happen. Particularly if the `VoteStorage` visit functions do not
+						// consistently provide the same data/hashes, i.e. are non-deterministic, or
+						// base their behaviour on mutable values not passed to them.
+						debug_assert!(false, "{error:?}");
+					})?;
+				}
 			}
 
 			Ok(())
