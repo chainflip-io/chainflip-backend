@@ -1623,18 +1623,25 @@ pub mod pallet {
 			.map_err(Into::into)
 		}
 
-		/// Returns the set of elections (with their details), that a given validator should vote
-		/// in.
+		/// Returns all the current elections (with their details), the validators current votes and
+		/// if the validator should vote in each election.
 		#[allow(clippy::type_complexity)]
 		pub fn validator_election_data(
 			validator_id: &T::ValidatorId,
 		) -> Result<
-			Vec<(
-				ElectionIdentifierOf<T::ElectoralSystem>,
-				<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
-				<T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
-				Option<(VotePropertiesOf<T::ElectoralSystem>, AuthorityVoteOf<T::ElectoralSystem>)>,
-			)>,
+			(
+				Vec<(
+					ElectionIdentifierOf<T::ElectoralSystem>,
+					<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+					<T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+					Option<(
+						VotePropertiesOf<T::ElectoralSystem>,
+						AuthorityVoteOf<T::ElectoralSystem>,
+					)>,
+					bool,
+				)>,
+				Option<VoteSynchronisationBarrier>,
+			),
 			DispatchError,
 		> {
 			use frame_support::traits::OriginTrait;
@@ -1645,57 +1652,59 @@ pub mod pallet {
 
 			let block_number = frame_system::Pallet::<T>::current_block_number();
 
-			Self::with_electoral_access_and_identifiers(|electoral_access, election_identifiers| {
-				election_identifiers
-					.into_iter()
-					.map(|election_identifier| {
-						let unique_monotonic_identifier = *election_identifier.unique_monotonic();
+			Ok((
+				Self::with_electoral_access_and_identifiers(
+					|electoral_access, election_identifiers| {
+						election_identifiers
+							.into_iter()
+							.map(|election_identifier| {
+								let unique_monotonic_identifier =
+									*election_identifier.unique_monotonic();
 
-						let option_current_vote = {
-							let mut contains_timed_out_shared_data_references = false;
-							Pallet::<T, I>::get_vote(
-								epoch_index,
-								unique_monotonic_identifier,
-								&authority,
-								authority_index,
-								|unprovided_shared_data_hash| {
-									let option_reference_details =
-										SharedDataReferenceCount::<T, I>::get(
-											unprovided_shared_data_hash,
-											unique_monotonic_identifier,
-										);
-									if option_reference_details.is_none() ||
-										option_reference_details.unwrap().expires < block_number
-									{
-										contains_timed_out_shared_data_references = true;
-									}
-								},
-							)?
-							.filter(|_| !contains_timed_out_shared_data_references)
-						};
+								let option_current_vote = {
+									let mut contains_timed_out_shared_data_references = false;
+									Pallet::<T, I>::get_vote(
+										epoch_index,
+										unique_monotonic_identifier,
+										&authority,
+										authority_index,
+										|unprovided_shared_data_hash| {
+											let option_reference_details =
+												SharedDataReferenceCount::<T, I>::get(
+													unprovided_shared_data_hash,
+													unique_monotonic_identifier,
+												);
+											if option_reference_details.is_none() ||
+												option_reference_details.unwrap().expires <
+													block_number
+											{
+												contains_timed_out_shared_data_references = true;
+											}
+										},
+									)?
+									.filter(|_| !contains_timed_out_shared_data_references)
+								};
 
-						let election_access = electoral_access.election(election_identifier)?;
+								let election_access =
+									electoral_access.election(election_identifier)?;
 
-						Ok(
-							if <T::ElectoralSystem as ElectoralSystem>::is_vote_desired(
-								election_identifier,
-								&election_access,
-								option_current_vote.clone(),
-							)? {
-								Some((
+								Ok((
 									election_identifier,
 									election_access.settings()?,
 									election_access.properties()?,
-									option_current_vote,
+									option_current_vote.clone(),
+									<T::ElectoralSystem as ElectoralSystem>::is_vote_desired(
+										election_identifier,
+										&election_access,
+										option_current_vote,
+									)?,
 								))
-							} else {
-								None
-							},
-						)
-					})
-					.filter_map(|result_option| result_option.transpose())
-					.collect::<Result<Vec<_>, _>>()
-			})
+							})
+							.collect::<Result<Vec<_>, _>>()
+					},
+				)?,
+				AuthorityVoteSynchronisationBarriers::<T, I>::get(validator_id),
+			))
 		}
 
 		fn recheck_contributed_to_consensuses(
