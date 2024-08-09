@@ -263,10 +263,13 @@ struct DcaState {
 }
 
 impl DcaState {
-	// Create initial DCA state; if no dca parameters provided (for non-DCA swaps),
-	// this creates state equivalent to 1 chunk DCA
-	fn new(input_amount: AssetAmount, params: Option<DcaParameters>) -> DcaState {
-		DcaState {
+	// Create initial DCA state and prepares the first chunk for scheduling; if no dca parameters
+	// provided (for non-DCA swaps), this creates state equivalent to 1 chunk DCA
+	fn create_with_first_chunk(
+		input_amount: AssetAmount,
+		params: Option<DcaParameters>,
+	) -> (DcaState, AssetAmount) {
+		let mut state = DcaState {
 			scheduled_chunk_swap_id: None,
 			remaining_input_amount: input_amount,
 			remaining_chunks: params.as_ref().map(|p| p.number_of_chunks).unwrap_or(1),
@@ -274,10 +277,36 @@ impl DcaState {
 			// set a reasonable default than unwrap Option when it is needed:
 			chunk_interval: params.as_ref().map(|p| p.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS),
 			accumulated_output_amount: 0,
-		}
+		};
+
+		let first_chunk_amount = state.prepare_next_chunk(None).unwrap_or_else(|| {
+			log_or_panic!("Invariant violation: initial DCA state must have at least one chunk!");
+			0
+		});
+
+		(state, first_chunk_amount)
 	}
 
-	fn prepare_next_chunk(&mut self) -> Option<AssetAmount> {
+	fn prepare_next_chunk(
+		&mut self,
+		prev_chunk_and_output: Option<(SwapId, AssetAmount)>,
+	) -> Option<AssetAmount> {
+		if let Some((prev_chunk_swap_id, prev_chunk_output_amount)) = prev_chunk_and_output {
+			if let Some(scheduled_swap_id) = self.scheduled_chunk_swap_id {
+				if scheduled_swap_id != prev_chunk_swap_id {
+					log_or_panic!(
+				"Invariant violation: the recorded chunk id {scheduled_swap_id} does not match executed {prev_chunk_swap_id}"
+			);
+				}
+			} else {
+				log_or_panic!(
+					"Invariant violation: attempting to get next chunk when no previous chunk is recorded"
+				);
+			}
+
+			self.accumulated_output_amount += prev_chunk_output_amount;
+		}
+
 		let chunk_input_amount = self
 			.remaining_input_amount
 			.checked_div(self.remaining_chunks as u128)
@@ -1366,13 +1395,11 @@ pub mod pallet {
 					if is_gas_swap {
 						*gas_swap_state = GasSwapState::OutputReady { gas_budget: output_amount };
 					} else {
-						// The executed swap must be for the principal amount:
-						dca_state.accumulated_output_amount += output_amount;
-
-						// Schedule any remaining DCA chunks:
-
-						dca_state.scheduled_chunk_swap_id =
-							dca_state.prepare_next_chunk().map(|chunk_input_amount| {
+						// The executed swap must be for the principal amount,
+						// record the output and schedule the next chunk if needed:
+						dca_state.scheduled_chunk_swap_id = dca_state
+							.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
+							.map(|chunk_input_amount| {
 								Self::schedule_swap(
 									request.input_asset,
 									request.output_asset,
@@ -1417,10 +1444,10 @@ pub mod pallet {
 					}
 				},
 				SwapRequestState::Regular { output_address, dca_state } => {
-					if let Some(chunk_input_amount) = dca_state.prepare_next_chunk() {
-						dca_state.accumulated_output_amount += output_amount;
-
-						Self::schedule_swap(
+					if let Some(chunk_input_amount) =
+						dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
+					{
+						let swap_id = Self::schedule_swap(
 							request.input_asset,
 							request.output_asset,
 							chunk_input_amount,
@@ -1431,13 +1458,15 @@ pub mod pallet {
 							dca_state.chunk_interval.into(),
 						);
 
+						dca_state.scheduled_chunk_swap_id = Some(swap_id);
+
 						false
 					} else {
 						debug_assert!(dca_state.remaining_input_amount == 0);
 
 						Self::egress_for_swap(
 							swap_request_id,
-							output_amount + dca_state.accumulated_output_amount,
+							dca_state.accumulated_output_amount,
 							swap.output_asset(),
 							output_address.clone(),
 							None,  /* ccm */
@@ -1886,11 +1915,8 @@ pub mod pallet {
 					);
 				},
 				SwapRequestType::Regular { output_address } => {
-					let mut dca_state = DcaState::new(net_amount, dca_params);
-					let Some(chunk_input_amount) = dca_state.prepare_next_chunk() else {
-						log_or_panic!("Initial DCA state must have at least one chunk");
-						return Err(DispatchError::Other("Invariant violation"));
-					};
+					let (mut dca_state, chunk_input_amount) =
+						DcaState::create_with_first_chunk(net_amount, dca_params);
 
 					let swap_refund_params = refund_params.as_ref().map(|params| {
 						utilities::calculate_swap_refund_parameters(
@@ -1964,11 +1990,8 @@ pub mod pallet {
 
 					// See if principal swap is needed, schedule it first if so:
 					if input_asset != output_asset && !principal_swap_amount.is_zero() {
-						let mut dca_state = DcaState::new(principal_swap_amount, dca_params);
-						let Some(chunk_input_amount) = dca_state.prepare_next_chunk() else {
-							log_or_panic!("Initial DCA state must have at least one chunk");
-							return Err(DispatchError::Other("Invariant violation"));
-						};
+						let (mut dca_state, chunk_input_amount) =
+							DcaState::create_with_first_chunk(principal_swap_amount, dca_params);
 
 						let swap_refund_params = refund_params.as_ref().map(|params| {
 							utilities::calculate_swap_refund_parameters(
