@@ -11,7 +11,7 @@ pub(super) mod old {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -20,7 +20,7 @@ pub(super) mod old {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			channel_metadata: CcmChannelMetadata,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		},
 	}
 

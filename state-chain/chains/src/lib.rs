@@ -677,8 +677,18 @@ pub struct SwapRefundParameters {
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
 )]
-pub struct ChannelRefundParameters {
+pub struct ChannelRefundParameters<A> {
 	pub retry_duration: cf_primitives::BlockNumber,
-	pub refund_address: ForeignChainAddress,
+	pub refund_address: A,
 	pub min_price: Price,
+}
+
+impl<A: Clone> ChannelRefundParameters<A> {
+	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParameters<B> {
+		ChannelRefundParameters {
+			retry_duration: self.retry_duration,
+			refund_address: f(self.refund_address.clone()),
+			min_price: self.min_price,
+		}
+	}
 }

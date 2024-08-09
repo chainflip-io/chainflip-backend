@@ -718,7 +718,7 @@ pub trait DepositApi<C: Chain> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
 
@@ -903,7 +903,7 @@ pub trait CcmHandler {
 		broker_commission: Beneficiaries<Self::AccountId>,
 		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 	) -> Result<CcmSwapIds, ()>;
 }
 
@@ -917,7 +917,7 @@ impl CcmHandler for () {
 		_broker_commission: Beneficiaries<Self::AccountId>,
 		_deposit_metadata: CcmDepositMetadata,
 		_origin: SwapOrigin,
-		_refund_params: Option<ChannelRefundParameters>,
+		_refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 	) -> Result<CcmSwapIds, ()> {
 		Err(())
 	}
