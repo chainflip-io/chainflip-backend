@@ -235,7 +235,8 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 				_payload: &<EvmCrypto as ChainCrypto>::Payload,
 				maybe_current_on_chain_key: Option<<EvmCrypto as ChainCrypto>::AggKey>
 			) -> RequiresSignatureRefresh<EvmCrypto, $chain_api<$env>> {
-				maybe_current_on_chain_key.map_or(RequiresSignatureRefresh::False, |current_on_chain_key| if call.signer().is_some_and(|signer|current_on_chain_key != signer ) {RequiresSignatureRefresh::True(None)} else {RequiresSignatureRefresh::False})
+				maybe_current_on_chain_key.map_or(RequiresSignatureRefresh::False, |current_on_chain_key|
+					if call.signer().is_some_and(|signer|current_on_chain_key != signer ) {RequiresSignatureRefresh::True(None)} else {RequiresSignatureRefresh::False})
 			}
 
 			/// Calculate the gas limit for a this evm chain's call, using the current gas price.
@@ -363,13 +364,9 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 			}) {
 				Some(signer) => {
 					let mut modified_call = (*call).clone();
-					// the unwraps should be safe because we are in the code where on chain key
-					// already exists (see above) and so thecurrent_key_epoch should also exist and
-					// so should the corresponding key,
-					let current_aggkey = SolanaThresholdSigner::keys(
-						SolanaThresholdSigner::current_key_epoch().unwrap(),
-					)
-					.unwrap();
+					// the unwrap should be safe because we are in the code where on chain key
+					// already exists (see above) and so the active_epoch_key() should also exist.
+					let current_aggkey = SolanaThresholdSigner::active_epoch_key().unwrap().key;
 					for (i, key) in call.transaction.message.account_keys.iter().enumerate() {
 						if *key == signer.into() {
 							modified_call.transaction.message.account_keys[i] =
