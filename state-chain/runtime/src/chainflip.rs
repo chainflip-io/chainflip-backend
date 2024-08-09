@@ -235,8 +235,13 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 				_payload: &<EvmCrypto as ChainCrypto>::Payload,
 				maybe_current_on_chain_key: Option<<EvmCrypto as ChainCrypto>::AggKey>
 			) -> RequiresSignatureRefresh<EvmCrypto, $chain_api<$env>> {
-				maybe_current_on_chain_key.map_or(RequiresSignatureRefresh::False, |current_on_chain_key|
-					if call.signer().is_some_and(|signer|current_on_chain_key != signer ) {RequiresSignatureRefresh::True(None)} else {RequiresSignatureRefresh::False})
+				maybe_current_on_chain_key.map_or(RequiresSignatureRefresh::False,
+					|current_on_chain_key| if call.signer().is_some_and(|signer|current_on_chain_key != signer ) {
+						RequiresSignatureRefresh::True(None)
+					} else {
+						RequiresSignatureRefresh::False
+					}
+				)
 			}
 
 			/// Calculate the gas limit for a this evm chain's call, using the current gas price.
