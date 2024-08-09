@@ -293,7 +293,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -303,7 +303,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		},
 	}
 
@@ -2079,7 +2079,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,

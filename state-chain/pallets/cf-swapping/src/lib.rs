@@ -275,7 +275,7 @@ struct SwapRequest {
 	id: SwapRequestId,
 	input_asset: Asset,
 	output_asset: Asset,
-	refund_params: Option<ChannelRefundParameters>,
+	refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 	state: SwapRequestState,
 }
 
@@ -443,7 +443,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParameters>,
+			refund_parameters: Option<ChannelRefundParameters<EncodedAddress>>,
 		},
 		/// A swap is scheduled for the first time
 		SwapScheduled {
@@ -994,7 +994,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParameters>,
+			refund_parameters: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			let (beneficiaries, total_bps) = {
@@ -1062,7 +1062,8 @@ pub mod pallet {
 				boost_fee,
 				channel_opening_fee,
 				affiliate_fees,
-				refund_parameters,
+				refund_parameters: refund_parameters
+					.map(|params| params.map_address(T::AddressConverter::to_encoded_address)),
 			});
 
 			Ok(())
@@ -1614,7 +1615,7 @@ pub mod pallet {
 			output_asset: Asset,
 			request_type: SwapRequestType,
 			broker_fees: Beneficiaries<Self::AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 			origin: SwapOrigin,
 		) -> Result<SwapRequestId, DispatchError> {
 			let (net_amount, broker_fee) = {
