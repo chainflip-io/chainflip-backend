@@ -185,6 +185,21 @@ pub mod pallet {
 		}
 	}
 
+	/// This is a value associated with each authority and every in-flight authority vote. The
+	/// authority can ensure invalidation of in-flight authority votes by changing its
+	/// VoteSynchronisationBarrier value, so that any in-flight no longer match the value. We use
+	/// random values as some the in-flight extrinsics may come from previous engine runs and if the
+	/// next vote barrier was deterministic then that previous engine would in some cases try to use
+	/// the same VoteSynchronisationBarrier as the new engine run.
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+	pub struct VoteSynchronisationBarrier(u32);
+	#[cfg(feature = "std")]
+	impl VoteSynchronisationBarrier {
+		pub fn new(rng: &mut impl rand::Rng) -> Self {
+			VoteSynchronisationBarrier(rng.gen())
+		}
+	}
+
 	/// This error is used indicate that the pallet's Storage is corrupt. If it is returned by an
 	/// ElectoralSystem then the whole pallet will stop all actions, and output an error Event every
 	/// block. This error should not be handled or interpreted, and instead should always be passed
@@ -261,7 +276,7 @@ pub mod pallet {
 		AlreadyInitialized,
 		UnknownElection,
 		Unauthorised,
-		Excluded,
+		MismatchedBarrier,
 		Paused,
 		NotPaused,
 		UnreferencedSharedData,
@@ -447,6 +462,16 @@ pub mod pallet {
 	#[pallet::storage]
 	type IncludedAuthorities<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
+
+	/// Votes will only be allowed if their `VoteSynchronisationBarrier` matches this value,
+	/// therefore authorities can invalidate in-flight votes by changing this value via an
+	/// extrinsic. Once they do that they can be confident that no old votes will be included, at
+	/// any block after the extrinsic is included. This allows validators to be able to ensure there
+	/// votes will not change, so they can delete/correct bad votes after detecting a problem for
+	/// example a reorg.
+	#[pallet::storage]
+	type AuthorityVoteSynchronisationBarriers<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, T::ValidatorId, VoteSynchronisationBarrier, OptionQuery>;
 
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
 	/// this is None, the pallet is considered uninitialized.
@@ -1090,9 +1115,15 @@ pub mod pallet {
 				AuthorityVoteOf<T::ElectoralSystem>,
 				ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
 			>,
+			vote_sync_barrier: VoteSynchronisationBarrier,
 		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_current_authority(origin)?;
-			ensure!(IncludedAuthorities::<T, I>::contains_key(&authority), Error::<T, I>::Excluded);
+			ensure!(
+				AuthorityVoteSynchronisationBarriers::<T, I>::get(&authority)
+					.map_or(false, |current_vote_sync_barrier| current_vote_sync_barrier ==
+						vote_sync_barrier),
+				Error::<T, I>::MismatchedBarrier,
+			);
 
 			for (election_identifier, authority_vote) in authority_votes {
 				let unique_monotonic_identifier =
@@ -1197,33 +1228,47 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			shared_data: <<T::ElectoralSystem as electoral_system::ElectoralSystem>::Vote as VoteStorage>::SharedData,
 		) -> DispatchResult {
-			let (_epoch_index, authority, _authority_index) =
-				Self::ensure_current_authority(origin)?;
-			ensure!(IncludedAuthorities::<T, I>::contains_key(&authority), Error::<T, I>::Excluded);
+			Self::ensure_current_authority(origin)?;
 			Self::inner_provide_shared_data(shared_data)?;
 			Ok(())
 		}
 
 		#[pallet::call_index(2)]
 		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
-		pub fn ignore_my_votes(origin: OriginFor<T>) -> DispatchResult {
+		pub fn ignore_my_votes(
+			origin: OriginFor<T>,
+			new_vote_sync_barrier: VoteSynchronisationBarrier,
+		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_current_authority(origin)?;
 
 			if IncludedAuthorities::<T, I>::take(&authority).is_some() {
 				Self::recheck_contributed_to_consensuses(epoch_index, &authority, authority_index)?;
 			}
+
+			AuthorityVoteSynchronisationBarriers::<T, I>::insert(authority, new_vote_sync_barrier);
+
 			Ok(())
 		}
 
 		#[pallet::call_index(3)]
 		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
-		pub fn stop_ignoring_my_votes(origin: OriginFor<T>) -> DispatchResult {
+		pub fn stop_ignoring_my_votes(
+			origin: OriginFor<T>,
+			vote_sync_barrier: VoteSynchronisationBarrier,
+		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_current_authority(origin)?;
+			ensure!(
+				AuthorityVoteSynchronisationBarriers::<T, I>::get(&authority)
+					.map_or(false, |current_vote_sync_barrier| current_vote_sync_barrier ==
+						vote_sync_barrier),
+				Error::<T, I>::MismatchedBarrier,
+			);
 
 			if !IncludedAuthorities::<T, I>::contains_key(&authority) {
 				Self::recheck_contributed_to_consensuses(epoch_index, &authority, authority_index)?;
 			}
 			IncludedAuthorities::<T, I>::insert(authority, ());
+
 			Ok(())
 		}
 
@@ -1482,6 +1527,16 @@ pub mod pallet {
 											IncludedAuthorities::<T, I>::remove(validator);
 										}
 									}
+									for validator in
+										AuthorityVoteSynchronisationBarriers::<T, I>::iter_keys()
+											.collect::<Vec<_>>()
+									{
+										if !current_authorities.contains(&validator) {
+											AuthorityVoteSynchronisationBarriers::<T, I>::remove(
+												validator,
+											);
+										}
+									}
 								}
 
 								T::ElectoralSystem::on_finalize(
@@ -1582,8 +1637,6 @@ pub mod pallet {
 				Pallet::<T, I>::ensure_current_authority(OriginFor::<T>::signed(
 					validator_id.clone().into(),
 				))?;
-
-			ensure!(IncludedAuthorities::<T, I>::contains_key(&authority), Error::<T, I>::Excluded);
 
 			let block_number = frame_system::Pallet::<T>::current_block_number();
 
@@ -1700,6 +1753,12 @@ pub mod pallet {
 						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_individual_component(
 							&individual_component,
 							|shared_data_hash| Self::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier),
+						);
+					}
+
+					if IncludedAuthorities::<T, I>::contains_key(authority) {
+						ElectionConsensusHistoryUpToDate::<T, I>::remove(
+							unique_monotonic_identifier,
 						);
 					}
 
