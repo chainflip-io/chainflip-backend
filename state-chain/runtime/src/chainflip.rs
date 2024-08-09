@@ -360,27 +360,20 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 		// to modify the apicall, by replacing the aggkey with the new key, in the key_accounts in
 		// the tx's message to create a new valid threshold signing payload.
 		maybe_current_onchain_key.map_or(RequiresSignatureRefresh::False, |current_on_chain_key| {
-			match call.signer().and_then(|signer| {
-				if signer != current_on_chain_key {
-					Some(signer)
-				} else {
-					None
-				}
-			}) {
-				Some(signer) => {
+			match call.signer() {
+				Some(signer) if signer != current_on_chain_key => {
 					let mut modified_call = (*call).clone();
 					// the unwrap should be safe because we are in the code where on chain key
 					// already exists (see above) and so the active_epoch_key() should also exist.
 					let current_aggkey = SolanaThresholdSigner::active_epoch_key().unwrap().key;
-					for (i, key) in call.transaction.message.account_keys.iter().enumerate() {
+					for key in modified_call.transaction.message.account_keys.iter_mut() {
 						if *key == signer.into() {
-							modified_call.transaction.message.account_keys[i] =
-								current_aggkey.into()
+							*key = current_aggkey.into()
 						}
 					}
 					RequiresSignatureRefresh::True(Some(modified_call.clone()))
 				},
-				None => RequiresSignatureRefresh::False,
+				_ => RequiresSignatureRefresh::False,
 			}
 		})
 	}
