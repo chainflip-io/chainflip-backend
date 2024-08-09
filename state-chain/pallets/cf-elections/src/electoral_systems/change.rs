@@ -69,7 +69,7 @@ impl<
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
 
-	fn vote_properties(
+	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
 		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 		_vote: &<Self::Vote as VoteStorage>::PartialVote,

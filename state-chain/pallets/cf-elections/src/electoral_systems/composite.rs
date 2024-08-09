@@ -218,7 +218,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     })
                 }
 
-                fn vote_properties(
+                fn generate_vote_properties(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
                     previous_vote: Option<(
                         VotePropertiesOf<Self>,
@@ -228,7 +228,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 ) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
                     match (*election_identifier.extra(), vote) {
                         $((CompositeElectoralSystemEnum::$electoral_system(extra), CompositeVoteStorageEnum::$electoral_system(vote)) => {
-                            <$electoral_system as ElectoralSystem>::vote_properties(
+                            <$electoral_system as ElectoralSystem>::generate_vote_properties(
                                 election_identifier.with_extra(extra),
                                 previous_vote.map(|(previous_properties, previous_vote)| {
                                     Ok((

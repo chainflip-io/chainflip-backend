@@ -1124,7 +1124,7 @@ pub mod pallet {
 				authority_index,
 				|option_existing_vote, election_bitmap_components| {
 					let components = <<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::partial_vote_into_components(
-						<T::ElectoralSystem as ElectoralSystem>::vote_properties(
+						<T::ElectoralSystem as ElectoralSystem>::generate_vote_properties(
 							election_identifier,
 							option_existing_vote,
 							&partial_vote,
