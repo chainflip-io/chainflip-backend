@@ -1696,7 +1696,7 @@ impl_runtime_apis! {
 			account_id: AccountId,
 		) -> BrokerInfo {
 			let earned_fees = Asset::all().map(|asset|
-				(asset, Swapping::earned_broker_fees(&account_id, asset))
+				(asset, AssetBalances::get_balance(&account_id, asset))
 			).collect();
 
 			BrokerInfo { earned_fees }

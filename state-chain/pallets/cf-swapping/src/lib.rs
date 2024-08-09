@@ -463,12 +463,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SwapRequestIdCounter<T: Config> = StorageValue<_, SwapRequestId, ValueQuery>;
 
-	/// Earned Fees by Brokers
-	#[pallet::storage]
-	#[pallet::getter(fn earned_broker_fees)]
-	pub(crate) type EarnedBrokerFees<T: Config> =
-		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
-
 	/// Fund accrued from rejected swap and CCM calls.
 	#[pallet::storage]
 	pub type CollectedRejectedFunds<T: Config> =
@@ -875,7 +869,6 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, asset)?;
 
-			// let earned_fees = EarnedBrokerFees::<T>::take(account_id, asset);
 			let earned_fees = T::BalanceApi::get_balance(&account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
 			T::BalanceApi::try_debit_account(&account_id, asset, earned_fees)?;
@@ -1079,8 +1072,6 @@ pub mod pallet {
 			);
 
 			T::BalanceApi::kill_account(&account_id);
-
-			// let _ = EarnedBrokerFees::<T>::clear_prefix(&account_id, u32::MAX, None);
 
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
 
@@ -1870,12 +1861,6 @@ pub mod pallet {
 					let fee =
 						Permill::from_parts(bps as u32 * BASIS_POINTS_PER_MILLION) * input_amount;
 					T::BalanceApi::try_credit_account(&account, input_asset, fee)?;
-					// EarnedBrokerFees::<T>::mutate(&account, input_asset, |earned_fees| {
-					// 	earned_fees.saturating_accrue(
-					// 		Permill::from_parts(bps as u32 * BASIS_POINTS_PER_MILLION) *
-					// 			input_amount,
-					// 	)
-					// });
 				}
 
 				(input_amount.saturating_sub(fee), fee)

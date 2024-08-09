@@ -80,17 +80,15 @@ impl BalanceApi for MockBalance {
 		.unwrap())
 	}
 
-	fn kill_account(_who: &Self::AccountId) {
-		unimplemented!()
-	}
+	fn kill_account(who: &Self::AccountId) {}
 
 	#[cfg(feature = "try-runtime")]
 	fn get_balances_info() -> BalancesInfo {
-		unimplemented!()
+		unreachable!("Only used in try-runtime")
 	}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
-		todo!()
+		Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default()
 	}
 }
 
