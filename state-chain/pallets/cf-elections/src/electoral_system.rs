@@ -99,8 +99,8 @@ pub trait ElectoralSystem: 'static {
 	}
 
 	/// This is used in the vote extrinsic to disallow a validator from providing votes that do not
-	/// pass this check. It is guaranteed that any vote values provided to `vote_properties`, or
-	/// `check_consensus` have past this check.
+	/// pass this check. It is guaranteed that any vote values provided to
+	/// `generate_vote_properties`, or `check_consensus` have past this check.
 	///
 	/// You should *NEVER* update the epoch during this call. And in general updating any other
 	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
@@ -119,7 +119,7 @@ pub trait ElectoralSystem: 'static {
 	/// You should *NEVER* update the epoch during this call. And in general updating any other
 	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
 	/// function.
-	fn vote_properties(
+	fn generate_vote_properties(
 		election_identifier: ElectionIdentifierOf<Self>,
 		previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 		vote: &<Self::Vote as VoteStorage>::PartialVote,
