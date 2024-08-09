@@ -1123,7 +1123,7 @@ pub mod pallet {
 			>,
 			vote_sync_barrier: VoteSynchronisationBarrier,
 		) -> DispatchResult {
-			let (epoch_index, authority, authority_index) = Self::ensure_current_authority(origin)?;
+			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 			ensure!(
 				AuthorityVoteSynchronisationBarriers::<T, I>::get(&authority)
 					.map_or(false, |current_vote_sync_barrier| current_vote_sync_barrier ==
@@ -1234,7 +1234,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			shared_data: <<T::ElectoralSystem as electoral_system::ElectoralSystem>::Vote as VoteStorage>::SharedData,
 		) -> DispatchResult {
-			Self::ensure_current_authority(origin)?;
+			Self::ensure_can_vote(origin)?;
 			Self::inner_provide_shared_data(shared_data)?;
 			Ok(())
 		}
@@ -1245,7 +1245,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			new_vote_sync_barrier: VoteSynchronisationBarrier,
 		) -> DispatchResult {
-			let (epoch_index, authority, authority_index) = Self::ensure_current_authority(origin)?;
+			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
 			if ContributingAuthorities::<T, I>::take(&authority).is_some() {
 				Self::recheck_contributed_to_consensuses(epoch_index, &authority, authority_index)?;
@@ -1262,7 +1262,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			vote_sync_barrier: VoteSynchronisationBarrier,
 		) -> DispatchResult {
-			let (epoch_index, authority, authority_index) = Self::ensure_current_authority(origin)?;
+			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 			ensure!(
 				AuthorityVoteSynchronisationBarriers::<T, I>::get(&authority)
 					.map_or(false, |current_vote_sync_barrier| current_vote_sync_barrier ==
@@ -1284,7 +1284,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
 		) -> DispatchResult {
-			let (epoch_index, authority, authority_index) = Self::ensure_current_authority(origin)?;
+			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 			let unique_monotonic_identifier = Self::ensure_election_exists(election_identifier)?;
 
 			Self::handle_corrupt_storage(Self::take_vote_and_then(
@@ -1639,10 +1639,9 @@ pub mod pallet {
 		> {
 			use frame_support::traits::OriginTrait;
 
-			let (epoch_index, authority, authority_index) =
-				Pallet::<T, I>::ensure_current_authority(OriginFor::<T>::signed(
-					validator_id.clone().into(),
-				))?;
+			let (epoch_index, authority, authority_index) = Pallet::<T, I>::ensure_can_vote(
+				OriginFor::<T>::signed(validator_id.clone().into()),
+			)?;
 
 			let block_number = frame_system::Pallet::<T>::current_block_number();
 
@@ -1809,7 +1808,7 @@ pub mod pallet {
 			)
 		}
 
-		fn ensure_current_authority(
+		fn ensure_can_vote(
 			origin: OriginFor<T>,
 		) -> Result<(EpochIndex, T::ValidatorId, AuthorityCount), DispatchError> {
 			let epoch_index = T::EpochInfo::epoch_index();
