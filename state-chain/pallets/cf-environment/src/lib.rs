@@ -447,7 +447,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		/// - [NonceAccountNotBeingUsedOrDoesntExist](Error::NonceAccountNotBeingUsedOrDoesntExist)
+		/// - [NonceAccountIsNotUnavailable](Error::NonceAccountNotBeingUsedOrDoesNotExist)
 		#[pallet::call_index(7)]
 		#[pallet::weight(Weight::zero())]
 		pub fn update_sol_nonce(
@@ -480,6 +480,8 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [NonceAccountNotBeingUsed](Error::NonceAccountNotBeingUsedOrDoesNotExist)
+		/// - [NonceHashNotSuppliedWhereRequired](Error::NonceAccountNotBeingUsedOrDoesNotExist)
 		#[pallet::call_index(8)]
 		#[pallet::weight(Weight::zero())]
 		pub fn force_recover_sol_nonce(
