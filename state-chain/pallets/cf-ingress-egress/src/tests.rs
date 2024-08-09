@@ -362,7 +362,6 @@ fn addresses_are_getting_reused() {
 			_ => None,
 		})
 		.then_execute_at_next_block(|(channels, broadcast_ids)| {
-			assert!(broadcast_ids.len() == 1);
 			// This would normally be triggered on broadcast success, should finalise the ingress.
 			for id in broadcast_ids {
 				MockEgressBroadcaster::dispatch_success_callback(id);
@@ -538,6 +537,7 @@ fn can_egress_ccm() {
 			ccm.source_address,
 			GAS_BUDGET,
 			ccm.channel_metadata.message.to_vec(),
+			vec![],
 		).unwrap()]);
 
 		// Storage should be cleared

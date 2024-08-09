@@ -127,6 +127,7 @@ impl crate::Config for Test {
 	type SwapRequestHandler =
 		MockSwapRequestHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
 	type AssetWithholding = MockAssetWithholding;
+	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
 }
 
