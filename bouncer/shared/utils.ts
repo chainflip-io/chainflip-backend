@@ -424,7 +424,8 @@ export async function observeSwapRequested(
       const data = event.data;
 
       if (typeof data.origin === 'object' && 'DepositChannel' in data.origin) {
-        const channelMatches = Number(data.origin.DepositChannel.channelId) === channelId;
+        const channelMatches =
+          Number(data.origin.DepositChannel.channelId.replaceAll(',', '')) === channelId;
         const sourceAssetMatches = sourceAsset === (data.inputAsset as Asset);
         const destAssetMatches = destAsset === (data.outputAsset as Asset);
         const requestTypeMatches = checkRequestTypeMatches(data.requestType, swapRequestType);
