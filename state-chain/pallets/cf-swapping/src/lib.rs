@@ -100,8 +100,8 @@ impl SwapState {
 		self.swap.input_amount
 	}
 
-	fn refund_params(&self) -> Option<&SwapRefundParameters> {
-		self.swap.refund_params.as_ref()
+	fn refund_params(&self) -> &Option<SwapRefundParameters> {
+		&self.swap.refund_params
 	}
 
 	fn update_swap_result(&mut self, direction: SwapLeg, output: AssetAmount) {
@@ -1404,7 +1404,7 @@ pub mod pallet {
 									request.input_asset,
 									request.output_asset,
 									chunk_input_amount,
-									swap.swap.refund_params.clone(),
+									swap.refund_params().clone(),
 									SwapType::CcmPrincipal,
 									swap_request_id,
 									dca_state.chunk_interval.into(),
@@ -1451,8 +1451,8 @@ pub mod pallet {
 							request.input_asset,
 							request.output_asset,
 							chunk_input_amount,
-							// TODO: recompute swap params depending on the output amount we got
-							swap.swap.refund_params.clone(),
+							// TODO: recompute swap params depending on the output amount we got?
+							swap.refund_params().clone(),
 							SwapType::Swap,
 							request.id,
 							dca_state.chunk_interval.into(),
