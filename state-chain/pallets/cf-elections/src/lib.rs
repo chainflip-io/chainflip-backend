@@ -1133,6 +1133,7 @@ pub mod pallet {
 
 					let block_number = frame_system::Pallet::<T>::current_block_number();
 					if let Some(bitmap_component) = components.bitmap_component {
+						// Store bitmap component and update shared data reference counts
 						election_bitmap_components.add(
 							authority_index,
 							bitmap_component,
@@ -1143,10 +1144,12 @@ pub mod pallet {
 					if let Some((properties, individual_component)) =
 						components.individual_component
 					{
+						// Update shared data reference counts
 						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_individual_component(
 							&individual_component,
 							|shared_data_hash| Self::add_shared_data_reference(shared_data_hash, unique_monotonic_identifier, block_number),
 						);
+						// Store individual component
 						IndividualComponents::<T, I>::set(
 							unique_monotonic_identifier,
 							authority.clone(),
@@ -1158,13 +1161,19 @@ pub mod pallet {
 				},
 			))?;
 
+			// Insert any `SharedData` provided as part of the `Vote`.
 			if let Some(vote) = option_vote {
 				<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_vote(
 					vote,
 					|shared_data| Self::inner_provide_shared_data(shared_data),
 				)
-				.inspect_err(|_| {
-					debug_assert!(false);
+				.inspect_err(|error| {
+					// Should be impossible for SharedData to be unreferenced
+					// (`UnreferencedSharedData`) here, but with poor `VoteStorage` impls it
+					// could happen. Particularly if the `VoteStorage` visit functions do not
+					// consistently provide the same data/hashes, i.e. are non-deterministic, or
+					// base their behaviour on mutable values not passed to them.
+					debug_assert!(false, "{error:?}");
 				})?;
 			}
 
