@@ -11,6 +11,7 @@ pub(super) mod old {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
+			refund_params: Option<ChannelRefundParameters>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -18,8 +19,8 @@ pub(super) mod old {
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
+			refund_params: Option<ChannelRefundParameters>,
 		},
 	}
 
@@ -66,11 +67,12 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 						destination_asset,
 						destination_address,
 						broker_fees,
+						refund_params,
 					} => ChannelAction::Swap {
 						destination_asset,
 						destination_address,
 						broker_fees,
-						refund_params: None,
+						refund_params,
 						dca_params: None,
 					},
 					old::ChannelAction::LiquidityProvision { lp_account } =>
@@ -78,14 +80,14 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					old::ChannelAction::CcmTransfer {
 						destination_asset,
 						destination_address,
-						broker_fees,
 						channel_metadata,
+						refund_params,
 					} => ChannelAction::CcmTransfer {
 						destination_asset,
 						destination_address,
-						broker_fees,
 						channel_metadata,
-						refund_params: None,
+						broker_fees: Default::default(),
+						refund_params,
 						dca_params: None,
 					},
 				},
@@ -146,6 +148,12 @@ mod tests {
 			let input_address_2 = ScriptPubkey::Taproot([1u8; 32]);
 			let output_address = ForeignChainAddress::Eth([0u8; 20].into());
 
+			let refund_params = ChannelRefundParameters {
+				retry_duration: 40,
+				refund_address: ForeignChainAddress::Eth([3u8; 20].into()),
+				min_price: 2.into(),
+			};
+
 			let old_details_swap = old::DepositChannelDetails::<Test, _> {
 				deposit_channel: mock_deposit_channel(),
 				opened_at: Default::default(),
@@ -155,6 +163,7 @@ mod tests {
 					destination_asset: Asset::Flip,
 					destination_address: output_address.clone(),
 					broker_fees: Default::default(),
+					refund_params: Some(refund_params.clone()),
 				},
 				boost_fee: 0,
 			};
@@ -163,12 +172,12 @@ mod tests {
 				action: old::ChannelAction::CcmTransfer {
 					destination_asset: Asset::Flip,
 					destination_address: output_address.clone(),
-					broker_fees: Default::default(),
 					channel_metadata: CcmChannelMetadata {
 						message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 						gas_budget: 50 * 10u128.pow(18),
 						cf_parameters: Default::default(),
 					},
+					refund_params: Some(refund_params.clone()),
 				},
 				..old_details_swap.clone()
 			};
@@ -193,7 +202,7 @@ mod tests {
 						destination_asset: Asset::Flip,
 						destination_address: output_address.clone(),
 						broker_fees: Default::default(),
-						refund_params: None,
+						refund_params: Some(refund_params.clone()),
 						dca_params: None,
 					},
 					boost_fee: 0,
@@ -209,13 +218,13 @@ mod tests {
 					action: ChannelAction::CcmTransfer {
 						destination_asset: Asset::Flip,
 						destination_address: output_address.clone(),
-						broker_fees: Default::default(),
 						channel_metadata: CcmChannelMetadata {
 							message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 							gas_budget: 50 * 10u128.pow(18),
 							cf_parameters: Default::default(),
 						},
-						refund_params: None,
+						broker_fees: Default::default(),
+						refund_params: Some(refund_params.clone()),
 						dca_params: None,
 					},
 					boost_fee: 0,
