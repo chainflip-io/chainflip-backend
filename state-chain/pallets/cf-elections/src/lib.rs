@@ -623,12 +623,17 @@ pub mod pallet {
 							IndividualComponents::<T, I>::iter_prefix(unique_monotonic_identifier)
 								.collect::<BTreeMap<_, _>>();
 
-						let votes = current_authorities.into_iter().filter(|validator_id| IncludedAuthorities::<T, I>::contains_key(validator_id)).map(|validator_id|
-							VoteComponents {
-								bitmap_component: bitmap_components.get(&validator_id).cloned(),
-								individual_component: individual_components.remove(&validator_id),
-							}
-						).filter_map(|vote_components| {
+						let votes = current_authorities.into_iter().map(|validator_id|
+							(
+								VoteComponents {
+									bitmap_component: bitmap_components.get(&validator_id).cloned(),
+									individual_component: individual_components.remove(&validator_id),
+								},
+								validator_id,
+							)
+						).filter(|(_, validator_id)| {
+							IncludedAuthorities::<T, I>::contains_key(validator_id)
+						}).filter_map(|(vote_components, _)| {
 							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_vote(vote_components, |shared_data_hash| {
 								// We don't bother to check if the reference has expired, as if we have the data we may as well use it, even if it was provided after the shared data reference expired (But before the reference was cleaned up `on_finalize`).
 								Ok(SharedData::<T, I>::get(shared_data_hash))
@@ -639,6 +644,7 @@ pub mod pallet {
 						})
 						.collect::<Result<Vec<_>, _>>()?;
 
+						// Remove individual components from non-authorities
 						for (validator_id, (_, individual_component)) in individual_components {
 							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_individual_component(
 								&individual_component,
