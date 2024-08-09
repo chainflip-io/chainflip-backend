@@ -583,13 +583,24 @@ pub trait WaivedFees {
 }
 
 /// Qualify what is considered as a potential authority for the network
-pub trait QualifyNode<Id: Ord> {
+///
+/// Note that when implementing this, it is sufficient to implement is_qualified. However, if
+/// there is a high fixed cost to check if a single node is qualified (for example if we need to
+/// compute some precondition or criterion), it is recommended to implement take_qualified as well.
+pub trait QualifyNode<Id: Ord + Clone> {
 	/// Is the node qualified to be an authority and meet our expectations of one
 	fn is_qualified(validator_id: &Id) -> bool;
 
 	/// Filter out the unqualified nodes from a list of potential nodes.
-	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
-		validators.into_iter().filter(|v| !Self::is_qualified(v)).collect()
+	fn filter_qualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
+		validators.into_iter().filter(|v| Self::is_qualified(v)).collect()
+	}
+
+	/// Takes a vector of items and a id-selector function, and returns another vector containing
+	/// only the items whose id is qualified.
+	fn filter_qualified_by_key<T>(items: Vec<T>, f: impl Fn(&T) -> &Id) -> Vec<T> {
+		let qualified = Self::filter_qualified(items.iter().map(&f).cloned().collect());
+		items.into_iter().filter(|i| qualified.contains(f(i))).collect()
 	}
 }
 
@@ -604,7 +615,7 @@ impl<T: Chainflip, R: frame_support::traits::ValidatorRegistration<T::ValidatorI
 	}
 }
 
-impl<Id: Ord, A, B> QualifyNode<Id> for (A, B)
+impl<Id: Ord + Clone, A, B> QualifyNode<Id> for (A, B)
 where
 	A: QualifyNode<Id>,
 	B: QualifyNode<Id>,
@@ -613,8 +624,8 @@ where
 		A::is_qualified(validator_id) && B::is_qualified(validator_id)
 	}
 
-	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
-		B::filter_unqualified(A::filter_unqualified(validators))
+	fn filter_qualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
+		B::filter_qualified(A::filter_qualified(validators))
 	}
 }
 

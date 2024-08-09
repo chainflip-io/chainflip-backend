@@ -1,3 +1,4 @@
+use pallet_cf_reputation::HeartbeatQualification;
 use sp_std::collections::btree_set::BTreeSet;
 
 use crate::mock_runtime::{
@@ -76,7 +77,10 @@ fn state_of_genesis_is_as_expected() {
 		}
 
 		for account in accounts.iter() {
-			assert!(Reputation::is_qualified(account), "Genesis nodes start online");
+			assert!(
+				HeartbeatQualification::<Runtime>::is_qualified(account),
+				"Genesis nodes start online"
+			);
 		}
 
 		assert_eq!(Emissions::last_supply_update_block(), 0, "no emissions");
