@@ -428,7 +428,11 @@ impl<C: Chain<Transaction = MockTransaction>, Call: ApiCall<C::ChainCrypto>>
 		_call: &Call,
 		_payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		_maybe_current_on_chain_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
-	) -> bool {
-		REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow())
+	) -> RequiresSignatureRefresh<C::ChainCrypto, Call> {
+		if REQUIRES_REFRESH.with(|is_valid| *is_valid.borrow()) {
+			RequiresSignatureRefresh::True(None)
+		} else {
+			RequiresSignatureRefresh::False
+		}
 	}
 }

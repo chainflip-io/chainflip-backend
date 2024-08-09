@@ -15,7 +15,7 @@ use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
 use cf_chains::{
 	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
-	RetryPolicy, TransactionBuilder, TransactionMetadata as _,
+	RequiresSignatureRefresh, RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
@@ -773,13 +773,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
 			// If the broadcast is not pending, we should not retry.
-			if let Some(api_call) = PendingApiCalls::<T, I>::get(broadcast_id) {
-				if T::TransactionBuilder::requires_signature_refresh(
-					&api_call,
-					&broadcast_data.threshold_signature_payload,
-					CurrentOnChainKey::<T, I>::get(),
-				) {
+			if let Some(mut api_call) = PendingApiCalls::<T, I>::get(broadcast_id) {
+				if let RequiresSignatureRefresh::True(maybe_modified_apicall) =
+					T::TransactionBuilder::requires_signature_refresh(
+						&api_call,
+						&broadcast_data.threshold_signature_payload,
+						CurrentOnChainKey::<T, I>::get(),
+					) {
 					Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
+					if let Some(modified_apicall) = maybe_modified_apicall {
+						PendingApiCalls::<T, I>::insert(broadcast_id, modified_apicall.clone());
+						api_call = modified_apicall;
+					}
 					Self::threshold_sign(api_call, broadcast_id, true);
 					log::info!(
 						"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
