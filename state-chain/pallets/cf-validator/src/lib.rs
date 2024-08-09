@@ -1218,13 +1218,10 @@ impl<T: Config> Pallet<T> {
 	/// sorted by bids highest to lowest.
 	pub fn highest_funded_qualified_backup_node_bids(
 	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
-		let backup_map = Backups::<T>::get();
-		let qualified_backups =
-			T::KeygenQualification::take_qualified(backup_map.keys().cloned().collect());
-		let mut backups = backup_map
-			.into_iter()
-			.filter(|(bidder_id, _bid)| qualified_backups.contains(bidder_id))
-			.collect::<Vec<_>>();
+		let mut backups = T::KeygenQualification::filter_qualified_by_key(
+			Backups::<T>::get().into_iter().collect(),
+			|(bidder_id, _bid)| bidder_id,
+		);
 
 		let limit = Self::backup_reward_nodes_limit();
 		if limit < backups.len() {
@@ -1301,13 +1298,7 @@ impl<T: Config> Pallet<T> {
 
 	pub fn get_qualified_bidders<Q: QualifyNode<ValidatorIdOf<T>>>(
 	) -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
-		let bids = Self::get_active_bids();
-		let qualified_bidders = Q::take_qualified(
-			bids.iter().map(|Bid { bidder_id, .. }| bidder_id).cloned().collect(),
-		);
-		bids.into_iter()
-			.filter(|Bid { ref bidder_id, .. }| qualified_bidders.contains(bidder_id))
-			.collect()
+		Q::filter_qualified_by_key(Self::get_active_bids(), |Bid { ref bidder_id, .. }| bidder_id)
 	}
 
 	pub fn is_bidding(account_id: &T::AccountId) -> bool {
@@ -1524,7 +1515,7 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 		NodeCFEVersion::<T>::get(validator_id) >= MinimumReportedCfeVersion::<T>::get()
 	}
 
-	fn take_qualified(
+	fn filter_qualified(
 		validators: BTreeSet<<T as Chainflip>::ValidatorId>,
 	) -> BTreeSet<<T as Chainflip>::ValidatorId> {
 		let min_version = MinimumReportedCfeVersion::<T>::get();

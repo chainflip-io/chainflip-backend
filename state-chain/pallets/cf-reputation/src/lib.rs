@@ -419,7 +419,7 @@ where
 		Reputations::<T>::get(validator_id).reputation_points >= cutoff
 	}
 
-	fn take_qualified(validators: BTreeSet<T::ValidatorId>) -> BTreeSet<T::ValidatorId> {
+	fn filter_qualified(validators: BTreeSet<T::ValidatorId>) -> BTreeSet<T::ValidatorId> {
 		let reputations = Reputations::<T>::iter()
 			.map(|(id, ReputationTracker { reputation_points, .. })| (id, reputation_points))
 			.collect::<BTreeMap<_, _>>();
@@ -496,7 +496,7 @@ impl<T: Config, L: OffenceList<T>> QualifyNode<T::ValidatorId> for ExclusionList
 		!Pallet::<T>::validators_suspended_for(L::OFFENCES).contains(validator_id)
 	}
 
-	fn take_qualified(validators: BTreeSet<T::ValidatorId>) -> BTreeSet<T::ValidatorId> {
+	fn filter_qualified(validators: BTreeSet<T::ValidatorId>) -> BTreeSet<T::ValidatorId> {
 		validators
 			.difference(&Pallet::<T>::validators_suspended_for(L::OFFENCES))
 			.cloned()
