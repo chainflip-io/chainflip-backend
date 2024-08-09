@@ -460,7 +460,7 @@ pub mod pallet {
 	/// the current authority set, and so it may include authorities that are not in the current
 	/// authority set or exclude authorities that are in the current authority set.
 	#[pallet::storage]
-	type IncludedAuthorities<T: Config<I>, I: 'static = ()> =
+	type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
 
 	/// Votes will only be allowed if their `VoteSynchronisationBarrier` matches this value,
@@ -632,7 +632,7 @@ pub mod pallet {
 								validator_id,
 							)
 						).filter(|(_, validator_id)| {
-							IncludedAuthorities::<T, I>::contains_key(validator_id)
+							ContributingAuthorities::<T, I>::contains_key(validator_id)
 						}).filter_map(|(vote_components, _)| {
 							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_vote(vote_components, |shared_data_hash| {
 								// We don't bother to check if the reference has expired, as if we have the data we may as well use it, even if it was provided after the shared data reference expired (But before the reference was cleaned up `on_finalize`).
@@ -1247,7 +1247,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_current_authority(origin)?;
 
-			if IncludedAuthorities::<T, I>::take(&authority).is_some() {
+			if ContributingAuthorities::<T, I>::take(&authority).is_some() {
 				Self::recheck_contributed_to_consensuses(epoch_index, &authority, authority_index)?;
 			}
 
@@ -1270,10 +1270,10 @@ pub mod pallet {
 				Error::<T, I>::MismatchedBarrier,
 			);
 
-			if !IncludedAuthorities::<T, I>::contains_key(&authority) {
+			if !ContributingAuthorities::<T, I>::contains_key(&authority) {
 				Self::recheck_contributed_to_consensuses(epoch_index, &authority, authority_index)?;
 			}
-			IncludedAuthorities::<T, I>::insert(authority, ());
+			ContributingAuthorities::<T, I>::insert(authority, ());
 
 			Ok(())
 		}
@@ -1526,11 +1526,11 @@ pub mod pallet {
 									}
 
 									let current_authorities = T::EpochInfo::current_authorities();
-									for validator in
-										IncludedAuthorities::<T, I>::iter_keys().collect::<Vec<_>>()
+									for validator in ContributingAuthorities::<T, I>::iter_keys()
+										.collect::<Vec<_>>()
 									{
 										if !current_authorities.contains(&validator) {
-											IncludedAuthorities::<T, I>::remove(validator);
+											ContributingAuthorities::<T, I>::remove(validator);
 										}
 									}
 									for validator in
@@ -1762,7 +1762,7 @@ pub mod pallet {
 						);
 					}
 
-					if IncludedAuthorities::<T, I>::contains_key(authority) {
+					if ContributingAuthorities::<T, I>::contains_key(authority) {
 						ElectionConsensusHistoryUpToDate::<T, I>::remove(
 							unique_monotonic_identifier,
 						);
