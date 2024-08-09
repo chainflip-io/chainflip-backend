@@ -519,7 +519,7 @@ fn should_properly_check_if_validator_is_qualified() {
 		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
 		assert!(ReputationPointsQualification::<Test>::is_qualified(&ALICE));
 		assert_eq!(
-			ReputationPointsQualification::<Test>::take_qualified(iter::once(ALICE).collect()),
+			ReputationPointsQualification::<Test>::filter_qualified(iter::once(ALICE).collect()),
 			iter::once(ALICE).collect()
 		);
 
@@ -529,7 +529,7 @@ fn should_properly_check_if_validator_is_qualified() {
 			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
 		}
 		assert_eq!(
-			ReputationPointsQualification::<Test>::take_qualified(test_set.clone()),
+			ReputationPointsQualification::<Test>::filter_qualified(test_set.clone()),
 			test_set
 		);
 
@@ -549,7 +549,7 @@ fn should_properly_check_if_validator_is_qualified() {
 			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
 		}
 		assert_eq!(
-			ReputationPointsQualification::<Test>::take_qualified(test_set.clone()),
+			ReputationPointsQualification::<Test>::filter_qualified(test_set.clone()),
 			test_set
 		);
 
@@ -559,7 +559,7 @@ fn should_properly_check_if_validator_is_qualified() {
 
 		assert!(!ReputationPointsQualification::<Test>::is_qualified(&EVE));
 		assert_eq!(
-			ReputationPointsQualification::<Test>::take_qualified(test_set.clone()),
+			ReputationPointsQualification::<Test>::filter_qualified(test_set.clone()),
 			test_set.into_iter().filter(|id| *id != EVE).collect()
 		);
 
@@ -596,7 +596,7 @@ fn should_properly_check_if_validator_is_qualified() {
 		assert!(reputation_points(&EVE) < 0);
 		assert!(!ReputationPointsQualification::<Test>::is_qualified(&EVE));
 		assert_eq!(
-			ReputationPointsQualification::<Test>::take_qualified(
+			ReputationPointsQualification::<Test>::filter_qualified(
 				test_set.iter().copied().collect()
 			),
 			test_set.iter().copied().filter(|id| *id != EVE).collect()
@@ -619,7 +619,7 @@ fn should_properly_check_if_validator_is_qualified() {
 			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
 		}
 		assert_eq!(
-			ReputationPointsQualification::<Test>::take_qualified(
+			ReputationPointsQualification::<Test>::filter_qualified(
 				test_set.iter().copied().collect()
 			),
 			rest.iter().copied().collect()

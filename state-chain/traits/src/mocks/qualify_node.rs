@@ -17,7 +17,7 @@ impl<Id: Encode + Decode> QualifyAll<Id> {
 	}
 }
 
-impl<Id: Ord + Encode + Decode> QualifyNode<Id> for QualifyAll<Id> {
+impl<Id: Ord + Clone + Encode + Decode> QualifyNode<Id> for QualifyAll<Id> {
 	fn is_qualified(id: &Id) -> bool {
 		!Self::get_storage::<_, Vec<Id>>(b"EXCEPT", b"").unwrap_or_default().contains(id)
 	}
