@@ -215,11 +215,10 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
-			if let Some((state, unsynchronised_settings, settings)) = &self.option_initialize {
-				ElectoralUnsynchronisedState::<T, I>::put(state);
-				ElectoralUnsynchronisedSettings::<T, I>::put(unsynchronised_settings);
-				ElectoralSettings::<T, I>::insert(NextElectionIdentifier::<T, I>::get(), settings);
-				Status::<T, I>::put(ElectoralSystemStatus::Running);
+			if let Some((state, unsynchronised_settings, settings)) = self.option_initialize.clone()
+			{
+				Pallet::<T, I>::internally_initialize(state, unsynchronised_settings, settings)
+					.expect("Pallet could not be already initialized at genesis.");
 			}
 		}
 	}
@@ -1238,11 +1237,7 @@ pub mod pallet {
 			settings: <T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(Status::<T, I>::get().is_none(), Error::<T, I>::AlreadyInitialized);
-			ElectoralUnsynchronisedState::<T, I>::put(state);
-			ElectoralUnsynchronisedSettings::<T, I>::put(unsynchronised_settings);
-			ElectoralSettings::<T, I>::insert(NextElectionIdentifier::<T, I>::get(), settings);
-			Status::<T, I>::put(ElectoralSystemStatus::Running);
+			Self::internally_initialize(state, unsynchronised_settings, settings)?;
 			Ok(())
 		}
 
@@ -1504,6 +1499,7 @@ pub mod pallet {
 			ElectoralUnsynchronisedState::<T, I>::put(state);
 			ElectoralUnsynchronisedSettings::<T, I>::put(unsynchronised_settings);
 			ElectoralSettings::<T, I>::insert(NextElectionIdentifier::<T, I>::get(), settings);
+			Status::<T, I>::put(ElectoralSystemStatus::Running);
 			Ok(())
 		}
 
