@@ -144,7 +144,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -301,6 +301,7 @@ pub mod pallet {
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
+			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
 			refund_params: Option<ChannelRefundParameters>,
 		},
@@ -1595,6 +1596,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
+				broker_fees,
 				channel_metadata,
 				refund_params,
 			} => {
@@ -1610,7 +1612,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						},
 						output_address: destination_address,
 					},
-					Default::default(),
+					broker_fees,
 					refund_params,
 					swap_origin,
 				) {
@@ -2096,6 +2098,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				Some(msg) => ChannelAction::CcmTransfer {
 					destination_asset,
 					destination_address,
+					broker_fees,
 					channel_metadata: msg,
 					refund_params,
 				},

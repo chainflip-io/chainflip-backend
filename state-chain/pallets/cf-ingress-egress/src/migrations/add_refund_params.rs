@@ -18,6 +18,7 @@ pub(super) mod old {
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
+			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
 		},
 	}
@@ -76,10 +77,12 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					old::ChannelAction::CcmTransfer {
 						destination_asset,
 						destination_address,
+						broker_fees,
 						channel_metadata,
 					} => ChannelAction::CcmTransfer {
 						destination_asset,
 						destination_address,
+						broker_fees,
 						channel_metadata,
 						refund_params: None,
 					},
@@ -158,6 +161,7 @@ mod tests {
 				action: old::ChannelAction::CcmTransfer {
 					destination_asset: Asset::Flip,
 					destination_address: output_address.clone(),
+					broker_fees: Default::default(),
 					channel_metadata: CcmChannelMetadata {
 						message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 						gas_budget: 50 * 10u128.pow(18),
@@ -202,6 +206,7 @@ mod tests {
 					action: ChannelAction::CcmTransfer {
 						destination_asset: Asset::Flip,
 						destination_address: output_address.clone(),
+						broker_fees: Default::default(),
 						channel_metadata: CcmChannelMetadata {
 							message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 							gas_budget: 50 * 10u128.pow(18),
