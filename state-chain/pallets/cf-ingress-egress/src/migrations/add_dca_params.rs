@@ -1,4 +1,5 @@
 use crate::*;
+use codec::{Decode, Encode};
 use frame_support::traits::OnRuntimeUpgrade;
 
 pub(super) mod old {
@@ -101,11 +102,16 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok(vec![])
+		let open_channels_len = old::DepositChannelLookup::<T, I>::iter().count();
+		Ok(open_channels_len.to_be_bytes().to_vec())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let existing_channels_len = usize::from_be_bytes(state.as_slice().try_into().unwrap());
+
+		assert_eq!(existing_channels_len, DepositChannelLookup::<T, I>::iter().count());
+
 		Ok(())
 	}
 }
