@@ -54,7 +54,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   await using chainflip = await getChainflipApi();
   // Check the broker fees before the swap
   const earnedBrokerFeesBefore = BigInt(
-    (await chainflip.query.swapping.earnedBrokerFees(broker.address, inputAsset)).toString(),
+    (await chainflip.query.assetBalances.freeBalances(broker.address, inputAsset)).toString(),
   );
   console.log(`${inputAsset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
@@ -143,14 +143,14 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   console.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
     depositAmountAfterIngressFee >= 0 &&
-      depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
+    depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
     `Unexpected ${inputAsset} deposit amount ${depositAmountAfterIngressFee},
     }`,
   );
 
   // Check that the detected increase in earned broker fees matches the swap event values and it is equal to the expected amount (after the deposit fee is accounted for)
   const earnedBrokerFeesAfter = BigInt(
-    (await chainflip.query.swapping.earnedBrokerFees(broker.address, inputAsset)).toString(),
+    (await chainflip.query.assetBalances.freeBalances(broker.address, inputAsset)).toString(),
   );
   console.log(`${inputAsset} earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
   const increase = earnedBrokerFeesAfter - earnedBrokerFeesBefore;
