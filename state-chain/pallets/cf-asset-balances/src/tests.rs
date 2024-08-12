@@ -317,7 +317,6 @@ fn can_reconciliate_multiple_chains_at_once() {
 pub mod balance_api {
 	use super::*;
 
-	use crate::HistoricalEarnedFees;
 	use cf_primitives::chains::assets::eth;
 
 	#[test]
@@ -381,42 +380,12 @@ pub mod balance_api {
 				ForeignChain::Ethereum.gas_asset(),
 				100,
 			);
-			HistoricalEarnedFees::<Test>::insert(
-				AccountId::from([1; 32]),
-				ForeignChain::Ethereum.gas_asset(),
-				100,
-			);
 			Pallet::<Test>::kill_account(&AccountId::from([1; 32]));
 			assert!(FreeBalances::<Test>::get(
 				AccountId::from([1; 32]),
 				ForeignChain::Ethereum.gas_asset()
 			)
 			.is_none());
-			assert_eq!(
-				HistoricalEarnedFees::<Test>::get(
-					AccountId::from([1; 32]),
-					ForeignChain::Ethereum.gas_asset()
-				),
-				0
-			);
-		});
-	}
-
-	#[test]
-	pub fn record_fees() {
-		new_test_ext().execute_with(|| {
-			Pallet::<Test>::record_fees(
-				&AccountId::from([1; 32]),
-				100,
-				ForeignChain::Ethereum.gas_asset(),
-			);
-			assert_eq!(
-				HistoricalEarnedFees::<Test>::get(
-					AccountId::from([1; 32]),
-					ForeignChain::Ethereum.gas_asset()
-				),
-				100
-			);
 		});
 	}
 

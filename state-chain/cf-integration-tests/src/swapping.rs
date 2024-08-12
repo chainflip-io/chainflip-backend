@@ -33,13 +33,12 @@ use frame_support::{
 	instances::Instance1,
 	traits::{OnFinalize, OnIdle},
 };
-use pallet_cf_asset_balances::HistoricalEarnedFees;
 use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls, RequestFailureCallbacks,
 	RequestSuccessCallbacks,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
-use pallet_cf_pools::{OrderId, RangeOrderSize};
+use pallet_cf_pools::{HistoricalEarnedFees, OrderId, RangeOrderSize};
 use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
 use sp_core::U256;
 use state_chain_runtime::{

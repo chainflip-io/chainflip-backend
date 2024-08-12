@@ -5,7 +5,7 @@ use cf_chains::{
 	assets::any::Asset,
 	AnyChain, Chain, Ethereum,
 };
-use cf_primitives::{chains::assets, AccountId, AssetAmount, BalancesInfo, ChannelId};
+use cf_primitives::{chains::assets, AccountId, AssetAmount, ChannelId};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
@@ -14,7 +14,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler,
 	},
-	AccountRoleRegistry, BalanceApi, BoostApi,
+	AccountRoleRegistry, BalanceApi, BoostApi, HistoricalFeeMigration,
 };
 use frame_support::{
 	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
@@ -68,6 +68,20 @@ thread_local! {
 	pub static BALANCE_MAP: RefCell<BTreeMap<AccountId, AssetAmount>> = RefCell::new(BTreeMap::new());
 }
 
+pub struct MockMigrationHelper;
+
+impl HistoricalFeeMigration for MockMigrationHelper {
+	type AccountId = AccountId;
+
+	fn migrate_historical_fee(_account_id: Self::AccountId, _asset: Asset, _amount: AssetAmount) {
+		todo!()
+	}
+
+	fn get_fee_amount(_account_id: Self::AccountId, _asset: Asset) -> AssetAmount {
+		todo!()
+	}
+}
+
 pub struct MockBalanceApi;
 
 impl BalanceApi for MockBalanceApi {
@@ -98,13 +112,6 @@ impl BalanceApi for MockBalanceApi {
 		})
 	}
 
-	fn record_fees(
-		_who: &Self::AccountId,
-		_amount: cf_primitives::AssetAmount,
-		_asset: cf_primitives::Asset,
-	) {
-	}
-
 	fn free_balances(
 		who: &Self::AccountId,
 	) -> Result<assets::any::AssetMap<cf_primitives::AssetAmount>, sp_runtime::DispatchError> {
@@ -124,12 +131,7 @@ impl BalanceApi for MockBalanceApi {
 		});
 	}
 
-	#[cfg(feature = "try-runtime")]
-	fn get_balances_info() -> BalancesInfo {
-		unimplemented!()
-	}
-
-	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
+	fn get_balance(_who: &Self::AccountId, _asset: Asset) -> AssetAmount {
 		todo!()
 	}
 }
@@ -193,6 +195,7 @@ impl crate::Config for Test {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
 	type BoostApi = MockIngressEgressBoostApi;
+	type MigrationHelper = MockMigrationHelper;
 }
 
 pub struct MockIngressEgressBoostApi;

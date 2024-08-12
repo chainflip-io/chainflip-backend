@@ -52,14 +52,13 @@ use codec::{alloc::string::ToString, Encode};
 use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
-use pallet_cf_asset_balances::HistoricalEarnedFees;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
 };
 use pallet_cf_pools::{
-	AskBidMap, AssetPair, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1, PoolPriceV2,
-	UnidirectionalPoolDepth,
+	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
+	PoolPriceV2, UnidirectionalPoolDepth,
 };
 
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
@@ -473,6 +472,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
+	type MigrationHelper = LiquidityPools;
 }
 
 impl pallet_cf_account_roles::Config for Runtime {

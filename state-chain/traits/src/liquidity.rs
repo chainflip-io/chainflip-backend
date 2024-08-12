@@ -1,6 +1,6 @@
 use cf_amm::common::PoolPairsMap;
 use cf_chains::assets::any::AssetMap;
-use cf_primitives::{Asset, AssetAmount, BalancesInfo};
+use cf_primitives::{Asset, AssetAmount};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use sp_std::{vec, vec::Vec};
 
@@ -49,9 +49,6 @@ pub trait BalanceApi {
 		amount: AssetAmount,
 	) -> DispatchResult;
 
-	/// Record the fees collected by the account.
-	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset);
-
 	/// Returns the asset free balances of the given account.
 	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
 
@@ -60,10 +57,12 @@ pub trait BalanceApi {
 
 	/// Removes the account from the balance storage.
 	fn kill_account(who: &Self::AccountId);
+}
 
-	/// Returns all available balance information.
-	#[cfg(feature = "try-runtime")]
-	fn get_balances_info() -> BalancesInfo;
+pub trait HistoricalFeeMigration {
+	type AccountId;
+	fn migrate_historical_fee(account_id: Self::AccountId, asset: Asset, amount: AssetAmount);
+	fn get_fee_amount(account_id: Self::AccountId, asset: Asset) -> AssetAmount;
 }
 
 pub trait PoolApi {

@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_pools, PalletSafeMode};
 use cf_chains::{assets::any::AssetMap, Ethereum};
-use cf_primitives::{Asset, AssetAmount, BalancesInfo};
+use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
@@ -112,12 +112,6 @@ impl BalanceApi for MockBalance {
 		Ok(())
 	}
 
-	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset) {
-		RecordedFees::mutate(|recorded_fees| {
-			recorded_fees.insert(*who, (asset, amount));
-		});
-	}
-
 	fn free_balances(
 		_who: &Self::AccountId,
 	) -> Result<AssetMap<AssetAmount>, sp_runtime::DispatchError> {
@@ -128,13 +122,8 @@ impl BalanceApi for MockBalance {
 		unimplemented!()
 	}
 
-	#[cfg(feature = "try-runtime")]
-	fn get_balances_info() -> BalancesInfo {
+	fn get_balance(_who: &Self::AccountId, _asset: Asset) -> AssetAmount {
 		unimplemented!()
-	}
-
-	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
-		todo!()
 	}
 }
 

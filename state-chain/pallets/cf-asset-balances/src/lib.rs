@@ -2,7 +2,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
-use cf_primitives::{AccountId, Asset, AssetAmount, BalancesInfo};
+use cf_primitives::{AccountId, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AssetWithholding, BalanceApi, Chainflip, EgressApi, KeyProvider,
@@ -151,11 +151,6 @@ pub mod pallet {
 	/// Storage for user's free balances/ DoubleMap: (AccountId, Asset) => Balance
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
-
-	#[pallet::storage]
-	/// Historical earned fees for an account.
-	pub type HistoricalEarnedFees<T: Config> =
-		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 }
 
 impl<T: Config> Pallet<T> {
@@ -438,26 +433,12 @@ where
 		Ok(())
 	}
 
-	fn record_fees(account_id: &Self::AccountId, amount: AssetAmount, asset: Asset) {
-		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
-			*balance = balance.saturating_add(amount)
-		});
-	}
-
 	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
 		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset).unwrap_or_default()))
 	}
 
 	fn kill_account(who: &Self::AccountId) {
 		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
-		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn get_balances_info() -> BalancesInfo {
-		let balances = FreeBalances::<T>::iter().collect::<Vec<_>>();
-		let fees = HistoricalEarnedFees::<T>::iter().collect::<Vec<_>>();
-		BalancesInfo { balances: balances.into(), fees: fees.into() }
 	}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {

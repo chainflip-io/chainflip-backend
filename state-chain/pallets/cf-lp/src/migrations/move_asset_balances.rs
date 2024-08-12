@@ -1,5 +1,6 @@
 use crate::*;
-use cf_primitives::{AccountId, BalancesInfo};
+use cf_primitives::AccountId;
+use cf_traits::HistoricalFeeMigration;
 use frame_support::traits::OnRuntimeUpgrade;
 use sp_std::vec::Vec;
 
@@ -27,10 +28,14 @@ mod old {
 		AssetAmount,
 		ValueQuery,
 	>;
+}
 
-	#[frame_support::storage_alias]
-	pub type CollectedRejectedFunds<T: Config> =
-		StorageMap<Pallet<T>, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+type AssetBalance<T> = Vec<(<T as frame_system::Config>::AccountId, Asset, u128)>;
+
+#[derive(Encode, Decode)]
+pub struct MigrationData<T: Config> {
+	pub balances: AssetBalance<T>,
+	pub fees: AssetBalance<T>,
 }
 
 pub struct Migration<T: Config>(PhantomData<T>);
@@ -42,31 +47,34 @@ where
 {
 	fn on_runtime_upgrade() -> Weight {
 		for (account, asset, amount) in old::FreeBalances::<T>::drain() {
-			let _ = T::BalanceApi::try_credit_account(&account, asset, amount);
+			T::BalanceApi::try_credit_account(&account, asset, amount).expect("Migration failed");
 		}
 		for (account, asset, amount) in old::HistoricalEarnedFees::<T>::drain() {
-			T::BalanceApi::record_fees(&account, amount, asset);
+			T::MigrationHelper::migrate_historical_fee(account, asset, amount);
 		}
 		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let balances = BalancesInfo {
-			balances: old::FreeBalances::<T>::iter().collect::<Vec<_>>().into(),
-			fees: old::HistoricalEarnedFees::<T>::iter().collect::<Vec<_>>().into(),
+		let balances: MigrationData<T> = MigrationData {
+			balances: old::FreeBalances::<T>::iter().collect::<Vec<_>>(),
+			fees: old::HistoricalEarnedFees::<T>::iter().collect::<Vec<_>>(),
 		};
 		Ok(balances.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let old_balances = BalancesInfo::decode(&mut &state[..]).unwrap();
-		let new_balances = T::BalanceApi::get_balances_info();
-		assert!(
-			old_balances.encode() == new_balances.encode(),
-			"Balances do not match after migration"
-		);
+		let data = MigrationData::<T>::decode(&mut &state[..]).unwrap();
+		for (account, asset, amount) in data.balances {
+			let new_balance = T::BalanceApi::get_balance(&account, asset);
+			assert_eq!(new_balance, amount, "Balance mismatch for {:?}", account);
+		}
+		for (account, asset, amount) in data.fees {
+			let new_fee = T::MigrationHelper::get_fee_amount(account.clone(), asset);
+			assert_eq!(new_fee, amount, "Fee mismatch for {:?}", account);
+		}
 		Ok(())
 	}
 }

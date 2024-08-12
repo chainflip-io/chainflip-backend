@@ -1,6 +1,6 @@
 use crate::{BalanceApi, LpDepositHandler};
 use cf_chains::assets::any::{Asset, AssetMap};
-use cf_primitives::{AssetAmount, BalancesInfo};
+use cf_primitives::AssetAmount;
 use frame_support::sp_runtime::{
 	traits::{CheckedSub, Saturating},
 	DispatchError, DispatchResult,
@@ -71,8 +71,6 @@ impl BalanceApi for MockBalance {
 		)
 	}
 
-	fn record_fees(_who: &Self::AccountId, _amount: AssetAmount, _asset: Asset) {}
-
 	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
 		Ok(AssetMap::try_from_iter(Asset::all().map(|asset| {
 			(asset, Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default())
@@ -80,12 +78,7 @@ impl BalanceApi for MockBalance {
 		.unwrap())
 	}
 
-	fn kill_account(who: &Self::AccountId) {}
-
-	#[cfg(feature = "try-runtime")]
-	fn get_balances_info() -> BalancesInfo {
-		unreachable!("Only used in try-runtime")
-	}
+	fn kill_account(_who: &Self::AccountId) {}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
 		Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default()

@@ -19,6 +19,8 @@ use frame_support::{
 	transactional,
 };
 
+use cf_traits::HistoricalFeeMigration;
+
 use cf_traits::LpApi;
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
@@ -285,6 +287,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type MaximumPriceImpact<T: Config> =
 		StorageMap<_, Twox64Concat, AssetPair, u32, OptionQuery>;
+
+	#[pallet::storage]
+	/// Historical earned fees for an account.
+	pub type HistoricalEarnedFees<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -1447,7 +1454,9 @@ impl<T: Config> Pallet<T> {
 			asset_pair.assets().zip(collected.fees).try_map(|(asset, collected_fees)| {
 				AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
 					|collected_fees| {
-						T::LpBalance::record_fees(lp, collected_fees, asset);
+						HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
+							*balance = balance.saturating_add(collected_fees)
+						});
 						T::LpBalance::try_credit_account(lp, asset, collected_fees)
 							.map(|()| collected_fees)
 					},
@@ -1883,7 +1892,9 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		let collected_fees: AssetAmount = collected.fees.try_into()?;
 		let asset = asset_pair.assets()[!order.to_sold_pair()];
-		T::LpBalance::record_fees(lp, collected_fees, asset);
+		HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
+			*balance = balance.saturating_add(collected_fees)
+		});
 		T::LpBalance::try_credit_account(lp, asset, collected_fees)?;
 
 		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
@@ -1931,5 +1942,17 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 		Ok(())
+	}
+}
+
+impl<T: Config> HistoricalFeeMigration for Pallet<T> {
+	type AccountId = T::AccountId;
+	fn migrate_historical_fee(account_id: Self::AccountId, asset: Asset, amount: AssetAmount) {
+		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
+			*balance = balance.saturating_add(amount)
+		});
+	}
+	fn get_fee_amount(account_id: Self::AccountId, asset: Asset) -> AssetAmount {
+		HistoricalEarnedFees::<T>::get(account_id, asset)
 	}
 }
