@@ -109,27 +109,19 @@ pub mod pallet {
 			amount: AssetAmount,
 		},
 		/// The refund was skipped because of the given reason.
-		RefundSkipped {
-			reason: DispatchError,
-			chain: ForeignChain,
-			address: ForeignChainAddress,
-		},
+		RefundSkipped { reason: DispatchError, chain: ForeignChain, address: ForeignChainAddress },
 		/// The Vault is running a deficit: we owe more than we have set aside for refunds.
 		VaultDeficitDetected {
 			chain: ForeignChain,
 			amount_owed: AssetAmount,
 			available: AssetAmount,
 		},
-		AccountDebited {
-			account_id: T::AccountId,
-			asset: Asset,
-			amount_debited: AssetAmount,
-		},
-		AccountCredited {
-			account_id: T::AccountId,
-			asset: Asset,
-			amount_credited: AssetAmount,
-		},
+		/// The account was debited.
+		AccountDebited { account_id: T::AccountId, asset: Asset, amount_debited: AssetAmount },
+		/// The account was credited.
+		AccountCredited { account_id: T::AccountId, asset: Asset, amount_credited: AssetAmount },
+		/// The account was removed from storage.
+		AccountKilled { account_id: T::AccountId },
 	}
 
 	#[pallet::pallet]
@@ -439,6 +431,7 @@ where
 
 	fn kill_account(who: &Self::AccountId) {
 		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
+		Self::deposit_event(Event::AccountKilled { account_id: who.clone() });
 	}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {

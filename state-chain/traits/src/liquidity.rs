@@ -13,7 +13,7 @@ pub trait LpDepositHandler {
 }
 
 /// API for interacting with the liquidity provider pallet.
-pub trait LpApi {
+pub trait LpRegistration {
 	type AccountId;
 
 	/// Register an address for an given account. This is for benchmarking purposes only.

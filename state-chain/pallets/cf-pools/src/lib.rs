@@ -21,7 +21,7 @@ use frame_support::{
 
 use cf_traits::HistoricalFeeMigration;
 
-use cf_traits::LpApi;
+use cf_traits::LpRegistration;
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -257,7 +257,7 @@ pub mod pallet {
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
 
-		type LpApi: LpApi<AccountId = Self::AccountId>;
+		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 
 		type SwapRequestHandler: SwapRequestHandler;
 
@@ -1546,7 +1546,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		f: F,
 	) -> Result<R, DispatchError> {
-		T::LpApi::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
+		T::LpRegistrationApi::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)

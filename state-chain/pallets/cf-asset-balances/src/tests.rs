@@ -373,7 +373,7 @@ pub mod balance_api {
 	}
 
 	#[test]
-	pub fn kill_accounts() {
+	pub fn kill_account() {
 		new_test_ext().execute_with(|| {
 			FreeBalances::<Test>::insert(
 				AccountId::from([1; 32]),
@@ -386,6 +386,9 @@ pub mod balance_api {
 				ForeignChain::Ethereum.gas_asset()
 			)
 			.is_none());
+			assert_has_event::<Test>(
+				crate::Event::AccountKilled { account_id: alice.clone() }.into(),
+			);
 		});
 	}
 

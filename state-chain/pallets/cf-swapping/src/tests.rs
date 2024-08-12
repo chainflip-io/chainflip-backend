@@ -2308,7 +2308,6 @@ fn register_and_deregister_account() {
 		));
 		assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(ALICE)),);
 
-		// assert!(!EarnedBrokerFees::<Test>::contains_key(ALICE, Asset::Eth));
 		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_broker(
 			OriginTrait::signed(ALICE),
 		)

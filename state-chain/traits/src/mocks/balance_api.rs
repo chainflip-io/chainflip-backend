@@ -11,7 +11,7 @@ use cf_chains::ForeignChainAddress;
 
 use super::{MockPallet, MockPalletStorage};
 
-use crate::LpApi;
+use crate::LpRegistration;
 
 pub struct MockBalance;
 
@@ -85,9 +85,9 @@ impl BalanceApi for MockBalance {
 	}
 }
 
-pub struct MockLpApi;
+pub struct MockLpRegistration;
 
-impl LpApi for MockLpApi {
+impl LpRegistration for MockLpRegistration {
 	type AccountId = u64;
 
 	#[cfg(feature = "runtime-benchmarks")]

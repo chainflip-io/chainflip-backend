@@ -5,7 +5,7 @@ use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, ForeignChain};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostApi, Chainflip, DepositApi,
-	EgressApi, LpApi, LpDepositHandler, PoolApi, ScheduledEgressDetails,
+	EgressApi, LpDepositHandler, LpRegistration, PoolApi, ScheduledEgressDetails,
 };
 
 use sp_std::vec;
@@ -442,7 +442,7 @@ impl<T: Config> LpDepositHandler for Pallet<T> {
 	}
 }
 
-impl<T: Config> LpApi for Pallet<T> {
+impl<T: Config> LpRegistration for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
 	#[cfg(feature = "runtime-benchmarks")]

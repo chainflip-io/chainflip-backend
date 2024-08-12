@@ -311,12 +311,6 @@ impl core::fmt::Display for NetworkEnvironment {
 	}
 }
 
-#[derive(Encode, Decode)]
-pub struct BalancesInfo {
-	pub balances: Vec<(AccountId, Asset, AssetAmount)>,
-	// pub fees: Vec<(AccountId, Asset, AssetAmount)>,
-}
-
 #[test]
 fn is_more_recent_semver() {
 	fn ver(major: u8, minor: u8, patch: u8) -> SemVer {
