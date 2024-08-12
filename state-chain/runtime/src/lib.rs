@@ -2023,12 +2023,14 @@ impl_runtime_apis! {
 			let eth = pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get().unwrap();
 			let dot = pallet_cf_chain_tracking::CurrentChainState::<Runtime, PolkadotInstance>::get().unwrap();
 			let sol = pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::get().unwrap();
+			let arb = pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get().unwrap();
 
 			ExternalChainsBlockHeight {
 				bitcoin: btc.block_height,
 				ethereum: eth.block_height,
 				polkadot: dot.block_height.into(),
 				solana: sol.block_height,
+				arbitrum: arb.block_height,
 			}
 		}
 
