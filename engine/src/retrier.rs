@@ -234,7 +234,7 @@ fn submission_future<Client: Clone + Send + Sync + 'static>(
 
 const TRY_PRIMARY_AFTER: Duration = Duration::from_secs(120);
 
-// Pass in two clients, a primary and an optional secondary.
+// Pass in two clients, a primary and an optional backup.
 // We can then select the client requested if it's ready, otherwise we return the client that's
 // ready first.
 #[derive(Clone)]
@@ -327,7 +327,7 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 	}
 
 	pub fn request_failed(&mut self, failed_client: PrimaryOrBackup) {
-		// If we have a second endpoint, then we should switch to the other one.
+		// If we have a backup endpoint, then we should switch to the other one.
 		if self.backup_signal.is_some() {
 			self.prefer = if failed_client == PrimaryOrBackup::Primary {
 				self.last_failed_primary = Some(tokio::time::Instant::now());
@@ -454,7 +454,7 @@ where
 							retry_delays.push(Box::pin(
 								async move {
 									tokio::time::sleep(sleep_duration).await;
-									// pass in primary or secondary so we know which client to use.
+									// pass in primary or backup so we know which client to use.
 									(request_id, request_log, attempt, retry_limit)
 								}
 							));
