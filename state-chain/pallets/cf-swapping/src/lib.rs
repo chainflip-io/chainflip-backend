@@ -292,11 +292,11 @@ impl DcaState {
 		prev_chunk_and_output: Option<(SwapId, AssetAmount)>,
 	) -> Option<AssetAmount> {
 		if let Some((prev_chunk_swap_id, prev_chunk_output_amount)) = prev_chunk_and_output {
-			if let Some(scheduled_swap_id) = self.scheduled_chunk_swap_id {
+			if let Some(scheduled_swap_id) = self.scheduled_chunk_swap_id.take() {
 				if scheduled_swap_id != prev_chunk_swap_id {
 					log_or_panic!(
-				"Invariant violation: the recorded chunk id {scheduled_swap_id} does not match executed {prev_chunk_swap_id}"
-			);
+						"Invariant violation: the recorded chunk id {scheduled_swap_id} does not match executed {prev_chunk_swap_id}"
+					);
 				}
 			} else {
 				log_or_panic!(
