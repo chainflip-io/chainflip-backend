@@ -13,6 +13,7 @@ import {
   observeSwapRequested,
   sleep,
   SwapRequestType,
+  SwapType,
 } from './utils';
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
@@ -139,15 +140,16 @@ async function trackGasLimitSwap(
   await send(sourceAsset, depositAddress);
   const swapRequestId = Number((await swapRequestedHandle).data.swapRequestId.replaceAll(',', ''));
 
-  // Wait for the swap to complete
-  const outputAmount = (
+  // Find all of the swap events
+  const gasSwapOutputAmount = (
     await observeEvent('swapping:SwapExecuted', {
-      test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
+      test: (event) =>
+        Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId &&
+        event.data.swapType === SwapType.CcmGas,
       historicCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.outputAmount;
 
-  // Find all of the swap events by looking at the event history
   const egressId = (
     await observeEvent('swapping:SwapEgressScheduled', {
       test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
@@ -173,7 +175,9 @@ async function trackGasLimitSwap(
   ).data.transactionPayload;
 
   const egressBudgetAmount =
-    chainGasAsset(destChain as Chain) === sourceAsset ? messageMetadata.gasBudget : outputAmount;
+    chainGasAsset(destChain as Chain) === sourceAsset
+      ? messageMetadata.gasBudget
+      : gasSwapOutputAmount;
 
   return { tag, destAddress, egressBudgetAmount, broadcastId, txPayload };
 }
