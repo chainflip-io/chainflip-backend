@@ -466,7 +466,7 @@ pub mod pallet {
 	/// Votes will only be allowed if their `VoteSynchronisationBarrier` matches this value,
 	/// therefore authorities can invalidate in-flight votes by changing this value via an
 	/// extrinsic. Once they do that they can be confident that no old votes will be included, at
-	/// any block after the extrinsic is included. This allows validators to be able to ensure there
+	/// any block after the extrinsic is included. This allows validators to be able to ensure their
 	/// votes will not change, so they can delete/correct bad votes after detecting a problem for
 	/// example a reorg.
 	#[pallet::storage]
