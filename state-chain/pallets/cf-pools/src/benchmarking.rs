@@ -22,7 +22,7 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 		ForeignChainAddress::Dot(Default::default()),
 		ForeignChainAddress::Btc(cf_chains::btc::ScriptPubkey::P2PKH(Default::default())),
 	] {
-		T::LpApi::register_liquidity_refund_address(&caller, address);
+		T::LpRegistrationApi::register_liquidity_refund_address(&caller, address);
 	}
 	caller
 }

@@ -387,7 +387,7 @@ pub mod balance_api {
 			)
 			.is_none());
 			assert_has_event::<Test>(
-				crate::Event::AccountKilled { account_id: alice.clone() }.into(),
+				crate::Event::AccountKilled { account_id: AccountId::from([1; 32]) }.into(),
 			);
 		});
 	}

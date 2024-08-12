@@ -4,7 +4,7 @@ use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		balance_api::MockLpApi, egress_handler::MockEgressHandler,
+		balance_api::MockLpRegistration, egress_handler::MockEgressHandler,
 		swap_request_api::MockSwapRequestHandler,
 	},
 	AccountRoleRegistry, BalanceApi,
@@ -137,8 +137,8 @@ impl_mock_runtime_safe_mode!(pools: PalletSafeMode);
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = MockBalance;
-	type LpApi = MockLpApi;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
+	type LpRegistrationApi = MockLpRegistration;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 }
