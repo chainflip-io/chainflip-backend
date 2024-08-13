@@ -1,6 +1,9 @@
 pub use crate::{self as pallet_cf_ingress_egress};
 
-use crate::PalletSafeMode;
+use crate::{
+	PalletSafeMode, DEFAULT_MAX_DCA_CHUNKS, DEFAULT_MAX_DCA_CHUNK_INTERVAL_BLOCKS,
+	DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS,
+};
 use cf_chains::btc::{deposit_address::DepositAddress, BitcoinTrackedData};
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
@@ -134,7 +137,9 @@ impl_test_helpers! {
 			deposit_channel_lifetime: 100,
 			witness_safety_margin: Some(2),
 			dust_limits: Default::default(),
-			max_swap_retry_duration_blocks: 600,
+			max_swap_retry_duration_blocks: DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS,
+			max_dca_chunks: DEFAULT_MAX_DCA_CHUNKS,
+			max_dca_chunk_interval_blocks: DEFAULT_MAX_DCA_CHUNK_INTERVAL_BLOCKS,
 		},
 	},
 	|| {

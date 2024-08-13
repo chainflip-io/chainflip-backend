@@ -1706,7 +1706,26 @@ impl_runtime_apis! {
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, ArbitrumInstance>::get(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, SolanaInstance>::get(),
 			}
+		}
 
+		fn cf_max_dca_chunks(chain: ForeignChain) -> u32{
+			match chain {
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::MaxDcaChunks::<Runtime, BitcoinInstance>::get(),
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::MaxDcaChunks::<Runtime, EthereumInstance>::get(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::MaxDcaChunks::<Runtime, PolkadotInstance>::get(),
+				ForeignChain::Arbitrum => pallet_cf_ingress_egress::MaxDcaChunks::<Runtime, ArbitrumInstance>::get(),
+				ForeignChain::Solana => pallet_cf_ingress_egress::MaxDcaChunks::<Runtime, SolanaInstance>::get(),
+			}
+		}
+
+		fn cf_max_dca_chunk_interval_blocks(chain: ForeignChain) -> u32{
+			match chain {
+				ForeignChain::Bitcoin => pallet_cf_ingress_egress::MaxDcaChunkIntervalBlocks::<Runtime, BitcoinInstance>::get(),
+				ForeignChain::Ethereum => pallet_cf_ingress_egress::MaxDcaChunkIntervalBlocks::<Runtime, EthereumInstance>::get(),
+				ForeignChain::Polkadot => pallet_cf_ingress_egress::MaxDcaChunkIntervalBlocks::<Runtime, PolkadotInstance>::get(),
+				ForeignChain::Arbitrum => pallet_cf_ingress_egress::MaxDcaChunkIntervalBlocks::<Runtime, ArbitrumInstance>::get(),
+				ForeignChain::Solana => pallet_cf_ingress_egress::MaxDcaChunkIntervalBlocks::<Runtime, SolanaInstance>::get(),
+			}
 		}
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.

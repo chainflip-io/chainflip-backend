@@ -151,6 +151,9 @@ pub struct TxId {
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;
 
+/// Number of blocks in the future a swap is scheduled for.
+pub const SWAP_DELAY_BLOCKS: u32 = 2;
+
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
 

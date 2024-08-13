@@ -287,5 +287,7 @@ decl_runtime_apis!(
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
 		fn cf_max_swap_retry_duration_blocks(chain: ForeignChain) -> u32;
+		fn cf_max_dca_chunks(chain: ForeignChain) -> u32;
+		fn cf_max_dca_chunk_interval_blocks(chain: ForeignChain) -> u32;
 	}
 );

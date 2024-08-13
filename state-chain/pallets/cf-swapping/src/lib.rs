@@ -13,7 +13,7 @@ use cf_chains::{
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId, DcaParameters,
 	ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash, BASIS_POINTS_PER_MILLION,
-	STABLE_ASSET,
+	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -55,8 +55,6 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
-
-pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
 pub struct DefaultSwapRetryDelay<T> {
 	_phantom: PhantomData<T>,

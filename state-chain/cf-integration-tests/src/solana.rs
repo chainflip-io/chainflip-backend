@@ -455,7 +455,7 @@ fn solana_ccm_fails_with_invalid_input() {
 				Some(receiver),
 			);
 
-			let block_number = System::block_number() + pallet_cf_swapping::SWAP_DELAY_BLOCKS;
+			let block_number = System::block_number() + cf_primitives::SWAP_DELAY_BLOCKS;
 			Swapping::on_finalize(block_number);
 			SolanaIngressEgress::on_finalize(block_number);
 

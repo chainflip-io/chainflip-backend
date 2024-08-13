@@ -407,6 +407,8 @@ pub struct IngressEgressEnvironment {
 	pub egress_dust_limits: any::AssetMap<NumberOrHex>,
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
 	pub max_swap_retry_duration_blocks: HashMap<ForeignChain, u32>,
+	pub max_dca_chunks: HashMap<ForeignChain, u32>,
+	pub max_dca_chunk_interval_blocks: HashMap<ForeignChain, u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1444,6 +1446,8 @@ where
 		let mut witness_safety_margins = HashMap::new();
 		let mut channel_opening_fees = HashMap::new();
 		let mut max_swap_retry_duration_blocks = HashMap::new();
+		let mut max_dca_chunks = HashMap::new();
+		let mut max_dca_chunk_interval_blocks = HashMap::new();
 
 		for chain in ForeignChain::iter() {
 			witness_safety_margins.insert(
@@ -1458,6 +1462,14 @@ where
 				chain,
 				runtime_api
 					.cf_max_swap_retry_duration_blocks(hash, chain)
+					.map_err(to_rpc_error)?,
+			);
+			max_dca_chunks
+				.insert(chain, runtime_api.cf_max_dca_chunks(hash, chain).map_err(to_rpc_error)?);
+			max_dca_chunk_interval_blocks.insert(
+				chain,
+				runtime_api
+					.cf_max_dca_chunk_interval_blocks(hash, chain)
 					.map_err(to_rpc_error)?,
 			);
 		}
@@ -1490,6 +1502,8 @@ where
 			})?,
 			channel_opening_fees,
 			max_swap_retry_duration_blocks,
+			max_dca_chunks,
+			max_dca_chunk_interval_blocks,
 		})
 	}
 
@@ -2128,6 +2142,20 @@ mod test {
 					(ForeignChain::Solana, 1000u32.into()),
 				]),
 				max_swap_retry_duration_blocks: HashMap::from([
+					(ForeignChain::Bitcoin, 600),
+					(ForeignChain::Ethereum, 600),
+					(ForeignChain::Polkadot, 600),
+					(ForeignChain::Arbitrum, 600),
+					(ForeignChain::Solana, 600),
+				]),
+				max_dca_chunks: HashMap::from([
+					(ForeignChain::Bitcoin, 50),
+					(ForeignChain::Ethereum, 50),
+					(ForeignChain::Polkadot, 50),
+					(ForeignChain::Arbitrum, 50),
+					(ForeignChain::Solana, 50),
+				]),
+				max_dca_chunk_interval_blocks: HashMap::from([
 					(ForeignChain::Bitcoin, 600),
 					(ForeignChain::Ethereum, 600),
 					(ForeignChain::Polkadot, 600),
