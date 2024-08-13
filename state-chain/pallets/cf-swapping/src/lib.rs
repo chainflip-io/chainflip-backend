@@ -50,7 +50,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
 
 pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
@@ -384,8 +384,15 @@ pub mod pallet {
 	/// Earned Fees by Brokers
 	#[pallet::storage]
 	#[pallet::getter(fn earned_broker_fees)]
-	pub(crate) type EarnedBrokerFees<T: Config> =
-		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+	pub(crate) type EarnedBrokerFees<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Twox64Concat,
+		Asset,
+		AssetAmount,
+		ValueQuery,
+	>;
 
 	/// Fund accrued from rejected swap and CCM calls.
 	#[pallet::storage]
