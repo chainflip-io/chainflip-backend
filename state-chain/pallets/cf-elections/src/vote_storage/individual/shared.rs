@@ -1,6 +1,6 @@
 use frame_support::{pallet_prelude::Member, Parameter};
 
-use super::SimpleVoteStorage;
+use super::IndividualVoteStorage;
 use crate::{CorruptStorageError, SharedDataHash};
 
 /// De-duplicates identical validator vote data, ensuring they will only be stored once. When vote
@@ -8,7 +8,7 @@ use crate::{CorruptStorageError, SharedDataHash};
 pub struct Shared<T: Parameter + Member> {
 	_phantom: core::marker::PhantomData<T>,
 }
-impl<T: Parameter + Member> SimpleVoteStorage for Shared<T> {
+impl<T: Parameter + Member> IndividualVoteStorage for Shared<T> {
 	type Vote = T;
 	type PartialVote = SharedDataHash;
 

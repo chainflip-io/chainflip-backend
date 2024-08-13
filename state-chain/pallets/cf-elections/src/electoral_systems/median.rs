@@ -41,7 +41,8 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = ();
 	type ElectionState = ();
-	type Vote = vote_storage::simple::Simple<(), vote_storage::simple::shared::Shared<Value>>;
+	type Vote =
+		vote_storage::individual::Individual<(), vote_storage::individual::shared::Shared<Value>>;
 	type Consensus = Value;
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
@@ -127,7 +128,8 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = ();
 	type ElectionState = ();
-	type Vote = vote_storage::simple::Simple<(), vote_storage::simple::shared::Shared<Value>>;
+	type Vote =
+		vote_storage::individual::Individual<(), vote_storage::individual::shared::Shared<Value>>;
 	type Consensus = Value;
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = Value;

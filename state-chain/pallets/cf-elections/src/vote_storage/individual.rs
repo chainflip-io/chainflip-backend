@@ -1,5 +1,5 @@
 mod composite;
-pub(crate) mod individual;
+pub(crate) mod identity;
 pub(crate) mod shared;
 
 #[cfg(test)]
@@ -11,10 +11,10 @@ use super::{AuthorityVote, VoteComponents, VoteStorage};
 
 use crate::{CorruptStorageError, SharedDataHash};
 
-pub struct Simple<P: Parameter + Member, T: SimpleVoteStorage> {
+pub struct Individual<P: Parameter + Member, T: IndividualVoteStorage> {
 	_phantom: core::marker::PhantomData<(P, T)>,
 }
-impl<P: Parameter + Member, T: SimpleVoteStorage> VoteStorage for Simple<P, T> {
+impl<P: Parameter + Member, T: IndividualVoteStorage> VoteStorage for Individual<P, T> {
 	type Properties = P;
 
 	type Vote = T::Vote;
@@ -80,9 +80,9 @@ impl<P: Parameter + Member, T: SimpleVoteStorage> VoteStorage for Simple<P, T> {
 	) {
 	}
 }
-impl<P: Parameter + Member, T: SimpleVoteStorage> super::private::Sealed for Simple<P, T> {}
+impl<P: Parameter + Member, T: IndividualVoteStorage> super::private::Sealed for Individual<P, T> {}
 
-pub trait SimpleVoteStorage: private::Sealed + Sized {
+pub trait IndividualVoteStorage: private::Sealed + Sized {
 	type Vote: Parameter + Member;
 	type PartialVote: Parameter + Member;
 
@@ -110,6 +110,6 @@ pub trait SimpleVoteStorage: private::Sealed + Sized {
 }
 
 mod private {
-	/// Ensures `SimpleVoteStorage` can only be implemented here.
+	/// Ensures `IndividualVoteStorage` can only be implemented here.
 	pub trait Sealed {}
 }

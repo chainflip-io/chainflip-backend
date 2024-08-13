@@ -1,15 +1,15 @@
 use frame_support::{pallet_prelude::Member, Parameter};
 
-use super::SimpleVoteStorage;
+use super::IndividualVoteStorage;
 use crate::{CorruptStorageError, SharedDataHash};
 
 /// Stores each validator's vote individually, without de-duplicating identical values. This is
 /// useful when a vote's encoding is close to the size of `SharedDataHash`'s or if the validator's
 /// votes aren't likely to be equal.
-pub struct Individual<T: Parameter + Member> {
+pub struct Identity<T: Parameter + Member> {
 	_phantom: core::marker::PhantomData<T>,
 }
-impl<T: Parameter + Member> SimpleVoteStorage for Individual<T> {
+impl<T: Parameter + Member> IndividualVoteStorage for Identity<T> {
 	type Vote = T;
 	type PartialVote = T;
 
@@ -43,4 +43,4 @@ impl<T: Parameter + Member> SimpleVoteStorage for Individual<T> {
 	) {
 	}
 }
-impl<T: Parameter + Member> super::private::Sealed for Individual<T> {}
+impl<T: Parameter + Member> super::private::Sealed for Identity<T> {}

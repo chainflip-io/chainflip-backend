@@ -116,9 +116,9 @@ where
 	// the safety margin to pass.
 	type ElectionState =
 		BTreeMap<<Sink::Chain as Chain>::ChainAccount, ChannelTotalIngressed<Sink::Chain>>;
-	type Vote = vote_storage::simple::Simple<
+	type Vote = vote_storage::individual::Individual<
 		(),
-		vote_storage::simple::individual::Individual<
+		vote_storage::individual::identity::Identity<
 			BoundedBTreeMap<
 				<Sink::Chain as Chain>::ChainAccount,
 				ChannelTotalIngressed<Sink::Chain>,
