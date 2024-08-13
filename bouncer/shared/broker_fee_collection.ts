@@ -143,7 +143,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   console.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
     depositAmountAfterIngressFee >= 0 &&
-    depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
+      depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
     `Unexpected ${inputAsset} deposit amount ${depositAmountAfterIngressFee},
     }`,
   );
