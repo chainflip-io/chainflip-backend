@@ -24,9 +24,33 @@ fn params(
 	}
 }
 
+fn get_dca_state(request_id: SwapRequestId) -> DcaState {
+	match SwapRequests::<Test>::get(request_id)
+		.expect("request state does not exist")
+		.state
+	{
+		SwapRequestState::Ccm { dca_state, .. } => dca_state,
+		SwapRequestState::Regular { dca_state, .. } => dca_state,
+		other => {
+			panic!("DCA not supported for {other:?}")
+		},
+	}
+}
+
+fn get_ccm_gas_state(request_id: SwapRequestId) -> GasSwapState {
+	if let SwapRequestState::Ccm { gas_swap_state, .. } = SwapRequests::<Test>::get(request_id)
+		.expect("request state does not exist")
+		.state
+	{
+		gas_swap_state
+	} else {
+		panic!("Not a CCM swap");
+	}
+}
+
 #[test]
 fn dca_happy_path() {
-	const CHUNK_1_BLOCK: u64 = 3;
+	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
 
 	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / 2;
@@ -63,6 +87,17 @@ fn dca_happy_path() {
 					..
 				})
 			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(1),
+					remaining_input_amount: CHUNK_AMOUNT,
+					remaining_chunks: 1,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: 0
+				}
+			);
 		})
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
 		.then_execute_with(|_| {
@@ -87,6 +122,17 @@ fn dca_happy_path() {
 					execute_at: CHUNK_2_BLOCK,
 					..
 				})
+			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(2),
+					remaining_input_amount: 0,
+					remaining_chunks: 0,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: CHUNK_AMOUNT
+				}
 			);
 		})
 		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
@@ -117,7 +163,7 @@ fn dca_happy_path() {
 /// Test that DCA with 1 chunk behaves like a regular swap
 #[test]
 fn dca_single_chunk() {
-	const CHUNK_1_BLOCK: u64 = 3;
+	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -148,6 +194,17 @@ fn dca_single_chunk() {
 					..
 				})
 			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(1),
+					remaining_input_amount: 0,
+					remaining_chunks: 0,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: 0
+				}
+			);
 		})
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
 		.then_execute_with(|_| {
@@ -176,7 +233,7 @@ fn dca_single_chunk() {
 
 #[test]
 fn dca_with_fok_full_refund() {
-	const CHUNK_1_BLOCK: u64 = 3;
+	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const NUMBER_OF_CHUNKS: u32 = 2;
 	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
 
@@ -219,6 +276,17 @@ fn dca_with_fok_full_refund() {
 					..
 				})
 			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(1),
+					remaining_input_amount: CHUNK_AMOUNT,
+					remaining_chunks: 1,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: 0
+				}
+			);
 		})
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
 		.then_execute_with(|_| {
@@ -228,6 +296,18 @@ fn dca_with_fok_full_refund() {
 					swap_id: 1,
 					execute_at: REFUND_BLOCK
 				})
+			);
+
+			// Note that there is no change to the DCA state:
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(1),
+					remaining_input_amount: CHUNK_AMOUNT,
+					remaining_chunks: 1,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: 0
+				}
 			);
 		})
 		.then_execute_at_block(REFUND_BLOCK, |_| {})
@@ -253,7 +333,7 @@ fn dca_with_fok_full_refund() {
 
 #[test]
 fn dca_with_fok_partial_refund() {
-	const CHUNK_1_BLOCK: u64 = 3;
+	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
 	const NUMBER_OF_CHUNKS: u32 = 4;
 	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
@@ -299,6 +379,17 @@ fn dca_with_fok_partial_refund() {
 					..
 				})
 			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(1),
+					remaining_input_amount: REFUNDED_AMOUNT,
+					remaining_chunks: 3,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: 0
+				}
+			);
 		})
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
 		.then_execute_with(|_| {
@@ -323,6 +414,17 @@ fn dca_with_fok_partial_refund() {
 					execute_at: CHUNK_2_BLOCK,
 					..
 				})
+			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(2),
+					remaining_input_amount: REFUNDED_AMOUNT - CHUNK_AMOUNT,
+					remaining_chunks: 2,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: CHUNK_AMOUNT
+				}
 			);
 		})
 		.then_execute_at_block(CHUNK_2_BLOCK, |_| {
@@ -358,7 +460,7 @@ fn dca_with_fok_partial_refund() {
 
 #[test]
 fn dca_with_fok_fully_executed() {
-	const CHUNK_1_BLOCK: u64 = 3;
+	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_1_RETRY_BLOCK: u64 = CHUNK_1_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_RETRY_BLOCK + CHUNK_INTERVAL as u64;
 	const NUMBER_OF_CHUNKS: u32 = 2;
@@ -399,6 +501,17 @@ fn dca_with_fok_fully_executed() {
 					..
 				})
 			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(1),
+					remaining_input_amount: CHUNK_AMOUNT,
+					remaining_chunks: 1,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: 0
+				}
+			);
 		})
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {
 			// Adjusting the swap rate, so that the first chunk fails at first
@@ -413,7 +526,18 @@ fn dca_with_fok_fully_executed() {
 					..
 				})
 			);
-			//
+
+			// No change:
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(1),
+					remaining_input_amount: CHUNK_AMOUNT,
+					remaining_chunks: 1,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: 0
+				}
+			);
 		})
 		.then_execute_at_block(CHUNK_1_RETRY_BLOCK, |_| {
 			// Set the price back to normal, so that the fist chunk is successful
@@ -437,6 +561,17 @@ fn dca_with_fok_fully_executed() {
 					execute_at: CHUNK_2_BLOCK,
 					..
 				})
+			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(2),
+					remaining_input_amount: 0,
+					remaining_chunks: 0,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: CHUNK_AMOUNT
+				}
 			);
 		})
 		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
@@ -468,7 +603,7 @@ fn dca_with_fok_fully_executed() {
 
 #[test]
 fn dca_with_ccm_happy_path() {
-	const CHUNK_1_BLOCK: u64 = 3;
+	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
 
 	// NOTE: gas swap is scheduled immediately after the first chunk,
@@ -508,6 +643,25 @@ fn dca_with_ccm_happy_path() {
 					..
 				})
 			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(1),
+					remaining_input_amount: CHUNK_AMOUNT,
+					remaining_chunks: 1,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: 0
+				}
+			);
+
+			assert_eq!(
+				get_ccm_gas_state(SWAP_REQUEST_ID),
+				GasSwapState::ToBeScheduled {
+					gas_budget: GAS_BUDGET,
+					other_gas_asset: OUTPUT_ASSET
+				}
+			);
 		})
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
 		.then_execute_with(|_| {
@@ -539,6 +693,22 @@ fn dca_with_ccm_happy_path() {
 					..
 				}),
 			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(2),
+					remaining_input_amount: 0,
+					remaining_chunks: 0,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: CHUNK_AMOUNT
+				}
+			);
+
+			assert_eq!(
+				get_ccm_gas_state(SWAP_REQUEST_ID),
+				GasSwapState::Scheduled { gas_swap_id: 3 }
+			);
 		})
 		.then_execute_at_block(GAS_BLOCK, |_| {})
 		.then_execute_with(|_| {
@@ -551,6 +721,23 @@ fn dca_with_ccm_happy_path() {
 					output_amount: GAS_BUDGET,
 					..
 				}),
+			);
+
+			// Gas swap has no effect on the DCA principal state:
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(2),
+					remaining_input_amount: 0,
+					remaining_chunks: 0,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: CHUNK_AMOUNT
+				}
+			);
+
+			assert_eq!(
+				get_ccm_gas_state(SWAP_REQUEST_ID),
+				GasSwapState::OutputReady { gas_budget: GAS_BUDGET }
 			);
 		})
 		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
