@@ -1649,7 +1649,7 @@ impl_runtime_apis! {
 			LiquidityProviderInfo {
 				refund_addresses,
 				balances: Asset::all().map(|asset|
-					(asset, pallet_cf_asset_balances::FreeBalances::<Runtime>::get(&account_id, asset).unwrap_or(0))
+					(asset, pallet_cf_asset_balances::FreeBalances::<Runtime>::get(&account_id, asset))
 				).collect(),
 				earned_fees: AssetMap::from_iter(HistoricalEarnedFees::<Runtime>::iter_prefix(&account_id)),
 				boost_balances: AssetMap::from_fn(|asset| {

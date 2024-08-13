@@ -141,8 +141,15 @@ pub mod pallet {
 
 	#[pallet::storage]
 	/// Storage for user's free balances/ DoubleMap: (AccountId, Asset) => Balance
-	pub type FreeBalances<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
+	pub type FreeBalances<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Twox64Concat,
+		Asset,
+		AssetAmount,
+		ValueQuery,
+	>;
 }
 
 impl<T: Config> Pallet<T> {
@@ -386,7 +393,7 @@ where
 			return Ok(())
 		}
 
-		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
+		let mut balance = FreeBalances::<T>::get(account_id, asset);
 		balance = balance.checked_add(amount).ok_or(Error::<T>::BalanceOverflow)?;
 		FreeBalances::<T>::insert(account_id, asset, balance);
 
@@ -407,7 +414,7 @@ where
 			return Ok(())
 		}
 
-		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
+		let mut balance = FreeBalances::<T>::get(account_id, asset);
 		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
 		balance = balance.saturating_sub(amount);
 
@@ -426,7 +433,7 @@ where
 	}
 
 	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
-		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset).unwrap_or_default()))
+		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset)))
 	}
 
 	fn kill_account(who: &Self::AccountId) {
@@ -435,6 +442,6 @@ where
 	}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
-		FreeBalances::<T>::get(who, asset).unwrap_or_default()
+		FreeBalances::<T>::get(who, asset)
 	}
 }

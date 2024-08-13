@@ -111,8 +111,7 @@ impl QueryApi {
 						&self.state_chain_client.account_id(),
 						&asset,
 					)
-					.await?
-					.unwrap_or_default(),
+					.await?,
 			))
 		}))
 		.await

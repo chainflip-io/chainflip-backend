@@ -339,7 +339,7 @@ pub mod balance_api {
 			);
 			assert_eq!(
 				FreeBalances::<Test>::get(&alice, ForeignChain::Ethereum.gas_asset()),
-				Some(AMOUNT)
+				AMOUNT
 			);
 			assert_noop!(
 				Pallet::<Test>::try_debit_account(
@@ -359,7 +359,7 @@ pub mod balance_api {
 					AccountId::from([1; 32]),
 					ForeignChain::Ethereum.gas_asset()
 				),
-				Some(10)
+				10
 			);
 			assert_has_event::<Test>(
 				crate::Event::AccountDebited {
@@ -381,11 +381,12 @@ pub mod balance_api {
 				100,
 			);
 			Pallet::<Test>::kill_account(&AccountId::from([1; 32]));
-			assert!(FreeBalances::<Test>::get(
-				AccountId::from([1; 32]),
-				ForeignChain::Ethereum.gas_asset()
-			)
-			.is_none());
+			assert!(
+				FreeBalances::<Test>::get(
+					AccountId::from([1; 32]),
+					ForeignChain::Ethereum.gas_asset()
+				) == 0
+			);
 			assert_has_event::<Test>(
 				crate::Event::AccountKilled { account_id: AccountId::from([1; 32]) }.into(),
 			);
