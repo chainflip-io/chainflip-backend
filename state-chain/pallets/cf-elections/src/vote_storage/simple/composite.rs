@@ -37,12 +37,12 @@ macro_rules! generate_simple_vote_storage_tuple_impls {
                 }
 
                 #[allow(unused_mut)]
-                fn partial_vote_into_vote<F: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>>(($($t,)*): &Self::PartialVote, mut f: F) -> Result<Option<Self::Vote>, CorruptStorageError> {
+                fn partial_vote_into_vote<GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>>(($($t,)*): &Self::PartialVote, mut get_shared_data: GetSharedData) -> Result<Option<Self::Vote>, CorruptStorageError> {
                     Ok(Some(($(
                         if let Some(vote) = <$t as SimpleVoteStorage>::partial_vote_into_vote(
                             $t,
                             |shared_data_hash| {
-                                Ok(match f(shared_data_hash)? {
+                                Ok(match get_shared_data(shared_data_hash)? {
                                     Some(SharedDataEnum::$t(shared_data)) => Some(shared_data),
                                     _ => None,
                                 })
@@ -55,17 +55,17 @@ macro_rules! generate_simple_vote_storage_tuple_impls {
                     )*)))
                 }
 
-                fn visit_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(($($t,)*): Self::Vote, f: F) -> Result<(), E> {
+                fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(($($t,)*): Self::Vote, f: F) -> Result<(), E> {
                     $(
-                        <$t as SimpleVoteStorage>::visit_vote($t, |shared_data| {
+                        <$t as SimpleVoteStorage>::visit_shared_data_in_vote($t, |shared_data| {
                             f(SharedDataEnum::$t(shared_data))
                         })?;
                     )*
                     Ok(())
                 }
-                fn visit_partial_vote<F: Fn(SharedDataHash)>(($($t,)*): &Self::PartialVote, f: F) {
+                fn visit_shared_data_references_in_partial_vote<F: Fn(SharedDataHash)>(($($t,)*): &Self::PartialVote, f: F) {
                     $(
-                        <$t as SimpleVoteStorage>::visit_partial_vote($t, &f);
+                        <$t as SimpleVoteStorage>::visit_shared_data_references_in_partial_vote($t, &f);
                     )*
                 }
             }

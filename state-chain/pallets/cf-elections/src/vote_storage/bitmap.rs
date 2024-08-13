@@ -32,11 +32,11 @@ impl<T: Parameter + Member> VoteStorage for Bitmap<T> {
 	) -> Result<VoteComponents<Self>, CorruptStorageError> {
 		Ok(VoteComponents { bitmap_component: Some(partial_vote), individual_component: None })
 	}
-	fn components_into_vote<
-		F: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
+	fn components_into_authority_vote<
+		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
 	>(
 		vote_components: VoteComponents<Self>,
-		mut f: F,
+		mut get_shared_data: GetSharedData,
 	) -> Result<
 		Option<(Self::Properties, AuthorityVote<Self::PartialVote, Self::Vote>)>,
 		CorruptStorageError,
@@ -45,7 +45,7 @@ impl<T: Parameter + Member> VoteStorage for Bitmap<T> {
 			VoteComponents { bitmap_component: Some(partial_vote), individual_component: None } =>
 				Some((
 					(),
-					match f(partial_vote)? {
+					match get_shared_data(partial_vote)? {
 						Some(vote) => AuthorityVote::Vote(vote),
 						None => AuthorityVote::PartialVote(partial_vote),
 					},
@@ -53,18 +53,18 @@ impl<T: Parameter + Member> VoteStorage for Bitmap<T> {
 			_ => None,
 		})
 	}
-	fn visit_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
 		vote: Self::Vote,
 		f: F,
 	) -> Result<(), E> {
 		f(vote)
 	}
-	fn visit_individual_component<F: Fn(SharedDataHash)>(
+	fn visit_shared_data_references_in_individual_component<F: Fn(SharedDataHash)>(
 		_individual_component: &Self::IndividualComponent,
 		_f: F,
 	) {
 	}
-	fn visit_bitmap_component<F: Fn(SharedDataHash)>(
+	fn visit_shared_data_references_in_bitmap_component<F: Fn(SharedDataHash)>(
 		bitmap_component: &Self::BitmapComponent,
 		f: F,
 	) {

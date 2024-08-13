@@ -62,25 +62,25 @@ pub trait VoteStorage: private::Sealed + Sized {
 
 	/// Note: If all components are `None` this *MUST* always return `None`.
 	#[allow(clippy::type_complexity)]
-	fn components_into_vote<
-		F: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
+	fn components_into_authority_vote<
+		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
 	>(
 		vote_components: VoteComponents<Self>,
-		f: F,
+		get_shared_data: GetSharedData,
 	) -> Result<
 		Option<(Self::Properties, AuthorityVote<Self::PartialVote, Self::Vote>)>,
 		CorruptStorageError,
 	>;
 
-	fn visit_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
 		vote: Self::Vote,
 		f: F,
 	) -> Result<(), E>;
-	fn visit_individual_component<F: Fn(SharedDataHash)>(
+	fn visit_shared_data_references_in_individual_component<F: Fn(SharedDataHash)>(
 		individual_component: &Self::IndividualComponent,
 		f: F,
 	);
-	fn visit_bitmap_component<F: Fn(SharedDataHash)>(
+	fn visit_shared_data_references_in_bitmap_component<F: Fn(SharedDataHash)>(
 		bitmap_component: &Self::BitmapComponent,
 		f: F,
 	);

@@ -21,21 +21,24 @@ impl<T: Parameter + Member> SimpleVoteStorage for Shared<T> {
 		h(vote.clone())
 	}
 	fn partial_vote_into_vote<
-		F: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
+		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
 	>(
 		partial_vote: &Self::PartialVote,
-		mut f: F,
+		mut get_shared_data: GetSharedData,
 	) -> Result<Option<Self::Vote>, CorruptStorageError> {
-		f(*partial_vote)
+		get_shared_data(*partial_vote)
 	}
 
-	fn visit_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
 		vote: Self::Vote,
 		f: F,
 	) -> Result<(), E> {
 		f(vote)
 	}
-	fn visit_partial_vote<F: Fn(SharedDataHash)>(partial_vote: &Self::PartialVote, f: F) {
+	fn visit_shared_data_references_in_partial_vote<F: Fn(SharedDataHash)>(
+		partial_vote: &Self::PartialVote,
+		f: F,
+	) {
 		f(*partial_vote)
 	}
 }
