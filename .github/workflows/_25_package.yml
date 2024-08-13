@@ -73,7 +73,8 @@ jobs:
           git config --global --add safe.directory '*'
           TARGET_BRANCH=$(git branch -r --contains ${{ github.sha }} | grep -v '\->' | sed 's|origin/||' | head -n 1)
           echo "The target branch is $TARGET_BRANCH"
-          VERSION=${TARGET_BRANCH#release/}
+          BRANCH_NO_WHITE_SPACE=$(echo $TARGET_BRANCH | sed 's/^[ \t]*//;s/[ \t]*$//')
+          VERSION=${BRANCH_NO_WHITE_SPACE#release/}
           MAJOR=$(echo $VERSION | cut -d. -f1)
           MINOR=$(echo $VERSION | cut -d. -f2)
 
