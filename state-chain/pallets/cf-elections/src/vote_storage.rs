@@ -6,7 +6,7 @@ use scale_info::TypeInfo;
 
 pub(crate) mod bitmap;
 pub(crate) mod composite;
-pub(crate) mod simple;
+pub(crate) mod individual;
 
 #[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo)]
 pub enum AuthorityVote<PartialVote, Vote> {
