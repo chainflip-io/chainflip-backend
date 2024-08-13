@@ -57,7 +57,7 @@ jobs:
           echo "TARGET_BRANCH: ${{ env.TARGET_BRANCH }}"
           TARGET_BRANCH=${{ env.TARGET_BRANCH }}
           echo "Checking if branch name $TARGET_BRANCH is a release branch"
-          if [[ "${TARGET_BRANCH}" =~ ^release/[0-9]+\.[0-9]+$ ]]; then
+            if [[ "${TARGET_BRANCH}" =~ ^release/[0-9]+\.[0-9]+$ || "${TARGET_BRANCH}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Branch name ${TARGET_BRANCH} does match the required format 'release/x.y'"
             echo "IS_RELEASE_BRANCH=true" >> $GITHUB_ENV
           else
