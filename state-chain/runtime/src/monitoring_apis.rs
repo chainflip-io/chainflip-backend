@@ -17,6 +17,7 @@ pub struct ExternalChainsBlockHeight {
 	pub ethereum: u64,
 	pub polkadot: u64,
 	pub solana: u64,
+	pub arbitrum: u64,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct BtcUtxos {
