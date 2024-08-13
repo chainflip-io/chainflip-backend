@@ -23,20 +23,24 @@ impl<T: Parameter + Member> SimpleVoteStorage for Individual<T> {
 		vote.clone()
 	}
 	fn partial_vote_into_vote<
-		F: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
+		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
 	>(
 		partial_vote: &Self::PartialVote,
-		_f: F,
+		_get_shared_data: GetSharedData,
 	) -> Result<Option<Self::Vote>, CorruptStorageError> {
 		Ok(Some(partial_vote.clone()))
 	}
 
-	fn visit_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
 		_vote: Self::Vote,
 		_f: F,
 	) -> Result<(), E> {
 		Ok(())
 	}
-	fn visit_partial_vote<F: Fn(SharedDataHash)>(_partial_vote: &Self::PartialVote, _f: F) {}
+	fn visit_shared_data_references_in_partial_vote<F: Fn(SharedDataHash)>(
+		_partial_vote: &Self::PartialVote,
+		_f: F,
+	) {
+	}
 }
 impl<T: Parameter + Member> super::private::Sealed for Individual<T> {}

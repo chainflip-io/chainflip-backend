@@ -61,9 +61,9 @@ macro_rules! generate_vote_storage_tuple_impls {
                     }
                 }
 
-                fn components_into_vote<F: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>>(
+                fn components_into_authority_vote<GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>>(
                     vote_components: VoteComponents<Self>,
-                    mut f: F,
+                    mut get_shared_data: GetSharedData,
                 ) -> Result<Option<(Self::Properties, AuthorityVote<Self::PartialVote, Self::Vote>)>, CorruptStorageError> {
                     match vote_components {
                         $(
@@ -71,13 +71,13 @@ macro_rules! generate_vote_storage_tuple_impls {
                                 individual_component: Some((CompositeVoteStorageEnum::$t(properties), CompositeVoteStorageEnum::$t(individual_component))),
                                 bitmap_component: Some(CompositeVoteStorageEnum::$t(bitmap_component)),
                             } => {
-                                Ok(<$t as VoteStorage>::components_into_vote(
+                                Ok(<$t as VoteStorage>::components_into_authority_vote(
                                     VoteComponents {
                                         individual_component: Some((properties, individual_component)),
                                         bitmap_component: Some(bitmap_component)
                                     },
                                     |shared_data_hash| {
-                                        match f(shared_data_hash)? {
+                                        match get_shared_data(shared_data_hash)? {
                                             Some(CompositeVoteStorageEnum::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),
                                             _ => Err(CorruptStorageError),
@@ -97,13 +97,13 @@ macro_rules! generate_vote_storage_tuple_impls {
                                 individual_component: Some((CompositeVoteStorageEnum::$t(properties), CompositeVoteStorageEnum::$t(individual_component))),
                                 bitmap_component: None,
                             } => {
-                                Ok(<$t as VoteStorage>::components_into_vote(
+                                Ok(<$t as VoteStorage>::components_into_authority_vote(
                                     VoteComponents {
                                         individual_component: Some((properties, individual_component)),
                                         bitmap_component: None
                                     },
                                     |shared_data_hash| {
-                                        match f(shared_data_hash)? {
+                                        match get_shared_data(shared_data_hash)? {
                                             Some(CompositeVoteStorageEnum::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),
                                             _ => Err(CorruptStorageError),
@@ -123,13 +123,13 @@ macro_rules! generate_vote_storage_tuple_impls {
                                 individual_component: None,
                                 bitmap_component: Some(CompositeVoteStorageEnum::$t(bitmap_component)),
                             } => {
-                                Ok(<$t as VoteStorage>::components_into_vote(
+                                Ok(<$t as VoteStorage>::components_into_authority_vote(
                                     VoteComponents {
                                         individual_component: None,
                                         bitmap_component: Some(bitmap_component)
                                     },
                                     |shared_data_hash| {
-                                        match f(shared_data_hash)? {
+                                        match get_shared_data(shared_data_hash)? {
                                             Some(CompositeVoteStorageEnum::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),
                                             _ => Err(CorruptStorageError),
@@ -154,13 +154,13 @@ macro_rules! generate_vote_storage_tuple_impls {
                     }
                 }
 
-                fn visit_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+                fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
                     vote: Self::Vote,
                     f: F,
                 ) -> Result<(), E> {
                     match vote {
                         $(CompositeVoteStorageEnum::$t(vote) => {
-                            <$t as VoteStorage>::visit_vote(
+                            <$t as VoteStorage>::visit_shared_data_in_vote(
                                 vote,
                                 |shared_data| {
                                     f(CompositeVoteStorageEnum::$t(shared_data))
@@ -170,13 +170,13 @@ macro_rules! generate_vote_storage_tuple_impls {
                     }
                 }
 
-                fn visit_individual_component<F: Fn(SharedDataHash)>(
+                fn visit_shared_data_references_in_individual_component<F: Fn(SharedDataHash)>(
                     individual_component: &Self::IndividualComponent,
                     f: F,
                 ) {
                     match individual_component {
                         $(CompositeVoteStorageEnum::$t(individual_component) => {
-                            <$t as VoteStorage>::visit_individual_component(
+                            <$t as VoteStorage>::visit_shared_data_references_in_individual_component(
                                 individual_component,
                                 |shared_data_hash| {
                                     f(shared_data_hash)
@@ -186,13 +186,13 @@ macro_rules! generate_vote_storage_tuple_impls {
                     }
                 }
 
-                fn visit_bitmap_component<F: Fn(SharedDataHash)>(
+                fn visit_shared_data_references_in_bitmap_component<F: Fn(SharedDataHash)>(
                     bitmap_component: &Self::BitmapComponent,
                     f: F,
                 ) {
                     match bitmap_component {
                         $(CompositeVoteStorageEnum::$t(bitmap_component) => {
-                            <$t as VoteStorage>::visit_bitmap_component(
+                            <$t as VoteStorage>::visit_shared_data_references_in_bitmap_component(
                                 bitmap_component,
                                 |shared_data_hash| {
                                     f(shared_data_hash)
