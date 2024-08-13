@@ -27,7 +27,7 @@ fn test_simple_vote_storage() {
 	assert_eq!(vote_components.individual_component, Some((test_properties, partial_vote)));
 	assert_eq!(vote_components.bitmap_component, None);
 
-	let vote = assert_ok!(SimpleStorageTest::components_into_vote(
+	let vote = assert_ok!(SimpleStorageTest::components_into_authority_vote(
 		VoteComponents {
 			individual_component: Some((test_properties, partial_vote)),
 			bitmap_component: None,
@@ -39,7 +39,7 @@ fn test_simple_vote_storage() {
 	));
 	assert_eq!(vote, Some((test_properties, AuthorityVote::Vote(test_vote),)));
 
-	let vote = assert_ok!(SimpleStorageTest::components_into_vote(
+	let vote = assert_ok!(SimpleStorageTest::components_into_authority_vote(
 		VoteComponents {
 			individual_component: Some((test_properties, partial_vote)),
 			bitmap_component: None,
@@ -51,7 +51,7 @@ fn test_simple_vote_storage() {
 	));
 	assert_eq!(vote, Some((test_properties, AuthorityVote::PartialVote(partial_vote),)));
 
-	let vote = assert_ok!(SimpleStorageTest::components_into_vote(
+	let vote = assert_ok!(SimpleStorageTest::components_into_authority_vote(
 		VoteComponents { individual_component: None, bitmap_component: None },
 		|_shared_data_hash| {
 			panic!();
@@ -59,7 +59,7 @@ fn test_simple_vote_storage() {
 	));
 	assert_eq!(vote, None);
 
-	let vote = assert_ok!(SimpleStorageTest::components_into_vote(
+	let vote = assert_ok!(SimpleStorageTest::components_into_authority_vote(
 		VoteComponents { individual_component: None, bitmap_component: Some(()) },
 		|_shared_data_hash| {
 			panic!();
@@ -68,7 +68,7 @@ fn test_simple_vote_storage() {
 	assert_eq!(vote, None);
 
 	assert_eq!(
-		SimpleStorageTest::visit_vote(
+		SimpleStorageTest::visit_shared_data_in_vote(
 			test_vote,
 			|shared_data: <SimpleStorageTest as VoteStorage>::SharedData| {
 				assert_eq!(shared_data, test_shared_vote_data);
@@ -79,7 +79,10 @@ fn test_simple_vote_storage() {
 		Ok(())
 	);
 
-	SimpleStorageTest::visit_individual_component(&partial_vote, |shared_data_hash| {
-		assert_eq!(shared_data_hash, test_shared_data_hash);
-	});
+	SimpleStorageTest::visit_shared_data_references_in_individual_component(
+		&partial_vote,
+		|shared_data_hash| {
+			assert_eq!(shared_data_hash, test_shared_data_hash);
+		},
+	);
 }

@@ -39,11 +39,11 @@ impl<P: Parameter + Member, T: SimpleVoteStorage> VoteStorage for Simple<P, T> {
 			individual_component: Some((properties, partial_vote)),
 		})
 	}
-	fn components_into_vote<
-		F: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
+	fn components_into_authority_vote<
+		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
 	>(
 		vote_components: VoteComponents<Self>,
-		f: F,
+		get_shared_data: GetSharedData,
 	) -> Result<
 		Option<(Self::Properties, AuthorityVote<Self::PartialVote, Self::Vote>)>,
 		CorruptStorageError,
@@ -54,7 +54,7 @@ impl<P: Parameter + Member, T: SimpleVoteStorage> VoteStorage for Simple<P, T> {
 				individual_component: Some((properties, partial_vote)),
 			} => Some((
 				properties,
-				match T::partial_vote_into_vote(&partial_vote, f)? {
+				match T::partial_vote_into_vote(&partial_vote, get_shared_data)? {
 					Some(vote) => AuthorityVote::Vote(vote),
 					None => AuthorityVote::PartialVote(partial_vote),
 				},
@@ -62,19 +62,19 @@ impl<P: Parameter + Member, T: SimpleVoteStorage> VoteStorage for Simple<P, T> {
 			_ => None,
 		})
 	}
-	fn visit_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
 		vote: Self::Vote,
 		f: F,
 	) -> Result<(), E> {
-		T::visit_vote(vote, f)
+		T::visit_shared_data_in_vote(vote, f)
 	}
-	fn visit_individual_component<F: Fn(SharedDataHash)>(
+	fn visit_shared_data_references_in_individual_component<F: Fn(SharedDataHash)>(
 		individual_component: &Self::IndividualComponent,
 		f: F,
 	) {
-		T::visit_partial_vote(individual_component, f)
+		T::visit_shared_data_references_in_partial_vote(individual_component, f)
 	}
-	fn visit_bitmap_component<F: Fn(SharedDataHash)>(
+	fn visit_shared_data_references_in_bitmap_component<F: Fn(SharedDataHash)>(
 		_bitmap_component: &Self::BitmapComponent,
 		_f: F,
 	) {
@@ -93,17 +93,20 @@ pub trait SimpleVoteStorage: private::Sealed + Sized {
 		h: H,
 	) -> Self::PartialVote;
 	fn partial_vote_into_vote<
-		F: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
+		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
 	>(
 		partial_vote: &Self::PartialVote,
-		f: F,
+		get_shared_data: GetSharedData,
 	) -> Result<Option<Self::Vote>, CorruptStorageError>;
 
-	fn visit_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
 		vote: Self::Vote,
 		f: F,
 	) -> Result<(), E>;
-	fn visit_partial_vote<F: Fn(SharedDataHash)>(partial_vote: &Self::PartialVote, f: F);
+	fn visit_shared_data_references_in_partial_vote<F: Fn(SharedDataHash)>(
+		partial_vote: &Self::PartialVote,
+		f: F,
+	);
 }
 
 mod private {

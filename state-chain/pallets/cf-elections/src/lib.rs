@@ -557,7 +557,7 @@ pub mod pallet {
 				for (_, (_, individual_component)) in
 					IndividualComponents::<T, I>::drain_prefix(unique_monotonic_identifier)
 				{
-					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_individual_component(&individual_component, |shared_data_hash| {
+					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_individual_component(&individual_component, |shared_data_hash| {
 						Pallet::<T, I>::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier);
 					});
 				}
@@ -634,7 +634,7 @@ pub mod pallet {
 						).filter(|(_, validator_id)| {
 							ContributingAuthorities::<T, I>::contains_key(validator_id)
 						}).filter_map(|(vote_components, _)| {
-							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_vote(vote_components, |shared_data_hash| {
+							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash| {
 								// We don't bother to check if the reference has expired, as if we have the data we may as well use it, even if it was provided after the shared data reference expired (But before the reference was cleaned up `on_finalize`).
 								Ok(SharedData::<T, I>::get(shared_data_hash))
 							}).transpose()
@@ -646,7 +646,7 @@ pub mod pallet {
 
 						// Remove individual components from non-authorities
 						for (validator_id, (_, individual_component)) in individual_components {
-							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_individual_component(
+							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_individual_component(
 								&individual_component,
 								|shared_data_hash| {
 									Pallet::<T, I>::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier);
@@ -948,7 +948,7 @@ pub mod pallet {
 					this.bitmaps.retain(|(bitmap_component, bitmap)| {
 						let retain = bitmap.any();
 						if !retain {
-							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_bitmap_component(
+							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
 								bitmap_component,
 								|shared_data_hash| {
 									Pallet::<T, I>::remove_shared_data_reference(
@@ -1015,7 +1015,7 @@ pub mod pallet {
 						*bitmap.get_mut(authority_index).ok_or(CorruptStorageError)? = true;
 						bitmap
 					}));
-					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_bitmap_component(
+					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
 						&bitmap_component,
 						|shared_data_hash| {
 							Pallet::<T, I>::add_shared_data_reference(
@@ -1084,7 +1084,7 @@ pub mod pallet {
 			pub(super) fn clear(unique_monotonic_identifier: UniqueMonotonicIdentifier) {
 				if let Some(this) = BitmapComponents::<T, I>::get(unique_monotonic_identifier) {
 					for (bitmap_component, _) in this.bitmaps {
-						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_bitmap_component(
+						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
 							&bitmap_component,
 							|shared_data_hash| {
 								Pallet::<T, I>::remove_shared_data_reference(
@@ -1192,7 +1192,7 @@ pub mod pallet {
 							components.individual_component
 						{
 							// Update shared data reference counts
-							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_individual_component(
+							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_individual_component(
 								&individual_component,
 								|shared_data_hash| Self::add_shared_data_reference(shared_data_hash, unique_monotonic_identifier, block_number),
 							);
@@ -1210,7 +1210,7 @@ pub mod pallet {
 
 				// Insert any `SharedData` provided as part of the `Vote`.
 				if let Some(vote) = option_vote {
-					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_vote(
+					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_in_vote(
 						vote,
 						|shared_data| Self::inner_provide_shared_data(shared_data),
 					)
@@ -1751,7 +1751,7 @@ pub mod pallet {
 						IndividualComponents::<T, I>::take(unique_monotonic_identifier, authority);
 
 					let r = f(
-						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_vote(
+						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_authority_vote(
 							VoteComponents {
 								bitmap_component: election_bitmap_components.take(authority_index)?,
 								individual_component: individual_component.clone(),
@@ -1764,7 +1764,7 @@ pub mod pallet {
 					// Remove references late to avoid deleting shared data that we will add
 					// references to inside `f`.
 					if let Some((_properties, individual_component)) = individual_component {
-						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_individual_component(
+						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_individual_component(
 							&individual_component,
 							|shared_data_hash| Self::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier),
 						);
@@ -1782,17 +1782,17 @@ pub mod pallet {
 		}
 
 		#[allow(clippy::type_complexity)]
-		fn get_vote<F: FnMut(SharedDataHash)>(
+		fn get_vote<VisitUnprovidedSharedData: FnMut(SharedDataHash)>(
 			epoch_index: EpochIndex,
 			unique_monotonic_identifier: UniqueMonotonicIdentifier,
 			authority: &T::ValidatorId,
 			authority_index: AuthorityCount,
-			mut f: F,
+			mut visit_unprovided_shared_data: VisitUnprovidedSharedData,
 		) -> Result<
 			Option<(VotePropertiesOf<T::ElectoralSystem>, AuthorityVoteOf<T::ElectoralSystem>)>,
 			CorruptStorageError,
 		> {
-			<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_vote(
+			<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_authority_vote(
 				VoteComponents {
 					bitmap_component: ElectionBitmapComponents::<T, I>::with(
 						epoch_index,
@@ -1810,7 +1810,7 @@ pub mod pallet {
 					Ok(if let Some(shared_data) = SharedData::<T, I>::get(shared_data_hash) {
 						Some(shared_data)
 					} else {
-						f(shared_data_hash);
+						visit_unprovided_shared_data(shared_data_hash);
 						None
 					})
 				},
