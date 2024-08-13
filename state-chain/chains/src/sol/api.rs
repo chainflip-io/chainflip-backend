@@ -409,7 +409,7 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
-		// No replay protection refresh for Bitcoin.
+		// No replay protection refresh for Solana.
 	}
 
 	fn signer(&self) -> Option<<SolanaCrypto as ChainCrypto>::AggKey> {
