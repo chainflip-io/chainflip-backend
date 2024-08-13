@@ -128,7 +128,7 @@ impl crate::Config for Test {
 	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
-	type LpBalance = MockBalance;
+	type Balance = MockBalance;
 	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
 	type LpDepositHandler = MockBalance;
 	type Broadcaster = MockEgressBroadcaster;

@@ -254,9 +254,10 @@ pub mod pallet {
 		/// The event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Pallet responsible for managing account balances.
+		/// Access to the account balances.
 		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
 
+		/// LP address registration and verification.
 		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 
 		type SwapRequestHandler: SwapRequestHandler;

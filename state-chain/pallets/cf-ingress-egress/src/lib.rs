@@ -414,7 +414,7 @@ pub mod pallet {
 		/// representation.
 		type AddressConverter: AddressConverter;
 
-		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
+		type Balance: BalanceApi<AccountId = Self::AccountId>;
 
 		type LpDepositHandler: LpDepositHandler<AccountId = Self::AccountId>;
 
@@ -1084,7 +1084,7 @@ pub mod pallet {
 			);
 			ensure!(amount > Zero::zero(), Error::<T, I>::AddBoostAmountMustBeNonZero);
 
-			T::LpBalance::try_debit_account(&booster_id, asset.into(), amount.into())?;
+			T::Balance::try_debit_account(&booster_id, asset.into(), amount.into())?;
 
 			BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T, I>::BoostPoolDoesNotExist)?;
@@ -1118,7 +1118,7 @@ pub mod pallet {
 					pool.stop_boosting(booster.clone())
 				})?;
 
-			T::LpBalance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
+			T::Balance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
 
 			Self::deposit_event(Event::StoppedBoosting {
 				booster_id: booster,
@@ -1700,7 +1700,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						for (booster_id, finalised_withdrawn_amount) in
 							pool.process_deposit_as_finalised(prewitnessed_deposit_id)
 						{
-							if let Err(err) = T::LpBalance::try_credit_account(
+							if let Err(err) = T::Balance::try_credit_account(
 								&booster_id,
 								asset.into(),
 								finalised_withdrawn_amount.into(),

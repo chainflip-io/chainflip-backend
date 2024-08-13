@@ -342,7 +342,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
-	type LpBalance = AssetBalances;
+	type Balance = AssetBalances;
 	type LpDepositHandler = LiquidityProvider;
 	type ChainApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
@@ -365,7 +365,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
-	type LpBalance = AssetBalances;
+	type Balance = AssetBalances;
 	type LpDepositHandler = LiquidityProvider;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
@@ -388,7 +388,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
-	type LpBalance = AssetBalances;
+	type Balance = AssetBalances;
 	type LpDepositHandler = LiquidityProvider;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
@@ -411,7 +411,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type TargetChain = Arbitrum;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
-	type LpBalance = AssetBalances;
+	type Balance = AssetBalances;
 	type LpDepositHandler = LiquidityProvider;
 	type ChainApiCall = ArbitrumApi<EvmEnvironment>;
 	type Broadcaster = ArbitrumBroadcaster;
@@ -434,7 +434,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type TargetChain = Solana;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
-	type LpBalance = AssetBalances;
+	type Balance = AssetBalances;
 	type LpDepositHandler = LiquidityProvider;
 	type ChainApiCall = cf_chains::sol::api::SolanaApi<SolEnvironment>;
 	type Broadcaster = SolanaBroadcaster;
