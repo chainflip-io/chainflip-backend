@@ -153,9 +153,7 @@ async function testTransferAsset() {
 
   const getLpBalance = async (account: string) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((await chainflip.query.assetBalances.freeBalances(account, testAsset)) as any)
-      .unwrapOrDefault()
-      .toBigInt();
+    ((await chainflip.query.assetBalances.freeBalances(account, testAsset)) as any).toBigInt();
 
   const keyring = new Keyring({ type: 'sr25519' });
 
