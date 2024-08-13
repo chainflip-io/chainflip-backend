@@ -83,7 +83,7 @@ fn price_limit_is_respected_in_fok_swap() {
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = 3;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 
-	const HIGH_MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * 2;
+	const HIGH_MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1;
 
 	const REGULAR_SWAP_ID: u64 = 1;
 	const FOK_SWAP_1_ID: u64 = 2;
@@ -161,7 +161,7 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 			assert_eq!(System::block_number(), SWAPS_ADDED_BLOCK);
 
 			// Min output for swap 1 is too high to be executed:
-			const MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * 2;
+			const MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1;
 			insert_swaps(&[new_swap(Some(params(SWAP_REFUND_AT_BLOCK, MIN_OUTPUT)))]);
 			// However, swap 2 is non-FoK and should still be executed:
 			insert_swaps(&[new_swap(None)]);

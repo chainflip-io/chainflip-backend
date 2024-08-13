@@ -237,7 +237,11 @@ fn process_all_swaps() {
 			.iter()
 			.map(|swap| MockEgressParameter::<AnyChain>::Swap {
 				asset: swap.output_asset,
-				amount: swap.input_amount,
+				amount: if swap.input_asset == Asset::Usdc || swap.output_asset == Asset::Usdc {
+					swap.input_amount * DEFAULT_SWAP_RATE
+				} else {
+					swap.input_amount * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE
+				},
 				destination_address: swap.output_address.clone(),
 				fee: 0,
 			})
@@ -583,7 +587,11 @@ mod ccm {
 	}
 
 	#[track_caller]
-	pub(super) fn assert_ccm_egressed(asset: Asset, principal_amount: AssetAmount) {
+	pub(super) fn assert_ccm_egressed(
+		asset: Asset,
+		principal_amount: AssetAmount,
+		gas_budget: AssetAmount,
+	) {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Swapping(Event::<Test>::SwapEgressScheduled {
@@ -600,7 +608,7 @@ mod ccm {
 				destination_address: (*EVM_OUTPUT_ADDRESS).clone(),
 				message: vec![0x01].try_into().unwrap(),
 				cf_parameters: vec![].try_into().unwrap(),
-				gas_budget: GAS_BUDGET,
+				gas_budget,
 			},]
 		);
 	}
@@ -622,7 +630,7 @@ mod ccm {
 					RuntimeOrigin::signed(ALICE),
 					Asset::Dot,
 					Asset::Eth,
-					EncodedAddress::Eth(Default::default()),
+					MockAddressConverter::to_encoded_address((*EVM_OUTPUT_ADDRESS).clone()),
 					0,
 					Some(request_ccm),
 					0,
@@ -637,7 +645,7 @@ mod ccm {
 					Asset::Eth,
 					SwapRequestType::Ccm {
 						ccm_deposit_metadata: ccm.clone(),
-						output_address: ForeignChainAddress::Eth(Default::default())
+						output_address: (*EVM_OUTPUT_ADDRESS).clone()
 					},
 					Default::default(),
 					None,
@@ -683,25 +691,10 @@ mod ccm {
 			.then_execute_at_block(GAS_SWAP_BLOCK, |_| {})
 			.then_execute_with(|_| {
 				// CCM is scheduled for egress
-				assert_eq!(
-					MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
-					vec![MockEgressParameter::Ccm {
-						asset: Asset::Eth,
-						amount: DEPOSIT_AMOUNT - GAS_BUDGET,
-						destination_address: ForeignChainAddress::Eth(Default::default()),
-						message: vec![0x01].try_into().unwrap(),
-						cf_parameters: vec![].try_into().unwrap(),
-						gas_budget: GAS_BUDGET
-					},]
-				);
-
-				assert_has_matching_event!(
-					Test,
-					RuntimeEvent::Swapping(Event::<Test>::SwapEgressScheduled {
-						swap_request_id: 1,
-						egress_id: (ForeignChain::Ethereum, 1),
-						..
-					})
+				assert_ccm_egressed(
+					Asset::Eth,
+					(DEPOSIT_AMOUNT - GAS_BUDGET) * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
+					GAS_BUDGET * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
 				);
 
 				assert_has_matching_event!(
@@ -726,7 +719,7 @@ mod ccm {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
 			// CCM should be immediately egressed:
-			assert_ccm_egressed(OUTPUT_ASSET, PRINCIPAL_AMOUNT);
+			assert_ccm_egressed(OUTPUT_ASSET, PRINCIPAL_AMOUNT, GAS_BUDGET);
 
 			assert_has_matching_event!(
 				Test,
@@ -787,7 +780,11 @@ mod ccm {
 
 				assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
-				assert_ccm_egressed(OUTPUT_ASSET, PRINCIPAL_AMOUNT);
+				assert_ccm_egressed(
+					OUTPUT_ASSET,
+					PRINCIPAL_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
+					GAS_BUDGET,
+				);
 
 				assert_eq!(CollectedRejectedFunds::<Test>::get(INPUT_ASSET), 0);
 				assert_eq!(CollectedRejectedFunds::<Test>::get(OUTPUT_ASSET), 0);
@@ -836,7 +833,11 @@ mod ccm {
 					}),
 				);
 
-				assert_ccm_egressed(OUTPUT_ASSET, 0);
+				assert_ccm_egressed(
+					OUTPUT_ASSET,
+					0,
+					GAS_BUDGET * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
+				);
 
 				assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
@@ -901,7 +902,11 @@ mod ccm {
 			})
 			.then_execute_at_block(GAS_SWAP_BLOCK, |_| {})
 			.then_execute_with(|_| {
-				assert_ccm_egressed(OUTPUT_ASSET, PRINCIPAL_AMOUNT);
+				assert_ccm_egressed(
+					OUTPUT_ASSET,
+					PRINCIPAL_AMOUNT * DEFAULT_SWAP_RATE,
+					GAS_BUDGET * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
+				);
 				assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 			});
 	}
@@ -1009,6 +1014,8 @@ fn process_all_into_stable_swaps_first() {
 		let amount = 1_000_000;
 		let encoded_address = EncodedAddress::Eth(Default::default());
 
+		NetworkFee::set(Permill::from_parts(100));
+
 		[Asset::Flip, Asset::Btc, Asset::Dot, Asset::Usdc]
 			.into_iter()
 			.for_each(|asset| {
@@ -1039,10 +1046,10 @@ fn process_all_into_stable_swaps_first() {
 		Swapping::on_finalize(execute_at);
 		assert_swaps_queue_is_empty();
 
-		// Network fee should only be taken once.
-		let total_amount_after_network_fee =
-			Swapping::take_network_fee(amount * 4).remaining_amount;
-		let output_amount = total_amount_after_network_fee / 4;
+		let usdc_amount_swapped_after_fee =
+			Swapping::take_network_fee(amount * DEFAULT_SWAP_RATE).remaining_amount;
+		let usdc_amount_deposited_after_fee = Swapping::take_network_fee(amount).remaining_amount;
+
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
 		assert_eq!(
 			Swaps::get(),
@@ -1050,7 +1057,11 @@ fn process_all_into_stable_swaps_first() {
 				(Asset::Flip, Asset::Usdc, amount),
 				(Asset::Dot, Asset::Usdc, amount),
 				(Asset::Btc, Asset::Usdc, amount),
-				(Asset::Usdc, Asset::Eth, total_amount_after_network_fee),
+				(
+					Asset::Usdc,
+					Asset::Eth,
+					usdc_amount_swapped_after_fee * 3 + usdc_amount_deposited_after_fee
+				),
 			]
 		);
 
@@ -1062,7 +1073,7 @@ fn process_all_into_stable_swaps_first() {
 				egress_id: (ForeignChain::Ethereum, 1),
 				amount,
 				..
-			}) if amount == output_amount,
+			}) if amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1070,7 +1081,7 @@ fn process_all_into_stable_swaps_first() {
 				egress_id: (ForeignChain::Ethereum, 2),
 				amount,
 				..
-			}) if amount == output_amount,
+			}) if amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1078,7 +1089,7 @@ fn process_all_into_stable_swaps_first() {
 				egress_id: (ForeignChain::Ethereum, 3),
 				amount,
 				..
-			}) if amount == output_amount,
+			}) if amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1086,7 +1097,7 @@ fn process_all_into_stable_swaps_first() {
 				egress_id: (ForeignChain::Ethereum, 4),
 				amount,
 				..
-			}) if amount == output_amount,
+			}) if amount == usdc_amount_deposited_after_fee * DEFAULT_SWAP_RATE,
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 		);
 	});
@@ -1516,8 +1527,6 @@ fn input_amount_excludes_network_fee() {
 	const AMOUNT: AssetAmount = 1_000;
 	const FROM_ASSET: Asset = Asset::Usdc;
 	const TO_ASSET: Asset = Asset::Flip;
-	// let output_address: ForeignChainAddress = ForeignChainAddress::Eth(Default::default());
-	// const NETWORK_FEE: Percent = Percent::from_percent(1);
 	let output_address: ForeignChainAddress = ForeignChainAddress::Eth(Default::default());
 	const NETWORK_FEE: Permill = Permill::from_percent(1);
 
@@ -1550,7 +1559,7 @@ fn input_amount_excludes_network_fee() {
 				output_asset: TO_ASSET,
 				network_fee,
 				input_amount: expected_input_amount,
-				output_amount: expected_input_amount,
+				output_amount: expected_input_amount * DEFAULT_SWAP_RATE,
 				intermediate_amount: None,
 			}));
 		});
@@ -2177,7 +2186,7 @@ fn network_fee_swap_gets_burnt() {
 		})
 		.then_execute_at_block(SWAP_BLOCK, |_| {})
 		.then_execute_with(|_| {
-			assert_eq!(FlipToBurn::<Test>::get(), AMOUNT);
+			assert_eq!(FlipToBurn::<Test>::get(), AMOUNT * DEFAULT_SWAP_RATE);
 			assert_swaps_queue_is_empty();
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapExecuted { .. }),);
@@ -2232,7 +2241,7 @@ fn transaction_fees_are_collected() {
 				MockIngressEgressFeeHandler::<Ethereum>::withheld_assets(
 					cf_chains::assets::eth::GAS_ASSET
 				),
-				AMOUNT
+				AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE
 			);
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 			assert_swaps_queue_is_empty();
@@ -2278,18 +2287,31 @@ fn swap_output_amounts_correctly_account_for_fees() {
 		[(Asset::Btc, Asset::Eth), (Asset::Btc, Asset::Usdc), (Asset::Usdc, Asset::Eth)]
 	{
 		new_test_ext().execute_with(|| {
-			const SWAPPED_AMOUNT: AssetAmount = 1000;
+			const INPUT_AMOUNT: AssetAmount = 1000;
 
 			let network_fee = Permill::from_percent(1);
 			NetworkFee::set(network_fee);
 
-			let expected_output: AssetAmount =
-				(SWAPPED_AMOUNT as u32 - (network_fee * SWAPPED_AMOUNT as u32)).into();
+			let expected_output: AssetAmount = {
+				let usdc_amount = if from == Asset::Usdc {
+					INPUT_AMOUNT
+				} else {
+					INPUT_AMOUNT * DEFAULT_SWAP_RATE
+				};
+
+				let usdc_after_network_fees = usdc_amount - network_fee * usdc_amount;
+
+				if to == Asset::Usdc {
+					usdc_after_network_fees
+				} else {
+					usdc_after_network_fees * DEFAULT_SWAP_RATE
+				}
+			};
 
 			{
 				assert_ok!(Swapping::init_swap_request(
 					from,
-					SWAPPED_AMOUNT,
+					INPUT_AMOUNT,
 					to,
 					SwapRequestType::Regular {
 						output_address: ForeignChainAddress::Eth(H160::zero())
