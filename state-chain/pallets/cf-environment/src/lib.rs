@@ -483,8 +483,6 @@ pub mod pallet {
 		/// - [NonceAccountNotBeingUsed](Error::NonceAccountNotBeingUsedOrDoesNotExist)
 		/// - [NonceHashNotSuppliedWhereRequired](Error::NonceAccountNotBeingUsedOrDoesNotExist)
 		#[pallet::call_index(8)]
-		// This weight is not strictly correct but since it's a governance call, weight is
-		// irrelevant.
 		#[pallet::weight(T::WeightInfo::force_recover_sol_nonce())]
 		pub fn force_recover_sol_nonce(
 			origin: OriginFor<T>,
