@@ -15,7 +15,9 @@ use cf_chains::{
 	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall,
 	TransferAssetParams,
 };
-use cf_primitives::{chains::assets::eth, ChannelId, DcaParameters, ForeignChain};
+use cf_primitives::{
+	chains::assets::eth, ChannelId, DcaParameters, ForeignChain, SWAP_DELAY_BLOCKS,
+};
 use cf_test_utilities::{assert_events_eq, assert_has_event};
 use cf_traits::{
 	mocks::{
@@ -507,6 +509,7 @@ fn test_dca_parameter_validation() {
 		let max_chunk_interval = MaxDcaChunkIntervalBlocks::<Test, ()>::get();
 
 		assert_ok!(request_dca_swap(max_chunks, max_chunk_interval));
+		assert_ok!(request_dca_swap(1, SWAP_DELAY_BLOCKS));
 		assert_err!(
 			request_dca_swap(0, max_chunk_interval),
 			DispatchError::from(crate::Error::<Test, _>::InvalidNumberOfDcaChunks)
@@ -517,6 +520,10 @@ fn test_dca_parameter_validation() {
 		);
 		assert_err!(
 			request_dca_swap(max_chunks, 0),
+			DispatchError::from(crate::Error::<Test, _>::InvalidDcaChunkInterval)
+		);
+		assert_err!(
+			request_dca_swap(max_chunks, SWAP_DELAY_BLOCKS - 1),
 			DispatchError::from(crate::Error::<Test, _>::InvalidDcaChunkInterval)
 		);
 		assert_err!(
