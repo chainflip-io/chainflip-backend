@@ -46,6 +46,7 @@ sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "cha
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
 
 [dev-dependencies]
+cf-test-utilities = { path = '../../test-utilities' }
 
 [features]
 default = ['std']
@@ -63,7 +64,11 @@ std = [
   'sp-core/std',
   'rand',
 ]
-try-runtime = ['frame-support/try-runtime', 'frame-system/try-runtime', 'cf-traits/try-runtime']
+try-runtime = [
+  'frame-support/try-runtime',
+  'frame-system/try-runtime',
+  'cf-traits/try-runtime',
+]
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',
   'cf-primitives/runtime-benchmarks',
