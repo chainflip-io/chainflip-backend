@@ -24,7 +24,7 @@ async function testDCASwap(inputAsset: Asset, amount: number, numberOfChunks: nu
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
   const destBalanceBefore = await getBalance(inputAsset, destAddress);
-  console.log(`Streaming Swap destination address: ${destAddress}`);
+  console.log(`DCA destination address: ${destAddress}`);
 
   // TODO: Use chainflip api instead of rpc
   const swapRequest = await brokerApiRpc('broker_request_swap_deposit_address', [
@@ -63,7 +63,7 @@ async function testDCASwap(inputAsset: Asset, amount: number, numberOfChunks: nu
   // Find the `SwapExecuted` events for this swap.
   const observeSwapExecutedEvents = await observeEvents(`swapping:SwapExecuted`, {
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicCheckBlocks: numberOfChunks * CHUNK_INTERVAL + 10,
+    historicalCheckBlocks: numberOfChunks * CHUNK_INTERVAL + 10,
   }).events;
 
   // Check that there were the correct number of SwapExecuted events, one for each chunk.
@@ -78,7 +78,7 @@ async function testDCASwap(inputAsset: Asset, amount: number, numberOfChunks: nu
 }
 
 export async function testDCASwaps() {
-  console.log('\x1b[36m%s\x1b[0m', '=== Running Streaming Swaps (DCA) test ===');
+  console.log('\x1b[36m%s\x1b[0m', '=== Running DCA test ===');
   await testDCASwap(Assets.Eth, 1, 2);
-  console.log('\x1b[32m%s\x1b[0m', '=== Streaming Swaps (DCA) test complete ===');
+  console.log('\x1b[32m%s\x1b[0m', '=== DCA test complete ===');
 }
