@@ -891,8 +891,8 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 	}
 
 	fn maybe_ccm_limit() -> Option<usize> {
-		// Substract extra nonces from the limit to make sure CCMs will never block regular batches.
-		Some(Self::maybe_transfers_limit()?.saturating_sub(3))
+		// Substract extra nonces from the limit to make sure CCMs won't block regular batches.
+		Some(Self::maybe_transfers_limit()?.saturating_sub(5))
 	}
 
 	fn maybe_fetches_limit() -> Option<usize> {
