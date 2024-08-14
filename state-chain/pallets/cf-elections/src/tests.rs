@@ -52,7 +52,7 @@ fn happy_path_vote_and_consensus() {
 			.unwrap();
 		})
 		.then_execute_at_next_block(|()| {
-			assert_eq!(Pallet::<Test, Instance1>::status(), Some(ElectoralSystemStatus::Running));
+			assert_eq!(Status::<Test, Instance1>::get(), Some(ElectoralSystemStatus::Running));
 
 			// TODO: Test the sync barrier
 			// Set a synchronisation barrier for all the authorities

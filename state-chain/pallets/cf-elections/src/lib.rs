@@ -478,14 +478,12 @@ pub mod pallet {
 	/// votes will not change, so they can delete/correct bad votes after detecting a problem for
 	/// example a reorg.
 	#[pallet::storage]
-	#[pallet::getter(fn vote_synchronisation_barrier)]
 	type AuthorityVoteSynchronisationBarriers<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, VoteSynchronisationBarrier, OptionQuery>;
 
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
 	/// this is None, the pallet is considered uninitialized.
 	#[pallet::storage]
-	#[pallet::getter(fn status)]
 	pub type Status<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ElectoralSystemStatus, OptionQuery>;
 
