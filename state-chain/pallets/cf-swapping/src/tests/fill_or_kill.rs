@@ -243,7 +243,6 @@ fn fok_test_zero_refund_duration() {
 			// This simulates not having enough liquidity/triggering price impact protection
 			MockSwappingApi::set_swaps_should_fail(true);
 		})
-		.then_execute_with(|_| {})
 		.then_execute_with(|_| {
 			// The swap should fail and be refunded immediately instead of being retried
 			assert_event_sequence!(
