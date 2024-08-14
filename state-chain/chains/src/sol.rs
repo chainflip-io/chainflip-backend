@@ -148,7 +148,7 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 
-	pub const MIN_COMPUTE_PRICE: SolAmount = 1u64;
+	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
 
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
 	pub const MAX_COMPUTE_UNITS_PER_CCM_TRANSFER: SolComputeLimit = 600_000u32;
