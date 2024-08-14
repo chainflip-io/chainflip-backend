@@ -33,7 +33,7 @@ pub trait SwapRequestHandler {
 		output_asset: Asset,
 		request_type: SwapRequestType,
 		broker_fees: Beneficiaries<Self::AccountId>,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		origin: SwapOrigin,
 	) -> Result<SwapRequestId, DispatchError>;
 }

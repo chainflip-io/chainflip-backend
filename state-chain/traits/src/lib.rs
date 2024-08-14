@@ -732,7 +732,7 @@ pub trait DepositApi<C: Chain> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
 
