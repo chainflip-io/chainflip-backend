@@ -7,7 +7,7 @@ import { executeWithTimeout, observeFetch, sleep } from '../shared/utils';
 import { observeEvent } from '../shared/utils/substrate';
 import { killEngines, startEngines } from '../shared/upgrade_network';
 
-// For example:
+// To run:
 // ./tests/delta_base_ingress.ts prebuilt --bins ./../target/debug --localnet_init ./../localnet/init
 
 let swapsWitnessed: number = 0;
