@@ -62,7 +62,6 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
   console.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
 
   const swapRequestedEvent = await swapRequestedHandle;
-  console.log(`Swap requested: ${JSON.stringify(swapRequestedEvent)}`);
   const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
   console.log(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
 

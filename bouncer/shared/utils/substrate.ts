@@ -112,6 +112,72 @@ export type Event<T = any> = {
   eventIndex: number;
 };
 
+// Iterate over all the events, reshaping them for the consumer
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapEvents(events: any[], blockNumber: number): Event[] {
+  return events.map(({ event }, index) => ({
+    name: { section: event.section, method: event.method },
+    data: event.toHuman().data,
+    block: blockNumber,
+    eventIndex: index,
+  }));
+}
+
+class EventCache {
+  // TODO: Support for reorgs
+  private cache: Map<number, Event[]>;
+
+  private cacheSizeBlocks: number;
+
+  private chain: SubstrateChain;
+
+  constructor(cacheSizeBlocks: number, chain: SubstrateChain) {
+    this.cache = new Map();
+    this.cacheSizeBlocks = cacheSizeBlocks;
+    this.chain = chain;
+  }
+
+  addEvents(blockNumber: number, events: Event[]) {
+    if (this.cache.has(blockNumber)) {
+      return; // Event already in cache
+    }
+    this.cache.set(blockNumber, events);
+
+    // Remove old blocks to maintain cache size
+    if (this.cache.size > this.cacheSizeBlocks) {
+      const oldestBlock = Array.from(this.cache.keys()).sort((a, b) => a - b)[0];
+      this.cache.delete(oldestBlock);
+    }
+  }
+
+  async getEvents(fromBlock: number, toBlock: number): Promise<Event[]> {
+    const api = await apiMap[this.chain]();
+    const events: Event[] = [];
+    for (let i = fromBlock; i <= toBlock; i++) {
+      if (this.cache.has(i)) {
+        events.push(...this.cache.get(i)!);
+      } else {
+        const blockHash = await api.rpc.chain.getBlockHash(i);
+        const historicApi = await api.at(blockHash);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
+        const mappedEvents = mapEvents(rawEvents, i);
+        this.addEvents(i, mappedEvents);
+        events.push(...mappedEvents);
+      }
+    }
+    return events;
+  }
+}
+
+const chainflipEventCache = new EventCache(100, 'chainflip');
+const polkadotEventCache = new EventCache(100, 'polkadot');
+const eventCacheMap = {
+  chainflip: chainflipEventCache,
+  polkadot: polkadotEventCache,
+} as const;
+
 async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortSignal) {
   // async generator is pull-based, but the observable is push-based
   // if the consumer takes too long, we need to buffer the events
@@ -171,17 +237,6 @@ async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortS
   sub.unsubscribe();
 }
 
-// Iterate over all the events, reshaping them for the consumer
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapEvents(events: any[], blockNumber: number): Event[] {
-  return events.map(({ event }, index) => ({
-    name: { section: event.section, method: event.method },
-    data: event.toHuman().data,
-    block: blockNumber,
-    eventIndex: index,
-  }));
-}
-
 const subscribeHeads = getCachedDisposable(
   async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
     // prepare a stack for cleanup
@@ -200,7 +255,10 @@ const subscribeHeads = getCachedDisposable(
       const historicApi = await api.at(header.hash);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
-      subject.next(mapEvents(rawEvents, header.number.toNumber()));
+      const mappedEvents = mapEvents(rawEvents, header.number.toNumber());
+      const cache = eventCacheMap[chain];
+      cache.addEvents(header.number.toNumber(), mappedEvents);
+      subject.next(mappedEvents);
     });
 
     // automatic cleanup!
@@ -226,15 +284,8 @@ async function getPastEvents(
     const latestHeader = await api.rpc.chain.getHeader();
     const latestBlockNumber = latestHeader.number.toNumber();
     const startAtBlock = Math.max(latestBlockNumber - historicalCheckBlocks, 0);
-
-    for (let i = startAtBlock; i <= latestBlockNumber; i++) {
-      const blockHash = await api.rpc.chain.getBlockHash(i);
-      const historicApi = await api.at(blockHash);
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
-      historicEvents.push(...mapEvents(rawEvents, i));
-    }
+    const cache = eventCacheMap[chain];
+    historicEvents.push(...(await cache.getEvents(startAtBlock, latestBlockNumber)));
   }
 
   return historicEvents;

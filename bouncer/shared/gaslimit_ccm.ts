@@ -159,10 +159,8 @@ async function trackGasLimitSwap(
 
   const broadcastId = (
     await observeEvent(`${destChain.toLowerCase()}IngressEgress:CcmBroadcastRequested`, {
-      test: (event) => {
-        console.log(`event.data.egressId ${event.data.egressId} / ${egressId}`);
-        return event.data.egressId[0] === egressId[0] && event.data.egressId[1] === egressId[1];
-      },
+      test: (event) =>
+        event.data.egressId[0] === egressId[0] && event.data.egressId[1] === egressId[1],
       historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.broadcastId;
