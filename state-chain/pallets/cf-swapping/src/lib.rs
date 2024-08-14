@@ -1404,7 +1404,7 @@ pub mod pallet {
 									request.input_asset,
 									request.output_asset,
 									chunk_input_amount,
-									swap.refund_params().clone(),
+									request.refund_params.as_ref(),
 									SwapType::CcmPrincipal,
 									swap_request_id,
 									dca_state.chunk_interval.into(),
@@ -1451,8 +1451,7 @@ pub mod pallet {
 							request.input_asset,
 							request.output_asset,
 							chunk_input_amount,
-							// TODO: recompute swap params depending on the output amount we got?
-							swap.refund_params().clone(),
+							request.refund_params.as_ref(),
 							SwapType::Swap,
 							request.id,
 							dca_state.chunk_interval.into(),
@@ -1618,7 +1617,7 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			input_amount: AssetAmount,
-			refund_params: Option<SwapRefundParameters>,
+			refund_params: Option<&ChannelRefundParameters>,
 			swap_type: SwapType,
 			swap_request_id: SwapRequestId,
 			delay_blocks: BlockNumberFor<T>,
@@ -1629,6 +1628,15 @@ pub mod pallet {
 			});
 
 			let execute_at = frame_system::Pallet::<T>::block_number() + delay_blocks;
+
+			let refund_params = refund_params.map(|params| {
+				utilities::calculate_swap_refund_parameters(
+					params,
+					// In practice block number always fits in u32:
+					execute_at.unique_saturated_into(),
+					input_amount,
+				)
+			});
 
 			// Network fee is not charged for network fee swaps:
 			let fees = if matches!(swap_type, SwapType::NetworkFee) {
@@ -1918,20 +1926,11 @@ pub mod pallet {
 					let (mut dca_state, chunk_input_amount) =
 						DcaState::create_with_first_chunk(net_amount, dca_params);
 
-					let swap_refund_params = refund_params.as_ref().map(|params| {
-						utilities::calculate_swap_refund_parameters(
-							params,
-							// In practice block number always fits in u32:
-							frame_system::Pallet::<T>::block_number().unique_saturated_into(),
-							chunk_input_amount,
-						)
-					});
-
 					let swap_id = Self::schedule_swap(
 						input_asset,
 						output_asset,
 						chunk_input_amount,
-						swap_refund_params,
+						refund_params.as_ref(),
 						SwapType::Swap,
 						request_id,
 						SWAP_DELAY_BLOCKS.into(),
@@ -1993,20 +1992,11 @@ pub mod pallet {
 						let (mut dca_state, chunk_input_amount) =
 							DcaState::create_with_first_chunk(principal_swap_amount, dca_params);
 
-						let swap_refund_params = refund_params.as_ref().map(|params| {
-							utilities::calculate_swap_refund_parameters(
-								params,
-								// In practice block number always fits in u32:
-								frame_system::Pallet::<T>::block_number().unique_saturated_into(),
-								chunk_input_amount,
-							)
-						});
-
 						let swap_id = Self::schedule_swap(
 							input_asset,
 							output_asset,
 							chunk_input_amount,
-							swap_refund_params,
+							refund_params.as_ref(),
 							SwapType::CcmPrincipal,
 							request_id,
 							SWAP_DELAY_BLOCKS.into(),
@@ -2181,11 +2171,12 @@ pub(crate) mod utilities {
 
 	pub(super) fn calculate_swap_refund_parameters(
 		params: &ChannelRefundParameters,
-		deposit_block: u32,
+		execute_at_block: u32,
 		input_amount: AssetAmount,
 	) -> SwapRefundParameters {
 		SwapRefundParameters {
-			refund_block: deposit_block.saturating_add(params.retry_duration),
+			// NOTE: We add 1 to make retry duration inclusive of the last block:
+			refund_block: execute_at_block.saturating_add(params.retry_duration).saturating_add(1),
 			min_output: u128::try_from(cf_amm::common::output_amount_ceil(
 				input_amount.into(),
 				params.min_price,

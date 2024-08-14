@@ -59,10 +59,32 @@ struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
 	input_amount: AssetAmount,
-	refund_params: Option<SwapRefundParameters>,
+	refund_params: Option<ChannelRefundParameters>,
 	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
+}
+
+// Convenience struct used in tests allowing to specify refund parameters
+// with min output rather than min price:
+struct TestRefundParams {
+	retry_duration: u32,
+	min_output: AssetAmount,
+}
+
+impl TestRefundParams {
+	fn into_channel_params(self, input_amount: AssetAmount) -> ChannelRefundParameters {
+		use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
+
+		ChannelRefundParameters {
+			retry_duration: self.retry_duration,
+			refund_address: ForeignChainAddress::Eth([10; 20].into()),
+			min_price: sqrt_price_to_price(bounded_sqrt_price(
+				self.min_output.into(),
+				input_amount.into(),
+			)),
+		}
+	}
 }
 
 // Returns some test data
@@ -148,8 +170,6 @@ fn assert_failed_ccm(
 }
 
 fn insert_swaps(swaps: &[TestSwapParams]) {
-	use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
-
 	for (broker_id, swap) in swaps.iter().enumerate() {
 		let request_type = if swap.is_ccm {
 			SwapRequestType::Ccm {
@@ -170,17 +190,7 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 			swap.output_asset,
 			request_type,
 			bounded_vec![Beneficiary { account: broker_id as u64, bps: BROKER_FEE_BPS }],
-			swap.refund_params.clone().map(|params| ChannelRefundParameters {
-				retry_duration: params
-					.refund_block
-					.checked_sub(System::block_number().try_into().unwrap())
-					.expect("invalid refund block"),
-				refund_address: ForeignChainAddress::Eth([10; 20].into()),
-				min_price: sqrt_price_to_price(bounded_sqrt_price(
-					params.min_output.into(),
-					swap.input_amount.into(),
-				)),
-			}),
+			swap.refund_params.clone(),
 			swap.dca_params.clone(),
 			SwapOrigin::Vault { tx_hash: Default::default() },
 		));

@@ -10,14 +10,14 @@ const OUTPUT_ASSET: Asset = Asset::Eth;
 
 fn params(
 	dca_params: Option<DcaParameters>,
-	refund_params: Option<SwapRefundParameters>,
+	refund_params: Option<TestRefundParams>,
 	is_ccm: bool,
 ) -> TestSwapParams {
 	TestSwapParams {
 		input_asset: INPUT_ASSET,
 		output_asset: OUTPUT_ASSET,
 		input_amount: INPUT_AMOUNT,
-		refund_params,
+		refund_params: refund_params.map(|params| params.into_channel_params(INPUT_AMOUNT)),
 		dca_params,
 		output_address: (*EVM_OUTPUT_ADDRESS).clone(),
 		is_ccm,
@@ -252,9 +252,10 @@ fn dca_with_fok_full_refund() {
 					number_of_chunks: NUMBER_OF_CHUNKS,
 					chunk_interval: CHUNK_INTERVAL,
 				}),
-				Some(SwapRefundParameters {
-					refund_block: REFUND_BLOCK as u32,
-					// Due to 1:1 swap rate, this ensures the swap is refunded:
+				Some(TestRefundParams {
+					// Allow for exactly 1 retry
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+					// This ensures the swap is refunded:
 					min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
 				}),
 				false,
@@ -338,15 +339,14 @@ fn dca_with_fok_full_refund() {
 fn dca_with_fok_partial_refund() {
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
+	const CHUNK_2_RESCHEDULED_AT_BLOCK: u64 = CHUNK_2_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
+
 	const NUMBER_OF_CHUNKS: u32 = 4;
 	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
 	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT * DEFAULT_SWAP_RATE;
 
 	// The test will be set up as to execute one chunk only and refund the rest
 	const REFUNDED_AMOUNT: AssetAmount = NET_AMOUNT - CHUNK_AMOUNT;
-
-	// Allow for one retry for good measure:
-	const REFUND_BLOCK: u64 = CHUNK_1_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -357,8 +357,9 @@ fn dca_with_fok_partial_refund() {
 					number_of_chunks: NUMBER_OF_CHUNKS,
 					chunk_interval: CHUNK_INTERVAL,
 				}),
-				Some(SwapRefundParameters {
-					refund_block: REFUND_BLOCK as u32,
+				Some(TestRefundParams {
+					// Allow for one retry for good measure:
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
 					min_output: INPUT_AMOUNT,
 				}),
 				false,
@@ -436,9 +437,31 @@ fn dca_with_fok_partial_refund() {
 			SwapRate::set(0.5);
 		})
 		.then_execute_with(|_| {
-			// Swap should fail after the first retry and result in a
-			// refund of the remaining amount and egress of the already
-			// executed amount.
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRescheduled {
+					swap_id: 2,
+					execute_at: CHUNK_2_RESCHEDULED_AT_BLOCK
+				})
+			);
+
+			// Note that there is no change to the DCA state:
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					scheduled_chunk_swap_id: Some(2),
+					remaining_input_amount: REFUNDED_AMOUNT - CHUNK_AMOUNT,
+					remaining_chunks: 2,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: CHUNK_OUTPUT
+				}
+			);
+		})
+		.then_execute_at_block(CHUNK_2_RESCHEDULED_AT_BLOCK, |_| {})
+		.then_execute_with(|_| {
+			// The swap will fail again, but this time it will reach expiry,
+			// resulting in a refund of the remaining amount and egress of the
+			// already executed amount.
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
 			assert_event_sequence!(
@@ -479,8 +502,8 @@ fn dca_with_fok_fully_executed() {
 					number_of_chunks: NUMBER_OF_CHUNKS,
 					chunk_interval: CHUNK_INTERVAL,
 				}),
-				Some(SwapRefundParameters {
-					refund_block: CHUNK_2_BLOCK as u32,
+				Some(TestRefundParams {
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
 					min_output: INPUT_AMOUNT,
 				}),
 				false,
