@@ -134,7 +134,7 @@ pub struct SolanaApi<Environment: 'static> {
 	pub signer: Option<SolAddress>,
 	#[doc(hidden)]
 	#[codec(skip)]
-	_phantom: PhantomData<Environment>,
+	pub _phantom: PhantomData<Environment>,
 }
 
 impl<Environment: SolanaEnvironment> SolanaApi<Environment> {

@@ -1,18 +1,21 @@
 #![cfg(test)]
 
+use std::marker::PhantomData;
+
 use super::*;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
 	assets::any::Asset,
 	ccm_checker::CcmValidityError,
 	sol::{
-		api::{SolanaEnvironment, SolanaTransactionBuildingError},
-		sol_tx_core::sol_test_values,
+		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
+		sol_tx_core::{sol_test_values, CompiledInstruction, MessageHeader},
 		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
 		SolTrackedData, SolanaCrypto,
 	},
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ExecutexSwapAndCallError,
-	ForeignChainAddress, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin,
+	ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError,
+	Solana, SwapOrigin, TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -21,7 +24,10 @@ use frame_support::traits::{OnFinalize, UnfilteredDispatchable};
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_validator::RotationPhase;
 use state_chain_runtime::{
-	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter, SolEnvironment},
+	chainflip::{
+		address_derivation::AddressDerivation, ChainAddressConverter, SolEnvironment,
+		SolanaTransactionBuilder,
+	},
 	Runtime, RuntimeCall, RuntimeEvent, SolanaIngressEgress, SolanaInstance, SolanaThresholdSigner,
 	Swapping,
 };
@@ -520,5 +526,67 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 				pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys()
 					.count()
 			)
+		});
+}
+
+#[test]
+fn solana_resigning() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+			(ALICE, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+			(BOB, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_ok!(RuntimeCall::SolanaVault(
+				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
+			)
+			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
+			testnet.move_to_the_next_epoch();
+
+			setup_sol_environments();
+			register_refund_addresses(&DORIS);
+			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
+
+			const CURRENT_SIGNER: [u8; 32] = [3u8; 32];
+			let apicall = SolanaApi {
+				call_type: cf_chains::sol::api::SolanaTransactionType::Transfer,
+				transaction: cf_chains::sol::SolTransaction {
+					signatures: vec![[1u8; 64].into()],
+					message: cf_chains::sol::SolMessage {
+						header: MessageHeader {
+							num_required_signatures: 1,
+							num_readonly_signed_accounts: 1,
+							num_readonly_unsigned_accounts: 1,
+						},
+						account_keys: vec![CURRENT_SIGNER.into()],
+						recent_blockhash: [4u8; 32].into(),
+						instructions: vec![CompiledInstruction {
+							program_id_index: 1,
+							accounts: vec![0],
+							data: vec![],
+						}],
+					},
+				},
+				signer: Some(CURRENT_SIGNER.into()),
+				_phantom: PhantomData::<SolEnvironment>,
+			};
+
+			let modified_call = SolanaTransactionBuilder::requires_signature_refresh(
+				&apicall,
+				&Default::default(),
+				Some([5u8; 32].into()),
+			);
+
+			assert!(matches!(modified_call, RequiresSignatureRefresh::True(call) if
+			call.clone().unwrap().transaction.message.account_keys[0] == <SolEnvironment as
+			SolanaEnvironment>::current_agg_key().unwrap().into()));
 		});
 }
