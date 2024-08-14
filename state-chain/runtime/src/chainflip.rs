@@ -890,6 +890,11 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 		Some(Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(2))
 	}
 
+	fn maybe_ccm_limit() -> Option<usize> {
+		// Substract extra nonces from the limit to make sure CCMs won't block regular batches.
+		Some(Self::maybe_transfers_limit()?.saturating_sub(4))
+	}
+
 	fn maybe_fetches_limit() -> Option<usize> {
 		// only fetch if we have more than once nonce account available since one nonce nonce is
 		// reserved for rotations. See above

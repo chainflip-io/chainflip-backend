@@ -1326,7 +1326,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Blacklisted assets are not sent and will remain in storage.
 	fn do_egress_scheduled_ccm() {
 		let mut maybe_no_of_transfers_remaining =
-			T::FetchesTransfersLimitProvider::maybe_transfers_limit();
+			T::FetchesTransfersLimitProvider::maybe_ccm_limit();
 
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
