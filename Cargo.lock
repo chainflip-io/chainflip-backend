@@ -7558,6 +7558,7 @@ dependencies = [
  "bitvec",
  "cf-chains",
  "cf-primitives",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
