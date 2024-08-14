@@ -9,7 +9,8 @@ use cf_chains::{
 	ccm_checker::CcmValidityError,
 	sol::{
 		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
-		sol_tx_core::{sol_test_values, CompiledInstruction, MessageHeader},
+		sol_tx_core::sol_test_values,
+		transaction_builder::SolanaTransactionBuilder,
 		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
 		SolTrackedData, SolanaCrypto,
 	},
@@ -19,6 +20,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
+use cf_utilities::bs58_array;
 use codec::Encode;
 use frame_support::traits::{OnFinalize, UnfilteredDispatchable};
 use pallet_cf_ingress_egress::DepositWitness;
@@ -26,7 +28,7 @@ use pallet_cf_validator::RotationPhase;
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, ChainAddressConverter, SolEnvironment,
-		SolanaTransactionBuilder,
+		SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
 	},
 	Runtime, RuntimeCall, RuntimeEvent, SolanaIngressEgress, SolanaInstance, SolanaThresholdSigner,
 	Swapping,
@@ -531,6 +533,8 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 
 #[test]
 fn solana_resigning() {
+	use crate::solana::sol_test_values::TEST_DURABLE_NONCE;
+
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
@@ -556,37 +560,51 @@ fn solana_resigning() {
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
 
 			const CURRENT_SIGNER: [u8; 32] = [3u8; 32];
+
+			let mut transaction = SolanaTransactionBuilder::transfer_native(
+				10000000,
+				SolAddress(bs58_array("EwVmJgZwHBzmdVUzdujfbxFdaG25PMzbPLx8F7PvhWgs")),
+				CURRENT_SIGNER.into(),
+				(SolAddress(bs58_array("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw")), TEST_DURABLE_NONCE),
+				100,
+			).unwrap();
+			transaction.signatures = vec![[1u8; 64].into()];
+
+			let original_account_keys = transaction.message.account_keys.clone();
+
 			let apicall = SolanaApi {
 				call_type: cf_chains::sol::api::SolanaTransactionType::Transfer,
-				transaction: cf_chains::sol::SolTransaction {
-					signatures: vec![[1u8; 64].into()],
-					message: cf_chains::sol::SolMessage {
-						header: MessageHeader {
-							num_required_signatures: 1,
-							num_readonly_signed_accounts: 1,
-							num_readonly_unsigned_accounts: 1,
-						},
-						account_keys: vec![CURRENT_SIGNER.into()],
-						recent_blockhash: [4u8; 32].into(),
-						instructions: vec![CompiledInstruction {
-							program_id_index: 1,
-							accounts: vec![0],
-							data: vec![],
-						}],
-					},
-				},
+				transaction,
 				signer: Some(CURRENT_SIGNER.into()),
 				_phantom: PhantomData::<SolEnvironment>,
 			};
 
-			let modified_call = SolanaTransactionBuilder::requires_signature_refresh(
+			let modified_call = RuntimeSolanaTransactionBuilder::requires_signature_refresh(
 				&apicall,
 				&Default::default(),
 				Some([5u8; 32].into()),
 			);
+			if let RequiresSignatureRefresh::True(call) = modified_call {
+				let agg_key = <SolEnvironment as SolanaEnvironment>::current_agg_key().unwrap();
+				let transaction = call.clone().unwrap().transaction;
+				for (modified_key, original_key) in transaction.message.account_keys.iter().zip(original_account_keys.iter()) {
+					if *original_key != SolPubkey::from(CURRENT_SIGNER) {
+						assert_eq!(modified_key, original_key);
+						assert_ne!(*modified_key, SolPubkey::from(agg_key));
+					} else {
+						assert_eq!(*modified_key, SolPubkey::from(agg_key));
+					}
+				}
+				let serialized_tx = transaction
+					.clone()
+					.finalize_and_serialize().unwrap();
 
-			assert!(matches!(modified_call, RequiresSignatureRefresh::True(call) if
-			call.clone().unwrap().transaction.message.account_keys[0] == <SolEnvironment as
-			SolanaEnvironment>::current_agg_key().unwrap().into()));
+				// Compare against a manually crafted transaction that works with the current test values and
+				// agg_key. Not comparing the first byte (number of signatures) nor the signature itself
+				let expected_serialized_tx = hex_literal::hex!("010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000306f68d61e8d834034cf583f486f2a08ef53ce4134ed41c4d88f4720c39518745b617eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192cf1dd130e0341d60a0771ac40ea7900106a423354d2ecd6e609bd5e2ed833dec00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004030301050004040000000400090364000000000000000400050284030000030200020c020000008096980000000000").to_vec();
+				assert_eq!(&serialized_tx[1+64..], &expected_serialized_tx[1+64..]);
+			} else {
+				panic!("RequiresSignatureRefresh is False");
+			}
 		});
 }
