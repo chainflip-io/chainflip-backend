@@ -111,7 +111,7 @@ pub mod electoral_system;
 pub mod electoral_systems;
 mod mock;
 mod tests;
-mod vote_storage;
+pub mod vote_storage;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -144,6 +144,44 @@ pub mod pallet {
 
 	pub const MAXIMUM_VOTES_PER_EXTRINSIC: u32 = 16;
 	const BLOCKS_BETWEEN_CLEANUP: u64 = 128;
+
+	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	pub struct AuthorityElectionData<Settings, Properties, AuthorityVote> {
+		pub settings: Settings,
+		pub properties: Properties,
+		pub is_vote_desired: bool,
+		/// Important we use `AuthorityVote` as when validator wants to delete invalid/possibly bad
+		/// votes, it needs to delete `PartialVote`s as other validators may submit `SharedData`
+		/// later that would cause those `PartialVote`s to be reconstructed to full `Vote`s.
+		pub option_existing_vote: Option<AuthorityVote>,
+	}
+
+	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	pub struct AuthorityElectoralData<
+		ElectionIdentifier,
+		Settings,
+		Properties,
+		AuthorityVote,
+		BlockNumber,
+	> {
+		pub current_elections: BTreeMap<
+			ElectionIdentifier,
+			AuthorityElectionData<Settings, Properties, AuthorityVote>,
+		>,
+		pub unprovided_shared_data_hashes: BTreeMap<SharedDataHash, ReferenceDetails<BlockNumber>>,
+		pub current_vote_sync_barrier: Option<VoteSynchronisationBarrier>,
+	}
+
+	/// This is the information exposed via RPC to the engine each block so it can decide how and
+	/// when to vote.
+	#[allow(type_alias_bounds)]
+	pub type AuthorityElectoralDataFor<T: Config<I>, I: 'static> = AuthorityElectoralData<
+		ElectionIdentifierOf<T::ElectoralSystem>,
+		<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+		<T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+		AuthorityVoteOf<T::ElectoralSystem>,
+		BlockNumberFor<T>,
+	>;
 
 	/// A unique identifier for an election.
 	#[derive(
@@ -179,7 +217,7 @@ pub mod pallet {
 	}
 
 	/// The hash of the original `SharedData` information, used retrieve the original information.
-	#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
 	pub struct SharedDataHash(sp_core::H256);
 	impl SharedDataHash {
 		pub(crate) fn of<Vote: frame_support::Hashable>(vote: &Vote) -> Self {
@@ -297,7 +335,8 @@ pub mod pallet {
 
 	/// Stores the number of blocks after a piece of shared data is first referenced without being
 	/// "provided" before expiring. Expiring will cause all votes that include references to be
-	/// invalidated.
+	/// invalidated. This should be set as low as possible, I'd suggest using 8 blocks, which
+	/// equates to 48 seconds.
 	#[pallet::storage]
 	type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
@@ -320,13 +359,13 @@ pub mod pallet {
 	>;
 
 	#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo, Default)]
-	struct ReferenceDetails<BlockNumber> {
-		count: u32,
+	pub struct ReferenceDetails<BlockNumber> {
+		pub count: u32,
 		/// The block at which the first reference was introduced.
-		created: BlockNumber,
+		pub created: BlockNumber,
 		/// The block at which this reference will become invalid. This will be `self.created +
 		/// SharedDataReferenceLifetime::get()`.
-		expires: BlockNumber,
+		pub expires: BlockNumber,
 	}
 
 	/// Stores the *shared* parts of validator votes. Any duplicates will only be stored once,
@@ -1636,85 +1675,102 @@ pub mod pallet {
 		/// Returns all the current elections (with their details), the validators current votes and
 		/// if the validator should vote in each election.
 		#[allow(clippy::type_complexity)]
-		pub fn validator_election_data(
+		pub fn authority_electoral_data(
 			validator_id: &T::ValidatorId,
-		) -> Result<
-			(
-				Vec<(
-					ElectionIdentifierOf<T::ElectoralSystem>,
-					<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
-					<T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
-					Option<(
-						VotePropertiesOf<T::ElectoralSystem>,
-						AuthorityVoteOf<T::ElectoralSystem>,
-					)>,
-					bool,
-				)>,
-				Option<VoteSynchronisationBarrier>,
-			),
-			DispatchError,
-		> {
+		) -> Option<AuthorityElectoralDataFor<T, I>> {
 			use frame_support::traits::OriginTrait;
 
-			let (epoch_index, authority, authority_index) = Pallet::<T, I>::ensure_can_vote(
-				OriginFor::<T>::signed(validator_id.clone().into()),
-			)?;
+			Pallet::<T, I>::ensure_can_vote(OriginFor::<T>::signed(validator_id.clone().into()))
+				.ok()
+				.and_then(|(epoch_index, authority, authority_index)| {
+					let block_number = frame_system::Pallet::<T>::current_block_number();
 
-			let block_number = frame_system::Pallet::<T>::current_block_number();
+					Some(AuthorityElectoralData {
+						current_elections: Self::with_electoral_access_and_identifiers(
+							|electoral_access, election_identifiers| {
+								election_identifiers
+									.into_iter()
+									.map(|election_identifier| {
+										let unique_monotonic_identifier =
+											*election_identifier.unique_monotonic();
 
-			Ok((
-				Self::with_electoral_access_and_identifiers(
-					|electoral_access, election_identifiers| {
-						election_identifiers
-							.into_iter()
-							.map(|election_identifier| {
-								let unique_monotonic_identifier =
-									*election_identifier.unique_monotonic();
+										let mut contains_timed_out_shared_data_references = false;
+										let option_current_authority_vote =
+											Pallet::<T, I>::get_vote(
+												epoch_index,
+												unique_monotonic_identifier,
+												&authority,
+												authority_index,
+												|unprovided_shared_data_hash| {
+													let option_reference_details =
+														SharedDataReferenceCount::<T, I>::get(
+															unprovided_shared_data_hash,
+															unique_monotonic_identifier,
+														);
+													if option_reference_details.is_none() ||
+														option_reference_details.unwrap().expires <
+															block_number
+													{
+														contains_timed_out_shared_data_references =
+															true;
+													}
+												},
+											)?;
 
-								let option_current_vote = {
-									let mut contains_timed_out_shared_data_references = false;
-									Pallet::<T, I>::get_vote(
-										epoch_index,
-										unique_monotonic_identifier,
-										&authority,
-										authority_index,
-										|unprovided_shared_data_hash| {
-											let option_reference_details =
-												SharedDataReferenceCount::<T, I>::get(
-													unprovided_shared_data_hash,
-													unique_monotonic_identifier,
-												);
-											if option_reference_details.is_none() ||
-												option_reference_details.unwrap().expires <
-													block_number
-											{
-												contains_timed_out_shared_data_references = true;
-											}
-										},
-									)?
-									.filter(|_| !contains_timed_out_shared_data_references)
-								};
+										let election_access =
+											electoral_access.election(election_identifier)?;
 
-								let election_access =
-									electoral_access.election(election_identifier)?;
-
-								Ok((
-									election_identifier,
-									election_access.settings()?,
-									election_access.properties()?,
-									option_current_vote.clone(),
-									<T::ElectoralSystem as ElectoralSystem>::is_vote_desired(
+										Ok((
 										election_identifier,
-										&election_access,
-										option_current_vote,
-									)?,
-								))
-							})
-							.collect::<Result<Vec<_>, _>>()
-					},
-				)?,
-				AuthorityVoteSynchronisationBarriers::<T, I>::get(validator_id),
-			))
+										AuthorityElectionData {
+											settings: election_access.settings()?,
+											properties: election_access.properties()?,
+											// We report the vote to the engine even though it is timeouted so the engine
+											// knows to delete it. As it may still later to reconstructed if the right
+											// `SharedData` is provided, unless it is delete.
+											option_existing_vote: option_current_authority_vote.as_ref().map(|(_, authority_vote)| {
+												authority_vote.clone()
+											}),
+											is_vote_desired: <T::ElectoralSystem as ElectoralSystem>::is_vote_desired(
+												election_identifier,
+												&election_access,
+												option_current_authority_vote.filter(|_| !contains_timed_out_shared_data_references),
+											)?,
+										},
+									))
+									})
+									.collect::<Result<BTreeMap<_, _>, _>>()
+							},
+						)
+						.ok()?,
+						unprovided_shared_data_hashes: {
+							let mut unprovided_shared_data_hashes = BTreeMap::<
+								SharedDataHash,
+								ReferenceDetails<BlockNumberFor<T>>,
+							>::new();
+
+							for (shared_data_hash, _election_identifier, reference_details) in
+								SharedDataReferenceCount::<T, I>::iter()
+							{
+								// We use the first created reference
+								if unprovided_shared_data_hashes.get(&shared_data_hash).map_or(
+									true,
+									|previous_reference_details| {
+										reference_details.created <
+											previous_reference_details.created
+									},
+								) {
+									unprovided_shared_data_hashes
+										.insert(shared_data_hash, reference_details);
+								}
+							}
+
+							unprovided_shared_data_hashes
+						},
+						current_vote_sync_barrier:
+							AuthorityVoteSynchronisationBarriers::<T, I>::get(validator_id),
+					})
+				})
 		}
 
 		fn recheck_contributed_to_consensuses(
