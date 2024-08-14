@@ -5,12 +5,12 @@ import { doPerformSwap } from '../shared/perform_swap';
 import { testSwap } from '../shared/swapping';
 import { executeWithTimeout, observeFetch, sleep } from '../shared/utils';
 import { observeEvent } from '../shared/utils/substrate';
-import { killAndStartEngine } from '../shared/upgrade_network';
+import { killEngines, startEngines } from '../shared/upgrade_network';
 
 // For example:
-// ./tests/delta_base_ingress.ts prebuilt --runtime ./../main-runtime/state_chain_runtime.compact.compressed.wasm --bins ./../upgrade-to-bins --localnet_init ./../localnet/init
+// ./tests/delta_base_ingress.ts prebuilt --bins ./../target/debug --localnet_init ./../localnet/init
 
-let swapsWitnessed = 0;
+let swapsWitnessed: number = 0;
 
 async function deltaBasedIngressTest(
   // Directory where the node and CFE binaries of the new version are located
@@ -19,7 +19,6 @@ async function deltaBasedIngressTest(
   numberOfNodes: 1 | 3 = 1,
 ): Promise<void> {
   const sourceAsset = 'Sol';
-  const amount = '1';
 
   // Monitor swap events to make sure there is only one
   let swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
@@ -43,22 +42,33 @@ async function deltaBasedIngressTest(
     undefined,
     undefined,
     ' DeltaBasedIngress',
-    amount,
+    '1',
   );
 
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  await killAndStartEngine(localnetInitPath, binariesPath, numberOfNodes);
+  await killEngines();
+  await startEngines(localnetInitPath, binariesPath, numberOfNodes);
 
   // Wait to ensure no new swap is being triggered after restart.
+  console.log('Waiting for 30 seconds to ensure no swap is being triggered after restart');
   await sleep(30000);
   swapScheduledHandle.stop();
 
-  await killAndStartEngine(localnetInitPath, binariesPath, numberOfNodes);
+  if (swapsWitnessed !== 1) {
+    throw new Error('No swap was initiated. Swaps witnessed: ' + swapsWitnessed);
+  }
+
+  // Kill the engine
+  await killEngines();
+
   // Start another swap doing another deposit to the same address
   const swapHandle = doPerformSwap(
     swapParams,
     `[${sourceAsset}->Eth DeltaBasedIngressSecondDeposit]`,
+    undefined,
+    undefined,
+    '5',
   );
 
   swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
@@ -73,12 +83,17 @@ async function deltaBasedIngressTest(
     },
     abortable: true,
   });
-  await startNodesCompatible(localnetInitPath, binariesPath, numberOfNodes);
+  await startEngines(localnetInitPath, binariesPath, numberOfNodes);
 
-  // Wait to ensure no new swap is being triggered after restart and check
-  // that swap completes.
+  // Wait to ensure no additional new swap is being triggered after restart
+  // and check that swap completes.
   await sleep(30000);
   await swapHandle;
+  swapScheduledHandle.stop();
+
+  if (swapsWitnessed < 2) {
+    throw new Error('Expected two swaps. Swaps witnessed: ' + swapsWitnessed);
+  }
 }
 
 // Test Solana's delta based ingress
