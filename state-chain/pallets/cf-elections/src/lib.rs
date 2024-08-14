@@ -109,6 +109,8 @@
 
 pub mod electoral_system;
 pub mod electoral_systems;
+mod mock;
+mod tests;
 mod vote_storage;
 
 use frame_support::pallet_prelude::*;
@@ -198,6 +200,11 @@ pub mod pallet {
 		pub fn new(rng: &mut impl rand::Rng) -> Self {
 			VoteSynchronisationBarrier(rng.gen())
 		}
+
+		#[cfg(test)]
+		pub fn from_u32(value: u32) -> Self {
+			VoteSynchronisationBarrier(value)
+		}
 	}
 
 	/// This error is used indicate that the pallet's Storage is corrupt. If it is returned by an
@@ -218,7 +225,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		#[allow(clippy::type_complexity)]
-		option_initialize: Option<(
+		pub option_initialize: Option<(
 			<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 			<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
 			<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
@@ -283,6 +290,7 @@ pub mod pallet {
 		CorruptStorage,
 		VotesNotCleared,
 		InvalidVote,
+		NoVotesSpecified,
 	}
 
 	// ---------------------------------------------------------------------------------------- //
@@ -1124,6 +1132,8 @@ pub mod pallet {
 			vote_sync_barrier: VoteSynchronisationBarrier,
 		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
+
+			ensure!(!authority_votes.is_empty(), Error::<T, I>::NoVotesSpecified);
 			ensure!(
 				AuthorityVoteSynchronisationBarriers::<T, I>::get(&authority)
 					.map_or(false, |current_vote_sync_barrier| current_vote_sync_barrier ==
