@@ -87,7 +87,7 @@ impl LpDepositHandler for MockDepositHandler {
 		_asset: Asset,
 		_amount: AssetAmount,
 	) -> frame_support::pallet_prelude::DispatchResult {
-		todo!()
+		unimplemented!()
 	}
 }
 

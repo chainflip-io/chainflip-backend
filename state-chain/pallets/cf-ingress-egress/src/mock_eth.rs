@@ -27,7 +27,7 @@ use cf_traits::{
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	DepositApi, LpDepositHandler, NetworkEnvironmentProvider, OnDeposit,
+	BalanceApi, DepositApi, LpDepositHandler, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
 use frame_system as system;
@@ -83,10 +83,11 @@ impl LpDepositHandler for MockDepositHandler {
 	type AccountId = u64;
 
 	fn add_deposit(
-		_who: &Self::AccountId,
-		_asset: Asset,
-		_amount: AssetAmount,
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
 	) -> frame_support::pallet_prelude::DispatchResult {
+		MockBalance::try_credit_account(who, asset, amount)?;
 		Ok(())
 	}
 }
