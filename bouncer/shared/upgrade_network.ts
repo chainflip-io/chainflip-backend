@@ -133,17 +133,13 @@ async function compatibleUpgrade(
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
 }
 
-async function incompatibleUpgradeNoBuild(
+export async function killAndStartEngine(
   localnetInitPath: string,
   binaryPath: string,
-  runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
   const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
 
-  // We need to kill the engine process before starting the new engine (engine-runner)
-  // Since the new engine contains the old one.
-  console.log('Killing the old engines');
   execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
 
   console.log('Starting all the engines');
@@ -161,6 +157,18 @@ async function incompatibleUpgradeNoBuild(
   await sleep(7000);
 
   console.log('Engines started');
+}
+
+async function incompatibleUpgradeNoBuild(
+  localnetInitPath: string,
+  binaryPath: string,
+  runtimePath: string,
+  numberOfNodes: 1 | 3,
+) {
+  // We need to kill the engine process before starting the new engine (engine-runner)
+  // Since the new engine contains the old one.
+  console.log('Killing the old engines');
+  await killAndStartEngine(localnetInitPath, binaryPath, numberOfNodes);
 
   await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
 
