@@ -1124,6 +1124,8 @@ pub mod pallet {
 			vote_sync_barrier: VoteSynchronisationBarrier,
 		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
+
+			ensure!(!authority_votes.is_empty(), Error::<T, I>::NoVotesSpecified);
 			ensure!(
 				AuthorityVoteSynchronisationBarriers::<T, I>::get(&authority)
 					.map_or(false, |current_vote_sync_barrier| current_vote_sync_barrier ==
