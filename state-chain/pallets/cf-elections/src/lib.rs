@@ -109,6 +109,8 @@
 
 pub mod electoral_system;
 pub mod electoral_systems;
+mod mock;
+mod tests;
 mod vote_storage;
 
 use frame_support::pallet_prelude::*;
@@ -198,6 +200,11 @@ pub mod pallet {
 		pub fn new(rng: &mut impl rand::Rng) -> Self {
 			VoteSynchronisationBarrier(rng.gen())
 		}
+
+		#[cfg(test)]
+		pub fn from_u32(value: u32) -> Self {
+			VoteSynchronisationBarrier(value)
+		}
 	}
 
 	/// This error is used indicate that the pallet's Storage is corrupt. If it is returned by an
@@ -218,7 +225,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		#[allow(clippy::type_complexity)]
-		option_initialize: Option<(
+		pub option_initialize: Option<(
 			<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 			<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
 			<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
@@ -283,6 +290,7 @@ pub mod pallet {
 		CorruptStorage,
 		VotesNotCleared,
 		InvalidVote,
+		NoVotesSpecified,
 	}
 
 	// ---------------------------------------------------------------------------------------- //
@@ -470,12 +478,14 @@ pub mod pallet {
 	/// votes will not change, so they can delete/correct bad votes after detecting a problem for
 	/// example a reorg.
 	#[pallet::storage]
+	#[pallet::getter(fn vote_synchronisation_barrier)]
 	type AuthorityVoteSynchronisationBarriers<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, VoteSynchronisationBarrier, OptionQuery>;
 
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
 	/// this is None, the pallet is considered uninitialized.
 	#[pallet::storage]
+	#[pallet::getter(fn status)]
 	pub type Status<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ElectoralSystemStatus, OptionQuery>;
 
