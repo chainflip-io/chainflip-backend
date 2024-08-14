@@ -146,14 +146,14 @@ async function trackGasLimitSwap(
       test: (event) =>
         Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId &&
         event.data.swapType === SwapType.CcmGas,
-      historicCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.outputAmount;
 
   const egressId = (
     await observeEvent('swapping:SwapEgressScheduled', {
       test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-      historicCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.egressId as EgressId;
 
@@ -163,14 +163,14 @@ async function trackGasLimitSwap(
         console.log(`event.data.egressId ${event.data.egressId} / ${egressId}`);
         return event.data.egressId[0] === egressId[0] && event.data.egressId[1] === egressId[1];
       },
-      historicCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.broadcastId;
 
   const txPayload = (
     await observeEvent(`${destChain.toLowerCase()}Broadcaster:TransactionBroadcastRequest`, {
       test: (event) => event.data.broadcastId === broadcastId,
-      historicCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.transactionPayload;
 

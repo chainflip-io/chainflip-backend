@@ -68,7 +68,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
 
   const observeSwapExecuted = observeEvent(`swapping:SwapExecuted`, {
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicCheckBlocks: 10,
+    historicalCheckBlocks: 10,
   }).event;
 
   // Wait for the swap to execute or get refunded

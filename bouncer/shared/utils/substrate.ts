@@ -216,14 +216,16 @@ const subscribeHeads = getCachedDisposable(
   },
 );
 
-async function getPastEvents(chain: SubstrateChain, historicCheckBlocks: number): Promise<Event[]> {
+async function getPastEvents(
+  chain: SubstrateChain,
+  historicalCheckBlocks: number,
+): Promise<Event[]> {
   const api = await apiMap[chain]();
   const historicEvents: Event[] = [];
-  if (historicCheckBlocks > 0) {
+  if (historicalCheckBlocks > 0) {
     const latestHeader = await api.rpc.chain.getHeader();
     const latestBlockNumber = latestHeader.number.toNumber();
-    const startAtBlock =
-      latestBlockNumber - historicCheckBlocks > 0 ? latestBlockNumber - historicCheckBlocks : 0;
+    const startAtBlock = Math.max(latestBlockNumber - historicalCheckBlocks, 0);
 
     for (let i = startAtBlock; i <= latestBlockNumber; i++) {
       const blockHash = await api.rpc.chain.getBlockHash(i);
@@ -244,7 +246,7 @@ interface BaseOptions<T> {
   chain?: SubstrateChain;
   test?: EventTest<T>;
   finalized?: boolean;
-  historicCheckBlocks?: number;
+  historicalCheckBlocks?: number;
 }
 
 interface Options<T> extends BaseOptions<T> {
@@ -279,7 +281,7 @@ export function observeEvents<T = any>(
     chain = 'chainflip',
     test = () => true,
     finalized = false,
-    historicCheckBlocks = 0,
+    historicalCheckBlocks = 0,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
 ) {
@@ -291,8 +293,8 @@ export function observeEvents<T = any>(
     const foundEvents: Event[] = [];
 
     // Check historic events first
-    if (historicCheckBlocks > 0) {
-      const historicEvents = await getPastEvents(chain, historicCheckBlocks);
+    if (historicalCheckBlocks > 0) {
+      const historicEvents = await getPastEvents(chain, historicalCheckBlocks);
       for (const event of historicEvents) {
         if (
           event.name.section.includes(expectedSection) &&
@@ -359,7 +361,7 @@ export function observeEvent<T = any>(
     chain = 'chainflip',
     test = () => true,
     finalized = false,
-    historicCheckBlocks = 0,
+    historicalCheckBlocks: historicCheckBlocks = 0,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
 ): SingleEventObserver<T> | SingleEventAbortableObserver<T> {
@@ -368,7 +370,7 @@ export function observeEvent<T = any>(
       chain,
       test,
       finalized,
-      historicCheckBlocks,
+      historicalCheckBlocks: historicCheckBlocks,
       abortable,
     });
 
@@ -382,7 +384,7 @@ export function observeEvent<T = any>(
     chain,
     test,
     finalized,
-    historicCheckBlocks,
+    historicalCheckBlocks: historicCheckBlocks,
     abortable,
   });
 
