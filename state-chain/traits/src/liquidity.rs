@@ -31,34 +31,6 @@ pub trait LpRegistration {
 	) -> DispatchResult;
 }
 
-/// API for interacting with the asset-balance pallet.
-pub trait BalanceApi {
-	type AccountId;
-
-	/// Attempt to credit the account with the given asset and amount.
-	fn try_credit_account(
-		who: &Self::AccountId,
-		asset: Asset,
-		amount: AssetAmount,
-	) -> DispatchResult;
-
-	/// Attempt to debit the account with the given asset and amount.
-	fn try_debit_account(
-		who: &Self::AccountId,
-		asset: Asset,
-		amount: AssetAmount,
-	) -> DispatchResult;
-
-	/// Returns the asset free balances of the given account.
-	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
-
-	/// Returns the balance of the given account for the given asset.
-	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount;
-
-	/// Removes the account from the balance storage.
-	fn kill_account(who: &Self::AccountId);
-}
-
 pub trait HistoricalFeeMigration {
 	type AccountId;
 	fn migrate_historical_fee(account_id: Self::AccountId, asset: Asset, amount: AssetAmount);

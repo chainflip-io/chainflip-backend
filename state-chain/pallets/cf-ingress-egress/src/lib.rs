@@ -39,8 +39,8 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
 	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
 	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
-	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler,
-	SwapRequestType,
+	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapLimitsProvider,
+	SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -220,7 +220,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::OnDeposit, SwapLimitsProvider;
+	use cf_traits::{OnDeposit, SwapLimitsProvider};
 	use core::marker::PhantomData;
 	use frame_support::{
 		traits::{ConstU128, EnsureOrigin, IsType},
