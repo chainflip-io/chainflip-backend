@@ -363,15 +363,18 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 			match call.signer() {
 				Some(signer) if signer != current_on_chain_key => {
 					let mut modified_call = (*call).clone();
-					// the unwrap should be safe because we are in the code where on chain key
-					// already exists (see above) and so the active_epoch_key() should also exist.
-					let current_aggkey = SolanaThresholdSigner::active_epoch_key().unwrap().key;
-					for key in modified_call.transaction.message.account_keys.iter_mut() {
-						if *key == signer.into() {
-							*key = current_aggkey.into()
-						}
-					}
-					RequiresSignatureRefresh::True(Some(modified_call.clone()))
+					SolanaThresholdSigner::active_epoch_key().map_or(
+						RequiresSignatureRefresh::False,
+						|active_epoch_key| {
+							let current_aggkey = active_epoch_key.key;
+							for key in modified_call.transaction.message.account_keys.iter_mut() {
+								if *key == signer.into() {
+									*key = current_aggkey.into()
+								}
+							}
+							RequiresSignatureRefresh::True(Some(modified_call.clone()))
+						},
+					)
 				},
 				_ => RequiresSignatureRefresh::False,
 			}
