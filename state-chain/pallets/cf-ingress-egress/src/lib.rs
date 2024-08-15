@@ -688,10 +688,8 @@ pub mod pallet {
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
 		},
-		LiquidityDepositCredited {
-			account_id: T::AccountId,
-			asset: Asset,
-			amount_credited: AssetAmount,
+		MaxSwapRetryDurationSet {
+			max_swap_retry_duration_blocks: BlockNumber,
 		},
 	}
 
@@ -1559,12 +1557,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset.into(),
 					amount_after_fees.into(),
 				)?;
-				Self::deposit_event(Event::LiquidityDepositCredited {
-					account_id: lp_account.clone(),
-					asset: asset.into(),
-					amount_credited: amount_after_fees.into(),
-				});
-
 				DepositAction::LiquidityProvision { lp_account }
 			},
 			ChannelAction::Swap {
