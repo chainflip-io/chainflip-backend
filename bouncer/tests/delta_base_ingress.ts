@@ -1,16 +1,33 @@
 #!/usr/bin/env -S pnpm tsx
-import yargs from 'yargs';
-import { hideBin } from 'yargs/helpers';
-import { doPerformSwap } from '../shared/perform_swap';
-import { testSwap } from '../shared/swapping';
-import { executeWithTimeout, observeFetch, sleep } from '../shared/utils';
-import { observeEvent } from '../shared/utils/substrate';
-import { killEngines, startEngines } from '../shared/upgrade_network';
+
+// Test the delta based ingress feature of Solana works as intended.
+// The test will initiate and witness a swap from Solana. It will then restart the engine and ensure
+// that a new swap is not scheduled upon restart. Finally it will kill the engine again, make a deposit
+// while the engine is down and ensure that the swap is started upon restart.
+
+// Args:
+// --bins <path to directory containing node and CFE binaries>.
+// --localnet_init <path to localnet init directory>.
+// --nodes <1 or 3>: The number of nodes running on your localnet. Defaults to 1.
 
 // To run locally:
 // ./tests/delta_base_ingress.ts prebuilt --bins ./../target/debug --localnet_init ./../localnet/init
 // To run in CI:
 // ./tests/delta_base_ingress.ts prebuilt --bins ./../ --localnet_init ./../localnet/init
+
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import { doPerformSwap } from '../shared/perform_swap';
+import { testSwap } from '../shared/swapping';
+import {
+  amountToFineAmount,
+  assetDecimals,
+  executeWithTimeout,
+  observeFetch,
+  sleep,
+} from '../shared/utils';
+import { observeEvent } from '../shared/utils/substrate';
+import { killEngines, startEngines } from '../shared/upgrade_network';
 
 let swapsWitnessed: number = 0;
 
@@ -21,15 +38,28 @@ async function deltaBasedIngressTest(
   numberOfNodes: 1 | 3 = 1,
 ): Promise<void> {
   const sourceAsset = 'Sol';
+  const amountFirstDeposit = '5';
+  const amountSecondDeposit = '1';
 
   // Monitor swap events to make sure there is only one
   let swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
-    test: () => {
+    test: (event) => {
+      const data = event.data;
+
       swapsWitnessed++;
       console.log('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
 
       if (swapsWitnessed > 1) {
         throw new Error('More than one swaps were initiated');
+      }
+
+      const inputAmount = Number(data.inputAmount.replace(/,/g, ''));
+      if (
+        inputAmount > Number(amountToFineAmount(amountFirstDeposit, assetDecimals(sourceAsset)))
+      ) {
+        throw new Error(
+          'Swap input amount is greater than the first deposit ' + inputAmount.toString(),
+        );
       }
       return false;
     },
@@ -44,7 +74,7 @@ async function deltaBasedIngressTest(
     undefined,
     undefined,
     ' DeltaBasedIngress',
-    '1',
+    amountFirstDeposit.toString(),
   );
 
   await observeFetch(sourceAsset, swapParams.depositAddress);
@@ -70,16 +100,26 @@ async function deltaBasedIngressTest(
     `[${sourceAsset}->Eth DeltaBasedIngressSecondDeposit]`,
     undefined,
     undefined,
-    '5',
+    amountSecondDeposit,
   );
 
   swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
-    test: () => {
+    test: (event) => {
+      const data = event.data;
+
       swapsWitnessed++;
       console.log('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
 
       if (swapsWitnessed > 2) {
         throw new Error('More than two swaps were initiated');
+      }
+      const inputAmount = Number(data.inputAmount.replace(/,/g, ''));
+      if (
+        inputAmount > Number(amountToFineAmount(amountSecondDeposit, assetDecimals(sourceAsset)))
+      ) {
+        throw new Error(
+          'Swap input amount is greater than the second deposit ' + inputAmount.toString(),
+        );
       }
       return false;
     },
