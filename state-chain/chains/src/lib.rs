@@ -11,7 +11,8 @@ use crate::{
 };
 pub use address::ForeignChainAddress;
 use address::{
-	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
+	AddressDerivationApi, AddressDerivationError, EncodedAddress, IntoForeignChainAddress,
+	ToHumanreadableAddress,
 };
 use cf_primitives::{
 	AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TransactionHash,
@@ -697,15 +698,18 @@ pub struct SwapRefundParameters {
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
 )]
-pub struct ChannelRefundParameters<A> {
+pub struct ChannelRefundParametersGeneric<A> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
 	pub min_price: Price,
 }
 
-impl<A: Clone> ChannelRefundParameters<A> {
-	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParameters<B> {
-		ChannelRefundParameters {
+pub type ChannelRefundParameters = ChannelRefundParametersGeneric<ForeignChainAddress>;
+pub type ChannelRefundParametersEncoded = ChannelRefundParametersGeneric<EncodedAddress>;
+
+impl<A: Clone> ChannelRefundParametersGeneric<A> {
+	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParametersGeneric<B> {
+		ChannelRefundParametersGeneric {
 			retry_duration: self.retry_duration,
 			refund_address: f(self.refund_address.clone()),
 			min_price: self.min_price,

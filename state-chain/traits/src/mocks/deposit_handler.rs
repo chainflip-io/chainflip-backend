@@ -124,7 +124,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		broker_id: Self::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		_refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
+		_refund_params: Option<ChannelRefundParameters>,
 		_dca_params: Option<DcaParameters>,
 	) -> Result<
 		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount),

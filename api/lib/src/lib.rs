@@ -7,7 +7,7 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	evm::to_evm_address,
 	sol::SolAddress,
-	CcmChannelMetadata, ChannelRefundParameters, ForeignChain, ForeignChainAddress,
+	CcmChannelMetadata, ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{BlockNumber, DcaParameters, NetworkEnvironment, Price};
@@ -347,7 +347,7 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
 	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<ChannelRefundParameters<AddressString>>,
+	pub refund_parameters: Option<ChannelRefundParametersGeneric<AddressString>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -414,7 +414,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					affiliate_fees,
 					refund_parameters: refund_parameters
 						.map(|rpc_params| {
-							Ok::<_, anyhow::Error>(ChannelRefundParameters {
+							Ok::<_, anyhow::Error>(ChannelRefundParametersGeneric {
 								retry_duration: rpc_params.retry_duration,
 								refund_address: rpc_params
 									.refund_address

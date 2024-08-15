@@ -59,7 +59,7 @@ struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
 	input_amount: AssetAmount,
-	refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
+	refund_params: Option<ChannelRefundParameters>,
 	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
@@ -73,10 +73,7 @@ struct TestRefundParams {
 }
 
 impl TestRefundParams {
-	fn into_channel_params(
-		self,
-		input_amount: AssetAmount,
-	) -> ChannelRefundParameters<ForeignChainAddress> {
+	fn into_channel_params(self, input_amount: AssetAmount) -> ChannelRefundParameters {
 		use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 
 		ChannelRefundParameters {

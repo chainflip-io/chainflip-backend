@@ -7,8 +7,8 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
-	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters, SwapOrigin,
-	SwapRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters,
+	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId, DcaParameters,
@@ -345,7 +345,7 @@ struct SwapRequest {
 	id: SwapRequestId,
 	input_asset: Asset,
 	output_asset: Asset,
-	refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
+	refund_params: Option<ChannelRefundParameters>,
 	state: SwapRequestState,
 }
 
@@ -513,7 +513,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParameters<EncodedAddress>>,
+			refund_parameters: Option<ChannelRefundParametersEncoded>,
 			dca_parameters: Option<DcaParameters>,
 		},
 		/// A swap is scheduled for the first time
@@ -1045,7 +1045,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParameters<ForeignChainAddress>>,
+			refund_parameters: Option<ChannelRefundParameters>,
 			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
@@ -1618,7 +1618,7 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			input_amount: AssetAmount,
-			refund_params: Option<&ChannelRefundParameters<ForeignChainAddress>>,
+			refund_params: Option<&ChannelRefundParameters>,
 			swap_type: SwapType,
 			swap_request_id: SwapRequestId,
 			delay_blocks: BlockNumberFor<T>,
@@ -1793,7 +1793,7 @@ pub mod pallet {
 			output_asset: Asset,
 			request_type: SwapRequestType,
 			broker_fees: Beneficiaries<Self::AccountId>,
-			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
+			refund_params: Option<ChannelRefundParameters>,
 			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin,
 		) -> Result<SwapRequestId, DispatchError> {
@@ -2171,7 +2171,7 @@ pub(crate) mod utilities {
 	}
 
 	pub(super) fn calculate_swap_refund_parameters(
-		params: &ChannelRefundParameters<ForeignChainAddress>,
+		params: &ChannelRefundParameters,
 		execute_at_block: u32,
 		input_amount: AssetAmount,
 	) -> SwapRefundParameters {
