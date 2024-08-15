@@ -51,7 +51,7 @@ pub trait VoteStorage: private::Sealed + Sized {
 	/// validator's votes.
 	type SharedData: Parameter + Member;
 
-	fn vote_into_partial_vote<H: Fn(Self::SharedData) -> SharedDataHash>(
+	fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
 		vote: &Self::Vote,
 		h: H,
 	) -> Self::PartialVote;
