@@ -352,7 +352,6 @@ fn account_registration_and_deregistration() {
 		);
 
 		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT_ID)
-			.unwrap()
 			.iter()
 			.all(|(_, amount)| *amount == 0));
 	});

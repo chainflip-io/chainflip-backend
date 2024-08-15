@@ -1301,14 +1301,14 @@ impl_runtime_apis! {
 				})
 				.collect()
 		}
-		fn cf_free_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
-			AssetBalances::free_balances(&account_id).map_err(Into::into)
+		fn cf_free_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
+			AssetBalances::free_balances(&account_id)
 		}
-		fn cf_lp_total_balances(account_id: AccountId) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage> {
-			let free_balances = AssetBalances::free_balances(&account_id)?;
+		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
+			let free_balances = AssetBalances::free_balances(&account_id);
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
 			let boost_pools_balances = IngressEgressBoostApi::boost_pool_account_balances(&account_id);
-			Ok(free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances))
+			free_balances.saturating_add(open_order_balances).saturating_add(boost_pools_balances)
 		}
 		fn cf_account_flip_balance(account_id: &AccountId) -> u128 {
 			pallet_cf_flip::Account::<Runtime>::get(account_id).total()

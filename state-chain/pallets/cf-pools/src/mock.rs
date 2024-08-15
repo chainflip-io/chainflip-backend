@@ -112,9 +112,7 @@ impl BalanceApi for MockBalance {
 		Ok(())
 	}
 
-	fn free_balances(
-		_who: &Self::AccountId,
-	) -> Result<AssetMap<AssetAmount>, sp_runtime::DispatchError> {
+	fn free_balances(_who: &Self::AccountId) -> AssetMap<AssetAmount> {
 		unimplemented!()
 	}
 

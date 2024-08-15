@@ -1065,9 +1065,7 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
 			ensure!(
-				T::BalanceApi::free_balances(&account_id)?
-					.iter()
-					.all(|(_, amount)| *amount == 0),
+				T::BalanceApi::free_balances(&account_id).iter().all(|(_, amount)| *amount == 0),
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
 

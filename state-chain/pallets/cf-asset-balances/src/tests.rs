@@ -8,7 +8,7 @@ use crate::FreeBalances;
 use cf_chains::AnyChain;
 use cf_test_utilities::assert_has_event;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, BalanceApi, SafeMode};
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, traits::OnKilledAccount};
 
 use crate::{mock::*, ExternalOwner, Liabilities, Pallet, WithheldAssets};
 
@@ -404,7 +404,7 @@ pub mod balance_api {
 				100,
 			);
 			assert_eq!(
-				Pallet::<Test>::free_balances(&AccountId::from([1; 32])).unwrap().eth,
+				Pallet::<Test>::free_balances(&AccountId::from([1; 32])).eth,
 				eth::AssetMap { eth: 100, flip: 0, usdc: 0, usdt: 0 }
 			);
 		});

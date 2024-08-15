@@ -112,16 +112,14 @@ impl BalanceApi for MockBalanceApi {
 		})
 	}
 
-	fn free_balances(
-		who: &Self::AccountId,
-	) -> Result<assets::any::AssetMap<cf_primitives::AssetAmount>, sp_runtime::DispatchError> {
+	fn free_balances(who: &Self::AccountId) -> assets::any::AssetMap<cf_primitives::AssetAmount> {
 		BALANCE_MAP.with(|balance_map| {
-			Ok(assets::any::AssetMap::try_from_iter(
+			assets::any::AssetMap::try_from_iter(
 				Asset::all().map(|asset| {
 					(asset, balance_map.borrow().get(who).cloned().unwrap_or_default())
 				}),
 			)
-			.unwrap())
+			.unwrap()
 		})
 	}
 

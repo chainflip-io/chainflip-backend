@@ -448,8 +448,8 @@ where
 		Ok(())
 	}
 
-	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
-		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset)))
+	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
 	}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
@@ -459,10 +459,7 @@ where
 
 pub struct DeleteAccount<T: Config>(PhantomData<T>);
 
-impl OnKilledAccount<T> for DeleteAccount<T>
-where
-	T: Config,
-{
+impl<T: Config> OnKilledAccount<T::AccountId> for DeleteAccount<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
 	}

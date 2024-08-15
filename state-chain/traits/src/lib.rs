@@ -1010,7 +1010,7 @@ pub trait BalanceApi {
 	) -> DispatchResult;
 
 	/// Returns the asset free balances of the given account.
-	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
+	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
 
 	/// Returns the balance of the given account for the given asset.
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount;

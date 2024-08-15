@@ -293,9 +293,7 @@ pub mod pallet {
 				Error::<T>::OpenOrdersRemaining
 			);
 			ensure!(
-				T::BalanceApi::free_balances(&account_id)?
-					.iter()
-					.all(|(_, amount)| *amount == 0),
+				T::BalanceApi::free_balances(&account_id).iter().all(|(_, amount)| *amount == 0),
 				Error::<T>::FundsRemaining
 			);
 			ensure!(

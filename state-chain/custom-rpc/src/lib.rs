@@ -1121,12 +1121,8 @@ where
 		self.client
 			.runtime_api()
 			.cf_free_balances(self.unwrap_or_best(at), account_id)
+			.map(|asset_map| asset_map.map(Into::into))
 			.map_err(to_rpc_error)
-			.and_then(|result| {
-				result
-					.map(|free_balances| free_balances.map(Into::into))
-					.map_err(map_dispatch_error)
-			})
 	}
 
 	fn cf_lp_total_balances(
@@ -1137,12 +1133,8 @@ where
 		self.client
 			.runtime_api()
 			.cf_lp_total_balances(self.unwrap_or_best(at), account_id)
+			.map(|asset_map| asset_map.map(Into::into))
 			.map_err(to_rpc_error)
-			.and_then(|result| {
-				result
-					.map(|total_balances| total_balances.map(Into::into))
-					.map_err(map_dispatch_error)
-			})
 	}
 
 	fn cf_penalties(
