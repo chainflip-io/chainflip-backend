@@ -52,11 +52,6 @@ jobs:
 
   lint-bouncer:
     runs-on: namespace-profile-default
-    container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
