@@ -324,6 +324,7 @@ pub mod balance_api {
 		new_test_ext().execute_with(|| {
 			let alice = AccountId::from([1; 32]);
 			const AMOUNT: u128 = 100;
+			const DELTA: u128 = 10;
 			assert_ok!(Pallet::<Test>::try_credit_account(
 				&alice,
 				ForeignChain::Ethereum.gas_asset(),
@@ -334,6 +335,7 @@ pub mod balance_api {
 					account_id: alice.clone(),
 					asset: ForeignChain::Ethereum.gas_asset(),
 					amount_credited: AMOUNT,
+					new_balance: AMOUNT,
 				}
 				.into(),
 			);
@@ -345,27 +347,28 @@ pub mod balance_api {
 				Pallet::<Test>::try_debit_account(
 					&alice,
 					ForeignChain::Ethereum.gas_asset(),
-					AMOUNT + 10
+					AMOUNT + DELTA
 				),
 				crate::Error::<Test>::InsufficientBalance
 			);
 			assert_ok!(Pallet::<Test>::try_debit_account(
 				&AccountId::from([1; 32]),
 				ForeignChain::Ethereum.gas_asset(),
-				AMOUNT - 10
+				AMOUNT - DELTA
 			));
 			assert_eq!(
 				FreeBalances::<Test>::get(
 					AccountId::from([1; 32]),
 					ForeignChain::Ethereum.gas_asset()
 				),
-				10
+				DELTA
 			);
 			assert_has_event::<Test>(
 				crate::Event::AccountDebited {
 					account_id: alice.clone(),
 					asset: ForeignChain::Ethereum.gas_asset(),
-					amount_debited: AMOUNT - 10,
+					amount_debited: AMOUNT - DELTA,
+					new_balance: DELTA,
 				}
 				.into(),
 			);
