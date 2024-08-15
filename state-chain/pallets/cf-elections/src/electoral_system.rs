@@ -3,7 +3,6 @@ use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
-use sp_std::vec::Vec;
 
 use crate::{
 	vote_storage::{AuthorityVote, VoteStorage},
@@ -15,6 +14,7 @@ use crate::{
 ///
 /// Implementations of this trait should *NEVER* directly access the storage of the elections
 /// pallet, and only access it through the passed-in accessors.
+
 pub trait ElectoralSystem: 'static {
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
 	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
@@ -214,6 +214,7 @@ mod access {
 
 	/// Represents the current consensus, and how it has changed since it was last checked (i.e.
 	/// 'check_consensus' was called).
+	#[cfg_attr(test, derive(Clone))]
 	pub enum ConsensusStatus<Consensus> {
 		/// You did not have consensus when previously checked, but now consensus has been gained.
 		Gained {
@@ -414,3 +415,278 @@ pub use access::{
 	ConsensusStatus, ElectionReadAccess, ElectionWriteAccess, ElectoralReadAccess,
 	ElectoralWriteAccess,
 };
+
+#[cfg(test)]
+pub mod mocks {
+	use super::*;
+
+	use core::marker::PhantomData;
+	use std::collections::BTreeMap;
+
+	use crate::{
+		electoral_system::{ConsensusStatus, ElectionIdentifierOf, ElectoralReadAccess},
+		UniqueMonotonicIdentifier,
+	};
+
+	pub struct MockElectionReadAccess<'es, ES: ElectoralSystem> {
+		electoral_system: &'es MockElectoralAccess<ES>,
+		election_identifier: ElectionIdentifierOf<ES>,
+		_phantom: PhantomData<ES>,
+	}
+
+	pub struct MockElectionWriteAccess<'es, ES: ElectoralSystem> {
+		electoral_system: &'es mut MockElectoralAccess<ES>,
+		election_identifier: ElectionIdentifierOf<ES>,
+		_phantom: PhantomData<ES>,
+	}
+
+	macro_rules! impl_election_read_access {
+		($struct_name:ident) => {
+			impl<ES: ElectoralSystem> ElectionReadAccess for $struct_name<'_, ES> {
+				type ElectoralSystem = ES;
+
+				fn settings(
+					&self,
+				) -> Result<
+					<Self::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+					CorruptStorageError,
+				> {
+					Ok(self
+						.electoral_system
+						.election_settings
+						.get(&self.election_identifier)
+						.cloned()
+						.unwrap())
+				}
+
+				fn properties(
+					&self,
+				) -> Result<
+					<Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+					CorruptStorageError,
+				> {
+					Ok(self
+						.electoral_system
+						.election_properties
+						.get(&self.election_identifier)
+						.cloned()
+						.unwrap())
+				}
+
+				fn state(
+					&self,
+				) -> Result<
+					<Self::ElectoralSystem as ElectoralSystem>::ElectionState,
+					CorruptStorageError,
+				> {
+					Ok(self
+						.electoral_system
+						.election_state
+						.get(&self.election_identifier)
+						.cloned()
+						.unwrap())
+				}
+			}
+		};
+	}
+
+	impl_election_read_access!(MockElectionReadAccess);
+	impl_election_read_access!(MockElectionWriteAccess);
+
+	// Do we even need this stuff?
+	impl<ES: ElectoralSystem> ElectionWriteAccess for MockElectionWriteAccess<'_, ES> {
+		fn set_state(
+			&mut self,
+			state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
+		) -> Result<(), CorruptStorageError> {
+			self.electoral_system.election_state.insert(self.election_identifier, state);
+			Ok(())
+		}
+		fn clear_votes(&mut self) {
+			// nothing
+		}
+		fn delete(self) {
+			self.electoral_system.election_properties.remove(&self.election_identifier);
+			self.electoral_system.election_state.remove(&self.election_identifier);
+			self.electoral_system.election_settings.remove(&self.election_identifier);
+		}
+		fn refresh(
+			&mut self,
+			extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
+			properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+		) -> Result<(), CorruptStorageError> {
+			self.electoral_system.election_properties.remove(&self.election_identifier);
+			let unique_monotonic_identifier = self.election_identifier.unique_monotonic().clone();
+			self.election_identifier = ElectionIdentifier::new(unique_monotonic_identifier, extra);
+			self.electoral_system
+				.election_properties
+				.insert(self.election_identifier, properties);
+			Ok(())
+		}
+
+		fn check_consensus(
+			&mut self,
+		) -> Result<
+			ConsensusStatus<<Self::ElectoralSystem as ElectoralSystem>::Consensus>,
+			CorruptStorageError,
+		> {
+			Ok(self
+				.electoral_system
+				.consensus_status
+				.get(&self.election_identifier)
+				.unwrap_or(&ConsensusStatus::None)
+				.clone())
+		}
+	}
+
+	pub struct MockElectoralAccess<ES: ElectoralSystem> {
+		next_election_monotonic_identifier: UniqueMonotonicIdentifier,
+		unsynchronised_state: ES::ElectoralUnsynchronisedState,
+		// We use a Vec to avoid needing the `Hash` or `Ord` trait for the key.
+		unsynchronised_state_map: Vec<(
+			ES::ElectoralUnsynchronisedStateMapKey,
+			Option<ES::ElectoralUnsynchronisedStateMapValue>,
+		)>,
+		election_properties: BTreeMap<ElectionIdentifierOf<ES>, ES::ElectionProperties>,
+		election_state: BTreeMap<ElectionIdentifierOf<ES>, ES::ElectionState>,
+		election_settings: BTreeMap<ElectionIdentifierOf<ES>, ES::ElectoralSettings>,
+		consensus_status: BTreeMap<ElectionIdentifierOf<ES>, ConsensusStatus<ES::Consensus>>,
+		unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
+	}
+
+	impl<ES: ElectoralSystem> MockElectoralAccess<ES> {
+		pub fn new(
+			unsynchronised_state: ES::ElectoralUnsynchronisedState,
+			unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
+		) -> Self {
+			Self {
+				next_election_monotonic_identifier: UniqueMonotonicIdentifier::new(0),
+				unsynchronised_state,
+				unsynchronised_state_map: Vec::new(),
+				election_properties: BTreeMap::new(),
+				election_settings: BTreeMap::new(),
+				election_state: BTreeMap::new(),
+				consensus_status: BTreeMap::new(),
+				unsynchronised_settings,
+			}
+		}
+
+		pub fn set_unsynchronised_settings(
+			&mut self,
+			unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
+		) {
+			self.unsynchronised_settings = unsynchronised_settings;
+		}
+
+		pub fn set_consensus_status(
+			&mut self,
+			election_identifier: ElectionIdentifierOf<ES>,
+			consensus_status: ConsensusStatus<ES::Consensus>,
+		) {
+			self.consensus_status.insert(election_identifier, consensus_status);
+		}
+	}
+
+	impl<ES: ElectoralSystem> ElectoralReadAccess for MockElectoralAccess<ES> {
+		type ElectoralSystem = ES;
+
+		type ElectionReadAccess<'es> = MockElectionReadAccess<'es, ES>;
+
+		fn election(
+			&self,
+			id: ElectionIdentifierOf<Self::ElectoralSystem>,
+		) -> Result<Self::ElectionReadAccess<'_>, CorruptStorageError> {
+			Ok(MockElectionReadAccess {
+				election_identifier: id,
+				electoral_system: self,
+				_phantom: PhantomData,
+			})
+		}
+		fn unsynchronised_settings(
+			&self,
+		) -> Result<
+			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
+			CorruptStorageError,
+		> {
+			Ok(self.unsynchronised_settings.clone())
+		}
+		fn unsynchronised_state(
+			&self,
+		) -> Result<
+			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+			CorruptStorageError,
+		> {
+			Ok(self.unsynchronised_state.clone())
+		}
+		fn unsynchronised_state_map(
+			&self,
+			key: &<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
+		) -> Result<
+			Option<
+				<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
+			>,
+			CorruptStorageError,
+		> {
+			Ok(self
+				.unsynchronised_state_map
+				.iter()
+				.find(|(k, _)| k == key)
+				.map(|(_, v)| v.clone())
+				.expect("Key not found"))
+		}
+	}
+
+	impl<ES: ElectoralSystem> ElectoralWriteAccess for MockElectoralAccess<ES> {
+		type ElectionWriteAccess<'a> = MockElectionWriteAccess<'a, ES>;
+
+		fn new_election(
+			&mut self,
+			extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
+			properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+			state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
+		) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
+			self.next_election_monotonic_identifier = self
+				.next_election_monotonic_identifier
+				.next_identifier()
+				.ok_or(CorruptStorageError)?;
+			let election_identifier =
+				ElectionIdentifier::new(self.next_election_monotonic_identifier, extra);
+			self.election_properties.insert(election_identifier, properties);
+			self.election_state.insert(election_identifier, state);
+			Ok(MockElectionWriteAccess {
+				electoral_system: self,
+				election_identifier,
+				_phantom: PhantomData,
+			})
+		}
+		fn election_mut(
+			&mut self,
+			id: ElectionIdentifierOf<Self::ElectoralSystem>,
+		) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
+			Ok(MockElectionWriteAccess {
+				election_identifier: id,
+				electoral_system: self,
+				_phantom: PhantomData,
+			})
+		}
+		fn set_unsynchronised_state(
+			&mut self,
+			unsynchronised_state: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+		) -> Result<(), CorruptStorageError> {
+			self.unsynchronised_state = unsynchronised_state;
+			Ok(())
+		}
+
+		/// Inserts or removes a value from the unsynchronised state map of the electoral system.
+		fn set_unsynchronised_state_map(
+			&mut self,
+			key: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
+			value: Option<
+				<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
+			>,
+		) -> Result<(), CorruptStorageError> {
+			self.unsynchronised_state_map.push((key, value));
+			Ok(())
+		}
+	}
+}

@@ -194,3 +194,144 @@ impl<
 	}
 }
 
+#[cfg(test)]
+mod test_unsafe_median {
+
+	use super::*;
+
+	use crate::{
+		electoral_system::{mocks::*, ConsensusStatus, ElectoralReadAccess},
+		UniqueMonotonicIdentifier,
+	};
+
+	#[test]
+	fn if_consensus_update_unsynchronised_state() {
+		let election_identifier = ElectionIdentifier::new(UniqueMonotonicIdentifier::new(0), ());
+
+		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
+		const NEW_UNSYNCHRONISED_STATE: u64 = 33;
+		let mut electoral_access =
+			MockElectoralAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, ());
+
+		electoral_access.set_consensus_status(
+			election_identifier,
+			ConsensusStatus::Changed {
+				previous: INIT_UNSYNCHRONISED_STATE,
+				new: NEW_UNSYNCHRONISED_STATE,
+			},
+		);
+
+		UnsafeMedian::<u64, (), ()>::on_finalize(
+			&mut electoral_access,
+			vec![election_identifier],
+			&(),
+		)
+		.unwrap();
+
+		assert_eq!(electoral_access.unsynchronised_state().unwrap(), NEW_UNSYNCHRONISED_STATE);
+	}
+
+	#[test]
+	fn if_no_consensus_do_not_update_unsynchronised_state() {
+		let election_identifier = ElectionIdentifier::new(UniqueMonotonicIdentifier::new(0), ());
+
+		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
+		let mut electoral_access =
+			MockElectoralAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, ());
+
+		electoral_access.set_consensus_status(election_identifier, ConsensusStatus::None);
+
+		UnsafeMedian::<u64, (), ()>::on_finalize(
+			&mut electoral_access,
+			vec![election_identifier],
+			&(),
+		)
+		.unwrap();
+
+		assert_eq!(electoral_access.unsynchronised_state().unwrap(), INIT_UNSYNCHRONISED_STATE);
+	}
+
+	#[test]
+	fn check_consensus_correctly_calculates_median_when_all_authorities_vote() {
+		let election_identifier = ElectionIdentifier::new(UniqueMonotonicIdentifier::new(0), ());
+
+		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
+		let mut electoral_access =
+			MockElectoralAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, ());
+
+		let mut votes = (1..=10).map(|v| ((), v)).collect::<Vec<_>>();
+
+		use rand::{seq::SliceRandom, thread_rng};
+
+		// vote ordering should not affect the result
+		votes.shuffle(&mut thread_rng());
+
+		let votes_len = votes.len() as u32;
+
+		let consensus = UnsafeMedian::<u64, (), ()>::check_consensus(
+			election_identifier,
+			&electoral_access.election_mut(election_identifier).unwrap(),
+			None,
+			votes,
+			// all authorities have voted
+			votes_len,
+		)
+		.unwrap();
+
+		assert_eq!(consensus, Some(5));
+	}
+
+	// Note: This is the reason the median is "unsafe" as 1/3 of validators can influence the value
+	// in this case.
+	#[test]
+	fn check_consensus_correctly_calculates_median_when_exactly_super_majority_authorities_vote() {
+		let election_identifier = ElectionIdentifier::new(UniqueMonotonicIdentifier::new(0), ());
+
+		let mut electoral_access =
+			MockElectoralAccess::<UnsafeMedian<u64, (), ()>>::new(Default::default(), ());
+
+		let mut votes = vec![((), 1u64), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6)];
+
+		use rand::{seq::SliceRandom, thread_rng};
+
+		// vote ordering shouldn't matter
+		votes.shuffle(&mut thread_rng());
+
+		let votes_len = votes.len() as u32;
+
+		let consensus = UnsafeMedian::<u64, (), ()>::check_consensus(
+			election_identifier,
+			&electoral_access.election_mut(election_identifier).unwrap(),
+			None,
+			votes,
+			(votes_len + (votes_len / 2)) as u32,
+		)
+		.unwrap();
+
+		assert_eq!(consensus, Some(3));
+	}
+
+	#[test]
+	fn fewer_than_supermajority_votes_does_not_get_consensus() {
+		let election_identifier = ElectionIdentifier::new(UniqueMonotonicIdentifier::new(0), ());
+
+		let mut electoral_access =
+			MockElectoralAccess::<UnsafeMedian<u64, (), ()>>::new(Default::default(), ());
+
+		let all_votes = vec![((), 1u64), ((), 5), ((), 3), ((), 2), ((), 8)];
+
+		(0..(all_votes.len())).for_each(|n_votes| {
+			assert_eq!(
+				UnsafeMedian::<u64, (), ()>::check_consensus(
+					election_identifier,
+					&electoral_access.election_mut(election_identifier).unwrap(),
+					None,
+					all_votes.clone().into_iter().take(n_votes).collect::<Vec<_>>(),
+					(all_votes.len() + (all_votes.len() / 2)) as u32,
+				)
+				.unwrap(),
+				None
+			);
+		});
+	}
+}
