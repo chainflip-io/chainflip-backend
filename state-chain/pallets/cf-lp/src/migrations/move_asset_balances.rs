@@ -1,7 +1,7 @@
 use crate::*;
 use cf_primitives::AccountId;
 use cf_traits::HistoricalFeeMigration;
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::traits::{DefensiveResult, OnRuntimeUpgrade};
 use sp_std::vec::Vec;
 
 mod old {
@@ -47,7 +47,7 @@ where
 {
 	fn on_runtime_upgrade() -> Weight {
 		for (account, asset, amount) in old::FreeBalances::<T>::drain() {
-			T::BalanceApi::try_credit_account(&account, asset, amount).expect("Migration failed");
+			T::BalanceApi::try_credit_account(&account, asset, amount).defensive_ok();
 		}
 		for (account, asset, amount) in old::HistoricalEarnedFees::<T>::drain() {
 			T::MigrationHelper::migrate_historical_fee(account, asset, amount);
