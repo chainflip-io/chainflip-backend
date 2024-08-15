@@ -140,7 +140,7 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::storage]
-	/// Storage for user's free balances/ DoubleMap: (AccountId, Asset) => Balance
+	/// Storage for user's free balances.
 	pub type FreeBalances<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
