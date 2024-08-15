@@ -22,6 +22,7 @@ import { doPerformSwap } from '../shared/perform_swap';
 import { testSwap } from '../shared/swapping';
 import {
   amountToFineAmount,
+  Asset,
   assetDecimals,
   executeWithTimeout,
   observeFetch,
@@ -30,15 +31,15 @@ import {
 import { observeEvent } from '../shared/utils/substrate';
 import { killEngines, startEngines } from '../shared/upgrade_network';
 
-let swapsWitnessed: number = 0;
-
 async function deltaBasedIngressTest(
+  sourceAsset: 'Sol' | 'SolUsdc',
+  destAsset: Asset,
   // Directory where the node and CFE binaries of the new version are located
   binariesPath: string,
   localnetInitPath: string,
   numberOfNodes: 1 | 3 = 1,
 ): Promise<void> {
-  const sourceAsset = 'Sol';
+  let swapsWitnessed: number = 0;
   const amountFirstDeposit = '5';
   const amountSecondDeposit = '1';
 
@@ -47,13 +48,21 @@ async function deltaBasedIngressTest(
     test: (event) => {
       const data = event.data;
 
+      if (
+        sourceAsset !== 'Sol' &&
+        data.swapType !== undefined &&
+        data.swapType === 'IngressEgressFee'
+      ) {
+        // Not count internal fee swaps
+        return false;
+      }
+
       swapsWitnessed++;
       console.log('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
 
       if (swapsWitnessed > 1) {
         throw new Error('More than one swaps were initiated');
       }
-
       const inputAmount = Number(data.inputAmount.replace(/,/g, ''));
       if (
         inputAmount > Number(amountToFineAmount(amountFirstDeposit, assetDecimals(sourceAsset)))
@@ -70,7 +79,7 @@ async function deltaBasedIngressTest(
   // Initiate swap from Solana
   const swapParams = await testSwap(
     sourceAsset,
-    'Eth',
+    destAsset,
     undefined,
     undefined,
     undefined,
@@ -84,8 +93,8 @@ async function deltaBasedIngressTest(
   await startEngines(localnetInitPath, binariesPath, numberOfNodes);
 
   // Wait to ensure no new swap is being triggered after restart.
-  console.log('Waiting for 30 seconds to ensure no swap is being triggered after restart');
-  await sleep(30000);
+  console.log('Waiting for 40 seconds to ensure no swap is being triggered after restart');
+  await sleep(40000);
   swapScheduledHandle.stop();
 
   if (swapsWitnessed !== 1) {
@@ -93,12 +102,13 @@ async function deltaBasedIngressTest(
   }
 
   // Kill the engine
+  console.log('Killing the engines');
   await killEngines();
 
   // Start another swap doing another deposit to the same address
   const swapHandle = doPerformSwap(
     swapParams,
-    `[${sourceAsset}->Eth DeltaBasedIngressSecondDeposit]`,
+    `[${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit]`,
     undefined,
     undefined,
     amountSecondDeposit,
@@ -107,6 +117,15 @@ async function deltaBasedIngressTest(
   swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
     test: (event) => {
       const data = event.data;
+
+      if (
+        sourceAsset !== 'Sol' &&
+        data.swapType !== undefined &&
+        data.swapType === 'IngressEgressFee'
+      ) {
+        // Not count internal fee swaps
+        return false;
+      }
 
       swapsWitnessed++;
       console.log('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
@@ -130,7 +149,8 @@ async function deltaBasedIngressTest(
 
   // Wait to ensure no additional new swap is being triggered after restart
   // and check that swap completes.
-  await sleep(30000);
+  console.log('Waiting for 40 seconds to ensure no extra swap is being triggered after restart');
+  await sleep(40000);
   await swapHandle;
   swapScheduledHandle.stop();
 
@@ -173,7 +193,20 @@ async function main(): Promise<void> {
           'delta based ingress test subcommand with args: ' + args.bins + ' ' + args.runtime,
         );
 
-        await deltaBasedIngressTest(args.bins, args.localnet_init, args.nodes as 1 | 3);
+        await deltaBasedIngressTest(
+          'Sol',
+          'Eth',
+          args.bins,
+          args.localnet_init,
+          args.nodes as 1 | 3,
+        );
+        await deltaBasedIngressTest(
+          'SolUsdc',
+          'ArbUsdc',
+          args.bins,
+          args.localnet_init,
+          args.nodes as 1 | 3,
+        );
       },
     )
     .demandCommand(1)
