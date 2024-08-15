@@ -51,6 +51,7 @@ sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chai
 
 [dev-dependencies]
 cf-test-utilities = { path = '../../test-utilities' }
+rand = "0.8.4"
 
 [features]
 default = ['std']

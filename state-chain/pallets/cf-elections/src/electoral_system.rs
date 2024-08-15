@@ -648,7 +648,7 @@ pub mod mocks {
 			self.next_election_monotonic_identifier = self
 				.next_election_monotonic_identifier
 				.next_identifier()
-				.ok_or(CorruptStorageError)?;
+				.ok_or_else(|| CorruptStorageError::new())?;
 			let election_identifier =
 				ElectionIdentifier::new(self.next_election_monotonic_identifier, extra);
 			self.election_properties.insert(election_identifier, properties);
