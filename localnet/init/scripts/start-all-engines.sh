@@ -16,6 +16,7 @@ for NODE in $SELECTED_NODES; do
     else
         echo "Not copying db to tmp for $NODE"
     fi
+    echo "BINARY_ROOT_PATH is: $BINARY_ROOT_PATH"  # Add this line to echo the value
     BINARY_ROOT_PATH=$BINARY_ROOT_PATH NODE_NAME=$NODE P2P_PORT=$ENGINE_P2P_PORT SC_RPC_PORT=$SC_RPC_PORT LOG_PORT=$LOG_PORT HEALTH_PORT=$HEALTH_PORT LOG_SUFFIX=$LOG_SUFFIX $LOCALNET_INIT_DIR/scripts/start-engine.sh
     echo "🚗 Starting chainflip-engine of $NODE ..."
     ((SC_RPC_PORT++))
