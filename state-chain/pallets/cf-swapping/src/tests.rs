@@ -59,7 +59,7 @@ struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
 	input_amount: AssetAmount,
-	refund_params: Option<ChannelRefundParameters>,
+	refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 	dca_params: Option<DcaParameters>,
 	output_address: ForeignChainAddress,
 	is_ccm: bool,
@@ -73,7 +73,10 @@ struct TestRefundParams {
 }
 
 impl TestRefundParams {
-	fn into_channel_params(self, input_amount: AssetAmount) -> ChannelRefundParameters {
+	fn into_channel_params(
+		self,
+		input_amount: AssetAmount,
+	) -> ChannelRefundParameters<ForeignChainAddress> {
 		use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 
 		ChannelRefundParameters {
@@ -1978,7 +1981,7 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 				refund_parameters: Some(ref refund_params_in_event),
 				dca_parameters: Some(ref dca_params_in_event),
 				..
-			}) if refund_params_in_event == &refund_parameters && dca_params_in_event == &dca_parameters
+			}) if refund_params_in_event == &refund_parameters.map_address(MockAddressConverter::to_encoded_address) && dca_params_in_event == &dca_parameters
 		);
 	});
 }

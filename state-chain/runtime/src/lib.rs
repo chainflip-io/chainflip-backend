@@ -60,7 +60,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 
-use pallet_cf_reputation::{ExclusionList, ReputationPointsQualification};
+use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
@@ -212,7 +212,7 @@ impl pallet_cf_validator::Config for Runtime {
 	);
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type KeygenQualification = (
-		Reputation,
+		HeartbeatQualification<Self>,
 		(
 			ExclusionList<Self, chainflip::KeygenExclusionOffences>,
 			(
@@ -1359,7 +1359,7 @@ impl_runtime_apis! {
 				is_current_authority,
 				is_current_backup,
 				is_qualified: is_bidding && is_qualified,
-				is_online: Reputation::is_qualified(account_id),
+				is_online: HeartbeatQualification::<Runtime>::is_qualified(account_id),
 				is_bidding,
 				bound_redeem_address,
 				apy_bp,
@@ -2010,8 +2010,8 @@ impl_runtime_apis! {
 				backups: backups.len() as u32,
 				online_backups: 0,
 			};
-			authorities.retain(Reputation::is_qualified);
-			backups.retain(|elem, _| Reputation::is_qualified(elem));
+			authorities.retain(HeartbeatQualification::<Runtime>::is_qualified);
+			backups.retain(|id, _| HeartbeatQualification::<Runtime>::is_qualified(id));
 			result.online_authorities = authorities.len() as u32;
 			result.online_backups = backups.len() as u32;
 			result

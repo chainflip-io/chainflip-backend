@@ -655,7 +655,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints,
-				refund_parameters: Option<ChannelRefundParameters>,
+				refund_parameters: Option<ChannelRefundParameters<ForeignChainAddress>>,
 				dca_parameters: Option<DcaParameters>,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
@@ -892,6 +892,11 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 		// we need to leave one nonce for the fetch tx and one nonce reserved for rotation tx since
 		// rotation tx can fail to build if all nonce accounts are occupied
 		Some(Environment::get_number_of_available_sol_nonce_accounts().saturating_sub(2))
+	}
+
+	fn maybe_ccm_limit() -> Option<usize> {
+		// Substract extra nonces from the limit to make sure CCMs won't block regular batches.
+		Some(Self::maybe_transfers_limit()?.saturating_sub(4))
 	}
 
 	fn maybe_fetches_limit() -> Option<usize> {

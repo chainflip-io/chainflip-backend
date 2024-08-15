@@ -293,7 +293,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
@@ -304,7 +304,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 			dca_params: Option<DcaParameters>,
 		},
 	}
@@ -1328,7 +1328,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Blacklisted assets are not sent and will remain in storage.
 	fn do_egress_scheduled_ccm() {
 		let mut maybe_no_of_transfers_remaining =
-			T::FetchesTransfersLimitProvider::maybe_transfers_limit();
+			T::FetchesTransfersLimitProvider::maybe_ccm_limit();
 
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
@@ -2086,7 +2086,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		dca_params: Option<DcaParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
