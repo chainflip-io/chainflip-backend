@@ -131,9 +131,10 @@ pub enum SolanaTransactionType {
 pub struct SolanaApi<Environment: 'static> {
 	pub call_type: SolanaTransactionType,
 	pub transaction: SolTransaction,
+	pub signer: Option<SolAddress>,
 	#[doc(hidden)]
 	#[codec(skip)]
-	_phantom: PhantomData<Environment>,
+	pub _phantom: PhantomData<Environment>,
 }
 
 impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
@@ -158,6 +159,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		Ok(Self {
 			call_type: SolanaTransactionType::BatchFetch,
 			transaction,
+			signer: None,
 			_phantom: Default::default(),
 		})
 	}
@@ -210,6 +212,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					Self {
 						call_type: SolanaTransactionType::Transfer,
 						transaction,
+						signer: None,
 						_phantom: Default::default(),
 					},
 					vec![egress_id],
@@ -255,6 +258,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		Ok(Self {
 			call_type: SolanaTransactionType::RotateAggKey,
 			transaction,
+			signer: None,
 			_phantom: Default::default(),
 		})
 	}
@@ -371,6 +375,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		Ok(Self {
 			call_type: SolanaTransactionType::CcmTransfer,
 			transaction,
+			signer: None,
 			_phantom: Default::default(),
 		})
 	}
@@ -384,9 +389,10 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	fn signed(
 		mut self,
 		threshold_signature: &<SolanaCrypto as ChainCrypto>::ThresholdSignature,
-		_signer: <SolanaCrypto as ChainCrypto>::AggKey,
+		signer: <SolanaCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		self.transaction.signatures = vec![*threshold_signature];
+		self.signer = Some(signer);
 		self
 	}
 
@@ -403,11 +409,11 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
-		todo!()
+		// No replay protection refresh for Solana.
 	}
 
 	fn signer(&self) -> Option<<SolanaCrypto as ChainCrypto>::AggKey> {
-		todo!()
+		self.signer
 	}
 }
 
@@ -510,6 +516,7 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 		Ok(Self {
 			call_type: SolanaTransactionType::SetGovKeyWithAggKey,
 			transaction,
+			signer: None,
 			_phantom: Default::default(),
 		})
 	}
