@@ -372,6 +372,10 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 									*key = current_aggkey.into()
 								}
 							}
+							for sig in modified_call.transaction.signatures.iter_mut() {
+								*sig = Default::default()
+							}
+							modified_call.signer = None;
 							RequiresSignatureRefresh::True(Some(modified_call.clone()))
 						},
 					)
