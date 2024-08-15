@@ -6,6 +6,10 @@ use cf_chains::{
 	btc::{self, BitcoinTransactionData},
 	dot::{EncodedPolkadotPayload, PolkadotAccountId, PolkadotTransactionData},
 	evm::{self, Address, ParityBit, H256},
+	sol::{
+		sol_tx_core::{CompiledInstruction, MessageHeader},
+		RawSolHash, SolMessage, SolPubkey, SolTransaction,
+	},
 };
 use cf_primitives::AccountId;
 use codec::Encode;
@@ -75,6 +79,27 @@ fn event_decoding() {
 					26, 177, 23, 110, 251, 101, 104, 16, 37, 5, 166, 230, 32, 125, 201,
 				]),
 			}), "010100000000000000020000007a921f2e7f8aec1c2aa6267859d58ea2762fded712e9fa25d3ddc6a93a63e56a0801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202805300676583067624feabc25c65e106b72f1ab1176efb6568102505a6e6207dc9");
+
+		check_encoding(CfeEvent::SolThresholdSignatureRequest(ThresholdSignatureRequest::<AccountId, _> {
+				ceremony_id: 1,
+				epoch_index: 2,
+				key: [7u8;32].into(),
+				signatories: participants.clone(),
+				payload: SolMessage {
+					header: MessageHeader {
+						num_readonly_signed_accounts: 1,
+						num_readonly_unsigned_accounts: 1,
+						num_required_signatures: 1,
+					},
+					account_keys: vec![SolPubkey([7u8;32])],
+					recent_blockhash: RawSolHash([8u8; 32]),
+					instructions: vec![CompiledInstruction {
+						program_id_index:1,
+						accounts: vec![0],
+						data: vec![3,4,5,6]
+					}],
+				}
+			}), "0d010000000000000002000000070707070707070707070707070707070707070707070707070707070707070708010101010101010101010101010101010101010101010101010101010101010102020202020202020202020202020202020202020202020202020202020202020101010407070707070707070707070707070707070707070707070707070707070707070808080808080808080808080808080808080808080808080808080808080808040104001003040506");
 	}
 
 	// Keygen requests
@@ -88,6 +113,7 @@ fn event_decoding() {
 		check_encoding(CfeEvent::EvmKeygenRequest(keygen_request.clone()), "030100000000000000020000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202");
 		check_encoding(CfeEvent::DotKeygenRequest(keygen_request.clone()), "040100000000000000020000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202");
 		check_encoding(CfeEvent::BtcKeygenRequest(keygen_request.clone()), "050100000000000000020000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202");
+		check_encoding(CfeEvent::SolKeygenRequest(keygen_request.clone()), "0e0100000000000000020000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202");
 	}
 
 	// Handover request
@@ -150,6 +176,27 @@ fn event_decoding() {
 				nominee: AccountId::from([1; 32]),
 				payload: BitcoinTransactionData { encoded_transaction: vec![2, 0, 1, 7, 23, 241] },
 			}), "09010000000101010101010101010101010101010101010101010101010101010101010101180200010717f1");
+		check_encoding(CfeEvent::SolTxBroadcastRequest(TxBroadcastRequest {
+				broadcast_id: 1,
+				nominee: AccountId::from([1; 32]),
+				payload: SolTransaction { 
+					signatures: vec![[9u8; 64].into()],
+					message: SolMessage {
+						header: MessageHeader {
+							num_readonly_signed_accounts: 2,
+							num_readonly_unsigned_accounts: 2,
+							num_required_signatures: 2,
+						},
+						account_keys: vec![SolPubkey([10u8;32])],
+						recent_blockhash: RawSolHash([11u8; 32]),
+						instructions: vec![CompiledInstruction {
+							program_id_index:2,
+							accounts: vec![1],
+							data: vec![31,41,51,61]
+						}],
+					},
+				 },
+			}), "0f0100000001010101010101010101010101010101010101010101010101010101010101010409090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909020202040a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b04020401101f29333d");
 	}
 
 	// P2P registration/deregistration
