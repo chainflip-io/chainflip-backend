@@ -26,7 +26,7 @@ use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, FLIPPERINOS_PER_FLIP,
 	GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
-use cf_test_utilities::{assert_events_eq, assert_events_match};
+use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{BalanceApi, Chainflip, EpochInfo, SwapType};
 use frame_support::{
 	assert_ok,
@@ -81,13 +81,14 @@ fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
 		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset),
 		original_amount + amount
 	);
-	assert_events_eq!(
+	assert_has_matching_event!(
 		Runtime,
 		RuntimeEvent::AssetBalances(pallet_cf_asset_balances::Event::AccountCredited {
-			account_id: account_id.clone(),
-			asset,
-			amount_credited: amount,
-		},)
+			account_id: event_account_id,
+			asset: event_asset,
+			amount_credited,
+			..
+		}) if *amount_credited == amount && event_account_id == account_id && *event_asset == asset
 	);
 	System::reset_events();
 }
@@ -116,17 +117,18 @@ fn set_range_order(
 
 	assert!(new_balances.into_iter().zip(balances).all(|(new, old)| { new <= old }));
 
-	for ((new_balance, old_balance), asset) in
+	for ((new_balance, old_balance), expected_asset) in
 		new_balances.into_iter().zip(balances).zip([base_asset, quote_asset])
 	{
 		if new_balance < old_balance {
-			assert_events_eq!(
+			assert_has_matching_event!(
 				Runtime,
 				RuntimeEvent::AssetBalances(pallet_cf_asset_balances::Event::AccountDebited {
-					account_id: account_id.clone(),
+					account_id: event_account_id,
 					asset,
-					amount_debited: old_balance - new_balance,
-				},)
+					amount_debited,
+					..
+				}) if event_account_id == account_id && *asset == expected_asset && *amount_debited == old_balance - new_balance
 			);
 		}
 	}
@@ -165,13 +167,14 @@ fn set_limit_order(
 	assert_eq!(new_buy_balance, buy_balance);
 
 	if new_sell_balance < sell_balance {
-		assert_events_eq!(
+		assert_has_matching_event!(
 			Runtime,
 			RuntimeEvent::AssetBalances(pallet_cf_asset_balances::Event::AccountDebited {
-				account_id: account_id.clone(),
-				asset: sell_asset,
-				amount_debited: sell_balance - new_sell_balance,
-			},)
+				account_id: event_account_id,
+				asset,
+				amount_debited,
+				..
+			}) if event_account_id == account_id && *asset == sell_asset && *amount_debited == sell_balance - new_sell_balance
 		);
 	}
 

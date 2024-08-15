@@ -117,9 +117,19 @@ pub mod pallet {
 			available: AssetAmount,
 		},
 		/// The account was debited.
-		AccountDebited { account_id: T::AccountId, asset: Asset, amount_debited: AssetAmount },
+		AccountDebited {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount_debited: AssetAmount,
+			new_balance: AssetAmount,
+		},
 		/// The account was credited.
-		AccountCredited { account_id: T::AccountId, asset: Asset, amount_credited: AssetAmount },
+		AccountCredited {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount_credited: AssetAmount,
+			new_balance: AssetAmount,
+		},
 		/// The account was removed from storage.
 		AccountKilled { account_id: T::AccountId },
 	}
@@ -393,14 +403,16 @@ where
 			return Ok(())
 		}
 
-		let mut balance = FreeBalances::<T>::get(account_id, asset);
-		balance = balance.checked_add(amount).ok_or(Error::<T>::BalanceOverflow)?;
-		FreeBalances::<T>::insert(account_id, asset, balance);
+		let new_balance = FreeBalances::<T>::try_mutate(account_id, asset, |balance| {
+			*balance = balance.checked_add(amount).ok_or(Error::<T>::BalanceOverflow)?;
+			Ok::<_, Error<T>>(*balance)
+		})?;
 
 		Self::deposit_event(Event::AccountCredited {
 			account_id: account_id.clone(),
 			asset,
 			amount_credited: amount,
+			new_balance,
 		});
 		Ok(())
 	}
@@ -414,21 +426,25 @@ where
 			return Ok(())
 		}
 
-		let mut balance = FreeBalances::<T>::get(account_id, asset);
-		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
-		balance = balance.saturating_sub(amount);
-
-		if balance == 0 {
-			FreeBalances::<T>::remove(account_id, asset);
-		} else {
-			FreeBalances::<T>::insert(account_id, asset, balance);
-		}
+		let new_balance = FreeBalances::<T>::try_mutate_exists(account_id, asset, |balance| {
+			let new_balance = match balance.take() {
+				None => Err(Error::<T>::InsufficientBalance),
+				Some(balance) =>
+					Ok(balance.checked_sub(amount).ok_or(Error::<T>::InsufficientBalance)?),
+			}?;
+			if new_balance > 0 {
+				*balance = Some(new_balance);
+			}
+			Ok::<_, Error<T>>(new_balance)
+		})?;
 
 		Self::deposit_event(Event::AccountDebited {
 			account_id: account_id.clone(),
 			asset,
 			amount_debited: amount,
+			new_balance,
 		});
+
 		Ok(())
 	}
 
