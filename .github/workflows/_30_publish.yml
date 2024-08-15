@@ -19,7 +19,7 @@ env:
 
 jobs:
   build-deb:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     permissions:
       id-token: write
       contents: read
