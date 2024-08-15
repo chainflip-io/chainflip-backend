@@ -19,7 +19,7 @@ use cf_chains::{
 };
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
-	CfeBroadcastRequest, Chainflip, EpochInfo, GetBlockHeight, LiabilityTracker, ThresholdSigner,
+	CfeBroadcastRequest, Chainflip, EpochInfo, GetBlockHeight, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
