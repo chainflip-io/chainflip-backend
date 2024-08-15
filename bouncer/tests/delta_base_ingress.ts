@@ -3,7 +3,8 @@
 // Test the delta based ingress feature of Solana works as intended.
 // The test will initiate and witness a swap from Solana. It will then restart the engine and ensure
 // that a new swap is not scheduled upon restart. Finally it will kill the engine again, make a deposit
-// while the engine is down and ensure that the swap is started upon restart.
+// while the engine is down and ensure that the swap is started upon restart. It checks that the swap
+// is not an accumulated amount but rather just a delta ingress.
 
 // Args:
 // --bins <path to directory containing node and CFE binaries>.
