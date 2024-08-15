@@ -15,7 +15,7 @@ use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
 	storage::with_storage_layer,
-	traits::{OriginTrait, StorageVersion, UnfilteredDispatchable},
+	traits::{OnKilledAccount, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	transactional,
 };
 
@@ -1955,5 +1955,11 @@ impl<T: Config> HistoricalFeeMigration for Pallet<T> {
 	}
 	fn get_fee_amount(account_id: Self::AccountId, asset: Asset) -> AssetAmount {
 		HistoricalEarnedFees::<T>::get(account_id, asset)
+	}
+}
+
+impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
 	}
 }
