@@ -118,10 +118,6 @@ impl BalanceApi for MockBalance {
 		unimplemented!()
 	}
 
-	fn kill_account(_: &Self::AccountId) {
-		unimplemented!()
-	}
-
 	fn get_balance(_who: &Self::AccountId, _asset: Asset) -> AssetAmount {
 		unimplemented!()
 	}

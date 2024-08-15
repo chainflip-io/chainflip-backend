@@ -78,8 +78,6 @@ impl BalanceApi for MockBalance {
 		.unwrap())
 	}
 
-	fn kill_account(_who: &Self::AccountId) {}
-
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
 		Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default()
 	}

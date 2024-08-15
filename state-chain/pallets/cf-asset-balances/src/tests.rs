@@ -315,6 +315,8 @@ fn can_reconciliate_multiple_chains_at_once() {
 }
 
 pub mod balance_api {
+	use crate::DeleteAccount;
+
 	use super::*;
 
 	use cf_primitives::chains::assets::eth;
@@ -383,15 +385,12 @@ pub mod balance_api {
 				ForeignChain::Ethereum.gas_asset(),
 				100,
 			);
-			Pallet::<Test>::kill_account(&AccountId::from([1; 32]));
+			DeleteAccount::<Test>::on_killed_account(&AccountId::from([1; 32]));
 			assert!(
 				FreeBalances::<Test>::get(
 					AccountId::from([1; 32]),
 					ForeignChain::Ethereum.gas_asset()
 				) == 0
-			);
-			assert_has_event::<Test>(
-				crate::Event::AccountKilled { account_id: AccountId::from([1; 32]) }.into(),
 			);
 		});
 	}

@@ -1014,7 +1014,4 @@ pub trait BalanceApi {
 
 	/// Returns the balance of the given account for the given asset.
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount;
-
-	/// Removes the account from the balance storage.
-	fn kill_account(who: &Self::AccountId);
 }

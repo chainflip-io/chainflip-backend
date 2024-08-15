@@ -1071,8 +1071,6 @@ pub mod pallet {
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
 
-			T::BalanceApi::kill_account(&account_id);
-
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
 
 			Ok(())

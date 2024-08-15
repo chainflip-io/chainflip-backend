@@ -1958,7 +1958,9 @@ impl<T: Config> HistoricalFeeMigration for Pallet<T> {
 	}
 }
 
-impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
+pub struct DeleteHistoricalEarnedFees<T: Config>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for DeleteHistoricalEarnedFees<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
 	}
