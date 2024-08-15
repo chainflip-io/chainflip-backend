@@ -292,7 +292,6 @@ pub mod pallet {
 				}),
 				Error::<T>::OpenOrdersRemaining
 			);
-			T::PoolApi::sweep(&account_id)?;
 			ensure!(
 				T::BalanceApi::free_balances(&account_id)?
 					.iter()
