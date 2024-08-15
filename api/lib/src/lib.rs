@@ -347,7 +347,7 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
 	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<ChannelRefundParameters>,
+	pub refund_parameters: Option<ChannelRefundParameters<AddressString>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -454,7 +454,11 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				channel_id: *channel_id,
 				source_chain_expiry_block: (*source_chain_expiry_block).into(),
 				channel_opening_fee: (*channel_opening_fee).into(),
-				refund_parameters: refund_parameters.clone(),
+				refund_parameters: refund_parameters.as_ref().map(|params| {
+					params.map_address(|refund_address| {
+						AddressString::from_encoded_address(&refund_address)
+					})
+				}),
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");

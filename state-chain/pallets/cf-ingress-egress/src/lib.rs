@@ -144,7 +144,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -293,7 +293,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -301,8 +301,9 @@ pub mod pallet {
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
+			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 		},
 	}
 
@@ -1325,7 +1326,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Blacklisted assets are not sent and will remain in storage.
 	fn do_egress_scheduled_ccm() {
 		let mut maybe_no_of_transfers_remaining =
-			T::FetchesTransfersLimitProvider::maybe_transfers_limit();
+			T::FetchesTransfersLimitProvider::maybe_ccm_limit();
 
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
@@ -1595,6 +1596,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
+				broker_fees,
 				channel_metadata,
 				refund_params,
 			} => {
@@ -1610,7 +1612,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						},
 						output_address: destination_address,
 					},
-					Default::default(),
+					broker_fees,
 					refund_params,
 					swap_origin,
 				) {
@@ -2077,7 +2079,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
@@ -2096,6 +2098,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				Some(msg) => ChannelAction::CcmTransfer {
 					destination_asset,
 					destination_address,
+					broker_fees,
 					channel_metadata: msg,
 					refund_params,
 				},
