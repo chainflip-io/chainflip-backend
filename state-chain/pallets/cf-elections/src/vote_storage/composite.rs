@@ -26,9 +26,9 @@ macro_rules! generate_vote_storage_tuple_impls {
                 type BitmapComponent = CompositeVoteStorageEnum<$(<$t as VoteStorage>::BitmapComponent,)*>;
                 type SharedData = CompositeVoteStorageEnum<$(<$t as VoteStorage>::SharedData,)*>;
 
-                fn vote_into_partial_vote<H: Fn(Self::SharedData) -> SharedDataHash>(
+                fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
                     vote: &Self::Vote,
-                    h: H,
+                    mut h: H,
                 ) -> Self::PartialVote {
                     match vote {
                         $(
