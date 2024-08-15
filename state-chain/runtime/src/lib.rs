@@ -1182,8 +1182,6 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-// TODO: After this  release, remember to un-comment the
-// Arbitrum-specific pallet migrations.
 type MigrationsForV1_6 = (
 	VersionedMigration<
 		pallet_cf_environment::Pallet<Runtime>,
