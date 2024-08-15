@@ -179,7 +179,7 @@ fn event_decoding() {
 		check_encoding(CfeEvent::SolTxBroadcastRequest(TxBroadcastRequest {
 				broadcast_id: 1,
 				nominee: AccountId::from([1; 32]),
-				payload: SolTransaction { 
+				payload: SolTransaction {
 					signatures: vec![[9u8; 64].into()],
 					message: SolMessage {
 						header: MessageHeader {
@@ -195,7 +195,7 @@ fn event_decoding() {
 							data: vec![31,41,51,61]
 						}],
 					},
-				 },
+				},
 			}), "0f0100000001010101010101010101010101010101010101010101010101010101010101010409090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909020202040a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b04020401101f29333d");
 	}
 
