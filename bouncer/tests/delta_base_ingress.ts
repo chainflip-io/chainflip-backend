@@ -9,6 +9,8 @@ import { killEngines, startEngines } from '../shared/upgrade_network';
 
 // To run locally:
 // ./tests/delta_base_ingress.ts prebuilt --bins ./../target/debug --localnet_init ./../localnet/init
+// To run in CI:
+// ./tests/delta_base_ingress.ts prebuilt --bins ./../ --localnet_init ./../localnet/init
 
 let swapsWitnessed: number = 0;
 
