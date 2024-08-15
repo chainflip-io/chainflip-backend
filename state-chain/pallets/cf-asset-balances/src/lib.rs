@@ -9,8 +9,10 @@ use cf_traits::{
 	LiabilityTracker, ScheduledEgressDetails,
 };
 use frame_support::{
-	pallet_prelude::*, sp_runtime::traits::Saturating, storage::transactional::with_storage_layer,
-	traits::DefensiveSaturating,
+	pallet_prelude::*,
+	sp_runtime::traits::Saturating,
+	storage::transactional::with_storage_layer,
+	traits::{DefensiveSaturating, OnKilledAccount},
 };
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
@@ -130,8 +132,6 @@ pub mod pallet {
 			amount_credited: AssetAmount,
 			new_balance: AssetAmount,
 		},
-		/// The account was removed from storage.
-		AccountKilled { account_id: T::AccountId },
 	}
 
 	#[pallet::pallet]
@@ -452,12 +452,18 @@ where
 		Ok(AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset)))
 	}
 
-	fn kill_account(who: &Self::AccountId) {
-		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
-		Self::deposit_event(Event::AccountKilled { account_id: who.clone() });
-	}
-
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
 		FreeBalances::<T>::get(who, asset)
+	}
+}
+
+pub struct DeleteAccount<T: Config>(PhantomData<T>);
+
+impl OnKilledAccount<T> for DeleteAccount<T>
+where
+	T: Config,
+{
+	fn on_killed_account(who: &T::AccountId) {
+		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
 	}
 }
