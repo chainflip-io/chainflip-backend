@@ -4,7 +4,7 @@ use cf_chains::{address::EncodedAddress, ForeignChainAddress};
 use cf_primitives::{AccountId, Asset, AssetAmount, ForeignChain};
 
 use cf_test_utilities::assert_events_match;
-use cf_traits::{AccountRoleRegistry, BalanceApi, Chainflip, LpDepositHandler, SetSafeMode};
+use cf_traits::{AccountRoleRegistry, BalanceApi, Chainflip, SetSafeMode};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
 use sp_runtime::AccountId32;
 
@@ -319,11 +319,8 @@ fn account_registration_and_deregistration() {
 			OriginTrait::signed(LP_ACCOUNT_ID),
 			EncodedAddress::Eth([0x01; 20])
 		));
-		assert_ok!(<LiquidityProvider as LpDepositHandler>::add_deposit(
-			&LP_ACCOUNT_ID,
-			Asset::Eth,
-			DEPOSIT_AMOUNT
-		));
+
+		MockBalanceApi::try_credit_account(&LP_ACCOUNT_ID, Asset::Eth, DEPOSIT_AMOUNT).unwrap();
 
 		assert_noop!(
 			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),

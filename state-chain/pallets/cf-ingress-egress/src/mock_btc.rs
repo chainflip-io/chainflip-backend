@@ -1,16 +1,13 @@
 pub use crate::{self as pallet_cf_ingress_egress};
 
 use crate::PalletSafeMode;
+use cf_chains::btc::{deposit_address::DepositAddress, BitcoinTrackedData};
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
 	Chain,
 };
-use cf_chains::{
-	assets::any::Asset,
-	btc::{deposit_address::DepositAddress, BitcoinTrackedData},
-};
 pub use cf_primitives::chains::{assets, Bitcoin};
-use cf_primitives::{AssetAmount, ChannelId};
+use cf_primitives::ChannelId;
 use cf_test_utilities::impl_test_helpers;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -26,7 +23,7 @@ use cf_traits::{
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	LpDepositHandler, NetworkEnvironmentProvider, OnDeposit,
+	NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
 use sp_core::H256;
@@ -79,18 +76,6 @@ pub type MockEgressBroadcaster =
 
 pub struct MockAddressDerivation;
 
-impl LpDepositHandler for MockDepositHandler {
-	type AccountId = u64;
-
-	fn add_deposit(
-		_who: &Self::AccountId,
-		_asset: Asset,
-		_amount: AssetAmount,
-	) -> frame_support::pallet_prelude::DispatchResult {
-		unimplemented!()
-	}
-}
-
 impl AddressDerivationApi<Bitcoin> for MockAddressDerivation {
 	fn generate_address(
 		_source_asset: assets::btc::Asset,
@@ -128,7 +113,6 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
 	type ChainApiCall = MockBitcoinApiCall<MockBtcEnvironment>;
-	type LpDepositHandler = MockDepositHandler;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type ChainTracking = ChainTracker<Bitcoin>;

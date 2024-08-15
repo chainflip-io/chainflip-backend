@@ -7,11 +7,11 @@ pub use cf_chains::{
 	eth::Address as EthereumAddress,
 	CcmDepositMetadata, Chain,
 };
+use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset,
 };
-use cf_primitives::{AssetAmount, ChannelId};
 use cf_test_utilities::{impl_test_helpers, TestExternalities};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -27,7 +27,7 @@ use cf_traits::{
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	BalanceApi, DepositApi, LpDepositHandler, NetworkEnvironmentProvider, OnDeposit,
+	DepositApi, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
 use frame_system as system;
@@ -79,19 +79,6 @@ impl OnDeposit<Ethereum> for MockDepositHandler {}
 pub type MockEgressBroadcaster =
 	MockBroadcaster<(MockEthereumApiCall<MockEvmEnvironment>, RuntimeCall)>;
 
-impl LpDepositHandler for MockDepositHandler {
-	type AccountId = u64;
-
-	fn add_deposit(
-		who: &Self::AccountId,
-		asset: Asset,
-		amount: AssetAmount,
-	) -> frame_support::pallet_prelude::DispatchResult {
-		MockBalance::try_credit_account(who, asset, amount)?;
-		Ok(())
-	}
-}
-
 pub struct MockAddressDerivation;
 
 impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
@@ -131,7 +118,6 @@ impl crate::Config for Test {
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
 	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
-	type LpDepositHandler = MockBalance;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type ChainTracking = ChainTracker<Ethereum>;

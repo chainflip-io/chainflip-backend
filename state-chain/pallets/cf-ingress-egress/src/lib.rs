@@ -39,8 +39,8 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
 	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
 	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
-	LpDepositHandler, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
-	SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
+	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler,
+	SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -220,7 +220,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{LpDepositHandler, OnDeposit, SwapLimitsProvider};
+	use cf_traits::OnDeposit, SwapLimitsProvider;
 	use core::marker::PhantomData;
 	use frame_support::{
 		traits::{ConstU128, EnsureOrigin, IsType},
@@ -415,8 +415,6 @@ pub mod pallet {
 		type AddressConverter: AddressConverter;
 
 		type Balance: BalanceApi<AccountId = Self::AccountId>;
-
-		type LpDepositHandler: LpDepositHandler<AccountId = Self::AccountId>;
 
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain>
@@ -689,6 +687,11 @@ pub mod pallet {
 		},
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
+		},
+		LiquidityDepositCredited {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount_credited: AssetAmount,
 		},
 	}
 
@@ -1551,11 +1554,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let action = match action {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
-				T::LpDepositHandler::add_deposit(
+				T::Balance::try_credit_account(
 					&lp_account,
 					asset.into(),
 					amount_after_fees.into(),
 				)?;
+				Self::deposit_event(Event::LiquidityDepositCredited {
+					account_id: lp_account.clone(),
+					asset: asset.into(),
+					amount_credited: amount_after_fees.into(),
+				});
 
 				DepositAction::LiquidityProvision { lp_account }
 			},
