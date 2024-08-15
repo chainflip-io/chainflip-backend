@@ -22,16 +22,17 @@ macro_rules! generate_individual_vote_storage_tuple_impls {
 
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
+            #[allow(unused_mut)]
             impl<$($t: IndividualVoteStorage),*> IndividualVoteStorage for ($($t,)*) {
                 type Vote = ($(<$t as IndividualVoteStorage>::Vote,)*);
                 type PartialVote = ($(<$t as IndividualVoteStorage>::PartialVote,)*);
                 type SharedData = SharedDataEnum<$(<$t as IndividualVoteStorage>::SharedData,)*>;
 
                 #[allow(clippy::unused_unit)]
-                fn vote_into_partial_vote<H: Fn(Self::SharedData) -> SharedDataHash>(($($t,)*): &Self::Vote, h: H) -> Self::PartialVote {
+                fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(($($t,)*): &Self::Vote, mut h: H) -> Self::PartialVote {
                     ($(
                         <$t as IndividualVoteStorage>::vote_into_partial_vote($t, |shared_data| {
-                            (&h)(SharedDataEnum::$t(shared_data))
+                            (&mut h)(SharedDataEnum::$t(shared_data))
                         })
                     ,)*)
                 }

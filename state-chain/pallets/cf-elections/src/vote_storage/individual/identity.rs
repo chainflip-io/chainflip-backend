@@ -16,7 +16,7 @@ impl<T: Parameter + Member> IndividualVoteStorage for Identity<T> {
 	// Cannot use `Infallible` here, as scale-codec doesn't implement the codec traits on it.
 	type SharedData = ();
 
-	fn vote_into_partial_vote<H: Fn(Self::SharedData) -> SharedDataHash>(
+	fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
 		vote: &Self::Vote,
 		_h: H,
 	) -> Self::PartialVote {

@@ -24,7 +24,7 @@ impl<P: Parameter + Member, T: IndividualVoteStorage> VoteStorage for Individual
 	type BitmapComponent = ();
 	type SharedData = T::SharedData;
 
-	fn vote_into_partial_vote<H: Fn(Self::SharedData) -> SharedDataHash>(
+	fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
 		vote: &Self::Vote,
 		h: H,
 	) -> Self::PartialVote {
@@ -88,7 +88,7 @@ pub trait IndividualVoteStorage: private::Sealed + Sized {
 
 	type SharedData: Parameter + Member;
 
-	fn vote_into_partial_vote<H: Fn(Self::SharedData) -> SharedDataHash>(
+	fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
 		vote: &Self::Vote,
 		h: H,
 	) -> Self::PartialVote;
