@@ -45,7 +45,10 @@ use cf_chains::{
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
 use cf_runtime_upgrade_utilities::VersionedMigration;
-use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi, NoLimit};
+use cf_traits::{
+	AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi, NoLimit, SwapRequestValidation,
+	SwapRequestValidationProvider,
+};
 use codec::{alloc::string::ToString, Encode};
 use core::ops::Range;
 use frame_support::instances::*;
@@ -352,6 +355,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
+	type SwapLimitsProvider = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -373,6 +377,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
+	type SwapLimitsProvider = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -394,6 +399,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
+	type SwapLimitsProvider = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -415,6 +421,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
+	type SwapLimitsProvider = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -436,6 +443,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
+	type SwapLimitsProvider = Swapping;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -1698,34 +1706,8 @@ impl_runtime_apis! {
 			pallet_cf_swapping::SwapRetryDelay::<Runtime>::get()
 		}
 
-		fn cf_max_swap_retry_duration_blocks(chain: ForeignChain) -> u32 {
-			match chain {
-				ForeignChain::Bitcoin => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, BitcoinInstance>::get(),
-				ForeignChain::Ethereum => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, EthereumInstance>::get(),
-				ForeignChain::Polkadot => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, PolkadotInstance>::get(),
-				ForeignChain::Arbitrum => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, ArbitrumInstance>::get(),
-				ForeignChain::Solana => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, SolanaInstance>::get(),
-			}
-		}
-
-		fn cf_max_dca_chunks(chain: ForeignChain) -> u32{
-			match chain {
-				ForeignChain::Bitcoin => pallet_cf_ingress_egress::MaxDcaChunks::<Runtime, BitcoinInstance>::get(),
-				ForeignChain::Ethereum => pallet_cf_ingress_egress::MaxDcaChunks::<Runtime, EthereumInstance>::get(),
-				ForeignChain::Polkadot => pallet_cf_ingress_egress::MaxDcaChunks::<Runtime, PolkadotInstance>::get(),
-				ForeignChain::Arbitrum => pallet_cf_ingress_egress::MaxDcaChunks::<Runtime, ArbitrumInstance>::get(),
-				ForeignChain::Solana => pallet_cf_ingress_egress::MaxDcaChunks::<Runtime, SolanaInstance>::get(),
-			}
-		}
-
-		fn cf_max_dca_chunk_interval_blocks(chain: ForeignChain) -> u32{
-			match chain {
-				ForeignChain::Bitcoin => pallet_cf_ingress_egress::MaxDcaChunkIntervalBlocks::<Runtime, BitcoinInstance>::get(),
-				ForeignChain::Ethereum => pallet_cf_ingress_egress::MaxDcaChunkIntervalBlocks::<Runtime, EthereumInstance>::get(),
-				ForeignChain::Polkadot => pallet_cf_ingress_egress::MaxDcaChunkIntervalBlocks::<Runtime, PolkadotInstance>::get(),
-				ForeignChain::Arbitrum => pallet_cf_ingress_egress::MaxDcaChunkIntervalBlocks::<Runtime, ArbitrumInstance>::get(),
-				ForeignChain::Solana => pallet_cf_ingress_egress::MaxDcaChunkIntervalBlocks::<Runtime, SolanaInstance>::get(),
-			}
+		fn cf_swap_request_validation() -> SwapRequestValidation {
+			pallet_cf_swapping::Pallet::<Runtime>::get_swap_request_limits()
 		}
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.

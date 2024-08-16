@@ -24,9 +24,6 @@ use sp_runtime::{
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-/// The swap retry delay that the mock uses for genesis.
-pub const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u64 = 5;
-
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test {
@@ -166,13 +163,7 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
-	RuntimeGenesisConfig{
-		swapping: pallet_cf_swapping::GenesisConfig {
-			swap_retry_delay: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-			..Default::default()
-		},
-		..Default::default()
-	},
+	RuntimeGenesisConfig::default(),
 	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE).unwrap();
 	},

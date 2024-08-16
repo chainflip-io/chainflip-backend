@@ -1,9 +1,6 @@
 pub use crate::{self as pallet_cf_ingress_egress};
 
-use crate::{
-	PalletSafeMode, DEFAULT_MAX_DCA_CHUNKS, DEFAULT_MAX_DCA_CHUNK_INTERVAL_BLOCKS,
-	DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS,
-};
+use crate::PalletSafeMode;
 use cf_chains::btc::{deposit_address::DepositAddress, BitcoinTrackedData};
 pub use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
@@ -24,6 +21,7 @@ use cf_traits::{
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
 		swap_request_api::MockSwapRequestHandler,
+		swap_request_validation_provider::MockSwapRequestValidationProvider,
 	},
 	NetworkEnvironmentProvider, OnDeposit,
 };
@@ -127,6 +125,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type AssetWithholding = MockAssetWithholding;
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
+	type SwapLimitsProvider = MockSwapRequestValidationProvider;
 }
 
 impl_test_helpers! {
@@ -137,9 +136,6 @@ impl_test_helpers! {
 			deposit_channel_lifetime: 100,
 			witness_safety_margin: Some(2),
 			dust_limits: Default::default(),
-			max_swap_retry_duration_blocks: DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS,
-			max_dca_chunks: DEFAULT_MAX_DCA_CHUNKS,
-			max_dca_chunk_interval_blocks: DEFAULT_MAX_DCA_CHUNK_INTERVAL_BLOCKS,
 		},
 	},
 	|| {

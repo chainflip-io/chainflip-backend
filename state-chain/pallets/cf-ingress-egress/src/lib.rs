@@ -30,10 +30,9 @@ use cf_chains::{
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, BoostPoolTier, BroadcastId,
-	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
-	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
-	SWAP_DELAY_BLOCKS,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
+	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
+	SwapRequestId, ThresholdSignatureRequestId, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -41,7 +40,7 @@ use cf_traits::{
 	AssetWithholding, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi, EpochInfo,
 	FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, LpBalanceApi,
 	LpDepositHandler, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
-	SwapRequestHandler, SwapRequestType,
+	SwapRequestHandler, SwapRequestType, SwapRequestValidationProvider,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -62,10 +61,6 @@ use sp_std::{
 	vec::Vec,
 };
 pub use weights::WeightInfo;
-
-const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
-const DEFAULT_MAX_DCA_CHUNKS: u32 = 50;
-const DEFAULT_MAX_DCA_CHUNK_INTERVAL_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
@@ -147,7 +142,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(14);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -177,13 +172,6 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	ChannelOpeningFee { fee: T::Amount },
 	/// Set the minimum deposit allowed for a particular asset.
 	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
-	/// Set the max allowed value for the number of blocks to keep retrying a swap before it is
-	/// refunded
-	SetMaxSwapRetryDurationBlocks { blocks: BlockNumber },
-	/// Set the max allowed value for the number of chunks a swap can be split into for DCA.
-	SetMaxDCAChunks { chunks: u32 },
-	/// Set the max allowed value for the number of blocks between chunks for DCA.
-	SetMaxDCAChunkIntervalBlocks { blocks: BlockNumber },
 }
 
 macro_rules! append_chain_to_name {
@@ -222,17 +210,6 @@ where
 									f.ty::<TargetChainAmount<T, I>>().name("minimum_deposit")
 								}),
 						)
-					})
-					.variant("SetMaxSwapRetryDurationBlocks", |v| {
-						v.index(2)
-							.fields(Fields::named().field(|f| f.ty::<BlockNumber>().name("blocks")))
-					})
-					.variant("SetMaxDCAChunks", |v| {
-						v.index(3).fields(Fields::named().field(|f| f.ty::<u32>().name("chunks")))
-					})
-					.variant("SetMaxDCAChunkIntervalBlocks", |v| {
-						v.index(4)
-							.fields(Fields::named().field(|f| f.ty::<BlockNumber>().name("blocks")))
 					}),
 			)
 	}
@@ -243,7 +220,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{LpDepositHandler, OnDeposit};
+	use cf_traits::{LpDepositHandler, OnDeposit, SwapRequestValidationProvider};
 	use core::marker::PhantomData;
 	use frame_support::{
 		traits::{ConstU128, EnsureOrigin, IsType},
@@ -388,9 +365,6 @@ pub mod pallet {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
 		pub dust_limits: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
-		pub max_swap_retry_duration_blocks: BlockNumber,
-		pub max_dca_chunks: u32,
-		pub max_dca_chunk_interval_blocks: BlockNumber,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
@@ -399,9 +373,6 @@ pub mod pallet {
 				deposit_channel_lifetime: Default::default(),
 				witness_safety_margin: None,
 				dust_limits: Default::default(),
-				max_swap_retry_duration_blocks: DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS,
-				max_dca_chunks: DEFAULT_MAX_DCA_CHUNKS,
-				max_dca_chunk_interval_blocks: DEFAULT_MAX_DCA_CHUNK_INTERVAL_BLOCKS,
 			}
 		}
 	}
@@ -415,10 +386,6 @@ pub mod pallet {
 			for (asset, dust_limit) in self.dust_limits.clone() {
 				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
 			}
-
-			MaxSwapRetryDurationBlocks::<T, I>::set(self.max_swap_retry_duration_blocks);
-			MaxDcaChunks::<T, I>::set(self.max_dca_chunks);
-			MaxDcaChunkIntervalBlocks::<T, I>::set(self.max_dca_chunk_interval_blocks);
 		}
 	}
 
@@ -490,6 +457,8 @@ pub mod pallet {
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
+
+		type SwapLimitsProvider: SwapRequestValidationProvider;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -597,21 +566,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
-
-	/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
-	#[pallet::storage]
-	pub type MaxSwapRetryDurationBlocks<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BlockNumber, ValueQuery, ConstU32<DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS>>;
-
-	/// Max allowed value for the number of chunks a swap can be split into for DCA.
-	#[pallet::storage]
-	pub type MaxDcaChunks<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, u32, ValueQuery, ConstU32<DEFAULT_MAX_DCA_CHUNKS>>;
-
-	/// Max allowed value for the number of blocks between chunks for DCA.
-	#[pallet::storage]
-	pub type MaxDcaChunkIntervalBlocks<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BlockNumber, ValueQuery, ConstU32<DEFAULT_MAX_DCA_CHUNK_INTERVAL_BLOCKS>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -736,15 +690,6 @@ pub mod pallet {
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
 		},
-		MaxSwapRetryDurationSet {
-			max_swap_retry_duration_blocks: BlockNumber,
-		},
-		MaxDcaChunksSet {
-			chunks: u32,
-		},
-		MaxDcaChunkIntervalSet {
-			blocks: BlockNumber,
-		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -784,10 +729,9 @@ pub mod pallet {
 		BoostPoolDoesNotExist,
 		/// Swap Retry duration is set above the max allowed.
 		SwapRetryDurationTooLong,
-		/// The number of DCA chunks must be greater than 0 and below the max allowed.
-		InvalidNumberOfDcaChunks,
-		/// The interval must be set to a value greater than 2 and below the max allowed.
-		InvalidDcaChunkInterval,
+		/// The number of chunks must be greater than 0, the interval must be greater than 2 and
+		/// the total duration of the swap request must be less then the max allowed.
+		InvalidDcaParameters,
 	}
 
 	#[pallet::hooks]
@@ -1118,20 +1062,6 @@ pub mod pallet {
 							asset,
 							minimum_deposit,
 						});
-					},
-					PalletConfigUpdate::SetMaxSwapRetryDurationBlocks { blocks } => {
-						MaxSwapRetryDurationBlocks::<T, I>::set(blocks);
-						Self::deposit_event(Event::<T, I>::MaxSwapRetryDurationSet {
-							max_swap_retry_duration_blocks: blocks,
-						});
-					},
-					PalletConfigUpdate::SetMaxDCAChunks { chunks } => {
-						MaxDcaChunks::<T, I>::set(chunks);
-						Self::deposit_event(Event::<T, I>::MaxDcaChunksSet { chunks });
-					},
-					PalletConfigUpdate::SetMaxDCAChunkIntervalBlocks { blocks } => {
-						MaxDcaChunkIntervalBlocks::<T, I>::set(blocks);
-						Self::deposit_event(Event::<T, I>::MaxDcaChunkIntervalSet { blocks });
 					},
 				}
 			}
@@ -2142,23 +2072,28 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
+		let swap_limits = T::SwapLimitsProvider::get_swap_request_limits();
 		if let Some(params) = &refund_params {
 			ensure!(
-				params.retry_duration <= MaxSwapRetryDurationBlocks::<T, I>::get(),
+				params.retry_duration <= swap_limits.max_swap_retry_duration_blocks,
 				DispatchError::from(Error::<T, I>::SwapRetryDurationTooLong)
 			);
 		}
 
 		if let Some(params) = &dca_params {
 			ensure!(
-				params.number_of_chunks > 0 &&
-					params.number_of_chunks <= MaxDcaChunks::<T, I>::get(),
-				DispatchError::from(Error::<T, I>::InvalidNumberOfDcaChunks)
+				params.number_of_chunks > 0 && params.chunk_interval >= SWAP_DELAY_BLOCKS,
+				DispatchError::from(Error::<T, I>::InvalidDcaParameters)
 			);
+			let total_swap_request_duration = params
+				.number_of_chunks
+				.saturating_sub(1)
+				.checked_mul(params.chunk_interval)
+				.ok_or(Error::<T, I>::InvalidDcaParameters)?;
+
 			ensure!(
-				params.chunk_interval >= SWAP_DELAY_BLOCKS &&
-					params.chunk_interval <= MaxDcaChunkIntervalBlocks::<T, I>::get(),
-				DispatchError::from(Error::<T, I>::InvalidDcaChunkInterval)
+				total_swap_request_duration <= swap_limits.max_swap_request_duration_blocks,
+				DispatchError::from(Error::<T, I>::InvalidDcaParameters)
 			);
 		}
 

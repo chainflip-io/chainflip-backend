@@ -34,6 +34,7 @@ pub mod reputation_resetter;
 pub mod safe_mode;
 pub mod signer_nomination;
 pub mod swap_request_api;
+pub mod swap_request_validation_provider;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod tracked_data_provider;
