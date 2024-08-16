@@ -210,7 +210,7 @@ fn test_refund_validators_with_checks(
 }
 
 #[test]
-pub fn test_simple_refund_validators() {
+pub fn test_refund_validators() {
 	const REFUND_AMOUNT: u128 = 1_000u128;
 	test_refund_validators_with_checks(
 		ForeignChain::Bitcoin,
