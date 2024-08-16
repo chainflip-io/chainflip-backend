@@ -37,7 +37,7 @@
 //! data. Note the `PartialVote` is not restricted to only being the hash of the full vote.
 //!
 //! This diagram shows how an authority's vote is formulated, and split up so it can be stored:
-//!
+//! ```text
 //!     ┌─────────────────────────────────────────────────────────────────┐
 //!     │   Key:                                                          │
 //!     │                                                                 │
@@ -84,7 +84,7 @@
 //!         └───────────┼────────────────────────────┼────────────────────────────────┘
 //!                     │How the pallet stores votes.│
 //!                     └────────────────────────────┘
-//!
+//! ```
 //! - "SharedData" is shared between authority votes, so if 150 different validator votes when
 //!   "split up" contain the same SharedData, only one copy of that SharedData will be stored. A
 //!   vote when split up, may be constructed from any number of SharedData values, including zero.
@@ -204,7 +204,7 @@ pub mod pallet {
 			VoteSynchronisationBarrier(rng.gen())
 		}
 
-		#[cfg(test)]
+		#[cfg(any(feature = "runtime-benchmarks", test))]
 		pub fn from_u32(value: u32) -> Self {
 			VoteSynchronisationBarrier(value)
 		}
@@ -481,7 +481,7 @@ pub mod pallet {
 	/// votes will not change, so they can delete/correct bad votes after detecting a problem for
 	/// example a reorg.
 	#[pallet::storage]
-	type AuthorityVoteSynchronisationBarriers<T: Config<I>, I: 'static = ()> =
+	pub type AuthorityVoteSynchronisationBarriers<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, VoteSynchronisationBarrier, OptionQuery>;
 
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If

@@ -156,6 +156,11 @@ pub trait ElectoralSystem: 'static {
 		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn benchmark_authority_vote() -> AuthorityVoteOf<Self> {
+		unimplemented!("This can be implemented on an as-needed basis")
+	}
 }
 
 #[allow(type_alias_bounds)]
