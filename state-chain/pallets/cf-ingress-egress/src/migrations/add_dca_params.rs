@@ -20,6 +20,7 @@ pub(super) mod old {
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
+			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
 			refund_params: Option<ChannelRefundParameters>,
 		},
@@ -81,13 +82,14 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 					old::ChannelAction::CcmTransfer {
 						destination_asset,
 						destination_address,
+						broker_fees,
 						channel_metadata,
 						refund_params,
 					} => ChannelAction::CcmTransfer {
 						destination_asset,
 						destination_address,
 						channel_metadata,
-						broker_fees: Default::default(),
+						broker_fees,
 						refund_params,
 						dca_params: None,
 					},
@@ -129,6 +131,8 @@ mod tests {
 		},
 		Bitcoin,
 	};
+	use cf_primitives::Beneficiary;
+	use sp_core::bounded_vec;
 
 	fn mock_deposit_channel() -> DepositChannel<Bitcoin> {
 		DepositChannel {
@@ -160,6 +164,9 @@ mod tests {
 				min_price: 2.into(),
 			};
 
+			let broker_fees: Beneficiaries<u64> =
+				bounded_vec![Beneficiary { account: 1234, bps: 100 }];
+
 			let old_details_swap = old::DepositChannelDetails::<Test, _> {
 				deposit_channel: mock_deposit_channel(),
 				opened_at: Default::default(),
@@ -168,7 +175,7 @@ mod tests {
 				action: old::ChannelAction::Swap {
 					destination_asset: Asset::Flip,
 					destination_address: output_address.clone(),
-					broker_fees: Default::default(),
+					broker_fees: broker_fees.clone(),
 					refund_params: Some(refund_params.clone()),
 				},
 				boost_fee: 0,
@@ -178,6 +185,7 @@ mod tests {
 				action: old::ChannelAction::CcmTransfer {
 					destination_asset: Asset::Flip,
 					destination_address: output_address.clone(),
+					broker_fees: broker_fees.clone(),
 					channel_metadata: CcmChannelMetadata {
 						message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 						gas_budget: 50 * 10u128.pow(18),
@@ -207,7 +215,7 @@ mod tests {
 					action: ChannelAction::Swap {
 						destination_asset: Asset::Flip,
 						destination_address: output_address.clone(),
-						broker_fees: Default::default(),
+						broker_fees: broker_fees.clone(),
 						refund_params: Some(refund_params.clone()),
 						dca_params: None,
 					},
@@ -229,7 +237,7 @@ mod tests {
 							gas_budget: 50 * 10u128.pow(18),
 							cf_parameters: Default::default(),
 						},
-						broker_fees: Default::default(),
+						broker_fees,
 						refund_params: Some(refund_params.clone()),
 						dca_params: None,
 					},
