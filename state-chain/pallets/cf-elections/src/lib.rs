@@ -204,7 +204,7 @@ pub mod pallet {
 			VoteSynchronisationBarrier(rng.gen())
 		}
 
-		#[cfg(test)]
+		#[cfg(any(feature = "runtime-benchmarks", test))]
 		pub fn from_u32(value: u32) -> Self {
 			VoteSynchronisationBarrier(value)
 		}
@@ -461,7 +461,7 @@ pub mod pallet {
 	/// Stores the elections whose consensus doesn't need to be rechecked, and the epoch when they
 	/// were last checked.
 	#[pallet::storage]
-	type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
+	pub type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, UniqueMonotonicIdentifier, EpochIndex, OptionQuery>;
 
 	/// Stores the set of authorities whose votes can contribute to consensus. Whether an authority
