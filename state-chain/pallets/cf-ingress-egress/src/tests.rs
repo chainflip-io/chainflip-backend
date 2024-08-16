@@ -477,6 +477,7 @@ fn test_refund_parameter_validation() {
 					refund_address: ForeignChainAddress::Eth(Default::default()),
 					min_price: Default::default(),
 				}),
+				None,
 			),
 			DispatchError::Other("Retry duration too long")
 		);

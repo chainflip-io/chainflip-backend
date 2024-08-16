@@ -31,8 +31,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, BoostPoolTier, BroadcastId,
-	ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
+	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -144,7 +144,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -293,7 +293,8 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
-			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
+			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -303,7 +304,8 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
-			refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
+			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DcaParameters>,
 		},
 	}
 
@@ -1578,6 +1580,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				broker_fees,
 				refund_params,
+				dca_params,
 			} => {
 				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
@@ -1586,6 +1589,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					SwapRequestType::Regular { output_address: destination_address },
 					broker_fees,
 					refund_params,
+					dca_params,
 					swap_origin,
 				) {
 					DepositAction::Swap { swap_request_id }
@@ -1599,6 +1603,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broker_fees,
 				channel_metadata,
 				refund_params,
+				dca_params,
 			} => {
 				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
@@ -1614,6 +1619,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 					broker_fees,
 					refund_params,
+					dca_params,
 					swap_origin,
 				) {
 					DepositAction::CcmTransfer { swap_request_id }
@@ -1941,7 +1947,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
 					SwapRequestType::IngressEgressFee,
 					Default::default(),
-					None, /* refund params */
+					None, /* no refund params */
+					None, /* no DCA */
 					SwapOrigin::Internal,
 				) {
 					log_or_panic!("Ingress-egress fee swap should never fail");
@@ -2079,14 +2086,15 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		broker_id: T::AccountId,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
-		refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
+		refund_params: Option<ChannelRefundParameters>,
+		dca_params: Option<DcaParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		if let Some(refund_params) = &refund_params {
+		if let Some(params) = &refund_params {
 			ensure!(
-				refund_params.retry_duration <= MaxSwapRetryDurationBlocks::<T, I>::get(),
+				params.retry_duration <= MaxSwapRetryDurationBlocks::<T, I>::get(),
 				DispatchError::Other("Retry duration too long")
 			);
 		}
@@ -2095,18 +2103,20 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 			&broker_id,
 			source_asset,
 			match channel_metadata {
-				Some(msg) => ChannelAction::CcmTransfer {
+				Some(channel_metadata) => ChannelAction::CcmTransfer {
 					destination_asset,
 					destination_address,
 					broker_fees,
-					channel_metadata: msg,
+					channel_metadata,
 					refund_params,
+					dca_params,
 				},
 				None => ChannelAction::Swap {
 					destination_asset,
 					destination_address,
 					broker_fees,
 					refund_params,
+					dca_params,
 				},
 			},
 			boost_fee,

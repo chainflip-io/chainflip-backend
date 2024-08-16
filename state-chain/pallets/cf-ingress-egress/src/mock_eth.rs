@@ -260,6 +260,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						None,
 						0,
 						None,
+						None,
 					)
 					.map(|(channel_id, deposit_address, ..)| {
 						(request, channel_id, TestChainAccount::try_from(deposit_address).unwrap())
