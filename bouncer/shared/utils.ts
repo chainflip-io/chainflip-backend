@@ -1025,6 +1025,12 @@ export async function tryUntilSuccess(
   throw new Error('tryUntilSuccess failed: ' + logTag);
 }
 
+export async function getNodesInfo(numberOfNodes: 1 | 3) {
+  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
+  const nodeCount = numberOfNodes + '-node';
+  return { SELECTED_NODES, nodeCount };
+}
+
 export async function killEngines() {
   execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
 }
@@ -1036,8 +1042,7 @@ export async function startEngines(
 ) {
   console.log('Starting all the engines');
 
-  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
-  const nodeCount = numberOfNodes + '-node';
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
   execWithLog(`${localnetInitPath}/scripts/start-all-engines.sh`, 'start-all-engines-pre-upgrade', {
     INIT_RUN: 'false',
     LOG_SUFFIX: '-pre-upgrade',

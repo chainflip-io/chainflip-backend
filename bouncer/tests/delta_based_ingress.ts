@@ -44,36 +44,39 @@ async function deltaBasedIngressTest(
   const amountFirstDeposit = '5';
   const amountSecondDeposit = '1';
 
+  const handleSwapScheduled = (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    event: any,
+    expectedAmount: string,
+    maxTotalSwapsExpected: number,
+  ) => {
+    const data = event.data;
+
+    if (
+      sourceAsset !== 'Sol' &&
+      data.swapType !== undefined &&
+      data.swapType === 'IngressEgressFee'
+    ) {
+      // Not count internal fee swaps
+      return false;
+    }
+
+    swapsWitnessed++;
+    console.log('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
+
+    if (swapsWitnessed > maxTotalSwapsExpected) {
+      throw new Error('More than one swaps were initiated');
+    }
+    const inputAmount = Number(data.inputAmount.replace(/,/g, ''));
+    if (inputAmount > Number(amountToFineAmount(expectedAmount, assetDecimals(sourceAsset)))) {
+      throw new Error('Swap input amount is greater than the deposit ' + inputAmount.toString());
+    }
+    return false;
+  };
+
   // Monitor swap events to make sure there is only one
   let swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
-    test: (event) => {
-      const data = event.data;
-
-      if (
-        sourceAsset !== 'Sol' &&
-        data.swapType !== undefined &&
-        data.swapType === 'IngressEgressFee'
-      ) {
-        // Not count internal fee swaps
-        return false;
-      }
-
-      swapsWitnessed++;
-      console.log('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
-
-      if (swapsWitnessed > 1) {
-        throw new Error('More than one swaps were initiated');
-      }
-      const inputAmount = Number(data.inputAmount.replace(/,/g, ''));
-      if (
-        inputAmount > Number(amountToFineAmount(amountFirstDeposit, assetDecimals(sourceAsset)))
-      ) {
-        throw new Error(
-          'Swap input amount is greater than the first deposit ' + inputAmount.toString(),
-        );
-      }
-      return false;
-    },
+    test: (event) => handleSwapScheduled(event, amountFirstDeposit, 1),
     abortable: true,
   });
 
@@ -115,34 +118,7 @@ async function deltaBasedIngressTest(
   );
 
   swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
-    test: (event) => {
-      const data = event.data;
-
-      if (
-        sourceAsset !== 'Sol' &&
-        data.swapType !== undefined &&
-        data.swapType === 'IngressEgressFee'
-      ) {
-        // Not count internal fee swaps
-        return false;
-      }
-
-      swapsWitnessed++;
-      console.log('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
-
-      if (swapsWitnessed > 2) {
-        throw new Error('More than two swaps were initiated');
-      }
-      const inputAmount = Number(data.inputAmount.replace(/,/g, ''));
-      if (
-        inputAmount > Number(amountToFineAmount(amountSecondDeposit, assetDecimals(sourceAsset)))
-      ) {
-        throw new Error(
-          'Swap input amount is greater than the second deposit ' + inputAmount.toString(),
-        );
-      }
-      return false;
-    },
+    test: (event) => handleSwapScheduled(event, amountSecondDeposit, 2),
     abortable: true,
   });
   await startEngines(localnetInitPath, binariesPath, numberOfNodes);

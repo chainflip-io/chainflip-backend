@@ -4,7 +4,7 @@ import * as toml from 'toml';
 import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
-import { compareSemVer, killEngines, sleep, startEngines } from './utils';
+import { compareSemVer, getNodesInfo, killEngines, sleep, startEngines } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
@@ -100,9 +100,7 @@ async function compatibleUpgrade(
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
-  const nodeCount = numberOfNodes + '-node';
-
-  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
 
   execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
     INIT_RPC_PORT: `9944`,
@@ -181,8 +179,7 @@ async function incompatibleUpgradeNoBuild(
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
-  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
-  const nodeCount = numberOfNodes + '-node';
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
   execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
     INIT_RPC_PORT: `9944`,
     KEYS_DIR,
