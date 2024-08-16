@@ -152,7 +152,14 @@ pub mod pallet {
 	#[derive(
 		PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode, TypeInfo, Default,
 	)]
-	struct UniqueMonotonicIdentifier(u64);
+	pub(crate) struct UniqueMonotonicIdentifier(u64);
+
+	impl UniqueMonotonicIdentifier {
+		#[cfg(any(feature = "runtime-benchmarks", test))]
+		pub fn from_u64(value: u64) -> Self {
+			Self(value)
+		}
+	}
 
 	/// A unique identifier for an election with extra details used by the ElectoralSystem
 	/// implementation. These extra details are currently used in composite electoral systems to
@@ -471,7 +478,7 @@ pub mod pallet {
 	/// the current authority set, and so it may include authorities that are not in the current
 	/// authority set or exclude authorities that are in the current authority set.
 	#[pallet::storage]
-	type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
+	pub type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
 
 	/// Votes will only be allowed if their `VoteSynchronisationBarrier` matches this value,
@@ -481,7 +488,7 @@ pub mod pallet {
 	/// votes will not change, so they can delete/correct bad votes after detecting a problem for
 	/// example a reorg.
 	#[pallet::storage]
-	type AuthorityVoteSynchronisationBarriers<T: Config<I>, I: 'static = ()> =
+	pub type AuthorityVoteSynchronisationBarriers<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, VoteSynchronisationBarrier, OptionQuery>;
 
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If

@@ -17,7 +17,7 @@ mod benchmarks {
 	#[benchmark]
 	fn request_liquidity_deposit_address() {
 		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
-			AccountRole::LiquidityProvider,
+			AccountRole::Validator,
 		)
 		.unwrap();
 		assert_ok!(Pallet::<T>::register_liquidity_refund_address(
