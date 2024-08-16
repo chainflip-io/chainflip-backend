@@ -506,9 +506,9 @@ export function getEvmEndpoint(chain: Chain): string {
 }
 
 export function getSolConnection(): Connection {
-  return new Connection(process.env.SOL_ENDPOINT ?? 'http://0.0.0.0:8899', {
+  return new Connection(process.env.SOL_HTTP_ENDPOINT ?? 'http://0.0.0.0:8899', {
     commitment: 'confirmed',
-    wsEndpoint: 'ws://0.0.0.0:8900/',
+    wsEndpoint: `${process.env.SOL_WS_ENDPOINT ?? 'ws://0.0.0.0:8900'}`,
   });
 }
 
