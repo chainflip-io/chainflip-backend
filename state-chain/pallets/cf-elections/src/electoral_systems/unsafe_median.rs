@@ -6,6 +6,7 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
+use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::AuthorityCount;
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
@@ -27,7 +28,7 @@ pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings> {
 	_phantom: core::marker::PhantomData<(Value, UnsynchronisedSettings, Settings)>,
 }
 impl<
-		Value: Member + Parameter + MaybeSerializeDeserialize + Ord,
+		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 	> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings>
@@ -97,6 +98,11 @@ impl<
 				None
 			},
 		)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn benchmark_authority_vote() -> AuthorityVoteOf<Self> {
+		AuthorityVoteOf::<Self>::Vote(BenchmarkValue::benchmark_value())
 	}
 }
 
