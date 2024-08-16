@@ -109,89 +109,50 @@ pub fn keep_fees_in_storage_if_egress_fails() {
 }
 
 #[test]
-pub fn refund_validators_btc() {
-	new_test_ext().execute_with(|| {
-		payed_gas(ForeignChain::Bitcoin, 100, BTC_ADDR_1.clone());
-
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Bitcoin.gas_asset()), 100);
-
-		Pallet::<Test>::trigger_reconciliation();
-
-		let recorded_fees_btc = Liabilities::<Test>::get(ForeignChain::Bitcoin.gas_asset());
-
-		assert!(recorded_fees_btc.is_empty());
-
-		assert_egress(0, None);
-
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Bitcoin.gas_asset()), 0);
-	});
-}
-
-#[test]
 pub fn not_enough_withheld_fees() {
 	new_test_ext().execute_with(|| {
-		payed_gas(ForeignChain::Bitcoin, 100, BTC_ADDR_1.clone());
-		WithheldAssets::<Test>::insert(ForeignChain::Bitcoin.gas_asset(), 99);
+		const BTC_OWED: u128 = 100;
+		const BTC_AVAILABLE: u128 = 99;
+		const ETH_OWED: u128 = 200;
+		const ETH_AVAILABLE: u128 = 199;
+		payed_gas(ForeignChain::Bitcoin, BTC_OWED, BTC_ADDR_1.clone());
+		WithheldAssets::<Test>::insert(ForeignChain::Bitcoin.gas_asset(), BTC_AVAILABLE);
 
-		payed_gas(ForeignChain::Ethereum, 200, ETH_ADDR_1.clone());
-		WithheldAssets::<Test>::insert(ForeignChain::Ethereum.gas_asset(), 199);
+		payed_gas(ForeignChain::Ethereum, ETH_OWED, ETH_ADDR_1.clone());
+		WithheldAssets::<Test>::insert(ForeignChain::Ethereum.gas_asset(), ETH_AVAILABLE);
 
 		Pallet::<Test>::trigger_reconciliation();
 
 		System::assert_has_event(RuntimeEvent::AssetBalances(crate::Event::VaultDeficitDetected {
 			chain: ForeignChain::Bitcoin,
-			amount_owed: 100,
-			available: 99,
+			amount_owed: BTC_OWED,
+			available: BTC_AVAILABLE,
 		}));
 		System::assert_has_event(RuntimeEvent::AssetBalances(crate::Event::VaultDeficitDetected {
 			chain: ForeignChain::Ethereum,
-			amount_owed: 200,
-			available: 199,
+			amount_owed: ETH_OWED,
+			available: ETH_AVAILABLE,
 		}));
 
 		// For Bitcoin, reconciliate as much as possible.
 		assert_eq!(
 			Liabilities::<Test>::get(ForeignChain::Bitcoin.gas_asset())[&ExternalOwner::Vault],
-			1
+			BTC_OWED - BTC_AVAILABLE
 		);
 		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Bitcoin.gas_asset()), 0);
 
 		// For Ethereum, either refund the entirety or do nothing.
 		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
-		assert_eq!(recorded_fees_eth[&ExternalOwner::Account(ETH_ADDR_1)], 200);
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 199);
-	});
-}
-
-#[test]
-pub fn refund_validators_polkadot() {
-	new_test_ext().execute_with(|| {
-		payed_gas(ForeignChain::Polkadot, 100, DOT_ADDR_1.clone());
-
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Polkadot.gas_asset()), 100);
-
-		Pallet::<Test>::trigger_reconciliation();
-
-		assert_egress(
-			1,
-			Some(|egresses: Vec<MockEgressParameter<AnyChain>>| {
-				for egress in egresses {
-					assert_eq!(egress.amount(), 100);
-				}
-			}),
-		);
-
-		let recorded_fees_dot = Liabilities::<Test>::get(ForeignChain::Polkadot.gas_asset());
-
-		assert!(recorded_fees_dot.is_empty());
-
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Polkadot.gas_asset()), 0);
+		assert_eq!(recorded_fees_eth[&ExternalOwner::Account(ETH_ADDR_1)], ETH_OWED);
+		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), ETH_AVAILABLE);
 	});
 }
 
 #[test]
 pub fn max_refunds_per_epoch() {
 	new_test_ext().execute_with(|| {
+		const SMALL_FEE: AssetAmount = 30;
+		let asset = ForeignChain::Ethereum.gas_asset();
 		for i in 0..crate::MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH {
 			payed_gas(
 				ForeignChain::Ethereum,
@@ -199,24 +160,30 @@ pub fn max_refunds_per_epoch() {
 				ForeignChainAddress::Eth(sp_core::H160([i as u8; 20])),
 			);
 		}
+		// Add 2 small fees, which will be payed out last.
 		for i in 254u8..=255u8 {
 			payed_gas(
 				ForeignChain::Ethereum,
-				500,
+				SMALL_FEE,
 				ForeignChainAddress::Eth(sp_core::H160([i; 20])),
 			);
 		}
 		assert_eq!(
-			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()),
-			(100 * (crate::MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH as u128) + 500 * 2)
+			WithheldAssets::<Test>::get(asset),
+			(100 * (crate::MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH as u128) + SMALL_FEE * 2)
 		);
 		Pallet::<Test>::trigger_reconciliation();
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 200);
-		assert!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()) > 0);
-		assert_eq!(Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).len(), 2);
+
+		// Fees are paid out in reverse order (largest -> smallest). The 2 smallest fees are left
+		// out as available funds ran out.
+		assert_eq!(Liabilities::<Test>::get(asset).values().sum::<u128>(), SMALL_FEE * 2u128);
+		assert_eq!(WithheldAssets::<Test>::get(asset), SMALL_FEE * 2u128);
+		assert!(WithheldAssets::<Test>::get(asset) > 0);
+		assert_eq!(Liabilities::<Test>::get(asset).len(), 2);
+
 		Pallet::<Test>::trigger_reconciliation();
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 0);
-		assert_eq!(Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).len(), 0);
+		assert_eq!(WithheldAssets::<Test>::get(asset), 0);
+		assert_eq!(Liabilities::<Test>::get(asset).len(), 0);
 	});
 }
 
@@ -251,23 +218,61 @@ pub fn do_not_refund_if_amount_is_too_low() {
 	});
 }
 
-#[test]
-pub fn refund_validators_solana() {
+#[track_caller]
+fn test_refund_validators_with_no_egress(
+	chain: ForeignChain,
+	addr: ForeignChainAddress,
+	liability: ExternalOwner,
+	egress_check: impl Fn(),
+) {
 	new_test_ext().execute_with(|| {
 		const REFUND_AMOUNT: u128 = 1_000u128;
-		payed_gas(ForeignChain::Solana, REFUND_AMOUNT, SOL_ADDR.clone());
+		let asset = chain.gas_asset();
 
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Solana.gas_asset()), REFUND_AMOUNT);
-		assert_eq!(
-			Liabilities::<Test>::get(ForeignChain::Solana.gas_asset()).get(&ExternalOwner::Vault),
-			Some(&REFUND_AMOUNT)
-		);
+		payed_gas(chain, REFUND_AMOUNT, addr);
+
+		assert_eq!(WithheldAssets::<Test>::get(asset), REFUND_AMOUNT);
+		assert_eq!(Liabilities::<Test>::get(asset).get(&liability), Some(&REFUND_AMOUNT));
 
 		Pallet::<Test>::trigger_reconciliation();
 
-		// Solana gas fee is owed to the Vault, no egress is needed.
-		assert_egress(0, None);
-		assert!(Liabilities::<Test>::get(ForeignChain::Solana.gas_asset()).is_empty());
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Solana.gas_asset()), 0);
+		// Check all fees owed have been paid out.
+		assert!(Liabilities::<Test>::get(asset).is_empty());
+		assert_eq!(WithheldAssets::<Test>::get(asset), 0);
+
+		egress_check();
 	});
+}
+
+#[test]
+pub fn test_simple_refund_validators() {
+	const REFUND_AMOUNT: u128 = 1_000u128;
+	test_refund_validators_with_no_egress(
+		ForeignChain::Bitcoin,
+		BTC_ADDR_1,
+		ExternalOwner::Vault,
+		|| assert_egress(0, None),
+	);
+	test_refund_validators_with_no_egress(
+		ForeignChain::Solana,
+		SOL_ADDR,
+		ExternalOwner::Vault,
+		|| assert_egress(0, None),
+	);
+
+	test_refund_validators_with_no_egress(
+		ForeignChain::Polkadot,
+		DOT_ADDR_1,
+		ExternalOwner::AggKey,
+		|| {
+			assert_egress(
+				1,
+				Some(|egresses: Vec<MockEgressParameter<AnyChain>>| {
+					for egress in egresses {
+						assert_eq!(egress.amount(), REFUND_AMOUNT);
+					}
+				}),
+			)
+		},
+	);
 }
