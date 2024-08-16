@@ -46,7 +46,7 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v1.18.17
-  SOLANA_PROGRAMS_VERSION: v0.6.1-audit
+  SOLANA_PROGRAMS_VERSION: v0.6.3-audit
   NODE_COUNT: "1-node"
 
 permissions:

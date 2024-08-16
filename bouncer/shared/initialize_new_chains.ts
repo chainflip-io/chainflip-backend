@@ -140,7 +140,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
         solKeyBuffer,
         whaleKeypair.publicKey.toBuffer(), // govkey
         tokenVaultPda.toBuffer(),
-        Buffer.from([253]), // tokenVaultPda bump
+        Buffer.from([255]), // tokenVaultPda bump
         upgradeSignerPda.toBuffer(),
         Buffer.from([255]), // upgradeSignerPda bump
         Buffer.from([0]), // suspendedVault (false)
@@ -207,7 +207,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const solUsdcMintPubkey = new PublicKey(getContractAddress('Solana', 'SolUsdc'));
 
   const [tokenSupportedAccount] = PublicKey.findProgramAddressSync(
-    [solUsdcMintPubkey.toBuffer()],
+    [Buffer.from('supported_token'), solUsdcMintPubkey.toBuffer()],
     solanaVaultProgramId,
   );
 

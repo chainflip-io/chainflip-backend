@@ -63,43 +63,43 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_durable_nonces_and_accounts: [
 		(
 			const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
-			const_hash("5GW5wo9kWhwsCTNHkUanSQB1VF4o3uLuAntshM32p8zP"),
+			const_hash("GogbV48pmmEaGmipMJc4aLiacEZz9wQHS4CX2zT4PEsm"),
 		),
 		(
 			const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
-			const_hash("2u4NiphsYWp5HV59WakFxYXDfySCuYzLGzp8eMmLZ2L2"),
+			const_hash("CB6pTV6JXoUewUDXjU49upCkEP4NHE3JQ73nEyYCja44"),
 		),
 		(
 			const_address("HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p"),
-			const_hash("2Xsm92sfjUG6X4S1MD7my77gGWBXR7AKvvtE4izso8tn"),
+			const_hash("2u3cnRSQyoUXkjJTy1mLdau14k1AUgB2uFs2JYWoCv71"),
 		),
 		(
 			const_address("HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2"),
-			const_hash("DcmJSgJQGL7Mv2t3Sfyu11t8XJQwQQXhTCT7kisaaazp"),
+			const_hash("94dq3SJWgEQ4Y6gCjQzLcbBeNNRRfUDb5Z1ukcYskNAq"),
 		),
 		(
 			const_address("GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM"),
-			const_hash("AeJMHLR8GxqdP3E5XeN6S8w1jKtJR8Xe7MRu97WMRNPM"),
+			const_hash("CUGTVuNuWC2W23UowCaATfVkFzXZ84xhe1hQe2uDs5yw"),
 		),
 		(
 			const_address("EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn"),
-			const_hash("9fRvtzfA3o8g4Mf2dxkF4mdEQz3cFh8su1v662H5VuDd"),
+			const_hash("EhpNvPoHTk59QeDo5RodU1sucPBcZ4ptiw4NgVtuARGp"),
 		),
 		(
 			const_address("9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa"),
-			const_hash("E4gqc7MH5iMjcYgbjHqxskLLySED5c2vPww4DPGfA3cX"),
+			const_hash("8xQKGacN7m2szw8ZFXkjLjGjEEfCFzhp3em1B8sazym9"),
 		),
 		(
 			const_address("J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna"),
-			const_hash("8HTHawrhN2rVwhyNHaksMpthrhWMjiiRwr3rzZFP9Z2c"),
+			const_hash("4KBbZqjDAeDYDh5ceDJ59fg679YBaw5mR9h2r9pua18S"),
 		),
 		(
 			const_address("GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55"),
-			const_hash("FQAAaFeGWzGnxeRhNxzzzmL6VnnbNZibyfgyQDzjrmns"),
+			const_hash("83Kht22e7rReWCRb7Ge2UvY4mwxC83dKfRcDrHCHF5Di"),
 		),
 		(
 			const_address("AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv"),
-			const_hash("H3DiHaeuGXJZH35SAGZYNXTypWiYTXvJVMVkvHQAme2c"),
+			const_hash("6otHj5QS3JaVFo5Vjg52viQp7jdoHccGjxjdcZM5Wmss"),
 		),
 	],
 };
