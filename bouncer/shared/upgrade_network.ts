@@ -4,7 +4,7 @@ import * as toml from 'toml';
 import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
-import { compareSemVer, sleep } from './utils';
+import { compareSemVer, killEngines, sleep, startEngines } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
@@ -131,33 +131,6 @@ async function compatibleUpgrade(
   );
 
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
-}
-
-export async function startEngines(
-  localnetInitPath: string,
-  binaryPath: string,
-  numberOfNodes: 1 | 3,
-) {
-  console.log('Starting all the engines');
-
-  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
-  const nodeCount = numberOfNodes + '-node';
-  execWithLog(`${localnetInitPath}/scripts/start-all-engines.sh`, 'start-all-engines-pre-upgrade', {
-    INIT_RUN: 'false',
-    LOG_SUFFIX: '-pre-upgrade',
-    NODE_COUNT: nodeCount,
-    SELECTED_NODES,
-    LOCALNET_INIT_DIR: localnetInitPath,
-    BINARY_ROOT_PATH: binaryPath,
-  });
-
-  await sleep(7000);
-
-  console.log('Engines started');
-}
-
-export async function killEngines() {
-  execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
 }
 
 async function incompatibleUpgradeNoBuild(

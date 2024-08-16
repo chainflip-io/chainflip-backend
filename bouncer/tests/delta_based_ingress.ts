@@ -12,9 +12,9 @@
 // --nodes <1 or 3>: The number of nodes running on your localnet. Defaults to 1.
 
 // To run locally:
-// ./tests/delta_base_ingress.ts prebuilt --bins ./../target/debug --localnet_init ./../localnet/init
+// ./tests/delta_based_ingress.ts prebuilt --bins ./../target/debug --localnet_init ./../localnet/init
 // To run in CI:
-// ./tests/delta_base_ingress.ts prebuilt --bins ./../ --localnet_init ./../localnet/init
+// ./tests/delta_based_ingress.ts prebuilt --bins ./../ --localnet_init ./../localnet/init
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -25,11 +25,12 @@ import {
   Asset,
   assetDecimals,
   executeWithTimeout,
+  killEngines,
   observeFetch,
   sleep,
+  startEngines,
 } from '../shared/utils';
 import { observeEvent } from '../shared/utils/substrate';
-import { killEngines, startEngines } from '../shared/upgrade_network';
 
 async function deltaBasedIngressTest(
   sourceAsset: 'Sol' | 'SolUsdc',
@@ -101,7 +102,6 @@ async function deltaBasedIngressTest(
     throw new Error('No swap was initiated. Swaps witnessed: ' + swapsWitnessed);
   }
 
-  // Kill the engine
   console.log('Killing the engines');
   await killEngines();
 
@@ -195,7 +195,7 @@ async function main(): Promise<void> {
 
         await deltaBasedIngressTest(
           'Sol',
-          'Eth',
+          'ArbEth',
           args.bins,
           args.localnet_init,
           args.nodes as 1 | 3,
