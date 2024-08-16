@@ -13,12 +13,14 @@ use crate::Call;
 // Keep this to avoid CI warnings about no benchmarks in the crate.
 #[instance_benchmarks]
 mod benchmarks {
+	use core::iter;
+
 	use __private::traits::OnFinalize;
 
 	use super::*;
 
 	#[benchmark]
-	fn vote() {
+	fn vote(n: Linear<1, 10>) {
 		let caller =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Validator).unwrap();
 		let validator_id: T::ValidatorId = caller.clone().into();
@@ -51,8 +53,8 @@ mod benchmarks {
 		vote(
 			RawOrigin::Signed(caller),
 			BoundedBTreeMap::try_from(
-				[(next_election.0, T::ElectoralSystem::benchmark_authority_vote())]
-					.into_iter()
+				iter::repeat((next_election.0, T::ElectoralSystem::benchmark_authority_vote()))
+					.take(n as usize)
 					.collect::<BTreeMap<_, _>>(),
 			)
 			.unwrap(),
@@ -70,7 +72,7 @@ mod benchmarks {
 	#[test]
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {
-			_vote::<Test, Instance1>(true);
+			_vote::<Test, Instance1>(10, true);
 		});
 	}
 }
