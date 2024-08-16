@@ -122,43 +122,43 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 					vec![
 						(
 							const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
-							const_hash("BcuQnUuMLi7dDGTcW13fPmkf26gZp6cmMycwuzXAPUWq"),
+							const_hash("5GW5wo9kWhwsCTNHkUanSQB1VF4o3uLuAntshM32p8zP"),
 						),
 						(
 							const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),
-							const_hash("CCFc5QptF1HogqCZHCD1HaEzZRunGJvpqJJEnELsoqrH"),
+							const_hash("2u4NiphsYWp5HV59WakFxYXDfySCuYzLGzp8eMmLZ2L2"),
 						),
 						(
 							const_address("HDYArziNzyuNMrK89igisLrXFe78ti8cvkcxfx4qdU2p"),
-							const_hash("CjPEYgDoX2PD5sQKg9pJyBzVFPEy6BYHCZtYpE7LKEPu"),
+							const_hash("2Xsm92sfjUG6X4S1MD7my77gGWBXR7AKvvtE4izso8tn"),
 						),
 						(
 							const_address("HLPsNyxBqfq2tLE31v6RiViLp2dTXtJRgHgsWgNDRPs2"),
-							const_hash("HKx2FNX7rsfzat1Nsr83Xq82LZSBnEB3LyzBmEtFGpAy"),
+							const_hash("DcmJSgJQGL7Mv2t3Sfyu11t8XJQwQQXhTCT7kisaaazp"),
 						),
 						(
 							const_address("GKMP63TqzbueWTrFYjRwMNkAyTHpQ54notRbAbMDmePM"),
-							const_hash("92ijUn6xBxFExuazPhspSSzhZXjQqbXmYre4ztNGWLJ9"),
+							const_hash("AeJMHLR8GxqdP3E5XeN6S8w1jKtJR8Xe7MRu97WMRNPM"),
 						),
 						(
 							const_address("EpmHm2aSPsB5ZZcDjqDhQ86h1BV32GFCbGSMuC58Y2tn"),
-							const_hash("BiHQhh7xY1ZFuEuC2vj9rFsZSXvhWA6FcdNDfBsfENbh"),
+							const_hash("9fRvtzfA3o8g4Mf2dxkF4mdEQz3cFh8su1v662H5VuDd"),
 						),
 						(
 							const_address("9yBZNMrLrtspj4M7bEf2X6tqbqHxD2vNETw8qSdvJHMa"),
-							const_hash("AtxE1WFQGV1hbxmNmAcN7azMRLjaEyp6wk8Y62swxQEz"),
+							const_hash("E4gqc7MH5iMjcYgbjHqxskLLySED5c2vPww4DPGfA3cX"),
 						),
 						(
 							const_address("J9dT7asYJFGS68NdgDCYjzU2Wi8uBoBusSHN1Z6JLWna"),
-							const_hash("Ub9SGgi88Pyrd2ZPRLj6QzsMDf4VCM4U2EBz37f3QWP"),
+							const_hash("8HTHawrhN2rVwhyNHaksMpthrhWMjiiRwr3rzZFP9Z2c"),
 						),
 						(
 							const_address("GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55"),
-							const_hash("HgZQKdVeArjJmetoAw4SpYKyzKJh3txaqb7VQe4kJ7tV"),
+							const_hash("FQAAaFeGWzGnxeRhNxzzzmL6VnnbNZibyfgyQDzjrmns"),
 						),
 						(
 							const_address("AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv"),
-							const_hash("ZW7wrDEXQe94VrsoG5A6b5iQMEdUPGkc16Vk5rt7pgR"),
+							const_hash("H3DiHaeuGXJZH35SAGZYNXTypWiYTXvJVMVkvHQAme2c"),
 						),
 					],
 				),
