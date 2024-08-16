@@ -58,7 +58,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"7B13iu7bUbBX88eVBqTZkQqrErnTMazPmGLdE5RqdyKZ",
 	)),
 	sol_usdc_token_vault_ata: SolAddress(bs58_array(
-		"GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd",
+		"9CGLwcPknpYs3atgwtjMX7RhgvBgaqK8wwCvXnmjEoL9",
 	)),
 	sol_durable_nonces_and_accounts: [
 		(
