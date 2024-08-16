@@ -2176,8 +2176,7 @@ pub(crate) mod utilities {
 		input_amount: AssetAmount,
 	) -> SwapRefundParameters {
 		SwapRefundParameters {
-			// NOTE: We add 1 to make retry duration inclusive of the last block:
-			refund_block: execute_at_block.saturating_add(params.retry_duration).saturating_add(1),
+			refund_block: execute_at_block.saturating_add(params.retry_duration),
 			min_output: u128::try_from(cf_amm::common::output_amount_ceil(
 				input_amount.into(),
 				params.min_price,
