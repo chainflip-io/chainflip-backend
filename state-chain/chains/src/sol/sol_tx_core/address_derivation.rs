@@ -212,9 +212,9 @@ mod tests {
 		assert_eq!(
 			derive_fetch_account(deposit_channel, vault_program).unwrap(),
 			PdaAndBump {
-				address: SolAddress::from_str("AS1fDXUeL6dYHKxvyMGyFoqrsN5zPcUsanPDqmvVvFUA")
+				address: SolAddress::from_str("4oeSeUiNcbd2CK6jRs5b5hHKE5so4nxzNWPsHMoTSAm3")
 					.unwrap(),
-				bump: 255u8
+				bump: 253u8
 			},
 		);
 	}
