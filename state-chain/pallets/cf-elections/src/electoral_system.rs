@@ -14,7 +14,6 @@ use crate::{
 ///
 /// Implementations of this trait should *NEVER* directly access the storage of the elections
 /// pallet, and only access it through the passed-in accessors.
-
 pub trait ElectoralSystem: 'static {
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
 	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
