@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   upload:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

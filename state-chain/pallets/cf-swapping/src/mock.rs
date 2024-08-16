@@ -70,10 +70,13 @@ impl system::Config for Test {
 impl_mock_chainflip!(Test);
 impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }
 
+// NOTE: the use of u128 lets us avoid type conversions in tests:
+pub const DEFAULT_SWAP_RATE: u128 = 2;
+
 parameter_types! {
 	pub static NetworkFee: Permill = Permill::from_perthousand(0);
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
-	pub static SwapRate: f64 = 1f64;
+	pub static SwapRate: f64 = DEFAULT_SWAP_RATE as f64;
 }
 
 thread_local! {
