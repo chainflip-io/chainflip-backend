@@ -4,6 +4,7 @@
 #![feature(split_array)]
 
 use core::{fmt::Display, iter::Step};
+use sp_std::marker::PhantomData;
 
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
@@ -24,7 +25,8 @@ use frame_support::{
 		traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub},
 		BoundedVec, DispatchError,
 	},
-	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
+	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Never, Parameter, PartialEqNoBound,
+	StorageHasher,
 };
 use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
 use scale_info::TypeInfo;
@@ -391,7 +393,7 @@ where
 		call: &Call,
 		payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		maybe_current_onchain_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
-	) -> bool;
+	) -> RequiresSignatureRefresh<C::ChainCrypto, Call>;
 
 	/// Calculate the Units of gas that is allowed to make this call.
 	fn calculate_gas_limit(_call: &Call) -> Option<U256> {
@@ -715,4 +717,10 @@ impl<A: Clone> ChannelRefundParametersGeneric<A> {
 			min_price: self.min_price,
 		}
 	}
+}
+
+pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
+	True(Option<Api>),
+	False,
+	_Phantom(PhantomData<C>, Never),
 }
