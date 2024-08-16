@@ -23,7 +23,7 @@ export async function initializeArbitrumChain() {
 
 export async function initializeSolanaChain() {
   console.log('Initializing Solana');
-  const solInitializationRequest = observeEvent('solanaVault:ChainInitialized');
+  const solInitializationRequest = observeEvent('solanaVault:ChainInitialized').event;
   await submitGovernanceExtrinsic((chainflip) => chainflip.tx.solanaVault.initializeChain());
   await solInitializationRequest;
 }
@@ -126,7 +126,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
   const tokenVaultPda = new PublicKey(getContractAddress('Solana', 'TOKEN_VAULT_PDA'));
-  const upgradeSignerPda = new PublicKey('3eechPbKXiAVCubUkM9asJ5DbjNn7jHyi5KFLd5ocJbz');
+  const upgradeSignerPda = new PublicKey('H7G2avdmRSQyVxPcgZJPGXVCPhC61TMAKdvYBRF42zJ9');
 
   // Fund new Solana Agg key
   console.log('Funding Solana new aggregate key:', newAggKey.toString());

@@ -91,11 +91,11 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'VAULT':
           return '8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf';
         case 'TOKEN_VAULT_PDA':
-          return 'CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d';
+          return '7B13iu7bUbBX88eVBqTZkQqrErnTMazPmGLdE5RqdyKZ';
         case 'DATA_ACCOUNT':
-          return 'wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc';
+          return 'BttvFNSRKrkHugwDP6SpnBejCKKskHowJif1HGgBtTfG';
         case 'SolUsdc':
-          return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
+          return process.env.SOL_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':
           return '8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH';
         case 'SWAP_ENDPOINT':

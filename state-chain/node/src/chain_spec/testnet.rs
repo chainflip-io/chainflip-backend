@@ -49,13 +49,13 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_genesis_hash: None,
 	sol_vault_program: SolAddress(bs58_array("8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf")),
 	sol_vault_program_data_account: SolAddress(bs58_array(
-		"wxudAoEJWfe6ZFHYsDPYGGs2K3m62N3yApNxZLGyMYc",
+		"BttvFNSRKrkHugwDP6SpnBejCKKskHowJif1HGgBtTfG",
 	)),
 	sol_usdc_token_mint_pubkey: SolAddress(bs58_array(
 		"24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p",
 	)),
 	sol_token_vault_pda_account: SolAddress(bs58_array(
-		"CWxWcNZR1d5MpkvmL3HgvgohztoKyCDumuZvdPyJHK3d",
+		"7B13iu7bUbBX88eVBqTZkQqrErnTMazPmGLdE5RqdyKZ",
 	)),
 	sol_usdc_token_vault_ata: SolAddress(bs58_array(
 		"GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd",
