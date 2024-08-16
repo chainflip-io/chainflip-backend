@@ -15,6 +15,7 @@ fn payed_gas(chain: ForeignChain, amount: AssetAmount, account: ForeignChainAddr
 	Pallet::<Test>::withhold_assets(chain.gas_asset(), amount);
 }
 
+#[track_caller]
 fn assert_egress(
 	number_of_egresses: usize,
 	maybe_additional_conditions: Option<fn(egresses: Vec<MockEgressParameter<AnyChain>>)>,
@@ -24,46 +25,6 @@ fn assert_egress(
 	if let Some(additional_conditions) = maybe_additional_conditions {
 		additional_conditions(egresses);
 	}
-}
-
-#[test]
-fn refund_validators_evm() {
-	new_test_ext().execute_with(|| {
-		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
-		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_2.clone());
-		payed_gas(ForeignChain::Arbitrum, 100, ARB_ADDR_1.clone());
-
-		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
-
-		let recorded_fees_arb = Liabilities::<Test>::get(ForeignChain::Arbitrum.gas_asset());
-
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_2.into()), Some(&100));
-		assert_eq!(recorded_fees_arb.get(&ARB_ADDR_1.into()), Some(&100));
-
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 200);
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Arbitrum.gas_asset()), 100);
-
-		Pallet::<Test>::trigger_reconciliation();
-
-		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
-		let recorded_fees_arb = Liabilities::<Test>::get(ForeignChain::Arbitrum.gas_asset());
-
-		assert_egress(
-			3,
-			Some(|egresses: Vec<MockEgressParameter<AnyChain>>| {
-				for egress in egresses {
-					assert_eq!(egress.amount(), 100);
-				}
-			}),
-		);
-
-		assert!(recorded_fees_eth.is_empty());
-		assert!(recorded_fees_arb.is_empty());
-
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 0);
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Arbitrum.gas_asset()), 0);
-	});
 }
 
 #[test]
@@ -219,20 +180,24 @@ pub fn do_not_refund_if_amount_is_too_low() {
 }
 
 #[track_caller]
-fn test_refund_validators_with_no_egress(
+fn test_refund_validators_with_checks(
 	chain: ForeignChain,
-	addr: ForeignChainAddress,
-	liability: ExternalOwner,
+	addresses: Vec<ForeignChainAddress>,
+	liabilities: Vec<ExternalOwner>,
 	egress_check: impl Fn(),
 ) {
 	new_test_ext().execute_with(|| {
 		const REFUND_AMOUNT: u128 = 1_000u128;
 		let asset = chain.gas_asset();
 
-		payed_gas(chain, REFUND_AMOUNT, addr);
+		let total_gas_paid = REFUND_AMOUNT * addresses.len() as u128;
+		addresses.into_iter().for_each(|addr| payed_gas(chain, REFUND_AMOUNT, addr));
 
-		assert_eq!(WithheldAssets::<Test>::get(asset), REFUND_AMOUNT);
-		assert_eq!(Liabilities::<Test>::get(asset).get(&liability), Some(&REFUND_AMOUNT));
+		assert_eq!(WithheldAssets::<Test>::get(asset), total_gas_paid);
+
+		liabilities.into_iter().for_each(|liability| {
+			assert_eq!(Liabilities::<Test>::get(asset).get(&liability), Some(&REFUND_AMOUNT))
+		});
 
 		Pallet::<Test>::trigger_reconciliation();
 
@@ -247,23 +212,23 @@ fn test_refund_validators_with_no_egress(
 #[test]
 pub fn test_simple_refund_validators() {
 	const REFUND_AMOUNT: u128 = 1_000u128;
-	test_refund_validators_with_no_egress(
+	test_refund_validators_with_checks(
 		ForeignChain::Bitcoin,
-		BTC_ADDR_1,
-		ExternalOwner::Vault,
+		vec![BTC_ADDR_1],
+		vec![ExternalOwner::Vault],
 		|| assert_egress(0, None),
 	);
-	test_refund_validators_with_no_egress(
+	test_refund_validators_with_checks(
 		ForeignChain::Solana,
-		SOL_ADDR,
-		ExternalOwner::Vault,
+		vec![SOL_ADDR],
+		vec![ExternalOwner::Vault],
 		|| assert_egress(0, None),
 	);
 
-	test_refund_validators_with_no_egress(
+	test_refund_validators_with_checks(
 		ForeignChain::Polkadot,
-		DOT_ADDR_1,
-		ExternalOwner::AggKey,
+		vec![DOT_ADDR_1],
+		vec![ExternalOwner::AggKey],
 		|| {
 			assert_egress(
 				1,
@@ -275,4 +240,74 @@ pub fn test_simple_refund_validators() {
 			)
 		},
 	);
+
+	test_refund_validators_with_checks(
+		ForeignChain::Ethereum,
+		vec![ETH_ADDR_1, ETH_ADDR_2],
+		vec![ExternalOwner::Account(ETH_ADDR_1), ExternalOwner::Account(ETH_ADDR_2)],
+		|| {
+			assert_egress(
+				2,
+				Some(|egresses: Vec<MockEgressParameter<AnyChain>>| {
+					for egress in egresses {
+						assert_eq!(egress.amount(), REFUND_AMOUNT);
+					}
+				}),
+			)
+		},
+	);
+
+	test_refund_validators_with_checks(
+		ForeignChain::Arbitrum,
+		vec![ARB_ADDR_1],
+		vec![ExternalOwner::Account(ARB_ADDR_1)],
+		|| {
+			assert_egress(
+				1,
+				Some(|egresses: Vec<MockEgressParameter<AnyChain>>| {
+					for egress in egresses {
+						assert_eq!(egress.amount(), REFUND_AMOUNT);
+					}
+				}),
+			)
+		},
+	);
+}
+
+#[test]
+fn can_reconciliate_multiple_chains_at_once() {
+	new_test_ext().execute_with(|| {
+		const REFUND_AMOUNT: u128 = 1_000u128;
+
+		let test_accounts = vec![
+			(ForeignChain::Ethereum, ETH_ADDR_1),
+			(ForeignChain::Arbitrum, ARB_ADDR_1),
+			(ForeignChain::Polkadot, DOT_ADDR_1),
+			(ForeignChain::Bitcoin, BTC_ADDR_1),
+			(ForeignChain::Solana, SOL_ADDR),
+		];
+
+		test_accounts.iter().for_each(|(chain, acc)| {
+			payed_gas(*chain, REFUND_AMOUNT, acc.clone());
+			assert_eq!(WithheldAssets::<Test>::get(chain.gas_asset()), REFUND_AMOUNT);
+		});
+
+		Pallet::<Test>::trigger_reconciliation();
+
+		assert_egress(
+			// Only Ethereum, Arbitrum and Polkadot requires Egress
+			3,
+			Some(|egresses: Vec<MockEgressParameter<AnyChain>>| {
+				for egress in egresses {
+					assert_eq!(egress.amount(), REFUND_AMOUNT);
+				}
+			}),
+		);
+
+		test_accounts.into_iter().for_each(|(chain, _)| {
+			let asset = chain.gas_asset();
+			assert!(Liabilities::<Test>::get(asset).is_empty());
+			assert_eq!(WithheldAssets::<Test>::get(asset), 0);
+		});
+	});
 }
