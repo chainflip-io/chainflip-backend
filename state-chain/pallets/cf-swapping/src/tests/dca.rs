@@ -2,8 +2,6 @@ use super::*;
 
 const INPUT_AMOUNT: AssetAmount = 40_000;
 const CHUNK_INTERVAL: u32 = 3;
-const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
-const NET_AMOUNT: AssetAmount = INPUT_AMOUNT - BROKER_FEE;
 
 const INPUT_ASSET: Asset = Asset::Usdc;
 const OUTPUT_ASSET: Asset = Asset::Eth;
@@ -53,11 +51,13 @@ fn dca_happy_path() {
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
 
-	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / 2;
-	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT * DEFAULT_SWAP_RATE;
+	const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
+	const CHUNK_BROKER_FEE: AssetAmount = CHUNK_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
+	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
 
-	// 1:1 swap ratio
-	const TOTAL_OUTPUT_AMOUNT: AssetAmount = NET_AMOUNT * DEFAULT_SWAP_RATE;
+	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
+
+	const TOTAL_OUTPUT_AMOUNT: AssetAmount = CHUNK_OUTPUT * 2;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -107,7 +107,7 @@ fn dca_happy_path() {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
+					input_amount: CHUNK_AMOUNT_AFTER_FEE,
 					output_amount: CHUNK_OUTPUT,
 					..
 				})
@@ -132,7 +132,7 @@ fn dca_happy_path() {
 					remaining_input_amount: 0,
 					remaining_chunks: 0,
 					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: CHUNK_AMOUNT * DEFAULT_SWAP_RATE
+					accumulated_output_amount: CHUNK_OUTPUT
 				}
 			);
 		})
@@ -145,8 +145,9 @@ fn dca_happy_path() {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 2,
-					input_amount: CHUNK_AMOUNT,
+					input_amount: CHUNK_AMOUNT_AFTER_FEE,
 					output_amount: CHUNK_OUTPUT,
+					broker_fee: CHUNK_BROKER_FEE,
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -166,7 +167,9 @@ fn dca_happy_path() {
 fn dca_single_chunk() {
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
-	const EGRESS_AMOUNT: AssetAmount = NET_AMOUNT * DEFAULT_SWAP_RATE;
+	const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
+	const INPUT_AMOUNT_AFTER_FEE: AssetAmount = INPUT_AMOUNT - BROKER_FEE;
+	const EGRESS_AMOUNT: AssetAmount = INPUT_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -192,7 +195,7 @@ fn dca_single_chunk() {
 				RuntimeEvent::Swapping(Event::SwapScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 1,
-					input_amount: NET_AMOUNT,
+					input_amount: INPUT_AMOUNT,
 					execute_at: CHUNK_1_BLOCK,
 					..
 				})
@@ -217,8 +220,9 @@ fn dca_single_chunk() {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 1,
-					input_amount: NET_AMOUNT,
+					input_amount: INPUT_AMOUNT_AFTER_FEE,
 					output_amount: EGRESS_AMOUNT,
+					broker_fee: BROKER_FEE,
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -238,7 +242,7 @@ fn dca_single_chunk() {
 fn dca_with_fok_full_refund() {
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const NUMBER_OF_CHUNKS: u32 = 2;
-	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
+	const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / NUMBER_OF_CHUNKS as u128;
 
 	// Allow for one retry for good measure:
 	const REFUND_BLOCK: u64 = CHUNK_1_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
@@ -328,7 +332,7 @@ fn dca_with_fok_full_refund() {
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					asset: INPUT_ASSET,
-					amount: NET_AMOUNT,
+					amount: INPUT_AMOUNT,
 					..
 				})
 			);
@@ -342,11 +346,13 @@ fn dca_with_fok_partial_refund() {
 	const CHUNK_2_RESCHEDULED_AT_BLOCK: u64 = CHUNK_2_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 
 	const NUMBER_OF_CHUNKS: u32 = 4;
-	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
-	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT * DEFAULT_SWAP_RATE;
+	const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / NUMBER_OF_CHUNKS as u128;
+	const CHUNK_BROKER_FEE: AssetAmount = CHUNK_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
+	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
+	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
 
 	// The test will be set up as to execute one chunk only and refund the rest
-	const REFUNDED_AMOUNT: AssetAmount = NET_AMOUNT - CHUNK_AMOUNT;
+	const REFUNDED_AMOUNT: AssetAmount = INPUT_AMOUNT - CHUNK_AMOUNT;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -403,7 +409,7 @@ fn dca_with_fok_partial_refund() {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
+					input_amount: CHUNK_AMOUNT_AFTER_FEE,
 					output_amount: CHUNK_OUTPUT,
 					..
 				})
@@ -491,7 +497,13 @@ fn dca_with_fok_fully_executed() {
 	const CHUNK_1_RETRY_BLOCK: u64 = CHUNK_1_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_RETRY_BLOCK + CHUNK_INTERVAL as u64;
 	const NUMBER_OF_CHUNKS: u32 = 2;
-	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
+
+	const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / NUMBER_OF_CHUNKS as u128;
+	const CHUNK_BROKER_FEE: AssetAmount = CHUNK_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
+	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
+	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
+
+	const TOTAL_OUTPUT: AssetAmount = CHUNK_OUTPUT * 2;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -504,7 +516,7 @@ fn dca_with_fok_fully_executed() {
 				}),
 				Some(TestRefundParams {
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
-					min_output: INPUT_AMOUNT,
+					min_output: CHUNK_OUTPUT,
 				}),
 				false,
 			)]);
@@ -568,7 +580,7 @@ fn dca_with_fok_fully_executed() {
 		})
 		.then_execute_at_block(CHUNK_1_RETRY_BLOCK, |_| {
 			// Set the price back to normal, so that the fist chunk is successful
-			SwapRate::set(1.0);
+			SwapRate::set(DEFAULT_SWAP_RATE as f64);
 		})
 		.then_execute_with(|_| {
 			assert_event_sequence!(
@@ -576,8 +588,9 @@ fn dca_with_fok_fully_executed() {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
-					output_amount: CHUNK_AMOUNT,
+					input_amount: CHUNK_AMOUNT_AFTER_FEE,
+					output_amount: CHUNK_OUTPUT,
+					broker_fee: CHUNK_BROKER_FEE,
 					..
 				}),
 				// Second chunk should be scheduled 2 blocks after the first is executed:
@@ -597,7 +610,7 @@ fn dca_with_fok_fully_executed() {
 					remaining_input_amount: 0,
 					remaining_chunks: 0,
 					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: CHUNK_AMOUNT
+					accumulated_output_amount: CHUNK_OUTPUT
 				}
 			);
 		})
@@ -610,15 +623,15 @@ fn dca_with_fok_fully_executed() {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 2,
-					input_amount: CHUNK_AMOUNT,
-					output_amount: CHUNK_AMOUNT,
+					input_amount: CHUNK_AMOUNT_AFTER_FEE,
+					output_amount: CHUNK_OUTPUT,
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					asset: OUTPUT_ASSET,
-					// full amount should be egressed:
-					amount: NET_AMOUNT,
+					// Total amount from all chunks should be egressed:
+					amount: TOTAL_OUTPUT,
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
@@ -637,11 +650,13 @@ fn dca_with_ccm_happy_path() {
 	// and we apply the default swap delay to them (rather than chunk interval)
 	const GAS_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
-	const PRINCIPAL_AMOUNT: AssetAmount = NET_AMOUNT - GAS_BUDGET;
+	const PRINCIPAL_AMOUNT: AssetAmount = INPUT_AMOUNT - GAS_BUDGET;
 
 	const CHUNK_AMOUNT: AssetAmount = PRINCIPAL_AMOUNT / 2;
+	const CHUNK_BROKER_FEE: AssetAmount = CHUNK_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
+	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
 
-	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT * DEFAULT_SWAP_RATE;
+	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -701,7 +716,7 @@ fn dca_with_ccm_happy_path() {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
+					input_amount: CHUNK_AMOUNT_AFTER_FEE,
 					output_amount: CHUNK_OUTPUT,
 					..
 				}),
@@ -730,7 +745,7 @@ fn dca_with_ccm_happy_path() {
 					remaining_input_amount: 0,
 					remaining_chunks: 0,
 					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: CHUNK_AMOUNT * DEFAULT_SWAP_RATE
+					accumulated_output_amount: CHUNK_OUTPUT
 				}
 			);
 
@@ -778,7 +793,7 @@ fn dca_with_ccm_happy_path() {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: 2,
-					input_amount: CHUNK_AMOUNT,
+					input_amount: CHUNK_AMOUNT_AFTER_FEE,
 					output_amount: CHUNK_OUTPUT,
 					..
 				}),
@@ -791,11 +806,7 @@ fn dca_with_ccm_happy_path() {
 				}),
 			);
 
-			ccm::assert_ccm_egressed(
-				OUTPUT_ASSET,
-				PRINCIPAL_AMOUNT * DEFAULT_SWAP_RATE,
-				GAS_BUDGET * DEFAULT_SWAP_RATE,
-			)
+			ccm::assert_ccm_egressed(OUTPUT_ASSET, CHUNK_OUTPUT * 2, GAS_BUDGET * DEFAULT_SWAP_RATE)
 		});
 }
 
