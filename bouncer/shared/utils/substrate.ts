@@ -412,7 +412,7 @@ export function observeEvent<T = any>(
     chain = 'chainflip',
     test = () => true,
     finalized = false,
-    historicalCheckBlocks: historicCheckBlocks = 0,
+    historicalCheckBlocks = 0,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
 ): SingleEventObserver<T> | SingleEventAbortableObserver<T> {
@@ -421,7 +421,7 @@ export function observeEvent<T = any>(
       chain,
       test,
       finalized,
-      historicalCheckBlocks: historicCheckBlocks,
+      historicalCheckBlocks,
       abortable,
     });
 
@@ -435,7 +435,7 @@ export function observeEvent<T = any>(
     chain,
     test,
     finalized,
-    historicalCheckBlocks: historicCheckBlocks,
+    historicalCheckBlocks,
     abortable,
   });
 
