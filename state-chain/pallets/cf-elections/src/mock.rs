@@ -53,7 +53,7 @@ impl pallet_cf_elections::Config<Instance1> for Test {
 
 	// Use the median electoral system as a simple way to test the election pallet
 	// TODO: Use Settings?
-	type ElectoralSystem = electoral_systems::median::UnsafeMedian<u64, (), ()>;
+	type ElectoralSystem = electoral_systems::unsafe_median::UnsafeMedian<u64, (), ()>;
 }
 
 impl_mock_chainflip!(Test);
