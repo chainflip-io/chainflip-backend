@@ -341,6 +341,7 @@ struct CcmState {
 	ccm_deposit_metadata: CcmDepositMetadata,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(CloneNoBound, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 enum SwapRequestState<T: Config> {
@@ -1261,7 +1262,7 @@ pub mod pallet {
 					let fee =
 						Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) * stable_amount;
 
-					EarnedBrokerFees::<T>::mutate(&account, STABLE_ASSET, |earned_fees| {
+					EarnedBrokerFees::<T>::mutate(account, STABLE_ASSET, |earned_fees| {
 						earned_fees.saturating_accrue(fee)
 					});
 
@@ -1298,7 +1299,7 @@ pub mod pallet {
 						},
 						FeeType::BrokerFee(beneficiaries) => {
 							let FeeTaken { remaining_amount, fee } =
-								Self::take_broker_fees(stable_amount, &beneficiaries);
+								Self::take_broker_fees(stable_amount, beneficiaries);
 							swap.broker_fee_taken = Some(fee);
 							remaining_amount
 						},
@@ -1387,9 +1388,9 @@ pub mod pallet {
 					ccm,
 					output_address,
 					dca_state: DcaState { remaining_input_amount, accumulated_output_amount, .. },
-					broker_fees,
+					broker_fees: _,
 				} => {
-					if let Some(ccm) = ccm {
+					if let Some(_ccm) = ccm {
 						// TODO: add remaining DCA input to the refunded amount (DCA isn't yet
 						// implemented for CCM so we always refund the full amount)
 						Self::egress_for_swap(
@@ -1539,6 +1540,7 @@ pub mod pallet {
 							false
 						}
 					} else {
+						#[allow(clippy::collapsible_if)] // collapsing makes non-ccm case less clear
 						if let Some(chunk_input_amount) =
 							dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
 						{
