@@ -27,8 +27,7 @@ fn get_dca_state(request_id: SwapRequestId) -> DcaState {
 		.expect("request state does not exist")
 		.state
 	{
-		SwapRequestState::Ccm { dca_state, .. } => dca_state,
-		SwapRequestState::Regular { dca_state, .. } => dca_state,
+		SwapRequestState::UserSwap { dca_state, .. } => dca_state,
 		other => {
 			panic!("DCA not supported for {other:?}")
 		},
@@ -36,11 +35,11 @@ fn get_dca_state(request_id: SwapRequestId) -> DcaState {
 }
 
 fn get_ccm_gas_state(request_id: SwapRequestId) -> GasSwapState {
-	if let SwapRequestState::Ccm { gas_swap_state, .. } = SwapRequests::<Test>::get(request_id)
+	if let SwapRequestState::UserSwap { ccm: Some(ccm), .. } = SwapRequests::<Test>::get(request_id)
 		.expect("request state does not exist")
 		.state
 	{
-		gas_swap_state
+		ccm.gas_swap_state
 	} else {
 		panic!("Not a CCM swap");
 	}
