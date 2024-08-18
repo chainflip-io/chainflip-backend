@@ -55,8 +55,21 @@ fn setup_sol_environments() {
 
 	pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::internally_initialize(
 		(/* chain tracking */ Default::default(), /* priority_fee */ COMPUTE_PRICE, ()),
-		((), solana_elections::SolanaFeeSettings { fee_multiplier: FixedU128::from_u32(1u32) }, ()),
-		((), (), ()),
+		(
+			(),
+			solana_elections::SolanaFeeUnsynchronisedSettings {
+				fee_multiplier: FixedU128::from_u32(1u32),
+			},
+			(),
+		),
+		(
+			(),
+			(),
+			solana_elections::SolanaIngressSettings {
+				vault_program: sol_test_values::VAULT_PROGRAM,
+				usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
+			},
+		),
 	)
 	.unwrap();
 
