@@ -16,8 +16,7 @@ fn happy_path_vote_and_consensus() {
 	const NEW_DATA: u64 = 23;
 
 	fn submit_vote_for(validator_id: u64) {
-		let electoral_data =
-			Pallet::<Test, Instance1>::authority_electoral_data(&validator_id).unwrap();
+		let electoral_data = Pallet::<Test, Instance1>::electoral_data(&validator_id).unwrap();
 
 		for (election_identifier, _election_data) in electoral_data.current_elections {
 			Pallet::<Test, Instance1>::vote(
@@ -33,7 +32,6 @@ fn happy_path_vote_and_consensus() {
 					.collect::<BTreeMap<_, _>>(),
 				)
 				.unwrap(),
-				electoral_data.current_vote_sync_barrier.clone().unwrap(),
 			)
 			.unwrap();
 		}
@@ -54,20 +52,10 @@ fn happy_path_vote_and_consensus() {
 		.then_execute_at_next_block(|()| {
 			assert_eq!(Status::<Test, Instance1>::get(), Some(ElectoralSystemStatus::Running));
 
-			// TODO: Test the sync barrier
-			// Set a synchronisation barrier for all the authorities
-			let zero_sync_barrier = VoteSynchronisationBarrier::from_u32(0);
 			let current_authorities = MockEpochInfo::current_authorities();
 			for validator_id in current_authorities.clone() {
-				Pallet::<Test, Instance1>::ignore_my_votes(
-					RawOrigin::Signed(validator_id).into(),
-					zero_sync_barrier.clone(),
-				)
-				.unwrap();
-
 				Pallet::<Test, Instance1>::stop_ignoring_my_votes(
 					RawOrigin::Signed(validator_id).into(),
-					zero_sync_barrier.clone(),
 				)
 				.unwrap()
 			}
