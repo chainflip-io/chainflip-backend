@@ -1852,6 +1852,7 @@ dependencies = [
  "pallet-cf-broadcast",
  "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",
+ "pallet-cf-elections",
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-funding",
