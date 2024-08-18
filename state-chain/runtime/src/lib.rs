@@ -1130,6 +1130,8 @@ pub type PalletExecutionOrder = (
 	PolkadotChainTracking,
 	BitcoinChainTracking,
 	ArbitrumChainTracking,
+	// Elections
+	SolanaElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
