@@ -12,7 +12,11 @@ use cf_traits::IngressSink;
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cmp::Ordering;
-use frame_support::storage::bounded_btree_map::BoundedBTreeMap;
+use frame_support::{
+	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	storage::bounded_btree_map::BoundedBTreeMap,
+	Parameter,
+};
 use scale_info::TypeInfo;
 use sp_core::ConstU32;
 use sp_std::{
@@ -40,10 +44,13 @@ pub struct OpenChannelDetails<TargetChain: Chain> {
 	close_block: <TargetChain as Chain>::ChainBlockNumber,
 }
 
-pub struct DeltaBasedIngress<Sink: IngressSink> {
-	_phantom: core::marker::PhantomData<Sink>,
+pub struct DeltaBasedIngress<Sink: IngressSink, Settings> {
+	_phantom: core::marker::PhantomData<(Sink, Settings)>,
 }
-impl<Sink: IngressSink + 'static> DeltaBasedIngress<Sink>
+impl<
+		Sink: IngressSink + 'static,
+		Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
+	> DeltaBasedIngress<Sink, Settings>
 where
 	<Sink::Chain as Chain>::DepositDetails: Default,
 {
@@ -88,7 +95,10 @@ where
 		Ok(())
 	}
 }
-impl<Sink: IngressSink + 'static> ElectoralSystem for DeltaBasedIngress<Sink>
+impl<
+		Sink: IngressSink + 'static,
+		Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
+	> ElectoralSystem for DeltaBasedIngress<Sink, Settings>
 where
 	<Sink::Chain as Chain>::DepositDetails: Default,
 {
@@ -102,8 +112,7 @@ where
 	type ElectoralUnsynchronisedStateMapValue = ChannelTotalIngressed<Sink::Chain>;
 
 	type ElectoralUnsynchronisedSettings = ();
-	// SafetyMargins
-	type ElectoralSettings = (); // Add Validity fn check for settings
+	type ElectoralSettings = Settings;
 	type ElectionIdentifierExtra = u32;
 
 	// Stores the channels a given election is witnessing, and a recent total ingressed value.

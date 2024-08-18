@@ -1,6 +1,8 @@
 use crate::Runtime;
 use cf_chains::{
-	instances::ChainInstanceAlias, sol::SolTrackedData, Chain, FeeEstimationApi, Solana,
+	instances::ChainInstanceAlias,
+	sol::{SolAddress, SolTrackedData},
+	Chain, FeeEstimationApi, Solana,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{AdjustedFeeEstimationApi, GetBlockHeight, IngressSource};
@@ -25,13 +27,18 @@ pub type SolanaElectoralSystem = Composite<
 	SolanaElectionHooks,
 >;
 
-type SolanaBlockHeightTracking =
+pub type SolanaBlockHeightTracking =
 	electoral_systems::median::MonotonicMedian<<Solana as Chain>::ChainBlockNumber, ()>;
-type SolanaFeeTracking =
-	electoral_systems::median::UnsafeMedian<<Solana as Chain>::ChainAmount, SolanaFeeSettings, ()>;
-type SolanaIngressTracking = electoral_systems::blockchain::delta_based_ingress::DeltaBasedIngress<
-	pallet_cf_ingress_egress::Pallet<Runtime, Instance>,
+pub type SolanaFeeTracking = electoral_systems::median::UnsafeMedian<
+	<Solana as Chain>::ChainAmount,
+	SolanaFeeUnsynchronisedSettings,
+	(),
 >;
+pub type SolanaIngressTracking =
+	electoral_systems::blockchain::delta_based_ingress::DeltaBasedIngress<
+		pallet_cf_ingress_egress::Pallet<Runtime, Instance>,
+		SolanaIngressSettings,
+	>;
 
 pub struct SolanaElectionHooks;
 
@@ -90,8 +97,14 @@ impl Hooks<SolanaBlockHeightTracking, SolanaFeeTracking, SolanaIngressTracking>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
-pub struct SolanaFeeSettings {
+pub struct SolanaFeeUnsynchronisedSettings {
 	pub fee_multiplier: FixedU128,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+pub struct SolanaIngressSettings {
+	pub vault_program: SolAddress,
+	pub usdc_token_mint_pubkey: SolAddress,
 }
 
 pub struct SolanaChainTracking;
