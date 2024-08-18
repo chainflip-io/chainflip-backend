@@ -292,14 +292,14 @@ mod access {
 		/// This will change the `ElectionIdentifierExtra` value of the election, and allows you to
 		/// optionally change the properties. Note the `extra` must be strictly greater than the
 		/// previous value of this election, this function will return `Err` if it is not. This
-		/// ensures that all `ES::ElectionIdentifierExtra` ever used by a particular election are
-		/// unique. The purpose of this function to in effect allow the deletion and recreation of
-		/// an election so you can change its `Properties`, while efficiently transferring the
-		/// existing election's votes to the new election. The only difference is that here the
-		/// elections `Settings` will not be updated to the latest. This could create a problem if
-		/// you never delete elections, as old `Settings` values will be stored until any elections
-		/// referencing them are deleted. Any in-flight authority votes will be invalidated
-		/// by this.
+		/// ensures that all `Self::ElectoralSystem::ElectionIdentifierExtra` ever used by a
+		/// particular election are unique. The purpose of this function to in effect allow the
+		/// deletion and recreation of an election so you can change its `Properties`, while
+		/// efficiently transferring the existing election's votes to the new election. The only
+		/// difference is that here the elections `Settings` will not be updated to the latest. This
+		/// could create a problem if you never delete elections, as old `Settings` values will be
+		/// stored until any elections referencing them are deleted. Any in-flight authority votes
+		/// will be invalidated by this.
 		fn refresh(
 			&mut self,
 			extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
