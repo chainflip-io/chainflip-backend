@@ -289,3 +289,15 @@ decl_runtime_apis!(
 		fn cf_max_swap_retry_duration_blocks(chain: ForeignChain) -> u32;
 	}
 );
+
+decl_runtime_apis!(
+	pub trait ElectoralRuntimeApi<Instance: 'static> {
+		/// Returns SCALE encoded `Option<AuthorityElectoralDataFor<state_chain_runtime::Runtime,
+		/// Instance>>`
+		fn cf_authority_electoral_data(account_id: AccountId32) -> Vec<u8>;
+
+		/// Returns SCALE encoded `BTreeSet<ElectionIdentifierOf<<state_chain_runtime::Runtime as
+		/// pallet_cf_elections::Config<Instance>>::ElectoralSystem>>`
+		fn cf_filter_votes(account_id: AccountId32, proposed_votes: Vec<u8>) -> Vec<u8>;
+	}
+);

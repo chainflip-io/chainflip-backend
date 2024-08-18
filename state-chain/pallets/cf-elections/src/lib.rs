@@ -139,7 +139,10 @@ pub mod pallet {
 		StorageDoubleMap as _,
 	};
 	use itertools::Itertools;
-	use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+	use sp_std::{
+		collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+		vec::Vec,
+	};
 	use vote_storage::{AuthorityVote, VoteComponents, VoteStorage};
 
 	pub const MAXIMUM_VOTES_PER_EXTRINSIC: u32 = 16;
@@ -170,6 +173,7 @@ pub mod pallet {
 		>,
 		pub unprovided_shared_data_hashes: BTreeMap<SharedDataHash, ReferenceDetails<BlockNumber>>,
 		pub current_vote_sync_barrier: Option<VoteSynchronisationBarrier>,
+		pub authority_count: u32,
 	}
 
 	/// This is the information exposed via RPC to the engine each block so it can decide how and
@@ -217,10 +221,12 @@ pub mod pallet {
 	}
 
 	/// The hash of the original `SharedData` information, used retrieve the original information.
-	#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+	#[derive(
+		Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode, TypeInfo,
+	)]
 	pub struct SharedDataHash(sp_core::H256);
 	impl SharedDataHash {
-		pub(crate) fn of<Vote: frame_support::Hashable>(vote: &Vote) -> Self {
+		pub fn of<Vote: frame_support::Hashable>(vote: &Vote) -> Self {
 			Self(vote.blake2_256().into())
 		}
 	}
@@ -231,7 +237,7 @@ pub mod pallet {
 	/// random values as some the in-flight extrinsics may come from previous engine runs and if the
 	/// next vote barrier was deterministic then that previous engine would in some cases try to use
 	/// the same VoteSynchronisationBarrier as the new engine run.
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+	#[derive(Debug, PartialEq, Eq, Copy, Clone, Encode, Decode, TypeInfo)]
 	pub struct VoteSynchronisationBarrier(u32);
 	#[cfg(feature = "std")]
 	impl VoteSynchronisationBarrier {
@@ -1752,16 +1758,19 @@ pub mod pallet {
 							for (shared_data_hash, _election_identifier, reference_details) in
 								SharedDataReferenceCount::<T, I>::iter()
 							{
-								// We use the first created reference
-								if unprovided_shared_data_hashes.get(&shared_data_hash).map_or(
-									true,
-									|previous_reference_details| {
-										reference_details.created <
-											previous_reference_details.created
-									},
-								) {
-									unprovided_shared_data_hashes
-										.insert(shared_data_hash, reference_details);
+								if SharedData::<T, I>::get(shared_data_hash).is_none() {
+									// We use the first created unexpired reference
+									if reference_details.created <= block_number &&
+										block_number < reference_details.expires &&
+										unprovided_shared_data_hashes
+											.get(&shared_data_hash)
+											.map_or(true, |previous_reference_details| {
+												reference_details.created <
+													previous_reference_details.created
+											}) {
+										unprovided_shared_data_hashes
+											.insert(shared_data_hash, reference_details);
+									}
 								}
 							}
 
@@ -1769,8 +1778,86 @@ pub mod pallet {
 						},
 						current_vote_sync_barrier:
 							AuthorityVoteSynchronisationBarriers::<T, I>::get(validator_id),
+						authority_count: T::EpochInfo::current_authority_count(),
 					})
 				})
+		}
+
+		pub fn authority_filter_votes(
+			validator_id: &T::ValidatorId,
+			proposed_votes: BTreeMap<
+				ElectionIdentifierOf<T::ElectoralSystem>,
+				<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote,
+			>,
+		) -> BTreeSet<ElectionIdentifierOf<T::ElectoralSystem>> {
+			use frame_support::traits::OriginTrait;
+
+			if let Some((epoch_index, authority, authority_index)) =
+				Pallet::<T, I>::ensure_can_vote(OriginFor::<T>::signed(validator_id.clone().into()))
+					.ok()
+			{
+				let block_number = frame_system::Pallet::<T>::current_block_number();
+
+				Self::with_electoral_access_and_identifiers(
+					|_electoral_access, election_identifiers| {
+						election_identifiers
+							.into_iter()
+							.map(|election_identifier| {
+								Ok((
+									election_identifier,
+									if let Some(proposed_vote) =
+										proposed_votes.get(&election_identifier)
+									{
+										let unique_monotonic_identifier =
+											*election_identifier.unique_monotonic();
+
+										let mut contains_timed_out_shared_data_references = false;
+										let option_current_authority_vote =
+											Pallet::<T, I>::get_vote(
+												epoch_index,
+												unique_monotonic_identifier,
+												&authority,
+												authority_index,
+												|unprovided_shared_data_hash| {
+													let option_reference_details =
+														SharedDataReferenceCount::<T, I>::get(
+															unprovided_shared_data_hash,
+															unique_monotonic_identifier,
+														);
+													if option_reference_details.is_none() ||
+														option_reference_details.unwrap().expires <
+															block_number
+													{
+														contains_timed_out_shared_data_references =
+															true;
+													}
+												},
+											)?;
+
+										if let Some(existing_vote) = option_current_authority_vote
+											.filter(|_| !contains_timed_out_shared_data_references)
+										{
+											<T::ElectoralSystem as ElectoralSystem>::is_vote_needed(
+												existing_vote,
+												proposed_vote.clone(),
+											)
+										} else {
+											true
+										}
+									} else {
+										false
+									},
+								))
+							})
+							.filter_ok(|(_election_identifier, needed)| *needed)
+							.map_ok(|(election_identifier, _needed)| (election_identifier))
+							.collect::<Result<BTreeSet<_>, _>>()
+					},
+				)
+				.unwrap_or_default()
+			} else {
+				Default::default()
+			}
 		}
 
 		fn recheck_contributed_to_consensuses(
