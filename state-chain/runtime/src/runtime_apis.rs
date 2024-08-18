@@ -292,9 +292,9 @@ decl_runtime_apis!(
 
 decl_runtime_apis!(
 	pub trait ElectoralRuntimeApi<Instance: 'static> {
-		/// Returns SCALE encoded `Option<AuthorityElectoralDataFor<state_chain_runtime::Runtime,
+		/// Returns SCALE encoded `Option<ElectoralDataFor<state_chain_runtime::Runtime,
 		/// Instance>>`
-		fn cf_authority_electoral_data(account_id: AccountId32) -> Vec<u8>;
+		fn cf_electoral_data(account_id: AccountId32) -> Vec<u8>;
 
 		/// Returns SCALE encoded `BTreeSet<ElectionIdentifierOf<<state_chain_runtime::Runtime as
 		/// pallet_cf_elections::Config<Instance>>::ElectoralSystem>>`

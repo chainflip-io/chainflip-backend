@@ -1825,7 +1825,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
 		let runtime_api = self.client.runtime_api();
-		ElectoralRuntimeApi::<_, SolanaInstance>::cf_authority_electoral_data(
+		ElectoralRuntimeApi::<_, SolanaInstance>::cf_electoral_data(
 			&*runtime_api,
 			self.unwrap_or_best(at),
 			validator,

@@ -160,13 +160,7 @@ pub mod pallet {
 	}
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
-	pub struct AuthorityElectoralData<
-		ElectionIdentifier,
-		Settings,
-		Properties,
-		AuthorityVote,
-		BlockNumber,
-	> {
+	pub struct ElectoralData<ElectionIdentifier, Settings, Properties, AuthorityVote, BlockNumber> {
 		pub current_elections: BTreeMap<
 			ElectionIdentifier,
 			AuthorityElectionData<Settings, Properties, AuthorityVote>,
@@ -179,7 +173,7 @@ pub mod pallet {
 	/// This is the information exposed via RPC to the engine each block so it can decide how and
 	/// when to vote.
 	#[allow(type_alias_bounds)]
-	pub type AuthorityElectoralDataFor<T: Config<I>, I: 'static> = AuthorityElectoralData<
+	pub type ElectoralDataFor<T: Config<I>, I: 'static> = ElectoralData<
 		ElectionIdentifierOf<T::ElectoralSystem>,
 		<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
 		<T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
@@ -1681,9 +1675,7 @@ pub mod pallet {
 		/// Returns all the current elections (with their details), the validators current votes and
 		/// if the validator should vote in each election.
 		#[allow(clippy::type_complexity)]
-		pub fn authority_electoral_data(
-			validator_id: &T::ValidatorId,
-		) -> Option<AuthorityElectoralDataFor<T, I>> {
+		pub fn electoral_data(validator_id: &T::ValidatorId) -> Option<ElectoralDataFor<T, I>> {
 			use frame_support::traits::OriginTrait;
 
 			Pallet::<T, I>::ensure_can_vote(OriginFor::<T>::signed(validator_id.clone().into()))
@@ -1691,7 +1683,7 @@ pub mod pallet {
 				.and_then(|(epoch_index, authority, authority_index)| {
 					let block_number = frame_system::Pallet::<T>::current_block_number();
 
-					Some(AuthorityElectoralData {
+					Some(ElectoralData {
 						current_elections: Self::with_electoral_access_and_identifiers(
 							|electoral_access, election_identifiers| {
 								election_identifiers
@@ -1783,7 +1775,7 @@ pub mod pallet {
 				})
 		}
 
-		pub fn authority_filter_votes(
+		pub fn filter_votes(
 			validator_id: &T::ValidatorId,
 			proposed_votes: BTreeMap<
 				ElectionIdentifierOf<T::ElectoralSystem>,
