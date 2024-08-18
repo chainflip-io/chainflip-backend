@@ -57,6 +57,10 @@ impl<Key: Ord + Copy, Fut: Future + Unpin> FutureMap<Key, Fut> {
 		}
 	}
 
+	pub fn contains_key(&self, key: &Key) -> bool {
+		self.keys.contains(key)
+	}
+
 	pub fn len(&self) -> usize {
 		self.keys.len()
 	}

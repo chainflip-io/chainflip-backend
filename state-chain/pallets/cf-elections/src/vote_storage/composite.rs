@@ -1,6 +1,6 @@
 macro_rules! generate_vote_storage_tuple_impls {
     ($module:ident: ($($t:ident),*$(,)?)) => {
-        pub(crate) mod $module {
+        pub mod $module {
             #[allow(unused_imports)]
             use crate::{CorruptStorageError, SharedDataHash};
 
