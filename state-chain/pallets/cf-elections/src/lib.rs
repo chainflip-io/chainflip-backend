@@ -166,7 +166,7 @@ pub mod pallet {
 			AuthorityElectionData<Settings, Properties, AuthorityVote>,
 		>,
 		pub unprovided_shared_data_hashes: BTreeMap<SharedDataHash, ReferenceDetails<BlockNumber>>,
-		pub current_vote_sync_barrier: Option<VoteSynchronisationBarrier>,
+		pub contributing: bool,
 		pub authority_count: u32,
 	}
 
@@ -222,26 +222,6 @@ pub mod pallet {
 	impl SharedDataHash {
 		pub fn of<Vote: frame_support::Hashable>(vote: &Vote) -> Self {
 			Self(vote.blake2_256().into())
-		}
-	}
-
-	/// This is a value associated with each authority and every in-flight authority vote. The
-	/// authority can ensure invalidation of in-flight authority votes by changing its
-	/// VoteSynchronisationBarrier value, so that any in-flight no longer match the value. We use
-	/// random values as some the in-flight extrinsics may come from previous engine runs and if the
-	/// next vote barrier was deterministic then that previous engine would in some cases try to use
-	/// the same VoteSynchronisationBarrier as the new engine run.
-	#[derive(Debug, PartialEq, Eq, Copy, Clone, Encode, Decode, TypeInfo)]
-	pub struct VoteSynchronisationBarrier(u32);
-	#[cfg(feature = "std")]
-	impl VoteSynchronisationBarrier {
-		pub fn new(rng: &mut impl rand::Rng) -> Self {
-			VoteSynchronisationBarrier(rng.gen())
-		}
-
-		#[cfg(test)]
-		pub fn from_u32(value: u32) -> Self {
-			VoteSynchronisationBarrier(value)
 		}
 	}
 
@@ -321,13 +301,13 @@ pub mod pallet {
 		AlreadyInitialized,
 		UnknownElection,
 		Unauthorised,
-		MismatchedBarrier,
 		Paused,
 		NotPaused,
 		UnreferencedSharedData,
 		CorruptStorage,
 		VotesNotCleared,
 		InvalidVote,
+		NotContributing,
 		NoVotesSpecified,
 	}
 
@@ -509,16 +489,6 @@ pub mod pallet {
 	#[pallet::storage]
 	type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
-
-	/// Votes will only be allowed if their `VoteSynchronisationBarrier` matches this value,
-	/// therefore authorities can invalidate in-flight votes by changing this value via an
-	/// extrinsic. Once they do that they can be confident that no old votes will be included, at
-	/// any block after the extrinsic is included. This allows validators to be able to ensure their
-	/// votes will not change, so they can delete/correct bad votes after detecting a problem for
-	/// example a reorg.
-	#[pallet::storage]
-	type AuthorityVoteSynchronisationBarriers<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::ValidatorId, VoteSynchronisationBarrier, OptionQuery>;
 
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
 	/// this is None, the pallet is considered uninitialized.
@@ -1168,16 +1138,13 @@ pub mod pallet {
 				AuthorityVoteOf<T::ElectoralSystem>,
 				ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
 			>,
-			vote_sync_barrier: VoteSynchronisationBarrier,
 		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
 			ensure!(!authority_votes.is_empty(), Error::<T, I>::NoVotesSpecified);
 			ensure!(
-				AuthorityVoteSynchronisationBarriers::<T, I>::get(&authority)
-					.map_or(false, |current_vote_sync_barrier| current_vote_sync_barrier ==
-						vote_sync_barrier),
-				Error::<T, I>::MismatchedBarrier,
+				ContributingAuthorities::<T, I>::contains_key(&authority),
+				Error::<T, I>::NotContributing
 			);
 
 			for (election_identifier, authority_vote) in authority_votes {
@@ -1290,34 +1257,20 @@ pub mod pallet {
 
 		#[pallet::call_index(2)]
 		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
-		pub fn ignore_my_votes(
-			origin: OriginFor<T>,
-			new_vote_sync_barrier: VoteSynchronisationBarrier,
-		) -> DispatchResult {
+		pub fn ignore_my_votes(origin: OriginFor<T>) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
 			if ContributingAuthorities::<T, I>::take(&authority).is_some() {
 				Self::recheck_contributed_to_consensuses(epoch_index, &authority, authority_index)?;
 			}
 
-			AuthorityVoteSynchronisationBarriers::<T, I>::insert(authority, new_vote_sync_barrier);
-
 			Ok(())
 		}
 
 		#[pallet::call_index(3)]
 		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
-		pub fn stop_ignoring_my_votes(
-			origin: OriginFor<T>,
-			vote_sync_barrier: VoteSynchronisationBarrier,
-		) -> DispatchResult {
+		pub fn stop_ignoring_my_votes(origin: OriginFor<T>) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
-			ensure!(
-				AuthorityVoteSynchronisationBarriers::<T, I>::get(&authority)
-					.map_or(false, |current_vote_sync_barrier| current_vote_sync_barrier ==
-						vote_sync_barrier),
-				Error::<T, I>::MismatchedBarrier,
-			);
 
 			if !ContributingAuthorities::<T, I>::contains_key(&authority) {
 				Self::recheck_contributed_to_consensuses(epoch_index, &authority, authority_index)?;
@@ -1582,16 +1535,6 @@ pub mod pallet {
 											ContributingAuthorities::<T, I>::remove(validator);
 										}
 									}
-									for validator in
-										AuthorityVoteSynchronisationBarriers::<T, I>::iter_keys()
-											.collect::<Vec<_>>()
-									{
-										if !current_authorities.contains(&validator) {
-											AuthorityVoteSynchronisationBarriers::<T, I>::remove(
-												validator,
-											);
-										}
-									}
 								}
 
 								T::ElectoralSystem::on_finalize(
@@ -1768,8 +1711,7 @@ pub mod pallet {
 
 							unprovided_shared_data_hashes
 						},
-						current_vote_sync_barrier:
-							AuthorityVoteSynchronisationBarriers::<T, I>::get(validator_id),
+						contributing: ContributingAuthorities::<T, I>::contains_key(&authority),
 						authority_count: T::EpochInfo::current_authority_count(),
 					})
 				})
