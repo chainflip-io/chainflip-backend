@@ -1259,12 +1259,12 @@ mod benches {
 
 impl_runtime_apis! {
 	impl runtime_apis::ElectoralRuntimeApi<Block, SolanaInstance> for Runtime {
-		fn cf_authority_electoral_data(account_id: AccountId) -> Vec<u8> {
-			SolanaElections::authority_electoral_data(&account_id).encode()
+		fn cf_electoral_data(account_id: AccountId) -> Vec<u8> {
+			SolanaElections::electoral_data(&account_id).encode()
 		}
 
 		fn cf_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
-			SolanaElections::authority_filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+			SolanaElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
 	}
 
