@@ -179,10 +179,19 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			),
 			(
 				(),
-				solana_elections::SolanaFeeSettings { fee_multiplier: FixedU128::from_u32(1u32) },
+				solana_elections::SolanaFeeUnsynchronisedSettings {
+					fee_multiplier: FixedU128::from_u32(1u32),
+				},
 				(),
 			),
-			((), (), ()),
+			(
+				(),
+				(),
+				solana_elections::SolanaIngressSettings {
+					vault_program: sol_env.vault_program,
+					usdc_token_mint_pubkey: sol_env.usdc_token_mint_pubkey,
+				},
+			),
 		);
 		Weight::zero()
 	}
