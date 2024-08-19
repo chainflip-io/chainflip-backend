@@ -1775,9 +1775,8 @@ pub mod pallet {
 		) -> BTreeSet<ElectionIdentifierOf<T::ElectoralSystem>> {
 			use frame_support::traits::OriginTrait;
 
-			if let Some((epoch_index, authority, authority_index)) =
+			if let Ok((epoch_index, authority, authority_index)) =
 				Pallet::<T, I>::ensure_can_vote(OriginFor::<T>::signed(validator_id.clone().into()))
-					.ok()
 			{
 				let block_number = frame_system::Pallet::<T>::current_block_number();
 
