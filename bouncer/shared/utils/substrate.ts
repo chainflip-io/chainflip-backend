@@ -1,7 +1,7 @@
 import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
-import { deferredPromise } from '../utils';
+import { deferredPromise, sleep } from '../utils';
 
 // @ts-expect-error polyfilling
 Symbol.asyncDispose ??= Symbol('asyncDispose');
@@ -124,46 +124,96 @@ function mapEvents(events: any[], blockNumber: number): Event[] {
 }
 
 class EventCache {
-  // TODO: Support for reorgs
-  private cache: Map<number, Event[]>;
+  private cache: Map<string, Event[]>;
+
+  private blockNumberToHash: Map<number, string>;
 
   private cacheSizeBlocks: number;
 
   private chain: SubstrateChain;
 
+  private finalisedBlockNumber: number | undefined;
+
+  private pendingRequests: number[];
+
   constructor(cacheSizeBlocks: number, chain: SubstrateChain) {
     this.cache = new Map();
+    this.blockNumberToHash = new Map();
     this.cacheSizeBlocks = cacheSizeBlocks;
     this.chain = chain;
+    this.finalisedBlockNumber = undefined;
+    this.pendingRequests = [];
   }
 
-  addEvents(blockNumber: number, events: Event[]) {
-    if (this.cache.has(blockNumber)) {
+  addEvents(blockHash: string, events: Event[], isFinalised = false) {
+    if (this.cache.has(blockHash)) {
       return; // Event already in cache
     }
-    this.cache.set(blockNumber, events);
+    // Removed old block with different hash
+    const blockNumber = events[0].block;
+    if (this.blockNumberToHash.has(blockNumber)) {
+      this.cache.delete(this.blockNumberToHash.get(blockNumber)!);
+      this.blockNumberToHash.delete(blockNumber);
+    }
+
+    // Add new block to cache
+    this.cache.set(blockHash, events);
+    this.blockNumberToHash.set(blockNumber, blockHash);
+    if (isFinalised) {
+      this.finalisedBlockNumber = blockNumber;
+    }
 
     // Remove old blocks to maintain cache size
     if (this.cache.size > this.cacheSizeBlocks) {
-      const oldestBlock = Array.from(this.cache.keys()).sort((a, b) => a - b)[0];
-      this.cache.delete(oldestBlock);
+      const oldestBlockNumber = Array.from(this.blockNumberToHash.keys()).reduce(
+        (oldest, current) => (current < oldest! ? current : oldest),
+      );
+      this.cache.delete(this.blockNumberToHash.get(oldestBlockNumber)!);
+      this.blockNumberToHash.delete(oldestBlockNumber);
     }
   }
 
   async getEvents(fromBlock: number, toBlock: number): Promise<Event[]> {
     const api = await apiMap[this.chain]();
     const events: Event[] = [];
-    for (let i = fromBlock; i <= toBlock; i++) {
-      if (this.cache.has(i)) {
-        events.push(...this.cache.get(i)!);
-      } else {
-        const blockHash = await api.rpc.chain.getBlockHash(i);
-        const historicApi = await api.at(blockHash);
 
+    // Update the finalised block number if needed
+    if (this.finalisedBlockNumber === undefined || this.finalisedBlockNumber! < toBlock) {
+      const newFinalisedHash = await api.rpc.chain.getFinalizedHead();
+      this.finalisedBlockNumber = (
+        await api.rpc.chain.getHeader(newFinalisedHash)
+      ).number.toNumber();
+    }
+
+    // Get events from cache or fetch them from the node
+    for (let i = fromBlock; i <= toBlock; i++) {
+      let blockHash = this.blockNumberToHash.get(i);
+      // No need to fetch the hash if it is already finalised and in the cache
+      if (
+        blockHash === undefined ||
+        this.finalisedBlockNumber === undefined ||
+        i > this.finalisedBlockNumber!
+      ) {
+        blockHash = (await api.rpc.chain.getBlockHash(i)).toString();
+      }
+      // Wait for the block to be fetched if someone else already requested it
+      let timeout = 0;
+      while (this.pendingRequests.includes(i)) {
+        if (timeout++ > 50) {
+          break;
+        }
+        await sleep(100);
+      }
+      if (this.cache.has(blockHash)) {
+        events.push(...this.cache.get(blockHash)!);
+      } else {
+        this.pendingRequests.push(i);
+        const historicApi = await api.at(blockHash);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
         const mappedEvents = mapEvents(rawEvents, i);
-        this.addEvents(i, mappedEvents);
+        this.addEvents(blockHash, mappedEvents);
+        this.pendingRequests = this.pendingRequests.filter((block) => block !== i);
         events.push(...mappedEvents);
       }
     }
@@ -257,7 +307,7 @@ const subscribeHeads = getCachedDisposable(
       const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
       const mappedEvents = mapEvents(rawEvents, header.number.toNumber());
       const cache = eventCacheMap[chain];
-      cache.addEvents(header.number.toNumber(), mappedEvents);
+      cache.addEvents(header.hash.toString(), mappedEvents, finalized);
       subject.next(mappedEvents);
     });
 
