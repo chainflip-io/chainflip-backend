@@ -140,6 +140,28 @@ where
 	type OnFinalizeContext = <Sink::Chain as Chain>::ChainBlockNumber;
 	type OnFinalizeReturn = ();
 
+	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
+		_election_identifier_with_extra: ElectionIdentifier<Self::ElectionIdentifierExtra>,
+		_election_access: &ElectionAccess,
+		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+	) -> Result<bool, CorruptStorageError> {
+		Ok(true)
+	}
+
+	fn is_vote_needed(
+		(_, current_partial_vote, _): (
+			VotePropertiesOf<Self>,
+			<Self::Vote as VoteStorage>::PartialVote,
+			AuthorityVoteOf<Self>,
+		),
+		(proposed_partial_vote, _): (
+			<Self::Vote as VoteStorage>::PartialVote,
+			<Self::Vote as VoteStorage>::Vote,
+		),
+	) -> bool {
+		current_partial_vote != proposed_partial_vote
+	}
+
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
