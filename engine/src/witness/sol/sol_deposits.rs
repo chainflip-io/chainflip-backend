@@ -432,6 +432,7 @@ mod tests {
 
 	use super::*;
 
+	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn test_get_deposit_channels_info() {
 		task_scope::task_scope(|scope| {
@@ -557,6 +558,7 @@ mod tests {
 		.unwrap();
 	}
 
+	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	#[should_panic]
 	async fn test_fail_erroneus_fetch_account() {
