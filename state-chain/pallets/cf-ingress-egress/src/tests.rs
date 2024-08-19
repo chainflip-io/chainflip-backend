@@ -30,7 +30,7 @@ use cf_traits::{
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
 	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
-	ScheduledEgressDetails, SwapRequestType, SwapRequestValidationProvider,
+	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_ok,
@@ -485,7 +485,7 @@ fn test_refund_parameter_validation() {
 
 	new_test_ext().execute_with(|| {
 		let max_swap_retry_duration_blocks =
-			<Test as crate::pallet::Config>::SwapLimitsProvider::get_swap_request_limits()
+			<Test as crate::pallet::Config>::SwapLimitsProvider::get_swap_limits()
 				.max_swap_retry_duration_blocks;
 
 		assert_ok!(request_fok_swap(0));
@@ -517,7 +517,7 @@ fn test_dca_parameter_validation() {
 	new_test_ext().execute_with(|| {
 		const MIN_CHUNK_INTERVAL: u32 = SWAP_DELAY_BLOCKS;
 		let max_swap_request_duration_blocks =
-			<Test as crate::pallet::Config>::SwapLimitsProvider::get_swap_request_limits()
+			<Test as crate::pallet::Config>::SwapLimitsProvider::get_swap_limits()
 				.max_swap_request_duration_blocks;
 
 		// Trivially ok

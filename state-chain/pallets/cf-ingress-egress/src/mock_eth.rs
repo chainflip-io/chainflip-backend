@@ -24,8 +24,8 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
+		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
-		swap_request_validation_provider::MockSwapRequestValidationProvider,
 	},
 	DepositApi, NetworkEnvironmentProvider, OnDeposit,
 };
@@ -130,7 +130,7 @@ impl crate::Config for Test {
 	type AssetWithholding = MockAssetWithholding;
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
-	type SwapLimitsProvider = MockSwapRequestValidationProvider;
+	type SwapLimitsProvider = MockSwapLimitsProvider;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

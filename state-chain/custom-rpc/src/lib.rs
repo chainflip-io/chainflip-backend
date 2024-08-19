@@ -1492,7 +1492,7 @@ where
 	) -> RpcResult<SwappingEnvironment> {
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
-		let swap_limits = runtime_api.cf_swap_request_validation(hash).map_err(to_rpc_error)?;
+		let swap_limits = runtime_api.cf_swap_limits(hash).map_err(to_rpc_error)?;
 		Ok(SwappingEnvironment {
 			maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 				runtime_api

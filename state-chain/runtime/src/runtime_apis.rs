@@ -10,7 +10,7 @@ use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
 	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
-use cf_traits::SwapRequestValidation;
+use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
@@ -287,6 +287,6 @@ decl_runtime_apis!(
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
-		fn cf_swap_request_validation() -> SwapRequestValidation;
+		fn cf_swap_limits() -> SwapLimits;
 	}
 );

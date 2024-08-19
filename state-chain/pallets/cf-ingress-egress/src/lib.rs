@@ -40,7 +40,7 @@ use cf_traits::{
 	AssetWithholding, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi, EpochInfo,
 	FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, LpBalanceApi,
 	LpDepositHandler, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
-	SwapRequestHandler, SwapRequestType, SwapRequestValidationProvider,
+	SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -220,7 +220,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{LpDepositHandler, OnDeposit, SwapRequestValidationProvider};
+	use cf_traits::{LpDepositHandler, OnDeposit, SwapLimitsProvider};
 	use core::marker::PhantomData;
 	use frame_support::{
 		traits::{ConstU128, EnsureOrigin, IsType},
@@ -458,7 +458,7 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
 
-		type SwapLimitsProvider: SwapRequestValidationProvider;
+		type SwapLimitsProvider: SwapLimitsProvider;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -2072,7 +2072,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		let swap_limits = T::SwapLimitsProvider::get_swap_request_limits();
+		let swap_limits = T::SwapLimitsProvider::get_swap_limits();
 		if let Some(params) = &refund_params {
 			ensure!(
 				params.retry_duration <= swap_limits.max_swap_retry_duration_blocks,

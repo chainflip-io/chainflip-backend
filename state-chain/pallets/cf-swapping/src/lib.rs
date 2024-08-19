@@ -1044,7 +1044,6 @@ pub mod pallet {
 						Self::deposit_event(Event::<T>::MaxSwapRetryDurationSet { blocks });
 					},
 					PalletConfigUpdate::SetMaxSwapRequestDuration { blocks } => {
-						// TODO JAMIE: check that this is correct.
 						ensure!(
 							blocks >= SWAP_DELAY_BLOCKS,
 							Error::<T>::MaxSwapRequestDurationTooShort
@@ -2179,9 +2178,9 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	}
 }
 
-impl<T: Config> cf_traits::SwapRequestValidationProvider for Pallet<T> {
-	fn get_swap_request_limits() -> cf_traits::SwapRequestValidation {
-		cf_traits::SwapRequestValidation {
+impl<T: Config> cf_traits::SwapLimitsProvider for Pallet<T> {
+	fn get_swap_limits() -> cf_traits::SwapLimits {
+		cf_traits::SwapLimits {
 			max_swap_retry_duration_blocks: MaxSwapRetryDurationBlocks::<T>::get(),
 			max_swap_request_duration_blocks: MaxSwapRequestDurationBlocks::<T>::get(),
 		}

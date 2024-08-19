@@ -983,10 +983,10 @@ pub struct NoLimit;
 impl FetchesTransfersLimitProvider for NoLimit {}
 
 #[derive(Encode, Decode, TypeInfo)]
-pub struct SwapRequestValidation {
+pub struct SwapLimits {
 	pub max_swap_retry_duration_blocks: BlockNumber,
 	pub max_swap_request_duration_blocks: BlockNumber,
 }
-pub trait SwapRequestValidationProvider {
-	fn get_swap_request_limits() -> SwapRequestValidation;
+pub trait SwapLimitsProvider {
+	fn get_swap_limits() -> SwapLimits;
 }

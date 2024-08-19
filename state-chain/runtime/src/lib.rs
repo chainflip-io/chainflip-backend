@@ -46,8 +46,7 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
 use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{
-	AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi, NoLimit, SwapRequestValidation,
-	SwapRequestValidationProvider,
+	AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi, NoLimit, SwapLimits, SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Encode};
 use core::ops::Range;
@@ -1706,8 +1705,8 @@ impl_runtime_apis! {
 			pallet_cf_swapping::SwapRetryDelay::<Runtime>::get()
 		}
 
-		fn cf_swap_request_validation() -> SwapRequestValidation {
-			pallet_cf_swapping::Pallet::<Runtime>::get_swap_request_limits()
+		fn cf_swap_limits() -> SwapLimits {
+			pallet_cf_swapping::Pallet::<Runtime>::get_swap_limits()
 		}
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
