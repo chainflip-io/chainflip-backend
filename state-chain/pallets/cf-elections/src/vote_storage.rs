@@ -41,7 +41,7 @@ pub trait VoteStorage: private::Sealed + Sized {
 	/// Instances of this type are stored in a storage map whose key is the validator's id. It is
 	/// intended for situations where validators are likely to not provide matching vote data,
 	/// thereby making the bitmap storage inefficient. Not this feature/type doesn't have to be
-	/// used, and in which case no addition stores or loads will occur.
+	/// used, and in which case no additional stores or loads will occur.
 	type IndividualComponent: Parameter + Member;
 	/// Unique instances of this type are stored alongside a bitmap of who used that value in their
 	/// vote. Assuming most people use the same value, this allows us to significantly decrease the
