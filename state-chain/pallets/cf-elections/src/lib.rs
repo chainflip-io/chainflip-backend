@@ -317,6 +317,8 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Corrupted storage was detected, and so all elections and voting has been paused.
 		CorruptStorage,
+		/// A request was made, but the pallet hasn't been initialized.
+		Uninitialized,
 		/// All vote data was cleared.
 		AllVotesCleared,
 		/// Not all vote data was cleared. *You should continue clearing votes until you receive
@@ -1623,7 +1625,13 @@ pub mod pallet {
 		>(
 			f: F,
 		) -> Result<R, DispatchError> {
-			Self::handle_corrupt_storage(f(&mut ElectoralAccess::<T, I>::new())).map_err(Into::into)
+			if Status::<T, I>::get().is_some() {
+				Self::handle_corrupt_storage(f(&mut ElectoralAccess::<T, I>::new()))
+					.map_err(Into::into)
+			} else {
+				Self::deposit_event(Event::<T, I>::Uninitialized);
+				Err(Error::<T, I>::Uninitialized.into())
+			}
 		}
 
 		/// Provides access into the ElectoralSystem's storage, and also all the current election
@@ -1641,14 +1649,19 @@ pub mod pallet {
 		>(
 			f: F,
 		) -> Result<R, DispatchError> {
-			let mut election_identifiers =
-				ElectionProperties::<T, I>::iter_keys().collect::<Vec<_>>();
-			election_identifiers.sort();
-			Self::handle_corrupt_storage(f(
-				&mut ElectoralAccess::<T, I>::new(),
-				election_identifiers,
-			))
-			.map_err(Into::into)
+			if Status::<T, I>::get().is_some() {
+				let mut election_identifiers =
+					ElectionProperties::<T, I>::iter_keys().collect::<Vec<_>>();
+				election_identifiers.sort();
+				Self::handle_corrupt_storage(f(
+					&mut ElectoralAccess::<T, I>::new(),
+					election_identifiers,
+				))
+				.map_err(Into::into)
+			} else {
+				Self::deposit_event(Event::<T, I>::Uninitialized);
+				Err(Error::<T, I>::Uninitialized.into())
+			}
 		}
 
 		/// Returns all the current elections (with their details), the validators current votes and
