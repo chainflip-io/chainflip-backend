@@ -53,7 +53,7 @@ use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyIngressSource, GetBlockHeight,
 	NoLimit, SwapLimits, SwapLimitsProvider,
 };
-use codec::{alloc::string::ToString, Encode};
+use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
@@ -1258,6 +1258,16 @@ mod benches {
 }
 
 impl_runtime_apis! {
+	impl runtime_apis::ElectoralRuntimeApi<Block, SolanaInstance> for Runtime {
+		fn cf_authority_electoral_data(account_id: AccountId) -> Vec<u8> {
+			SolanaElections::authority_electoral_data(&account_id).encode()
+		}
+
+		fn cf_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			SolanaElections::authority_filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
+	}
+
 	// START custom runtime APIs
 	impl runtime_apis::CustomRuntimeApi<Block> for Runtime {
 		fn cf_is_auction_phase() -> bool {

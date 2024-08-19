@@ -85,6 +85,19 @@ impl<
 		Ok(true)
 	}
 
+	fn is_vote_needed(
+		(_, current_vote): (VotePropertiesOf<Self>, AuthorityVoteOf<Self>),
+		proposed_vote: <Self::Vote as VoteStorage>::Vote,
+	) -> bool {
+		match current_vote {
+			AuthorityVoteOf::<Self>::Vote(current_vote) => current_vote != proposed_vote,
+			// Could argue for either true or false. If the `PartialVote` is never reconstructed and
+			// becomes invalid, then this function will be bypassed and the vote will be considered
+			// needed. So false is safe, and true will likely result in unneeded voting.
+			_ => false,
+		}
+	}
+
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
 		electoral_access: &mut ElectoralAccess,
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
