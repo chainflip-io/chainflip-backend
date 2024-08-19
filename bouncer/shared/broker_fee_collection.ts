@@ -13,10 +13,14 @@ import {
   hexStringToBytesArray,
   calculateFeeWithBps,
   amountToFineAmountBigInt,
+  SwapRequestType,
+  observeSwapRequested,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { doPerformSwap } from '../shared/perform_swap';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { send } from './send';
+import { KeyringPair } from '@polkadot/keyring/types';
 
 const swapAssetAmount = {
   [Assets.Eth]: 1,
@@ -48,6 +52,17 @@ export async function submitBrokerWithdrawal(
   );
 }
 
+const feeAsset = Assets.Usdc;
+
+async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> {
+  await using chainflip = await getChainflipApi();
+  // NOTE: All broker fees are collected in USDC now:
+  const feeStr = (
+    await chainflip.query.swapping.earnedBrokerFees(brokerKeypair.address, feeAsset)
+  ).toString();
+  return BigInt(feeStr);
+}
+
 /// Runs a swap, checks that the broker fees are collected,
 /// then withdraws the broker fees, making sure the balance is correct after the withdrawal.
 async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
@@ -59,25 +74,13 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   console.log(`${inputAsset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
   // Run a swap
-  const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
+  const destAsset = inputAsset === feeAsset ? Assets.Flip : feeAsset;
   const destinationAddress = await newAddress(destAsset, seed ?? randomBytes(32).toString('hex'));
   const observeDestinationAddress =
     inputAsset === Assets.Dot
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress;
-  const destinationChain = shortChainFromAsset(destAsset);
   console.log(`${inputAsset} destinationAddress:`, destinationAddress);
-  const swapRequestedEventPromise = observeEvent(':SwapRequested', {
-    test: (event) => {
-      const data = event.data;
-
-      const outputAddress = data.requestType.Regular
-        ? data.requestType.Regular.outputAddress[destinationChain]?.toLowerCase()
-        : undefined;
-
-      return outputAddress === observeDestinationAddress.toLowerCase();
-    },
-  });
 
   console.log(`Running swap ${inputAsset} -> ${destAsset}`);
 
@@ -113,29 +116,30 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
 
   const depositAddress = res.depositAddress[shortChainFromAsset(inputAsset)];
   const channelId = Number(res.channelId);
-  await doPerformSwap(
-    {
-      sourceAsset: inputAsset,
-      destAsset,
-      destAddress: destinationAddress,
-      depositAddress,
-      channelId,
-    },
-    `${inputAsset}->${destAsset} BrokerFee`,
-    undefined,
-    undefined,
-    rawDepositForSwapAmount,
+
+  const swapRequestedHandle = observeSwapRequested(
+    inputAsset,
+    destAsset,
+    channelId,
+    SwapRequestType.Regular,
   );
 
+  await send(inputAsset, depositAddress, rawDepositForSwapAmount, true /* log */);
+
+  const swapRequestedEvent = (await swapRequestedHandle).data;
+
   // Get values from the swap event
-  const swapScheduledEvent = await swapRequestedEventPromise.event;
-  const brokerFee = BigInt(swapScheduledEvent.data.brokerFee.replace(/,/g, ''));
+  const requestId = swapRequestedEvent.swapRequestId;
+
+  const swapExecutedEvent = await observeEvent('swapping:SwapExecuted', {
+    test: (event) => event.data.swapRequestId === requestId,
+  }).event;
+
+  const brokerFee = BigInt(swapExecutedEvent.data.brokerFee.replace(/,/g, ''));
   console.log('brokerFee:', brokerFee);
 
   // Check that the deposit amount is correct after deducting the deposit fee
-  const depositAmountAfterIngressFee = BigInt(
-    swapScheduledEvent.data.inputAmount.replaceAll(',', ''),
-  );
+  const depositAmountAfterIngressFee = BigInt(swapRequestedEvent.inputAmount.replaceAll(',', ''));
   const rawDepositForSwapAmountBigInt = amountToFineAmountBigInt(
     rawDepositForSwapAmount,
     inputAsset,
@@ -153,63 +157,38 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
     (await chainflip.query.assetBalances.freeBalances(broker.address, inputAsset)).toString(),
   );
   console.log(`${inputAsset} earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
-  const increase = earnedBrokerFeesAfter - earnedBrokerFeesBefore;
-  console.log('increase:', increase);
-  assert.strictEqual(
-    increase,
-    brokerFee,
-    `Mismatch between brokerCommission from the swap event and the detected increase. Did some other ${inputAsset} swap happen at the same time as this test?`,
-  );
 
-  const expectedIncrease = calculateFeeWithBps(depositAmountAfterIngressFee, commissionBps);
-  assert.strictEqual(
-    increase,
-    expectedIncrease,
-    `Unexpected increase in the ${inputAsset} earned broker fees. Did the broker commission change?`,
-  );
+  assert(earnedBrokerFeesAfter > earnedBrokerFeesBefore, 'No increase in earned broker fees');
 
   // Withdraw the broker fees
-  const withdrawalAddress = await newAddress(inputAsset, seed ?? randomBytes(32).toString('hex'));
-  const observeWithdrawalAddress =
-    inputAsset === Assets.Dot ? decodeDotAddressForContract(withdrawalAddress) : withdrawalAddress;
-  const chain = shortChainFromAsset(inputAsset);
+  const withdrawalAddress = await newAddress(feeAsset, seed ?? randomBytes(32).toString('hex'));
+  const chain = shortChainFromAsset(feeAsset);
   console.log(`${chain} withdrawalAddress:`, withdrawalAddress);
-  const balanceBeforeWithdrawal = await getBalance(inputAsset, withdrawalAddress);
+  const balanceBeforeWithdrawal = await getBalance(feeAsset, withdrawalAddress);
   console.log(
-    `Withdrawing broker fees to ${observeWithdrawalAddress}, balance before: ${balanceBeforeWithdrawal}`,
+    `Withdrawing broker fees to ${withdrawalAddress}, balance before: ${balanceBeforeWithdrawal}`,
   );
   const observeWithdrawalRequested = observeEvent('swapping:WithdrawalRequested', {
     test: (event) =>
-      event.data.destinationAddress[chain]?.toLowerCase() ===
-      observeWithdrawalAddress.toLowerCase(),
+      event.data.destinationAddress[chain]?.toLowerCase() === withdrawalAddress.toLowerCase(),
   });
 
-  await submitBrokerWithdrawal(inputAsset, {
-    [chain]: observeWithdrawalAddress,
+  await submitBrokerWithdrawal(feeAsset, {
+    [chain]: withdrawalAddress,
   });
-  console.log(`Submitted withdrawal for ${inputAsset}`);
+  console.log(`Submitted withdrawal for ${feeAsset}`);
 
   const withdrawalRequestedEvent = await observeWithdrawalRequested.event;
 
   console.log(`Withdrawal requested, egressId: ${withdrawalRequestedEvent.data.egressId}`);
 
-  await observeBalanceIncrease(inputAsset, withdrawalAddress, balanceBeforeWithdrawal);
+  await observeBalanceIncrease(feeAsset, withdrawalAddress, balanceBeforeWithdrawal);
 
   // Check that the balance after withdrawal is correct after deducting withdrawal fee
-  const balanceAfterWithdrawal = await getBalance(inputAsset, withdrawalAddress);
+  const balanceAfterWithdrawal = await getBalance(feeAsset, withdrawalAddress);
   console.log(`${inputAsset} Balance after withdrawal:`, balanceAfterWithdrawal);
-  const balanceAfterWithdrawalBigInt = amountToFineAmountBigInt(balanceAfterWithdrawal, inputAsset);
-  const balanceBeforeWithdrawalBigInt = amountToFineAmountBigInt(
-    balanceBeforeWithdrawal,
-    inputAsset,
-  );
-  // Log the chain state for Ethereum assets to help debugging.
-  if (['Flip', 'Eth', 'Usdc'].includes(inputAsset.toString())) {
-    const chainState = JSON.stringify(
-      await chainflip.query.ethereumChainTracking.currentChainState(),
-    );
-    console.log('Ethereum chain tracking state:', chainState);
-  }
+  const balanceAfterWithdrawalBigInt = amountToFineAmountBigInt(balanceAfterWithdrawal, feeAsset);
+  const balanceBeforeWithdrawalBigInt = amountToFineAmountBigInt(balanceBeforeWithdrawal, feeAsset);
   assert(
     balanceAfterWithdrawalBigInt > balanceBeforeWithdrawalBigInt,
     `Balance after withdrawal is less than balance before withdrawal.`,
@@ -228,14 +207,7 @@ export async function testBrokerFeeCollection(): Promise<void> {
   console.log('Broker address:', broker.address);
   assert.strictEqual(role, 'Broker', `Broker has unexpected role: ${role}`);
 
-  // Run the test for all assets at the same time (with different seeds so the eth addresses are different)
-  await Promise.all([
-    testBrokerFees(Assets.Flip, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.Eth, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.Dot, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.Btc, randomBytes(32).toString('hex')),
-    testBrokerFees(Assets.Usdc, randomBytes(32).toString('hex')),
-  ]);
+  await testBrokerFees(Assets.Flip, randomBytes(32).toString('hex'));
 
   console.log('\x1b[32m%s\x1b[0m', '=== Broker fee collection test complete ===');
 }
