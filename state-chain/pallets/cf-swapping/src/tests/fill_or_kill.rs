@@ -1,6 +1,6 @@
 use super::*;
 
-const INPUT_AMOUNT: AssetAmount = 40;
+const INPUT_AMOUNT: AssetAmount = 40_000;
 
 fn new_swap(refund_params: Option<TestRefundParams>) -> TestSwapParams {
 	TestSwapParams {
@@ -34,6 +34,9 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 	const REGULAR_REQUEST_ID: u64 = 1;
 	const FOK_REQUEST_ID: u64 = 2;
 
+	const BROKER_FEE: AssetAmount =
+		INPUT_AMOUNT * DEFAULT_SWAP_RATE * BROKER_FEE_BPS as u128 / 10_000;
+
 	new_test_ext()
 		.execute_with(|| {
 			assert_eq!(System::block_number(), INIT_BLOCK);
@@ -42,7 +45,7 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 				new_swap(None),
 				new_swap(Some(TestRefundParams {
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
-					min_output: INPUT_AMOUNT,
+					min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE - BROKER_FEE,
 				})),
 			]);
 
@@ -80,7 +83,11 @@ fn price_limit_is_respected_in_fok_swap() {
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
 
-	const HIGH_MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1;
+	const BROKER_FEE: AssetAmount =
+		INPUT_AMOUNT * DEFAULT_SWAP_RATE * BROKER_FEE_BPS as u128 / 10_000;
+
+	const EXPECTED_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE - BROKER_FEE;
+	const HIGH_OUTPUT: AssetAmount = EXPECTED_OUTPUT + 1;
 
 	const REGULAR_SWAP_ID: u64 = 1;
 	const FOK_SWAP_1_ID: u64 = 2;
@@ -94,11 +101,11 @@ fn price_limit_is_respected_in_fok_swap() {
 				new_swap(None),
 				new_swap(Some(TestRefundParams {
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
-					min_output: HIGH_MIN_OUTPUT,
+					min_output: HIGH_OUTPUT,
 				})),
 				new_swap(Some(TestRefundParams {
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
-					min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE,
+					min_output: EXPECTED_OUTPUT,
 				})),
 			]);
 
@@ -131,7 +138,7 @@ fn price_limit_is_respected_in_fok_swap() {
 		})
 		.then_execute_at_block(SWAP_RETRIED_AT_BLOCK, |_| {
 			// Changing the swap rate to allow the FoK swap to be executed
-			SwapRate::set(HIGH_MIN_OUTPUT as f64 / INPUT_AMOUNT as f64);
+			SwapRate::set((HIGH_OUTPUT + BROKER_FEE) as f64 / INPUT_AMOUNT as f64);
 		})
 		.then_execute_with(|_| {
 			assert_event_sequence!(
