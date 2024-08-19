@@ -492,7 +492,6 @@ pub mod mocks {
 	impl_election_read_access!(MockElectionReadAccess);
 	impl_election_read_access!(MockElectionWriteAccess);
 
-	// Do we even need this stuff?
 	impl<ES: ElectoralSystem> ElectionWriteAccess for MockElectionWriteAccess<'_, ES> {
 		fn set_state(
 			&mut self,
