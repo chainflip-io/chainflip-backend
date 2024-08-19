@@ -136,7 +136,7 @@ pub mod pallet {
 	};
 	use frame_support::{
 		sp_runtime::traits::BlockNumberProvider, storage::bounded_btree_map::BoundedBTreeMap,
-		StorageDoubleMap as _,
+		Deserialize, Serialize, StorageDoubleMap as _,
 	};
 	use itertools::Itertools;
 	use sp_std::{
@@ -257,28 +257,41 @@ pub mod pallet {
 		Running,
 	}
 
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+	pub struct InitialState<
+		ElectoralUnsynchronisedState,
+		ElectoralUnsynchronisedSettings,
+		ElectoralSettings,
+	> {
+		pub unsynchronised_state: ElectoralUnsynchronisedState,
+		pub unsynchronised_settings: ElectoralUnsynchronisedSettings,
+		pub settings: ElectoralSettings,
+	}
+
+	#[allow(type_alias_bounds)]
+	pub type InitialStateOf<T: Config<I>, I: 'static> = InitialState<
+		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
+		<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+	>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		#[allow(clippy::type_complexity)]
-		pub option_initialize: Option<(
-			<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
-			<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
-			<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
-		)>,
+		pub option_initial_state: Option<InitialStateOf<T, I>>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
-			Self { option_initialize: Default::default() }
+			Self { option_initial_state: Default::default() }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
-			if let Some((state, unsynchronised_settings, settings)) = self.option_initialize.clone()
-			{
-				Pallet::<T, I>::internally_initialize(state, unsynchronised_settings, settings)
+			if let Some(initial_state) = self.option_initial_state.clone() {
+				Pallet::<T, I>::internally_initialize(initial_state)
 					.expect("Pallet could not be already initialized at genesis.");
 			}
 		}
@@ -1329,12 +1342,10 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
 		pub fn initialize(
 			origin: OriginFor<T>,
-			state: <T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
-			unsynchronised_settings: <T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
-			settings: <T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+			initial_state: InitialStateOf<T, I>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			Self::internally_initialize(state, unsynchronised_settings, settings)?;
+			Self::internally_initialize(initial_state)?;
 			Ok(())
 		}
 
@@ -1588,14 +1599,15 @@ pub mod pallet {
 		/// This function allows other pallets to initialize an Elections pallet, instead of needing
 		/// to initialize it via a governance extrinsic or at genesis.
 		pub fn internally_initialize(
-			state: <T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
-			unsynchronised_settings: <T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
-			settings: <T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+			initial_state: InitialStateOf<T, I>,
 		) -> Result<(), Error<T, I>> {
 			ensure!(Status::<T, I>::get().is_none(), Error::<T, I>::AlreadyInitialized);
-			ElectoralUnsynchronisedState::<T, I>::put(state);
-			ElectoralUnsynchronisedSettings::<T, I>::put(unsynchronised_settings);
-			ElectoralSettings::<T, I>::insert(NextElectionIdentifier::<T, I>::get(), settings);
+			ElectoralUnsynchronisedState::<T, I>::put(initial_state.unsynchronised_state);
+			ElectoralUnsynchronisedSettings::<T, I>::put(initial_state.unsynchronised_settings);
+			ElectoralSettings::<T, I>::insert(
+				NextElectionIdentifier::<T, I>::get(),
+				initial_state.settings,
+			);
 			Status::<T, I>::put(ElectoralSystemStatus::Running);
 			Ok(())
 		}

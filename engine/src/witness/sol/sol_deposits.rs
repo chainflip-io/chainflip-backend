@@ -518,7 +518,8 @@ mod tests {
 						.await
 						.unwrap();
 
-				assert!(ingresses.0.is_empty());
+				assert_eq!(ingresses.0[0].1, 0);
+				assert_eq!(ingresses.0[1].1, 0);
 
 				let vault_program_account =
 					SolAddress::from_str("EMxiTBPTkGVkkbCMncu7j17gHyySojii4KhHwM36Hgz2").unwrap();
