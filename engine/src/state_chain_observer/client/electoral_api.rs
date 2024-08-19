@@ -55,7 +55,7 @@ impl<
 				.cf_solana_electoral_data(account_id, Some(block.hash))
 				.await
 				.ok()
-				.and_then(|electoral_data| Decode::decode(&mut &electoral_data[..]).ok())
+				.and_then(|electoral_data| <Option<ElectoralDataFor<state_chain_runtime::Runtime, SolanaInstance>> as Decode>::decode(&mut &electoral_data[..]).ok().flatten())
 		}
 	}
 
@@ -74,7 +74,16 @@ impl<
 				.cf_solana_filter_votes(account_id, proposed_votes.encode(), None)
 				.await
 				.ok()
-				.and_then(|electoral_data| Decode::decode(&mut &electoral_data[..]).ok())
+				.and_then(|electoral_data| {
+					<BTreeSet<
+						ElectionIdentifierOf<
+							<state_chain_runtime::Runtime as pallet_cf_elections::Config<
+								SolanaInstance,
+							>>::ElectoralSystem,
+						>,
+					> as Decode>::decode(&mut &electoral_data[..])
+					.ok()
+				})
 				.unwrap_or_default()
 		}
 	}
