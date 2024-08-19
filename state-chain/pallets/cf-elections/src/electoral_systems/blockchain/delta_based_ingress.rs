@@ -361,7 +361,7 @@ where
 								account,
 								ChannelTotalIngressed {
 									// Requires 2/3 to decrease the block_number,
-									block_number: contributing_channel_votes[threshold]
+									block_number: contributing_channel_votes[threshold - 1]
 										.block_number,
 									// Requires 2/3 to increase the amount
 									amount: contributing_channel_votes
