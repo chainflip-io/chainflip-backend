@@ -1,26 +1,6 @@
 use super::*;
 
-const INPUT_AMOUNT: AssetAmount = 40_000;
 const CHUNK_INTERVAL: u32 = 3;
-
-const INPUT_ASSET: Asset = Asset::Usdc;
-const OUTPUT_ASSET: Asset = Asset::Eth;
-
-fn params(
-	dca_params: Option<DcaParameters>,
-	refund_params: Option<TestRefundParams>,
-	is_ccm: bool,
-) -> TestSwapParams {
-	TestSwapParams {
-		input_asset: INPUT_ASSET,
-		output_asset: OUTPUT_ASSET,
-		input_amount: INPUT_AMOUNT,
-		refund_params: refund_params.map(|params| params.into_channel_params(INPUT_AMOUNT)),
-		dca_params,
-		output_address: (*EVM_OUTPUT_ADDRESS).clone(),
-		is_ccm,
-	}
-}
 
 fn get_dca_state(request_id: SwapRequestId) -> DcaState {
 	match SwapRequests::<Test>::get(request_id)
