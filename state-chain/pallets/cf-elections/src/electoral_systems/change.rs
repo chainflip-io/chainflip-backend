@@ -64,7 +64,10 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = (Identifier, Value);
 	type ElectionState = ();
-	type Vote = vote_storage::bitmap::Bitmap<Value>;
+	type Vote = vote_storage::individual::Individual<
+		(),
+		vote_storage::individual::identity::Identity<Value>,
+	>;
 	type Consensus = Value;
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
