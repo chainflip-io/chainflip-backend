@@ -1288,8 +1288,7 @@ pub mod pallet {
 
 				let mut stable_amount = swap.stable_amount.unwrap_or_default();
 
-				let required_fees = &swap.swap.fees;
-				for fee_type in required_fees {
+				for fee_type in &swap.swap.fees {
 					let remaining_amount = match fee_type {
 						FeeType::NetworkFee => {
 							let FeeTaken { remaining_amount, fee } =
@@ -1304,8 +1303,7 @@ pub mod pallet {
 							remaining_amount
 						},
 					};
-
-					stable_amount = remaining_amount
+					stable_amount = remaining_amount;
 				}
 
 				swap.stable_amount = Some(stable_amount);
@@ -1740,13 +1738,13 @@ pub mod pallet {
 			let fees = {
 				let mut fees = Vec::with_capacity(2);
 
+				if !broker_fees.is_empty() {
+					fees.push(FeeType::BrokerFee(broker_fees));
+				}
+
 				// Network fee is not charged for network fee swaps:
 				if !matches!(swap_type, SwapType::NetworkFee) {
 					fees.push(FeeType::NetworkFee);
-				}
-
-				if !broker_fees.is_empty() {
-					fees.push(FeeType::BrokerFee(broker_fees));
 				}
 
 				fees
