@@ -16,15 +16,15 @@ fn happy_path_vote_and_consensus() {
 	const NEW_DATA: u64 = 23;
 
 	fn submit_vote_for(validator_id: u64) {
-		let (elections, sync_barrier) =
-			Pallet::<Test, Instance1>::validator_election_data(&validator_id).unwrap();
+		let electoral_data =
+			Pallet::<Test, Instance1>::authority_electoral_data(&validator_id).unwrap();
 
-		for election in elections {
+		for (election_identifier, _election_data) in electoral_data.current_elections {
 			Pallet::<Test, Instance1>::vote(
 				RawOrigin::Signed(validator_id).into(),
 				BoundedBTreeMap::try_from(
 					[(
-						election.0,
+						election_identifier,
 						AuthorityVoteOf::<<Test as Config<Instance1>>::ElectoralSystem>::Vote(
 							NEW_DATA,
 						),
@@ -33,7 +33,7 @@ fn happy_path_vote_and_consensus() {
 					.collect::<BTreeMap<_, _>>(),
 				)
 				.unwrap(),
-				sync_barrier.clone().unwrap(),
+				electoral_data.current_vote_sync_barrier.clone().unwrap(),
 			)
 			.unwrap();
 		}

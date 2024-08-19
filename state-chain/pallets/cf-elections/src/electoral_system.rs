@@ -98,6 +98,15 @@ pub trait ElectoralSystem: 'static {
 		Ok(current_vote.is_none())
 	}
 
+	/// This is not used by the pallet, but is used to tell a validator if they should submit vote.
+	/// This is a way to decrease the amount of extrinsics a validator needs to send.
+	fn is_vote_needed(
+		_current_vote: (VotePropertiesOf<Self>, AuthorityVoteOf<Self>),
+		_proposed_vote: <Self::Vote as VoteStorage>::Vote,
+	) -> bool {
+		true
+	}
+
 	/// This is used in the vote extrinsic to disallow a validator from providing votes that do not
 	/// pass this check. It is guaranteed that any vote values provided to
 	/// `generate_vote_properties`, or `check_consensus` have past this check.
