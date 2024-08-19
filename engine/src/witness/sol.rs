@@ -28,9 +28,11 @@ use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteS
 use state_chain_runtime::{
 	chainflip::solana_elections::{
 		SolanaBlockHeightTracking, SolanaElectoralSystem, SolanaFeeTracking, SolanaIngressTracking,
+		SolanaNonceTracking,
 	},
 	SolanaInstance,
 };
+
 use std::sync::Arc;
 use utilities::{context, task_scope, task_scope::Scope};
 
@@ -104,6 +106,36 @@ impl VoterApi<SolanaIngressTracking> for SolanaIngressTrackingVoter {
 	}
 }
 
+#[derive(Clone)]
+struct SolanaNonceTrackingVoter {
+	client: SolRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
+	async fn vote(
+		&self,
+		_settings: <SolanaNonceTracking as ElectoralSystem>::ElectoralSettings,
+		properties: <SolanaNonceTracking as ElectoralSystem>::ElectionProperties,
+	) -> Result<<<SolanaNonceTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error>
+	{
+		let (nonce_account, previous_nonce) = properties;
+		let (response_account, response_nonce) =
+			nonce_witnessing::get_durable_nonces(&self.client, vec![nonce_account])
+				.await?
+				.pop()
+				.expect("If the query succeeds, we expect a nonce for the account we queried for");
+
+		assert_eq!(response_account, nonce_account);
+
+		if response_nonce == previous_nonce {
+			Err(anyhow::anyhow!("Nonce did not change"))
+		} else {
+			Ok(response_nonce)
+		}
+	}
+}
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: SolRetryRpcClient,
@@ -127,7 +159,8 @@ where
 					CompositeVoter::<SolanaElectoralSystem, _>::new((
 						SolanaBlockHeightTrackingVoter { client: client.clone() },
 						SolanaFeeTrackingVoter { client: client.clone() },
-						SolanaIngressTrackingVoter { client },
+						SolanaIngressTrackingVoter { client: client.clone() },
+						SolanaNonceTrackingVoter { client },
 					)),
 				)
 				.continuously_vote()
