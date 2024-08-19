@@ -225,14 +225,31 @@ pub mod pallet {
 		}
 	}
 
-	/// This error is used indicate that the pallet's Storage is corrupt. If it is returned by an
-	/// ElectoralSystem then the whole pallet will stop all actions, and output an error Event every
-	/// block. This error should not be handled or interpreted, and instead should always be passed
-	/// out. Note there are a small number of cases we do handle these errors, specifically in
-	/// Solana's chain/fee tracking trait impls as those traits do not allow errors to be returned,
-	/// this is ok, but should be avoided in future.
-	#[derive(Debug, PartialEq, Eq)]
-	pub struct CorruptStorageError;
+	// Private mod forces creation of error via the new function
+	mod corrupt_storage_error {
+		/// This error is used indicate that the pallet's Storage is corrupt. If it is returned by
+		/// an ElectoralSystem then the whole pallet will stop all actions, and output an error
+		/// Event every block. This error should not be handled or interpreted, and instead should
+		/// always be passed out. Note there are a small number of cases we do handle these errors,
+		/// specifically in Solana's chain/fee tracking trait impls as those traits do not allow
+		/// errors to be returned, this is ok, but should be avoided in future.
+		#[derive(Debug, PartialEq, Eq)]
+		pub struct CorruptStorageError {}
+		impl CorruptStorageError {
+			/// We use this function to create this error type (and make the struct impossible to
+			/// create without it) so it is easier to find all locations we create the error, and so
+			/// every location will log.
+			#[track_caller]
+			pub fn new() -> Self {
+				log::error!(
+					"Election pallet CorruptStorageError at '{}'.",
+					core::panic::Location::caller()
+				);
+				Self {}
+			}
+		}
+	}
+	pub use corrupt_storage_error::CorruptStorageError;
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 	pub enum ElectoralSystemStatus {
@@ -535,8 +552,8 @@ pub mod pallet {
 					.find(|settings_boundary| {
 						**settings_boundary <= self.unique_monotonic_identifier()
 					})
-					.ok_or(CorruptStorageError)?;
-				ElectoralSettings::<T, I>::get(settings_boundary).ok_or(CorruptStorageError)
+					.ok_or(CorruptStorageError::new())?;
+				ElectoralSettings::<T, I>::get(settings_boundary).ok_or(CorruptStorageError::new())
 			}
 			fn properties(
 				&self,
@@ -544,14 +561,15 @@ pub mod pallet {
 				<T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
 				CorruptStorageError,
 			> {
-				ElectionProperties::<T, I>::get(self.election_identifier).ok_or(CorruptStorageError)
+				ElectionProperties::<T, I>::get(self.election_identifier)
+					.ok_or(CorruptStorageError::new())
 			}
 			fn state(
 				&self,
 			) -> Result<<T::ElectoralSystem as ElectoralSystem>::ElectionState, CorruptStorageError>
 			{
 				ElectionState::<T, I>::get(self.unique_monotonic_identifier())
-					.ok_or(CorruptStorageError)
+					.ok_or(CorruptStorageError::new())
 			}
 		}
 		impl<T: Config<I>, I: 'static> ElectionWriteAccess for ElectionAccess<T, I> {
@@ -593,7 +611,7 @@ pub mod pallet {
 				properties: <T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
 			) -> Result<(), CorruptStorageError> {
 				if extra <= *self.election_identifier.extra() {
-					Err(CorruptStorageError)
+					Err(CorruptStorageError::new())
 				} else {
 					ElectionProperties::<T, I>::remove(self.election_identifier);
 					self.election_identifier =
@@ -627,7 +645,7 @@ pub mod pallet {
 						let current_authorities_count: AuthorityCount = current_authorities
 							.len()
 							.try_into()
-							.map_err(|_| CorruptStorageError)?;
+							.map_err(|_| CorruptStorageError::new())?;
 
 						let bitmap_components = ElectionBitmapComponents::<T, I>::with(
 							epoch_index,
@@ -767,7 +785,7 @@ pub mod pallet {
 				<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
 				CorruptStorageError,
 			> {
-				ElectoralUnsynchronisedSettings::<T, I>::get().ok_or(CorruptStorageError)
+				ElectoralUnsynchronisedSettings::<T, I>::get().ok_or(CorruptStorageError::new())
 			}
 
 			fn unsynchronised_state(
@@ -776,7 +794,7 @@ pub mod pallet {
 				<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 				CorruptStorageError,
 			> {
-				ElectoralUnsynchronisedState::<T, I>::get().ok_or(CorruptStorageError)
+				ElectoralUnsynchronisedState::<T, I>::get().ok_or(CorruptStorageError::new())
 			}
 
 			fn unsynchronised_state_map(
@@ -803,7 +821,10 @@ pub mod pallet {
 				let unique_monotonic_identifier = NextElectionIdentifier::<T, I>::get();
 				let election_identifier = ElectionIdentifier(unique_monotonic_identifier, extra);
 				NextElectionIdentifier::<T, I>::set(UniqueMonotonicIdentifier(
-					unique_monotonic_identifier.0.checked_add(1).ok_or(CorruptStorageError)?,
+					unique_monotonic_identifier
+						.0
+						.checked_add(1)
+						.ok_or(CorruptStorageError::new())?,
 				));
 				ElectionProperties::<T, I>::insert(election_identifier, properties);
 				ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
@@ -910,7 +931,7 @@ pub mod pallet {
 															current_epoch,
 															old_authorities
 																.get(authority_old_index)
-																.ok_or(CorruptStorageError)?,
+																.ok_or(CorruptStorageError::new())?,
 														) {
 														let authority_new_index =
 															authority_new_index as usize;
@@ -919,7 +940,7 @@ pub mod pallet {
 														);
 														*new_bitmap
 															.get_mut(authority_new_index)
-															.ok_or(CorruptStorageError)? = true;
+															.ok_or(CorruptStorageError::new())? = true;
 													}
 													Ok(new_bitmap)
 												},
@@ -1024,12 +1045,13 @@ pub mod pallet {
 					self.bitmaps.iter_mut().find(|(existing_bitmap_component, _existing_bitmap)| {
 						bitmap_component == *existing_bitmap_component
 					}) {
-					*existing_bitmap.get_mut(authority_index).ok_or(CorruptStorageError)? = true;
+					*existing_bitmap.get_mut(authority_index).ok_or(CorruptStorageError::new())? =
+						true;
 				} else {
 					self.bitmaps.push((bitmap_component.clone(), {
 						let mut bitmap = BitVec::default();
 						bitmap.resize(T::EpochInfo::current_authority_count() as usize, false);
-						*bitmap.get_mut(authority_index).ok_or(CorruptStorageError)? = true;
+						*bitmap.get_mut(authority_index).ok_or(CorruptStorageError::new())? = true;
 						bitmap
 					}));
 					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
@@ -1056,7 +1078,7 @@ pub mod pallet {
 					.bitmaps
 					.iter_mut()
 					.try_find(|(_bitmap_component, bitmap)| -> Result<_, CorruptStorageError> {
-						Ok(*bitmap.get(authority_index).ok_or(CorruptStorageError)?)
+						Ok(*bitmap.get(authority_index).ok_or(CorruptStorageError::new())?)
 					})?
 					.map(|(bitmap_component, bitmap)| {
 						bitmap.set(authority_index, false);
@@ -1072,7 +1094,9 @@ pub mod pallet {
 					.bitmaps
 					.iter()
 					.try_find(|(_bitmap_component, bitmap)| -> Result<_, CorruptStorageError> {
-						Ok(*bitmap.get(authority_index as usize).ok_or(CorruptStorageError)?)
+						Ok(*bitmap
+							.get(authority_index as usize)
+							.ok_or(CorruptStorageError::new())?)
 					})?
 					.map(|(bitmap_component, _)| bitmap_component.clone()))
 			}
@@ -1090,7 +1114,7 @@ pub mod pallet {
 					.flat_map(|(bitmap_component, bitmap)| {
 						debug_assert_eq!(bitmap.len(), current_authorities.len());
 						bitmap.iter_ones().map(|index| {
-							current_authorities.get(index).ok_or(CorruptStorageError).map(
+							current_authorities.get(index).ok_or(CorruptStorageError::new()).map(
 								|validator_id| (validator_id.clone(), bitmap_component.clone()),
 							)
 						})
@@ -1464,7 +1488,7 @@ pub mod pallet {
 					// assumptions that are broken by arbitrarily removing elements from any of
 					// these storage items.
 					let _ = Self::handle_corrupt_storage(Err::<core::convert::Infallible, _>(
-						CorruptStorageError,
+						CorruptStorageError::new(),
 					));
 					Event::<T, I>::AllVotesNotCleared
 				},
