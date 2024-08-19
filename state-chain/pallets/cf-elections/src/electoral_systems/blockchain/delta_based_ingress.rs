@@ -32,16 +32,16 @@ const MAXIMUM_CHANNELS_PER_ELECTION: u32 = 50;
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(TargetChain))]
 pub struct ChannelTotalIngressed<TargetChain: Chain> {
-	block_number: <TargetChain as Chain>::ChainBlockNumber,
-	amount: <TargetChain as Chain>::ChainAmount,
+	pub block_number: <TargetChain as Chain>::ChainBlockNumber,
+	pub amount: <TargetChain as Chain>::ChainAmount,
 }
 impl<TargetChain: Chain> Copy for ChannelTotalIngressed<TargetChain> {}
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(TargetChain))]
 pub struct OpenChannelDetails<TargetChain: Chain> {
-	asset: <TargetChain as Chain>::ChainAsset,
-	close_block: <TargetChain as Chain>::ChainBlockNumber,
+	pub asset: <TargetChain as Chain>::ChainAsset,
+	pub close_block: <TargetChain as Chain>::ChainBlockNumber,
 }
 
 pub struct DeltaBasedIngress<Sink: IngressSink, Settings> {
