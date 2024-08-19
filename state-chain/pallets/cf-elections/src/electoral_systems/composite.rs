@@ -203,6 +203,38 @@ macro_rules! generate_electoral_system_tuple_impls {
                     }
                 }
 
+                fn is_vote_needed(
+                    (current_vote_properties, current_vote): (VotePropertiesOf<Self>, AuthorityVoteOf<Self>),
+                    proposed_vote: <Self::Vote as VoteStorage>::Vote,
+                ) -> bool {
+                    match (current_vote_properties, current_vote, proposed_vote) {
+                        $(
+                            (
+                                CompositeVoteStorageEnum::$electoral_system(current_vote_properties),
+                                AuthorityVote::Vote(CompositeVoteStorageEnum::$electoral_system(current_vote)),
+                                CompositeVoteStorageEnum::$electoral_system(proposed_vote),
+                            ) => {
+                                <$electoral_system as ElectoralSystem>::is_vote_needed(
+                                    (current_vote_properties, AuthorityVote::Vote(current_vote)),
+                                    proposed_vote,
+                                )
+                            },
+                            (
+                                CompositeVoteStorageEnum::$electoral_system(current_vote_properties),
+                                AuthorityVote::PartialVote(CompositeVoteStorageEnum::$electoral_system(current_partial_vote)),
+                                CompositeVoteStorageEnum::$electoral_system(proposed_vote),
+                            ) => {
+                                <$electoral_system as ElectoralSystem>::is_vote_needed(
+                                    (current_vote_properties, AuthorityVote::PartialVote(current_partial_vote)),
+                                    proposed_vote,
+                                )
+                            },
+                        )*
+                        _ => true,
+                    }
+                }
+
+
                 fn is_vote_valid<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
                     election_access: &ElectionAccess,
