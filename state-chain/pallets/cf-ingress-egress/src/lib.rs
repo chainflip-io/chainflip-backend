@@ -39,7 +39,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
 	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
 	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
-	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapLimitsProvider,
+	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapLimitsProvider,
 	SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
@@ -363,6 +363,8 @@ pub mod pallet {
 		type AddressConverter: AddressConverter;
 
 		type Balance: BalanceApi<AccountId = Self::AccountId>;
+
+		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain>
@@ -1023,11 +1025,16 @@ pub mod pallet {
 			pool_tier: BoostPoolTier,
 		) -> DispatchResult {
 			let booster_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
 			ensure!(
 				T::SafeMode::get().add_boost_funds_enabled,
 				Error::<T, I>::AddBoostFundsDisabled
 			);
 			ensure!(amount > Zero::zero(), Error::<T, I>::AddBoostAmountMustBeNonZero);
+
+			// Free balances returns the unswept funds included, so if we want to be able to use
+			// those funds for boosting, we first need to sweep.
+			T::PoolApi::sweep(&booster_id)?;
 
 			T::Balance::try_debit_account(&booster_id, asset.into(), amount.into())?;
 

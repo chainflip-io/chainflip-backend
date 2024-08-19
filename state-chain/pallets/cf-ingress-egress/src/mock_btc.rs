@@ -112,6 +112,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
+	type PoolApi = Self;
 	type ChainApiCall = MockBitcoinApiCall<MockBtcEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
