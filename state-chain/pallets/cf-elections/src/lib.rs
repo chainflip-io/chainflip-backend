@@ -297,7 +297,8 @@ pub mod pallet {
 
 	/// Stores the number of blocks after a piece of shared data is first referenced without being
 	/// "provided" before expiring. Expiring will cause all votes that include references to be
-	/// invalidated.
+	/// invalidated. This should be set as low as possible, I'd suggest using 8 blocks, which
+	/// equates to 48 seconds.
 	#[pallet::storage]
 	type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
