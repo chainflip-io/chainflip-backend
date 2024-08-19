@@ -1804,12 +1804,33 @@ pub mod pallet {
 												},
 											)?;
 
-										if let Some(existing_vote) = option_current_authority_vote
+										if let Some((
+											existing_vote_properties,
+											existing_authority_vote,
+										)) = option_current_authority_vote
 											.filter(|_| !contains_timed_out_shared_data_references)
 										{
 											<T::ElectoralSystem as ElectoralSystem>::is_vote_needed(
-												existing_vote,
-												proposed_vote.clone(),
+												(
+													existing_vote_properties,
+													match &existing_authority_vote {
+														AuthorityVote::Vote(existing_vote) => {
+															<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
+																existing_vote,
+																|shared_data| SharedDataHash::of(&shared_data)
+															)
+														},
+														AuthorityVote::PartialVote(existing_partial_vote) => existing_partial_vote.clone(),
+													},
+													existing_authority_vote,
+												),
+												(
+													<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
+														proposed_vote,
+														|shared_data| SharedDataHash::of(&shared_data)
+													),
+													proposed_vote.clone(),
+												),
 											)
 										} else {
 											true
