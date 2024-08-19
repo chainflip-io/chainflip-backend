@@ -204,29 +204,33 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
 
                 fn is_vote_needed(
-                    (current_vote_properties, current_vote): (VotePropertiesOf<Self>, AuthorityVoteOf<Self>),
-                    proposed_vote: <Self::Vote as VoteStorage>::Vote,
+                    (current_vote_properties, current_partial_vote, current_authority_vote): (VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::PartialVote, AuthorityVoteOf<Self>),
+                    (proposed_partial_vote, proposed_vote): (<Self::Vote as VoteStorage>::PartialVote, <Self::Vote as VoteStorage>::Vote),
                 ) -> bool {
-                    match (current_vote_properties, current_vote, proposed_vote) {
+                    match (current_vote_properties, current_partial_vote, current_authority_vote, proposed_partial_vote, proposed_vote) {
                         $(
                             (
                                 CompositeVoteStorageEnum::$electoral_system(current_vote_properties),
-                                AuthorityVote::Vote(CompositeVoteStorageEnum::$electoral_system(current_vote)),
+                                CompositeVoteStorageEnum::$electoral_system(current_partial_vote),
+                                AuthorityVote::Vote(CompositeVoteStorageEnum::$electoral_system(current_authority_vote)),
+                                CompositeVoteStorageEnum::$electoral_system(proposed_partial_vote),
                                 CompositeVoteStorageEnum::$electoral_system(proposed_vote),
                             ) => {
                                 <$electoral_system as ElectoralSystem>::is_vote_needed(
-                                    (current_vote_properties, AuthorityVote::Vote(current_vote)),
-                                    proposed_vote,
+                                    (current_vote_properties, current_partial_vote, AuthorityVote::Vote(current_authority_vote)),
+                                    (proposed_partial_vote, proposed_vote),
                                 )
                             },
                             (
                                 CompositeVoteStorageEnum::$electoral_system(current_vote_properties),
-                                AuthorityVote::PartialVote(CompositeVoteStorageEnum::$electoral_system(current_partial_vote)),
+                                CompositeVoteStorageEnum::$electoral_system(current_partial_vote),
+                                AuthorityVote::PartialVote(CompositeVoteStorageEnum::$electoral_system(current_authority_partial_vote)),
+                                CompositeVoteStorageEnum::$electoral_system(proposed_partial_vote),
                                 CompositeVoteStorageEnum::$electoral_system(proposed_vote),
                             ) => {
                                 <$electoral_system as ElectoralSystem>::is_vote_needed(
-                                    (current_vote_properties, AuthorityVote::PartialVote(current_partial_vote)),
-                                    proposed_vote,
+                                    (current_vote_properties, current_partial_vote, AuthorityVote::PartialVote(current_authority_partial_vote)),
+                                    (proposed_partial_vote, proposed_vote),
                                 )
                             },
                         )*
