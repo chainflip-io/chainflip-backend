@@ -63,7 +63,7 @@ impl<
 		if let Some(election_identifier) = election_identifiers
 			.into_iter()
 			.at_most_one()
-			.map_err(|_| CorruptStorageError)?
+			.map_err(|_| CorruptStorageError::new())?
 		{
 			let mut election_access = electoral_access.election_mut(election_identifier)?;
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
@@ -150,7 +150,7 @@ impl<
 		if let Some(election_identifier) = election_identifiers
 			.into_iter()
 			.at_most_one()
-			.map_err(|_| CorruptStorageError)?
+			.map_err(|_| CorruptStorageError::new())?
 		{
 			let mut election_access = electoral_access.election_mut(election_identifier)?;
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
