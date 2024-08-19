@@ -164,6 +164,7 @@ impl pallet_cf_environment::Config for Test {
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
 	type SolanaVaultKeyWitnessedHandler = MockSolanaVaultKeyWitnessedHandler;
+	type SolanaNonceWatch = ();
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type BitcoinKeyProvider = MockBitcoinKeyProvider;
 	type RuntimeSafeMode = MockRuntimeSafeMode;
