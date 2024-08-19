@@ -128,11 +128,7 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 
 		assert_eq!(response_account, nonce_account);
 
-		if response_nonce == previous_nonce {
-			Err(anyhow::anyhow!("Nonce did not change"))
-		} else {
-			Ok(response_nonce)
-		}
+		Ok(response_nonce)
 	}
 }
 
