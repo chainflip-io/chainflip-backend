@@ -1,3 +1,4 @@
+import { execSync } from 'child_process';
 import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
@@ -27,6 +28,7 @@ import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
+import { execWithLog } from './utils/exec_with_log';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -504,9 +506,9 @@ export function getEvmEndpoint(chain: Chain): string {
 }
 
 export function getSolConnection(): Connection {
-  return new Connection(process.env.SOL_ENDPOINT ?? 'http://0.0.0.0:8899', {
+  return new Connection(process.env.SOL_HTTP_ENDPOINT ?? 'http://0.0.0.0:8899', {
     commitment: 'confirmed',
-    wsEndpoint: 'ws://0.0.0.0:8900/',
+    wsEndpoint: `${process.env.SOL_WS_ENDPOINT ?? 'ws://0.0.0.0:8900'}`,
   });
 }
 
@@ -1021,4 +1023,36 @@ export async function tryUntilSuccess(
     await sleep(pollTime);
   }
   throw new Error('tryUntilSuccess failed: ' + logTag);
+}
+
+export async function getNodesInfo(numberOfNodes: 1 | 3) {
+  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
+  const nodeCount = numberOfNodes + '-node';
+  return { SELECTED_NODES, nodeCount };
+}
+
+export async function killEngines() {
+  execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
+}
+
+export async function startEngines(
+  localnetInitPath: string,
+  binaryPath: string,
+  numberOfNodes: 1 | 3,
+) {
+  console.log('Starting all the engines');
+
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
+  execWithLog(`${localnetInitPath}/scripts/start-all-engines.sh`, 'start-all-engines-pre-upgrade', {
+    INIT_RUN: 'false',
+    LOG_SUFFIX: '-pre-upgrade',
+    NODE_COUNT: nodeCount,
+    SELECTED_NODES,
+    LOCALNET_INIT_DIR: localnetInitPath,
+    BINARY_ROOT_PATH: binaryPath,
+  });
+
+  await sleep(7000);
+
+  console.log('Engines started');
 }

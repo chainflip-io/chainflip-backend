@@ -71,6 +71,7 @@ async fn run_cli() -> Result<()> {
 								params.boost_fee,
 								Default::default(),
 								None,
+								None,
 							)
 							.await?;
 						println!("Deposit Address: {address}");

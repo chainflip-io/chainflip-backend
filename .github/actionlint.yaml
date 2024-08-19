@@ -4,6 +4,7 @@ self-hosted-runner:
     [
       digitalocean,
       hetzner,
+      namespace-profile-default,
       namespace-profile-rust-builder,
       nscloud-ubuntu-22.04-amd64-2x4,
       nscloud-ubuntu-22.04-amd64-2x4-with-cache,

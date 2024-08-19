@@ -237,7 +237,7 @@ jobs:
             👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
 
   chainspec-compatibility:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     strategy:
       fail-fast: false
       matrix:

@@ -21,7 +21,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   audit:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
       credentials:
@@ -51,12 +51,7 @@ jobs:
         run: cargo cf-clippy-ci
 
   lint-bouncer:
-    runs-on: ubuntu-22.04
-    container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2024-02-04-ubuntu-22.04-48"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: namespace-profile-default
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -89,7 +84,7 @@ jobs:
         run: pnpm tsc --noEmit
 
   lint-ci-workflows:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -101,7 +96,7 @@ jobs:
         shell: bash
 
   lint-dockerfiles:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     strategy:
       matrix:
         dockerfile:

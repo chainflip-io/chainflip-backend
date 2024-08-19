@@ -1,5 +1,5 @@
 use cf_chains::{CcmDepositMetadata, ChannelRefundParameters, ForeignChainAddress, SwapOrigin};
-use cf_primitives::{Asset, AssetAmount, Beneficiaries, SwapRequestId};
+use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
@@ -33,7 +33,8 @@ pub trait SwapRequestHandler {
 		output_asset: Asset,
 		request_type: SwapRequestType,
 		broker_fees: Beneficiaries<Self::AccountId>,
-		refund_params: Option<ChannelRefundParameters<ForeignChainAddress>>,
+		refund_params: Option<ChannelRefundParameters>,
+		dca_params: Option<DcaParameters>,
 		origin: SwapOrigin,
 	) -> Result<SwapRequestId, DispatchError>;
 }

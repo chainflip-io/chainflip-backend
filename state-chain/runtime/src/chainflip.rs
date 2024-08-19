@@ -54,10 +54,12 @@ use cf_chains::{
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
-	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
-	TransactionBuilder,
+	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
+	Solana, TransactionBuilder,
 };
-use cf_primitives::{chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId};
+use cf_primitives::{
+	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
+};
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
@@ -234,8 +236,14 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 				call: &$chain_api<$env>,
 				_payload: &<EvmCrypto as ChainCrypto>::Payload,
 				maybe_current_on_chain_key: Option<<EvmCrypto as ChainCrypto>::AggKey>
-			) -> bool {
-				maybe_current_on_chain_key.map_or(false, |current_on_chain_key| call.signer().is_some_and(|signer|current_on_chain_key != signer ))
+			) -> RequiresSignatureRefresh<EvmCrypto, $chain_api<$env>> {
+				maybe_current_on_chain_key.map_or(RequiresSignatureRefresh::False,
+					|current_on_chain_key| if call.signer().is_some_and(|signer|current_on_chain_key != signer ) {
+						RequiresSignatureRefresh::True(None)
+					} else {
+						RequiresSignatureRefresh::False
+					}
+				)
 			}
 
 			/// Calculate the gas limit for a this evm chain's call, using the current gas price.
@@ -283,10 +291,14 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<<Polkadot as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		_maybe_current_onchain_key: Option<<PolkadotCrypto as ChainCrypto>::AggKey>,
-	) -> bool {
+	) -> RequiresSignatureRefresh<PolkadotCrypto, PolkadotApi<DotEnvironment>> {
 		// Current key and signature are irrelevant. The only thing that can invalidate a polkadot
 		// transaction is if the payload changes due to a runtime version update.
-		&call.threshold_signature_payload() != payload
+		if &call.threshold_signature_payload() != payload {
+			RequiresSignatureRefresh::True(None)
+		} else {
+			RequiresSignatureRefresh::False
+		}
 	}
 }
 
@@ -308,14 +320,14 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		_call: &BitcoinApi<BtcEnvironment>,
 		_payload: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		_maybe_current_onchain_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
-	) -> bool {
+	) -> RequiresSignatureRefresh<BitcoinCrypto, BitcoinApi<BtcEnvironment>> {
 		// The payload for a Bitcoin transaction will never change and so it doesnt need to be
 		// checked here. We also dont need to check for the signature here because even if we are in
 		// the next epoch and the key has changed, the old signature for the btc tx is still valid
 		// since its based on those old input UTXOs. In fact, we never have to resign btc txs and
 		// the btc tx is always valid as long as the input UTXOs are valid. Therefore, we don't have
 		// to check anything here and just rebroadcast.
-		false
+		RequiresSignatureRefresh::False
 	}
 }
 
@@ -341,16 +353,38 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	}
 
 	fn requires_signature_refresh(
-		_call: &SolanaApi<SolEnvironment>,
+		call: &SolanaApi<SolEnvironment>,
 		_payload: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		_maybe_current_onchain_key: Option<<SolanaCrypto as ChainCrypto>::AggKey>,
-	) -> bool {
-		// We use Durable Nonce mechanism to avoid the 150 blocks expiry period and so
-		// transactions won't expire. Then, the only reason to resign would be if the
-		// payload has been updated or the aggKey has been updated (key rotation).
-		// The payload won't be refreshed, as explained above, and the the broadcast
-		// barrier prevents a transaction from requiring to be resigned by a new aggKey.
-		false
+		maybe_current_onchain_key: Option<<SolanaCrypto as ChainCrypto>::AggKey>,
+	) -> RequiresSignatureRefresh<SolanaCrypto, SolanaApi<SolEnvironment>> {
+		// The only reason to resign would be if the aggKey has been updated on chain (key rotation)
+		// and this apicall is signed with the old key and is still pending. In this case, we need
+		// to modify the apicall, by replacing the aggkey with the new key, in the key_accounts in
+		// the tx's message to create a new valid threshold signing payload.
+		maybe_current_onchain_key.map_or(RequiresSignatureRefresh::False, |current_on_chain_key| {
+			match call.signer() {
+				Some(signer) if signer != current_on_chain_key => {
+					let mut modified_call = (*call).clone();
+					SolanaThresholdSigner::active_epoch_key().map_or(
+						RequiresSignatureRefresh::False,
+						|active_epoch_key| {
+							let current_aggkey = active_epoch_key.key;
+							for key in modified_call.transaction.message.account_keys.iter_mut() {
+								if *key == signer.into() {
+									*key = current_aggkey.into()
+								}
+							}
+							for sig in modified_call.transaction.signatures.iter_mut() {
+								*sig = Default::default()
+							}
+							modified_call.signer = None;
+							RequiresSignatureRefresh::True(Some(modified_call.clone()))
+						},
+					)
+				},
+				_ => RequiresSignatureRefresh::False,
+			}
+		})
 	}
 }
 
@@ -653,7 +687,8 @@ macro_rules! impl_deposit_api_for_anychain {
 				broker_id: Self::AccountId,
 				channel_metadata: Option<CcmChannelMetadata>,
 				boost_fee: BasisPoints,
-				refund_parameters: Option<ChannelRefundParameters<ForeignChainAddress>>,
+				refund_parameters: Option<ChannelRefundParameters>,
+				dca_parameters: Option<DcaParameters>,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
 					$(
@@ -666,6 +701,7 @@ macro_rules! impl_deposit_api_for_anychain {
 							channel_metadata,
 							boost_fee,
 							refund_parameters,
+							dca_parameters,
 						).map(|(channel, address, block_number, channel_opening_fee)| (channel, address, block_number.into(), channel_opening_fee)),
 					)+
 				}
