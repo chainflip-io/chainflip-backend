@@ -57,7 +57,7 @@ macro_rules! generate_vote_storage_tuple_impls {
                                 })
                             },
                         )*
-                        _ => Err(CorruptStorageError),
+                        _ => Err(CorruptStorageError::new()),
                     }
                 }
 
@@ -80,7 +80,7 @@ macro_rules! generate_vote_storage_tuple_impls {
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeVoteStorageEnum::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),
-                                            _ => Err(CorruptStorageError),
+                                            _ => Err(CorruptStorageError::new()),
                                         }
                                     },
                                 )?.map(|(properties, authority_vote)| {
@@ -106,7 +106,7 @@ macro_rules! generate_vote_storage_tuple_impls {
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeVoteStorageEnum::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),
-                                            _ => Err(CorruptStorageError),
+                                            _ => Err(CorruptStorageError::new()),
                                         }
                                     },
                                 )?.map(|(properties, authority_vote)| {
@@ -132,7 +132,7 @@ macro_rules! generate_vote_storage_tuple_impls {
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeVoteStorageEnum::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),
-                                            _ => Err(CorruptStorageError),
+                                            _ => Err(CorruptStorageError::new()),
                                         }
                                     },
                                 )?.map(|(properties, authority_vote)| {
@@ -150,7 +150,7 @@ macro_rules! generate_vote_storage_tuple_impls {
                             individual_component: None,
                             bitmap_component: None,
                         } => Ok(None),
-                        _ => Err(CorruptStorageError),
+                        _ => Err(CorruptStorageError::new()),
                     }
                 }
 

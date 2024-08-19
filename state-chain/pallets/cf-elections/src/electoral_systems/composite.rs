@@ -189,12 +189,12 @@ macro_rules! generate_electoral_system_tuple_impls {
                                     Ok((
                                         match properties {
                                             CompositeVoteStorageEnum::$electoral_system(properties) => properties,
-                                            _ => return Err(CorruptStorageError),
+                                            _ => return Err(CorruptStorageError::new()),
                                         },
                                         match vote {
                                             AuthorityVote::PartialVote(CompositeVoteStorageEnum::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
                                             AuthorityVote::Vote(CompositeVoteStorageEnum::$electoral_system(vote)) => AuthorityVote::Vote(vote),
-                                            _ => return Err(CorruptStorageError),
+                                            _ => return Err(CorruptStorageError::new()),
                                         },
                                     ))
                                 }).transpose()?,
@@ -266,19 +266,19 @@ macro_rules! generate_electoral_system_tuple_impls {
                                     Ok((
                                         match previous_properties {
                                             CompositeVoteStorageEnum::$electoral_system(previous_properties) => previous_properties,
-                                            _ => return Err(CorruptStorageError),
+                                            _ => return Err(CorruptStorageError::new()),
                                         },
                                         match previous_vote {
                                             AuthorityVote::PartialVote(CompositeVoteStorageEnum::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
                                             AuthorityVote::Vote(CompositeVoteStorageEnum::$electoral_system(vote)) => AuthorityVote::Vote(vote),
-                                            _ => return Err(CorruptStorageError),
+                                            _ => return Err(CorruptStorageError::new()),
                                         },
                                     ))
                                 }).transpose()?,
                                 vote,
                             ).map(CompositeVoteStorageEnum::$electoral_system)
                         },)*
-                        _ => Err(CorruptStorageError),
+                        _ => Err(CorruptStorageError::new()),
                     }
                 }
 
@@ -314,7 +314,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                                 previous_consensus.map(|previous_consensus| {
                                     match previous_consensus {
                                         CompositeElectoralSystemEnum::$electoral_system(previous_consensus) => Ok(previous_consensus),
-                                        _ => Err(CorruptStorageError),
+                                        _ => Err(CorruptStorageError::new()),
                                     }
                                 }).transpose()?,
                                 votes.into_iter().map(|(properties, vote)| {
@@ -323,7 +323,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                                             CompositeVoteStorageEnum::$electoral_system(properties),
                                             CompositeVoteStorageEnum::$electoral_system(vote)
                                         ) => Ok((properties, vote)),
-                                        _ => Err(CorruptStorageError),
+                                        _ => Err(CorruptStorageError::new()),
                                     }
                                 }).collect::<Result<Vec<_>, _>>()?,
                                 authorities,
@@ -389,7 +389,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     CompositeElectoralSystemEnum::$current(properties) => {
                         Ok(properties)
                     },
-                    _ => Err(CorruptStorageError)
+                    _ => Err(CorruptStorageError::new())
                 }
             }
             fn state(&self) -> Result<$current::ElectionState, CorruptStorageError> {
@@ -397,7 +397,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     CompositeElectoralSystemEnum::$current(state) => {
                         Ok(state)
                     },
-                    _ => Err(CorruptStorageError)
+                    _ => Err(CorruptStorageError::new())
                 }
             }
         }
@@ -428,7 +428,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     consensus_status.try_map(|consensus| {
                         match consensus {
                             CompositeElectoralSystemEnum::$current(consensus) => Ok(consensus),
-                            _ => Err(CorruptStorageError),
+                            _ => Err(CorruptStorageError::new()),
                         }
                     })
 
@@ -468,7 +468,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 match self.ea.unsynchronised_state_map(&CompositeElectoralSystemEnum::$current(key.clone()))? {
                     Some(CompositeElectoralSystemEnum::$current(value)) => Ok(Some(value)),
                     None => Ok(None),
-                    _ => Err(CorruptStorageError),
+                    _ => Err(CorruptStorageError::new()),
                 }
             }
         }
