@@ -157,6 +157,8 @@ fn can_build_solana_batch_all() {
 		])
 		.build()
 		.execute_with(|| {
+			setup_sol_environments();
+
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
@@ -164,7 +166,6 @@ fn can_build_solana_batch_all() {
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
 
-			setup_sol_environments();
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
 
@@ -222,11 +223,12 @@ fn can_rotate_solana_vault() {
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
+			setup_sol_environments();
+
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {})
 				.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into())
 			);
-			setup_sol_environments();
 			testnet.move_to_the_next_epoch();
 
 			assert_eq!(Validator::epoch_index(), 2);
@@ -285,6 +287,8 @@ fn can_send_solana_ccm() {
 		])
 		.build()
 		.execute_with(|| {
+			setup_sol_environments();
+
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
@@ -292,7 +296,6 @@ fn can_send_solana_ccm() {
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
 
-			setup_sol_environments();
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
 
@@ -360,6 +363,8 @@ fn solana_ccm_fails_with_invalid_input() {
 		])
 		.build()
 		.execute_with(|| {
+			setup_sol_environments();
+
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
@@ -367,7 +372,6 @@ fn solana_ccm_fails_with_invalid_input() {
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
 
-			setup_sol_environments();
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
 
@@ -497,6 +501,8 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 		])
 		.build()
 		.execute_with(|| {
+			setup_sol_environments();
+
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
@@ -504,7 +510,6 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
 
-			setup_sol_environments();
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
 

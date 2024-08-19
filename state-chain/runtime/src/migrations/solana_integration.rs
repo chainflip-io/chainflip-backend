@@ -8,7 +8,6 @@ use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use sol_prim::consts::{const_address, const_hash};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
-use sp_runtime::FixedU128;
 use sp_std::vec;
 
 pub struct SolanaIntegration;
@@ -169,28 +168,12 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 		pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
 			durable_nonces_and_accounts,
 		);
-		// Ignore errors as it is not dangerous if the pallet fails to initialize (TODO possible
-		// makes sense to emit an event though?)
+		// Ignore errors as it is not dangerous if the pallet fails to initialize
 		let _result = pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::internally_initialize(
-			(
-				/* chain tracking */ Default::default(),
-				/* priority_fee */ 100000u32.into(),
-				(),
-			),
-			(
-				(),
-				solana_elections::SolanaFeeUnsynchronisedSettings {
-					fee_multiplier: FixedU128::from_u32(1u32),
-				},
-				(),
-			),
-			(
-				(),
-				(),
-				solana_elections::SolanaIngressSettings {
-					vault_program: sol_env.vault_program,
-					usdc_token_mint_pubkey: sol_env.usdc_token_mint_pubkey,
-				},
+			solana_elections::initial_state(
+				100000,
+				sol_env.vault_program,
+				sol_env.usdc_token_mint_pubkey,
 			),
 		);
 		Weight::zero()

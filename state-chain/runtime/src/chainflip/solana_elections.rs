@@ -1,7 +1,7 @@
 use crate::Runtime;
 use cf_chains::{
 	instances::ChainInstanceAlias,
-	sol::{SolAddress, SolTrackedData},
+	sol::{SolAddress, SolAmount, SolTrackedData},
 	Chain, FeeEstimationApi, Solana,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -13,7 +13,7 @@ use pallet_cf_elections::{
 		self,
 		composite::{tuple_3_impls::Hooks, Composite, Translator},
 	},
-	CorruptStorageError, ElectionIdentifier,
+	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -26,6 +26,29 @@ pub type SolanaElectoralSystem = Composite<
 	(SolanaBlockHeightTracking, SolanaFeeTracking, SolanaIngressTracking),
 	SolanaElectionHooks,
 >;
+
+/// Creates an initial state to initialize the pallet with.
+pub fn initial_state(
+	priority_fee: SolAmount,
+	vault_program: SolAddress,
+	usdc_token_mint_pubkey: SolAddress,
+) -> InitialStateOf<Runtime, Instance> {
+	InitialState {
+		unsynchronised_state: (
+			// The initial chaintracking value does not matter, as we don't care about the vault
+			// start blocks.
+			Default::default(),
+			priority_fee,
+			(),
+		),
+		unsynchronised_settings: (
+			(),
+			SolanaFeeUnsynchronisedSettings { fee_multiplier: FixedU128::from_u32(1u32) },
+			(),
+		),
+		settings: ((), (), SolanaIngressSettings { vault_program, usdc_token_mint_pubkey }),
+	}
+}
 
 pub type SolanaBlockHeightTracking =
 	electoral_systems::median::MonotonicMedian<<Solana as Chain>::ChainBlockNumber, ()>;
