@@ -455,7 +455,7 @@ pub mod mocks {
 						.election_settings
 						.get(&self.election_identifier)
 						.cloned()
-						.unwrap())
+						.ok_or(CorruptStorageError)?)
 				}
 
 				fn properties(
@@ -469,7 +469,7 @@ pub mod mocks {
 						.election_properties
 						.get(&self.election_identifier)
 						.cloned()
-						.unwrap())
+						.ok_or(CorruptStorageError)?)
 				}
 
 				fn state(
@@ -483,7 +483,7 @@ pub mod mocks {
 						.election_state
 						.get(&self.election_identifier)
 						.cloned()
-						.unwrap())
+						.ok_or(CorruptStorageError)?)
 				}
 			}
 		};
@@ -630,7 +630,7 @@ pub mod mocks {
 				.iter()
 				.find(|(k, _)| k == key)
 				.map(|(_, v)| v.clone())
-				.expect("Key not found"))
+				.flatten())
 		}
 	}
 
