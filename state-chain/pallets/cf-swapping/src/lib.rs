@@ -1335,12 +1335,21 @@ pub mod pallet {
 					dca_state: DcaState { remaining_input_amount, accumulated_output_amount, .. },
 					broker_fees: _,
 				} => {
-					if let Some(_ccm) = ccm {
+					if let Some(ccm) = ccm {
 						// TODO: add remaining DCA input to the refunded amount (DCA isn't yet
 						// implemented for CCM so we always refund the full amount)
+
+						let gas_refund = if let GasSwapState::ToBeScheduled { gas_budget, .. } =
+							ccm.gas_swap_state
+						{
+							gas_budget
+						} else {
+							0
+						};
+
 						Self::egress_for_swap(
 							request.id,
-							swap.input_amount,
+							swap.input_amount + gas_refund,
 							request.input_asset,
 							refund_params.refund_address,
 							None, /* ccm */

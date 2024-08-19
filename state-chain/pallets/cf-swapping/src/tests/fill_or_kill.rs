@@ -307,3 +307,96 @@ fn fok_test_zero_refund_duration() {
 			);
 		});
 }
+
+#[test]
+fn fok_ccm_happy_path() {
+	const PRINCIPAL_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const GAS_BLOCK: u64 = PRINCIPAL_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+	const REQUEST_ID: u64 = 1;
+	const PRINCIPAL_SWAP_ID: u64 = 1;
+	const GAS_SWAP_ID: u64 = 2;
+
+	const EXPECTED_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE;
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_eq!(System::block_number(), INIT_BLOCK);
+
+			insert_swaps(&vec![fok_swap_ccm(Some(TestRefundParams {
+				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+				min_output: EXPECTED_OUTPUT,
+			}))]);
+
+			assert_swaps_scheduled_for_block(&[PRINCIPAL_SWAP_ID], PRINCIPAL_BLOCK);
+		})
+		.then_execute_at_block(PRINCIPAL_BLOCK, |_| {})
+		.then_execute_with(|_| {
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: PRINCIPAL_SWAP_ID, .. }),
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_id: GAS_SWAP_ID,
+					swap_type: SwapType::CcmGas,
+					..
+				}),
+			);
+		})
+		.then_execute_at_block(GAS_BLOCK, |_| {})
+		.then_execute_with(|_| {
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: GAS_SWAP_ID, .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: REQUEST_ID,
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
+			);
+		});
+}
+
+#[test]
+fn fok_ccm_refunded() {
+	const PRINCIPAL_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+	const REQUEST_ID: u64 = 1;
+	const PRINCIPAL_SWAP_ID: u64 = 1;
+
+	const PRINCIPAL_AMOUNT: AssetAmount = INPUT_AMOUNT - GAS_BUDGET;
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_eq!(System::block_number(), INIT_BLOCK);
+
+			insert_swaps(&vec![fok_swap_ccm(Some(TestRefundParams {
+				retry_duration: 0,
+				min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
+			}))]);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_id: PRINCIPAL_SWAP_ID,
+					swap_type: SwapType::CcmPrincipal,
+					input_amount: PRINCIPAL_AMOUNT,
+					..
+				}),
+			);
+
+			assert_swaps_scheduled_for_block(&[PRINCIPAL_SWAP_ID], PRINCIPAL_BLOCK);
+		})
+		.then_execute_at_block(PRINCIPAL_BLOCK, |_| {})
+		.then_execute_with(|_| {
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
+				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
+					swap_request_id: REQUEST_ID,
+					// Note that gas is refunded too:
+					amount: INPUT_AMOUNT,
+					..
+				}),
+			);
+		});
+}
