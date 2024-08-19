@@ -32,16 +32,16 @@ const MAXIMUM_CHANNELS_PER_ELECTION: u32 = 50;
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(TargetChain))]
 pub struct ChannelTotalIngressed<TargetChain: Chain> {
-	block_number: <TargetChain as Chain>::ChainBlockNumber,
-	amount: <TargetChain as Chain>::ChainAmount,
+	pub block_number: <TargetChain as Chain>::ChainBlockNumber,
+	pub amount: <TargetChain as Chain>::ChainAmount,
 }
 impl<TargetChain: Chain> Copy for ChannelTotalIngressed<TargetChain> {}
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(TargetChain))]
 pub struct OpenChannelDetails<TargetChain: Chain> {
-	asset: <TargetChain as Chain>::ChainAsset,
-	close_block: <TargetChain as Chain>::ChainBlockNumber,
+	pub asset: <TargetChain as Chain>::ChainAsset,
+	pub close_block: <TargetChain as Chain>::ChainBlockNumber,
 }
 
 pub struct DeltaBasedIngress<Sink: IngressSink, Settings> {
@@ -139,6 +139,28 @@ where
 		BTreeMap<<Sink::Chain as Chain>::ChainAccount, ChannelTotalIngressed<Sink::Chain>>;
 	type OnFinalizeContext = <Sink::Chain as Chain>::ChainBlockNumber;
 	type OnFinalizeReturn = ();
+
+	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
+		_election_identifier_with_extra: ElectionIdentifier<Self::ElectionIdentifierExtra>,
+		_election_access: &ElectionAccess,
+		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+	) -> Result<bool, CorruptStorageError> {
+		Ok(true)
+	}
+
+	fn is_vote_needed(
+		(_, current_partial_vote, _): (
+			VotePropertiesOf<Self>,
+			<Self::Vote as VoteStorage>::PartialVote,
+			AuthorityVoteOf<Self>,
+		),
+		(proposed_partial_vote, _): (
+			<Self::Vote as VoteStorage>::PartialVote,
+			<Self::Vote as VoteStorage>::Vote,
+		),
+	) -> bool {
+		current_partial_vote != proposed_partial_vote
+	}
 
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
@@ -336,7 +358,7 @@ where
 								account,
 								ChannelTotalIngressed {
 									// Requires 2/3 to decrease the block_number,
-									block_number: contributing_channel_votes[threshold]
+									block_number: contributing_channel_votes[threshold - 1]
 										.block_number,
 									// Requires 2/3 to increase the amount
 									amount: contributing_channel_votes

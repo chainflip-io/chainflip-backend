@@ -86,8 +86,15 @@ impl<
 	}
 
 	fn is_vote_needed(
-		(_, current_vote): (VotePropertiesOf<Self>, AuthorityVoteOf<Self>),
-		proposed_vote: <Self::Vote as VoteStorage>::Vote,
+		(_, _, current_vote): (
+			VotePropertiesOf<Self>,
+			<Self::Vote as VoteStorage>::PartialVote,
+			AuthorityVoteOf<Self>,
+		),
+		(_, proposed_vote): (
+			<Self::Vote as VoteStorage>::PartialVote,
+			<Self::Vote as VoteStorage>::Vote,
+		),
 	) -> bool {
 		match current_vote {
 			AuthorityVoteOf::<Self>::Vote(current_vote) => current_vote != proposed_vote,

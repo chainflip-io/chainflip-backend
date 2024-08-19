@@ -1,23 +1,8 @@
-mod chain_tracking;
 mod nonce_witnessing;
 mod sol_deposits;
-mod source;
 
-use std::{collections::HashMap, sync::Arc};
-
-use cf_primitives::EpochIndex;
-use futures_core::Future;
-use utilities::task_scope::Scope;
-
-use super::{
-	common::{
-		chain_source::{extension::ChainSourceExt, Header},
-		epoch_source::{EpochSourceBuilder, Vault},
-	},
-	sol::source::SolSource,
-};
 use crate::{
-	db::PersistentKeyDB,
+	elections::voter_api::{CompositeVoter, VoterApi},
 	sol::{
 		commitment_config::CommitmentConfig,
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
@@ -26,17 +11,137 @@ use crate::{
 		},
 	},
 	state_chain_observer::client::{
-		chain_api::ChainApi,
-		extrinsic_api::signed::SignedExtrinsicApi,
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED},
+		chain_api::ChainApi, electoral_api::ElectoralApi,
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
+	witness::{
+		common::{chain_source::Header, epoch_source::Vault},
+		sol::sol_deposits::get_channel_ingress_amounts,
 	},
 };
+use anyhow::Result;
 use cf_chains::sol::{SolHash, SolSignature, LAMPORTS_PER_SIGNATURE};
+use cf_primitives::EpochIndex;
+use futures::FutureExt;
+use futures_core::Future;
+use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
+use state_chain_runtime::{
+	chainflip::solana_elections::{
+		SolanaBlockHeightTracking, SolanaElectoralSystem, SolanaFeeTracking, SolanaIngressTracking,
+	},
+	SolanaInstance,
+};
+use std::sync::Arc;
+use utilities::{context, task_scope, task_scope::Scope};
 
-use crate::common::Mutex;
-use anyhow::{Context, Result};
-use state_chain_runtime::SolanaInstance;
+#[derive(Clone)]
+struct SolanaBlockHeightTrackingVoter {
+	client: SolRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaBlockHeightTracking> for SolanaBlockHeightTrackingVoter {
+	async fn vote(
+		&self,
+		_settings: <SolanaBlockHeightTracking as ElectoralSystem>::ElectoralSettings,
+		_properties: <SolanaBlockHeightTracking as ElectoralSystem>::ElectionProperties,
+	) -> Result<
+		<<SolanaBlockHeightTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
+		anyhow::Error,
+	> {
+		Ok(self.client.get_slot(CommitmentConfig::finalized()).await)
+	}
+}
+
+#[derive(Clone)]
+struct SolanaFeeTrackingVoter {
+	client: SolRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaFeeTracking> for SolanaFeeTrackingVoter {
+	async fn vote(
+		&self,
+		_settings: <SolanaFeeTracking as ElectoralSystem>::ElectoralSettings,
+		_properties: <SolanaFeeTracking as ElectoralSystem>::ElectionProperties,
+	) -> Result<<<SolanaFeeTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error>
+	{
+		let priorization_fees = self.client.get_recent_prioritization_fees().await;
+
+		let mut priority_fees: Vec<u64> =
+			priorization_fees.iter().map(|f| f.prioritization_fee).collect();
+		priority_fees.sort();
+
+		Ok(context!(priority_fees.get(priority_fees.len().saturating_sub(1) / 2).cloned())?)
+	}
+}
+
+#[derive(Clone)]
+struct SolanaIngressTrackingVoter {
+	client: SolRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaIngressTracking> for SolanaIngressTrackingVoter {
+	async fn vote(
+		&self,
+		settings: <SolanaIngressTracking as ElectoralSystem>::ElectoralSettings,
+		properties: <SolanaIngressTracking as ElectoralSystem>::ElectionProperties,
+	) -> Result<
+		<<SolanaIngressTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
+		anyhow::Error,
+	> {
+		get_channel_ingress_amounts(
+			&self.client,
+			settings.vault_program,
+			settings.usdc_token_mint_pubkey,
+			properties,
+		)
+		.await
+		.and_then(|vote| {
+			vote.try_into().map_err(|_| anyhow::anyhow!("Too many channels in election"))
+		})
+	}
+}
+
+pub async fn start<StateChainClient>(
+	scope: &Scope<'_, anyhow::Error>,
+	client: SolRetryRpcClient,
+	state_chain_client: Arc<StateChainClient>,
+) -> Result<()>
+where
+	StateChainClient: StorageApi
+		+ ChainApi
+		+ SignedExtrinsicApi
+		+ ElectoralApi<SolanaInstance>
+		+ 'static
+		+ Send
+		+ Sync,
+{
+	scope.spawn(async move {
+		task_scope::task_scope(|scope| {
+			async {
+				crate::elections::Voter::new(
+					scope,
+					state_chain_client,
+					CompositeVoter::<SolanaElectoralSystem, _>::new((
+						SolanaBlockHeightTrackingVoter { client: client.clone() },
+						SolanaFeeTrackingVoter { client: client.clone() },
+						SolanaIngressTrackingVoter { client },
+					)),
+				)
+				.continuously_vote()
+				.await;
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+	});
+
+	Ok(())
+}
 
 pub async fn process_egress<ProcessCall, ProcessingFut>(
 	epoch: Vault<cf_chains::Solana, (), ()>,
@@ -132,104 +237,6 @@ where
 	}
 
 	finalized_txs_info
-}
-
-pub async fn start<StateChainClient, StateChainStream, ProcessCall, ProcessingFut>(
-	scope: &Scope<'_, anyhow::Error>,
-	sol_client: SolRetryRpcClient,
-	process_call: ProcessCall,
-	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: StateChainStream,
-	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
-	db: Arc<PersistentKeyDB>,
-) -> Result<()>
-where
-	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StreamApi<FINALIZED> + Clone,
-	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	ProcessingFut: Future<Output = ()> + Send + 'static,
-{
-	let sol_env = state_chain_client
-		.storage_value::<pallet_cf_environment::SolanaApiEnvironment<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_block().hash,
-		)
-		.await
-		.context("Failed to get Solana Environment from SC")?;
-
-	let sol_source = SolSource::new(sol_client.clone()).strictly_monotonic().shared(scope);
-
-	sol_source
-		.clone()
-		.chunk_by_time(epoch_source.clone(), scope)
-		.chain_tracking(state_chain_client.clone(), sol_client.clone())
-		.logging("chain tracking")
-		.spawn(scope);
-
-	let vaults = epoch_source.vaults::<cf_chains::Solana>().await;
-
-	// ===== Full witnessing stream =====
-
-	// Not using safety margin in Solana
-	let sol_safe_vault_source =
-		sol_source.logging("safe block produced").chunk_by_vault(vaults, scope);
-
-	let sol_safe_vault_source_deposit_addresses = sol_safe_vault_source
-		.clone()
-		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await;
-
-	// In the new pallet we'll be submitting to cumulative historical balance of each deposit
-	// channel. We cache the balance of deposit channels to avoid submitting them on every query.
-	// Upon restarting the CFE all the balances will be resubmitted, as the cache is not persistent
-	// and the pallet will handle it correctly.
-	let cached_balances = Arc::new(Mutex::new(HashMap::new()));
-
-	sol_safe_vault_source_deposit_addresses
-		.clone()
-		.sol_deposits(
-			process_call.clone(),
-			sol_client.clone(),
-			sol_env.vault_program,
-			cached_balances.clone(),
-			sol_env.usdc_token_mint_pubkey,
-		)
-		.await
-		.continuous("SolanaDeposits".to_string(), db.clone())
-		.logging("SolanaDeposits")
-		.spawn(scope);
-
-	// Witnessing the state of the nonce accounts periodically. It could also be done only when a
-	// broadcast is witnessed, which is the only time a nonce account should change. Doing it
-	// periocally is more reliable to ensure we don't miss a change in the value but will require an
-	// extra rpc call.
-	sol_safe_vault_source_deposit_addresses
-		.clone()
-		.witness_nonces(process_call.clone(), sol_client.clone(), state_chain_client.clone())
-		.await
-		.continuous("SolanaNonceWitnessing".to_string(), db.clone())
-		.logging("SolanaNonceWitnessing")
-		.spawn(scope);
-
-	sol_safe_vault_source
-		.clone()
-		.egress_items(scope, state_chain_stream, state_chain_client.clone())
-		.await
-		.then({
-			let process_call = process_call.clone();
-			let sol_client = sol_client.clone();
-			move |epoch, header| {
-				process_egress(epoch, header, process_call.clone(), sol_client.clone())
-			}
-		})
-		.continuous("SolanaEgress".to_string(), db)
-		.logging("Egress")
-		.spawn(scope);
-
-	Ok(())
 }
 
 #[cfg(test)]
