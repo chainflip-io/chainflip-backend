@@ -88,6 +88,7 @@ fn schedule_deposit_to_swap(
 		0u16,
 		Default::default(),
 		None,
+		None,
 	));
 
 	let deposit_address = <AddressDerivation as AddressDerivationApi<Solana>>::generate_address(
@@ -384,6 +385,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					Some(invalid_ccm.channel_metadata.clone()),
 					0u16,
 					Default::default(),
+					None,
 					None,
 				),
 				pallet_cf_swapping::Error::<Runtime>::InvalidCcm,

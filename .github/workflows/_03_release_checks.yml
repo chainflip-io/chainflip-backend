@@ -11,7 +11,7 @@ env:
 
 jobs:
   check-version:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     strategy:
       matrix:
         manifest:
@@ -48,7 +48,7 @@ jobs:
           fi
 
   check-changelog:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     if: inputs.network != 'sisyphos'
     steps:
       - name: Checkout 🛒
@@ -59,7 +59,7 @@ jobs:
         run: ./ci/scripts/check_changelog.sh ${{ github.ref_name }}
 
   check-runtime-spec-version:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -69,7 +69,7 @@ jobs:
         run: ./ci/scripts/check_runtime_spec_version.sh berghain
 
   notify-discord-on-failure:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     needs: [check-version, check-changelog, check-runtime-spec-version]
     if: failure()
     steps:
