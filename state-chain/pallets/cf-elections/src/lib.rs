@@ -1397,7 +1397,7 @@ pub mod pallet {
 
 		#[pallet::call_index(33)]
 		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
-		pub fn invalid_election_consensus_cache(
+		pub fn invalidate_election_consensus_cache(
 			origin: OriginFor<T>,
 			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
 			ignore_corrupt_storage: CorruptStorageAdherance,

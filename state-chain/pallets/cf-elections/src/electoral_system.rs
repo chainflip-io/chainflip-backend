@@ -260,6 +260,7 @@ mod access {
 	pub trait ElectionReadAccess {
 		type ElectoralSystem: ElectoralSystem;
 
+		/// Get the ElectoralSettings that are active for this election.
 		fn settings(
 			&self,
 		) -> Result<
