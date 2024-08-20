@@ -2,7 +2,9 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import Keyring from '../polkadot/keyring';
+// eslint-disable-next-line no-restricted-imports
+import { KeyringPair } from '@polkadot/keyring/types';
+import  Keyring  from '../polkadot/keyring';
 import {
   brokerMutex,
   decodeDotAddressForContract,
@@ -11,16 +13,13 @@ import {
   observeBalanceIncrease,
   shortChainFromAsset,
   hexStringToBytesArray,
-  calculateFeeWithBps,
   amountToFineAmountBigInt,
   SwapRequestType,
   observeSwapRequested,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
-import { doPerformSwap } from '../shared/perform_swap';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { send } from './send';
-import { KeyringPair } from '@polkadot/keyring/types';
 
 const swapAssetAmount = {
   [Assets.Eth]: 1,
