@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::{H256, U256};
 use state_chain_runtime::RuntimeCall;
 use std::ops::Range;
+use types::LimitOrRangeOrder;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -79,7 +80,7 @@ pub mod types {
 	}
 
 	#[derive(Serialize, Deserialize, Clone)]
-	pub enum Order {
+	pub enum LimitOrRangeOrder {
 		LimitOrder(LimitOrder),
 		RangeOrder(RangeOrder),
 	}
@@ -88,34 +89,9 @@ pub mod types {
 fn collect_range_order_returns(
 	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
 ) -> Vec<types::RangeOrder> {
-	events
-		.into_iter()
-		.filter_map(|event| match event {
-			state_chain_runtime::RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::RangeOrderUpdated {
-					size_change,
-					liquidity_total,
-					collected_fees,
-					tick_range,
-					base_asset,
-					quote_asset,
-					id,
-					..
-				},
-			) => Some(types::RangeOrder {
-				base_asset,
-				quote_asset,
-				id: id.into(),
-				size_change: size_change.map(|increase_or_decrese| {
-					increase_or_decrese.map(|range_order_change| types::RangeOrderChange {
-						liquidity: range_order_change.liquidity.into(),
-						amounts: range_order_change.amounts.map(|amount| amount.into()),
-					})
-				}),
-				liquidity_total: liquidity_total.into(),
-				tick_range,
-				collected_fees: collected_fees.map(Into::into),
-			}),
+	filter_orders(events)
+		.filter_map(|order| match order {
+			types::LimitOrRangeOrder::RangeOrder(range_order) => Some(range_order),
 			_ => None,
 		})
 		.collect()
@@ -124,34 +100,9 @@ fn collect_range_order_returns(
 fn collect_limit_order_returns(
 	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
 ) -> Vec<types::LimitOrder> {
-	events
-		.into_iter()
-		.filter_map(|event| match event {
-			state_chain_runtime::RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::LimitOrderUpdated {
-					sell_amount_change,
-					sell_amount_total,
-					collected_fees,
-					bought_amount,
-					tick,
-					base_asset,
-					quote_asset,
-					side,
-					id,
-					..
-				},
-			) => Some(types::LimitOrder {
-				base_asset,
-				quote_asset,
-				side,
-				id: id.into(),
-				tick,
-				sell_amount_total: sell_amount_total.into(),
-				collected_fees: collected_fees.into(),
-				bought_amount: bought_amount.into(),
-				sell_amount_change: sell_amount_change
-					.map(|increase_or_decrese| increase_or_decrese.map(|amount| amount.into())),
-			}),
+	filter_orders(events)
+		.filter_map(|order| match order {
+			types::LimitOrRangeOrder::LimitOrder(limit_order) => Some(limit_order),
 			_ => None,
 		})
 		.collect()
@@ -159,63 +110,66 @@ fn collect_limit_order_returns(
 
 fn collect_order_returns(
 	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
-) -> Vec<types::Order> {
-	events
-		.into_iter()
-		.filter_map(|event| match event {
-			state_chain_runtime::RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::LimitOrderUpdated {
-					sell_amount_change,
-					sell_amount_total,
-					collected_fees,
-					bought_amount,
-					tick,
-					base_asset,
-					quote_asset,
-					side,
-					id,
-					..
-				},
-			) => Some(types::Order::LimitOrder(types::LimitOrder {
+) -> Vec<types::LimitOrRangeOrder> {
+	filter_orders(events).collect()
+}
+
+fn filter_orders(
+	events: impl IntoIterator<Item = state_chain_runtime::RuntimeEvent>,
+) -> impl Iterator<Item = LimitOrRangeOrder> {
+	events.into_iter().filter_map(|event| match event {
+		state_chain_runtime::RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::LimitOrderUpdated {
+				sell_amount_change,
+				sell_amount_total,
+				collected_fees,
+				bought_amount,
+				tick,
 				base_asset,
 				quote_asset,
 				side,
-				id: id.into(),
-				tick,
-				sell_amount_total: sell_amount_total.into(),
-				collected_fees: collected_fees.into(),
-				bought_amount: bought_amount.into(),
-				sell_amount_change: sell_amount_change
-					.map(|increase_or_decrease| increase_or_decrease.map(|amount| amount.into())),
-			})),
-			state_chain_runtime::RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::RangeOrderUpdated {
-					size_change,
-					liquidity_total,
-					collected_fees,
-					tick_range,
-					base_asset,
-					quote_asset,
-					id,
-					..
-				},
-			) => Some(types::Order::RangeOrder(types::RangeOrder {
+				id,
+				..
+			},
+		) => Some(types::LimitOrRangeOrder::LimitOrder(types::LimitOrder {
+			base_asset,
+			quote_asset,
+			side,
+			id: id.into(),
+			tick,
+			sell_amount_total: sell_amount_total.into(),
+			collected_fees: collected_fees.into(),
+			bought_amount: bought_amount.into(),
+			sell_amount_change: sell_amount_change
+				.map(|increase_or_decrease| increase_or_decrease.map(|amount| amount.into())),
+		})),
+		state_chain_runtime::RuntimeEvent::LiquidityPools(
+			pallet_cf_pools::Event::RangeOrderUpdated {
+				size_change,
+				liquidity_total,
+				collected_fees,
+				tick_range,
 				base_asset,
 				quote_asset,
-				id: id.into(),
-				size_change: size_change.map(|increase_or_decrease| {
-					increase_or_decrease.map(|range_order_change| types::RangeOrderChange {
-						liquidity: range_order_change.liquidity.into(),
-						amounts: range_order_change.amounts.map(|amount| amount.into()),
-					})
-				}),
-				liquidity_total: liquidity_total.into(),
-				tick_range,
-				collected_fees: collected_fees.map(Into::into),
-			})),
-			_ => None,
-		})
-		.collect()
+				id,
+				..
+			},
+		) => Some(types::LimitOrRangeOrder::RangeOrder(types::RangeOrder {
+			base_asset,
+			quote_asset,
+			id: id.into(),
+			size_change: size_change.map(|increase_or_decrease| {
+				increase_or_decrease.map(|range_order_change| types::RangeOrderChange {
+					liquidity: range_order_change.liquidity.into(),
+					amounts: range_order_change.amounts.map(|amount| amount.into()),
+				})
+			}),
+			liquidity_total: liquidity_total.into(),
+			tick_range,
+			collected_fees: collected_fees.map(Into::into),
+		})),
+		_ => None,
+	})
 }
 
 impl LpApi for StateChainClient {}
@@ -498,7 +452,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		&self,
 		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: WaitFor,
-	) -> Result<ApiWaitForResult<Vec<types::Order>>> {
+	) -> Result<ApiWaitForResult<Vec<types::LimitOrRangeOrder>>> {
 		Ok(into_api_wait_for_result(
 			self.submit_signed_extrinsic_wait_for(
 				pallet_cf_pools::Call::cancel_orders_batch { orders },

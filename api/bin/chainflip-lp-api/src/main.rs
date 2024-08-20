@@ -8,7 +8,7 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		types::{LimitOrder, Order, RangeOrder},
+		types::{LimitOrRangeOrder, LimitOrder, RangeOrder},
 		ApiWaitForResult, LpApi, PoolPairsMap, Side, Tick,
 	},
 	primitives::{
@@ -205,14 +205,14 @@ pub trait Rpc {
 	async fn cancel_all_orders(
 		&self,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<Vec<ApiWaitForResult<Vec<Order>>>>;
+	) -> RpcResult<Vec<ApiWaitForResult<Vec<LimitOrRangeOrder>>>>;
 
 	#[method(name = "cancel_orders_batch")]
 	async fn cancel_orders_batch(
 		&self,
 		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<Vec<Order>>>;
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
 }
 
 pub struct RpcServerImpl {
@@ -517,7 +517,7 @@ impl RpcServer for RpcServerImpl {
 	async fn cancel_all_orders(
 		&self,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<Vec<ApiWaitForResult<Vec<Order>>>> {
+	) -> RpcResult<Vec<ApiWaitForResult<Vec<LimitOrRangeOrder>>>> {
 		let mut orders_to_delete: Vec<CloseOrder> = vec![];
 		let pool_environment = self
 			.api
@@ -592,7 +592,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<Vec<Order>>> {
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
 		Ok(self
 			.api
 			.lp_api()
