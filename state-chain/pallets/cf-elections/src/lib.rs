@@ -1570,11 +1570,13 @@ pub mod pallet {
 									let mut settings_boundaries =
 										ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
 									settings_boundaries.sort();
-									for setting_boundary in
-										&settings_boundaries[..settings_boundaries[..]
+									for setting_boundary in &settings_boundaries
+										[..settings_boundaries[..]
 											.partition_point(|&setting_boundary| {
-												setting_boundary < minimum_election_identifiers
-											})] {
+												setting_boundary <= minimum_election_identifiers
+											})
+											.saturating_sub(1) /*Keep the latest settings lower than the minimum election identifier, i.e. the settings referenced by the election with the minimum election identifier*/]
+									{
 										ElectoralSettings::<T, I>::remove(setting_boundary);
 									}
 
