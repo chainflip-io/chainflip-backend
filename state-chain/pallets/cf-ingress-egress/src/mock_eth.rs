@@ -1,5 +1,5 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use crate::{DepositBalances, DepositWitness, PalletSafeMode};
+use crate::{DepositWitness, PalletSafeMode};
 
 use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
@@ -269,32 +269,6 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 					.unwrap(),
 				})
 				.collect()
-		})
-	}
-}
-
-pub trait CheckDepositBalances {
-	fn check_deposit_balances(
-		self,
-		expected_balances: &[(TestChainAsset, TestChainAmount)],
-	) -> Self;
-}
-
-impl<Ctx: Clone> CheckDepositBalances for TestExternalities<Test, Ctx> {
-	#[track_caller]
-	fn check_deposit_balances(
-		self,
-		expected_balances: &[(TestChainAsset, TestChainAmount)],
-	) -> Self {
-		self.inspect_storage(|_| {
-			for (asset, expected_balance) in expected_balances {
-				assert_eq!(
-					DepositBalances::<Test, _>::get(asset).total(),
-					*expected_balance,
-					"Unexpected balance for {asset:?}. Expected {expected_balance}, got {:?}.",
-					DepositBalances::<Test, _>::get(asset)
-				);
-			}
 		})
 	}
 }
