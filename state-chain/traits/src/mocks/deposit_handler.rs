@@ -4,7 +4,7 @@ use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotAccountId, CcmChannelMetadata, Chain,
 	ChannelRefundParameters, ForeignChain,
 };
-use cf_primitives::{chains::assets::any, BasisPoints, Beneficiaries, ChannelId};
+use cf_primitives::{chains::assets::any, BasisPoints, Beneficiaries, ChannelId, DcaParameters};
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
@@ -125,6 +125,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
 		_refund_params: Option<ChannelRefundParameters>,
+		_dca_params: Option<DcaParameters>,
 	) -> Result<
 		(cf_primitives::ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount),
 		DispatchError,

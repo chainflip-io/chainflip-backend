@@ -24,9 +24,6 @@ use sp_runtime::{
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-/// The swap retry delay that the mock uses for genesis.
-pub const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u64 = 5;
-
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test {
@@ -70,10 +67,13 @@ impl system::Config for Test {
 impl_mock_chainflip!(Test);
 impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }
 
+// NOTE: the use of u128 lets us avoid type conversions in tests:
+pub const DEFAULT_SWAP_RATE: u128 = 2;
+
 parameter_types! {
 	pub static NetworkFee: Permill = Permill::from_perthousand(0);
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
-	pub static SwapRate: f64 = 1f64;
+	pub static SwapRate: f64 = DEFAULT_SWAP_RATE as f64;
 }
 
 thread_local! {
@@ -163,13 +163,7 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
-	RuntimeGenesisConfig{
-		swapping: pallet_cf_swapping::GenesisConfig {
-			swap_retry_delay: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-			..Default::default()
-		},
-		..Default::default()
-	},
+	RuntimeGenesisConfig::default(),
 	|| {
 		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE).unwrap();
 	},

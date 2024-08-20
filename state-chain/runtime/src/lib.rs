@@ -9,7 +9,6 @@ pub mod runtime_apis;
 pub mod safe_mode;
 #[cfg(feature = "std")]
 pub mod test_runner;
-use cf_runtime_upgrade_utilities::VersionedMigration;
 mod weights;
 use crate::{
 	chainflip::{calculate_account_apy, Offence},
@@ -25,7 +24,6 @@ use crate::{
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
 	},
 };
-
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
@@ -46,7 +44,10 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
-use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi, NoLimit};
+use cf_runtime_upgrade_utilities::VersionedMigration;
+use cf_traits::{
+	AdjustedFeeEstimationApi, AssetConverter, LpBalanceApi, NoLimit, SwapLimits, SwapLimitsProvider,
+};
 use codec::{alloc::string::ToString, Encode};
 use core::ops::Range;
 use frame_support::instances::*;
@@ -60,7 +61,7 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 
-use pallet_cf_reputation::{ExclusionList, ReputationPointsQualification};
+use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
@@ -212,7 +213,7 @@ impl pallet_cf_validator::Config for Runtime {
 	);
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type KeygenQualification = (
-		Reputation,
+		HeartbeatQualification<Self>,
 		(
 			ExclusionList<Self, chainflip::KeygenExclusionOffences>,
 			(
@@ -353,6 +354,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
+	type SwapLimitsProvider = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -374,6 +376,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
+	type SwapLimitsProvider = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -395,6 +398,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
+	type SwapLimitsProvider = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -416,6 +420,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
+	type SwapLimitsProvider = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -437,6 +442,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AssetWithholding = AssetBalances;
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
+	type SwapLimitsProvider = Swapping;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -1140,7 +1146,7 @@ type AllMigrations = (
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
-	MigrationsForV1_5,
+	MigrationsForV1_6,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1181,56 +1187,18 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
-	// TODO: After this migration is run, remember to un-comment the
-	// Solana-specific pallet migrations.
+);
+
+type MigrationsForV1_6 = (
 	VersionedMigration<
 		pallet_cf_environment::Pallet<Runtime>,
 		migrations::solana_integration::SolanaIntegration,
 		11,
 		12,
 	>,
-	MigrateApicalls,
+	migrations::housekeeping::Migration,
+	migrations::reap_old_accounts::Migration,
 );
-
-type MigrateApicalls = (
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
-		migrations::migrate_apicalls_to_store_signer::EthMigrateApicallsAndOnChainKey,
-		5,
-		6,
-	>,
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
-		migrations::migrate_apicalls_to_store_signer::DotMigrateApicallsAndOnChainKey,
-		5,
-		6,
-	>,
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
-		migrations::migrate_apicalls_to_store_signer::BtcMigrateApicallsAndOnChainKey,
-		5,
-		6,
-	>,
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
-		migrations::migrate_apicalls_to_store_signer::ArbMigrateApicallsAndOnChainKey,
-		5,
-		6,
-	>,
-	// The apicalls migration is not needed for solana since solana is not initizlized yet and so
-	// the storage items do not exist yet.
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		migrations::migrate_apicalls_to_store_signer::NoSolUpgrade,
-		5,
-		6,
-	>,
-);
-
-// TODO: After this  release, remember to un-comment the
-// Arbitrum-specific pallet migrations.
-type MigrationsForV1_5 =
-	(migrations::housekeeping::Migration, migrations::reap_old_accounts::Migration);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -1359,7 +1327,7 @@ impl_runtime_apis! {
 				is_current_authority,
 				is_current_backup,
 				is_qualified: is_bidding && is_qualified,
-				is_online: Reputation::is_qualified(account_id),
+				is_online: HeartbeatQualification::<Runtime>::is_qualified(account_id),
 				is_bidding,
 				bound_redeem_address,
 				apy_bp,
@@ -1737,15 +1705,8 @@ impl_runtime_apis! {
 			pallet_cf_swapping::SwapRetryDelay::<Runtime>::get()
 		}
 
-		fn cf_max_swap_retry_duration_blocks(chain: ForeignChain) -> u32 {
-			match chain {
-				ForeignChain::Bitcoin => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, BitcoinInstance>::get(),
-				ForeignChain::Ethereum => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, EthereumInstance>::get(),
-				ForeignChain::Polkadot => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, PolkadotInstance>::get(),
-				ForeignChain::Arbitrum => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, ArbitrumInstance>::get(),
-				ForeignChain::Solana => pallet_cf_ingress_egress::MaxSwapRetryDurationBlocks::<Runtime, SolanaInstance>::get(),
-			}
-
+		fn cf_swap_limits() -> SwapLimits {
+			pallet_cf_swapping::Pallet::<Runtime>::get_swap_limits()
 		}
 
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
@@ -2010,8 +1971,8 @@ impl_runtime_apis! {
 				backups: backups.len() as u32,
 				online_backups: 0,
 			};
-			authorities.retain(Reputation::is_qualified);
-			backups.retain(|elem, _| Reputation::is_qualified(elem));
+			authorities.retain(HeartbeatQualification::<Runtime>::is_qualified);
+			backups.retain(|id, _| HeartbeatQualification::<Runtime>::is_qualified(id));
 			result.online_authorities = authorities.len() as u32;
 			result.online_backups = backups.len() as u32;
 			result

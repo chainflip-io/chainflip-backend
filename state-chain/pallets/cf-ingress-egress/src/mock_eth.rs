@@ -24,6 +24,7 @@ use cf_traits::{
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
 		lp_balance::MockBalance,
+		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
 	DepositApi, NetworkEnvironmentProvider, OnDeposit,
@@ -129,6 +130,7 @@ impl crate::Config for Test {
 	type AssetWithholding = MockAssetWithholding;
 	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
+	type SwapLimitsProvider = MockSwapLimitsProvider;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
@@ -142,7 +144,6 @@ impl_test_helpers! {
 			deposit_channel_lifetime: 100,
 			witness_safety_margin: Some(2),
 			dust_limits: Default::default(),
-			max_swap_retry_duration_blocks: 600,
 		},
 	},
 	|| {
@@ -259,6 +260,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						BROKER,
 						None,
 						0,
+						None,
 						None,
 					)
 					.map(|(channel_id, deposit_address, ..)| {

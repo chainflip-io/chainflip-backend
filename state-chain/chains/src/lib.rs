@@ -4,6 +4,7 @@
 #![feature(split_array)]
 
 use core::{fmt::Display, iter::Step};
+use sp_std::marker::PhantomData;
 
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
@@ -11,7 +12,8 @@ use crate::{
 };
 pub use address::ForeignChainAddress;
 use address::{
-	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
+	AddressDerivationApi, AddressDerivationError, EncodedAddress, IntoForeignChainAddress,
+	ToHumanreadableAddress,
 };
 use cf_primitives::{
 	AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TransactionHash,
@@ -23,7 +25,8 @@ use frame_support::{
 		traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub},
 		BoundedVec, DispatchError,
 	},
-	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
+	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Never, Parameter, PartialEqNoBound,
+	StorageHasher,
 };
 use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
 use scale_info::TypeInfo;
@@ -390,7 +393,7 @@ where
 		call: &Call,
 		payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
 		maybe_current_onchain_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
-	) -> bool;
+	) -> RequiresSignatureRefresh<C::ChainCrypto, Call>;
 
 	/// Calculate the Units of gas that is allowed to make this call.
 	fn calculate_gas_limit(_call: &Call) -> Option<U256> {
@@ -691,15 +694,33 @@ impl RetryPolicy for DefaultRetryPolicy {
 )]
 pub struct SwapRefundParameters {
 	pub refund_block: cf_primitives::BlockNumber,
-	pub refund_address: ForeignChainAddress,
 	pub min_output: cf_primitives::AssetAmount,
 }
 
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
 )]
-pub struct ChannelRefundParameters {
+pub struct ChannelRefundParametersGeneric<A> {
 	pub retry_duration: cf_primitives::BlockNumber,
-	pub refund_address: ForeignChainAddress,
+	pub refund_address: A,
 	pub min_price: Price,
+}
+
+pub type ChannelRefundParameters = ChannelRefundParametersGeneric<ForeignChainAddress>;
+pub type ChannelRefundParametersEncoded = ChannelRefundParametersGeneric<EncodedAddress>;
+
+impl<A: Clone> ChannelRefundParametersGeneric<A> {
+	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParametersGeneric<B> {
+		ChannelRefundParametersGeneric {
+			retry_duration: self.retry_duration,
+			refund_address: f(self.refund_address.clone()),
+			min_price: self.min_price,
+		}
+	}
+}
+
+pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
+	True(Option<Api>),
+	False,
+	_Phantom(PhantomData<C>, Never),
 }

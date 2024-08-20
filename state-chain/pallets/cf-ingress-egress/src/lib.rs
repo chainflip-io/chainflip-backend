@@ -30,9 +30,9 @@ use cf_chains::{
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, BoostPoolTier, BroadcastId,
-	ChannelId, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
+	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
+	SwapRequestId, ThresholdSignatureRequestId, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -40,7 +40,7 @@ use cf_traits::{
 	AssetWithholding, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi, EpochInfo,
 	FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, LpBalanceApi,
 	LpDepositHandler, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
-	SwapRequestHandler, SwapRequestType,
+	SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -61,8 +61,6 @@ use sp_std::{
 	vec::Vec,
 };
 pub use weights::WeightInfo;
-
-const DEFAULT_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
@@ -144,7 +142,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(14);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -174,9 +172,6 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	ChannelOpeningFee { fee: T::Amount },
 	/// Set the minimum deposit allowed for a particular asset.
 	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
-	/// Set the max allowed value for the number of blocks to keep retrying a swap before it is
-	/// refunded
-	SetMaxSwapRetryDurationBlocks { blocks: BlockNumber },
 }
 
 macro_rules! append_chain_to_name {
@@ -215,10 +210,6 @@ where
 									f.ty::<TargetChainAmount<T, I>>().name("minimum_deposit")
 								}),
 						)
-					})
-					.variant("SetMaxSwapRetryDurationBlocks", |v| {
-						v.index(2)
-							.fields(Fields::named().field(|f| f.ty::<BlockNumber>().name("blocks")))
 					}),
 			)
 	}
@@ -229,7 +220,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{LpDepositHandler, OnDeposit};
+	use cf_traits::{LpDepositHandler, OnDeposit, SwapLimitsProvider};
 	use core::marker::PhantomData;
 	use frame_support::{
 		traits::{ConstU128, EnsureOrigin, IsType},
@@ -294,6 +285,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
 			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -304,6 +296,7 @@ pub mod pallet {
 			broker_fees: Beneficiaries<AccountId>,
 			channel_metadata: CcmChannelMetadata,
 			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DcaParameters>,
 		},
 	}
 
@@ -372,7 +365,6 @@ pub mod pallet {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
 		pub witness_safety_margin: Option<TargetChainBlockNumber<T, I>>,
 		pub dust_limits: Vec<(TargetChainAsset<T, I>, TargetChainAmount<T, I>)>,
-		pub max_swap_retry_duration_blocks: BlockNumber,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
@@ -381,7 +373,6 @@ pub mod pallet {
 				deposit_channel_lifetime: Default::default(),
 				witness_safety_margin: None,
 				dust_limits: Default::default(),
-				max_swap_retry_duration_blocks: DEFAULT_SWAP_RETRY_DURATION_BLOCKS,
 			}
 		}
 	}
@@ -395,8 +386,6 @@ pub mod pallet {
 			for (asset, dust_limit) in self.dust_limits.clone() {
 				EgressDustLimit::<T, I>::set(asset, dust_limit.unique_saturated_into());
 			}
-
-			MaxSwapRetryDurationBlocks::<T, I>::set(self.max_swap_retry_duration_blocks);
 		}
 	}
 
@@ -468,6 +457,8 @@ pub mod pallet {
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
+
+		type SwapLimitsProvider: SwapLimitsProvider;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -575,11 +566,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
-
-	/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
-	#[pallet::storage]
-	pub type MaxSwapRetryDurationBlocks<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BlockNumber, ValueQuery, ConstU32<DEFAULT_SWAP_RETRY_DURATION_BLOCKS>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -704,9 +690,6 @@ pub mod pallet {
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
 		},
-		MaxSwapRetryDurationSet {
-			max_swap_retry_duration_blocks: BlockNumber,
-		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -744,6 +727,11 @@ pub mod pallet {
 		DepositChannelCreationDisabled,
 		/// The specified boost pool does not exist.
 		BoostPoolDoesNotExist,
+		/// Swap Retry duration is set above the max allowed.
+		SwapRetryDurationTooLong,
+		/// The number of chunks must be greater than 0, the interval must be greater than 2 and
+		/// the total duration of the swap request must be less then the max allowed.
+		InvalidDcaParameters,
 	}
 
 	#[pallet::hooks]
@@ -1075,12 +1063,6 @@ pub mod pallet {
 							minimum_deposit,
 						});
 					},
-					PalletConfigUpdate::SetMaxSwapRetryDurationBlocks { blocks } => {
-						MaxSwapRetryDurationBlocks::<T, I>::set(blocks);
-						Self::deposit_event(Event::<T, I>::MaxSwapRetryDurationSet {
-							max_swap_retry_duration_blocks: blocks,
-						});
-					},
 				}
 			}
 
@@ -1326,7 +1308,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Blacklisted assets are not sent and will remain in storage.
 	fn do_egress_scheduled_ccm() {
 		let mut maybe_no_of_transfers_remaining =
-			T::FetchesTransfersLimitProvider::maybe_transfers_limit();
+			T::FetchesTransfersLimitProvider::maybe_ccm_limit();
 
 		let ccms_to_send: Vec<CrossChainMessage<T::TargetChain>> =
 			ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
@@ -1578,6 +1560,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				broker_fees,
 				refund_params,
+				dca_params,
 			} => {
 				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
@@ -1586,6 +1569,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					SwapRequestType::Regular { output_address: destination_address },
 					broker_fees,
 					refund_params,
+					dca_params,
 					swap_origin,
 				) {
 					DepositAction::Swap { swap_request_id }
@@ -1599,6 +1583,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broker_fees,
 				channel_metadata,
 				refund_params,
+				dca_params,
 			} => {
 				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
@@ -1614,6 +1599,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 					broker_fees,
 					refund_params,
+					dca_params,
 					swap_origin,
 				) {
 					DepositAction::CcmTransfer { swap_request_id }
@@ -1941,7 +1927,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
 					SwapRequestType::IngressEgressFee,
 					Default::default(),
-					None, /* refund params */
+					None, /* no refund params */
+					None, /* no DCA */
 					SwapOrigin::Internal,
 				) {
 					log_or_panic!("Ingress-egress fee swap should never fail");
@@ -2080,33 +2067,56 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
 		refund_params: Option<ChannelRefundParameters>,
+		dca_params: Option<DcaParameters>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		if let Some(refund_params) = &refund_params {
+		let swap_limits = T::SwapLimitsProvider::get_swap_limits();
+		if let Some(params) = &refund_params {
 			ensure!(
-				refund_params.retry_duration <= MaxSwapRetryDurationBlocks::<T, I>::get(),
-				DispatchError::Other("Retry duration too long")
+				params.retry_duration <= swap_limits.max_swap_retry_duration_blocks,
+				DispatchError::from(Error::<T, I>::SwapRetryDurationTooLong)
 			);
+		}
+
+		if let Some(params) = &dca_params {
+			if params.number_of_chunks != 1 {
+				ensure!(
+					params.number_of_chunks > 0 && params.chunk_interval >= SWAP_DELAY_BLOCKS,
+					DispatchError::from(Error::<T, I>::InvalidDcaParameters)
+				);
+				let total_swap_request_duration = params
+					.number_of_chunks
+					.saturating_sub(1)
+					.checked_mul(params.chunk_interval)
+					.ok_or(Error::<T, I>::InvalidDcaParameters)?;
+
+				ensure!(
+					total_swap_request_duration <= swap_limits.max_swap_request_duration_blocks,
+					DispatchError::from(Error::<T, I>::InvalidDcaParameters)
+				);
+			}
 		}
 
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
 			&broker_id,
 			source_asset,
 			match channel_metadata {
-				Some(msg) => ChannelAction::CcmTransfer {
+				Some(channel_metadata) => ChannelAction::CcmTransfer {
 					destination_asset,
 					destination_address,
 					broker_fees,
-					channel_metadata: msg,
+					channel_metadata,
 					refund_params,
+					dca_params,
 				},
 				None => ChannelAction::Swap {
 					destination_asset,
 					destination_address,
 					broker_fees,
 					refund_params,
+					dca_params,
 				},
 			},
 			boost_fee,

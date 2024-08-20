@@ -24,7 +24,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, FLIPPERINOS_PER_FLIP,
-	GENESIS_EPOCH, STABLE_ASSET,
+	GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match};
 use cf_traits::{Chainflip, EpochInfo, LpBalanceApi, SwapType};
@@ -40,7 +40,7 @@ use pallet_cf_broadcast::{
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
 use pallet_cf_lp::HistoricalEarnedFees;
 use pallet_cf_pools::{OrderId, RangeOrderSize};
-use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay, SWAP_DELAY_BLOCKS};
+use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
 use sp_core::U256;
 use state_chain_runtime::{
 	chainflip::{
@@ -269,6 +269,7 @@ fn basic_pool_setup_provision_and_swap() {
 				0u16,
 				Default::default(),
 				None,
+				None,
 			));
 
 			let deposit_address =
@@ -391,6 +392,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Some(message),
 			0u16,
 			Default::default(),
+			None,
 			None,
 		));
 

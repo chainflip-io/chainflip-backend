@@ -151,6 +151,9 @@ pub struct TxId {
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;
 
+/// Number of blocks in the future a swap is scheduled for.
+pub const SWAP_DELAY_BLOCKS: u32 = 2;
+
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
 
@@ -342,4 +345,12 @@ pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<{ MAX_AFFILIAT
 pub struct Beneficiary<Id> {
 	pub account: Id,
 	pub bps: BasisPoints,
+}
+
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+pub struct DcaParameters {
+	/// The number of individual swaps to be executed
+	pub number_of_chunks: u32,
+	/// The interval in blocks between each swap.
+	pub chunk_interval: u32,
 }

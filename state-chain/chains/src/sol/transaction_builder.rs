@@ -5,9 +5,8 @@
 //! This avoids the need to deal with low level Solana core types.
 
 use sol_prim::consts::{
-	LAMPORTS_PER_SIGNATURE, MAX_COMPUTE_UNITS_PER_TRANSACTION, MAX_TRANSACTION_LENGTH,
-	MICROLAMPORTS_PER_LAMPORT, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
-	TOKEN_PROGRAM_ID,
+	LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT, SOL_USDC_DECIMAL,
+	SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
 };
 
 use crate::{
@@ -33,8 +32,8 @@ use crate::{
 use sp_std::{vec, vec::Vec};
 
 use super::compute_units_costs::{
-	DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER, MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
-	MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
+	MAX_COMPUTE_UNITS_PER_CCM_TRANSFER, MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
+	MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER, MIN_COMPUTE_PRICE,
 };
 
 fn system_program_id() -> SolAddress {
@@ -68,10 +67,11 @@ impl SolanaTransactionBuilder {
 			&agg_key,
 		)];
 
-		if compute_price > 0 {
-			final_instructions
-				.push(ComputeBudgetInstruction::set_compute_unit_price(compute_price));
-		}
+		// Set a minimum priority fee to maximize chances of inclusion
+		final_instructions.push(ComputeBudgetInstruction::set_compute_unit_price(
+			sp_std::cmp::max(compute_price, MIN_COMPUTE_PRICE),
+		));
+
 		final_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(compute_limit));
 
 		final_instructions.append(&mut instructions);
@@ -308,7 +308,7 @@ impl SolanaTransactionBuilder {
 			durable_nonce,
 			agg_key.into(),
 			compute_price,
-			Self::calculate_gas_limit(gas_budget, compute_price, SolAsset::Sol),
+			Self::calculate_ccm_gas_limit(gas_budget, compute_price, SolAsset::Sol),
 		)
 	}
 
@@ -368,29 +368,28 @@ impl SolanaTransactionBuilder {
 			durable_nonce,
 			agg_key.into(),
 			compute_price,
-			Self::calculate_gas_limit(gas_budget, compute_price, SolAsset::SolUsdc),
+			Self::calculate_ccm_gas_limit(gas_budget, compute_price, SolAsset::SolUsdc),
 		)
 	}
 
-	fn calculate_gas_limit(
+	fn calculate_ccm_gas_limit(
 		gas_budget: SolAmount,
 		compute_price: SolAmount,
 		asset: SolAsset,
 	) -> SolComputeLimit {
-		let budget_after_signature = gas_budget.saturating_sub(LAMPORTS_PER_SIGNATURE);
-		if compute_price == 0 {
-			return DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER;
-		}
-		let compute_budget =
-			// Budget is in lamports, compute price is in microlamports/CU
+		let gas_budget_after_signature = gas_budget.saturating_sub(LAMPORTS_PER_SIGNATURE);
+
+		let compute_limit_from_budget =
+			// Budget is in lamports, compute price is in microlamports/CU.
+			// A minimum compute price is set when building a transaction.
 			sp_std::cmp::min(
-				MAX_COMPUTE_UNITS_PER_TRANSACTION as u128,
-				(budget_after_signature as u128 * MICROLAMPORTS_PER_LAMPORT as u128)
-					/ (compute_price as u128),
+				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u128,
+				(gas_budget_after_signature as u128 * MICROLAMPORTS_PER_LAMPORT as u128)
+					/ sp_std::cmp::max(compute_price as u128, MIN_COMPUTE_PRICE as u128),
 			) as SolComputeLimit;
 
 		sp_std::cmp::max(
-			compute_budget,
+			compute_limit_from_budget,
 			match asset {
 				SolAsset::Sol => MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
 				SolAsset::SolUsdc => MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
@@ -525,7 +524,7 @@ mod test {
 		.unwrap();
 
 		// Serialized tx built in `create_fetch_native` test
-		let expected_serialized_tx = hex_literal::hex!("0148d83989bd4eb7bfe89c29af09ffb7e88901cf1065914ec7623382b2257cabc21acdd8d8bc095ca733267f22bbc75ecaed11d3e7774c6b6f87d5146ca1b37c0301000509f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19233306d43f017cdb7b1a324afdc62c79317d5b93e2e63b870143344134db9c600606b9a783a1a2f182b11e9663561cde6ebc2a7d83e97922c214e25284519a68800000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004040301060004040000000500090340420f000000000005000502875a000008050700020304158e24658f6c59298c080000000b0c0d3700000000ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01164d992e7ea27e3815b2f0b6b00634e36e9fdc8573171a8ae668d24a1d26c18939c4e49b773383504f0356d518be517c3dac563c652639cc518ad4fc468b870e01000509f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1923a4539fbb757256442c16343f639b15db95c39a6d35721439f7f94f5c8776b7bfd35d0bf8686de2e369c3d97a8033b31e6bc33518629f59314bc3d9050956c8d00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004040301060004040000000500090340420f000000000005000502875a000008050700030204158e24658f6c59298c080000000b0c0d3700000000fc").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
@@ -547,7 +546,7 @@ mod test {
 		.unwrap();
 
 		// Serialized tx built in `create_fetch_native_in_batch` test
-		let expected_serialized_tx = hex_literal::hex!("019e3bef60c12bbb5ba315e3768a735415d6aea628502c685911e0caf72c1e620e309fa75c7069792bda27eba0ddca79beeb588077c6e34ea51e93fa01a93be3010100050bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec457965dbc726e7fe35896f2bf0b9c965ebeb488cb0534aed3a6bb35f6343f503c8c21729498a6919298e0c953bd5fc297329663d413cbaac7799a79bd75f7df47ffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588be00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005060301080004040000000700090340420f0000000000070005026bb200000a050900050406158e24658f6c59298c080000000000000000000000fe0a050900020306158e24658f6c59298c080000000100000000000000ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("017c85a12db8b922bbd99f15896019dd5f5549bb56f3987e5d1f6e3a1bc349498b4a3b5d4d45f4e6d74eb6619c2347f39639ea1c08449c65dc576bf01b51e29d000100050bf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19238861d2f0bf5cd80031b701a6c25d13b4c812dd92f9d6301fafd9a58fb9e438646cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a708d9871ed5fb2ee05765af23b7cabcc0d6b08ed370bb9f616a0d4dea40a25f870b5b9d633289c8fd72fb05f33349bf4cc44e82add5d865311ae346d7c9a67b7dd00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0972b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890005060301080004040000000700090340420f0000000000070005026bb200000a050900030206158e24658f6c59298c080000000000000000000000ff0a050900040506158e24658f6c59298c080000000100000000000000ff").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
@@ -565,7 +564,7 @@ mod test {
 		.unwrap();
 
 		// Serialized tx built in `create_fetch_tokens` test
-		let expected_serialized_tx = hex_literal::hex!("01f6faa1394ebce55db0f4b4887818c48d54d0be2dc4ece0eb6d4e411f1204d629a7115f43aaa9c0e7fb77244f0bc30db744f63ed5e0391730aab43ca8a8ca8d020100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871dd6e0fc50e3b853cb77f36ec4fff9c847d1b12f83ae2535aa98f2bd1d627ad08e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8772b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004050301070004040000000600090340420f0000000000060005024f0a01000b0909000c02040a08030516494710642cb0c646080000000000000000000000fe06").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01fabad9f984bdb8cd256c36191cd9942a4de41daf32f057fff20a9e7ef0152246ca837ef6a3f720d450e4a03443bcbcffabb8c73e8151f950e733300584a57a040100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19242ff6863b52c3f8faf95739e6541bda5d0ac593f00c6c07d9ab37096bf26d910ae85f2fb6289c70bfe37df150dddb17dd84f403fd0b1aa1bfee85795159de21fe91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8746cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a7072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004050301070004040000000600090340420f0000000000060005024f0a01000c0909000b02040a08030516494710642cb0c646080000000000000000000000ff06").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
@@ -586,7 +585,7 @@ mod test {
 		.unwrap();
 
 		// Serialized tx built in `create_batch_fetch` test
-		let expected_serialized_tx = hex_literal::hex!("0150c470c3e09a4a75b745c238eeb19bac147b466e83e340dcbdd9eec04cbfad0f6452c138d5bbc9871bae658c145892e77ee330af7c710b465713fc2201dd180e01000912f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19234ba473530acb5fe214bcf1637a95dd9586131636adc3a27365264e64025a91c55268e2506656a8aafc4689443bad81d0ca129f134075303ca77eefefc1b3b395f2c4cda9625242d4cc2e114789f8a6b1fcc7b36decda03a639919cdce0be871839f5b31e9ce2282c92310f62fa5e69302a0ae2e28ba1b99b0e7d57c10ab84c6bd306154bf886039adbb6f2126a02d730889b6d320507c74f5c0240c8c406454dd6e0fc50e3b853cb77f36ec4fff9c847d1b12f83ae2535aa98f2bd1d627ad08e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee871e2fb5dc3bc76acc1a86ef6457885c32189c53b1db8a695267fed8f8d6921ec472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cffe38210450436716ebc835b8499c10c957d9fb8c4c8ef5a3c0473cf67b588bec27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060903010b0004040000000a00090340420f00000000000a000502df69020010090d001104080e0c070916494710642cb0c646080000000000000000000000fe0610090d000f05080e0c020916494710642cb0c646080000000100000000000000ff0610050d00030609158e24658f6c59298c080000000200000000000000ff").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("0153d7af11a4c08f2691f1fb66efce8c535f966ec6a479a3c0266ff5852323758b88c88cb4587a99cad21b193fcf79ddd965b6e4263fcf95af75c765d37c888d0501000912f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921ad0968d57ee79348476716f9b2cd44ec4284b8f52c36648d560949e41589a5540de1c0451cccb6edd1fda9b4a48c282b279350b55a7a9716800cc0132b6f0b042ff6863b52c3f8faf95739e6541bda5d0ac593f00c6c07d9ab37096bf26d910a140fd3d05766f0087d57bf99df05731e894392ffcc8e8d7e960ba73c09824aaae85f2fb6289c70bfe37df150dddb17dd84f403fd0b1aa1bfee85795159de21fb4baefcd4965beb1c71311a2ffe76419d4b8f8d35fbc4cf514b1bd02da2df2e3e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e090fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8746cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a7072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8d9871ed5fb2ee05765af23b7cabcc0d6b08ed370bb9f616a0d4dea40a25f870c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060903010b0004040000000a00090340420f00000000000a000502df69020010090d000f04080e0c060916494710642cb0c646080000000000000000000000ff0610090d001102080e0c030916494710642cb0c646080000000100000000000000ff0610050d00050709158e24658f6c59298c080000000200000000000000ff").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
@@ -669,7 +668,7 @@ mod test {
 
 		let compute_price_lamports = TEST_COMPUTE_PRICE.div_ceil(MICROLAMPORTS_PER_LAMPORT.into());
 		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
-			let mut tx_compute_limit: u32 = SolanaTransactionBuilder::calculate_gas_limit(
+			let mut tx_compute_limit: u32 = SolanaTransactionBuilder::calculate_ccm_gas_limit(
 				TEST_EGRESS_BUDGET * compute_price_lamports + LAMPORTS_PER_SIGNATURE,
 				TEST_COMPUTE_PRICE,
 				*asset,
@@ -678,25 +677,25 @@ mod test {
 
 			// Rounded down
 			assert_eq!(
-				SolanaTransactionBuilder::calculate_gas_limit(
+				SolanaTransactionBuilder::calculate_ccm_gas_limit(
 					(TEST_EGRESS_BUDGET + 1) as SolAmount + LAMPORTS_PER_SIGNATURE,
 					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
 					*asset,
 				),
-				SolanaTransactionBuilder::calculate_gas_limit(
+				SolanaTransactionBuilder::calculate_ccm_gas_limit(
 					(TEST_EGRESS_BUDGET + 9) as SolAmount + LAMPORTS_PER_SIGNATURE,
 					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
 					*asset,
 				)
 			);
 			assert_eq!(
-				SolanaTransactionBuilder::calculate_gas_limit(
+				SolanaTransactionBuilder::calculate_ccm_gas_limit(
 					(TEST_EGRESS_BUDGET + 1) as SolAmount * compute_price_lamports +
 						LAMPORTS_PER_SIGNATURE,
 					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
 					*asset,
 				),
-				SolanaTransactionBuilder::calculate_gas_limit(
+				SolanaTransactionBuilder::calculate_ccm_gas_limit(
 					TEST_EGRESS_BUDGET as SolAmount * compute_price_lamports +
 						LAMPORTS_PER_SIGNATURE,
 					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
@@ -706,35 +705,35 @@ mod test {
 
 			// Test SolComputeLimit saturation
 			assert_eq!(
-				SolanaTransactionBuilder::calculate_gas_limit(
+				SolanaTransactionBuilder::calculate_ccm_gas_limit(
 					(SolComputeLimit::MAX as SolAmount) * 2 * compute_price_lamports +
 						LAMPORTS_PER_SIGNATURE,
 					TEST_COMPUTE_PRICE,
 					*asset,
 				),
-				MAX_COMPUTE_UNITS_PER_TRANSACTION
+				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER
 			);
 
 			// Test upper cap
-			tx_compute_limit = SolanaTransactionBuilder::calculate_gas_limit(
-				MAX_COMPUTE_UNITS_PER_TRANSACTION as u64 * compute_price_lamports * 2,
+			tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_gas_limit(
+				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u64 * compute_price_lamports * 2,
 				TEST_COMPUTE_PRICE,
 				*asset,
 			);
-			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_TRANSACTION);
+			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
 
 			tx_compute_limit =
-				SolanaTransactionBuilder::calculate_gas_limit(TEST_EGRESS_BUDGET, 0, *asset);
-			assert_eq!(tx_compute_limit, DEFAULT_COMPUTE_UNITS_PER_CCM_TRANSFER);
+				SolanaTransactionBuilder::calculate_ccm_gas_limit(TEST_EGRESS_BUDGET, 0, *asset);
+			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
 		}
 
 		// Test lower cap
 		let mut tx_compute_limit =
-			SolanaTransactionBuilder::calculate_gas_limit(10u64, 1, SolAsset::Sol);
+			SolanaTransactionBuilder::calculate_ccm_gas_limit(10u64, 1, SolAsset::Sol);
 		assert_eq!(tx_compute_limit, MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER);
 
 		tx_compute_limit =
-			SolanaTransactionBuilder::calculate_gas_limit(10u64, 1, SolAsset::SolUsdc);
+			SolanaTransactionBuilder::calculate_ccm_gas_limit(10u64, 1, SolAsset::SolUsdc);
 		assert_eq!(tx_compute_limit, MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER);
 	}
 

@@ -1,15 +1,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+// lazy_cell has been stabilized in a newer version of rust
+// (feature directive can be removed once we upgrade)
+#![feature(lazy_cell)]
 
 use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
-	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters, SwapOrigin,
-	SwapRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters,
+	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
-	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId, ForeignChain, SwapId,
-	SwapLeg, SwapRequestId, TransactionHash, BASIS_POINTS_PER_MILLION, STABLE_ASSET,
+	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber, ChannelId,
+	DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash,
+	BASIS_POINTS_PER_MILLION, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -52,14 +56,16 @@ pub use weights::WeightInfo;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
-pub const SWAP_DELAY_BLOCKS: u32 = 2;
+pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
+const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
+const DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS: u32 = 86_400 / SECONDS_PER_BLOCK as u32; // 24 hours
 
 pub struct DefaultSwapRetryDelay<T> {
 	_phantom: PhantomData<T>,
 }
 impl<T: Config> Get<BlockNumberFor<T>> for DefaultSwapRetryDelay<T> {
 	fn get() -> BlockNumberFor<T> {
-		BlockNumberFor::<T>::from(5u32)
+		BlockNumberFor::<T>::from(DEFAULT_SWAP_RETRY_DELAY_BLOCKS)
 	}
 }
 
@@ -96,8 +102,8 @@ impl SwapState {
 		self.swap.input_amount
 	}
 
-	fn refund_params(&self) -> Option<&SwapRefundParameters> {
-		self.swap.refund_params.as_ref()
+	fn refund_params(&self) -> &Option<SwapRefundParameters> {
+		&self.swap.refund_params
 	}
 
 	fn update_swap_result(&mut self, direction: SwapLeg, output: AssetAmount) {
@@ -243,27 +249,93 @@ pub struct CcmSwapAmounts {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-enum CcmSwapState {
-	PrincipalSwapScheduled {
-		principal_swap_id: SwapId,
-		gas_budget: AssetAmount,
-		other_gas_asset: Option<Asset>,
-	},
-	GasSwapScheduled {
-		gas_swap_id: SwapId,
-		principal_output_amount: AssetAmount,
-	},
+enum GasSwapState {
+	OutputReady { gas_budget: AssetAmount },
+	Scheduled { gas_swap_id: SwapId },
+	ToBeScheduled { gas_budget: AssetAmount, other_gas_asset: Asset },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+struct DcaState {
+	scheduled_chunk_swap_id: Option<SwapId>,
+	remaining_input_amount: AssetAmount,
+	remaining_chunks: u32,
+	chunk_interval: u32,
+	accumulated_output_amount: AssetAmount,
+}
+
+impl DcaState {
+	// Create initial DCA state and prepares the first chunk for scheduling; if no dca parameters
+	// provided (for non-DCA swaps), this creates state equivalent to 1 chunk DCA
+	fn create_with_first_chunk(
+		input_amount: AssetAmount,
+		params: Option<DcaParameters>,
+	) -> (DcaState, AssetAmount) {
+		let mut state = DcaState {
+			scheduled_chunk_swap_id: None,
+			remaining_input_amount: input_amount,
+			remaining_chunks: params.as_ref().map(|p| p.number_of_chunks).unwrap_or(1),
+			// Chunk interval won't be used for non-DCA swaps but seems nicer to
+			// set a reasonable default than unwrap Option when it is needed:
+			chunk_interval: params.as_ref().map(|p| p.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS),
+			accumulated_output_amount: 0,
+		};
+
+		let first_chunk_amount = state.prepare_next_chunk(None).unwrap_or_else(|| {
+			log_or_panic!("Invariant violation: initial DCA state must have at least one chunk!");
+			0
+		});
+
+		(state, first_chunk_amount)
+	}
+
+	fn prepare_next_chunk(
+		&mut self,
+		prev_chunk_and_output: Option<(SwapId, AssetAmount)>,
+	) -> Option<AssetAmount> {
+		if let Some((prev_chunk_swap_id, prev_chunk_output_amount)) = prev_chunk_and_output {
+			if let Some(scheduled_swap_id) = self.scheduled_chunk_swap_id.take() {
+				if scheduled_swap_id != prev_chunk_swap_id {
+					log_or_panic!(
+						"Invariant violation: the recorded chunk id {scheduled_swap_id} does not match executed {prev_chunk_swap_id}"
+					);
+				}
+			} else {
+				log_or_panic!(
+					"Invariant violation: attempting to get next chunk when no previous chunk is recorded"
+				);
+			}
+
+			self.accumulated_output_amount += prev_chunk_output_amount;
+		}
+
+		let chunk_input_amount = self
+			.remaining_input_amount
+			.checked_div(self.remaining_chunks as u128)
+			.unwrap_or(0);
+
+		if self.remaining_chunks > 0 {
+			self.remaining_chunks = self.remaining_chunks.saturating_sub(1);
+			self.remaining_input_amount =
+				self.remaining_input_amount.saturating_sub(chunk_input_amount);
+			Some(chunk_input_amount)
+		} else {
+			None
+		}
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 enum SwapRequestState {
 	Ccm {
-		state: CcmSwapState,
+		gas_swap_state: GasSwapState,
 		ccm_deposit_metadata: CcmDepositMetadata,
 		output_address: ForeignChainAddress,
+		dca_state: DcaState,
 	},
 	Regular {
 		output_address: ForeignChainAddress,
+		dca_state: DcaState,
 	},
 	NetworkFee,
 	IngressEgressFee,
@@ -294,6 +366,11 @@ pub enum PalletConfigUpdate<T: Config> {
 	SwapRetryDelay { delay: BlockNumberFor<T> },
 	/// Set the interval at which we buy FLIP in order to burn it.
 	FlipBuyInterval { interval: BlockNumberFor<T> },
+	/// Set the max allowed value for the number of blocks to keep retrying a swap before it is
+	/// refunded
+	SetMaxSwapRetryDuration { blocks: BlockNumber },
+	/// Set the max allowed total duration of a DCA swap request.
+	SetMaxSwapRequestDuration { blocks: BlockNumber },
 }
 
 impl_pallet_safe_mode! {
@@ -307,7 +384,8 @@ pub mod pallet {
 	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{
-		Asset, AssetAmount, BasisPoints, EgressId, SwapId, SwapOutput, SwapRequestId,
+		Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId, SwapId, SwapOutput,
+		SwapRequestId,
 	};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, ScheduledEgressDetails};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -414,6 +492,20 @@ pub mod pallet {
 	pub type SwapRetryDelay<T: Config> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery, DefaultSwapRetryDelay<T>>;
 
+	/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
+	#[pallet::storage]
+	pub type MaxSwapRetryDurationBlocks<T> =
+		StorageValue<_, BlockNumber, ValueQuery, ConstU32<DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS>>;
+
+	/// Max allowed total duration of a DCA swap request.
+	#[pallet::storage]
+	pub type MaxSwapRequestDurationBlocks<T> = StorageValue<
+		_,
+		BlockNumber,
+		ValueQuery,
+		ConstU32<DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS>,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -443,7 +535,8 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParameters>,
+			refund_parameters: Option<ChannelRefundParametersEncoded>,
+			dca_parameters: Option<DcaParameters>,
 		},
 		/// A swap is scheduled for the first time
 		SwapScheduled {
@@ -476,7 +569,7 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			fee: AssetAmount,
+			egress_fee: AssetAmount,
 		},
 		RefundEgressScheduled {
 			swap_request_id: SwapRequestId,
@@ -535,6 +628,12 @@ pub mod pallet {
 			swap_retry_delay: BlockNumberFor<T>,
 		},
 		// TODO: add SwapFailed?
+		MaxSwapRetryDurationSet {
+			blocks: BlockNumber,
+		},
+		MaxSwapRequestDurationSet {
+			blocks: BlockNumber,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -564,12 +663,16 @@ pub mod pallet {
 		ZeroBuyIntervalNotAllowed,
 		/// Setting the swap retry delay to zero is not allowed.
 		ZeroSwapRetryDelayNotAllowed,
+		/// Setting the max swap request duration to less than the swap delay is not allowed.
+		MaxSwapRequestDurationTooShort,
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub flip_buy_interval: BlockNumberFor<T>,
 		pub swap_retry_delay: BlockNumberFor<T>,
+		pub max_swap_retry_duration_blocks: BlockNumber,
+		pub max_swap_request_duration_blocks: BlockNumber,
 	}
 
 	#[pallet::genesis_build]
@@ -577,6 +680,8 @@ pub mod pallet {
 		fn build(&self) {
 			FlipBuyInterval::<T>::set(self.flip_buy_interval);
 			SwapRetryDelay::<T>::set(self.swap_retry_delay);
+			MaxSwapRetryDurationBlocks::<T>::set(self.max_swap_retry_duration_blocks);
+			MaxSwapRequestDurationBlocks::<T>::set(self.max_swap_request_duration_blocks);
 		}
 	}
 
@@ -585,6 +690,8 @@ pub mod pallet {
 			Self {
 				flip_buy_interval: BlockNumberFor::<T>::zero(),
 				swap_retry_delay: DefaultSwapRetryDelay::<T>::get(),
+				max_swap_retry_duration_blocks: DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS,
+				max_swap_request_duration_blocks: DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS,
 			}
 		}
 	}
@@ -609,7 +716,8 @@ pub mod pallet {
 							Asset::Flip,
 							SwapRequestType::NetworkFee,
 							Default::default(),
-							None,
+							None, /* no refund */
+							None, /* no DCA */
 							SwapOrigin::Internal,
 						)
 						.is_err()
@@ -645,8 +753,10 @@ pub mod pallet {
 
 				match Self::execute_batch(swaps_to_execute.clone()) {
 					Ok(successful_swaps) => {
-						Self::process_swap_outcomes(&successful_swaps);
-						// Nothing to do here, all swaps are processed for block
+						for swap in successful_swaps {
+							Self::process_swap_outcome(swap);
+						}
+						// Nothing else to do here, all swaps are processed for block
 						return
 					},
 					Err(err) => {
@@ -682,41 +792,12 @@ pub mod pallet {
 
 						for swap in failed_swaps {
 							match swap.refund_params {
-								Some(params)
+								Some(ref params)
 									if BlockNumberFor::<T>::from(params.refund_block) <
 										retry_block =>
 								{
-									// Reached refund block, schedule refund:
-									match T::EgressHandler::schedule_egress(
-										swap.from,
-										swap.input_amount,
-										params.refund_address,
-										None,
-									) {
-										Ok(ScheduledEgressDetails {
-											egress_id,
-											egress_amount,
-											fee_withheld,
-										}) => {
-											Self::deposit_event(
-												Event::<T>::RefundEgressScheduled {
-													swap_request_id: swap.swap_request_id,
-													egress_id,
-													asset: swap.from,
-													amount: egress_amount,
-													egress_fee: fee_withheld,
-												},
-											);
-										},
-										Err(err) => {
-											Self::deposit_event(Event::<T>::RefundEgressIgnored {
-												swap_request_id: swap.swap_request_id,
-												asset: swap.from,
-												amount: swap.input_amount,
-												reason: err.into(),
-											});
-										},
-									}
+									// Reached refund block, process refund:
+									Self::refund_failed_swap(swap);
 								},
 								_ => {
 									// Either refund parameters not set, or refund block not
@@ -764,7 +845,9 @@ pub mod pallet {
 				channel_metadata,
 				boost_fee,
 				Default::default(),
-				// This extrinsic is for backwards compatibility and does not support FoK
+				// This extrinsic is for backwards compatibility and does not support new
+				// features like FoK or DCA
+				None,
 				None,
 			)
 		}
@@ -841,6 +924,8 @@ pub mod pallet {
 				Default::default(),
 				// NOTE: FoK not yet supported for swaps from the contract
 				None,
+				// NOTE: DCA not yet supported for swaps from the contract
+				None,
 				SwapOrigin::Vault { tx_hash },
 			)
 			.is_err()
@@ -892,6 +977,8 @@ pub mod pallet {
 				},
 				Default::default(),
 				// NOTE: FoK not yet supported for swaps from the contract
+				None,
+				// NOTE: DCA not yet supported for swaps from the contract
 				None,
 				SwapOrigin::Vault { tx_hash },
 			)?;
@@ -952,6 +1039,18 @@ pub mod pallet {
 						FlipBuyInterval::<T>::set(interval);
 						Self::deposit_event(Event::<T>::BuyIntervalSet { buy_interval: interval });
 					},
+					PalletConfigUpdate::SetMaxSwapRetryDuration { blocks } => {
+						MaxSwapRetryDurationBlocks::<T>::set(blocks);
+						Self::deposit_event(Event::<T>::MaxSwapRetryDurationSet { blocks });
+					},
+					PalletConfigUpdate::SetMaxSwapRequestDuration { blocks } => {
+						ensure!(
+							blocks >= SWAP_DELAY_BLOCKS,
+							Error::<T>::MaxSwapRequestDurationTooShort
+						);
+						MaxSwapRequestDurationBlocks::<T>::set(blocks);
+						Self::deposit_event(Event::<T>::MaxSwapRequestDurationSet { blocks });
+					},
 				}
 			}
 
@@ -995,6 +1094,7 @@ pub mod pallet {
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
 			refund_parameters: Option<ChannelRefundParameters>,
+			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			let (beneficiaries, total_bps) = {
@@ -1048,6 +1148,7 @@ pub mod pallet {
 					channel_metadata.clone(),
 					boost_fee,
 					refund_parameters.clone(),
+					dca_parameters.clone(),
 				)?;
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
@@ -1062,7 +1163,9 @@ pub mod pallet {
 				boost_fee,
 				channel_opening_fee,
 				affiliate_fees,
-				refund_parameters,
+				refund_parameters: refund_parameters
+					.map(|params| params.map_address(T::AddressConverter::to_encoded_address)),
+				dca_parameters,
 			});
 
 			Ok(())
@@ -1201,199 +1304,260 @@ pub mod pallet {
 			}
 		}
 
-		fn process_ccm_outcome(
-			swap_request_id: SwapRequestId,
-			output_asset: Asset,
-			output_address: ForeignChainAddress,
-			principal_amount: AssetAmount,
-			gas_amount: AssetAmount,
-			ccm_deposit_metadata: CcmDepositMetadata,
-		) {
-			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-
-			if let Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =
-				T::EgressHandler::schedule_egress(
-					output_asset,
-					principal_amount,
-					output_address,
-					Some((ccm_deposit_metadata, gas_amount)),
-				) {
-				Self::deposit_event(Event::<T>::SwapEgressScheduled {
-					swap_request_id,
-					egress_id,
-					asset: output_asset,
-					amount: egress_amount,
-					fee: fee_withheld,
-				});
-			} else {
-				log_or_panic!("CCM egress scheduling should never fail.");
-			}
-		}
-
 		fn schedule_ccm_gas_swap(
 			request_id: SwapRequestId,
 			input_asset: Asset,
 			gas_asset: Asset,
 			gas_budget: AssetAmount,
-			principal_output_amount: AssetAmount,
-		) -> CcmSwapState {
-			let swap_id = Self::schedule_swap(
+		) -> GasSwapState {
+			let gas_swap_id = Self::schedule_swap(
 				input_asset,
 				gas_asset,
 				gas_budget,
 				None, // FoK does not apply to gas swaps
 				SwapType::CcmGas,
 				request_id,
+				SWAP_DELAY_BLOCKS.into(),
 			);
 
-			CcmSwapState::GasSwapScheduled { gas_swap_id: swap_id, principal_output_amount }
+			GasSwapState::Scheduled { gas_swap_id }
 		}
 
-		fn process_swap_outcomes(swaps: &[SwapState]) {
-			for swap in swaps {
-				let swap_request_id = swap.swap.swap_request_id;
+		fn refund_failed_swap(swap: Swap) {
+			let swap_request_id = swap.swap_request_id;
 
-				let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
-					log_or_panic!("Swap request {swap_request_id} not found");
-					continue;
-				};
+			let Some(request) = SwapRequests::<T>::take(swap_request_id) else {
+				log_or_panic!("Swap request {swap_request_id} not found");
+				return;
+			};
 
-				let Some(output_amount) = swap.final_output else {
-					log_or_panic!("Swap {} is not completed yet!", swap.swap_id());
-					continue;
-				};
+			let Some(refund_params) = request.refund_params else {
+				log_or_panic!("Trying to refund swap request {swap_request_id}, but missing refund parameters");
+				return;
+			};
 
-				Self::deposit_event(Event::<T>::SwapExecuted {
-					swap_request_id,
-					swap_id: swap.swap_id(),
-					// To be consistent with `swap_output` and `intermediate_amount` (which do
-					// not include the network fee), we report input amount without the network fee
-					// for swaps from STABLE_ASSET:
-					input_amount: if swap.input_asset() == STABLE_ASSET {
-						swap.stable_amount.unwrap_or_else(|| {
-							log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
-							swap.input_amount()
-						})
-					} else {
+			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
+
+			match request.state {
+				SwapRequestState::Regular {
+					dca_state: DcaState { remaining_input_amount, accumulated_output_amount, .. },
+					output_address,
+				} => {
+					// Refund the failed swap and any unused input amount:
+					Self::egress_for_swap(
+						request.id,
+						swap.input_amount + remaining_input_amount,
+						request.input_asset,
+						refund_params.refund_address,
+						None, /* ccm */
+						true, /* refund */
+					);
+
+					// In case of DCA we may have partially swapped and now have some output asset
+					// to egress to the output address:
+					if accumulated_output_amount > 0 {
+						Self::egress_for_swap(
+							swap.swap_request_id,
+							accumulated_output_amount,
+							request.output_asset,
+							output_address,
+							None,  /* ccm */
+							false, /* refund */
+						);
+					}
+				},
+				SwapRequestState::Ccm { output_address: _, .. } => {
+					// TODO: add remaining DCA input to the refunded amount:
+					Self::egress_for_swap(
+						request.id,
+						swap.input_amount,
+						request.input_asset,
+						refund_params.refund_address,
+						None, /* ccm */
+						true, /* refund */
+					);
+				},
+				non_refundable_request => {
+					log_or_panic!(
+						"Refund for swap request is not supported: {non_refundable_request:?}"
+					);
+				},
+			};
+		}
+
+		fn process_swap_outcome(swap: SwapState) {
+			let swap_request_id = swap.swap.swap_request_id;
+
+			let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
+				log_or_panic!("Swap request {swap_request_id} not found");
+				return;
+			};
+
+			let Some(output_amount) = swap.final_output else {
+				log_or_panic!("Swap {} is not completed yet!", swap.swap_id());
+				return;
+			};
+
+			Self::deposit_event(Event::<T>::SwapExecuted {
+				swap_request_id,
+				swap_id: swap.swap_id(),
+				// To be consistent with `swap_output` and `intermediate_amount` (which do
+				// not include the network fee), we report input amount without the network fee
+				// for swaps from STABLE_ASSET:
+				input_amount: if swap.input_asset() == STABLE_ASSET {
+					swap.stable_amount.unwrap_or_else(|| {
+						log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
 						swap.input_amount()
-					},
-					input_asset: swap.input_asset(),
-					network_fee: swap.network_fee_taken.unwrap_or_default(),
-					output_asset: swap.output_asset(),
-					output_amount,
-					intermediate_amount: swap.intermediate_amount(),
-				});
+					})
+				} else {
+					swap.input_amount()
+				},
+				input_asset: swap.input_asset(),
+				network_fee: swap.network_fee_taken.unwrap_or_default(),
+				output_asset: swap.output_asset(),
+				output_amount,
+				intermediate_amount: swap.intermediate_amount(),
+			});
 
-				match &mut request.state {
-					SwapRequestState::Ccm { state, ccm_deposit_metadata, output_address } =>
-						match state {
-							CcmSwapState::PrincipalSwapScheduled {
-								principal_swap_id,
-								gas_budget,
-								other_gas_asset,
-							} => {
-								debug_assert!(swap.swap_id() == *principal_swap_id);
-
-								if let Some(other_gas_asset) = other_gas_asset {
-									*state = Self::schedule_ccm_gas_swap(
-										swap_request_id,
-										request.input_asset,
-										*other_gas_asset,
-										*gas_budget,
-										output_amount,
-									);
-
-									// We are not done with the request, so put it back
-									SwapRequests::<T>::insert(swap_request_id, request);
-								} else {
-									Self::process_ccm_outcome(
-										swap_request_id,
-										request.output_asset,
-										output_address.clone(),
-										output_amount,
-										*gas_budget,
-										ccm_deposit_metadata.clone(),
-									);
-								}
-							},
-							CcmSwapState::GasSwapScheduled {
-								gas_swap_id,
-								principal_output_amount,
-							} => {
-								debug_assert!(swap.swap_id() == *gas_swap_id);
-
-								Self::process_ccm_outcome(
-									swap_request_id,
-									request.output_asset,
-									output_address.clone(),
-									*principal_output_amount,
-									output_amount,
-									ccm_deposit_metadata.clone(),
+			let request_completed = match &mut request.state {
+				SwapRequestState::Ccm {
+					gas_swap_state,
+					ccm_deposit_metadata,
+					output_address,
+					dca_state,
+				} => {
+					let is_gas_swap = match gas_swap_state {
+						GasSwapState::Scheduled { gas_swap_id }
+							if *gas_swap_id == swap.swap_id() =>
+							true,
+						_ => {
+							if dca_state.scheduled_chunk_swap_id != Some(swap.swap_id()) {
+								log_or_panic!(
+									"Executed swap with unexpected id {} for swap request {swap_request_id}", swap.swap_id()
 								);
-							},
+							}
+
+							false
 						},
-					SwapRequestState::Regular { output_address } => {
-						Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-						match T::EgressHandler::schedule_egress(
+					};
+
+					if is_gas_swap {
+						*gas_swap_state = GasSwapState::OutputReady { gas_budget: output_amount };
+					} else {
+						// The executed swap must be for the principal amount,
+						// record the output and schedule the next chunk if needed:
+						dca_state.scheduled_chunk_swap_id = dca_state
+							.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
+							.map(|chunk_input_amount| {
+								Self::schedule_swap(
+									request.input_asset,
+									request.output_asset,
+									chunk_input_amount,
+									request.refund_params.as_ref(),
+									SwapType::CcmPrincipal,
+									swap_request_id,
+									dca_state.chunk_interval.into(),
+								)
+							});
+
+						// See if we still need to schedule the gas swap
+						if let GasSwapState::ToBeScheduled { gas_budget, other_gas_asset } =
+							gas_swap_state
+						{
+							*gas_swap_state = Self::schedule_ccm_gas_swap(
+								swap_request_id,
+								request.input_asset,
+								*other_gas_asset,
+								*gas_budget,
+							);
+						}
+					}
+
+					// Process outcome if there aren't any more scheduled swaps,
+					// otherwise put the request state back:
+					if let (GasSwapState::OutputReady { gas_budget }, None) =
+						(gas_swap_state, dca_state.scheduled_chunk_swap_id)
+					{
+						Self::egress_for_swap(
+							swap_request_id,
+							dca_state.accumulated_output_amount,
+							request.output_asset,
+							output_address.clone(),
+							Some((ccm_deposit_metadata.clone(), *gas_budget)),
+							false, /* refund */
+						);
+
+						true
+					} else {
+						false
+					}
+				},
+				SwapRequestState::Regular { output_address, dca_state } => {
+					if let Some(chunk_input_amount) =
+						dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
+					{
+						let swap_id = Self::schedule_swap(
+							request.input_asset,
+							request.output_asset,
+							chunk_input_amount,
+							request.refund_params.as_ref(),
+							SwapType::Swap,
+							request.id,
+							dca_state.chunk_interval.into(),
+						);
+
+						dca_state.scheduled_chunk_swap_id = Some(swap_id);
+
+						false
+					} else {
+						debug_assert!(dca_state.remaining_input_amount == 0);
+
+						Self::egress_for_swap(
+							swap_request_id,
+							dca_state.accumulated_output_amount,
+							swap.output_asset(),
+							output_address.clone(),
+							None,  /* ccm */
+							false, /* refund */
+						);
+
+						true
+					}
+				},
+				SwapRequestState::NetworkFee => {
+					if swap.output_asset() == Asset::Flip {
+						FlipToBurn::<T>::mutate(|total| {
+							total.saturating_accrue(output_amount);
+						});
+					} else {
+						log_or_panic!(
+							"NetworkFee burning should not be in asset: {:?}",
+							swap.output_asset()
+						);
+					}
+					true
+				},
+				SwapRequestState::IngressEgressFee => {
+					if swap.output_asset() == ForeignChain::from(swap.output_asset()).gas_asset() {
+						T::IngressEgressFeeHandler::accrue_withheld_fee(
 							swap.output_asset(),
 							output_amount,
-							output_address.clone(),
-							None, /* ccm metadata */
-						) {
-							Ok(ScheduledEgressDetails {
-								egress_id,
-								egress_amount,
-								fee_withheld,
-							}) => {
-								Self::deposit_event(Event::<T>::SwapEgressScheduled {
-									swap_request_id: swap.swap.swap_request_id,
-									egress_id,
-									asset: swap.output_asset(),
-									amount: egress_amount,
-									fee: fee_withheld,
-								});
-							},
-							Err(err) => {
-								Self::deposit_event(Event::<T>::SwapEgressIgnored {
-									swap_request_id,
-									asset: swap.output_asset(),
-									amount: output_amount,
-									reason: err.into(),
-								});
-							},
-						};
-					},
-					SwapRequestState::NetworkFee => {
-						Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
-						if swap.output_asset() == Asset::Flip {
-							FlipToBurn::<T>::mutate(|total| {
-								total.saturating_accrue(output_amount);
-							});
-						} else {
-							log_or_panic!(
-								"NetworkFee burning should not be in asset: {:?}",
-								swap.output_asset()
-							);
-						}
-					},
-					SwapRequestState::IngressEgressFee => {
-						Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+						);
+					} else {
+						log_or_panic!(
+							"IngressEgressFee swap should not be to non-gas asset: {:?}",
+							swap.output_asset()
+						);
+					}
 
-						if swap.output_asset() ==
-							ForeignChain::from(swap.output_asset()).gas_asset()
-						{
-							T::IngressEgressFeeHandler::accrue_withheld_fee(
-								swap.output_asset(),
-								output_amount,
-							);
-						} else {
-							log_or_panic!(
-								"IngressEgressFee swap should not be to non-gas asset: {:?}",
-								swap.output_asset()
-							);
-						}
-					},
-				}
+					true
+				},
+			};
+
+			if request_completed {
+				Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id });
+			} else {
+				SwapRequests::<T>::insert(swap_request_id, request);
 			}
 		}
 
@@ -1502,16 +1666,26 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			input_amount: AssetAmount,
-			refund_params: Option<SwapRefundParameters>,
+			refund_params: Option<&ChannelRefundParameters>,
 			swap_type: SwapType,
 			swap_request_id: SwapRequestId,
+			delay_blocks: BlockNumberFor<T>,
 		) -> SwapId {
 			let swap_id = SwapIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
 				*id
 			});
 
-			let execute_at = frame_system::Pallet::<T>::block_number() + SWAP_DELAY_BLOCKS.into();
+			let execute_at = frame_system::Pallet::<T>::block_number() + delay_blocks;
+
+			let refund_params = refund_params.map(|params| {
+				utilities::calculate_swap_refund_parameters(
+					params,
+					// In practice block number always fits in u32:
+					execute_at.unique_saturated_into(),
+					input_amount,
+				)
+			});
 
 			// Network fee is not charged for network fee swaps:
 			let fees = if matches!(swap_type, SwapType::NetworkFee) {
@@ -1603,6 +1777,59 @@ pub mod pallet {
 			});
 			NetworkFeeTaken { remaining_amount: remaining, network_fee: fee }
 		}
+
+		fn egress_for_swap(
+			swap_request_id: SwapRequestId,
+			amount: AssetAmount,
+			asset: Asset,
+			address: ForeignChainAddress,
+			ccm_gas_and_metadata: Option<(CcmDepositMetadata, AssetAmount)>,
+			is_refund: bool,
+		) {
+			let is_ccm_swap = ccm_gas_and_metadata.is_some();
+
+			match T::EgressHandler::schedule_egress(asset, amount, address, ccm_gas_and_metadata) {
+				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
+					if is_refund {
+						Self::deposit_event(Event::<T>::RefundEgressScheduled {
+							swap_request_id,
+							egress_id,
+							asset,
+							amount: egress_amount,
+							egress_fee: fee_withheld,
+						});
+					} else {
+						Self::deposit_event(Event::<T>::SwapEgressScheduled {
+							swap_request_id,
+							egress_id,
+							asset,
+							amount: egress_amount,
+							egress_fee: fee_withheld,
+						});
+					},
+				Err(err) => {
+					if is_ccm_swap {
+						log_or_panic!("CCM egress scheduling should never fail.");
+					}
+
+					if is_refund {
+						Self::deposit_event(Event::<T>::RefundEgressIgnored {
+							swap_request_id,
+							asset,
+							amount,
+							reason: err.into(),
+						});
+					} else {
+						Self::deposit_event(Event::<T>::SwapEgressIgnored {
+							swap_request_id,
+							asset,
+							amount,
+							reason: err.into(),
+						});
+					}
+				},
+			};
+		}
 	}
 
 	impl<T: Config> SwapRequestHandler for Pallet<T> {
@@ -1615,6 +1842,7 @@ pub mod pallet {
 			request_type: SwapRequestType,
 			broker_fees: Beneficiaries<Self::AccountId>,
 			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin,
 		) -> Result<SwapRequestId, DispatchError> {
 			let (net_amount, broker_fee) = {
@@ -1698,23 +1926,6 @@ pub mod pallet {
 				origin: origin.clone(),
 			});
 
-			// Now that we know input amount, we can calculate the minimum output amount:
-			let swap_refund_params = refund_params.clone().map(|params| SwapRefundParameters {
-				refund_block: {
-					use sp_arithmetic::traits::UniqueSaturatedInto;
-					// In practice block number always fits in u32:
-					let current_block: u32 =
-						frame_system::Pallet::<T>::block_number().unique_saturated_into();
-					current_block.saturating_add(params.retry_duration)
-				},
-				refund_address: params.refund_address,
-				min_output: u128::try_from(cf_amm::common::output_amount_ceil(
-					input_amount.into(),
-					params.min_price,
-				))
-				.unwrap_or(u128::MAX),
-			});
-
 			match request_type {
 				SwapRequestType::NetworkFee => {
 					Self::schedule_swap(
@@ -1724,6 +1935,7 @@ pub mod pallet {
 						None,
 						SwapType::NetworkFee,
 						request_id,
+						SWAP_DELAY_BLOCKS.into(),
 					);
 
 					SwapRequests::<T>::insert(
@@ -1745,6 +1957,7 @@ pub mod pallet {
 						None,
 						SwapType::IngressEgressFee,
 						request_id,
+						SWAP_DELAY_BLOCKS.into(),
 					);
 
 					SwapRequests::<T>::insert(
@@ -1759,14 +1972,20 @@ pub mod pallet {
 					);
 				},
 				SwapRequestType::Regular { output_address } => {
-					Self::schedule_swap(
+					let (mut dca_state, chunk_input_amount) =
+						DcaState::create_with_first_chunk(net_amount, dca_params);
+
+					let swap_id = Self::schedule_swap(
 						input_asset,
 						output_asset,
-						net_amount,
-						swap_refund_params.clone(),
+						chunk_input_amount,
+						refund_params.as_ref(),
 						SwapType::Swap,
 						request_id,
+						SWAP_DELAY_BLOCKS.into(),
 					);
+
+					dca_state.scheduled_chunk_swap_id = Some(swap_id);
 
 					SwapRequests::<T>::insert(
 						request_id,
@@ -1774,9 +1993,10 @@ pub mod pallet {
 							id: request_id,
 							input_asset,
 							output_asset,
-							refund_params: refund_params.clone(),
+							refund_params,
 							state: SwapRequestState::Regular {
 								output_address: output_address.clone(),
+								dca_state,
 							},
 						},
 					);
@@ -1816,16 +2036,22 @@ pub mod pallet {
 							},
 						};
 
-					// See if princial swap is needed, schedule it first if so:
+					// See if principal swap is needed, schedule it first if so:
 					if input_asset != output_asset && !principal_swap_amount.is_zero() {
+						let (mut dca_state, chunk_input_amount) =
+							DcaState::create_with_first_chunk(principal_swap_amount, dca_params);
+
 						let swap_id = Self::schedule_swap(
 							input_asset,
 							output_asset,
-							principal_swap_amount,
-							swap_refund_params.clone(),
+							chunk_input_amount,
+							refund_params.as_ref(),
 							SwapType::CcmPrincipal,
 							request_id,
+							SWAP_DELAY_BLOCKS.into(),
 						);
+
+						dca_state.scheduled_chunk_swap_id = Some(swap_id);
 
 						SwapRequests::<T>::insert(
 							request_id,
@@ -1835,25 +2061,25 @@ pub mod pallet {
 								output_asset,
 								refund_params: refund_params.clone(),
 								state: SwapRequestState::Ccm {
-									state: CcmSwapState::PrincipalSwapScheduled {
-										principal_swap_id: swap_id,
-										gas_budget,
-										other_gas_asset,
+									gas_swap_state: if let Some(other_gas_asset) = other_gas_asset {
+										GasSwapState::ToBeScheduled { gas_budget, other_gas_asset }
+									} else {
+										GasSwapState::OutputReady { gas_budget }
 									},
 									ccm_deposit_metadata: ccm_deposit_metadata.clone(),
 									output_address: output_address.clone(),
+									dca_state,
 								},
 							},
 						);
 					// See if gas swap is needed, schedule it immediately if so
 					// (since there is no principal swap in this case):
 					} else if let Some(other_gas_asset) = other_gas_asset {
-						let ccm_state = Self::schedule_ccm_gas_swap(
+						let gas_swap_state = Self::schedule_ccm_gas_swap(
 							request_id,
 							input_asset,
 							other_gas_asset,
 							gas_budget,
-							principal_swap_amount,
 						);
 
 						SwapRequests::<T>::insert(
@@ -1864,21 +2090,32 @@ pub mod pallet {
 								output_asset,
 								refund_params: None,
 								state: SwapRequestState::Ccm {
-									state: ccm_state,
+									gas_swap_state,
 									ccm_deposit_metadata: ccm_deposit_metadata.clone(),
 									output_address,
+									dca_state: DcaState {
+										scheduled_chunk_swap_id: None,
+										remaining_input_amount: 0,
+										remaining_chunks: 0,
+										chunk_interval: SWAP_DELAY_BLOCKS,
+										accumulated_output_amount: principal_swap_amount,
+									},
 								},
 							},
 						);
 					} else {
 						// No swaps are needed, process the CCM outcome immediately:
-						Self::process_ccm_outcome(
+						Self::deposit_event(Event::<T>::SwapRequestCompleted {
+							swap_request_id: request_id,
+						});
+
+						Self::egress_for_swap(
 							request_id,
+							principal_swap_amount,
 							output_asset,
 							output_address,
-							principal_swap_amount,
-							gas_budget,
-							ccm_deposit_metadata.clone(),
+							Some((ccm_deposit_metadata, gas_budget)),
+							false, /* refund */
 						);
 					}
 				},
@@ -1941,6 +2178,15 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	}
 }
 
+impl<T: Config> cf_traits::SwapLimitsProvider for Pallet<T> {
+	fn get_swap_limits() -> cf_traits::SwapLimits {
+		cf_traits::SwapLimits {
+			max_swap_retry_duration_blocks: MaxSwapRetryDurationBlocks::<T>::get(),
+			max_swap_request_duration_blocks: MaxSwapRequestDurationBlocks::<T>::get(),
+		}
+	}
+}
+
 pub struct NoPendingSwaps<T: Config>(PhantomData<T>);
 
 impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
@@ -1948,10 +2194,11 @@ impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
 		SwapQueue::<T>::iter().all(|(_, swaps)| swaps.is_empty())
 	}
 }
-pub mod utilities {
+
+pub(crate) mod utilities {
 	use super::*;
 
-	pub fn calculate_network_fee(
+	pub(crate) fn calculate_network_fee(
 		fee_percentage: Permill,
 		input: AssetAmount,
 	) -> (AssetAmount, AssetAmount) {
@@ -1965,7 +2212,7 @@ pub mod utilities {
 	///
 	/// The value should be large enough to allow a good estimation of the fee, but small enough
 	/// to not exhaust the pool liquidity.
-	pub fn fee_estimation_basis(asset: Asset) -> Option<u128> {
+	pub(crate) fn fee_estimation_basis(asset: Asset) -> Option<u128> {
 		use cf_primitives::FLIPPERINOS_PER_FLIP;
 		/// 20 Dollars.
 		const USD_ESTIMATION_CAP: u128 = 20_000_000;
@@ -1977,6 +2224,21 @@ pub mod utilities {
 			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
 			Asset::SolUsdc => Some(USD_ESTIMATION_CAP),
 			_ => None,
+		}
+	}
+
+	pub(super) fn calculate_swap_refund_parameters(
+		params: &ChannelRefundParameters,
+		execute_at_block: u32,
+		input_amount: AssetAmount,
+	) -> SwapRefundParameters {
+		SwapRefundParameters {
+			refund_block: execute_at_block.saturating_add(params.retry_duration),
+			min_output: u128::try_from(cf_amm::common::output_amount_ceil(
+				input_amount.into(),
+				params.min_price,
+			))
+			.unwrap_or(u128::MAX),
 		}
 	}
 }

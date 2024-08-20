@@ -166,6 +166,7 @@ mod tests {
 
 	use super::*;
 
+	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn test_get_nonces() {
 		task_scope(|scope| {

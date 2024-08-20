@@ -23,7 +23,7 @@ export async function initializeArbitrumChain() {
 
 export async function initializeSolanaChain() {
   console.log('Initializing Solana');
-  const solInitializationRequest = observeEvent('solanaVault:ChainInitialized');
+  const solInitializationRequest = observeEvent('solanaVault:ChainInitialized').event;
   await submitGovernanceExtrinsic((chainflip) => chainflip.tx.solanaVault.initializeChain());
   await solInitializationRequest;
 }
@@ -126,7 +126,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const solKeyBuffer = Buffer.from(solKey.slice(2), 'hex');
   const newAggKey = new PublicKey(encodeSolAddress(solKey));
   const tokenVaultPda = new PublicKey(getContractAddress('Solana', 'TOKEN_VAULT_PDA'));
-  const upgradeSignerPda = new PublicKey('3eechPbKXiAVCubUkM9asJ5DbjNn7jHyi5KFLd5ocJbz');
+  const upgradeSignerPda = new PublicKey('H7G2avdmRSQyVxPcgZJPGXVCPhC61TMAKdvYBRF42zJ9');
 
   // Fund new Solana Agg key
   console.log('Funding Solana new aggregate key:', newAggKey.toString());
@@ -140,7 +140,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
         solKeyBuffer,
         whaleKeypair.publicKey.toBuffer(), // govkey
         tokenVaultPda.toBuffer(),
-        Buffer.from([253]), // tokenVaultPda bump
+        Buffer.from([255]), // tokenVaultPda bump
         upgradeSignerPda.toBuffer(),
         Buffer.from([255]), // upgradeSignerPda bump
         Buffer.from([0]), // suspendedVault (false)
@@ -207,7 +207,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   const solUsdcMintPubkey = new PublicKey(getContractAddress('Solana', 'SolUsdc'));
 
   const [tokenSupportedAccount] = PublicKey.findProgramAddressSync(
-    [solUsdcMintPubkey.toBuffer()],
+    [Buffer.from('supported_token'), solUsdcMintPubkey.toBuffer()],
     solanaVaultProgramId,
   );
 
