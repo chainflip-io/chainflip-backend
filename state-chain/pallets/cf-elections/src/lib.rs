@@ -1313,7 +1313,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::provide_shared_data())]
 		pub fn provide_shared_data(
 			origin: OriginFor<T>,
 			shared_data: <<T::ElectoralSystem as electoral_system::ElectoralSystem>::Vote as VoteStorage>::SharedData,

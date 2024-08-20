@@ -147,6 +147,30 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn provide_shared_data() {
+		let validator_id = ready_validator_for_vote::<T, I>();
+
+		let elections = Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
+		let next_election = elections.into_iter().next().unwrap();
+
+		assert_ok!(Pallet::<T, I>::vote(
+			RawOrigin::Signed(validator_id.clone().into()).into(),
+			BoundedBTreeMap::try_from(
+				[(next_election.0, T::ElectoralSystem::benchmark_authority_vote())]
+					.into_iter()
+					.collect::<BTreeMap<_, _>>(),
+			)
+			.unwrap(),
+		));
+
+		#[extrinsic_call]
+		provide_shared_data(
+			RawOrigin::Signed(validator_id.into()),
+			T::ElectoralSystem::benchmark_shared_data(),
+		);
+	}
+
 	#[cfg(test)]
 	use crate::mock::*;
 
@@ -166,6 +190,9 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_ignore_my_votes::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_provide_shared_data::<Test, Instance1>(true);
 		});
 	}
 }
