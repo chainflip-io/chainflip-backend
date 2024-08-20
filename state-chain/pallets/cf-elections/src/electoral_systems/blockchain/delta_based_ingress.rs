@@ -78,7 +78,10 @@ where
 			if channels.len() < MAXIMUM_CHANNELS_PER_ELECTION as usize {
 				channels.insert(channel, channel_details);
 				election_access.refresh(
-					election_identifier.extra().checked_add(1).ok_or(CorruptStorageError::new())?,
+					election_identifier
+						.extra()
+						.checked_add(1)
+						.ok_or_else(|| CorruptStorageError::new())?,
 					channels,
 				)?;
 				return Ok(())
@@ -280,7 +283,7 @@ where
 						election_identifier
 							.extra()
 							.checked_add(1)
-							.ok_or(CorruptStorageError::new())?,
+							.ok_or_else(|| CorruptStorageError::new())?,
 						channels,
 					)?;
 				}
