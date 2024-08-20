@@ -1262,9 +1262,14 @@ pub mod pallet {
 					let fee =
 						Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) * stable_amount;
 
-					EarnedBrokerFees::<T>::mutate(account, STABLE_ASSET, |earned_fees| {
-						earned_fees.saturating_accrue(fee)
-					});
+					if let Err(err) = T::BalanceApi::try_credit_account(account, STABLE_ASSET, fee)
+					{
+						log_or_panic!(
+							"Failed to credit broker fee to account {:?} with error: {:?}",
+							account,
+							err
+						);
+					}
 
 					fee_accumulator.saturating_add(fee)
 				});
