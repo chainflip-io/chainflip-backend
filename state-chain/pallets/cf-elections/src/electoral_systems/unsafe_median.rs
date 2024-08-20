@@ -105,65 +105,57 @@ mod test_unsafe_median {
 
 	use super::*;
 
-	use crate::{
-		electoral_system::{mocks::*, ConsensusStatus, ElectoralReadAccess},
-		ElectionIdentifier, UniqueMonotonicIdentifier,
-	};
+	use crate::electoral_system::{mocks::*, ConsensusStatus, ElectoralReadAccess};
 
 	#[test]
 	fn if_consensus_update_unsynchronised_state() {
-		let election_identifier = ElectionIdentifier::new(UniqueMonotonicIdentifier::new(0), ());
-
 		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
 		const NEW_UNSYNCHRONISED_STATE: u64 = 33;
-		let mut electoral_access =
-			MockElectoralAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, ());
+		let mut electoral_system = MockElectoralSystem::<UnsafeMedian<u64, (), ()>>::new(
+			INIT_UNSYNCHRONISED_STATE,
+			(),
+			(),
+		);
 
-		electoral_access.set_consensus_status(
-			election_identifier,
+		electoral_system.new_election((), (), ()).unwrap().set_consensus_status(
 			ConsensusStatus::Changed {
 				previous: INIT_UNSYNCHRONISED_STATE,
 				new: NEW_UNSYNCHRONISED_STATE,
 			},
 		);
 
-		UnsafeMedian::<u64, (), ()>::on_finalize(
-			&mut electoral_access,
-			vec![election_identifier],
-			&(),
-		)
-		.unwrap();
+		electoral_system.finalize_elections(&()).unwrap();
 
-		assert_eq!(electoral_access.unsynchronised_state().unwrap(), NEW_UNSYNCHRONISED_STATE);
+		assert_eq!(electoral_system.unsynchronised_state().unwrap(), NEW_UNSYNCHRONISED_STATE);
 	}
 
 	#[test]
 	fn if_no_consensus_do_not_update_unsynchronised_state() {
-		let election_identifier = ElectionIdentifier::new(UniqueMonotonicIdentifier::new(0), ());
-
 		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
-		let mut electoral_access =
-			MockElectoralAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, ());
+		let mut electoral_system = MockElectoralSystem::<UnsafeMedian<u64, (), ()>>::new(
+			INIT_UNSYNCHRONISED_STATE,
+			(),
+			(),
+		);
 
-		electoral_access.set_consensus_status(election_identifier, ConsensusStatus::None);
+		electoral_system
+			.new_election((), (), ())
+			.unwrap()
+			.set_consensus_status(ConsensusStatus::None);
 
-		UnsafeMedian::<u64, (), ()>::on_finalize(
-			&mut electoral_access,
-			vec![election_identifier],
-			&(),
-		)
-		.unwrap();
+		electoral_system.finalize_elections(&()).unwrap();
 
-		assert_eq!(electoral_access.unsynchronised_state().unwrap(), INIT_UNSYNCHRONISED_STATE);
+		assert_eq!(electoral_system.unsynchronised_state().unwrap(), INIT_UNSYNCHRONISED_STATE);
 	}
 
 	#[test]
 	fn check_consensus_correctly_calculates_median_when_all_authorities_vote() {
-		let election_identifier = ElectionIdentifier::new(UniqueMonotonicIdentifier::new(0), ());
-
 		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
-		let mut electoral_access =
-			MockElectoralAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, ());
+		let mut electoral_system = MockElectoralSystem::<UnsafeMedian<u64, (), ()>>::new(
+			INIT_UNSYNCHRONISED_STATE,
+			(),
+			(),
+		);
 
 		let mut votes = (1..=10).map(|v| ((), v)).collect::<Vec<_>>();
 
@@ -174,9 +166,10 @@ mod test_unsafe_median {
 
 		let votes_len = votes.len() as u32;
 
+		let election = electoral_system.new_election((), (), ()).unwrap();
 		let consensus = UnsafeMedian::<u64, (), ()>::check_consensus(
-			election_identifier,
-			&electoral_access.election_mut(election_identifier).unwrap(),
+			election.identifier(),
+			&election,
 			None,
 			votes,
 			// all authorities have voted
@@ -191,10 +184,8 @@ mod test_unsafe_median {
 	// in this case.
 	#[test]
 	fn check_consensus_correctly_calculates_median_when_exactly_super_majority_authorities_vote() {
-		let election_identifier = ElectionIdentifier::new(UniqueMonotonicIdentifier::new(0), ());
-
-		let mut electoral_access =
-			MockElectoralAccess::<UnsafeMedian<u64, (), ()>>::new(Default::default(), ());
+		let mut electoral_system =
+			MockElectoralSystem::<UnsafeMedian<u64, (), ()>>::new(Default::default(), (), ());
 
 		let mut votes = vec![((), 1u64), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6)];
 
@@ -205,37 +196,32 @@ mod test_unsafe_median {
 
 		let votes_len = votes.len() as u32;
 
-		let consensus = UnsafeMedian::<u64, (), ()>::check_consensus(
-			election_identifier,
-			&electoral_access.election_mut(election_identifier).unwrap(),
-			None,
-			votes,
-			(votes_len + (votes_len / 2)) as u32,
-		)
-		.unwrap();
+		let consensus = electoral_system
+			.new_election((), (), ())
+			.unwrap()
+			.check_consensus(None, votes, (votes_len + (votes_len / 2)) as u32)
+			.unwrap();
 
 		assert_eq!(consensus, Some(3));
 	}
 
 	#[test]
 	fn fewer_than_supermajority_votes_does_not_get_consensus() {
-		let election_identifier = ElectionIdentifier::new(UniqueMonotonicIdentifier::new(0), ());
-
-		let mut electoral_access =
-			MockElectoralAccess::<UnsafeMedian<u64, (), ()>>::new(Default::default(), ());
+		let mut electoral_system =
+			MockElectoralSystem::<UnsafeMedian<u64, (), ()>>::new(Default::default(), (), ());
 
 		let all_votes = vec![((), 1u64), ((), 5), ((), 3), ((), 2), ((), 8)];
 
+		let election = electoral_system.new_election((), (), ()).unwrap();
 		(0..(all_votes.len())).for_each(|n_votes| {
 			assert_eq!(
-				UnsafeMedian::<u64, (), ()>::check_consensus(
-					election_identifier,
-					&electoral_access.election_mut(election_identifier).unwrap(),
-					None,
-					all_votes.clone().into_iter().take(n_votes).collect::<Vec<_>>(),
-					(all_votes.len() + (all_votes.len() / 2)) as u32,
-				)
-				.unwrap(),
+				election
+					.check_consensus(
+						None,
+						all_votes.clone().into_iter().take(n_votes).collect::<Vec<_>>(),
+						(all_votes.len() + (all_votes.len() / 2)) as u32,
+					)
+					.unwrap(),
 				None
 			);
 		});
