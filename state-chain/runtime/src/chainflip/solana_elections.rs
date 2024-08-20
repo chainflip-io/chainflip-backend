@@ -42,13 +42,15 @@ pub fn initial_state(
 			Default::default(),
 			priority_fee,
 			(),
+			(),
 		),
 		unsynchronised_settings: (
 			(),
 			SolanaFeeUnsynchronisedSettings { fee_multiplier: FixedU128::from_u32(1u32) },
 			(),
+			(),
 		),
-		settings: ((), (), SolanaIngressSettings { vault_program, usdc_token_mint_pubkey }),
+		settings: ((), (), SolanaIngressSettings { vault_program, usdc_token_mint_pubkey }, ()),
 	}
 }
 
