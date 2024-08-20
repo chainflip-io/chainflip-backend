@@ -545,8 +545,7 @@ impl RpcServer for RpcServerImpl {
 					orders_to_delete.push(CloseOrder::Range {
 						base_asset,
 						quote_asset: pool.quote_asset,
-						id: try_parse_number_or_hex(NumberOrHex::Hex(order.id))
-							.expect("cannot fail, u64 returned as a hex") as u64,
+						id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
 					});
 				}
 				for order in orders.limit_orders.asks {
@@ -554,8 +553,7 @@ impl RpcServer for RpcServerImpl {
 						base_asset,
 						quote_asset: pool.quote_asset,
 						side: Side::Sell,
-						id: try_parse_number_or_hex(NumberOrHex::Hex(order.id))
-							.expect("cannot fail, u64 returned as a hex") as u64,
+						id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
 					});
 				}
 				for order in orders.limit_orders.bids {
@@ -563,8 +561,7 @@ impl RpcServer for RpcServerImpl {
 						base_asset,
 						quote_asset: pool.quote_asset,
 						side: Side::Buy,
-						id: try_parse_number_or_hex(NumberOrHex::Hex(order.id))
-							.expect("cannot fail, u64 returned as a hex") as u64,
+						id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
 					});
 				}
 			}
