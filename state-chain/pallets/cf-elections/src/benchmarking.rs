@@ -169,6 +169,13 @@ mod benchmarks {
 			RawOrigin::Signed(validator_id.into()),
 			T::ElectoralSystem::benchmark_shared_data(),
 		);
+
+		assert_eq!(
+			SharedData::<T, I>::get(&SharedDataHash::of(
+				&T::ElectoralSystem::benchmark_shared_data()
+			)),
+			Some(T::ElectoralSystem::benchmark_shared_data())
+		);
 	}
 
 	#[cfg(test)]
