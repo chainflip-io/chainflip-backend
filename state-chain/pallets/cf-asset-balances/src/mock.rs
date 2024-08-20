@@ -72,6 +72,9 @@ pub const DOT_ADDR_1: ForeignChainAddress =
 pub const BTC_ADDR_1: ForeignChainAddress =
 	ForeignChainAddress::Btc(ScriptPubkey::Taproot([1u8; 32]));
 
+pub const SOL_ADDR: ForeignChainAddress =
+	ForeignChainAddress::Sol(cf_chains::sol::SolAddress([1u8; 32]));
+
 impl_mock_runtime_safe_mode!(refunding: PalletSafeMode);
 
 impl crate::Config for Test {

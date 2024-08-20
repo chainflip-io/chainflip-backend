@@ -164,11 +164,11 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn stop_refunding(chain: ForeignChain, number_or_refunds: usize) -> bool {
+	fn stop_refunding(chain: ForeignChain, number_of_refunds: usize) -> bool {
 		match chain {
-			ForeignChain::Ethereum => number_or_refunds >= MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH,
+			ForeignChain::Ethereum => number_of_refunds >= MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH,
 			ForeignChain::Arbitrum =>
-				number_or_refunds >= MAX_REFUNDED_VALIDATORS_ARB_ETH_PER_EPOCH,
+				number_of_refunds >= MAX_REFUNDED_VALIDATORS_ARB_ETH_PER_EPOCH,
 			_ => false,
 		}
 	}
@@ -177,13 +177,13 @@ impl<T: Config> Pallet<T> {
 	//
 	// The owed and available amount are mutated in place.
 	//
-	// For Ethereum and Arbitrum, we expect to the validators and pay out via egress to their
+	// For Ethereum and Arbitrum, we expect to pay out the validators via egress to their
 	// accounts. For Polkadot, we expect to pay out to the current AggKey account.
 	// For Bitcoin and Solana, the vault pays the fees directly so we don't need to egress
 	// anything.
 	//
 	// Note that we refund to accounts atomically (we never partially refund an account), whereas
-	// refunds to vaults or aggkeys can be made incrementally.
+	// refunds to vaults or agg-keys can be made incrementally.
 	fn reconcile(
 		chain: ForeignChain,
 		owner: &ExternalOwner,
@@ -277,11 +277,9 @@ impl<T: Config> Pallet<T> {
 					if Self::stop_refunding(chain, refund_counter) {
 						break;
 					}
-					match Self::reconcile(chain, destination, amount, total_withheld) {
-						Err(_) | Ok(_) if *total_withheld == 0 => {
-							break;
-						},
-						_ => {},
+					let _ = Self::reconcile(chain, destination, amount, total_withheld);
+					if *total_withheld == 0 {
+						break;
 					}
 				}
 
