@@ -68,7 +68,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 },
                 ElectionIdentifier,
             };
-            use crate::vote_storage::composite::$module::CompositeVoteStorageEnum;
+            use crate::vote_storage::composite::$module::{CompositeVoteProperties, CompositeVote, CompositePartialVote};
 
             use cf_primitives::AuthorityCount;
 
@@ -115,7 +115,27 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
 
             #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
-            pub enum CompositeElectoralSystemEnum<$($electoral_system,)*> {
+            pub enum CompositeElectoralUnsynchronisedStateMapKey<$($electoral_system,)*> {
+                $($electoral_system($electoral_system),)*
+            }
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            pub enum CompositeElectoralUnsynchronisedStateMapValue<$($electoral_system,)*> {
+                $($electoral_system($electoral_system),)*
+            }
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            pub enum CompositeElectionIdentifierExtra<$($electoral_system,)*> {
+                $($electoral_system($electoral_system),)*
+            }
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            pub enum CompositeElectionProperties<$($electoral_system,)*> {
+                $($electoral_system($electoral_system),)*
+            }
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            pub enum CompositeElectionState<$($electoral_system,)*> {
+                $($electoral_system($electoral_system),)*
+            }
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            pub enum CompositeConsensus<$($electoral_system,)*> {
                 $($electoral_system($electoral_system),)*
             }
 
@@ -132,7 +152,7 @@ macro_rules! generate_electoral_system_tuple_impls {
 
                     for election_identifier in election_identifiers {
                         match *election_identifier.extra() {
-                            $(CompositeElectoralSystemEnum::$electoral_system(extra) => {
+                            $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
                                 $electoral_system_alt_name_0.push(election_identifier.with_extra(extra));
                             })*
                         }
@@ -158,16 +178,16 @@ macro_rules! generate_electoral_system_tuple_impls {
 
             impl<$($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static> ElectoralSystem for Composite<($($electoral_system,)*), H> {
                 type ElectoralUnsynchronisedState = ($(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedState,)*);
-                type ElectoralUnsynchronisedStateMapKey = CompositeElectoralSystemEnum<$(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,)*>;
-                type ElectoralUnsynchronisedStateMapValue = CompositeElectoralSystemEnum<$(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,)*>;
+                type ElectoralUnsynchronisedStateMapKey = CompositeElectoralUnsynchronisedStateMapKey<$(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,)*>;
+                type ElectoralUnsynchronisedStateMapValue = CompositeElectoralUnsynchronisedStateMapValue<$(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,)*>;
                 type ElectoralUnsynchronisedSettings = ($(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedSettings,)*);
                 type ElectoralSettings = ($(<$electoral_system as ElectoralSystem>::ElectoralSettings,)*);
 
-                type ElectionIdentifierExtra = CompositeElectoralSystemEnum<$(<$electoral_system as ElectoralSystem>::ElectionIdentifierExtra,)*>;
-                type ElectionProperties = CompositeElectoralSystemEnum<$(<$electoral_system as ElectoralSystem>::ElectionProperties,)*>;
-                type ElectionState = CompositeElectoralSystemEnum<$(<$electoral_system as ElectoralSystem>::ElectionState,)*>;
+                type ElectionIdentifierExtra = CompositeElectionIdentifierExtra<$(<$electoral_system as ElectoralSystem>::ElectionIdentifierExtra,)*>;
+                type ElectionProperties = CompositeElectionProperties<$(<$electoral_system as ElectoralSystem>::ElectionProperties,)*>;
+                type ElectionState = CompositeElectionState<$(<$electoral_system as ElectoralSystem>::ElectionState,)*>;
                 type Vote = ($(<$electoral_system as ElectoralSystem>::Vote,)*);
-                type Consensus = CompositeElectoralSystemEnum<$(<$electoral_system as ElectoralSystem>::Consensus,)*>;
+                type Consensus = CompositeConsensus<$(<$electoral_system as ElectoralSystem>::Consensus,)*>;
 
                 type OnFinalizeContext = H::OnFinalizeContext;
                 type OnFinalizeReturn = H::OnFinalizeReturn;
@@ -181,19 +201,19 @@ macro_rules! generate_electoral_system_tuple_impls {
                     )>,
                 ) -> Result<bool, CorruptStorageError> {
                     match *election_identifier.extra() {
-                        $(CompositeElectoralSystemEnum::$electoral_system(extra) => {
+                        $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
                             <$electoral_system as ElectoralSystem>::is_vote_desired(
                                 election_identifier.with_extra(extra),
                                 &CompositeElectionAccess::<tags::$electoral_system, _, ElectionAccess>::new(election_access),
                                 current_vote.map(|(properties, vote)| {
                                     Ok((
                                         match properties {
-                                            CompositeVoteStorageEnum::$electoral_system(properties) => properties,
+                                            CompositeVoteProperties::$electoral_system(properties) => properties,
                                             _ => return Err(CorruptStorageError::new()),
                                         },
                                         match vote {
-                                            AuthorityVote::PartialVote(CompositeVoteStorageEnum::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
-                                            AuthorityVote::Vote(CompositeVoteStorageEnum::$electoral_system(vote)) => AuthorityVote::Vote(vote),
+                                            AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
+                                            AuthorityVote::Vote(CompositeVote::$electoral_system(vote)) => AuthorityVote::Vote(vote),
                                             _ => return Err(CorruptStorageError::new()),
                                         },
                                     ))
@@ -210,11 +230,11 @@ macro_rules! generate_electoral_system_tuple_impls {
                     match (current_vote_properties, current_partial_vote, current_authority_vote, proposed_partial_vote, proposed_vote) {
                         $(
                             (
-                                CompositeVoteStorageEnum::$electoral_system(current_vote_properties),
-                                CompositeVoteStorageEnum::$electoral_system(current_partial_vote),
-                                AuthorityVote::Vote(CompositeVoteStorageEnum::$electoral_system(current_authority_vote)),
-                                CompositeVoteStorageEnum::$electoral_system(proposed_partial_vote),
-                                CompositeVoteStorageEnum::$electoral_system(proposed_vote),
+                                CompositeVoteProperties::$electoral_system(current_vote_properties),
+                                CompositePartialVote::$electoral_system(current_partial_vote),
+                                AuthorityVote::Vote(CompositeVote::$electoral_system(current_authority_vote)),
+                                CompositePartialVote::$electoral_system(proposed_partial_vote),
+                                CompositeVote::$electoral_system(proposed_vote),
                             ) => {
                                 <$electoral_system as ElectoralSystem>::is_vote_needed(
                                     (current_vote_properties, current_partial_vote, AuthorityVote::Vote(current_authority_vote)),
@@ -222,11 +242,11 @@ macro_rules! generate_electoral_system_tuple_impls {
                                 )
                             },
                             (
-                                CompositeVoteStorageEnum::$electoral_system(current_vote_properties),
-                                CompositeVoteStorageEnum::$electoral_system(current_partial_vote),
-                                AuthorityVote::PartialVote(CompositeVoteStorageEnum::$electoral_system(current_authority_partial_vote)),
-                                CompositeVoteStorageEnum::$electoral_system(proposed_partial_vote),
-                                CompositeVoteStorageEnum::$electoral_system(proposed_vote),
+                                CompositeVoteProperties::$electoral_system(current_vote_properties),
+                                CompositePartialVote::$electoral_system(current_partial_vote),
+                                AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(current_authority_partial_vote)),
+                                CompositePartialVote::$electoral_system(proposed_partial_vote),
+                                CompositeVote::$electoral_system(proposed_vote),
                             ) => {
                                 <$electoral_system as ElectoralSystem>::is_vote_needed(
                                     (current_vote_properties, current_partial_vote, AuthorityVote::PartialVote(current_authority_partial_vote)),
@@ -245,7 +265,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
                 ) -> Result<bool, CorruptStorageError> {
                     Ok(match (*election_identifier.extra(), partial_vote) {
-                        $((CompositeElectoralSystemEnum::$electoral_system(extra), CompositeVoteStorageEnum::$electoral_system(partial_vote)) => <$electoral_system as ElectoralSystem>::is_vote_valid(
+                        $((CompositeElectionIdentifierExtra::$electoral_system(extra), CompositePartialVote::$electoral_system(partial_vote)) => <$electoral_system as ElectoralSystem>::is_vote_valid(
                             election_identifier.with_extra(extra),
                             &CompositeElectionAccess::<tags::$electoral_system, _, ElectionAccess>::new(election_access),
                             partial_vote,
@@ -260,27 +280,27 @@ macro_rules! generate_electoral_system_tuple_impls {
                         VotePropertiesOf<Self>,
                         AuthorityVoteOf<Self>,
                     )>,
-                    vote: &<Self::Vote as VoteStorage>::PartialVote,
+                    partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
                 ) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
-                    match (*election_identifier.extra(), vote) {
-                        $((CompositeElectoralSystemEnum::$electoral_system(extra), CompositeVoteStorageEnum::$electoral_system(vote)) => {
+                    match (*election_identifier.extra(), partial_vote) {
+                        $((CompositeElectionIdentifierExtra::$electoral_system(extra), CompositePartialVote::$electoral_system(partial_vote)) => {
                             <$electoral_system as ElectoralSystem>::generate_vote_properties(
                                 election_identifier.with_extra(extra),
                                 previous_vote.map(|(previous_properties, previous_vote)| {
                                     Ok((
                                         match previous_properties {
-                                            CompositeVoteStorageEnum::$electoral_system(previous_properties) => previous_properties,
+                                            CompositeVoteProperties::$electoral_system(previous_properties) => previous_properties,
                                             _ => return Err(CorruptStorageError::new()),
                                         },
                                         match previous_vote {
-                                            AuthorityVote::PartialVote(CompositeVoteStorageEnum::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
-                                            AuthorityVote::Vote(CompositeVoteStorageEnum::$electoral_system(vote)) => AuthorityVote::Vote(vote),
+                                            AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
+                                            AuthorityVote::Vote(CompositeVote::$electoral_system(vote)) => AuthorityVote::Vote(vote),
                                             _ => return Err(CorruptStorageError::new()),
                                         },
                                     ))
                                 }).transpose()?,
-                                vote,
-                            ).map(CompositeVoteStorageEnum::$electoral_system)
+                                partial_vote,
+                            ).map(CompositeVoteProperties::$electoral_system)
                         },)*
                         _ => Err(CorruptStorageError::new()),
                     }
@@ -311,27 +331,27 @@ macro_rules! generate_electoral_system_tuple_impls {
                     authorities: AuthorityCount,
                 ) -> Result<Option<Self::Consensus>, CorruptStorageError> {
                     Ok(match *election_identifier.extra() {
-                        $(CompositeElectoralSystemEnum::$electoral_system(extra) => {
+                        $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
                             <$electoral_system as ElectoralSystem>::check_consensus(
                                 election_identifier.with_extra(extra),
                                 &CompositeElectionAccess::<tags::$electoral_system, _, ElectionAccess>::new(election_access),
                                 previous_consensus.map(|previous_consensus| {
                                     match previous_consensus {
-                                        CompositeElectoralSystemEnum::$electoral_system(previous_consensus) => Ok(previous_consensus),
+                                        CompositeConsensus::$electoral_system(previous_consensus) => Ok(previous_consensus),
                                         _ => Err(CorruptStorageError::new()),
                                     }
                                 }).transpose()?,
                                 votes.into_iter().map(|(properties, vote)| {
                                     match (properties, vote) {
                                         (
-                                            CompositeVoteStorageEnum::$electoral_system(properties),
-                                            CompositeVoteStorageEnum::$electoral_system(vote)
+                                            CompositeVoteProperties::$electoral_system(properties),
+                                            CompositeVote::$electoral_system(vote)
                                         ) => Ok((properties, vote)),
                                         _ => Err(CorruptStorageError::new()),
                                     }
                                 }).collect::<Result<Vec<_>, _>>()?,
                                 authorities,
-                            )?.map(CompositeElectoralSystemEnum::$electoral_system)
+                            )?.map(CompositeConsensus::$electoral_system)
                         },)*
                     })
                 }
@@ -390,7 +410,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
             fn properties(&self) -> Result<$current::ElectionProperties, CorruptStorageError> {
                 match self.ea.borrow().properties()? {
-                    CompositeElectoralSystemEnum::$current(properties) => {
+                    CompositeElectionProperties::$current(properties) => {
                         Ok(properties)
                     },
                     _ => Err(CorruptStorageError::new())
@@ -398,7 +418,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
             fn state(&self) -> Result<$current::ElectionState, CorruptStorageError> {
                 match self.ea.borrow().state()? {
-                    CompositeElectoralSystemEnum::$current(state) => {
+                    CompositeElectionState::$current(state) => {
                         Ok(state)
                     },
                     _ => Err(CorruptStorageError::new())
@@ -407,7 +427,7 @@ macro_rules! generate_electoral_system_tuple_impls {
         }
         impl<$($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static,  EA: ElectionWriteAccess<ElectoralSystem = Composite<($($electoral_system,)*), H>>> ElectionWriteAccess for CompositeElectionAccess<tags::$current, EA, EA> {
             fn set_state(&mut self, state: $current::ElectionState) -> Result<(), CorruptStorageError> {
-                self.ea.set_state(CompositeElectoralSystemEnum::$current(state))
+                self.ea.set_state(CompositeElectionState::$current(state))
             }
             fn clear_votes(&mut self) {
                 self.ea.clear_votes()
@@ -421,8 +441,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                 properties: $current::ElectionProperties,
             ) -> Result<(), CorruptStorageError> {
                 self.ea.refresh(
-                    CompositeElectoralSystemEnum::$current(extra),
-                    CompositeElectoralSystemEnum::$current(properties),
+                    CompositeElectionIdentifierExtra::$current(extra),
+                    CompositeElectionProperties::$current(properties),
                 )
             }
             fn check_consensus(
@@ -431,7 +451,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 self.ea.check_consensus().and_then(|consensus_status| {
                     consensus_status.try_map(|consensus| {
                         match consensus {
-                            CompositeElectoralSystemEnum::$current(consensus) => Ok(consensus),
+                            CompositeConsensus::$current(consensus) => Ok(consensus),
                             _ => Err(CorruptStorageError::new()),
                         }
                     })
@@ -449,7 +469,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 &self,
                 id: ElectionIdentifier<<$current as ElectoralSystem>::ElectionIdentifierExtra>,
             ) -> Result<Self::ElectionReadAccess<'_>, CorruptStorageError> {
-                self.ea.election(id.with_extra(CompositeElectoralSystemEnum::$current(*id.extra()))).map(|election_access| {
+                self.ea.election(id.with_extra(CompositeElectionIdentifierExtra::$current(*id.extra()))).map(|election_access| {
                     CompositeElectionAccess::<tags::$current, _, <EA as ElectoralReadAccess>::ElectionReadAccess<'_>>::new(election_access)
                 })
             }
@@ -469,8 +489,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                 &self,
                 key: &$current::ElectoralUnsynchronisedStateMapKey,
             ) -> Result<Option<$current::ElectoralUnsynchronisedStateMapValue>, CorruptStorageError> {
-                match self.ea.unsynchronised_state_map(&CompositeElectoralSystemEnum::$current(key.clone()))? {
-                    Some(CompositeElectoralSystemEnum::$current(value)) => Ok(Some(value)),
+                match self.ea.unsynchronised_state_map(&CompositeElectoralUnsynchronisedStateMapKey::$current(key.clone()))? {
+                    Some(CompositeElectoralUnsynchronisedStateMapValue::$current(value)) => Ok(Some(value)),
                     None => Ok(None),
                     _ => Err(CorruptStorageError::new()),
                 }
@@ -488,7 +508,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 properties: $current::ElectionProperties,
                 state: $current::ElectionState,
             ) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
-                self.ea.new_election(CompositeElectoralSystemEnum::$current(extra), CompositeElectoralSystemEnum::$current(properties), CompositeElectoralSystemEnum::$current(state)).map(|election_access| {
+                self.ea.new_election(CompositeElectionIdentifierExtra::$current(extra), CompositeElectionProperties::$current(properties), CompositeElectionState::$current(state)).map(|election_access| {
                     CompositeElectionAccess::new(election_access)
                 })
             }
@@ -496,7 +516,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 &mut self,
                 id: ElectionIdentifier<$current::ElectionIdentifierExtra>,
             ) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
-                self.ea.election_mut(id.with_extra(CompositeElectoralSystemEnum::$current(*id.extra()))).map(|election_access| {
+                self.ea.election_mut(id.with_extra(CompositeElectionIdentifierExtra::$current(*id.extra()))).map(|election_access| {
                     CompositeElectionAccess::new(election_access)
                 })
             }
@@ -514,8 +534,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                 value: Option<$current::ElectoralUnsynchronisedStateMapValue>,
             ) -> Result<(), CorruptStorageError> {
                 self.ea.set_unsynchronised_state_map(
-                    CompositeElectoralSystemEnum::$current(key),
-                    value.map(CompositeElectoralSystemEnum::$current),
+                    CompositeElectoralUnsynchronisedStateMapKey::$current(key),
+                    value.map(CompositeElectoralUnsynchronisedStateMapValue::$current),
                 )
             }
 
