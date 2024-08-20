@@ -117,6 +117,7 @@ impl crate::Config for Test {
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
+	type PoolApi = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
