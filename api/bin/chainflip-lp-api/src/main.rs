@@ -566,28 +566,19 @@ impl RpcServer for RpcServerImpl {
 				}
 			}
 		}
+
 		// in case there are more than 100 elements we need to split the orders into chunks of 100
 		// and submit multiple extrinsics
 		let mut extrinsic_submissions = vec![];
-		while orders_to_delete.len() > MAX_ORDERS_DELETE as usize {
-			let bounded_orders_to_delete: BoundedVec<CloseOrder, ConstU32<100>> =
-				BoundedVec::try_from(
-					orders_to_delete.drain(..MAX_ORDERS_DELETE as usize).collect::<Vec<_>>(),
-				)
-				.expect("cannot fail");
-			extrinsic_submissions.push(
-				self.api
-					.lp_api()
-					.cancel_orders_batch(bounded_orders_to_delete, wait_for.unwrap_or_default())
-					.await?,
-			);
-		}
-		if !orders_to_delete.is_empty() {
+		for order_chunk in orders_to_delete.chunks(MAX_ORDERS_DELETE as usize) {
 			extrinsic_submissions.push(
 				self.api
 					.lp_api()
 					.cancel_orders_batch(
-						orders_to_delete.try_into().expect("cannot fail"),
+						BoundedVec::<_, ConstU32<MAX_ORDERS_DELETE>>::try_from(
+							order_chunk.to_vec(),
+						)
+						.expect("Guaranteed by `chunk` method."),
 						wait_for.unwrap_or_default(),
 					)
 					.await?,
