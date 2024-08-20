@@ -567,8 +567,9 @@ pub mod pallet {
 					.find(|settings_boundary| {
 						**settings_boundary <= self.unique_monotonic_identifier()
 					})
-					.ok_or(CorruptStorageError::new())?;
-				ElectoralSettings::<T, I>::get(settings_boundary).ok_or(CorruptStorageError::new())
+					.ok_or_else(|| CorruptStorageError::new())?;
+				ElectoralSettings::<T, I>::get(settings_boundary)
+					.ok_or_else(|| CorruptStorageError::new())
 			}
 			fn properties(
 				&self,
@@ -577,14 +578,14 @@ pub mod pallet {
 				CorruptStorageError,
 			> {
 				ElectionProperties::<T, I>::get(self.election_identifier)
-					.ok_or(CorruptStorageError::new())
+					.ok_or_else(|| CorruptStorageError::new())
 			}
 			fn state(
 				&self,
 			) -> Result<<T::ElectoralSystem as ElectoralSystem>::ElectionState, CorruptStorageError>
 			{
 				ElectionState::<T, I>::get(self.unique_monotonic_identifier())
-					.ok_or(CorruptStorageError::new())
+					.ok_or_else(|| CorruptStorageError::new())
 			}
 		}
 		impl<T: Config<I>, I: 'static> ElectionWriteAccess for ElectionAccess<T, I> {
@@ -800,7 +801,8 @@ pub mod pallet {
 				<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
 				CorruptStorageError,
 			> {
-				ElectoralUnsynchronisedSettings::<T, I>::get().ok_or(CorruptStorageError::new())
+				ElectoralUnsynchronisedSettings::<T, I>::get()
+					.ok_or_else(|| CorruptStorageError::new())
 			}
 
 			fn unsynchronised_state(
@@ -809,7 +811,8 @@ pub mod pallet {
 				<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 				CorruptStorageError,
 			> {
-				ElectoralUnsynchronisedState::<T, I>::get().ok_or(CorruptStorageError::new())
+				ElectoralUnsynchronisedState::<T, I>::get()
+					.ok_or_else(|| CorruptStorageError::new())
 			}
 
 			fn unsynchronised_state_map(
@@ -839,7 +842,7 @@ pub mod pallet {
 					unique_monotonic_identifier
 						.0
 						.checked_add(1)
-						.ok_or(CorruptStorageError::new())?,
+						.ok_or_else(|| CorruptStorageError::new())?,
 				));
 				ElectionProperties::<T, I>::insert(election_identifier, properties);
 				ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
@@ -910,16 +913,18 @@ pub mod pallet {
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,
 				f: F,
 			) -> Result<R, CorruptStorageError> {
-				let (updated, mut this) = if let Some(mut this) =
-					BitmapComponents::<T, I>::get(unique_monotonic_identifier)
-				{
-					let update = this.epoch != current_epoch;
+				let (updated, mut this) =
+					if let Some(mut this) =
+						BitmapComponents::<T, I>::get(unique_monotonic_identifier)
+					{
+						let update = this.epoch != current_epoch;
 
-					if update {
-						if this.epoch.checked_add(1) == Some(current_epoch) {
-							let old_authorities = T::EpochInfo::authorities_at_epoch(this.epoch);
-							this.debug_assert_authorities_in_order_of_indices(&old_authorities);
-							this.bitmaps = this
+						if update {
+							if this.epoch.checked_add(1) == Some(current_epoch) {
+								let old_authorities =
+									T::EpochInfo::authorities_at_epoch(this.epoch);
+								this.debug_assert_authorities_in_order_of_indices(&old_authorities);
+								this.bitmaps = this
 								.bitmaps
 								.into_iter()
 								.map(
@@ -946,7 +951,7 @@ pub mod pallet {
 															current_epoch,
 															old_authorities
 																.get(authority_old_index)
-																.ok_or(CorruptStorageError::new())?,
+																.ok_or_else(|| CorruptStorageError::new())?,
 														) {
 														let authority_new_index =
 															authority_new_index as usize;
@@ -955,7 +960,7 @@ pub mod pallet {
 														);
 														*new_bitmap
 															.get_mut(authority_new_index)
-															.ok_or(CorruptStorageError::new())? = true;
+															.ok_or_else(|| CorruptStorageError::new())? = true;
 													}
 													Ok(new_bitmap)
 												},
@@ -964,34 +969,35 @@ pub mod pallet {
 									},
 								)
 								.collect::<Result<_, _>>()?;
-						} else {
-							// If we skipped multiple epochs then we should not transition any
-							// votes, as only votes from validators who were consistently authorites
-							// between this.epoch and current_epoch should have their votes kept
-							// across epoch transitions to avoid unexpected behaviours.
-							//
-							// Note this is *NOT* done for IndividualComponents, and so those
-							// components/votes may be kept across periods when the voter wasn't an
-							// authority.
-							for (_bitmap_component, bitmap) in this.bitmaps.iter_mut() {
-								bitmap.fill(false);
+							} else {
+								// If we skipped multiple epochs then we should not transition any
+								// votes, as only votes from validators who were consistently
+								// authorites between this.epoch and current_epoch should have their
+								// votes kept across epoch transitions to avoid unexpected
+								// behaviours.
+								//
+								// Note this is *NOT* done for IndividualComponents, and so those
+								// components/votes may be kept across periods when the voter wasn't
+								// an authority.
+								for (_bitmap_component, bitmap) in this.bitmaps.iter_mut() {
+									bitmap.fill(false);
+								}
 							}
+
+							this.epoch = current_epoch;
 						}
 
-						this.epoch = current_epoch;
-					}
-
-					(update, this)
-				} else {
-					(
-						false,
-						Self {
-							epoch: current_epoch,
-							bitmaps: Default::default(),
-							_phantom: Default::default(),
-						},
-					)
-				};
+						(update, this)
+					} else {
+						(
+							false,
+							Self {
+								epoch: current_epoch,
+								bitmaps: Default::default(),
+								_phantom: Default::default(),
+							},
+						)
+					};
 
 				let r = f(&mut this)?;
 
@@ -1060,13 +1066,16 @@ pub mod pallet {
 					self.bitmaps.iter_mut().find(|(existing_bitmap_component, _existing_bitmap)| {
 						bitmap_component == *existing_bitmap_component
 					}) {
-					*existing_bitmap.get_mut(authority_index).ok_or(CorruptStorageError::new())? =
-						true;
+					*existing_bitmap
+						.get_mut(authority_index)
+						.ok_or_else(|| CorruptStorageError::new())? = true;
 				} else {
 					self.bitmaps.push((bitmap_component.clone(), {
 						let mut bitmap = BitVec::default();
 						bitmap.resize(T::EpochInfo::current_authority_count() as usize, false);
-						*bitmap.get_mut(authority_index).ok_or(CorruptStorageError::new())? = true;
+						*bitmap
+							.get_mut(authority_index)
+							.ok_or_else(|| CorruptStorageError::new())? = true;
 						bitmap
 					}));
 					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
@@ -1093,7 +1102,9 @@ pub mod pallet {
 					.bitmaps
 					.iter_mut()
 					.try_find(|(_bitmap_component, bitmap)| -> Result<_, CorruptStorageError> {
-						Ok(*bitmap.get(authority_index).ok_or(CorruptStorageError::new())?)
+						Ok(*bitmap
+							.get(authority_index)
+							.ok_or_else(|| CorruptStorageError::new())?)
 					})?
 					.map(|(bitmap_component, bitmap)| {
 						bitmap.set(authority_index, false);
@@ -1111,7 +1122,7 @@ pub mod pallet {
 					.try_find(|(_bitmap_component, bitmap)| -> Result<_, CorruptStorageError> {
 						Ok(*bitmap
 							.get(authority_index as usize)
-							.ok_or(CorruptStorageError::new())?)
+							.ok_or_else(|| CorruptStorageError::new())?)
 					})?
 					.map(|(bitmap_component, _)| bitmap_component.clone()))
 			}
@@ -1129,9 +1140,12 @@ pub mod pallet {
 					.flat_map(|(bitmap_component, bitmap)| {
 						debug_assert_eq!(bitmap.len(), current_authorities.len());
 						bitmap.iter_ones().map(|index| {
-							current_authorities.get(index).ok_or(CorruptStorageError::new()).map(
-								|validator_id| (validator_id.clone(), bitmap_component.clone()),
-							)
+							current_authorities
+								.get(index)
+								.ok_or_else(|| CorruptStorageError::new())
+								.map(|validator_id| {
+									(validator_id.clone(), bitmap_component.clone())
+								})
 						})
 					})
 					.collect()
