@@ -258,3 +258,16 @@ generate_vote_storage_tuple_impls!(tuple_2_impls: (A, B));
 generate_vote_storage_tuple_impls!(tuple_3_impls: (A, B, C));
 generate_vote_storage_tuple_impls!(tuple_4_impls: (A, B, C, D));
 generate_vote_storage_tuple_impls!(tuple_5_impls: (A, B, C, D, EE));
+
+/// BenchmarkValue impl for concrete types used by `solana_elections`
+impl cf_chains::benchmarking_value::BenchmarkValue
+	for tuple_3_impls::CompositeVoteStorageEnum<
+		cf_chains::sol::SolAmount,
+		cf_chains::sol::SolBlockNumber,
+		(),
+	>
+{
+	fn benchmark_value() -> Self {
+		tuple_3_impls::CompositeVoteStorageEnum::A(1_000)
+	}
+}

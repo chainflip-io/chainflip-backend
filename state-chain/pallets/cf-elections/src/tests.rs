@@ -1,13 +1,15 @@
 #![cfg(test)]
 
+use sp_std::collections::btree_set::BTreeSet;
 use std::collections::BTreeMap;
 
 use cf_traits::EpochInfo;
-use electoral_system::{AuthorityVoteOf, ElectoralReadAccess};
-use frame_system::RawOrigin;
-use sp_std::collections::btree_set::BTreeSet;
 
-use mock::{new_test_ext, MockEpochInfo, Test, INITIAL_UNSYNCED_STATE};
+use frame_support::assert_ok;
+use frame_system::RawOrigin;
+
+use electoral_system::{AuthorityVoteOf, ElectoralReadAccess};
+use mock::{new_test_ext, Elections, MockEpochInfo, Test, INITIAL_UNSYNCED_STATE};
 
 use super::*;
 
@@ -89,4 +91,45 @@ fn happy_path_vote_and_consensus() {
 			})
 			.unwrap();
 		});
+}
+
+#[test]
+fn can_provide_shared_data() {
+	const NEW_DATA: u64 = 23;
+
+	new_test_ext().execute_with(|| {
+		Elections::on_finalize(1);
+
+		let validator_id = MockEpochInfo::current_authorities()[0];
+		let elections = Pallet::<Test, Instance1>::electoral_data(&validator_id)
+			.unwrap()
+			.current_elections;
+
+		let election_id = elections.into_iter().next().unwrap().0;
+
+		assert_ok!(Pallet::<Test, Instance1>::ignore_my_votes(
+			RawOrigin::Signed(validator_id).into(),
+		));
+		assert_ok!(Pallet::<Test, Instance1>::stop_ignoring_my_votes(
+			RawOrigin::Signed(validator_id).into(),
+		));
+
+		assert_ok!(Pallet::<Test, Instance1>::vote(
+			RawOrigin::Signed(validator_id).into(),
+			BoundedBTreeMap::try_from(
+				[(
+					election_id,
+					AuthorityVoteOf::<<Test as Config<Instance1>>::ElectoralSystem>::Vote(NEW_DATA,),
+				)]
+				.into_iter()
+				.collect::<BTreeMap<_, _>>(),
+			)
+			.unwrap(),
+		));
+
+		assert_ok!(Elections::provide_shared_data(
+			RawOrigin::Signed(validator_id).into(),
+			NEW_DATA
+		));
+	});
 }

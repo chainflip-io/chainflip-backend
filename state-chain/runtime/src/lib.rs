@@ -995,7 +995,7 @@ impl pallet_cf_chain_tracking::Config<Instance4> for Runtime {
 impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystem = chainflip::solana_elections::SolanaElectoralSystem;
-	type WeightInfo = ();
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 }
 
 construct_runtime!(
@@ -1247,6 +1247,7 @@ mod benches {
 		[pallet_timestamp, Timestamp]
 		[pallet_cf_environment, Environment]
 		[pallet_cf_flip, Flip]
+		[pallet_cf_elections, SolanaElections]
 		[pallet_cf_emissions, Emissions]
 		[pallet_cf_funding, Funding]
 		[pallet_session, SessionBench::<Runtime>]
