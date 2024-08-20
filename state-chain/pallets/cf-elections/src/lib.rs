@@ -191,10 +191,6 @@ pub mod pallet {
 
 	#[cfg(test)]
 	impl UniqueMonotonicIdentifier {
-		pub(crate) fn new(value: u64) -> Self {
-			Self(value)
-		}
-
 		pub(crate) fn next_identifier(&self) -> Option<Self> {
 			self.0.checked_add(1).map(|next| Self(next))
 		}
