@@ -1727,7 +1727,7 @@ pub mod pallet {
 			))
 		}
 
-		fn recheck_contributed_to_consensuses(
+		pub(crate) fn recheck_contributed_to_consensuses(
 			epoch_index: EpochIndex,
 			authority: &T::ValidatorId,
 			authority_index: AuthorityCount,

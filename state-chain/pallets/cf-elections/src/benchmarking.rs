@@ -26,6 +26,7 @@ mod benchmarks {
 		epoch: u32,
 	) {
 		let validator_id: T::ValidatorId = account_id.clone().into();
+		let umi = epoch - 1;
 		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id.clone()]);
 
 		let block = BlockNumberFor::<T>::from(epoch);
@@ -63,8 +64,8 @@ mod benchmarks {
 		.unwrap();
 
 		ElectionConsensusHistoryUpToDate::<T, I>::insert(
-			UniqueMonotonicIdentifier::from_u64((epoch as u64) - 1),
-			epoch - 1,
+			UniqueMonotonicIdentifier::from_u64(umi as u64),
+			epoch,
 		);
 	}
 
@@ -117,22 +118,16 @@ mod benchmarks {
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Validator).unwrap();
 		let validator_id: T::ValidatorId = caller.clone().into();
 
-		vote_in_epoch::<T, I>(caller.clone(), 1);
+		T::EpochInfo::add_authority_info_for_epoch(2, vec![validator_id.clone()]);
 
 		let zero_sync_barrier = VoteSynchronisationBarrier::from_u32(0);
+
+		Status::<T, I>::put(ElectoralSystemStatus::Running);
 
 		#[extrinsic_call]
 		ignore_my_votes(RawOrigin::Signed(caller), zero_sync_barrier);
 
-		assert!(
-			ElectionConsensusHistoryUpToDate::<T, I>::iter().count() == 0,
-			"ElectionConsensusHistoryUpToDate not removed from storage!"
-		);
-
-		assert!(
-			AuthorityVoteSynchronisationBarriers::<T, I>::contains_key(validator_id),
-			"AuthorityVoteSynchronisationBarriers not present in storage!"
-		);
+		assert!(AuthorityVoteSynchronisationBarriers::<T, I>::contains_key(validator_id.clone()));
 	}
 
 	#[benchmark]
@@ -141,18 +136,37 @@ mod benchmarks {
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Validator).unwrap();
 		let validator_id: T::ValidatorId = caller.clone().into();
 
-		vote_in_epoch::<T, I>(caller.clone(), 1);
+		T::EpochInfo::add_authority_info_for_epoch(3, vec![validator_id.clone()]);
 
-		let zero_sync_barrier = VoteSynchronisationBarrier::from_u32(0);
+		Status::<T, I>::put(ElectoralSystemStatus::Running);
 
-		ContributingAuthorities::<T, I>::remove(&validator_id);
+		AuthorityVoteSynchronisationBarriers::<T, I>::insert(
+			validator_id.clone(),
+			VoteSynchronisationBarrier::from_u32(0),
+		);
 
 		#[extrinsic_call]
-		stop_ignoring_my_votes(RawOrigin::Signed(caller), zero_sync_barrier);
+		stop_ignoring_my_votes(RawOrigin::Signed(caller), VoteSynchronisationBarrier::from_u32(0));
+
+		assert!(ContributingAuthorities::<T, I>::contains_key(validator_id.clone()));
+	}
+
+	#[benchmark]
+	fn recheck_contributed_to_consensuses() {
+		let caller =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Validator).unwrap();
+		let validator_id: T::ValidatorId = caller.clone().into();
+
+		vote_in_epoch::<T, I>(caller.clone(), 1);
+
+		#[block]
+		{
+			let _ = Pallet::<T, I>::recheck_contributed_to_consensuses(1, &validator_id, 1);
+		}
 
 		assert!(
 			ElectionConsensusHistoryUpToDate::<T, I>::iter().count() == 0,
-			"ElectionConsensusHistoryUpToDate not removed from storage!"
+			"History not cleared"
 		);
 	}
 
@@ -168,12 +182,14 @@ mod benchmarks {
 		new_test_ext().execute_with(|| {
 			_vote::<Test, Instance1>(10, true);
 		});
+		new_test_ext().execute_with(|| {
+			_ignore_my_votes::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_stop_ignoring_my_votes::<Test, Instance1>(true);
+		});
 		// new_test_ext().execute_with(|| {
-		// 	_ignore_my_votes::<Test, Instance1>(true);
+		// 	_recheck_contributed_to_consensuses::<Test, Instance1>(true);
 		// });
-		// 	new_test_ext().execute_with(|| {
-		// 		_stop_ignoring_my_votes::<Test, Instance1>(true);
-		// 	});
-		// }
 	}
 }

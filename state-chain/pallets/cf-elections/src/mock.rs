@@ -3,6 +3,7 @@
 pub use crate::{self as pallet_cf_elections};
 
 use crate::{electoral_systems, GenesisConfig as ElectionGenesisConfig};
+use cf_primitives::EpochIndex;
 use cf_traits::{impl_mock_chainflip, AccountRoleRegistry};
 use frame_support::{
 	derive_impl,
