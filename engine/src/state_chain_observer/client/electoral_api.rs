@@ -10,6 +10,7 @@ use pallet_cf_elections::{
 };
 use state_chain_runtime::SolanaInstance;
 use std::collections::{BTreeMap, BTreeSet};
+use tracing::error;
 
 pub trait ElectoralApi<Instance: 'static>
 where
@@ -54,8 +55,13 @@ impl<
 				.raw_rpc_client
 				.cf_solana_electoral_data(account_id, Some(block.hash))
 				.await
+				.map_err(anyhow::Error::from)
+				.and_then(|electoral_data| <Option<ElectoralDataFor<state_chain_runtime::Runtime, SolanaInstance>> as Decode>::decode(&mut &electoral_data[..]).map_err(Into::into))
+				.inspect_err(|error| {
+					error!("Failure in electoral_data rpc: '{}'", error);
+				})
 				.ok()
-				.and_then(|electoral_data| <Option<ElectoralDataFor<state_chain_runtime::Runtime, SolanaInstance>> as Decode>::decode(&mut &electoral_data[..]).ok().flatten())
+				.flatten()
 		}
 	}
 
@@ -73,7 +79,7 @@ impl<
 				.raw_rpc_client
 				.cf_solana_filter_votes(account_id, proposed_votes.encode(), None)
 				.await
-				.ok()
+				.map_err(anyhow::Error::from)
 				.and_then(|electoral_data| {
 					<BTreeSet<
 						ElectionIdentifierOf<
@@ -82,7 +88,10 @@ impl<
 							>>::ElectoralSystem,
 						>,
 					> as Decode>::decode(&mut &electoral_data[..])
-					.ok()
+					.map_err(Into::into)
+				})
+				.inspect_err(|error| {
+					error!("Failure in filter_votes rpc: '{}'", error);
 				})
 				.unwrap_or_default()
 		}
