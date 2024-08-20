@@ -533,6 +533,7 @@ fn test_dca_parameter_validation() {
 
 		// Limit is ignored because there is only 1 chunk
 		assert_ok!(request_dca_swap(1, max_swap_request_duration_blocks + 100));
+		assert_ok!(request_dca_swap(1, 0));
 
 		// Exceeding limit
 		assert_err!(
@@ -543,11 +544,17 @@ fn test_dca_parameter_validation() {
 			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
 		);
 		assert_err!(
-			request_dca_swap(0, MIN_CHUNK_INTERVAL),
+			request_dca_swap(2, max_swap_request_duration_blocks + 1),
+			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
+		);
+
+		// Below the minimum
+		assert_err!(
+			request_dca_swap(10, 1),
 			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
 		);
 		assert_err!(
-			request_dca_swap(2, max_swap_request_duration_blocks + 1),
+			request_dca_swap(0, MIN_CHUNK_INTERVAL),
 			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
 		);
 	});

@@ -2081,20 +2081,22 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		}
 
 		if let Some(params) = &dca_params {
-			ensure!(
-				params.number_of_chunks > 0 && params.chunk_interval >= SWAP_DELAY_BLOCKS,
-				DispatchError::from(Error::<T, I>::InvalidDcaParameters)
-			);
-			let total_swap_request_duration = params
-				.number_of_chunks
-				.saturating_sub(1)
-				.checked_mul(params.chunk_interval)
-				.ok_or(Error::<T, I>::InvalidDcaParameters)?;
+			if params.number_of_chunks != 1 {
+				ensure!(
+					params.number_of_chunks > 0 && params.chunk_interval >= SWAP_DELAY_BLOCKS,
+					DispatchError::from(Error::<T, I>::InvalidDcaParameters)
+				);
+				let total_swap_request_duration = params
+					.number_of_chunks
+					.saturating_sub(1)
+					.checked_mul(params.chunk_interval)
+					.ok_or(Error::<T, I>::InvalidDcaParameters)?;
 
-			ensure!(
-				total_swap_request_duration <= swap_limits.max_swap_request_duration_blocks,
-				DispatchError::from(Error::<T, I>::InvalidDcaParameters)
-			);
+				ensure!(
+					total_swap_request_duration <= swap_limits.max_swap_request_duration_blocks,
+					DispatchError::from(Error::<T, I>::InvalidDcaParameters)
+				);
+			}
 		}
 
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
