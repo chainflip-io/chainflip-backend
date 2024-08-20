@@ -5,8 +5,8 @@ use crate::{
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MaxSwapRetryDurationBlocks, MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode,
-	PrewitnessedDepositIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
 	evm::{DepositDetails, EvmFetchId},
@@ -14,7 +14,9 @@ use cf_chains::{
 	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall,
 	TransferAssetParams,
 };
-use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
+use cf_primitives::{
+	chains::assets::eth, ChannelId, DcaParameters, ForeignChain, SWAP_DELAY_BLOCKS,
+};
 use cf_test_utilities::{assert_events_eq, assert_has_event};
 use cf_traits::{
 	mocks::{
@@ -28,7 +30,7 @@ use cf_traits::{
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
 	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
-	ScheduledEgressDetails, SwapRequestType,
+	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_ok,
@@ -462,24 +464,98 @@ fn reused_address_channel_id_matches() {
 
 #[test]
 fn test_refund_parameter_validation() {
+	fn request_fok_swap(retry_duration: u32) -> Result<(), DispatchError> {
+		IngressEgress::request_swap_deposit_address(
+			eth::Asset::Flip,
+			Asset::Eth,
+			ForeignChainAddress::Eth(Default::default()),
+			Default::default(),
+			1,
+			None,
+			0,
+			Some(ChannelRefundParameters {
+				retry_duration,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+				min_price: Default::default(),
+			}),
+			None,
+		)
+		.map(|_| ())
+	}
+
 	new_test_ext().execute_with(|| {
+		let max_swap_retry_duration_blocks =
+			<Test as crate::pallet::Config>::SwapLimitsProvider::get_swap_limits()
+				.max_swap_retry_duration_blocks;
+
+		assert_ok!(request_fok_swap(0));
+		assert_ok!(request_fok_swap(max_swap_retry_duration_blocks));
 		assert_err!(
-			IngressEgress::request_swap_deposit_address(
-				eth::Asset::Flip,
-				Asset::Eth,
-				ForeignChainAddress::Eth(Default::default()),
-				Default::default(),
-				1,
-				None,
-				0,
-				Some(ChannelRefundParameters {
-					retry_duration: MaxSwapRetryDurationBlocks::<Test, ()>::get() + 1,
-					refund_address: ForeignChainAddress::Eth(Default::default()),
-					min_price: Default::default(),
-				}),
-				None,
+			request_fok_swap(max_swap_retry_duration_blocks + 1),
+			DispatchError::from(crate::Error::<Test, _>::SwapRetryDurationTooLong)
+		);
+	});
+}
+
+#[test]
+fn test_dca_parameter_validation() {
+	fn request_dca_swap(number_of_chunks: u32, chunk_interval: u32) -> Result<(), DispatchError> {
+		IngressEgress::request_swap_deposit_address(
+			eth::Asset::Flip,
+			Asset::Eth,
+			ForeignChainAddress::Eth(Default::default()),
+			Default::default(),
+			1,
+			None,
+			0,
+			None,
+			Some(DcaParameters { number_of_chunks, chunk_interval }),
+		)
+		.map(|_| ())
+	}
+
+	new_test_ext().execute_with(|| {
+		const MIN_CHUNK_INTERVAL: u32 = SWAP_DELAY_BLOCKS;
+		let max_swap_request_duration_blocks =
+			<Test as crate::pallet::Config>::SwapLimitsProvider::get_swap_limits()
+				.max_swap_request_duration_blocks;
+
+		// Trivially ok
+		assert_ok!(request_dca_swap(1, MIN_CHUNK_INTERVAL));
+		assert_ok!(request_dca_swap(2, MIN_CHUNK_INTERVAL));
+
+		// Equal to the limit
+		assert_ok!(request_dca_swap(
+			(max_swap_request_duration_blocks / MIN_CHUNK_INTERVAL) + 1,
+			MIN_CHUNK_INTERVAL
+		));
+		assert_ok!(request_dca_swap(2, max_swap_request_duration_blocks));
+
+		// Limit is ignored because there is only 1 chunk
+		assert_ok!(request_dca_swap(1, max_swap_request_duration_blocks + 100));
+		assert_ok!(request_dca_swap(1, 0));
+
+		// Exceeding limit
+		assert_err!(
+			request_dca_swap(
+				(max_swap_request_duration_blocks / MIN_CHUNK_INTERVAL) + 2,
+				MIN_CHUNK_INTERVAL
 			),
-			DispatchError::Other("Retry duration too long")
+			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
+		);
+		assert_err!(
+			request_dca_swap(2, max_swap_request_duration_blocks + 1),
+			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
+		);
+
+		// Below the minimum
+		assert_err!(
+			request_dca_swap(10, 1),
+			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
+		);
+		assert_err!(
+			request_dca_swap(0, MIN_CHUNK_INTERVAL),
+			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
 		);
 	});
 }
@@ -1507,13 +1583,11 @@ fn can_update_all_config_items() {
 		const NEW_OPENING_FEE: u128 = 300;
 		const NEW_MIN_DEPOSIT_FLIP: u128 = 100;
 		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
-		const NEW_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 1234;
 
 		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), 0);
-		assert_ne!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION_BLOCKS);
 
 		// Update all config items at the same time, and updates 2 separate min deposit amounts.
 		assert_ok!(IngressEgress::update_pallet_config(
@@ -1528,9 +1602,6 @@ fn can_update_all_config_items() {
 					asset: eth::Asset::Eth,
 					minimum_deposit: NEW_MIN_DEPOSIT_ETH
 				},
-				PalletConfigUpdate::SetMaxSwapRetryDurationBlocks {
-					blocks: NEW_MAX_SWAP_RETRY_DURATION_BLOCKS
-				},
 			]
 			.try_into()
 			.unwrap()
@@ -1540,7 +1611,6 @@ fn can_update_all_config_items() {
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), NEW_OPENING_FEE);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), NEW_MIN_DEPOSIT_FLIP);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), NEW_MIN_DEPOSIT_ETH);
-		assert_eq!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION_BLOCKS);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -1556,9 +1626,6 @@ fn can_update_all_config_items() {
 				asset: eth::Asset::Eth,
 				minimum_deposit: NEW_MIN_DEPOSIT_ETH
 			}),
-			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::MaxSwapRetryDurationSet {
-				max_swap_retry_duration_blocks: NEW_MAX_SWAP_RETRY_DURATION_BLOCKS
-			})
 		);
 	});
 }

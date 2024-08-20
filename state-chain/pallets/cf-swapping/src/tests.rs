@@ -1850,13 +1850,14 @@ fn swaps_get_retried_after_failure() {
 	let mut swaps = generate_test_swaps();
 	let later_swaps = swaps.split_off(2);
 
-	const EXECUTE_AT_BLOCK: u64 = 3;
-	const RETRY_AT_BLOCK: u64 = EXECUTE_AT_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
+	const EXECUTE_AT_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const RETRY_AT_BLOCK: u64 = EXECUTE_AT_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 
 	new_test_ext()
 		.execute_with(|| {
+			assert_eq!(SwapRetryDelay::<Test>::get(), DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 			// Block 1, swaps should be scheduled at block 3
-			assert_eq!(System::block_number(), 1);
+			assert_eq!(System::block_number(), INIT_BLOCK);
 			insert_swaps(&swaps);
 
 			assert_has_matching_event!(
@@ -2105,12 +2106,16 @@ fn can_update_all_config_items() {
 		const NEW_MAX_SWAP_AMOUNT_DOT: Option<AssetAmount> = Some(69);
 		let new_swap_retry_delay = BlockNumberFor::<Test>::from(1234u32);
 		let new_flip_buy_interval = BlockNumberFor::<Test>::from(5678u32);
+		const NEW_MAX_SWAP_RETRY_DURATION: u32 = 69_u32;
+		const MAX_SWAP_REQUEST_DURATION: u32 = 420_u32;
 
 		// Check that the default values are different from the new ones
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Dot).is_none());
 		assert_ne!(SwapRetryDelay::<Test>::get(), new_swap_retry_delay);
 		assert_ne!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
+		assert_ne!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
+		assert_ne!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 
 		// Update all config items at the same time, and updates 2 separate max swap amounts.
 		assert_ok!(Swapping::update_pallet_config(
@@ -2126,6 +2131,8 @@ fn can_update_all_config_items() {
 				},
 				PalletConfigUpdate::SwapRetryDelay { delay: new_swap_retry_delay },
 				PalletConfigUpdate::FlipBuyInterval { interval: new_flip_buy_interval },
+				PalletConfigUpdate::SetMaxSwapRetryDuration { blocks: NEW_MAX_SWAP_RETRY_DURATION },
+				PalletConfigUpdate::SetMaxSwapRequestDuration { blocks: MAX_SWAP_REQUEST_DURATION },
 			]
 			.try_into()
 			.unwrap()
@@ -2136,6 +2143,8 @@ fn can_update_all_config_items() {
 		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Dot), NEW_MAX_SWAP_AMOUNT_DOT);
 		assert_eq!(SwapRetryDelay::<Test>::get(), new_swap_retry_delay);
 		assert_eq!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
+		assert_eq!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
+		assert_eq!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -2153,6 +2162,12 @@ fn can_update_all_config_items() {
 			}),
 			RuntimeEvent::Swapping(crate::Event::BuyIntervalSet {
 				buy_interval: new_flip_buy_interval
+			}),
+			RuntimeEvent::Swapping(crate::Event::MaxSwapRetryDurationSet {
+				blocks: NEW_MAX_SWAP_RETRY_DURATION
+			}),
+			RuntimeEvent::Swapping(crate::Event::MaxSwapRequestDurationSet {
+				blocks: MAX_SWAP_REQUEST_DURATION
 			})
 		);
 	});

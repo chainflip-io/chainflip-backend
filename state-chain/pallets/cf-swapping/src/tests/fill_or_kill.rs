@@ -41,7 +41,7 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 			insert_swaps(&vec![
 				new_swap(None),
 				new_swap(Some(TestRefundParams {
-					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					min_output: INPUT_AMOUNT,
 				})),
 			]);
@@ -78,7 +78,8 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 #[test]
 fn price_limit_is_respected_in_fok_swap() {
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
+	const SWAP_RETRIED_AT_BLOCK: u64 =
+		SWAPS_SCHEDULED_FOR_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 
 	const HIGH_MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1;
 
@@ -93,11 +94,11 @@ fn price_limit_is_respected_in_fok_swap() {
 			insert_swaps(&vec![
 				new_swap(None),
 				new_swap(Some(TestRefundParams {
-					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					min_output: HIGH_MIN_OUTPUT,
 				})),
 				new_swap(Some(TestRefundParams {
-					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE,
 				})),
 			]);
@@ -154,7 +155,8 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 	const OTHER_SWAP_ID: u64 = 2;
 
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
+	const SWAP_RETRIED_AT_BLOCK: u64 =
+		SWAPS_SCHEDULED_FOR_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 
 	new_test_ext()
 		.execute_with(|| {
@@ -163,7 +165,7 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 			// Min output for swap 1 is too high to be executed:
 			const MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1;
 			insert_swaps(&[new_swap(Some(TestRefundParams {
-				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 				min_output: MIN_OUTPUT,
 			}))]);
 			// However, swap 2 is non-FoK and should still be executed:
@@ -216,18 +218,20 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 #[test]
 fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 	const FOK_SWAP_REQUEST_ID: u64 = 1;
-
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const SWAP_RETRIED_AT_BLOCK: u64 = SWAPS_SCHEDULED_FOR_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
+	const SWAP_RETRIED_AT_BLOCK: u64 =
+		SWAPS_SCHEDULED_FOR_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 
 	const FOK_SWAP_ID: u64 = 1;
 	const REGULAR_SWAP_ID: u64 = 2;
 
 	new_test_ext()
 		.execute_with(|| {
+			assert_eq!(System::block_number(), INIT_BLOCK);
+
 			// FoK swap 1 should fail and will eventually be refunded
 			insert_swaps(&[new_swap(Some(TestRefundParams {
-				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 				min_output: INPUT_AMOUNT,
 			}))]);
 

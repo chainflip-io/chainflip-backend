@@ -79,7 +79,7 @@ macro_rules! assert_events_match {
 
 #[macro_export]
 macro_rules! assert_events_eq {
-	($runtime:ty, $($event:expr),+ ) => {{
+	($runtime:ty, $($event:expr),* $(,)?) => {{
 		let mut events = frame_system::Pallet::<$runtime>::events();
 
 		$({

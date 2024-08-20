@@ -23,9 +23,9 @@ use cf_chains::{
 	ChainCrypto, ChannelRefundParameters, DepositChannel, Ethereum,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BroadcastId,
-	ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance,
-	ForeignChain, Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BlockNumber,
+	BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex,
+	FlipBalance, ForeignChain, Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -981,3 +981,12 @@ pub trait FetchesTransfersLimitProvider {
 
 pub struct NoLimit;
 impl FetchesTransfersLimitProvider for NoLimit {}
+
+#[derive(Encode, Decode, TypeInfo)]
+pub struct SwapLimits {
+	pub max_swap_retry_duration_blocks: BlockNumber,
+	pub max_swap_request_duration_blocks: BlockNumber,
+}
+pub trait SwapLimitsProvider {
+	fn get_swap_limits() -> SwapLimits;
+}

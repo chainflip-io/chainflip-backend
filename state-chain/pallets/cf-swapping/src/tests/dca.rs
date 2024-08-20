@@ -241,7 +241,7 @@ fn dca_with_fok_full_refund() {
 	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
 
 	// Allow for one retry for good measure:
-	const REFUND_BLOCK: u64 = CHUNK_1_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
+	const REFUND_BLOCK: u64 = CHUNK_1_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 
 	new_test_ext()
 		.execute_with(|| {
@@ -254,7 +254,7 @@ fn dca_with_fok_full_refund() {
 				}),
 				Some(TestRefundParams {
 					// Allow for exactly 1 retry
-					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					// This ensures the swap is refunded:
 					min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
 				}),
@@ -339,7 +339,8 @@ fn dca_with_fok_full_refund() {
 fn dca_with_fok_partial_refund() {
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
-	const CHUNK_2_RESCHEDULED_AT_BLOCK: u64 = CHUNK_2_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
+	const CHUNK_2_RESCHEDULED_AT_BLOCK: u64 =
+		CHUNK_2_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 
 	const NUMBER_OF_CHUNKS: u32 = 4;
 	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
@@ -359,7 +360,7 @@ fn dca_with_fok_partial_refund() {
 				}),
 				Some(TestRefundParams {
 					// Allow for one retry for good measure:
-					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					min_output: INPUT_AMOUNT,
 				}),
 				false,
@@ -488,7 +489,7 @@ fn dca_with_fok_partial_refund() {
 #[test]
 fn dca_with_fok_fully_executed() {
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const CHUNK_1_RETRY_BLOCK: u64 = CHUNK_1_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS;
+	const CHUNK_1_RETRY_BLOCK: u64 = CHUNK_1_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_RETRY_BLOCK + CHUNK_INTERVAL as u64;
 	const NUMBER_OF_CHUNKS: u32 = 2;
 	const CHUNK_AMOUNT: AssetAmount = NET_AMOUNT / NUMBER_OF_CHUNKS as u128;
@@ -503,7 +504,7 @@ fn dca_with_fok_fully_executed() {
 					chunk_interval: CHUNK_INTERVAL,
 				}),
 				Some(TestRefundParams {
-					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					min_output: INPUT_AMOUNT,
 				}),
 				false,
