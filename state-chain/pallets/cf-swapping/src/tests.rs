@@ -338,7 +338,7 @@ fn expect_earned_fees_to_be_recorded() {
 				bounded_vec![Beneficiary { account: ALICE, bps: ALICE_FEE_BPS }],
 			);
 		})
-		.then_execute_at_block(3u32, |_| {})
+		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
 		.then_execute_with(|_| {
 			const AMOUNT_AFTER_BROKER_FEES: AssetAmount = INTERMEDIATE_AMOUNT - ALICE_FEE_1;
 			const NETWORK_FEE: AssetAmount =
@@ -1819,7 +1819,7 @@ fn swap_broker_fee_calculated_correctly() {
 				}
 			});
 		})
-		.then_execute_at_block(3u32, |_| {})
+		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
 		.then_execute_with(|_| {
 			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), total_fees);
 		});
@@ -1836,7 +1836,7 @@ fn swap_broker_fee_cannot_exceed_amount() {
 				bounded_vec![Beneficiary { account: ALICE, bps: 15000 }],
 			);
 		})
-		.then_execute_at_block(3u32, |_| {})
+		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
 		.then_execute_with(|_| {
 			assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Usdc), 100);
 		});
