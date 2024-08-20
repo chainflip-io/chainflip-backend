@@ -92,7 +92,8 @@ mod benchmarks {
 			AccountRole::Broker,
 		)
 		.unwrap();
-		EarnedBrokerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
+
+		T::BalanceApi::try_credit_account(&caller, Asset::Eth, 200).unwrap();
 
 		#[extrinsic_call]
 		withdraw(RawOrigin::Signed(caller.clone()), Asset::Eth, EncodedAddress::benchmark_value());

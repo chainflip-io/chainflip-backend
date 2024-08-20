@@ -24,12 +24,13 @@ use cf_traits::{
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
+		balance_api::MockBalance,
 		block_height_provider::BlockHeightProvider,
 		chain_tracking::ChainTracker,
 		funding_info::MockFundingInfo,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
+	BalanceApi, DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
 	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
 };
 use frame_support::{
@@ -719,6 +720,10 @@ fn multi_use_deposit_address_different_blocks() {
 				Default::default(),
 				Default::default()
 			));
+			assert!(
+				MockBalance::get_balance(&ALICE, ETH.into()) > 0,
+				"LP account hasn't earned fees!"
+			);
 			let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
 			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 
@@ -1012,6 +1017,7 @@ fn handle_pending_deployment() {
 			Default::default(),
 		)
 		.unwrap();
+		assert!(MockBalance::get_balance(&ALICE, ETH.into()) > 0, "LP account hasn't earned fees!");
 		// None-pending requests can still be sent
 		request_address_and_deposit(1u64, eth::Asset::Eth);
 		request_address_and_deposit(2u64, eth::Asset::Eth);
@@ -1041,6 +1047,10 @@ fn handle_pending_deployment_same_block() {
 			Default::default(),
 		)
 		.unwrap();
+		assert!(
+			MockBalance::get_balance(&ALICE, eth::Asset::Eth.into()) > 0,
+			"LP account hasn't earned fees!"
+		);
 		// Expect to have two fetch requests.
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 2);
 		// Process deposits.

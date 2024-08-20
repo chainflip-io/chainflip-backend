@@ -30,17 +30,17 @@ use cf_chains::{
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
-	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, SWAP_DELAY_BLOCKS,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, BoostPoolTier, BroadcastId,
+	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
-	AssetWithholding, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi, EpochInfo,
-	FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, LpBalanceApi,
-	LpDepositHandler, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
-	SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
+	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
+	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
+	NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails, SwapLimitsProvider,
+	SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -220,7 +220,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{LpDepositHandler, OnDeposit, SwapLimitsProvider};
+	use cf_traits::{OnDeposit, SwapLimitsProvider};
 	use core::marker::PhantomData;
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -362,9 +362,7 @@ pub mod pallet {
 		/// representation.
 		type AddressConverter: AddressConverter;
 
-		/// Pallet responsible for managing Liquidity Providers.
-		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>
-			+ LpDepositHandler<AccountId = Self::AccountId>;
+		type Balance: BalanceApi<AccountId = Self::AccountId>;
 
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain>
@@ -633,6 +631,9 @@ pub mod pallet {
 		},
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
+		},
+		MaxSwapRetryDurationSet {
+			max_swap_retry_duration_blocks: BlockNumber,
 		},
 	}
 
@@ -1028,7 +1029,7 @@ pub mod pallet {
 			);
 			ensure!(amount > Zero::zero(), Error::<T, I>::AddBoostAmountMustBeNonZero);
 
-			T::LpBalance::try_debit_account(&booster_id, asset.into(), amount.into())?;
+			T::Balance::try_debit_account(&booster_id, asset.into(), amount.into())?;
 
 			BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T, I>::BoostPoolDoesNotExist)?;
@@ -1062,7 +1063,7 @@ pub mod pallet {
 					pool.stop_boosting(booster.clone())
 				})?;
 
-			T::LpBalance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
+			T::Balance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
 
 			Self::deposit_event(Event::StoppedBoosting {
 				booster_id: booster,
@@ -1492,8 +1493,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let action = match action {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
-				T::LpBalance::add_deposit(&lp_account, asset.into(), amount_after_fees.into())?;
-
+				T::Balance::try_credit_account(
+					&lp_account,
+					asset.into(),
+					amount_after_fees.into(),
+				)?;
 				DepositAction::LiquidityProvision { lp_account }
 			},
 			ChannelAction::Swap {
@@ -1633,7 +1637,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						for (booster_id, finalised_withdrawn_amount) in
 							pool.process_deposit_as_finalised(prewitnessed_deposit_id)
 						{
-							if let Err(err) = T::LpBalance::try_credit_account(
+							if let Err(err) = T::Balance::try_credit_account(
 								&booster_id,
 								asset.into(),
 								finalised_withdrawn_amount.into(),

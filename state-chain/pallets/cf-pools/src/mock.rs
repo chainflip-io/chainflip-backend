@@ -3,8 +3,11 @@ use cf_chains::{assets::any::AssetMap, Ethereum};
 use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
-	mocks::{egress_handler::MockEgressHandler, swap_request_api::MockSwapRequestHandler},
-	AccountRoleRegistry, LpBalanceApi,
+	mocks::{
+		balance_api::MockLpRegistration, egress_handler::MockEgressHandler,
+		swap_request_api::MockSwapRequestHandler,
+	},
+	AccountRoleRegistry, BalanceApi,
 };
 use frame_support::{derive_impl, parameter_types};
 use frame_system as system;
@@ -76,23 +79,8 @@ parameter_types! {
 	pub static RecordedFees: BTreeMap<AccountId, (Asset, AssetAmount)> = BTreeMap::new();
 }
 pub struct MockBalance;
-impl LpBalanceApi for MockBalance {
+impl BalanceApi for MockBalance {
 	type AccountId = AccountId;
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn register_liquidity_refund_address(
-		_who: &Self::AccountId,
-		_address: cf_chains::ForeignChainAddress,
-	) {
-	}
-
-	fn ensure_has_refund_address_for_pair(
-		_who: &Self::AccountId,
-		_base_asset: Asset,
-		_quote_asset: Asset,
-	) -> DispatchResult {
-		Ok(())
-	}
 
 	fn try_credit_account(
 		who: &Self::AccountId,
@@ -124,16 +112,12 @@ impl LpBalanceApi for MockBalance {
 		Ok(())
 	}
 
-	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset) {
-		RecordedFees::mutate(|recorded_fees| {
-			recorded_fees.insert(*who, (asset, amount));
-		});
+	fn free_balances(_who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		unimplemented!()
 	}
 
-	fn free_balances(
-		_who: &Self::AccountId,
-	) -> Result<AssetMap<AssetAmount>, sp_runtime::DispatchError> {
-		unreachable!()
+	fn get_balance(_who: &Self::AccountId, _asset: Asset) -> AssetAmount {
+		unimplemented!()
 	}
 }
 
@@ -148,6 +132,7 @@ impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = MockBalance;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
+	type LpRegistrationApi = MockLpRegistration;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 }

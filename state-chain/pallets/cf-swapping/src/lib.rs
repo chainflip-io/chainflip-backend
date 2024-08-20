@@ -17,8 +17,9 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, DepositApi, ExecutionCondition, IngressEgressFeeApi, NetworkFeeTaken,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	impl_pallet_safe_mode, BalanceApi, DepositApi, ExecutionCondition, IngressEgressFeeApi,
+	NetworkFeeTaken, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -435,6 +436,9 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type NetworkFee: Get<Permill>;
+
+		/// The balance API for interacting with the asset-balance pallet.
+		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 	}
 
 	#[pallet::pallet]
@@ -458,12 +462,6 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type SwapRequestIdCounter<T: Config> = StorageValue<_, SwapRequestId, ValueQuery>;
-
-	/// Earned Fees by Brokers
-	#[pallet::storage]
-	#[pallet::getter(fn earned_broker_fees)]
-	pub(crate) type EarnedBrokerFees<T: Config> =
-		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	/// Fund accrued from rejected swap and CCM calls.
 	#[pallet::storage]
@@ -871,8 +869,9 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, asset)?;
 
-			let earned_fees = EarnedBrokerFees::<T>::take(account_id, asset);
+			let earned_fees = T::BalanceApi::get_balance(&account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
+			T::BalanceApi::try_debit_account(&account_id, asset, earned_fees)?;
 
 			let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
 				T::EgressHandler::schedule_egress(
@@ -1066,11 +1065,9 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
 			ensure!(
-				EarnedBrokerFees::<T>::iter_prefix(&account_id)
-					.all(|(_asset, balance)| balance.is_zero()),
+				T::BalanceApi::free_balances(&account_id).iter().all(|(_, amount)| *amount == 0),
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
-			let _ = EarnedBrokerFees::<T>::clear_prefix(&account_id, u32::MAX, None);
 
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
 
@@ -1857,12 +1854,9 @@ pub mod pallet {
 				assert!(fee <= input_amount, "Broker fee cannot be more than the amount");
 
 				for Beneficiary { account, bps } in broker_fees {
-					EarnedBrokerFees::<T>::mutate(&account, input_asset, |earned_fees| {
-						earned_fees.saturating_accrue(
-							Permill::from_parts(bps as u32 * BASIS_POINTS_PER_MILLION) *
-								input_amount,
-						)
-					});
+					let fee =
+						Permill::from_parts(bps as u32 * BASIS_POINTS_PER_MILLION) * input_amount;
+					T::BalanceApi::try_credit_account(&account, input_asset, fee)?;
 				}
 
 				(input_amount.saturating_sub(fee), fee)

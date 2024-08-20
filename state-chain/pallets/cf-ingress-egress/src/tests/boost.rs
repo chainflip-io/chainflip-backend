@@ -7,7 +7,7 @@ use cf_traits::{
 	mocks::{
 		account_role_registry::MockAccountRoleRegistry, tracked_data_provider::TrackedDataProvider,
 	},
-	AccountRoleRegistry, LpBalanceApi, SafeMode, SetSafeMode,
+	AccountRoleRegistry, BalanceApi, SafeMode, SetSafeMode,
 };
 use frame_support::assert_noop;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
@@ -32,7 +32,7 @@ const TIER_30_BPS: BoostPoolTier = 30;
 const INGRESS_FEE: AssetAmount = 1_000_000;
 
 fn get_lp_balance(lp: &AccountId, asset: eth::Asset) -> AssetAmount {
-	let balances = <Test as crate::Config>::LpBalance::free_balances(lp).unwrap();
+	let balances = <Test as crate::Config>::Balance::free_balances(lp);
 
 	balances[asset.into()]
 }
@@ -116,13 +116,13 @@ fn setup() {
 	);
 
 	for asset in eth::Asset::all() {
-		assert_ok!(<Test as crate::Config>::LpBalance::try_credit_account(
+		assert_ok!(<Test as crate::Config>::Balance::try_credit_account(
 			&BOOSTER_1,
 			asset.into(),
 			INIT_BOOSTER_ETH_BALANCE,
 		));
 
-		assert_ok!(<Test as crate::Config>::LpBalance::try_credit_account(
+		assert_ok!(<Test as crate::Config>::Balance::try_credit_account(
 			&BOOSTER_2,
 			asset.into(),
 			INIT_BOOSTER_ETH_BALANCE,

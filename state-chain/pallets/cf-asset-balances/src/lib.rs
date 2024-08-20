@@ -1,16 +1,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{AnyChain, ForeignChain, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount};
+use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
+use cf_primitives::{AccountId, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AssetWithholding, Chainflip, EgressApi, KeyProvider, LiabilityTracker,
-	ScheduledEgressDetails,
+	impl_pallet_safe_mode, AssetWithholding, BalanceApi, Chainflip, EgressApi, KeyProvider,
+	LiabilityTracker, ScheduledEgressDetails,
 };
 use frame_support::{
-	pallet_prelude::*, sp_runtime::traits::Saturating, storage::transactional::with_storage_layer,
-	traits::DefensiveSaturating,
+	pallet_prelude::*,
+	sp_runtime::traits::Saturating,
+	storage::transactional::with_storage_layer,
+	traits::{DefensiveSaturating, OnKilledAccount},
 };
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
@@ -93,6 +95,10 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Refund amount is too low to cover the egress fees. In this case, the refund is skipped.
 		RefundAmountTooLow,
+		/// The user does not have enough funds.
+		InsufficientBalance,
+		/// The user has reached the maximum balance.
+		BalanceOverflow,
 	}
 
 	#[pallet::event]
@@ -112,6 +118,20 @@ pub mod pallet {
 			amount_owed: AssetAmount,
 			available: AssetAmount,
 		},
+		/// The account was debited.
+		AccountDebited {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount_debited: AssetAmount,
+			new_balance: AssetAmount,
+		},
+		/// The account was credited.
+		AccountCredited {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount_credited: AssetAmount,
+			new_balance: AssetAmount,
+		},
 	}
 
 	#[pallet::pallet]
@@ -128,6 +148,18 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type WithheldAssets<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+
+	#[pallet::storage]
+	/// Storage for user's free balances.
+	pub type FreeBalances<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Twox64Concat,
+		Asset,
+		AssetAmount,
+		ValueQuery,
+	>;
 }
 
 impl<T: Config> Pallet<T> {
@@ -352,5 +384,83 @@ impl<T: Config> AssetWithholding for Pallet<T> {
 	#[cfg(feature = "try-runtime")]
 	fn withheld_assets(asset: Asset) -> AssetAmount {
 		WithheldAssets::<T>::get(asset)
+	}
+}
+
+impl<T: Config> BalanceApi for Pallet<T>
+where
+	Vec<(AccountId, cf_primitives::Asset, u128)>:
+		From<Vec<(<T as frame_system::Config>::AccountId, cf_primitives::Asset, u128)>>,
+{
+	type AccountId = T::AccountId;
+
+	fn try_credit_account(
+		account_id: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		if amount == 0 {
+			return Ok(())
+		}
+
+		let new_balance = FreeBalances::<T>::try_mutate(account_id, asset, |balance| {
+			*balance = balance.checked_add(amount).ok_or(Error::<T>::BalanceOverflow)?;
+			Ok::<_, Error<T>>(*balance)
+		})?;
+
+		Self::deposit_event(Event::AccountCredited {
+			account_id: account_id.clone(),
+			asset,
+			amount_credited: amount,
+			new_balance,
+		});
+		Ok(())
+	}
+
+	fn try_debit_account(
+		account_id: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		if amount == 0 {
+			return Ok(())
+		}
+
+		let new_balance = FreeBalances::<T>::try_mutate_exists(account_id, asset, |balance| {
+			let new_balance = match balance.take() {
+				None => Err(Error::<T>::InsufficientBalance),
+				Some(balance) =>
+					Ok(balance.checked_sub(amount).ok_or(Error::<T>::InsufficientBalance)?),
+			}?;
+			if new_balance > 0 {
+				*balance = Some(new_balance);
+			}
+			Ok::<_, Error<T>>(new_balance)
+		})?;
+
+		Self::deposit_event(Event::AccountDebited {
+			account_id: account_id.clone(),
+			asset,
+			amount_debited: amount,
+			new_balance,
+		});
+
+		Ok(())
+	}
+
+	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
+	}
+
+	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
+		FreeBalances::<T>::get(who, asset)
+	}
+}
+
+pub struct DeleteAccount<T: Config>(PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for DeleteAccount<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		let _ = FreeBalances::<T>::clear_prefix(who, u32::MAX, None);
 	}
 }

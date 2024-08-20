@@ -16,10 +16,10 @@ use cf_traits::{
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
+		balance_api::MockBalance,
 		broadcaster::MockBroadcaster,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
-		lp_balance::MockBalance,
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
@@ -111,7 +111,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type TargetChain = Bitcoin;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
-	type LpBalance = MockBalance;
+	type Balance = MockBalance;
 	type ChainApiCall = MockBitcoinApiCall<MockBtcEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;

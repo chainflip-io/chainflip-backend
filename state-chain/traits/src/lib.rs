@@ -19,8 +19,8 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, ChannelRefundParameters, DepositChannel, Ethereum,
+	address::ForeignChainAddress, assets::any::AssetMap, ApiCall, CcmChannelMetadata,
+	CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters, DepositChannel, Ethereum,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BlockNumber,
@@ -989,4 +989,29 @@ pub struct SwapLimits {
 }
 pub trait SwapLimitsProvider {
 	fn get_swap_limits() -> SwapLimits;
+}
+
+/// API for interacting with the asset-balance pallet.
+pub trait BalanceApi {
+	type AccountId;
+
+	/// Attempt to credit the account with the given asset and amount.
+	fn try_credit_account(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult;
+
+	/// Attempt to debit the account with the given asset and amount.
+	fn try_debit_account(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult;
+
+	/// Returns the asset free balances of the given account.
+	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
+
+	/// Returns the balance of the given account for the given asset.
+	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount;
 }

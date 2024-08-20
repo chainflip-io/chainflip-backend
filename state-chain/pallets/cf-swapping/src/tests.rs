@@ -6,8 +6,8 @@ use std::sync::LazyLock;
 use super::*;
 use crate::{
 	mock::{RuntimeEvent, *},
-	CcmFailReason, CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MaximumSwapAmount,
-	Pallet, Swap, SwapOrigin, SwapQueue, SwapType,
+	CcmFailReason, CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap,
+	SwapOrigin, SwapQueue, SwapType,
 };
 use cf_amm::common::{price_to_sqrt_price, PRICE_FRACTIONAL_BITS};
 use cf_chains::{
@@ -212,6 +212,14 @@ fn generate_ccm_deposit() -> CcmDepositMetadata {
 	}
 }
 
+fn get_broker_balance<T: Config>(who: &T::AccountId, asset: Asset) -> AssetAmount {
+	T::BalanceApi::get_balance(who, asset)
+}
+
+fn credit_broker_account<T: Config>(who: &T::AccountId, asset: Asset, amount: AssetAmount) {
+	assert_ok!(T::BalanceApi::try_credit_account(who, asset, amount));
+}
+
 #[track_caller]
 fn assert_swaps_queue_is_empty() {
 	assert_eq!(SwapQueue::<Test>::iter_keys().count(), 0);
@@ -278,7 +286,7 @@ fn expect_earned_fees_to_be_recorded() {
 			bounded_vec![Beneficiary { account: ALICE, bps: 200 }],
 		);
 
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
+		assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Flip), 2);
 
 		swap_with_custom_broker_fee(
 			Asset::Flip,
@@ -287,7 +295,7 @@ fn expect_earned_fees_to_be_recorded() {
 			bounded_vec![Beneficiary { account: ALICE, bps: 200 }],
 		);
 
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
+		assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Flip), 4);
 
 		swap_with_custom_broker_fee(
 			Asset::Eth,
@@ -298,8 +306,8 @@ fn expect_earned_fees_to_be_recorded() {
 				Beneficiary { account: BOB, bps: 200 }
 			],
 		);
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Eth), 2);
-		assert_eq!(EarnedBrokerFees::<Test>::get(BOB, cf_primitives::Asset::Eth), 2);
+		assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Eth), 2);
+		assert_eq!(get_broker_balance::<Test>(&BOB, cf_primitives::Asset::Eth), 2);
 	});
 }
 
@@ -391,7 +399,7 @@ fn withdraw_broker_fees() {
 			),
 			<Error<Test>>::NoFundsAvailable
 		);
-		EarnedBrokerFees::<Test>::insert(ALICE, Asset::Eth, 200);
+		credit_broker_account::<Test>(&ALICE, Asset::Eth, 200);
 		assert_ok!(Swapping::withdraw(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
@@ -1142,7 +1150,7 @@ fn cannot_swap_in_safe_mode() {
 #[test]
 fn cannot_withdraw_in_safe_mode() {
 	new_test_ext().execute_with(|| {
-		EarnedBrokerFees::<Test>::insert(ALICE, Asset::Eth, 200);
+		credit_broker_account::<Test>(&ALICE, Asset::Eth, 200);
 
 		// Activate code red
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -1156,7 +1164,8 @@ fn cannot_withdraw_in_safe_mode() {
 			),
 			Error::<Test>::WithdrawalsDisabled
 		);
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, Asset::Eth), 200);
+
+		assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Eth), 200);
 
 		// Change back to code green
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
@@ -1167,7 +1176,7 @@ fn cannot_withdraw_in_safe_mode() {
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 		));
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, Asset::Eth), 0);
+		assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Eth), 0);
 	});
 }
 
@@ -1682,7 +1691,8 @@ fn swap_broker_fee_calculated_correctly() {
 					total_fees +
 						Permill::from_parts(*fee_bps as u32 * BASIS_POINTS_PER_MILLION) * AMOUNT
 				});
-			assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, asset), total_fees);
+
+			assert_eq!(get_broker_balance::<Test>(&ALICE, asset), total_fees);
 		});
 	});
 }
@@ -1696,7 +1706,8 @@ fn swap_broker_fee_cannot_exceed_amount() {
 			100,
 			bounded_vec![Beneficiary { account: ALICE, bps: 15000 }],
 		);
-		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Usdc), 100);
+
+		assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Usdc), 100);
 	});
 }
 
@@ -1725,7 +1736,7 @@ fn swap_broker_fee_subtracted_from_swap_amount() {
 				let broker_fee =
 					Permill::from_parts(broker_fee as u32 * BASIS_POINTS_PER_MILLION) * *amount;
 				total_fees += broker_fee;
-				assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, asset), total_fees);
+				assert_eq!(get_broker_balance::<Test>(&ALICE, asset), total_fees);
 
 				assert_has_matching_event!(
 					Test,
@@ -2283,7 +2294,7 @@ fn register_and_deregister_account() {
 		.expect("ALICE was registered in test setup.");
 
 		// Earn some fees.
-		EarnedBrokerFees::<Test>::insert(ALICE, Asset::Eth, 100);
+		credit_broker_account::<Test>(&ALICE, Asset::Eth, 100);
 
 		assert_noop!(
 			Swapping::deregister_as_broker(OriginTrait::signed(ALICE)),
@@ -2297,7 +2308,6 @@ fn register_and_deregister_account() {
 		));
 		assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(ALICE)),);
 
-		assert!(!EarnedBrokerFees::<Test>::contains_key(ALICE, Asset::Eth));
 		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_broker(
 			OriginTrait::signed(ALICE),
 		)

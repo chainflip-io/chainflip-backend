@@ -1,12 +1,14 @@
 use cf_chains::{Ethereum, ForeignChain, ForeignChainAddress};
-use cf_primitives::AssetAmount;
+use cf_primitives::{AccountId, AssetAmount};
 use cf_traits::{
 	mocks::egress_handler::MockEgressParameter, AssetWithholding, LiabilityTracker, SetSafeMode,
 };
 
+use crate::FreeBalances;
 use cf_chains::AnyChain;
 use cf_test_utilities::assert_has_event;
-use cf_traits::{mocks::egress_handler::MockEgressHandler, SafeMode};
+use cf_traits::{mocks::egress_handler::MockEgressHandler, BalanceApi, SafeMode};
+use frame_support::{assert_noop, assert_ok, traits::OnKilledAccount};
 
 use crate::{mock::*, ExternalOwner, Liabilities, Pallet, WithheldAssets};
 
@@ -310,4 +312,101 @@ fn can_reconciliate_multiple_chains_at_once() {
 			assert_eq!(WithheldAssets::<Test>::get(asset), 0);
 		});
 	});
+}
+
+pub mod balance_api {
+	use crate::DeleteAccount;
+
+	use super::*;
+
+	use cf_primitives::chains::assets::eth;
+
+	#[test]
+	pub fn credit_and_debit() {
+		new_test_ext().execute_with(|| {
+			let alice = AccountId::from([1; 32]);
+			const AMOUNT: u128 = 100;
+			const DELTA: u128 = 10;
+			assert_ok!(Pallet::<Test>::try_credit_account(
+				&alice,
+				ForeignChain::Ethereum.gas_asset(),
+				AMOUNT
+			));
+			assert_has_event::<Test>(
+				crate::Event::AccountCredited {
+					account_id: alice.clone(),
+					asset: ForeignChain::Ethereum.gas_asset(),
+					amount_credited: AMOUNT,
+					new_balance: AMOUNT,
+				}
+				.into(),
+			);
+			assert_eq!(
+				FreeBalances::<Test>::get(&alice, ForeignChain::Ethereum.gas_asset()),
+				AMOUNT
+			);
+			assert_noop!(
+				Pallet::<Test>::try_debit_account(
+					&alice,
+					ForeignChain::Ethereum.gas_asset(),
+					AMOUNT + DELTA
+				),
+				crate::Error::<Test>::InsufficientBalance
+			);
+			assert_ok!(Pallet::<Test>::try_debit_account(
+				&AccountId::from([1; 32]),
+				ForeignChain::Ethereum.gas_asset(),
+				AMOUNT - DELTA
+			));
+			assert_eq!(
+				FreeBalances::<Test>::get(
+					AccountId::from([1; 32]),
+					ForeignChain::Ethereum.gas_asset()
+				),
+				DELTA
+			);
+			assert_has_event::<Test>(
+				crate::Event::AccountDebited {
+					account_id: alice.clone(),
+					asset: ForeignChain::Ethereum.gas_asset(),
+					amount_debited: AMOUNT - DELTA,
+					new_balance: DELTA,
+				}
+				.into(),
+			);
+		});
+	}
+
+	#[test]
+	pub fn kill_account() {
+		new_test_ext().execute_with(|| {
+			FreeBalances::<Test>::insert(
+				AccountId::from([1; 32]),
+				ForeignChain::Ethereum.gas_asset(),
+				100,
+			);
+			DeleteAccount::<Test>::on_killed_account(&AccountId::from([1; 32]));
+			assert!(
+				FreeBalances::<Test>::get(
+					AccountId::from([1; 32]),
+					ForeignChain::Ethereum.gas_asset()
+				) == 0
+			);
+		});
+	}
+
+	#[test]
+	pub fn free_balances() {
+		new_test_ext().execute_with(|| {
+			FreeBalances::<Test>::insert(
+				AccountId::from([1; 32]),
+				ForeignChain::Ethereum.gas_asset(),
+				100,
+			);
+			assert_eq!(
+				Pallet::<Test>::free_balances(&AccountId::from([1; 32])).eth,
+				eth::AssetMap { eth: 100, flip: 0, usdc: 0, usdt: 0 }
+			);
+		});
+	}
 }

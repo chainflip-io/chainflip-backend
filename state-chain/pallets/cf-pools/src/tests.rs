@@ -1,12 +1,12 @@
 use crate::{
-	self as pallet_cf_pools, mock::*, AskBidMap, AssetAmounts, AssetPair, Error, Event, LimitOrder,
-	PoolInfo, PoolOrders, PoolPairsMap, Pools, RangeOrder, RangeOrderSize,
-	ScheduledLimitOrderUpdates, STABLE_ASSET,
+	self as pallet_cf_pools, mock::*, AskBidMap, AssetAmounts, AssetPair, Error, Event,
+	HistoricalEarnedFees, LimitOrder, PoolInfo, PoolOrders, PoolPairsMap, Pools, RangeOrder,
+	RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
 use cf_amm::common::{price_at_tick, Side, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
-use cf_traits::SwappingApi;
+use cf_traits::{PoolApi, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_core::{bounded_vec, U256};
 
@@ -879,18 +879,20 @@ fn can_get_all_pool_orders() {
 }
 
 #[test]
-fn fees_are_getting_recorded() {
+fn fees_are_recorded() {
 	new_test_ext().execute_with(|| {
 		let range_1 = -100..100;
 
 		// Create a new pool.
-		assert_ok!(LiquidityPools::new_pool(
-			RuntimeOrigin::root(),
-			Asset::Eth,
-			STABLE_ASSET,
-			Default::default(),
-			price_at_tick(0).unwrap(),
-		));
+		for asset in [Asset::Eth, Asset::Btc] {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				asset,
+				STABLE_ASSET,
+				100,
+				price_at_tick(0).unwrap(),
+			));
+		}
 
 		assert_ok!(LiquidityPools::set_range_order(
 			RuntimeOrigin::signed(ALICE),
@@ -898,22 +900,37 @@ fn fees_are_getting_recorded() {
 			STABLE_ASSET,
 			0,
 			Some(range_1.clone()),
-			RangeOrderSize::Liquidity { liquidity: 100_000 },
+			RangeOrderSize::Liquidity { liquidity: 1_000_000_000_000_000_000 },
 		));
-
-		MockBalance::assert_fees_recorded(&ALICE);
-
 		assert_ok!(LiquidityPools::set_limit_order(
 			RuntimeOrigin::signed(BOB),
-			Asset::Eth,
+			Asset::Btc,
 			STABLE_ASSET,
 			Side::Sell,
-			6,
-			Some(100),
-			700_000,
+			0,
+			Some(0),
+			1_000_000_000_000_000_000,
 		));
 
-		MockBalance::assert_fees_recorded(&BOB);
+		assert!(
+			LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Eth, 1_000_000_000).unwrap() > 0
+		);
+		assert!(
+			LiquidityPools::swap_single_leg(STABLE_ASSET, Asset::Btc, 1_000_000_000).unwrap() > 0
+		);
+		LiquidityPools::sweep(&ALICE).unwrap();
+		LiquidityPools::sweep(&BOB).unwrap();
+
+		assert!(
+			HistoricalEarnedFees::<Test>::get(ALICE, Asset::Usdc) > 0,
+			"Alice's fees should be recorded but are:{:?}",
+			HistoricalEarnedFees::<Test>::iter_prefix(ALICE).collect::<Vec<_>>(),
+		);
+		assert!(
+			HistoricalEarnedFees::<Test>::get(BOB, Asset::Usdc) > 0,
+			"Bob's fees should be recorded but are:{:?}",
+			HistoricalEarnedFees::<Test>::iter_prefix(BOB).collect::<Vec<_>>(),
+		);
 	});
 }
 
