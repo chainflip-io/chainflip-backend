@@ -323,11 +323,20 @@ fn expect_earned_fees_to_be_recorded() {
 	const BOB_FEE_BPS: u16 = 100;
 
 	// Expected values:
-	const ALICE_FEE_1: AssetAmount = INTERMEDIATE_AMOUNT * ALICE_FEE_BPS as u128 / 10_000;
-	// This swap starts with USDC, so it is deducted from the input amount:
-	const ALICE_FEE_2: AssetAmount = INPUT_AMOUNT * ALICE_FEE_BPS as u128 / 10_000;
-	const ALICE_FEE_3: AssetAmount = INTERMEDIATE_AMOUNT * ALICE_FEE_BPS as u128 / 10_000;
-	const BOB_FEE_1: AssetAmount = INTERMEDIATE_AMOUNT * BOB_FEE_BPS as u128 / 10_000;
+	const NETWORK_FEE_1: AssetAmount = INTERMEDIATE_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
+	const ALICE_FEE_1: AssetAmount =
+		(INTERMEDIATE_AMOUNT - NETWORK_FEE_1) * ALICE_FEE_BPS as u128 / 10_000;
+
+	// This swap starts with USDC, so the fees are deducted from the input amount:
+	const NETWORK_FEE_2: AssetAmount = INPUT_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
+	const ALICE_FEE_2: AssetAmount =
+		(INPUT_AMOUNT - NETWORK_FEE_2) * ALICE_FEE_BPS as u128 / 10_000;
+
+	const NETWORK_FEE_3: AssetAmount = INTERMEDIATE_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
+	const ALICE_FEE_3: AssetAmount =
+		(INTERMEDIATE_AMOUNT - NETWORK_FEE_3) * ALICE_FEE_BPS as u128 / 10_000;
+	const BOB_FEE_1: AssetAmount =
+		(INTERMEDIATE_AMOUNT - NETWORK_FEE_3) * BOB_FEE_BPS as u128 / 10_000;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -340,19 +349,15 @@ fn expect_earned_fees_to_be_recorded() {
 		})
 		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
 		.then_execute_with(|_| {
-			const AMOUNT_AFTER_BROKER_FEES: AssetAmount = INTERMEDIATE_AMOUNT - ALICE_FEE_1;
-			const NETWORK_FEE: AssetAmount =
-				AMOUNT_AFTER_BROKER_FEES * NETWORK_FEE_PERCENT as u128 / 100;
-
 			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 				swap_request_id: 1,
 				swap_id: 1,
-				network_fee: NETWORK_FEE,
+				network_fee: NETWORK_FEE_1,
 				broker_fee: ALICE_FEE_1,
 				input_amount: INPUT_AMOUNT,
 				input_asset: Asset::Flip,
 				output_asset: Asset::Usdc,
-				output_amount: AMOUNT_AFTER_BROKER_FEES - NETWORK_FEE,
+				output_amount: INTERMEDIATE_AMOUNT - NETWORK_FEE_1 - ALICE_FEE_1,
 				intermediate_amount: None,
 			}));
 
@@ -368,18 +373,16 @@ fn expect_earned_fees_to_be_recorded() {
 		})
 		.then_execute_at_block(5u32, |_| {})
 		.then_execute_with(|_| {
-			const AMOUNT_AFTER_BROKER_FEES: AssetAmount = INPUT_AMOUNT - ALICE_FEE_2;
-			const NETWORK_FEE: AssetAmount =
-				AMOUNT_AFTER_BROKER_FEES * NETWORK_FEE_PERCENT as u128 / 100;
+			const AMOUNT_AFTER_FEES: AssetAmount = INPUT_AMOUNT - NETWORK_FEE_2 - ALICE_FEE_2;
 			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 				swap_request_id: 2,
 				swap_id: 2,
-				network_fee: NETWORK_FEE,
+				network_fee: NETWORK_FEE_2,
 				broker_fee: ALICE_FEE_2,
-				input_amount: AMOUNT_AFTER_BROKER_FEES - NETWORK_FEE,
+				input_amount: AMOUNT_AFTER_FEES,
 				input_asset: Asset::Usdc,
 				output_asset: Asset::Flip,
-				output_amount: (AMOUNT_AFTER_BROKER_FEES - NETWORK_FEE) * DEFAULT_SWAP_RATE,
+				output_amount: AMOUNT_AFTER_FEES * DEFAULT_SWAP_RATE,
 				intermediate_amount: None,
 			}));
 
@@ -398,18 +401,15 @@ fn expect_earned_fees_to_be_recorded() {
 		})
 		.then_execute_at_block(7u32, |_| {})
 		.then_execute_with(|_| {
-			const TOTAL_FEES: AssetAmount = ALICE_FEE_3 + BOB_FEE_1;
-			const AMOUNT_AFTER_BROKER_FEES: AssetAmount = INTERMEDIATE_AMOUNT - TOTAL_FEES;
-			const NETWORK_FEE: AssetAmount =
-				AMOUNT_AFTER_BROKER_FEES * NETWORK_FEE_PERCENT as u128 / 100;
+			const TOTAL_BROKER_FEES: AssetAmount = ALICE_FEE_3 + BOB_FEE_1;
 			const INTERMEDIATE_AMOUNT_AFTER_FEES: AssetAmount =
-				AMOUNT_AFTER_BROKER_FEES - NETWORK_FEE;
+				INTERMEDIATE_AMOUNT - NETWORK_FEE_3 - TOTAL_BROKER_FEES;
 
 			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 				swap_request_id: 3,
 				swap_id: 3,
-				network_fee: NETWORK_FEE,
-				broker_fee: TOTAL_FEES,
+				network_fee: NETWORK_FEE_3,
+				broker_fee: TOTAL_BROKER_FEES,
 				input_amount: INPUT_AMOUNT,
 				input_asset: Asset::ArbEth,
 				output_asset: Asset::Flip,

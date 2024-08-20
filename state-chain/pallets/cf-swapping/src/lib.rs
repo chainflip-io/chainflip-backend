@@ -1738,13 +1738,13 @@ pub mod pallet {
 			let fees = {
 				let mut fees = Vec::with_capacity(2);
 
-				if !broker_fees.is_empty() {
-					fees.push(FeeType::BrokerFee(broker_fees));
-				}
-
 				// Network fee is not charged for network fee swaps:
 				if !matches!(swap_type, SwapType::NetworkFee) {
 					fees.push(FeeType::NetworkFee);
+				}
+
+				if !broker_fees.is_empty() {
+					fees.push(FeeType::BrokerFee(broker_fees));
 				}
 
 				fees
