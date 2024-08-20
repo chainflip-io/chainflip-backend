@@ -468,7 +468,7 @@ pub mod pallet {
 	/// Stores the elections whose consensus doesn't need to be rechecked, and the epoch when they
 	/// were last checked.
 	#[pallet::storage]
-	pub type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
+	pub(crate) type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, UniqueMonotonicIdentifier, EpochIndex, OptionQuery>;
 
 	/// Stores the set of authorities whose votes can contribute to consensus. Whether an authority
