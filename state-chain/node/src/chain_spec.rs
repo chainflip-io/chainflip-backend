@@ -786,7 +786,6 @@ fn testnet_genesis(
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
 			witness_safety_margin: Some(bitcoin_safety_margin),
 			dust_limits: vec![(btc::Asset::Btc, BITCOIN_DUST_LIMIT)],
-			max_swap_retry_duration_blocks: 600,
 		},
 		ethereum_ingress_egress: state_chain_runtime::EthereumIngressEgressConfig {
 			deposit_channel_lifetime: ethereum_deposit_channel_lifetime.into(),

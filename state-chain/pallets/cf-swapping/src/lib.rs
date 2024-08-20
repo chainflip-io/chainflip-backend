@@ -11,9 +11,9 @@ use cf_chains::{
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
-	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, ChannelId, DcaParameters,
-	ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash, BASIS_POINTS_PER_MILLION,
-	STABLE_ASSET,
+	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber, ChannelId,
+	DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash,
+	BASIS_POINTS_PER_MILLION, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -56,14 +56,16 @@ pub use weights::WeightInfo;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
-pub const SWAP_DELAY_BLOCKS: u32 = 2;
+pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
+const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
+const DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS: u32 = 86_400 / SECONDS_PER_BLOCK as u32; // 24 hours
 
 pub struct DefaultSwapRetryDelay<T> {
 	_phantom: PhantomData<T>,
 }
 impl<T: Config> Get<BlockNumberFor<T>> for DefaultSwapRetryDelay<T> {
 	fn get() -> BlockNumberFor<T> {
-		BlockNumberFor::<T>::from(5u32)
+		BlockNumberFor::<T>::from(DEFAULT_SWAP_RETRY_DELAY_BLOCKS)
 	}
 }
 
@@ -364,6 +366,11 @@ pub enum PalletConfigUpdate<T: Config> {
 	SwapRetryDelay { delay: BlockNumberFor<T> },
 	/// Set the interval at which we buy FLIP in order to burn it.
 	FlipBuyInterval { interval: BlockNumberFor<T> },
+	/// Set the max allowed value for the number of blocks to keep retrying a swap before it is
+	/// refunded
+	SetMaxSwapRetryDuration { blocks: BlockNumber },
+	/// Set the max allowed total duration of a DCA swap request.
+	SetMaxSwapRequestDuration { blocks: BlockNumber },
 }
 
 impl_pallet_safe_mode! {
@@ -377,7 +384,8 @@ pub mod pallet {
 	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{
-		Asset, AssetAmount, BasisPoints, DcaParameters, EgressId, SwapId, SwapOutput, SwapRequestId,
+		Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId, SwapId, SwapOutput,
+		SwapRequestId,
 	};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, ScheduledEgressDetails};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -483,6 +491,20 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SwapRetryDelay<T: Config> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery, DefaultSwapRetryDelay<T>>;
+
+	/// Max allowed value for the number of blocks to keep retrying a swap before it is refunded
+	#[pallet::storage]
+	pub type MaxSwapRetryDurationBlocks<T> =
+		StorageValue<_, BlockNumber, ValueQuery, ConstU32<DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS>>;
+
+	/// Max allowed total duration of a DCA swap request.
+	#[pallet::storage]
+	pub type MaxSwapRequestDurationBlocks<T> = StorageValue<
+		_,
+		BlockNumber,
+		ValueQuery,
+		ConstU32<DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS>,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -606,6 +628,12 @@ pub mod pallet {
 			swap_retry_delay: BlockNumberFor<T>,
 		},
 		// TODO: add SwapFailed?
+		MaxSwapRetryDurationSet {
+			blocks: BlockNumber,
+		},
+		MaxSwapRequestDurationSet {
+			blocks: BlockNumber,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -635,12 +663,16 @@ pub mod pallet {
 		ZeroBuyIntervalNotAllowed,
 		/// Setting the swap retry delay to zero is not allowed.
 		ZeroSwapRetryDelayNotAllowed,
+		/// Setting the max swap request duration to less than the swap delay is not allowed.
+		MaxSwapRequestDurationTooShort,
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub flip_buy_interval: BlockNumberFor<T>,
 		pub swap_retry_delay: BlockNumberFor<T>,
+		pub max_swap_retry_duration_blocks: BlockNumber,
+		pub max_swap_request_duration_blocks: BlockNumber,
 	}
 
 	#[pallet::genesis_build]
@@ -648,6 +680,8 @@ pub mod pallet {
 		fn build(&self) {
 			FlipBuyInterval::<T>::set(self.flip_buy_interval);
 			SwapRetryDelay::<T>::set(self.swap_retry_delay);
+			MaxSwapRetryDurationBlocks::<T>::set(self.max_swap_retry_duration_blocks);
+			MaxSwapRequestDurationBlocks::<T>::set(self.max_swap_request_duration_blocks);
 		}
 	}
 
@@ -656,6 +690,8 @@ pub mod pallet {
 			Self {
 				flip_buy_interval: BlockNumberFor::<T>::zero(),
 				swap_retry_delay: DefaultSwapRetryDelay::<T>::get(),
+				max_swap_retry_duration_blocks: DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS,
+				max_swap_request_duration_blocks: DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS,
 			}
 		}
 	}
@@ -1002,6 +1038,18 @@ pub mod pallet {
 						);
 						FlipBuyInterval::<T>::set(interval);
 						Self::deposit_event(Event::<T>::BuyIntervalSet { buy_interval: interval });
+					},
+					PalletConfigUpdate::SetMaxSwapRetryDuration { blocks } => {
+						MaxSwapRetryDurationBlocks::<T>::set(blocks);
+						Self::deposit_event(Event::<T>::MaxSwapRetryDurationSet { blocks });
+					},
+					PalletConfigUpdate::SetMaxSwapRequestDuration { blocks } => {
+						ensure!(
+							blocks >= SWAP_DELAY_BLOCKS,
+							Error::<T>::MaxSwapRequestDurationTooShort
+						);
+						MaxSwapRequestDurationBlocks::<T>::set(blocks);
+						Self::deposit_event(Event::<T>::MaxSwapRequestDurationSet { blocks });
 					},
 				}
 			}
@@ -2127,6 +2175,15 @@ pub mod pallet {
 impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	fn take_flip_to_burn() -> AssetAmount {
 		FlipToBurn::<T>::take()
+	}
+}
+
+impl<T: Config> cf_traits::SwapLimitsProvider for Pallet<T> {
+	fn get_swap_limits() -> cf_traits::SwapLimits {
+		cf_traits::SwapLimits {
+			max_swap_retry_duration_blocks: MaxSwapRetryDurationBlocks::<T>::get(),
+			max_swap_request_duration_blocks: MaxSwapRequestDurationBlocks::<T>::get(),
+		}
 	}
 }
 

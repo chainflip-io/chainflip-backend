@@ -259,6 +259,7 @@ mod tests {
 		assert_eq!(encoded, "vines1vzrYbzLMRdu58ou5XTby4qAqVRLmqo36NKPTg");
 	}
 
+	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn test_sol_asyc() {
 		let sol_rpc_client =
@@ -271,6 +272,7 @@ mod tests {
 			.unwrap();
 	}
 
+	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn test_sol_devnet() {
 		let sol_rpc_client = SolRpcClient::new(
@@ -335,6 +337,7 @@ mod tests {
 		println!("block: {:?}", block);
 	}
 
+	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn test_sol_transaction() {
 		let sol_rpc_client = SolRpcClient::new(
