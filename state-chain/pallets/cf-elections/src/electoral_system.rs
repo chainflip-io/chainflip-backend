@@ -161,11 +161,6 @@ pub trait ElectoralSystem: 'static {
 	fn benchmark_authority_vote() -> AuthorityVoteOf<Self> {
 		unimplemented!("This can be implemented on an as-needed basis")
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn benchmark_shared_data() -> <Self::Vote as VoteStorage>::SharedData {
-		unimplemented!("This can be implemented on an as-needed basis")
-	}
 }
 
 #[allow(type_alias_bounds)]

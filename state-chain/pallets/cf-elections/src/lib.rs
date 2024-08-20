@@ -37,7 +37,7 @@
 //! data. Note the `PartialVote` is not restricted to only being the hash of the full vote.
 //!
 //! This diagram shows how an authority's vote is formulated, and split up so it can be stored:
-//!
+//! ```text
 //!     ┌─────────────────────────────────────────────────────────────────┐
 //!     │   Key:                                                          │
 //!     │                                                                 │
@@ -84,7 +84,7 @@
 //!         └───────────┼────────────────────────────┼────────────────────────────────┘
 //!                     │How the pallet stores votes.│
 //!                     └────────────────────────────┘
-//!
+//! ```
 //! - "SharedData" is shared between authority votes, so if 150 different validator votes when
 //!   "split up" contain the same SharedData, only one copy of that SharedData will be stored. A
 //!   vote when split up, may be constructed from any number of SharedData values, including zero.

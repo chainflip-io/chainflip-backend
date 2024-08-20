@@ -104,11 +104,6 @@ impl<
 	fn benchmark_authority_vote() -> AuthorityVoteOf<Self> {
 		AuthorityVoteOf::<Self>::Vote(BenchmarkValue::benchmark_value())
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn benchmark_shared_data() -> <Self::Vote as VoteStorage>::SharedData {
-		BenchmarkValue::benchmark_value()
-	}
 }
 
 /// This electoral system is for tracking a monotonically increasing `Value` that authorities may
