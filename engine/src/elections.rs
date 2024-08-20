@@ -240,6 +240,8 @@ where
 					} else {
 						return Err(anyhow!("Validator as been unexpectedly set as not contributing."));
 					}
+				} else {
+					info!("Not voting as not an authority.");
 				}
 			} else break Ok(()),
 		}
