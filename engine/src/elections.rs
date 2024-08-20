@@ -21,6 +21,7 @@ use std::{
 	collections::{BTreeMap, HashMap},
 	sync::Arc,
 };
+use tracing::{error, info};
 use utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
 use voter_api::VoterApi;
 
@@ -73,7 +74,10 @@ where
 
 	pub async fn continuously_vote(self) {
 		loop {
-			let _result = self.reset_and_continuously_vote().await;
+			info!("Beginning voting");
+			if let Err(error) = self.reset_and_continuously_vote().await {
+				error!("Voting reset due to error: '{}'", error);
+			}
 		}
 	}
 
@@ -142,6 +146,9 @@ where
 				}).chunks(MAXIMUM_VOTES_PER_EXTRINSIC as usize).for_each_concurrent(None, |votes| {
 					let state_chain_client = &self.state_chain_client;
 					async move {
+						for (election_identifier, _) in votes.iter() {
+							info!("Submitting vote for election: '{:?}'", election_identifier);
+						}
 						// TODO: Use block hash you got this vote tasks details from as the based of the mortal of the extrinsic
 						state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::vote {
 							authority_votes: BTreeMap::from_iter(votes).try_into().unwrap(/*Safe due to chunking*/),
@@ -150,20 +157,26 @@ where
 				}).await;
 			},
 			let (election_identifier, result_vote) = vote_tasks.next_or_pending() => {
-				if let Ok(vote) = result_vote {
-					// Create the partial_vote early so that SharedData can be provided as soon as the vote has been generated, rather than only after it is submitted.
-					let partial_vote = <<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(&vote, |shared_data| {
-						let shared_data_hash = SharedDataHash::of(&shared_data);
-						if shared_data_cache.len() > MAXIMUM_SHARED_DATA_CACHE_ITEMS {
-							for shared_data_hash in shared_data_cache.keys().cloned().take(shared_data_cache.len() - MAXIMUM_SHARED_DATA_CACHE_ITEMS).collect::<Vec<_>>() {
-								shared_data_cache.remove(&shared_data_hash);
+				match result_vote {
+					Ok(vote) => {
+						info!("Voting task for election: '{:?}' succeeded.", election_identifier);
+						// Create the partial_vote early so that SharedData can be provided as soon as the vote has been generated, rather than only after it is submitted.
+						let partial_vote = <<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(&vote, |shared_data| {
+							let shared_data_hash = SharedDataHash::of(&shared_data);
+							if shared_data_cache.len() > MAXIMUM_SHARED_DATA_CACHE_ITEMS {
+								for shared_data_hash in shared_data_cache.keys().cloned().take(shared_data_cache.len() - MAXIMUM_SHARED_DATA_CACHE_ITEMS).collect::<Vec<_>>() {
+									shared_data_cache.remove(&shared_data_hash);
+								}
 							}
-						}
-						shared_data_cache.insert(shared_data_hash, (shared_data, std::time::Instant::now()));
-						shared_data_hash
-					});
+							shared_data_cache.insert(shared_data_hash, (shared_data, std::time::Instant::now()));
+							shared_data_hash
+						});
 
-					pending_submissions.insert(election_identifier,	(partial_vote, vote));
+						pending_submissions.insert(election_identifier,	(partial_vote, vote));
+					},
+					Err(error) => {
+						error!("Voting task for election '{:?}' failed with error: '{:?}'.", election_identifier, error);
+					}
 				}
 			},
 			if let Some(block_info) = unfinalized_block_stream.next() => {
@@ -178,24 +191,29 @@ where
 				if let Some(electoral_data) = self.state_chain_client.electoral_data(block_info).await {
 					if electoral_data.contributing {
 						for (election_identifier, election_data) in electoral_data.current_elections {
-							if election_data.is_vote_desired && !vote_tasks.contains_key(&election_identifier) {
-								vote_tasks.insert(
-									election_identifier,
-									Box::pin(self.voter.request_with_limit(
-										RequestLog::new("vote".to_string(), Some(format!("{election_identifier:?}"))), // Add some identifier for `Instance`.
-										Box::pin(move |client| {
-											let election_data = election_data.clone();
-											#[allow(clippy::redundant_async_block)]
-											Box::pin(async move {
-												client.vote(
-													election_data.settings,
-													election_data.properties,
-												).await
-											})
-										}),
-										3,
-									))
-								);
+							if election_data.is_vote_desired {
+								if !vote_tasks.contains_key(&election_identifier) {
+									info!("Voting task for election: '{:?}' initiate.", election_identifier);
+									vote_tasks.insert(
+										election_identifier,
+										Box::pin(self.voter.request_with_limit(
+											RequestLog::new("vote".to_string(), Some(format!("{election_identifier:?}"))), // Add some identifier for `Instance`.
+											Box::pin(move |client| {
+												let election_data = election_data.clone();
+												#[allow(clippy::redundant_async_block)]
+												Box::pin(async move {
+													client.vote(
+														election_data.settings,
+														election_data.properties,
+													).await
+												})
+											}),
+											3,
+										))
+									);
+								} else {
+									info!("Voting task for election: '{:?}' not initiated as a task is already running for that election.", election_identifier);
+								}
 							}
 						}
 
