@@ -328,17 +328,15 @@ async function getPastEvents(
   chain: SubstrateChain,
   historicalCheckBlocks: number,
 ): Promise<Event[]> {
-  const api = await apiMap[chain]();
-  const historicEvents: Event[] = [];
-  if (historicalCheckBlocks > 0) {
-    const latestHeader = await api.rpc.chain.getHeader();
-    const latestBlockNumber = latestHeader.number.toNumber();
-    const startAtBlock = Math.max(latestBlockNumber - historicalCheckBlocks, 0);
-    const cache = eventCacheMap[chain];
-    historicEvents.push(...(await cache.getEvents(startAtBlock, latestBlockNumber)));
+  if (historicalCheckBlocks <= 0) {
+    throw new Error('Invalid Historical Check Blocks');
   }
-
-  return historicEvents;
+  const api = await apiMap[chain]();
+  const latestHeader = await api.rpc.chain.getHeader();
+  const latestBlockNumber = latestHeader.number.toNumber();
+  const startAtBlock = Math.max(latestBlockNumber - historicalCheckBlocks, 0);
+  const cache = eventCacheMap[chain];
+  return cache.getEvents(startAtBlock, latestBlockNumber);
 }
 
 type EventTest<T> = (event: Event<T>) => boolean;

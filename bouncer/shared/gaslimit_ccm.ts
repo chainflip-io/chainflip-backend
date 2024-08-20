@@ -141,11 +141,18 @@ async function trackGasLimitSwap(
   const swapRequestId = Number((await swapRequestedHandle).data.swapRequestId.replaceAll(',', ''));
 
   // Find all of the swap events
-  const gasSwapOutputAmount = (
-    await observeEvent('swapping:SwapExecuted', {
+  const gasSwapId = (
+    await observeEvent('swapping:SwapScheduled', {
       test: (event) =>
         Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId &&
         event.data.swapType === SwapType.CcmGas,
+      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+    }).event
+  ).data.swapId;
+
+  const gasSwapOutputAmount = (
+    await observeEvent('swapping:SwapExecuted', {
+      test: (event) => event.data.swapId === gasSwapId,
       historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.outputAmount;
@@ -206,7 +213,7 @@ async function testGasLimitSwapToSolana(
   const { priorityFee: computePrice } = await getChainFees('Solana');
 
   if (computePrice === 0) {
-    throw new Error('Compute price shouldnt be 0');
+    throw new Error('Compute price should not be 0');
   }
   const gasLimitBudget = Math.floor(
     (Math.max(0, egressBudgetAmount - LAMPORTS_PER_SIGNATURE) * 10 ** 6) / computePrice,
