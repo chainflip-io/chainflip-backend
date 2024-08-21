@@ -14,7 +14,7 @@ mod weights;
 use crate::{
 	chainflip::{
 		calculate_account_apy,
-		solana_elections::{SolanaChainTracking, SolanaIngress},
+		solana_elections::{SolanaChainTracking, SolanaIngress, SolanaNonceTrackingTrigger},
 		Offence,
 	},
 	monitoring_apis::{
@@ -258,6 +258,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
 	type SolanaVaultKeyWitnessedHandler = SolanaVault;
+	type SolanaNonceWatch = SolanaNonceTrackingTrigger;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type BitcoinKeyProvider = BitcoinThresholdSigner;
 	type RuntimeSafeMode = RuntimeSafeMode;
