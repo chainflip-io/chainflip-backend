@@ -634,9 +634,6 @@ pub mod pallet {
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
 		},
-		MaxSwapRetryDurationSet {
-			max_swap_retry_duration_blocks: BlockNumber,
-		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
