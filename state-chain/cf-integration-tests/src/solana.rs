@@ -28,11 +28,10 @@ use frame_support::{
 };
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_validator::RotationPhase;
-use sp_runtime::FixedU128;
 use state_chain_runtime::{
 	chainflip::{
-		address_derivation::AddressDerivation, solana_elections, ChainAddressConverter,
-		SolEnvironment, SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
+		address_derivation::AddressDerivation, ChainAddressConverter, SolEnvironment,
+		SolanaTransactionBuilder as RuntimeSolanaTransactionBuilder,
 	},
 	Runtime, RuntimeCall, RuntimeEvent, SolanaIngressEgress, SolanaInstance, SolanaThresholdSigner,
 	Swapping,
