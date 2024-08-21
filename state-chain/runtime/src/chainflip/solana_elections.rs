@@ -6,8 +6,8 @@ use cf_chains::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	AdjustedFeeEstimationApi, GetBlockHeight, IngressSource, SolanaNonceWatch,
-	WatchForEgressSuccess,
+	AdjustedFeeEstimationApi, ElectionEgressWitnesser, GetBlockHeight, IngressSource,
+	SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use pallet_cf_elections::{
@@ -92,6 +92,7 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
 	pub tx_fee: u64,
+	pub signer: SolAddress,
 }
 
 pub struct SolanaEgressWitnessingHook;
@@ -99,12 +100,12 @@ pub struct SolanaEgressWitnessingHook;
 impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
 	fn on_egress_success(
 		signature: SolSignature,
-		TransactionSuccessDetails { tx_fee }: TransactionSuccessDetails,
+		TransactionSuccessDetails { tx_fee, signer }: TransactionSuccessDetails,
 	) {
 		if let Err(err) = SolanaBroadcaster::egress_success(
 			pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 			signature,
-			Default::default(),
+			signer,
 			tx_fee,
 			(),
 			signature,
@@ -369,7 +370,7 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 
 pub struct SolanaEgressWitnessingTrigger;
 
-impl WatchForEgressSuccess for SolanaEgressWitnessingTrigger {
+impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 	type Chain = SolanaCrypto;
 
 	fn watch_for_egress_success(signature: SolSignature) -> DispatchResult {

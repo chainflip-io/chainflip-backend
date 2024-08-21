@@ -143,14 +143,13 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 		<<SolanaEgressWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		tracing::info!("Requesting success witnesses for {:?}", signature);
 		let (sig, _slot, tx_fee, _signer_pubkey) = success_witnesses(&self.client, vec![signature])
 			.await
 			.into_iter()
 			.next()
 			.ok_or(anyhow!("Success querying for {signature} but no items"))?;
 		assert_eq!(sig, signature, "signature we requested should be the same as in the response");
-		Ok(TransactionSuccessDetails { tx_fee })
+		Ok(TransactionSuccessDetails { tx_fee, signer: Default::default() })
 	}
 }
 
