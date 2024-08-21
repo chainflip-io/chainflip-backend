@@ -556,7 +556,7 @@ export async function observeBalanceIncrease(
       return newBalance;
     }
 
-    await sleep(10000);
+    await sleep(3000);
   }
 
   return Promise.reject(new Error('Failed to observe balance increase'));

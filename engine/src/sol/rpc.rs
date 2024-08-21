@@ -17,10 +17,6 @@ use cf_chains::sol::{SolAddress, SolHash, SolSignature};
 
 use super::{commitment_config::CommitmentConfig, rpc_client_api::*};
 use std::str::FromStr;
-use rand::Rng;
-use rand::rngs::StdRng;
-use rand::SeedableRng;
-use tokio::time::{sleep, Duration};
 
 #[derive(Clone)]
 pub struct SolRpcClient {
@@ -75,10 +71,6 @@ impl SolRpcClient {
 		method: &str,
 		params: Option<serde_json::Value>,
 	) -> Result<serde_json::Value, Error> {
-		// Generate a random delay between 0 and 1 second
-		let mut rng = StdRng::from_entropy();
-		let delay = rng.gen_range(0..=1000); // milliseconds
-		sleep(Duration::from_millis(delay)).await;
 		call_rpc_raw(&self.client, &self.endpoint, method, params).await
 	}
 }
