@@ -119,7 +119,7 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 		properties: <SolanaNonceTracking as ElectoralSystem>::ElectionProperties,
 	) -> Result<<<SolanaNonceTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error>
 	{
-		let (nonce_account, previous_nonce) = properties;
+		let (nonce_account, _previous_nonce) = properties;
 		let (response_account, response_nonce) =
 			nonce_witnessing::get_durable_nonces(&self.client, vec![nonce_account])
 				.await?
