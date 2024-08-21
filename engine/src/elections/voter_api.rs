@@ -42,18 +42,18 @@ macro_rules! generate_voter_api_tuple_impls {
                 <<Composite<($($electoral_system,)*), Hooks> as ElectoralSystem>::Vote as VoteStorage>::Vote,
                 anyhow::Error,
             > {
-                use vote_storage::composite::$module::CompositeVoteStorageEnum;
-                use composite::$module::CompositeElectoralSystemEnum;
+                use vote_storage::composite::$module::CompositeVote;
+                use composite::$module::CompositeElectionProperties;
 
                 let ($($voter,)*) = &self.voters;
                 let ($($electoral_system,)*) = settings;
                 match properties {
                     $(
-                        CompositeElectoralSystemEnum::$electoral_system(properties) => {
+                        CompositeElectionProperties::$electoral_system(properties) => {
                             $voter.vote(
                                 $electoral_system,
                                 properties,
-                            ).await.map(CompositeVoteStorageEnum::$electoral_system)
+                            ).await.map(CompositeVote::$electoral_system)
                         },
                     )*
                 }
