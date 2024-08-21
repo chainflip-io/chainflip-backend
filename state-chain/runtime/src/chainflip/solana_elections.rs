@@ -55,8 +55,8 @@ pub fn initial_state(
 }
 
 pub type SolanaBlockHeightTracking =
-	electoral_systems::median::MonotonicMedian<<Solana as Chain>::ChainBlockNumber, ()>;
-pub type SolanaFeeTracking = electoral_systems::median::UnsafeMedian<
+	electoral_systems::monotonic_median::MonotonicMedian<<Solana as Chain>::ChainBlockNumber, ()>;
+pub type SolanaFeeTracking = electoral_systems::unsafe_median::UnsafeMedian<
 	<Solana as Chain>::ChainAmount,
 	SolanaFeeUnsynchronisedSettings,
 	(),

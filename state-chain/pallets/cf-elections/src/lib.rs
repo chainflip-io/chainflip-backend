@@ -37,7 +37,7 @@
 //! data. Note the `PartialVote` is not restricted to only being the hash of the full vote.
 //!
 //! This diagram shows how an authority's vote is formulated, and split up so it can be stored:
-//!
+//! ```text
 //!     ┌─────────────────────────────────────────────────────────────────┐
 //!     │   Key:                                                          │
 //!     │                                                                 │
@@ -84,7 +84,7 @@
 //!         └───────────┼────────────────────────────┼────────────────────────────────┘
 //!                     │How the pallet stores votes.│
 //!                     └────────────────────────────┘
-//!
+//! ```
 //! - "SharedData" is shared between authority votes, so if 150 different validator votes when
 //!   "split up" contain the same SharedData, only one copy of that SharedData will be stored. A
 //!   vote when split up, may be constructed from any number of SharedData values, including zero.
@@ -119,6 +119,8 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
+
+pub use pallet::UniqueMonotonicIdentifier;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -185,7 +187,14 @@ pub mod pallet {
 	#[derive(
 		PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode, TypeInfo, Default,
 	)]
-	struct UniqueMonotonicIdentifier(u64);
+	pub struct UniqueMonotonicIdentifier(u64);
+
+	#[cfg(test)]
+	impl UniqueMonotonicIdentifier {
+		pub(crate) fn next_identifier(&self) -> Option<Self> {
+			self.0.checked_add(1).map(|next| Self(next))
+		}
+	}
 
 	/// A unique identifier for an election with extra details used by the ElectoralSystem
 	/// implementation. These extra details are currently used in composite electoral systems to
@@ -194,7 +203,7 @@ pub mod pallet {
 	#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode, TypeInfo)]
 	pub struct ElectionIdentifier<Extra>(UniqueMonotonicIdentifier, Extra);
 	impl<Extra> ElectionIdentifier<Extra> {
-		fn new(unique_monotonic: UniqueMonotonicIdentifier, extra: Extra) -> Self {
+		pub(crate) fn new(unique_monotonic: UniqueMonotonicIdentifier, extra: Extra) -> Self {
 			Self(unique_monotonic, extra)
 		}
 
@@ -205,7 +214,7 @@ pub mod pallet {
 			ElectionIdentifier::new(*self.unique_monotonic(), other_extra)
 		}
 
-		fn unique_monotonic(&self) -> &UniqueMonotonicIdentifier {
+		pub(crate) fn unique_monotonic(&self) -> &UniqueMonotonicIdentifier {
 			&self.0
 		}
 
