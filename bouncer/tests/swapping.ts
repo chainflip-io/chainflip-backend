@@ -6,7 +6,6 @@ const swapContext = new SwapContext();
 
 async function main(): Promise<void> {
   await testAllSwaps(swapContext);
-  swapContext.print_report();
 }
 
 runWithTimeout(main(), 3000000)
