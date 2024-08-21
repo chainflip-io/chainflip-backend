@@ -138,6 +138,7 @@ runtime-benchmarks = [
   'pallet-cf-chain-tracking/runtime-benchmarks',
   'pallet-cf-emissions/runtime-benchmarks',
   'pallet-cf-environment/runtime-benchmarks',
+  'pallet-cf-elections/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
   'pallet-cf-funding/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',

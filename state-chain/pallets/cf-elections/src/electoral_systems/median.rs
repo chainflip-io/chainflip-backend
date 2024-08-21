@@ -99,11 +99,6 @@ impl<
 			},
 		)
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn benchmark_authority_vote() -> AuthorityVoteOf<Self> {
-		AuthorityVoteOf::<Self>::Vote(BenchmarkValue::benchmark_value())
-	}
 }
 
 /// This electoral system is for tracking a monotonically increasing `Value` that authorities may
