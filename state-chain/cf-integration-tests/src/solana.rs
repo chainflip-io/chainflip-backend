@@ -22,8 +22,10 @@ use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
 use cf_utilities::bs58_array;
 use codec::Encode;
-use frame_support::traits::{OnFinalize, UnfilteredDispatchable};
-use pallet_cf_elections::InitialState;
+use frame_support::{
+	assert_err,
+	traits::{OnFinalize, UnfilteredDispatchable},
+};
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_validator::RotationPhase;
 use sp_runtime::FixedU128;
@@ -47,7 +49,6 @@ const ALICE: AccountId = AccountId::new([0x33; 32]);
 const BOB: AccountId = AccountId::new([0x44; 32]);
 
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
-const COMPUTE_PRICE: u64 = 1_000u64;
 
 fn setup_sol_environments() {
 	// Environment::SolanaApiEnvironment
@@ -58,32 +59,6 @@ fn setup_sol_environments() {
 		usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
 		usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 	});
-	pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::internally_initialize(InitialState {
-		unsynchronised_state: (
-			/* chain tracking */ Default::default(),
-			/* priority_fee */ COMPUTE_PRICE,
-			(),
-			(),
-		),
-		unsynchronised_settings: (
-			(),
-			solana_elections::SolanaFeeUnsynchronisedSettings {
-				fee_multiplier: FixedU128::from_u32(1u32),
-			},
-			(),
-			(),
-		),
-		settings: (
-			(),
-			(),
-			solana_elections::SolanaIngressSettings {
-				vault_program: sol_test_values::VAULT_PROGRAM,
-				usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
-			},
-			(),
-		),
-	})
-	.unwrap();
 
 	// Environment::AvailableDurableNonces
 	pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
@@ -541,12 +516,15 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 			pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
 				available_nonces.clone(),
 			);
-			assert_noop!(
+
+			println!("checking noop");
+			assert_err!(
 				<cf_chains::sol::api::SolanaApi<SolEnvironment> as SetAggKeyWithAggKey<
 					SolanaCrypto,
 				>>::new_unsigned(None, SolAddress([0xff; 32]),),
 				SetAggKeyWithAggKeyError::FinalTransactionExceededMaxLength
 			);
+			println!("Checked noop");
 
 			assert_eq!(
 				available_nonces,

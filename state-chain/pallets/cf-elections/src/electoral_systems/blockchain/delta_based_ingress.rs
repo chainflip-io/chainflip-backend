@@ -81,7 +81,7 @@ where
 					election_identifier
 						.extra()
 						.checked_add(1)
-						.ok_or_else(|| CorruptStorageError::new())?,
+						.ok_or_else(CorruptStorageError::new)?,
 					channels,
 				)?;
 				return Ok(())
@@ -283,7 +283,7 @@ where
 						election_identifier
 							.extra()
 							.checked_add(1)
-							.ok_or_else(|| CorruptStorageError::new())?,
+							.ok_or_else(CorruptStorageError::new)?,
 						channels,
 					)?;
 				}
