@@ -18,6 +18,7 @@ use crate::Call;
 #[instance_benchmarks(
 	where
 	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote: BenchmarkValue,
+	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData: BenchmarkValue,
 )]
 mod benchmarks {
 	use core::iter;

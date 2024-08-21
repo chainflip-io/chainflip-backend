@@ -245,7 +245,7 @@ use cf_chains::{
 };
 use frame_support::BoundedBTreeMap;
 use sp_core::ConstU32;
-use tuple_4_impls::CompositeVote;
+use tuple_4_impls::{CompositeSharedData, CompositeVote};
 impl BenchmarkValue
 	for CompositeVote<
 		u64,
@@ -261,5 +261,12 @@ impl BenchmarkValue
 	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self {
 		CompositeVote::A(1_000u64)
+	}
+}
+
+impl BenchmarkValue for CompositeSharedData<u64, u64, (), SolHash> {
+	#[cfg(feature = "runtime-benchmarks")]
+	fn benchmark_value() -> Self {
+		CompositeSharedData::A(1_000u64)
 	}
 }
