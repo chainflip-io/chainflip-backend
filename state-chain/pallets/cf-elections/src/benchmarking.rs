@@ -31,21 +31,11 @@ mod benchmarks {
 		Pallet::<T, I>::on_finalize(frame_system::Pallet::<T>::block_number());
 
 		// Set the sync barrier to 0
-		let zero_sync_barrier = VoteSynchronisationBarrier::from_u32(0);
-		Pallet::<T, I>::ignore_my_votes(
-			RawOrigin::Signed(caller.clone()).into(),
-			zero_sync_barrier.clone(),
-		)
-		.unwrap();
+		Pallet::<T, I>::ignore_my_votes(RawOrigin::Signed(caller.clone()).into()).unwrap();
 
-		Pallet::<T, I>::stop_ignoring_my_votes(
-			RawOrigin::Signed(caller.clone()).into(),
-			zero_sync_barrier.clone(),
-		)
-		.unwrap();
+		Pallet::<T, I>::stop_ignoring_my_votes(RawOrigin::Signed(caller.clone()).into()).unwrap();
 
-		let (elections, sync_barrier) =
-			Pallet::<T, I>::validator_election_data(&validator_id).unwrap();
+		let elections = Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
 
 		let next_election = elections.into_iter().next().unwrap();
 
@@ -58,7 +48,6 @@ mod benchmarks {
 					.collect::<BTreeMap<_, _>>(),
 			)
 			.unwrap(),
-			sync_barrier.unwrap(),
 		);
 	}
 
@@ -67,7 +56,6 @@ mod benchmarks {
 
 	#[cfg(test)]
 	use crate::Instance1;
-	use crate::VoteSynchronisationBarrier;
 
 	#[test]
 	fn benchmark_works() {
