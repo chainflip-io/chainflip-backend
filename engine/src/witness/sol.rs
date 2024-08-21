@@ -149,8 +149,7 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 			.next()
 			.ok_or(anyhow!("Success querying for {signature} but no items"))?;
 		assert_eq!(sig, signature, "signature we requested should be the same as in the response");
-		// TODO: Update TransactionSuccessDetails to take an option and not unwrap here
-		Ok(TransactionSuccessDetails { tx_fee, signer: signer.unwrap_or_default() })
+		Ok(TransactionSuccessDetails { tx_fee, signer })
 	}
 }
 
