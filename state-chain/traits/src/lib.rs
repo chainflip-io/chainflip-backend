@@ -1076,3 +1076,25 @@ impl SolanaNonceWatch for () {
 		Ok(())
 	}
 }
+
+pub trait WatchForEgressSuccess {
+	type Chain: ChainCrypto;
+
+	fn watch_for_egress_success(
+		tx_out_id: <Self::Chain as ChainCrypto>::TransactionOutId,
+	) -> DispatchResult;
+}
+
+pub struct DummyEgressSuccessWitnesser<C> {
+	_phantom: core::marker::PhantomData<C>,
+}
+
+impl<C: ChainCrypto> WatchForEgressSuccess for DummyEgressSuccessWitnesser<C> {
+	type Chain = C;
+
+	fn watch_for_egress_success(
+		_tx_out_id: <Self::Chain as ChainCrypto>::TransactionOutId,
+	) -> DispatchResult {
+		Ok(())
+	}
+}

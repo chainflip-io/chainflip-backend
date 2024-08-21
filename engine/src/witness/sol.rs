@@ -14,21 +14,16 @@ use crate::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
-	witness::{
-		common::{chain_source::Header, epoch_source::Vault},
-		sol::sol_deposits::get_channel_ingress_amounts,
-	},
+	witness::sol::sol_deposits::get_channel_ingress_amounts,
 };
-use anyhow::Result;
-use cf_chains::sol::{SolHash, SolSignature, LAMPORTS_PER_SIGNATURE};
-use cf_primitives::EpochIndex;
+use anyhow::{anyhow, Result};
+use cf_chains::sol::{SolSignature, LAMPORTS_PER_SIGNATURE};
 use futures::FutureExt;
-use futures_core::Future;
 use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
 use state_chain_runtime::{
 	chainflip::solana_elections::{
-		SolanaBlockHeightTracking, SolanaElectoralSystem, SolanaFeeTracking, SolanaIngressTracking,
-		SolanaNonceTracking,
+		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystem,
+		SolanaFeeTracking, SolanaIngressTracking, SolanaNonceTracking, TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
@@ -132,6 +127,32 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 	}
 }
 
+#[derive(Clone)]
+struct SolanaEgressWitnessingVoter {
+	client: SolRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
+	async fn vote(
+		&self,
+		_settings: <SolanaEgressWitnessing as ElectoralSystem>::ElectoralSettings,
+		signature: <SolanaEgressWitnessing as ElectoralSystem>::ElectionProperties,
+	) -> Result<
+		<<SolanaEgressWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
+		anyhow::Error,
+	> {
+		tracing::info!("Requesting success witnesses for {:?}", signature);
+		let (sig, _slot, tx_fee) = success_witnesses(&self.client, vec![signature])
+			.await
+			.into_iter()
+			.next()
+			.ok_or(anyhow!("Success querying for {signature} but no items"))?;
+		assert_eq!(sig, signature, "signature we requested should be the same as in the response");
+		Ok(TransactionSuccessDetails { tx_fee })
+	}
+}
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: SolRetryRpcClient,
@@ -156,7 +177,8 @@ where
 						SolanaBlockHeightTrackingVoter { client: client.clone() },
 						SolanaFeeTrackingVoter { client: client.clone() },
 						SolanaIngressTrackingVoter { client: client.clone() },
-						SolanaNonceTrackingVoter { client },
+						SolanaNonceTrackingVoter { client: client.clone() },
+						SolanaEgressWitnessingVoter { client },
 					)),
 				)
 				.continuously_vote()
@@ -170,44 +192,6 @@ where
 	});
 
 	Ok(())
-}
-
-pub async fn process_egress<ProcessCall, ProcessingFut>(
-	epoch: Vault<cf_chains::Solana, (), ()>,
-	header: Header<u64, SolHash, ((), Vec<(SolSignature, u64)>)>,
-	process_call: ProcessCall,
-	sol_client: SolRetryRpcClient,
-) where
-	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-		+ Send
-		+ Sync
-		+ Clone
-		+ 'static,
-	ProcessingFut: Future<Output = ()> + Send + 'static,
-{
-	let (_, monitored_egresses) = header.data;
-
-	let monitored_tx_signatures: Vec<_> = monitored_egresses.into_iter().map(|(x, _)| x).collect();
-
-	if !monitored_tx_signatures.is_empty() {
-		let success_witnesses_result =
-			success_witnesses(&sol_client, monitored_tx_signatures).await;
-
-		for (tx_signature, _slot, tx_fee) in success_witnesses_result {
-			process_call(
-				pallet_cf_broadcast::Call::<_, SolanaInstance>::transaction_succeeded {
-					tx_out_id: tx_signature,
-					signer_id: epoch.info.0,
-					tx_fee,
-					tx_metadata: (),
-					transaction_ref: tx_signature,
-				}
-				.into(),
-				epoch.index,
-			)
-			.await;
-		}
-	}
 }
 
 async fn success_witnesses(

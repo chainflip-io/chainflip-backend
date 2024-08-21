@@ -8,6 +8,7 @@ use crate::{
 	vote_storage::{AuthorityVote, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
+use sp_std::vec::Vec;
 
 /// A trait that describes a method of coming to consensus on some aspect of an external chain, and
 /// how that consensus should be processed.
