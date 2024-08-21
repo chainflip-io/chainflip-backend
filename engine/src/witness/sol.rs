@@ -7,7 +7,8 @@ use crate::{
 		commitment_config::CommitmentConfig,
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
 		rpc_client_api::{
-			RpcTransactionConfig, TransactionConfirmationStatus, UiTransactionEncoding,
+			EncodedTransaction, RpcTransactionConfig, TransactionConfirmationStatus, UiMessage,
+			UiTransactionEncoding,
 		},
 	},
 	state_chain_observer::client::{
@@ -17,7 +18,7 @@ use crate::{
 	witness::sol::sol_deposits::get_channel_ingress_amounts,
 };
 use anyhow::{anyhow, Result};
-use cf_chains::sol::{SolSignature, LAMPORTS_PER_SIGNATURE};
+use cf_chains::sol::{SolAddress, SolSignature, LAMPORTS_PER_SIGNATURE};
 use futures::FutureExt;
 use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
 use state_chain_runtime::{
@@ -28,7 +29,7 @@ use state_chain_runtime::{
 	SolanaInstance,
 };
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use utilities::{context, task_scope, task_scope::Scope};
 
 #[derive(Clone)]
@@ -143,7 +144,7 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 		anyhow::Error,
 	> {
 		tracing::info!("Requesting success witnesses for {:?}", signature);
-		let (sig, _slot, tx_fee) = success_witnesses(&self.client, vec![signature])
+		let (sig, _slot, tx_fee, _signer_pubkey) = success_witnesses(&self.client, vec![signature])
 			.await
 			.into_iter()
 			.next()
@@ -197,7 +198,7 @@ where
 async fn success_witnesses(
 	sol_client: &SolRetryRpcClient,
 	monitored_tx_signatures: Vec<SolSignature>,
-) -> Vec<(SolSignature, u64, u64)>
+) -> Vec<(SolSignature, u64, u64, Option<SolAddress>)>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
@@ -212,8 +213,7 @@ where
 		monitored_tx_signatures.iter().zip(signature_statuses.into_iter())
 	{
 		if let Some(status) = status_option {
-			// For now we don't check if the transaction have reverted, as we don't handle it in the
-			// SC.
+			// For now we don't check if the transaction reverted, as we don't handle it in the SC.
 			if let Some(TransactionConfirmationStatus::Finalized) = status.confirmation_status {
 				finalized_transactions.push((*signature, status.slot));
 			}
@@ -246,7 +246,25 @@ where
 			None => LAMPORTS_PER_SIGNATURE,
 		};
 
-		finalized_txs_info.push((signature, slot, fee));
+		let signer_pubkey =
+			if let EncodedTransaction::Json(ui_transaction) = transaction.transaction.transaction {
+				if let UiMessage::Raw(message) = ui_transaction.message {
+					message
+						.account_keys
+						.get(0)
+						.and_then(|account| SolAddress::from_str(account).ok())
+				// Not handling UiParsedMessage as it might not be enforced that the first account
+				// is the signer. It shouldn't returned a parsed message anyway.
+				} else {
+					None
+				}
+			} else {
+				None
+			};
+
+		println!("Signer pubkey: {:?}", signer_pubkey);
+
+		finalized_txs_info.push((signature, slot, fee, signer_pubkey));
 	}
 
 	finalized_txs_info

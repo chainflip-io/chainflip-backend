@@ -215,7 +215,7 @@ pub enum EncodedTransaction {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EncodedTransactionWithStatusMeta {
-	pub transaction: EncodedTransaction, // Not used
+	pub transaction: EncodedTransaction,
 	pub meta: Option<UiTransactionStatusMeta>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub version: Option<TransactionVersion>,
