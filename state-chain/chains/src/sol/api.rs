@@ -251,6 +251,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				new_agg_key,
 				durable_nonce
 			);
+			println!("Calling recover_durable_nonce");
 			Environment::recover_durable_nonce(durable_nonce.0);
 			e
 		})?;
