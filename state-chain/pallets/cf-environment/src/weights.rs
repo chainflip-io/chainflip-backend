@@ -34,7 +34,6 @@ use core::marker::PhantomData;
 pub trait WeightInfo {
 	fn update_safe_mode() -> Weight;
 	fn update_consolidation_parameters() -> Weight;
-	fn update_sol_nonce() -> Weight;
 	fn force_recover_sol_nonce() -> Weight;
 }
 
@@ -60,19 +59,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Minimum execution time: 7_000_000 picoseconds.
 		Weight::from_parts(8_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Environment::SolanaUnavailableNonceAccounts` (r:1 w:1)
-	/// Proof: `Environment::SolanaUnavailableNonceAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::SolanaAvailableNonceAccounts` (r:1 w:1)
-	/// Proof: `Environment::SolanaAvailableNonceAccounts` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_sol_nonce() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1216`
-		//  Estimated: `4681`
-		// Minimum execution time: 16_000_000 picoseconds.
-		Weight::from_parts(17_000_000, 4681)
-			.saturating_add(T::DbWeight::get().reads(2_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
 	/// Storage: `Environment::SolanaUnavailableNonceAccounts` (r:1 w:1)
 	/// Proof: `Environment::SolanaUnavailableNonceAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -110,19 +96,6 @@ impl WeightInfo for () {
 		// Minimum execution time: 7_000_000 picoseconds.
 		Weight::from_parts(8_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Environment::SolanaUnavailableNonceAccounts` (r:1 w:1)
-	/// Proof: `Environment::SolanaUnavailableNonceAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::SolanaAvailableNonceAccounts` (r:1 w:1)
-	/// Proof: `Environment::SolanaAvailableNonceAccounts` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_sol_nonce() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1216`
-		//  Estimated: `4681`
-		// Minimum execution time: 16_000_000 picoseconds.
-		Weight::from_parts(17_000_000, 4681)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `Environment::SolanaUnavailableNonceAccounts` (r:1 w:1)
 	/// Proof: `Environment::SolanaUnavailableNonceAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)

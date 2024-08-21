@@ -23,6 +23,7 @@ use cf_test_utilities::{assert_events_match, assert_has_matching_event};
 use cf_utilities::bs58_array;
 use codec::Encode;
 use frame_support::traits::{OnFinalize, UnfilteredDispatchable};
+use pallet_cf_elections::InitialState;
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_validator::RotationPhase;
 use sp_runtime::FixedU128;
@@ -57,25 +58,31 @@ fn setup_sol_environments() {
 		usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
 		usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 	});
-
-	pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::internally_initialize(
-		(/* chain tracking */ Default::default(), /* priority_fee */ COMPUTE_PRICE, ()),
-		(
+	pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::internally_initialize(InitialState {
+		unsynchronised_state: (
+			/* chain tracking */ Default::default(),
+			/* priority_fee */ COMPUTE_PRICE,
+			(),
+			(),
+		),
+		unsynchronised_settings: (
 			(),
 			solana_elections::SolanaFeeUnsynchronisedSettings {
 				fee_multiplier: FixedU128::from_u32(1u32),
 			},
 			(),
+			(),
 		),
-		(
+		settings: (
 			(),
 			(),
 			solana_elections::SolanaIngressSettings {
 				vault_program: sol_test_values::VAULT_PROGRAM,
 				usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
 			},
+			(),
 		),
-	)
+	})
 	.unwrap();
 
 	// Environment::AvailableDurableNonces

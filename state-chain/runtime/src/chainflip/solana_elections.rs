@@ -1,20 +1,22 @@
-use crate::Runtime;
+use crate::{Environment, Runtime};
 use cf_chains::{
 	instances::ChainInstanceAlias,
-	sol::{SolAddress, SolAmount, SolTrackedData},
+	sol::{SolAddress, SolAmount, SolHash, SolTrackedData},
 	Chain, FeeEstimationApi, Solana,
 };
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::{AdjustedFeeEstimationApi, GetBlockHeight, IngressSource};
+use cf_traits::{AdjustedFeeEstimationApi, GetBlockHeight, IngressSource, SolanaNonceWatch};
 use codec::{Decode, Encode};
 use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
 	electoral_systems::{
 		self,
-		composite::{tuple_3_impls::Hooks, Composite, Translator},
+		change::OnChangeHook,
+		composite::{tuple_4_impls::Hooks, Composite, Translator},
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 };
+
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
@@ -23,7 +25,7 @@ use sp_std::vec::Vec;
 type Instance = <Solana as ChainInstanceAlias>::Instance;
 
 pub type SolanaElectoralSystem = Composite<
-	(SolanaBlockHeightTracking, SolanaFeeTracking, SolanaIngressTracking),
+	(SolanaBlockHeightTracking, SolanaFeeTracking, SolanaIngressTracking, SolanaNonceTracking),
 	SolanaElectionHooks,
 >;
 
@@ -40,13 +42,15 @@ pub fn initial_state(
 			Default::default(),
 			priority_fee,
 			(),
+			(),
 		),
 		unsynchronised_settings: (
 			(),
 			SolanaFeeUnsynchronisedSettings { fee_multiplier: FixedU128::from_u32(1u32) },
 			(),
+			(),
 		),
-		settings: ((), (), SolanaIngressSettings { vault_program, usdc_token_mint_pubkey }),
+		settings: ((), (), SolanaIngressSettings { vault_program, usdc_token_mint_pubkey }, ()),
 	}
 }
 
@@ -63,9 +67,20 @@ pub type SolanaIngressTracking =
 		SolanaIngressSettings,
 	>;
 
+pub type SolanaNonceTracking =
+	electoral_systems::change::Change<SolAddress, SolHash, (), SolanaNonceTrackingHook>;
+
+pub struct SolanaNonceTrackingHook;
+
+impl OnChangeHook<SolAddress, SolHash> for SolanaNonceTrackingHook {
+	fn on_change(nonce_account: SolAddress, durable_nonce: SolHash) {
+		Environment::update_sol_nonce(nonce_account, durable_nonce);
+	}
+}
+
 pub struct SolanaElectionHooks;
 
-impl Hooks<SolanaBlockHeightTracking, SolanaFeeTracking, SolanaIngressTracking>
+impl Hooks<SolanaBlockHeightTracking, SolanaFeeTracking, SolanaIngressTracking, SolanaNonceTracking>
 	for SolanaElectionHooks
 {
 	type OnFinalizeContext = ();
@@ -76,14 +91,21 @@ impl Hooks<SolanaBlockHeightTracking, SolanaFeeTracking, SolanaIngressTracking>
 		BlockHeightTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaBlockHeightTracking>,
 		FeeTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaFeeTracking>,
 		IngressTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaIngressTracking>,
+		NonceTrackingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaNonceTracking>,
 	>(
 		generic_electoral_access: &mut GenericElectoralAccess,
-		(block_height_translator, fee_translator, ingress_translator): (
+		(block_height_translator, fee_translator, ingress_translator, nonce_tracking_translator): (
 			BlockHeightTranslator,
 			FeeTranslator,
 			IngressTranslator,
+			NonceTrackingTranslator,
 		),
-		(block_height_identifiers, fee_identifiers, ingress_identifiers): (
+		(
+			block_height_identifiers,
+			fee_identifiers,
+			ingress_identifiers,
+			nonce_tracking_identifiers,
+		): (
 			Vec<
 				ElectionIdentifier<
 					<SolanaBlockHeightTracking as ElectoralSystem>::ElectionIdentifierExtra,
@@ -97,6 +119,11 @@ impl Hooks<SolanaBlockHeightTracking, SolanaFeeTracking, SolanaIngressTracking>
 					<SolanaIngressTracking as ElectoralSystem>::ElectionIdentifierExtra,
 				>,
 			>,
+			Vec<
+				ElectionIdentifier<
+					<SolanaNonceTracking as ElectoralSystem>::ElectionIdentifierExtra,
+				>,
+			>,
 		),
 		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
@@ -108,6 +135,11 @@ impl Hooks<SolanaBlockHeightTracking, SolanaFeeTracking, SolanaIngressTracking>
 		SolanaFeeTracking::on_finalize(
 			&mut fee_translator.translate_electoral_access(generic_electoral_access),
 			fee_identifiers,
+			&(),
+		)?;
+		SolanaNonceTracking::on_finalize(
+			&mut nonce_tracking_translator.translate_electoral_access(generic_electoral_access),
+			nonce_tracking_identifiers,
 			&(),
 		)?;
 		SolanaIngressTracking::on_finalize(
@@ -224,8 +256,8 @@ impl IngressSource for SolanaIngress {
 					election_identifiers,
 					|election_identifiers| {
 						SolanaElectoralSystem::with_access_translators(|access_translators| {
-							let (_, _, access_translator) = &access_translators;
-							let (_, _, election_identifiers) = election_identifiers;
+							let (_, _, access_translator, ..) = &access_translators;
+							let (_, _, election_identifiers, ..) = election_identifiers;
 							SolanaIngressTracking::open_channel(
 								election_identifiers,
 								&mut access_translator.translate_electoral_access(electoral_access),
@@ -236,6 +268,31 @@ impl IngressSource for SolanaIngress {
 						})
 					},
 				)
+			},
+		)
+	}
+}
+
+pub struct SolanaNonceTrackingTrigger;
+
+impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
+	fn watch_for_nonce_change(
+		nonce_account: SolAddress,
+		previous_nonce_value: SolHash,
+	) -> DispatchResult {
+		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
+			|electoral_access| {
+				SolanaElectoralSystem::with_access_translators(|access_translators| {
+					let (_, _, _, access_translator) = &access_translators;
+					let mut electoral_access =
+						access_translator.translate_electoral_access(electoral_access);
+
+					SolanaNonceTracking::watch_for_change(
+						&mut electoral_access,
+						nonce_account,
+						previous_nonce_value,
+					)
+				})
 			},
 		)
 	}

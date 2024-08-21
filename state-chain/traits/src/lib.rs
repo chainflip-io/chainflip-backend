@@ -19,8 +19,11 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, assets::any::AssetMap, ApiCall, CcmChannelMetadata,
-	CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters, DepositChannel, Ethereum,
+	address::ForeignChainAddress,
+	assets::any::AssetMap,
+	sol::{SolAddress, SolHash},
+	ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters,
+	DepositChannel, Ethereum,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BlockNumber,
@@ -1053,6 +1056,22 @@ impl<TargetChain: Chain> IngressSource for DummyIngressSource<TargetChain> {
 		_channel: <Self::Chain as Chain>::ChainAccount,
 		_asset: <Self::Chain as Chain>::ChainAsset,
 		_close_block: <Self::Chain as Chain>::ChainBlockNumber,
+	) -> DispatchResult {
+		Ok(())
+	}
+}
+
+pub trait SolanaNonceWatch {
+	fn watch_for_nonce_change(
+		nonce_account: SolAddress,
+		previous_nonce_value: SolHash,
+	) -> DispatchResult;
+}
+
+impl SolanaNonceWatch for () {
+	fn watch_for_nonce_change(
+		_nonce_account: SolAddress,
+		_previous_nonce_value: SolHash,
 	) -> DispatchResult {
 		Ok(())
 	}

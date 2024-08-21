@@ -65,7 +65,11 @@ cf_test_utilities::impl_test_helpers! {
 	RuntimeGenesisConfig {
 		system: Default::default(),
 		elections: ElectionGenesisConfig {
-			option_initialize: Some((INITIAL_UNSYNCED_STATE, (), ()))
+			option_initial_state: Some(crate::InitialState {
+				unsynchronised_state: INITIAL_UNSYNCED_STATE,
+				unsynchronised_settings: (),
+				settings: ()
+			})
 		}
 	},
 	|| {
