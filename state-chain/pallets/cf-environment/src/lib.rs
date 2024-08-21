@@ -108,8 +108,6 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Eth is not an Erc20 token, so its address can't be updated.
 		EthAddressNotUpdateable,
-		/// The nonce account is currently not being used or does not exist.
-		NonceAccountNotBeingUsedOrDoesntExist,
 	}
 
 	#[pallet::pallet]
