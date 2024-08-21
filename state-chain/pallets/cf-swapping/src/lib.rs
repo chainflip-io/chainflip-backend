@@ -668,29 +668,18 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub flip_buy_interval: BlockNumberFor<T>,
-		pub swap_retry_delay: BlockNumberFor<T>,
-		pub max_swap_retry_duration_blocks: BlockNumber,
-		pub max_swap_request_duration_blocks: BlockNumber,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			FlipBuyInterval::<T>::set(self.flip_buy_interval);
-			SwapRetryDelay::<T>::set(self.swap_retry_delay);
-			MaxSwapRetryDurationBlocks::<T>::set(self.max_swap_retry_duration_blocks);
-			MaxSwapRequestDurationBlocks::<T>::set(self.max_swap_request_duration_blocks);
 		}
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {
-				flip_buy_interval: BlockNumberFor::<T>::zero(),
-				swap_retry_delay: DefaultSwapRetryDelay::<T>::get(),
-				max_swap_retry_duration_blocks: DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS,
-				max_swap_request_duration_blocks: DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS,
-			}
+			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
 		}
 	}
 
