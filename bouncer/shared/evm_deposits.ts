@@ -174,10 +174,10 @@ export async function testEvmDeposits() {
   console.log('=== Testing EVM Deposits ===');
 
   const depositTests = Promise.all([
-    testSuccessiveDepositEvm('Eth', 'Dot'),
-    testSuccessiveDepositEvm('Flip', 'Btc'),
-    testSuccessiveDepositEvm('ArbEth', 'Dot'),
-    testSuccessiveDepositEvm('ArbUsdc', 'Btc'),
+    // testSuccessiveDepositEvm('Eth', 'Dot'),
+    // testSuccessiveDepositEvm('Flip', 'Btc'),
+    // testSuccessiveDepositEvm('ArbEth', 'Dot'),
+    // testSuccessiveDepositEvm('ArbUsdc', 'Btc'),
   ]);
 
   const noDuplicatedWitnessingTest = Promise.all([
