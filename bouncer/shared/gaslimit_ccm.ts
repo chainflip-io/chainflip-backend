@@ -559,12 +559,12 @@ async function spamChain(chain: Chain) {
 }
 
 export async function testGasLimitCcmSwaps() {
+  console.log('=== Starting gasLimit CCM test ===');
+  console.log('Spamming chains to increase fees...');
+
   const spammingEth = spamChain('Ethereum');
   const spammingArb = spamChain('Arbitrum');
   const spammingSol = spamChain('Solana');
-
-  console.log('=== Starting gasLimit CCM test ===');
-  console.log('Spamming chains to increase fees...');
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
