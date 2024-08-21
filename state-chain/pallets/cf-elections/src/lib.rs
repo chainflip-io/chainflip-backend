@@ -115,6 +115,8 @@ pub mod vote_storage;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod weights;
+pub use weights::WeightInfo;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -261,6 +263,11 @@ pub mod pallet {
 				Self {}
 			}
 		}
+		impl Default for CorruptStorageError {
+			fn default() -> Self {
+				Self::new()
+			}
+		}
 	}
 	pub use corrupt_storage_error::CorruptStorageError;
 
@@ -323,6 +330,9 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		type ElectoralSystem: ElectoralSystem<OnFinalizeContext = ()>;
+
+		/// The weights for the pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -1188,7 +1198,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[pallet::call_index(0)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::vote(authority_votes.len() as u32))]
 		pub fn vote(
 			origin: OriginFor<T>,
 			authority_votes: BoundedBTreeMap<

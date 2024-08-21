@@ -99,11 +99,6 @@ impl<
 			},
 		)
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn benchmark_authority_vote() -> AuthorityVoteOf<Self> {
-		AuthorityVoteOf::<Self>::Vote(BenchmarkValue::benchmark_value())
-	}
 }
 
 #[cfg(test)]

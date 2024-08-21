@@ -987,6 +987,7 @@ impl pallet_cf_chain_tracking::Config<Instance4> for Runtime {
 impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystem = chainflip::solana_elections::SolanaElectoralSystem;
+	type WeightInfo = ();
 }
 
 construct_runtime!(

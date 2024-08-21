@@ -25,7 +25,7 @@ use sp_std::{
 	vec::Vec,
 };
 
-const MAXIMUM_CHANNELS_PER_ELECTION: u32 = 50;
+pub const MAXIMUM_CHANNELS_PER_ELECTION: u32 = 50;
 
 /// Represents the total ingressed amount over all time of a given asset at a particular
 /// `block_number`.
