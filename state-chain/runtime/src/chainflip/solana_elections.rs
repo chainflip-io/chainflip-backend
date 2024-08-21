@@ -6,8 +6,8 @@ use cf_chains::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	AdjustedFeeEstimationApi, GetBlockHeight, IngressSource, SolanaNonceWatch,
-	WatchForEgressSuccess,
+	AdjustedFeeEstimationApi, ElectionEgressWitnesser, GetBlockHeight, IngressSource,
+	SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use pallet_cf_elections::{
@@ -370,7 +370,7 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 
 pub struct SolanaEgressWitnessingTrigger;
 
-impl WatchForEgressSuccess for SolanaEgressWitnessingTrigger {
+impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 	type Chain = SolanaCrypto;
 
 	fn watch_for_egress_success(signature: SolSignature) -> DispatchResult {

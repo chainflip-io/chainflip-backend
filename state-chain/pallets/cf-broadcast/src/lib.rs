@@ -19,8 +19,8 @@ use cf_chains::{
 };
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
-	CfeBroadcastRequest, Chainflip, EpochInfo, GetBlockHeight, ThresholdSigner,
-	WatchForEgressSuccess,
+	CfeBroadcastRequest, Chainflip, ElectionEgressWitnesser, EpochInfo, GetBlockHeight,
+	ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -192,7 +192,7 @@ pub mod pallet {
 			AttemptCount = AttemptCount,
 		>;
 
-		type ElectionEgressWitnesser: WatchForEgressSuccess<
+		type ElectionEgressWitnesser: ElectionEgressWitnesser<
 			Chain = <Self::TargetChain as Chain>::ChainCrypto,
 		>;
 

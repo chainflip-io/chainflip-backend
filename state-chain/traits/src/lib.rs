@@ -1077,7 +1077,7 @@ impl SolanaNonceWatch for () {
 	}
 }
 
-pub trait WatchForEgressSuccess {
+pub trait ElectionEgressWitnesser {
 	type Chain: ChainCrypto;
 
 	fn watch_for_egress_success(
@@ -1089,7 +1089,7 @@ pub struct DummyEgressSuccessWitnesser<C> {
 	_phantom: core::marker::PhantomData<C>,
 }
 
-impl<C: ChainCrypto> WatchForEgressSuccess for DummyEgressSuccessWitnesser<C> {
+impl<C: ChainCrypto> ElectionEgressWitnesser for DummyEgressSuccessWitnesser<C> {
 	type Chain = C;
 
 	fn watch_for_egress_success(
