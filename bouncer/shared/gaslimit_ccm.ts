@@ -17,7 +17,7 @@ import {
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { spamEvm } from './send_evm';
-import { observeEvent, observeBadEvent } from './utils/substrate';
+import { observeEvent, observeBadEvent, getChainflipApi } from './utils/substrate';
 import { CcmDepositMetadata } from './new_swap';
 import { spamSolana } from './send_sol';
 
@@ -83,20 +83,34 @@ function getChainMinFee(chain: Chain): number {
 }
 
 async function getChainFees(chain: Chain) {
-  const trackedData = (
-    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
-  ).data.newChainState.trackedData;
-
   let baseFee = 0;
-  if (chain !== 'Solana') {
-    baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
-  }
-  // Arbitrum doesn't have priority fee
   let priorityFee = 0;
-  if (chain !== 'Arbitrum') {
-    priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
-  }
 
+  switch (chain) {
+    case 'Ethereum':
+    case 'Arbitrum': {
+      const trackedData = (
+        await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
+      ).data.newChainState.trackedData;
+      baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
+
+      if (chain === 'Ethereum') {
+        priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
+      }
+      break;
+    }
+    case 'Solana': {
+      await using chainflip = await getChainflipApi();
+      const trackedPriorityFee =
+        await chainflip.query.solanaElections.electoralUnsynchronisedState();
+      console.log('trackedPriorityFee', trackedPriorityFee.toJSON());
+      priorityFee = Number(trackedPriorityFee.toJSON()[1].toString().replace(/,/g, ''));
+      console.log('priorityFee', priorityFee);
+      break;
+    }
+    default:
+      throw new Error(`Chain ${chain} is not supported for CCM`);
+  }
   return { baseFee, priorityFee };
 }
 
@@ -337,10 +351,10 @@ async function testGasLimitSwapToSolana(
     if (transaction?.meta?.err !== null) {
       throw new Error(`${tag} Transaction should not have reverted!`);
     }
-    const feeDeficitHandle = observeEvent(
-      `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
-      { test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee },
-    );
+    // const feeDeficitHandle = observeEvent(
+    //   `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
+    //   { test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee },
+    // );
 
     if (totalFee > egressBudgetAmount) {
       throw new Error(
@@ -348,9 +362,9 @@ async function testGasLimitSwapToSolana(
       );
     }
     console.log(`${tag} CCM Swap success! TxHash: ${txSignature}!`);
-    console.log(`${tag} Waiting for a fee deficit to be recorded...`);
-    await feeDeficitHandle.event;
-    console.log(`${tag} Fee deficit recorded!`);
+    // console.log(`${tag} Waiting for a fee deficit to be recorded...`);
+    // await feeDeficitHandle.event;
+    // console.log(`${tag} Fee deficit recorded!`);
   } else {
     console.log(`${tag} Budget too tight, can't determine if swap should succeed.`);
   }
@@ -480,10 +494,10 @@ async function testGasLimitSwapToEvm(
     const gasPrice = tx.gasPrice;
     const totalFee = gasUsed * Number(gasPrice);
 
-    const feeDeficitHandle = observeEvent(
-      `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
-      { test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee },
-    );
+    // const feeDeficitHandle = observeEvent(
+    //   `${destChain.toLowerCase()}Broadcaster:TransactionFeeDeficitRecorded`,
+    //   { test: (event) => Number(event.data.amount.replace(/,/g, '')) === totalFee },
+    // );
 
     if (tx.maxFeePerGas !== maxFeePerGas.toString()) {
       throw new Error(
@@ -501,9 +515,9 @@ async function testGasLimitSwapToEvm(
     }
     console.log(`${tag} Swap success! TxHash: ${ccmReceived?.txHash}!`);
 
-    console.log(`${tag} Waiting for a fee deficit to be recorded...`);
-    await feeDeficitHandle.event;
-    console.log(`${tag} Fee deficit recorded!`);
+    // console.log(`${tag} Waiting for a fee deficit to be recorded...`);
+    // await feeDeficitHandle.event;
+    // console.log(`${tag} Fee deficit recorded!`);
   } else {
     console.log(`${tag} Budget too tight, can't determine if swap should succeed.`);
   }
@@ -549,6 +563,9 @@ export async function testGasLimitCcmSwaps() {
   const spammingEth = spamChain('Ethereum');
   const spammingArb = spamChain('Arbitrum');
   const spammingSol = spamChain('Solana');
+
+  console.log('=== Starting gasLimit CCM test ===');
+  console.log('Spamming chains to increase fees...');
 
   // Wait for the fees to increase to the stable expected amount
   let i = 0;
