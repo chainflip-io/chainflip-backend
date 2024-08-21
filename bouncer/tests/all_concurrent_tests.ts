@@ -32,7 +32,6 @@ async function runAllConcurrentTests() {
   const tests = [
     swapLessThanED(),
     testAllSwaps(swapContext),
-    testEvmDeposits(),
     testFundRedeem('redeem'),
     testMultipleMembersGovernance(),
     testLpApi(),
@@ -40,6 +39,7 @@ async function runAllConcurrentTests() {
     testBoostingSwap(),
     testFillOrKill(),
   ];
+  const evmDepositTestHandle = testEvmDeposits();
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
@@ -47,8 +47,10 @@ async function runAllConcurrentTests() {
     const multiNodeTests = [testPolkadotRuntimeUpdate()];
     tests.push(...multiNodeTests);
   }
-
+  console.log('Debug: Waiting for tests');
   await Promise.all(tests);
+  console.log('Debug: Tests passed. Waiting for EVM deposit test');
+  await evmDepositTestHandle;
 
   await Promise.all([broadcastAborted.stop(), feeDeficitRefused.stop()]);
 }
