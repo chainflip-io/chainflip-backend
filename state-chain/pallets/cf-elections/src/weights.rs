@@ -33,7 +33,6 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_elections.
 pub trait WeightInfo {
 	fn vote(n: u32, ) -> Weight;
-	fn provide_shared_data() -> Weight;
 }
 
 /// Weights for pallet_cf_elections using the Substrate node and recommended hardware.
@@ -73,29 +72,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(11_u64))
 			.saturating_add(T::DbWeight::get().writes(5_u64))
 	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::AuthorityIndex` (r:1 w:0)
-	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::Status` (r:1 w:0)
-	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::SharedDataReferenceCount` (r:2 w:0)
-	/// Proof: `SolanaElections::SharedDataReferenceCount` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:0 w:1)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::SharedData` (r:0 w:1)
-	/// Proof: `SolanaElections::SharedData` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn provide_shared_data() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1600`
-		//  Estimated: `7540`
-		// Minimum execution time: 37_000_000 picoseconds.
-		Weight::from_parts(38_000_000, 7540)
-			.saturating_add(T::DbWeight::get().reads(6_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
 }
 
 // For backwards compatibility and tests
@@ -133,28 +109,5 @@ impl WeightInfo for () {
 		Weight::from_parts(69_728_642, 7534)
 			.saturating_add(RocksDbWeight::get().reads(11_u64))
 			.saturating_add(RocksDbWeight::get().writes(5_u64))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::AuthorityIndex` (r:1 w:0)
-	/// Proof: `Validator::AuthorityIndex` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::Status` (r:1 w:0)
-	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::SharedDataReferenceCount` (r:2 w:0)
-	/// Proof: `SolanaElections::SharedDataReferenceCount` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:0 w:1)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::SharedData` (r:0 w:1)
-	/// Proof: `SolanaElections::SharedData` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn provide_shared_data() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1600`
-		//  Estimated: `7540`
-		// Minimum execution time: 37_000_000 picoseconds.
-		Weight::from_parts(38_000_000, 7540)
-			.saturating_add(RocksDbWeight::get().reads(6_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
 	}
 }
