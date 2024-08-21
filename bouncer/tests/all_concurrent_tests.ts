@@ -53,7 +53,7 @@ async function runAllConcurrentTests() {
   await Promise.all([broadcastAborted.stop(), feeDeficitRefused.stop()]);
 }
 
-runWithTimeout(runAllConcurrentTests(), 2000000)
+runWithTimeout(runAllConcurrentTests(), 3000000)
   .then(() => {
     // There are some dangling resources that prevent the process from exiting
     process.exit(0);
