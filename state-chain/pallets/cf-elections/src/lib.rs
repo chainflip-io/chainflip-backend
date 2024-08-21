@@ -194,10 +194,15 @@ pub mod pallet {
 	)]
 	pub struct UniqueMonotonicIdentifier(u64);
 
-	#[cfg(test)]
 	impl UniqueMonotonicIdentifier {
+		#[cfg(test)]
 		pub(crate) fn next_identifier(&self) -> Option<Self> {
 			self.0.checked_add(1).map(Self)
+		}
+
+		#[cfg(feature = "runtime-benchmarks")]
+		pub fn from_u64(value: u64) -> Self {
+			Self(value)
 		}
 	}
 
@@ -527,7 +532,7 @@ pub mod pallet {
 	/// Stores the elections whose consensus doesn't need to be rechecked, and the epoch when they
 	/// were last checked.
 	#[pallet::storage]
-	type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
+	pub(crate) type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, UniqueMonotonicIdentifier, EpochIndex, OptionQuery>;
 
 	/// Stores the set of authorities whose votes can contribute to consensus. Whether an authority
@@ -537,7 +542,7 @@ pub mod pallet {
 	/// the current authority set, and so it may include authorities that are not in the current
 	/// authority set or exclude authorities that are in the current authority set.
 	#[pallet::storage]
-	type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
+	pub(crate) type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
 
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
@@ -1889,7 +1894,7 @@ pub mod pallet {
 			}
 		}
 
-		fn recheck_contributed_to_consensuses(
+		pub(crate) fn recheck_contributed_to_consensuses(
 			epoch_index: EpochIndex,
 			authority: &T::ValidatorId,
 			authority_index: AuthorityCount,
