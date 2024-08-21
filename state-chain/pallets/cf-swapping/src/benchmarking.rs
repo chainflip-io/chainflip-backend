@@ -8,7 +8,6 @@ use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	sp_runtime::traits::One,
 	traits::{OnNewAccount, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
@@ -18,20 +17,6 @@ use frame_system::RawOrigin;
 )]
 mod benchmarks {
 	use super::*;
-
-	#[benchmark]
-	fn update_buy_interval() {
-		let call = Call::<T>::update_buy_interval { new_buy_interval: BlockNumberFor::<T>::one() };
-
-		#[block]
-		{
-			assert_ok!(
-				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
-			);
-		}
-
-		assert_eq!(FlipBuyInterval::<T>::get(), BlockNumberFor::<T>::one());
-	}
 
 	#[benchmark]
 	fn request_swap_deposit_address() {
@@ -92,6 +77,7 @@ mod benchmarks {
 			channel_metadata: None,
 			refund_parameters: None,
 			affiliate_fees,
+			dca_parameters: None,
 		};
 
 		#[block]
@@ -106,7 +92,8 @@ mod benchmarks {
 			AccountRole::Broker,
 		)
 		.unwrap();
-		EarnedBrokerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
+
+		T::BalanceApi::try_credit_account(&caller, Asset::Eth, 200).unwrap();
 
 		#[extrinsic_call]
 		withdraw(RawOrigin::Signed(caller.clone()), Asset::Eth, EncodedAddress::benchmark_value());
@@ -163,11 +150,12 @@ mod benchmarks {
 			),
 			vec![Swap::new(
 				1,
+				1,
 				Asset::Usdc,
 				Asset::Eth,
 				deposit_amount,
 				None,
-				SwapType::Swap(ForeignChainAddress::benchmark_value()),
+				[FeeType::NetworkFee],
 			)]
 		);
 	}
@@ -202,10 +190,7 @@ mod benchmarks {
 			SwapQueue::<T>::get(
 				<frame_system::Pallet<T>>::block_number() + SWAP_DELAY_BLOCKS.into()
 			),
-			vec![
-				Swap::new(1, Asset::Usdc, Asset::Eth, 1_000 - 1, None, SwapType::CcmPrincipal(1),),
-				Swap::new(2, Asset::Usdc, Asset::Eth, 1, None, SwapType::CcmGas(1),)
-			]
+			vec![Swap::new(1, 1, Asset::Usdc, Asset::Eth, 1_000 - 1, None, [FeeType::NetworkFee],),]
 		);
 	}
 

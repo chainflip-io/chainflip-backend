@@ -1,11 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "std", feature(option_get_or_insert_default))]
 
 mod async_result;
-pub mod liquidity;
+mod liquidity;
 use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
 pub use safe_mode::*;
+mod swapping;
+
+pub use swapping::{SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType};
 
 pub mod mocks;
 pub mod offence_reporting;
@@ -15,13 +19,13 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain,
-	ChainCrypto, ChannelRefundParameters, DepositChannel, Ethereum, SwapOrigin,
+	address::ForeignChainAddress, assets::any::AssetMap, ApiCall, CcmChannelMetadata,
+	CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters, DepositChannel, Ethereum,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BroadcastId,
-	ChannelId, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain,
-	Ipv6Addr, NetworkEnvironment, SemVer, SwapId, ThresholdSignatureRequestId,
+	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BlockNumber,
+	BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex,
+	FlipBalance, ForeignChain, Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -222,6 +226,8 @@ pub enum StartKeyActivationResult {
 pub trait EpochTransitionHandler {
 	/// When an epoch has been expired.
 	fn on_expired_epoch(_expired: EpochIndex) {}
+	/// When a new epoch has started.
+	fn on_new_epoch(_new: EpochIndex) {}
 }
 
 pub trait ReputationResetter {
@@ -437,9 +443,10 @@ where
 	) -> Result<(), Self::Error>;
 
 	/// Attempt to retrieve a requested signature.
+	#[allow(clippy::type_complexity)]
 	fn signature_result(
 		request_id: ThresholdSignatureRequestId,
-	) -> AsyncResult<Result<C::ThresholdSignature, Vec<Self::ValidatorId>>>;
+	) -> (C::AggKey, AsyncResult<Result<C::ThresholdSignature, Vec<Self::ValidatorId>>>);
 
 	/// Request a signature and register a callback for when the signature is available.
 	///
@@ -466,6 +473,7 @@ where
 	fn insert_signature(
 		_request_id: ThresholdSignatureRequestId,
 		_signature: C::ThresholdSignature,
+		_signer: C::AggKey,
 	) {
 		unimplemented!();
 	}
@@ -522,6 +530,7 @@ pub trait Broadcaster<C: Chain> {
 	/// specifically for a rotation tx..
 	fn threshold_sign_and_broadcast_rotation_tx(
 		api_call: Self::ApiCall,
+		new_key: <<C as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Request a new threshold signature for a previously aborted broadcast's payload, optionally
@@ -574,13 +583,24 @@ pub trait WaivedFees {
 }
 
 /// Qualify what is considered as a potential authority for the network
-pub trait QualifyNode<Id: Ord> {
+///
+/// Note that when implementing this, it is sufficient to implement is_qualified. However, if
+/// there is a high fixed cost to check if a single node is qualified (for example if we need to
+/// compute some precondition or criterion), it is recommended to implement take_qualified as well.
+pub trait QualifyNode<Id: Ord + Clone> {
 	/// Is the node qualified to be an authority and meet our expectations of one
 	fn is_qualified(validator_id: &Id) -> bool;
 
 	/// Filter out the unqualified nodes from a list of potential nodes.
-	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
-		validators.into_iter().filter(|v| !Self::is_qualified(v)).collect()
+	fn filter_qualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
+		validators.into_iter().filter(|v| Self::is_qualified(v)).collect()
+	}
+
+	/// Takes a vector of items and a id-selector function, and returns another vector containing
+	/// only the items whose id is qualified.
+	fn filter_qualified_by_key<T>(items: Vec<T>, f: impl Fn(&T) -> &Id) -> Vec<T> {
+		let qualified = Self::filter_qualified(items.iter().map(&f).cloned().collect());
+		items.into_iter().filter(|i| qualified.contains(f(i))).collect()
 	}
 }
 
@@ -595,7 +615,7 @@ impl<T: Chainflip, R: frame_support::traits::ValidatorRegistration<T::ValidatorI
 	}
 }
 
-impl<Id: Ord, A, B> QualifyNode<Id> for (A, B)
+impl<Id: Ord + Clone, A, B> QualifyNode<Id> for (A, B)
 where
 	A: QualifyNode<Id>,
 	B: QualifyNode<Id>,
@@ -604,8 +624,8 @@ where
 		A::is_qualified(validator_id) && B::is_qualified(validator_id)
 	}
 
-	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
-		B::filter_unqualified(A::filter_unqualified(validators))
+	fn filter_qualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
+		B::filter_qualified(A::filter_qualified(validators))
 	}
 }
 
@@ -613,6 +633,16 @@ where
 pub trait ExecutionCondition {
 	/// Returns true/false if the condition is satisfied
 	fn is_satisfied() -> bool;
+}
+
+impl<A, B> ExecutionCondition for (A, B)
+where
+	A: ExecutionCondition,
+	B: ExecutionCondition,
+{
+	fn is_satisfied() -> bool {
+		A::is_satisfied() && B::is_satisfied()
+	}
 }
 
 /// Performs a runtime upgrade
@@ -703,6 +733,7 @@ pub trait DepositApi<C: Chain> {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: BasisPoints,
 		refund_params: Option<ChannelRefundParameters>,
+		dca_params: Option<DcaParameters>,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 }
 
@@ -867,41 +898,6 @@ pub trait NetworkEnvironmentProvider {
 	fn get_network_environment() -> NetworkEnvironment;
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
-pub struct CcmSwapIds {
-	pub principal_swap_id: Option<SwapId>,
-	pub gas_swap_id: Option<SwapId>,
-}
-
-/// Trait for handling cross chain messages.
-pub trait CcmHandler {
-	/// Triggered when a ccm deposit is made.
-	#[allow(clippy::result_unit_err)]
-	fn on_ccm_deposit(
-		source_asset: Asset,
-		deposit_amount: AssetAmount,
-		destination_asset: Asset,
-		destination_address: ForeignChainAddress,
-		deposit_metadata: CcmDepositMetadata,
-		origin: SwapOrigin,
-		refund_params: Option<ChannelRefundParameters>,
-	) -> Result<CcmSwapIds, ()>;
-}
-
-impl CcmHandler for () {
-	fn on_ccm_deposit(
-		_source_asset: Asset,
-		_deposit_amount: AssetAmount,
-		_destination_asset: Asset,
-		_destination_address: ForeignChainAddress,
-		_deposit_metadata: CcmDepositMetadata,
-		_origin: SwapOrigin,
-		_refund_params: Option<ChannelRefundParameters>,
-	) -> Result<CcmSwapIds, ()> {
-		Err(())
-	}
-}
-
 pub trait OnBroadcastReady<C: Chain> {
 	type ApiCall: ApiCall<C::ChainCrypto>;
 
@@ -953,4 +949,69 @@ pub trait AssetConverter {
 
 pub trait IngressEgressFeeApi<C: Chain> {
 	fn accrue_withheld_fee(asset: C::ChainAsset, amount: C::ChainAmount);
+}
+
+pub trait LiabilityTracker {
+	fn record_liability(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
+
+	#[cfg(feature = "try-runtime")]
+	fn total_liabilities(gas_asset: Asset) -> AssetAmount;
+}
+
+pub trait AssetWithholding {
+	fn withhold_assets(asset: Asset, amount: AssetAmount);
+
+	#[cfg(feature = "try-runtime")]
+	fn withheld_assets(gas_asset: Asset) -> AssetAmount;
+}
+
+pub trait FetchesTransfersLimitProvider {
+	fn maybe_transfers_limit() -> Option<usize> {
+		None
+	}
+
+	fn maybe_ccm_limit() -> Option<usize> {
+		None
+	}
+
+	fn maybe_fetches_limit() -> Option<usize> {
+		None
+	}
+}
+
+pub struct NoLimit;
+impl FetchesTransfersLimitProvider for NoLimit {}
+
+#[derive(Encode, Decode, TypeInfo)]
+pub struct SwapLimits {
+	pub max_swap_retry_duration_blocks: BlockNumber,
+	pub max_swap_request_duration_blocks: BlockNumber,
+}
+pub trait SwapLimitsProvider {
+	fn get_swap_limits() -> SwapLimits;
+}
+
+/// API for interacting with the asset-balance pallet.
+pub trait BalanceApi {
+	type AccountId;
+
+	/// Attempt to credit the account with the given asset and amount.
+	fn try_credit_account(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult;
+
+	/// Attempt to debit the account with the given asset and amount.
+	fn try_debit_account(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult;
+
+	/// Returns the asset free balances of the given account.
+	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
+
+	/// Returns the balance of the given account for the given asset.
+	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount;
 }

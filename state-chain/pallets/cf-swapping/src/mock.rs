@@ -1,15 +1,16 @@
 use core::cell::Cell;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
-use cf_chains::AnyChain;
+use cf_chains::{ccm_checker::CcmValidityCheck, AnyChain};
 use cf_primitives::{Asset, AssetAmount};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler, ingress_egress_fee_handler::MockIngressEgressFeeHandler,
+		address_converter::MockAddressConverter, balance_api::MockBalance,
+		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
+		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
 	AccountRoleRegistry, SwappingApi,
 };
@@ -67,10 +68,13 @@ impl system::Config for Test {
 impl_mock_chainflip!(Test);
 impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }
 
+// NOTE: the use of u128 lets us avoid type conversions in tests:
+pub const DEFAULT_SWAP_RATE: u128 = 2;
+
 parameter_types! {
 	pub static NetworkFee: Permill = Permill::from_perthousand(0);
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
-	pub static SwapRate: f64 = 1f64;
+	pub static SwapRate: f64 = DEFAULT_SWAP_RATE as f64;
 }
 
 thread_local! {
@@ -109,9 +113,6 @@ impl SwappingApi for MockSwappingApi {
 pub struct MockWeightInfo;
 
 impl WeightInfo for MockWeightInfo {
-	fn update_buy_interval() -> Weight {
-		Weight::from_parts(100, 0)
-	}
 	fn request_swap_deposit_address() -> Weight {
 		Weight::from_parts(100, 0)
 	}
@@ -141,6 +142,9 @@ impl WeightInfo for MockWeightInfo {
 	}
 }
 
+pub struct AlwaysValid;
+impl CcmValidityCheck for AlwaysValid {}
+
 impl pallet_cf_swapping::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = MockDepositHandler<AnyChain, Self>;
@@ -152,6 +156,8 @@ impl pallet_cf_swapping::Config for Test {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
+	type BalanceApi = MockBalance;
+	type CcmValidityChecker = AlwaysValid;
 	type NetworkFee = NetworkFee;
 }
 

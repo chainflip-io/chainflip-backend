@@ -45,7 +45,6 @@ jobs:
 
       - name: Upload binary artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
-        
         with:
           name: ${{ inputs.upload-name }}
           path: |
@@ -57,7 +56,6 @@ jobs:
             ./target/${{ inputs.binary-subdir }}/chainflip-ingress-egress-tracker
             ./target/${{ inputs.binary-subdir }}/libchainflip_engine_v*.so
             ./target/${{ inputs.binary-subdir }}/engine-runner
-
 
       - name: Upload runtime artifacts
         uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32

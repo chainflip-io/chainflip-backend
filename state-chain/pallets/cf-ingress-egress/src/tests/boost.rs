@@ -7,15 +7,14 @@ use cf_traits::{
 	mocks::{
 		account_role_registry::MockAccountRoleRegistry, tracked_data_provider::TrackedDataProvider,
 	},
-	AccountRoleRegistry, LpBalanceApi, SafeMode, SetSafeMode,
+	AccountRoleRegistry, BalanceApi, SafeMode, SetSafeMode,
 };
 use frame_support::assert_noop;
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
-use crate::{BoostPoolId, BoostPoolTier, BoostPools, DepositTracker, Event, PalletSafeMode};
+use crate::{BoostPoolId, BoostPoolTier, BoostPools, Event, PalletSafeMode};
 
 type AccountId = u64;
-type DepositBalances = crate::DepositBalances<Test, ()>;
 
 const LP_ACCOUNT: AccountId = 100;
 const BOOSTER_1: AccountId = 101;
@@ -29,14 +28,11 @@ const TIER_5_BPS: BoostPoolTier = 5;
 const TIER_10_BPS: BoostPoolTier = 10;
 const TIER_30_BPS: BoostPoolTier = 30;
 
-// All fetched deposits represent two booster's initial balances:
-const INIT_FETCHED_DEPOSITS: AssetAmount = 2 * INIT_BOOSTER_ETH_BALANCE;
-
 // Amounts as computed by `setup`:
 const INGRESS_FEE: AssetAmount = 1_000_000;
 
 fn get_lp_balance(lp: &AccountId, asset: eth::Asset) -> AssetAmount {
-	let balances = <Test as crate::Config>::LpBalance::free_balances(lp).unwrap();
+	let balances = <Test as crate::Config>::Balance::free_balances(lp);
 
 	balances[asset.into()]
 }
@@ -119,26 +115,14 @@ fn setup() {
 		)
 	);
 
-	const TOTAL_DEPOSITS: AssetAmount = 2 * INIT_BOOSTER_ETH_BALANCE;
-
-	DepositBalances::mutate(eth::Asset::Eth, |deposits| {
-		deposits.register_deposit(TOTAL_DEPOSITS);
-		deposits.mark_as_fetched(TOTAL_DEPOSITS);
-	});
-
-	assert_eq!(
-		DepositBalances::get(eth::Asset::Eth),
-		DepositTracker { fetched: TOTAL_DEPOSITS, unfetched: 0 }
-	);
-
 	for asset in eth::Asset::all() {
-		assert_ok!(<Test as crate::Config>::LpBalance::try_credit_account(
+		assert_ok!(<Test as crate::Config>::Balance::try_credit_account(
 			&BOOSTER_1,
 			asset.into(),
 			INIT_BOOSTER_ETH_BALANCE,
 		));
 
-		assert_ok!(<Test as crate::Config>::LpBalance::try_credit_account(
+		assert_ok!(<Test as crate::Config>::Balance::try_credit_account(
 			&BOOSTER_2,
 			asset.into(),
 			INIT_BOOSTER_ETH_BALANCE,
@@ -244,14 +228,6 @@ fn basic_passive_boosting() {
 
 			// Channel action is immediately executed (LP gets credited in this case):
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), LP_BALANCE_AFTER_BOOST);
-
-			// Deposit isn't fully witnessed yet, so there is no change to fetched balance
-			// apart from part of it being reserved as ingress fee:
-			assert_eq!(
-				DepositBalances::get(ASSET),
-				DepositTracker { fetched: INIT_FETCHED_DEPOSITS - INGRESS_FEE, unfetched: 0 }
-			);
-
 			assert_eq!(get_available_amount(ASSET, TIER_5_BPS), 0);
 
 			assert_eq!(
@@ -282,15 +258,6 @@ fn basic_passive_boosting() {
 			// Channel action should *not* be performed again (since it's been done at the time of
 			// boosting), meaning LP's funds are unchanged:
 			assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), LP_BALANCE_AFTER_BOOST);
-
-			// The new deposit should now be reflected in the unfetched balance:
-			assert_eq!(
-				DepositBalances::get(ASSET),
-				DepositTracker {
-					fetched: INIT_FETCHED_DEPOSITS - INGRESS_FEE,
-					unfetched: DEPOSIT_AMOUNT
-				}
-			);
 		}
 	});
 }

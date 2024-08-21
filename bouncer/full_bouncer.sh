@@ -6,6 +6,7 @@ echo "Running full bouncer 🧪"
 ./tests/rotates_through_btc_swap.ts
 ./tests/btc_utxo_consolidation.ts
 ./tests/rotation_barrier.ts
+./tests/minimum_deposit.ts
 ./tests/create_and_delete_multiple_orders.ts
 
 if [[ $LOCALNET == false ]]; then

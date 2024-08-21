@@ -3,13 +3,13 @@ use core::marker::PhantomData;
 use cf_chains::{
 	btc::BitcoinCrypto, evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Bitcoin, Chain,
 	ChainCrypto, ChainEnvironment, ConsolidationError, Ethereum, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, TransferAssetParams, TransferFallback,
+	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
+	TransferFallback,
 };
-use cf_primitives::{chains::assets, ForeignChain};
+use cf_primitives::{chains::assets, EgressId, ForeignChain};
 use codec::{Decode, Encode};
-use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
+use frame_support::{sp_runtime::DispatchError, CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
-use sp_runtime::DispatchError;
 
 pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xee; 20];
 pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0xcf; 20];
@@ -43,7 +43,11 @@ impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
 		unimplemented!()
 	}
 
-	fn signed(self, _threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature) -> Self {
+	fn signed(
+		self,
+		_threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
+		_signer: <EvmCrypto as ChainCrypto>::AggKey,
+	) -> Self {
 		unimplemented!()
 	}
 
@@ -60,6 +64,10 @@ impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
+
+	fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {
 		unimplemented!()
 	}
 }
@@ -86,15 +94,19 @@ thread_local! {
 impl AllBatch<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
-		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Result<Self, AllBatchError> {
+		transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids) = transfer_params.into_iter().unzip();
 		if ALL_BATCH_SUCCESS.with(|cell| *cell.borrow()) {
-			Ok(Self::AllBatch(MockEthAllBatch {
-				nonce: Default::default(),
-				fetch_params,
-				transfer_params,
-				_phantom: PhantomData,
-			}))
+			Ok(vec![(
+				Self::AllBatch(MockEthAllBatch {
+					nonce: Default::default(),
+					fetch_params,
+					transfer_params,
+					_phantom: PhantomData,
+				}),
+				egress_ids,
+			)])
 		} else {
 			Err(AllBatchError::UnsupportedToken)
 		}
@@ -137,9 +149,10 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
-	) -> Result<Self, DispatchError> {
+		_cf_parameters: Vec<u8>,
+	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
-			Err(DispatchError::CannotLookup)
+			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
 		} else {
 			Ok(Self::ExecutexSwapAndCall(MockEthExecutexSwapAndCall {
 				nonce: Default::default(),
@@ -201,6 +214,7 @@ impl ApiCall<BitcoinCrypto> for MockBitcoinApiCall<MockBtcEnvironment> {
 	fn signed(
 		self,
 		_threshold_signature: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature,
+		_signer: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		unimplemented!()
 	}
@@ -218,6 +232,10 @@ impl ApiCall<BitcoinCrypto> for MockBitcoinApiCall<MockBtcEnvironment> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
+
+	fn signer(&self) -> Option<<BitcoinCrypto as ChainCrypto>::AggKey> {
 		unimplemented!()
 	}
 }
@@ -263,9 +281,10 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Bitcoin as Chain>::ChainAmount,
 		message: Vec<u8>,
-	) -> Result<Self, DispatchError> {
+		_cf_parameters: Vec<u8>,
+	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockBtcEnvironment::lookup(transfer_param.asset).is_none() {
-			Err(DispatchError::CannotLookup)
+			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
 		} else {
 			Ok(Self::ExecutexSwapAndCall(MockBtcExecutexSwapAndCall {
 				transfer_param,
@@ -295,14 +314,18 @@ impl MockBtcAllBatch<MockBtcEnvironment> {
 impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Bitcoin>>,
-		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
-	) -> Result<Self, AllBatchError> {
+		transfer_params: Vec<(TransferAssetParams<Bitcoin>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids) = transfer_params.into_iter().unzip();
 		if ALL_BATCH_SUCCESS.with(|cell| *cell.borrow()) {
-			Ok(Self::AllBatch(MockBtcAllBatch {
-				fetch_params,
-				transfer_params,
-				_phantom: PhantomData,
-			}))
+			Ok(vec![(
+				Self::AllBatch(MockBtcAllBatch {
+					fetch_params,
+					transfer_params,
+					_phantom: PhantomData,
+				}),
+				egress_ids,
+			)])
 		} else {
 			Err(AllBatchError::UnsupportedToken)
 		}

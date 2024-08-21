@@ -40,7 +40,7 @@ macro_rules! assets {
 		),+$(,)?
 	) => {
 		// This forces $asset_legacy_encoding to only ever possibly be `legacy_encoding`. This allows
-		// the option legacy_enoding to be an optional, but also be fixed and referenceable without
+		// the option legacy_encoding to be an optional, but also be fixed and reference-able without
 		// needing a full incremental tt muncher.
 		$(
 			$(
@@ -320,6 +320,14 @@ macro_rules! assets {
 				}
 			}
 
+			pub trait GetChainAssetMap<T> {
+				type Asset ;
+				fn from_fn<F: FnMut(Self::Asset) -> T>(f: F) -> Self;
+			}
+			impl<T> GetChainAssetMap<T> for () {
+				type Asset = ();
+				fn from_fn<F: FnMut(Self::Asset) -> T>(_f: F) -> Self {}
+			}
 			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 			pub struct AssetMap<T> {
 				$(
@@ -389,6 +397,45 @@ macro_rules! assets {
 					})
 				}
 			}
+
+			impl<N: sp_arithmetic::traits::Saturating> sp_arithmetic::traits::Saturating for AssetMap<N> {
+				fn saturating_add(self, rhs: AssetMap<N>) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_add(rhs.$chain_member_and_module),
+						)+
+					}
+				}
+				fn saturating_sub(self, rhs: AssetMap<N>) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_sub(rhs.$chain_member_and_module),
+						)+
+					}
+				}
+				fn saturating_mul(self, rhs: AssetMap<N>) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_mul(rhs.$chain_member_and_module),
+						)+
+					}
+				}
+				fn saturating_pow(self, exp: usize) -> AssetMap<N> {
+					AssetMap {
+						$(
+							$chain_member_and_module: self.$chain_member_and_module.saturating_pow(exp),
+						)+
+					}
+				}
+			}
+			impl<T> GetChainAssetMap<T> for AssetMap<T> {
+				type Asset = Asset;
+				fn from_fn<F: FnMut(Self::Asset) -> T>(mut f: F) -> Self {
+					Self {
+						$($chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>::from_fn(|asset| f(asset.into())),)+
+					}
+				}
+			}
 		}
 
 		$(
@@ -431,7 +478,9 @@ macro_rules! assets {
 					Hash,
 					Serialize,
 					Deserialize,
-					EnumIter
+					EnumIter,
+					Ord,
+					PartialOrd
 				)]
 				pub enum Asset {
 					$(
@@ -531,6 +580,46 @@ macro_rules! assets {
 							map[asset] = value;
 							map
 						})
+					}
+				}
+
+				impl<N: sp_arithmetic::traits::Saturating> sp_arithmetic::traits::Saturating for AssetMap<N> {
+					fn saturating_add(self, rhs: AssetMap<N>) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_add(rhs.$asset_member),
+							)+
+						}
+					}
+					fn saturating_sub(self, rhs: AssetMap<N>) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_sub(rhs.$asset_member),
+							)+
+						}
+					}
+					fn saturating_mul(self, rhs: AssetMap<N>) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_mul(rhs.$asset_member),
+							)+
+						}
+					}
+					fn saturating_pow(self, exp: usize) -> AssetMap<N> {
+						AssetMap {
+							$(
+								$asset_member: self.$asset_member.saturating_pow(exp),
+							)+
+						}
+					}
+				}
+
+				impl<T> super::any::GetChainAssetMap<T> for AssetMap<T> {
+					type Asset = Asset;
+					fn from_fn<F: FnMut(Self::Asset) -> T>(mut f: F) -> Self {
+						Self {
+							$($asset_member: f(Asset::$asset_variant.into()),)+
+						}
 					}
 				}
 			}
@@ -659,6 +748,14 @@ assets!(
 				gas: true,
 				index: 9,
 			},
+			Asset {
+				variant: SolUsdc,
+				member: usdc,
+				string: "USDC" (aliases: ["Usdc", "usdc"]),
+				json: "USDC",
+				gas: false,
+				index: 10,
+			},
 		],
 	}
 );
@@ -693,6 +790,7 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(7).unwrap(), any::Asset::ArbUsdc);
 		assert_eq!(any::Asset::try_from(8).unwrap(), any::Asset::Usdt);
 		assert_eq!(any::Asset::try_from(9).unwrap(), any::Asset::Sol);
+		assert_eq!(any::Asset::try_from(10).unwrap(), any::Asset::SolUsdc);
 	}
 
 	#[test]
@@ -706,6 +804,7 @@ mod test_assets {
 		assert_conversion!(arb, ArbEth);
 		assert_conversion!(arb, ArbUsdc);
 		assert_conversion!(sol, Sol);
+		assert_conversion!(sol, SolUsdc);
 
 		assert_incompatible!(eth, Dot);
 		assert_incompatible!(dot, Eth);
@@ -713,6 +812,13 @@ mod test_assets {
 		assert_incompatible!(dot, Usdc);
 		assert_incompatible!(btc, Usdc);
 		assert_incompatible!(btc, Usdt);
+
+		assert_incompatible!(sol, Usdc);
+		assert_incompatible!(sol, Usdt);
+		assert_incompatible!(eth, SolUsdc);
+		assert_incompatible!(arb, SolUsdc);
+		assert_incompatible!(dot, SolUsdc);
+		assert_incompatible!(btc, SolUsdc);
 	}
 
 	#[test]
@@ -728,6 +834,7 @@ mod test_assets {
 		assert_eq!(assert_ok!(any::Asset::from_str("Ethereum-Eth")), any::Asset::Eth);
 		assert_eq!(assert_ok!(any::Asset::from_str("Arbitrum-Eth")), any::Asset::ArbEth);
 		assert_eq!(assert_ok!(any::Asset::from_str("Solana-Sol")), any::Asset::Sol);
+		assert_eq!(assert_ok!(any::Asset::from_str("Solana-Usdc")), any::Asset::SolUsdc);
 
 		assert_err!(any::Asset::from_str("Ethereum-BTC"));
 		assert_err!(any::Asset::from_str("Polkadot-USDC"));
@@ -757,9 +864,12 @@ mod test_assets {
 			assert_ok!(serde_json::to_string(&any::Asset::Sol)),
 			"{\"chain\":\"Solana\",\"asset\":\"SOL\"}"
 		);
+		assert_eq!(
+			assert_ok!(serde_json::to_string(&any::Asset::SolUsdc)),
+			"{\"chain\":\"Solana\",\"asset\":\"USDC\"}"
+		);
 
 		// Explicit Chain Deserialization
-
 		assert_eq!(
 			assert_ok!(serde_json::from_str::<any::Asset>(
 				"{\"chain\":\"Ethereum\",\"asset\":\"ETH\"}"
@@ -790,6 +900,12 @@ mod test_assets {
 			)),
 			any::Asset::Sol
 		);
+		assert_eq!(
+			assert_ok!(serde_json::from_str::<any::Asset>(
+				"{\"chain\":\"Solana\",\"asset\":\"USDC\"}"
+			)),
+			any::Asset::SolUsdc
+		);
 
 		assert_err!(serde_json::from_str::<any::Asset>(
 			"{\"chain\":\"Ethereum\",\"asset\":\"Eth\"}"
@@ -817,8 +933,7 @@ mod test_assets {
 		assert_err!(serde_json::from_str::<any::Asset>("{\"asset\":\"BTC\"}"));
 		assert_err!(serde_json::from_str::<any::Asset>("{\"asset\":\"eth\"}"));
 
-		// Implicit Chain Deserialization
-
+		// Implicit Chain Deserialization (Deprecated for future assets)
 		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"ETH\"")), any::Asset::Eth);
 		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"DOT\"")), any::Asset::Dot);
 		assert_eq!(assert_ok!(serde_json::from_str::<any::Asset>("\"BTC\"")), any::Asset::Btc);
@@ -896,7 +1011,7 @@ mod test_assets {
 			btc(Btc),
 			dot(Dot),
 			arb(ArbEth, ArbUsdc),
-			sol(Sol)
+			sol(Sol, SolUsdc)
 		);
 
 		assert_ok!(any::AssetMap::try_from_iter(any::AssetMap::from_fn(|_asset| 1u32).iter()));

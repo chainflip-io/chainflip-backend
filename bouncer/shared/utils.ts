@@ -1,3 +1,4 @@
+import { execSync } from 'child_process';
 import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
@@ -13,21 +14,24 @@ import {
   chainConstants,
 } from '@chainflip/cli';
 import Web3 from 'web3';
-import { Connection, Keypair } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
 import BigNumber from 'bignumber.js';
+import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import { base58Decode, base58Encode } from '../polkadot/util-crypto';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEvmAddress } from './new_evm_address';
 import { CcmDepositMetadata } from './new_swap';
-import { getCFTesterAbi } from './contract_interfaces';
+import { getCFTesterAbi, getCfTesterIdl } from './contract_interfaces';
 import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
+import { execWithLog } from './utils/exec_with_log';
 
 const cfTesterAbi = await getCFTesterAbi();
+const cfTesterIdl = await getCfTesterIdl();
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
@@ -38,8 +42,8 @@ export const snowWhiteMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 
-export type Asset = SDKAsset | 'Sol' | 'SolUsdc';
-export type Chain = SDKChain | 'Solana';
+export type Asset = SDKAsset;
+export type Chain = SDKChain;
 
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
@@ -89,17 +93,15 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'VAULT':
           return '8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf';
         case 'TOKEN_VAULT_PDA':
-          return '9j17hjg8wR2uFxJAJDAFahwsgTCNx35sc5qXSxDmuuF6';
+          return '7B13iu7bUbBX88eVBqTZkQqrErnTMazPmGLdE5RqdyKZ';
         case 'DATA_ACCOUNT':
-          return '623nEsyGYWKYggY1yHxQFJiBarL9jdWdrMr7ASiCKP6a';
-        case 'UPGRADE_MANAGER':
-          return '274BzCz5RPHJZsxdcSGySahz4qAWqwSDcmz1YEKkGaZC';
-        case 'UPGRADE_MANAGER_SIGNER':
-          return '2SAhe89c1umM2JvCnmqCEnY8UCQtNPEKGe7UXA8KSQqH';
+          return 'BttvFNSRKrkHugwDP6SpnBejCKKskHowJif1HGgBtTfG';
         case 'SolUsdc':
-          return process.env.ARB_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
+          return process.env.SOL_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
         case 'CFTESTER':
           return '8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH';
+        case 'SWAP_ENDPOINT':
+          return '35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -162,21 +164,16 @@ export function defaultAssetAmounts(asset: Asset): string {
 
 export function assetContractId(asset: Asset): number {
   if (isSDKAsset(asset)) return assetConstants[asset].contractId;
-  if (asset === 'Sol') return 9;
-  if (asset === 'SolUsdc') return 10;
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function assetDecimals(asset: Asset): number {
   if (isSDKAsset(asset)) return assetConstants[asset].decimals;
-  if (asset === 'Sol') return 9;
-  if (asset === 'SolUsdc') return 6;
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export function chainContractId(chain: Chain): number {
   if (isSDKChain(chain)) return chainConstants[chain].contractId;
-  if (chain === 'Solana') return 5;
   throw new Error(`Unsupported chain: ${chain}`);
 }
 
@@ -190,6 +187,8 @@ export function chainGasAsset(chain: Chain): Asset {
       return Assets.Dot;
     case 'Arbitrum':
       return Assets.ArbEth;
+    case 'Solana':
+      return Assets.Sol;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -267,6 +266,8 @@ export function ingressEgressPalletForChain(chain: Chain) {
     case 'Polkadot':
     case 'Arbitrum':
       return `${toLowerCase(chain)}IngressEgress` as const;
+    case 'Solana':
+      return `${toLowerCase(chain)}IngressEgress` as const;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -288,27 +289,28 @@ export function getBtcClient(): Client {
 export type Event = { name: any; data: any; block: number; event_index: number };
 
 export type EgressId = [Chain, number];
-type BroadcastId = [Chain, number];
+type BroadcastChainAndId = [Chain, number];
 // Observe multiple events related to the same swap that could be emitted in the same block
 export async function observeSwapEvents(
   { sourceAsset, destAsset, depositAddress, channelId }: SwapParams,
   api: ApiPromise,
   tag?: string,
-  swapType?: SwapType,
   finalized = false,
-): Promise<BroadcastId | undefined> {
-  let eventFound = false;
+): Promise<BroadcastChainAndId | undefined> {
+  let broadcastEventFound = false;
   const subscribeMethod = finalized
     ? api.rpc.chain.subscribeFinalizedHeads
     : api.rpc.chain.subscribeNewHeads;
 
+  const swapRequestedEvent = 'SwapRequested';
   const swapScheduledEvent = 'SwapScheduled';
   const swapExecutedEvent = 'SwapExecuted';
   const swapEgressScheduled = 'SwapEgressScheduled';
   const batchBroadcastRequested = 'BatchBroadcastRequested';
-  let expectedMethod = swapScheduledEvent;
+  let expectedEvent = swapRequestedEvent;
 
-  let swapId = 0;
+  let swapId: number | undefined;
+  let swapRequestId: number | undefined;
   let egressId: EgressId;
   let broadcastId;
 
@@ -316,64 +318,70 @@ export async function observeSwapEvents(
   const unsubscribe: any = await subscribeMethod(async (header) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const events: any[] = await api.query.system.events.at(header.hash);
-    events.forEach((record) => {
-      const { event } = record;
-      if (!eventFound && event.method.includes(expectedMethod)) {
-        const expectedEvent = {
-          data: event.toHuman().data,
-        };
 
-        switch (expectedMethod) {
-          case swapScheduledEvent:
-            if ('DepositChannel' in expectedEvent.data.origin) {
-              if (
-                Number(expectedEvent.data.origin.DepositChannel.channelId) === channelId &&
-                sourceAsset === (expectedEvent.data.sourceAsset as Asset) &&
-                destAsset === (expectedEvent.data.destinationAsset as Asset) &&
-                swapType
-                  ? expectedEvent.data.swapType[swapType] !== undefined
-                  : true &&
-                    depositAddress ===
-                      (Object.values(
-                        expectedEvent.data.origin.DepositChannel.depositAddress,
-                      )[0] as string)
-              ) {
-                expectedMethod = swapExecutedEvent;
-                swapId = expectedEvent.data.swapId;
-                console.log(`${tag} swap scheduled with swapId: ${swapId}`);
-              }
-            }
-            break;
-          case swapExecutedEvent:
-            if (expectedEvent.data.swapId === swapId) {
-              expectedMethod = swapEgressScheduled;
-              console.log(`${tag} swap executed, with id: ${swapId}`);
-            }
-            break;
-          case swapEgressScheduled:
-            if (expectedEvent.data.swapId === swapId) {
-              expectedMethod = batchBroadcastRequested;
-              egressId = expectedEvent.data.egressId as EgressId;
-              console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
-            }
-            break;
-          case batchBroadcastRequested:
-            expectedEvent.data.egressIds.forEach((eventEgressId: EgressId) => {
-              if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
-                broadcastId = [egressId[0], Number(expectedEvent.data.broadcastId)] as BroadcastId;
-                console.log(`${tag} broadcast requested, with id: (${broadcastId})`);
-                eventFound = true;
-                unsubscribe();
-              }
-            });
-            break;
-          default:
-            break;
-        }
+    for (const record of events) {
+      const { event } = record;
+      if (broadcastEventFound || !event.method.includes(expectedEvent)) {
+        // eslint-disable-next-line no-continue
+        continue;
       }
-    });
+
+      const data = event.toHuman().data;
+
+      switch (expectedEvent) {
+        case swapRequestedEvent: {
+          const channel = data.origin.DepositChannel;
+
+          if (
+            channel &&
+            Number(channel.channelId) === channelId &&
+            Object.values(channel.depositAddress)[0] === depositAddress &&
+            sourceAsset === (data.inputAsset as Asset) &&
+            destAsset === (data.outputAsset as Asset)
+          ) {
+            swapRequestId = data.swapRequestId;
+            expectedEvent = swapScheduledEvent;
+          }
+
+          break;
+        }
+        case swapScheduledEvent:
+          if (data.swapRequestId === swapRequestId) {
+            swapId = data.swapId;
+            expectedEvent = swapExecutedEvent;
+          }
+
+          break;
+        case swapExecutedEvent:
+          if (data.swapId === swapId) {
+            expectedEvent = swapEgressScheduled;
+            console.log(`${tag} swap executed, with id: ${swapId}`);
+          }
+          break;
+        case swapEgressScheduled:
+          if (data.swapRequestId === swapRequestId) {
+            expectedEvent = batchBroadcastRequested;
+            egressId = data.egressId as EgressId;
+            console.log(`${tag} swap egress scheduled with id: (${egressId[0]}, ${egressId[1]})`);
+          }
+          break;
+        case batchBroadcastRequested:
+          for (const eventEgressId of data.egressIds) {
+            if (egressId[0] === eventEgressId[0] && egressId[1] === eventEgressId[1]) {
+              broadcastId = [egressId[0], Number(data.broadcastId)] as BroadcastChainAndId;
+              console.log(`${tag} broadcast requested, with id: (${broadcastId})`);
+              broadcastEventFound = true;
+              unsubscribe();
+              break;
+            }
+          }
+          break;
+        default:
+          break;
+      }
+    }
   });
-  while (!eventFound) {
+  while (!broadcastEventFound) {
     if (!api.isConnected) {
       throw new Error('API is not connected');
     }
@@ -391,21 +399,39 @@ export enum SwapType {
   IngressEgressFee = 'IngressEgressFee',
 }
 
-export async function observeSwapScheduled(
+export enum SwapRequestType {
+  Regular = 'Regular',
+  Ccm = 'Ccm',
+  NetworkFee = 'NetworkFee',
+  IngressEgressFee = 'IngressEgressFee',
+}
+
+function checkRequestTypeMatches(actual: object | string, expected: SwapRequestType) {
+  if (typeof actual === 'object') {
+    return expected in actual;
+  }
+
+  return expected === actual;
+}
+
+export async function observeSwapRequested(
   sourceAsset: Asset,
   destAsset: Asset,
   channelId: number,
-  swapType?: SwapType,
+  swapRequestType: SwapRequestType,
 ) {
   // need to await this to prevent the chainflip api from being disposed prematurely
-  return observeEvent('swapping:SwapScheduled', {
+  return observeEvent('swapping:SwapRequested', {
     test: (event) => {
-      if ('DepositChannel' in event.data.origin) {
-        const channelMatches = Number(event.data.origin.DepositChannel.channelId) === channelId;
-        const sourceAssetMatches = sourceAsset === (event.data.sourceAsset as Asset);
-        const destAssetMatches = destAsset === (event.data.destinationAsset as Asset);
-        const swapTypeMatches = swapType ? event.data.swapType[swapType] !== undefined : true;
-        return channelMatches && sourceAssetMatches && destAssetMatches && swapTypeMatches;
+      const data = event.data;
+
+      if (typeof data.origin === 'object' && 'DepositChannel' in data.origin) {
+        const channelMatches = Number(data.origin.DepositChannel.channelId) === channelId;
+        const sourceAssetMatches = sourceAsset === (data.inputAsset as Asset);
+        const destAssetMatches = destAsset === (data.outputAsset as Asset);
+        const requestTypeMatches = checkRequestTypeMatches(data.requestType, swapRequestType);
+
+        return channelMatches && sourceAssetMatches && destAssetMatches && requestTypeMatches;
       }
       // Otherwise it was a swap scheduled by interacting with the Eth smart contract
       return false;
@@ -413,7 +439,7 @@ export async function observeSwapScheduled(
   }).event;
 }
 
-export async function observeBroadcastSuccess(broadcastId: BroadcastId, testTag?: string) {
+export async function observeBroadcastSuccess(broadcastId: BroadcastChainAndId, testTag?: string) {
   const broadcaster = broadcastId[0].toLowerCase() + 'Broadcaster';
   const broadcastIdNumber = broadcastId[1];
 
@@ -480,9 +506,9 @@ export function getEvmEndpoint(chain: Chain): string {
 }
 
 export function getSolConnection(): Connection {
-  return new Connection(process.env.SOL_ENDPOINT ?? 'http://0.0.0.0:8899', {
+  return new Connection(process.env.SOL_HTTP_ENDPOINT ?? 'http://0.0.0.0:8899', {
     commitment: 'confirmed',
-    wsEndpoint: 'ws://0.0.0.0:8900/',
+    wsEndpoint: `${process.env.SOL_WS_ENDPOINT ?? 'ws://0.0.0.0:8900'}`,
   });
 }
 
@@ -546,18 +572,18 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
       if (chain === 'Ethereum' || chain === 'Arbitrum') {
         const web3 = new Web3(getEvmEndpoint(chain));
         if ((await web3.eth.getCode(address)) === '0x') {
-          throw new Error('Eth address has no bytecode');
+          throw new Error('EVM address has no bytecode');
         }
       }
       return;
     }
-    await sleep(1000);
+    await sleep(3000);
   }
 
   throw new Error('Failed to observe the fetch');
 }
 
-type EVMEvent = {
+type ContractEvent = {
   name: string;
   address: string;
   txHash: string;
@@ -568,19 +594,18 @@ export async function observeEVMEvent(
   chain: Chain,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,
-  address: string,
+  destAddress: string,
   eventName: string,
   eventParametersExpected: (string | null)[],
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
-): Promise<EVMEvent | undefined> {
+): Promise<ContractEvent | undefined> {
   const web3 = new Web3(getEvmEndpoint(chain));
-  const contract = new web3.eth.Contract(contractAbi, address);
+  const contract = new web3.eth.Contract(contractAbi, destAddress);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
   const stopObserve = stopObserveEvent ?? (() => false);
 
   // Gets all the event parameter as an array
-
   const eventAbi = contractAbi.find(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (item: any) => item.type === 'event' && item.name === eventName,
@@ -626,30 +651,155 @@ export async function observeEVMEvent(
   throw new Error(`Failed to observe the ${eventName} event`);
 }
 
+export async function observeSolanaCcmEvent(
+  eventName: string,
+  sourceChain: string,
+  sourceAddress: string | null,
+  messageMetadata: CcmDepositMetadata,
+): Promise<ContractEvent> {
+  function decodeExpectedCfParameters(cfParametersHex: string) {
+    // Convert the hexadecimal string back to a byte array
+    const cfParameters = new Uint8Array(
+      cfParametersHex
+        .slice(2)
+        .match(/.{1,2}/g)
+        ?.map((byte) => parseInt(byte, 16)) ?? [],
+    );
+
+    const publicKeySize = 32;
+    const remainingAccountSize = publicKeySize + 1;
+
+    // Extra byte for the encoded length
+    const remainingAccountsBytes = cfParameters.slice(remainingAccountSize + 1);
+
+    const remainingAccounts = [];
+    const remainingIsWritable = [];
+
+    // Extract the remaining bytes in groups of publicKeySize + 1
+    for (let i = 0; i < remainingAccountsBytes.length; i += remainingAccountSize) {
+      const publicKeyBytes = remainingAccountsBytes.slice(i, i + publicKeySize);
+      const isWritable = remainingAccountsBytes[i + publicKeySize];
+
+      remainingAccounts.push(new PublicKey(publicKeyBytes));
+      remainingIsWritable.push(Boolean(isWritable));
+    }
+
+    return { remainingAccounts, remainingIsWritable };
+  }
+
+  const connection = getSolConnection();
+  const idl = cfTesterIdl;
+  const cfTesterAddress = new PublicKey(getContractAddress('Solana', 'CFTESTER'));
+
+  for (let i = 0; i < 300; i++) {
+    const txSignatures = await connection.getSignaturesForAddress(cfTesterAddress);
+    for (const txSignature of txSignatures) {
+      const tx = await connection.getTransaction(txSignature.signature);
+      if (tx) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const eventParser = new EventParser(cfTesterAddress, new BorshCoder(idl as any));
+        const events = eventParser.parseLogs(tx.meta?.logMessages ?? []);
+        for (const event of events) {
+          const matchEventName = event.name === eventName;
+          const matchSourceChain = event.data.source_chain.toString() === sourceChain;
+
+          const hexMessage = '0x' + (event.data.message as Buffer).toString('hex');
+          const matchMessage = hexMessage === messageMetadata.message;
+
+          // The message is being used as the main discriminator
+          if (matchEventName && matchSourceChain && matchMessage) {
+            const {
+              remainingAccounts: expectedRemainingAccounts,
+              remainingIsWritable: expectedRemainingIsWritable,
+            } = decodeExpectedCfParameters(messageMetadata.cfParameters);
+
+            if (
+              expectedRemainingIsWritable.length !== event.data.remaining_is_writable.length ||
+              expectedRemainingIsWritable.toString() !== event.data.remaining_is_writable.toString()
+            ) {
+              throw new Error(
+                `Unexpected remaining account is writable: ${event.data.remaining_is_writable}, expecting ${expectedRemainingIsWritable}`,
+              );
+            }
+
+            if (event.data.remaining_is_signer.some((value: boolean) => value === true)) {
+              throw new Error(`Expected all remaining accounts to be read-only`);
+            }
+
+            if (
+              expectedRemainingAccounts.length !== event.data.remaining_pubkeys.length ||
+              expectedRemainingAccounts.toString() !== event.data.remaining_pubkeys.toString()
+            ) {
+              throw new Error(
+                `Unexpected remaining accounts: ${event.data.remaining_pubkeys}, expecting ${expectedRemainingAccounts}`,
+              );
+            }
+
+            if (sourceAddress !== null) {
+              const hexSourceAddress = '0x' + (event.data.source_address as Buffer).toString('hex');
+              if (hexSourceAddress !== sourceAddress) {
+                throw new Error(
+                  `Unexpected source address: ${event.data.source_address}, expecting ${sourceAddress}`,
+                );
+              }
+            } else if (event.data.source_address.toString() !== Buffer.from([]).toString()) {
+              throw new Error(
+                `Unexpected source address: ${event.data.source_address}, expecting empty ${Buffer.from([0])}`,
+              );
+            }
+            return {
+              name: event.name,
+              address: cfTesterAddress.toString(),
+              txHash: txSignature.signature,
+              returnValues: event.data,
+            };
+          }
+        }
+      }
+    }
+    await sleep(10000);
+  }
+  throw new Error(`Failed to observe Solana's ${eventName} event`);
+}
+
 export async function observeCcmReceived(
   sourceAsset: Asset,
   destAsset: Asset,
-  address: string,
+  destAddress: string,
   messageMetadata: CcmDepositMetadata,
   sourceAddress?: string,
   stopObserveEvent?: () => boolean,
-): Promise<EVMEvent | undefined> {
-  return observeEVMEvent(
-    chainFromAsset(destAsset),
-    cfTesterAbi,
-    address,
-    'ReceivedxSwapAndCall',
-    [
-      chainContractId(chainFromAsset(sourceAsset)).toString(),
-      sourceAddress ?? null,
-      messageMetadata.message,
-      getContractAddress(chainFromAsset(destAsset), destAsset.toString()),
-      '*',
-      '*',
-      '*',
-    ],
-    stopObserveEvent,
-  );
+): Promise<ContractEvent | undefined> {
+  const destChain = chainFromAsset(destAsset);
+  switch (destChain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+      return observeEVMEvent(
+        destChain,
+        cfTesterAbi,
+        destAddress,
+        'ReceivedxSwapAndCall',
+        [
+          chainContractId(chainFromAsset(sourceAsset)).toString(),
+          sourceAddress ?? null,
+          messageMetadata.message,
+          getContractAddress(destChain, destAsset.toString()),
+          '*',
+          '*',
+          '*',
+        ],
+        stopObserveEvent,
+      );
+    case 'Solana':
+      return observeSolanaCcmEvent(
+        'ReceivedCcm',
+        chainContractId(chainFromAsset(sourceAsset)).toString(),
+        sourceAddress ?? null,
+        messageMetadata,
+      );
+    default:
+      throw new Error(`Unsupported chain: ${destChain}`);
+  }
 }
 
 // Converts a hex string into a bytes array. Support hex strings start with and without 0x
@@ -873,4 +1023,36 @@ export async function tryUntilSuccess(
     await sleep(pollTime);
   }
   throw new Error('tryUntilSuccess failed: ' + logTag);
+}
+
+export async function getNodesInfo(numberOfNodes: 1 | 3) {
+  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
+  const nodeCount = numberOfNodes + '-node';
+  return { SELECTED_NODES, nodeCount };
+}
+
+export async function killEngines() {
+  execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
+}
+
+export async function startEngines(
+  localnetInitPath: string,
+  binaryPath: string,
+  numberOfNodes: 1 | 3,
+) {
+  console.log('Starting all the engines');
+
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
+  execWithLog(`${localnetInitPath}/scripts/start-all-engines.sh`, 'start-all-engines-pre-upgrade', {
+    INIT_RUN: 'false',
+    LOG_SUFFIX: '-pre-upgrade',
+    NODE_COUNT: nodeCount,
+    SELECTED_NODES,
+    LOCALNET_INIT_DIR: localnetInitPath,
+    BINARY_ROOT_PATH: binaryPath,
+  });
+
+  await sleep(7000);
+
+  console.log('Engines started');
 }

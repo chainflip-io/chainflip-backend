@@ -3,11 +3,11 @@ use crate::{EgressApi, ScheduledEgressDetails};
 use cf_chains::{CcmCfParameters, CcmDepositMetadata, CcmMessage, Chain};
 use cf_primitives::{AssetAmount, EgressCounter};
 use codec::{Decode, Encode};
-use scale_info::TypeInfo;
-use sp_runtime::{
+use frame_support::sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchError,
 };
+use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
 
 pub struct MockEgressHandler<C>(PhantomData<C>);
@@ -63,6 +63,9 @@ impl<C: Chain> MockEgressHandler<C> {
 	pub fn set_fee(amount: C::ChainAmount) {
 		<Self as MockPalletStorage>::put_value(b"EGRESS_FEE", amount);
 	}
+	pub fn return_failure(fail: bool) {
+		<Self as MockPalletStorage>::put_value(b"EGRESS_FAIL", fail);
+	}
 }
 
 impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
@@ -76,6 +79,9 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
 		if amount.is_zero() && maybe_ccm_with_gas_budget.is_none() {
 			return Err(DispatchError::from("Ignoring zero egress amount."))
+		}
+		if <Self as MockPalletStorage>::get_value(b"EGRESS_FAIL").unwrap_or_default() {
+			return Err(DispatchError::from("Egress failed."));
 		}
 		let egress_fee = <Self as MockPalletStorage>::get_value(b"EGRESS_FEE").unwrap_or_default();
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {

@@ -63,14 +63,19 @@ where
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,
-		transfer_params: Vec<TransferAssetParams<Polkadot>>,
-	) -> Result<Self, AllBatchError> {
-		Ok(Self::BatchFetchAndTransfer(batch_fetch_and_transfer::extrinsic_builder(
-			E::replay_protection(false),
-			fetch_params,
-			transfer_params,
-			E::try_vault_account().ok_or(AllBatchError::VaultAccountNotSet)?,
-		)))
+		transfer_params: Vec<(TransferAssetParams<Polkadot>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids) = transfer_params.into_iter().unzip();
+
+		Ok(vec![(
+			Self::BatchFetchAndTransfer(batch_fetch_and_transfer::extrinsic_builder(
+				E::replay_protection(false),
+				fetch_params,
+				transfer_params,
+				E::try_vault_account().ok_or(AllBatchError::VaultAccountNotSet)?,
+			)),
+			egress_ids,
+		)])
 	}
 }
 
@@ -123,8 +128,9 @@ where
 		_source_address: Option<ForeignChainAddress>,
 		_gas_budget: <Polkadot as Chain>::ChainAmount,
 		_message: Vec<u8>,
-	) -> Result<Self, DispatchError> {
-		Err(DispatchError::Other("Not implemented"))
+		_cf_parameters: Vec<u8>,
+	) -> Result<Self, ExecutexSwapAndCallError> {
+		Err(ExecutexSwapAndCallError::Unsupported)
 	}
 }
 
@@ -137,6 +143,7 @@ where
 	}
 }
 
+#[macro_export]
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
 		match $self {
@@ -164,11 +171,12 @@ impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<Polkad
 	fn signed(
 		mut self,
 		threshold_signature: &<PolkadotCrypto as ChainCrypto>::ThresholdSignature,
+		signer: <PolkadotCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		map_over_api_variants!(
 			self,
 			ref mut call,
-			call.insert_signature(threshold_signature.clone())
+			call.insert_signer_and_signature(signer, threshold_signature.clone())
 		);
 		self
 	}
@@ -198,6 +206,11 @@ impl<E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>> ApiCall<Polkad
 			call,
 			call.refresh_replay_protection(E::replay_protection(false))
 		)
+	}
+
+	fn signer(&self) -> Option<<PolkadotCrypto as ChainCrypto>::AggKey> {
+		map_over_api_variants!(self, call, call.signer_and_signature.clone())
+			.map(|(signer, _)| signer)
 	}
 }
 

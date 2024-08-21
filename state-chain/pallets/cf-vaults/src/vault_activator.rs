@@ -1,5 +1,4 @@
 use super::*;
-use cf_chains::SetAggKeyWithAggKeyError;
 use cf_runtime_utilities::{log_or_panic, StorageDecodeVariant};
 use cf_traits::{GetBlockHeight, StartKeyActivationResult, VaultActivator};
 
@@ -40,7 +39,10 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 					// reporting back the request_id of the tss such that we can complete the
 					// rotation when that request is completed
 					let (_, tss_request_id) =
-						T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(activation_call);
+						T::Broadcaster::threshold_sign_and_broadcast_rotation_tx(
+							activation_call,
+							new_public_key,
+						);
 					// since vaults are activated only when the tss completes we need to initiate
 					// the activation
 					PendingVaultActivation::<T, I>::put(
@@ -54,10 +56,11 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 					Self::activate_key();
 					vec![StartKeyActivationResult::ActivationTxNotRequired]
 				},
-				Err(SetAggKeyWithAggKeyError::Failed) => {
+				Err(err) => {
 					log_or_panic!(
-						"Unexpected failure during {} vault activation.",
+						"Unexpected failure during {} vault activation. Error: {:?}",
 						<T::Chain as cf_chains::Chain>::NAME,
+						err,
 					);
 					vec![StartKeyActivationResult::ActivationTxFailed]
 				},

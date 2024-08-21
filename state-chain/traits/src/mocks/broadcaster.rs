@@ -3,11 +3,11 @@ use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use codec::MaxEncodedLen;
 use core::marker::PhantomData;
 use frame_support::{
+	sp_runtime::{traits::Member, DispatchError},
 	traits::{OriginTrait, UnfilteredDispatchable},
 	CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, Parameter, PartialEqNoBound,
 };
 use scale_info::TypeInfo;
-use sp_runtime::traits::Member;
 
 use crate::Broadcaster;
 
@@ -45,6 +45,7 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 	fn signed(
 		self,
 		_threshold_signature: &<C as cf_chains::ChainCrypto>::ThresholdSignature,
+		_signer: <C as cf_chains::ChainCrypto>::AggKey,
 	) -> Self {
 		Self { is_signed: true, _phantom: Default::default() }
 	}
@@ -62,6 +63,10 @@ impl<C: ChainCrypto + 'static> ApiCall<C> for MockApiCall<C> {
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
+
+	fn signer(&self) -> Option<<C as ChainCrypto>::AggKey> {
 		unimplemented!()
 	}
 }
@@ -124,7 +129,7 @@ impl<
 		broadcast_id: BroadcastId,
 		_request_broadcast: bool,
 		_refresh_replay_protection: bool,
-	) -> Result<ThresholdSignatureRequestId, sp_runtime::DispatchError> {
+	) -> Result<ThresholdSignatureRequestId, DispatchError> {
 		Self::put_value(b"RESIGNED_CALLBACKS", broadcast_id);
 		Ok(Self::next_threshold_id())
 	}
@@ -134,6 +139,7 @@ impl<
 
 	fn threshold_sign_and_broadcast_rotation_tx(
 		api_call: Self::ApiCall,
+		_key: <<Api as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		<Self as Broadcaster<Api>>::threshold_sign_and_broadcast(api_call)
 	}

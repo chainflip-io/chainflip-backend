@@ -1,6 +1,11 @@
-use crate::{mock::*, *};
-use cf_traits::{offence_reporting::*, EpochInfo, QualifyNode, SafeMode, SetSafeMode};
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+
+use cf_traits::{
+	mocks::account_role_registry::MockAccountRoleRegistry, offence_reporting::*,
+	AccountRoleRegistry, EpochInfo, QualifyNode, SafeMode, SetSafeMode,
+};
+
+use crate::{mock::*, *};
 
 fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> ReputationPoints {
 	ReputationPallet::reputation(who).reputation_points
@@ -321,12 +326,13 @@ fn heartbeats_emitted_in_safe_mode() {
 
 #[cfg(test)]
 mod reporting_adapter_test {
-	use super::*;
 	use frame_support::assert_err;
 	use pallet_grandpa::{
 		EquivocationOffence as GrandpaEquivocationOffence, TimeSlot as GrandpaTimeSlot,
 	};
 	use sp_staking::offence::ReportOffence;
+
+	use super::*;
 
 	type IdentificationTuple = (u64, ());
 
@@ -409,12 +415,12 @@ mod reporting_adapter_test {
 fn submitting_heartbeat_more_than_once_in_an_interval() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
-		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
+		assert!(HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be online");
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
-		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
+		assert!(HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be online");
 		advance_by_hearbeat_intervals(1);
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
-		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
+		assert!(HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be online");
 	});
 }
 
@@ -422,7 +428,7 @@ fn submitting_heartbeat_more_than_once_in_an_interval() {
 fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
-		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
+		assert!(HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be online");
 		advance_by_hearbeat_intervals(1);
 		assert_eq!(
 			ReputationPallet::current_network_state().offline,
@@ -461,15 +467,15 @@ fn only_authorities_should_appear_in_network_state() {
 			"Alice should be an authority"
 		);
 
-		assert!(ReputationPallet::is_qualified(&BOB), "Bob should be online");
+		assert!(HeartbeatQualification::<Test>::is_qualified(&BOB), "Bob should be online");
 
-		assert!(ReputationPallet::is_qualified(&ALICE), "Alice should be online");
+		assert!(HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be online");
 
 		advance_by_hearbeat_intervals(3);
 
-		assert!(!ReputationPallet::is_qualified(&BOB), "Bob should be offline");
+		assert!(!HeartbeatQualification::<Test>::is_qualified(&BOB), "Bob should be offline");
 
-		assert!(!ReputationPallet::is_qualified(&ALICE), "Alice should be offline");
+		assert!(!HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be offline");
 
 		assert!(
 			ReputationPallet::current_network_state().online.is_empty(),
@@ -488,13 +494,175 @@ fn only_authorities_should_appear_in_network_state() {
 fn in_safe_mode_you_dont_lose_reputation_for_being_offline() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(BOB)));
-		assert!(ReputationPallet::is_qualified(&BOB));
+		assert!(HeartbeatQualification::<Test>::is_qualified(&BOB));
 		let reputation = reputation_points(&BOB);
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			reputation: PalletSafeMode { reporting_enabled: false },
 		});
 		advance_by_hearbeat_intervals(3);
-		assert!(!ReputationPallet::is_qualified(&BOB));
+		assert!(!HeartbeatQualification::<Test>::is_qualified(&BOB));
 		assert_eq!(reputation, reputation_points(&BOB));
 	});
+}
+
+#[test]
+fn should_properly_check_if_validator_is_qualified() {
+	new_test_ext().execute_with(|| {
+		const EVE: u64 = 101;
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&EVE
+		));
+
+		let test_set = BTreeSet::from_iter([ALICE, BOB, EVE]);
+
+		// single validator is always qualified
+		ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)).unwrap();
+		assert!(ReputationPointsQualification::<Test>::is_qualified(&ALICE));
+		assert_eq!(
+			ReputationPointsQualification::<Test>::filter_qualified(iter::once(ALICE).collect()),
+			iter::once(ALICE).collect()
+		);
+
+		// test when network has 3 validators
+		for id in &test_set {
+			ReputationPallet::heartbeat(RuntimeOrigin::signed(*id)).unwrap();
+			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
+		}
+		assert_eq!(
+			ReputationPointsQualification::<Test>::filter_qualified(test_set.clone()),
+			test_set
+		);
+
+		// If there are 3 validators and 33rd percentile validator has  lower reputation than the
+		// other (so 1 validator has worse reputation than the other 2, they should not be
+		// considered qualified)
+		ReputationPallet::penalise_offline_authorities(vec![BOB]);
+		assert!(reputation_points(&BOB) < 0);
+		assert!(!ReputationPointsQualification::<Test>::is_qualified(&BOB));
+
+		// If reputation of other validators is reduced further, make sure that
+		// we don't unnecessarily disqualify validators
+		ReputationPallet::penalise_offline_authorities(vec![EVE]);
+		assert!(reputation_points(&EVE) < 0);
+		assert!(reputation_points(&ALICE) >= 0);
+		for id in &test_set {
+			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
+		}
+		assert_eq!(
+			ReputationPointsQualification::<Test>::filter_qualified(test_set.clone()),
+			test_set
+		);
+
+		// Check that updating reputations properly calculates qualifications
+		move_forward_hearbeat_interval_and_submit_heartbeat(ALICE);
+		move_forward_hearbeat_interval_and_submit_heartbeat(BOB);
+
+		assert!(!ReputationPointsQualification::<Test>::is_qualified(&EVE));
+		assert_eq!(
+			ReputationPointsQualification::<Test>::filter_qualified(test_set.clone()),
+			test_set.into_iter().filter(|id| *id != EVE).collect()
+		);
+
+		// Test with a bunch of validators
+		let mut test_set =
+			(300..500u64)
+				.inspect(|id| {
+					assert_ok!(
+						<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
+					);
+					ReputationPallet::heartbeat(RuntimeOrigin::signed(*id)).unwrap();
+					assert!(ReputationPointsQualification::<Test>::is_qualified(id));
+				})
+				.collect::<Vec<_>>();
+
+		// just so that ALICE, BOB and EVE are at the end to make testing bit easier
+		test_set.extend([ALICE, BOB, EVE]);
+
+		let (first_third, rest) = test_set.split_at(test_set.len() / 3);
+
+		// make one third of validators misbehave
+		ReputationPallet::penalise_offline_authorities(first_third.to_vec());
+		// Even though validators misbehaved because previously they sent heartbeat and received
+		// reputation points they are still above 0, so they are all qualified
+		let current_reputation_of_third_of_validators =
+			REPUTATION_PER_HEARTBEAT - MISSED_HEARTBEAT_PENALTY_POINTS;
+
+		for id in first_third {
+			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
+			assert_eq!(reputation_points(id), current_reputation_of_third_of_validators);
+		}
+
+		// Except poor Eve, they are still disqualified
+		assert!(reputation_points(&EVE) < 0);
+		assert!(!ReputationPointsQualification::<Test>::is_qualified(&EVE));
+		assert_eq!(
+			ReputationPointsQualification::<Test>::filter_qualified(
+				test_set.iter().copied().collect()
+			),
+			test_set.iter().copied().filter(|id| *id != EVE).collect()
+		);
+
+		// Set reputation to negative for 1/3 of validators
+		let bad_rep = Reputations::<Test>::get(EVE).reputation_points - 1;
+		for id in first_third {
+			Reputations::<Test>::mutate(id, |reputation| {
+				reputation.reputation_points = bad_rep;
+			});
+		}
+
+		// Now the first third of validators will not be qualified anymore but the rest are,
+		// including EVE.
+		for id in first_third {
+			assert!(!ReputationPointsQualification::<Test>::is_qualified(id));
+		}
+		for id in rest {
+			assert!(ReputationPointsQualification::<Test>::is_qualified(id));
+		}
+		assert_eq!(
+			ReputationPointsQualification::<Test>::filter_qualified(
+				test_set.iter().copied().collect()
+			),
+			rest.iter().copied().collect()
+		);
+	});
+}
+
+#[test]
+fn reputation_cutoff_threshold() {
+	assert_eq!(
+		ReputationPointsQualification::<Test>::reputation_qualification_cutoff(vec![
+			-1, -1, -1, 0, 1, 1,
+		]),
+		-1
+	);
+	assert_eq!(
+		ReputationPointsQualification::<Test>::reputation_qualification_cutoff(vec![
+			-1, -1, 0, 1, 1,
+		]),
+		-1
+	);
+	assert_eq!(
+		ReputationPointsQualification::<Test>::reputation_qualification_cutoff(vec![
+			-1, -1, 0, 1, 1, 1
+		]),
+		0
+	);
+	assert_eq!(
+		ReputationPointsQualification::<Test>::reputation_qualification_cutoff(vec![
+			-1, -1, 0, 1, 1, 1, 1
+		]),
+		0
+	);
+	assert_eq!(
+		ReputationPointsQualification::<Test>::reputation_qualification_cutoff(vec![
+			-1, -1, 0, 1, 1, 1, 1, 1
+		]),
+		0
+	);
+	assert_eq!(
+		ReputationPointsQualification::<Test>::reputation_qualification_cutoff(vec![
+			-1, -1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+		]),
+		0
+	);
 }

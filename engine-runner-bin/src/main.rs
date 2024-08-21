@@ -2,7 +2,7 @@ use engine_upgrade_utils::{CStrArray, NEW_VERSION, OLD_VERSION};
 
 // Declare the entrypoints into each version of the engine
 mod old {
-	#[engine_proc_macros::link_engine_library_version("1.4.5")]
+	#[engine_proc_macros::link_engine_library_version("1.5.1")]
 	extern "C" {
 		pub fn cfe_entrypoint(
 			c_args: engine_upgrade_utils::CStrArray,
@@ -12,7 +12,7 @@ mod old {
 }
 
 mod new {
-	#[engine_proc_macros::link_engine_library_version("1.5.0")]
+	#[engine_proc_macros::link_engine_library_version("1.6.0")]
 	extern "C" {
 		fn cfe_entrypoint(
 			c_args: engine_upgrade_utils::CStrArray,
@@ -143,6 +143,11 @@ mod tests {
 			"--btc.backup_rpc.http_endpoint=http://localhost:8546".to_string(),
 			"--btc.backup_rpc.basic_auth_user=user".to_string(),
 			"--btc.backup_rpc.basic_auth_password=password".to_string(),
+			// Sol
+			"--sol.rpc.ws_endpoint=ws://localhost:8899".to_string(),
+			"--sol.rpc.http_endpoint=http://localhost:8899".to_string(),
+			"--sol.backup_rpc.ws_endpoint=ws://localhost:8899".to_string(),
+			"--sol.backup_rpc.http_endpoint=http://localhost:8899".to_string(),
 			// p2p
 			format!("--p2p.node_key_file={some_file}"),
 			"--p2p.ip_address=0.1.2.3".to_string(),

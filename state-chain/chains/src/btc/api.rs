@@ -10,6 +10,7 @@ use sp_std::marker::PhantomData;
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(Environment))]
+#[allow(clippy::large_enum_variant)]
 pub enum BitcoinApi<Environment: 'static> {
 	BatchTransfer(batch_transfer::BatchTransfer),
 	#[doc(hidden)]
@@ -62,8 +63,11 @@ where
 {
 	fn new_unsigned(
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
-		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
-	) -> Result<Self, AllBatchError> {
+		transfer_params: Vec<(TransferAssetParams<Bitcoin>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids): (Vec<TransferAssetParams<Bitcoin>>, Vec<EgressId>) =
+			transfer_params.into_iter().unzip();
+
 		let agg_key @ AggKey { current, .. } =
 			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(AllBatchError::AggKeyNotSet)?;
 		let bitcoin_change_script =
@@ -95,12 +99,15 @@ where
 			});
 		}
 
-		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
-			&agg_key,
-			agg_key.current,
-			selected_input_utxos,
-			btc_outputs,
-		)))
+		Ok(vec![(
+			Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
+				&agg_key,
+				agg_key.current,
+				selected_input_utxos,
+				btc_outputs,
+			)),
+			egress_ids,
+		)])
 	}
 }
 
@@ -133,8 +140,9 @@ impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for Bitc
 		_source_address: Option<ForeignChainAddress>,
 		_gas_budget: <Bitcoin as Chain>::ChainAmount,
 		_message: Vec<u8>,
-	) -> Result<Self, DispatchError> {
-		Err(DispatchError::Other("Bitcoin's ExecutexSwapAndCall is not supported."))
+		_cf_parameters: Vec<u8>,
+	) -> Result<Self, ExecutexSwapAndCallError> {
+		Err(ExecutexSwapAndCallError::Unsupported)
 	}
 }
 
@@ -157,9 +165,10 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 	fn signed(
 		self,
 		threshold_signature: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature,
+		signer: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		match self {
-			BitcoinApi::BatchTransfer(call) => call.signed(threshold_signature).into(),
+			BitcoinApi::BatchTransfer(call) => call.signed(threshold_signature, signer).into(),
 
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
@@ -190,5 +199,12 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 
 	fn refresh_replay_protection(&mut self) {
 		// No replay protection refresh for Bitcoin.
+	}
+
+	fn signer(&self) -> Option<<BitcoinCrypto as ChainCrypto>::AggKey> {
+		match self {
+			BitcoinApi::BatchTransfer(call) => call.signer(),
+			BitcoinApi::_Phantom(..) => unreachable!(),
+		}
 	}
 }

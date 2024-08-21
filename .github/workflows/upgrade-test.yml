@@ -45,6 +45,9 @@ on:
         default: true
 env:
   FORCE_COLOR: 1
+  SOLANA_VERSION: v1.18.17
+  SOLANA_PROGRAMS_VERSION: v1.0.0-rc
+  NODE_COUNT: "1-node"
 
 permissions:
   packages: read
@@ -208,6 +211,10 @@ jobs:
           MAIN_VERSION=$(./upgrade-to-bins/chainflip-node --version)
           echo $MAIN_VERSION
 
+      - name: Install solana ☀️
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
+
       - name: Start a localnet from current release 🚀
         if: inputs.run-job
         env:
@@ -216,15 +223,27 @@ jobs:
         run: |
           git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
           set -x
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p /tmp/chainflip/bashful
           mkdir -p /tmp/chainflip/doc
           mkdir -p /tmp/chainflip/dopey
           touch /tmp/chainflip/debug.log
           chmod +x ${{ env.BINARY_ROOT_PATH }}/chainflip-*
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
+          echo "/usr/lib before copy of .so files"
+          ls -l /usr/lib
+          # TODO: Remove this once we have implemented fetching the shared libs in the engine-runner build script
+          curl https://repo.chainflip.io/lib/1_4_6/libchainflip_engine_v1_4_6.so -o /usr/lib/libchainflip_engine_v1_4_6.so
           sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
+          sudo cp ./upgrade-to-bins/libchainflip_engine_v*.so /usr/lib/
+          echo "/usr/lib after copy of .so files"
+          ls -l /usr/lib
           touch ./localnet/.setup_complete
+          # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana programs version. Remove after 1.6 is released.
+          sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[0-9.]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
           ./localnet/manage.sh
+          # TODO: This is a temporary fix so the Solana programs are not being initialized with old bouncer code
+          sed -i 's/await solClient.getGenesisHash();/return;/g' bouncer/shared/initialize_new_chains.ts
 
       - name: Run bouncer on latest release 🙅‍♂️
         if: inputs.run-job
@@ -235,6 +254,8 @@ jobs:
           cd bouncer
           pnpm install --frozen-lockfile
           ./run.sh
+          # TODO: Temporary to discard the fixes above
+          git reset --hard
 
       # we need to be sure that when this fails, we catch the error, any panics etc. that occur
       # TODO: Run swaps simultaneously to the upgrade - we could do that inside the `upgrade_network` command itself.
@@ -262,6 +283,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
+          ./commands/setup_sol_vault.ts
           ./tests/all_concurrent_tests.ts
 
       - name: Print chainflip-engine logs 🚗
@@ -269,6 +291,13 @@ jobs:
         continue-on-error: true
         run: |
           cat /tmp/chainflip/*/chainflip-engine.*log
+
+      - name: Print solana logs ☀️
+        if: always()
+        continue-on-error: true
+        run: |
+          cat /tmp/solana/*.log
+          cat /tmp/solana/test-ledger/validator.log
 
       - name: Print new pre-upgrade chainflip-engine logs 🚗
         if: always()

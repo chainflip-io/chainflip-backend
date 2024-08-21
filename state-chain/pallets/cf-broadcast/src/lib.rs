@@ -14,12 +14,12 @@ pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
 use cf_chains::{
-	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, RetryPolicy, TransactionBuilder,
-	TransactionMetadata as _,
+	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
+	RequiresSignatureRefresh, RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
 use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
-	Chainflip, EpochInfo, GetBlockHeight, SafeMode, ThresholdSigner,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
+	CfeBroadcastRequest, Chainflip, EpochInfo, GetBlockHeight, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -36,34 +36,15 @@ use frame_support::{
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_set::BTreeSet, marker, marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
-#[derive(
-	serde::Serialize,
-	serde::Deserialize,
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	Copy,
-	Clone,
-	PartialEq,
-	Eq,
-	RuntimeDebug,
-)]
-#[scale_info(skip_type_params(I))]
-pub struct PalletSafeMode<I: 'static> {
-	pub retry_enabled: bool,
-	#[doc(hidden)]
-	#[codec(skip)]
-	#[serde(skip_serializing)]
-	_phantom: marker::PhantomData<I>,
-}
+type AggKey<T, I> =
+	<<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
 
-impl<I: 'static> SafeMode for PalletSafeMode<I> {
-	const CODE_RED: Self = PalletSafeMode { retry_enabled: false, _phantom: marker::PhantomData };
-	const CODE_GREEN: Self = PalletSafeMode { retry_enabled: true, _phantom: marker::PhantomData };
+impl_pallet_safe_mode! {
+	PalletSafeMode<I>;
+	retry_enabled,
 }
 
 /// The number of broadcast attempts that were made before this one.
@@ -74,14 +55,17 @@ pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{AccountRoleRegistry, BroadcastNomination, OnBroadcastReady};
-	use frame_support::{pallet_prelude::*, traits::EnsureOrigin};
+	use cf_traits::{AccountRoleRegistry, BroadcastNomination, LiabilityTracker, OnBroadcastReady};
+	use frame_support::{
+		pallet_prelude::{OptionQuery, *},
+		traits::EnsureOrigin,
+	};
 	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured Transaction.
@@ -209,6 +193,8 @@ pub mod pallet {
 
 		type CfeBroadcastRequest: CfeBroadcastRequest<Self, Self::TargetChain>;
 
+		type LiabilityTracker: LiabilityTracker;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -288,11 +274,6 @@ pub mod pallet {
 	pub type TransactionMetadata<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, TransactionMetadataFor<T, I>>;
 
-	/// Tracks how much a signer id is owed for paying transaction fees.
-	#[pallet::storage]
-	pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
-
 	/// Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
 	#[pallet::storage]
 	#[pallet::getter(fn broadcast_barriers)]
@@ -308,6 +289,20 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn aborted_broadcasts)]
 	pub type AbortedBroadcasts<T, I = ()> = StorageValue<_, BTreeSet<BroadcastId>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn incoming_key_broadcast_id)]
+	pub type IncomingKeyAndBroadcastId<T, I = ()> =
+		StorageValue<_, (AggKey<T, I>, BroadcastId), OptionQuery>;
+
+	/// We need to store the current Onchain key to know when to resign txs in edge cases around a
+	/// rotation. Note that the on chain key is different than the current AggKey stored in
+	/// threshold signature pallet. This is because we rotate the AggKey optimistically which means
+	/// that the key in threshold signature pallet is rotated as soon as the rotation tx is created,
+	/// without waiting for it the tx to actually go through onchain.
+	#[pallet::storage]
+	#[pallet::getter(fn current_on_chain_key)]
+	pub type CurrentOnChainKey<T, I = ()> = StorageValue<_, AggKey<T, I>, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -457,7 +452,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
-			let signature = T::ThresholdSigner::signature_result(threshold_request_id)
+			let (signer, signature_result) =
+				T::ThresholdSigner::signature_result(threshold_request_id);
+			let signature = signature_result
 				.ready_or_else(|r| {
 					log::error!(
 						"Signature not found for threshold request {:?}. Request status: {:?}",
@@ -468,7 +465,7 @@ pub mod pallet {
 				})?
 				.expect("signature can not be unavailable");
 
-			let signed_api_call = api_call.signed(&signature);
+			let signed_api_call = api_call.signed(&signature, signer);
 
 			PendingApiCalls::<T, I>::insert(broadcast_id, signed_api_call.clone());
 
@@ -540,15 +537,30 @@ pub mod pallet {
 
 			Self::remove_pending_broadcast(&broadcast_id);
 
+			if IncomingKeyAndBroadcastId::<T, I>::exists() {
+				let (incoming_key, rotation_broadcast_id) =
+					IncomingKeyAndBroadcastId::<T, I>::get().unwrap();
+				if rotation_broadcast_id == broadcast_id {
+					CurrentOnChainKey::<T, I>::put(incoming_key);
+					IncomingKeyAndBroadcastId::<T, I>::kill();
+				}
+			}
+
 			if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
 				if tx_metadata.verify_metadata(&expected_tx_metadata) {
 					if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
 						let to_refund =
 							broadcast_data.transaction_payload.return_fee_refund(tx_fee);
 
-						TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
-							*fee_deficit = fee_deficit.saturating_add(to_refund);
-						});
+						let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
+							T::TargetChain,
+						>>::into_foreign_chain_address(signer_id.clone());
+
+						T::LiabilityTracker::record_liability(
+							address_to_refund,
+							<T::TargetChain as Chain>::GAS_ASSET.into(),
+							to_refund.into(),
+						);
 
 						Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
 							beneficiary: signer_id,
@@ -686,11 +698,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if !pending_broadcasts.remove(broadcast_id) {
 				log::warn!("Expected broadcast with id {} to still be pending.", broadcast_id);
 			}
-			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
+			while let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
 				if pending_broadcasts.first().map_or(true, |id| *id > *broadcast_barrier_id) {
 					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
 						broadcast_barriers.pop_first();
 					});
+				} else {
+					break
 				}
 			}
 		});
@@ -759,12 +773,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
 			// If the broadcast is not pending, we should not retry.
-			if let Some(api_call) = PendingApiCalls::<T, I>::get(broadcast_id) {
-				if T::TransactionBuilder::requires_signature_refresh(
-					&api_call,
-					&broadcast_data.threshold_signature_payload,
-				) {
+			if let Some(mut api_call) = PendingApiCalls::<T, I>::get(broadcast_id) {
+				if let RequiresSignatureRefresh::True(maybe_modified_apicall) =
+					T::TransactionBuilder::requires_signature_refresh(
+						&api_call,
+						&broadcast_data.threshold_signature_payload,
+						CurrentOnChainKey::<T, I>::get(),
+					) {
 					Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
+					if let Some(modified_apicall) = maybe_modified_apicall {
+						PendingApiCalls::<T, I>::insert(broadcast_id, modified_apicall.clone());
+						api_call = modified_apicall;
+					}
 					Self::threshold_sign(api_call, broadcast_id, true);
 					log::info!(
 						"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
@@ -990,6 +1010,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 
 	fn threshold_sign_and_broadcast_rotation_tx(
 		api_call: Self::ApiCall,
+		new_key: AggKey<T, I>,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		let (broadcast_id, request_id) =
 			<Self as Broadcaster<_>>::threshold_sign_and_broadcast(api_call);
@@ -1004,6 +1025,8 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 					}
 				}
 		}
+
+		IncomingKeyAndBroadcastId::<T, I>::put((new_key, broadcast_id));
 
 		(broadcast_id, request_id)
 	}

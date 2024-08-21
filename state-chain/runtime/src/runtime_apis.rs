@@ -10,6 +10,7 @@ use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
 	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
+use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
@@ -115,10 +116,20 @@ pub struct AuctionState {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct LiquidityProviderBoostPoolInfo {
+	pub fee_tier: u16,
+	pub total_balance: AssetAmount,
+	pub available_balance: AssetAmount,
+	pub in_use_balance: AssetAmount,
+	pub is_withdrawing: bool,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
 	pub earned_fees: AssetMap<AssetAmount>,
+	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -225,6 +236,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 			lp: Option<AccountId32>,
+			filled_orders: bool,
 		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
@@ -248,9 +260,8 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
-		fn cf_free_balances(
-			account_id: AccountId32,
-		) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage>;
+		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
+		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
 		fn cf_failed_call_ethereum(
@@ -270,5 +281,8 @@ decl_runtime_apis!(
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
+		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
+		fn cf_swap_retry_delay_blocks() -> u32;
+		fn cf_swap_limits() -> SwapLimits;
 	}
 );

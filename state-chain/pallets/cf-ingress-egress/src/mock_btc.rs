@@ -15,13 +15,13 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
 		asset_converter::MockAssetConverter,
+		asset_withholding::MockAssetWithholding,
+		balance_api::MockBalance,
 		broadcaster::MockBroadcaster,
-		ccm_handler::MockCcmHandler,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
-		lp_balance::MockBalance,
-		swap_deposit_handler::MockSwapDepositHandler,
-		swap_queue_api::MockSwapQueueApi,
+		swap_limits_provider::MockSwapLimitsProvider,
+		swap_request_api::MockSwapRequestHandler,
 	},
 	NetworkEnvironmentProvider, OnDeposit,
 };
@@ -111,27 +111,33 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type TargetChain = Bitcoin;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
-	type LpBalance = MockBalance;
-	type SwapDepositHandler =
-		MockSwapDepositHandler<(Bitcoin, pallet_cf_ingress_egress::Pallet<Self>)>;
+	type Balance = MockBalance;
+	type PoolApi = Self;
 	type ChainApiCall = MockBitcoinApiCall<MockBtcEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
-	type CcmHandler = MockCcmHandler;
 	type ChainTracking = ChainTracker<Bitcoin>;
 	type WeightInfo = ();
 	type NetworkEnvironment = MockNetworkEnvironmentProvider;
 	type AssetConverter = MockAssetConverter;
 	type FeePayment = MockFeePayment<Self>;
-	type SwapQueueApi = MockSwapQueueApi;
+	type SwapRequestHandler =
+		MockSwapRequestHandler<(Bitcoin, pallet_cf_ingress_egress::Pallet<Self>)>;
+	type AssetWithholding = MockAssetWithholding;
+	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
 	type SafeMode = MockRuntimeSafeMode;
+	type SwapLimitsProvider = MockSwapLimitsProvider;
 }
 
 impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: Default::default(),
-		ingress_egress: IngressEgressConfig { deposit_channel_lifetime: 100, witness_safety_margin: Some(2), dust_limits: Default::default() },
+		ingress_egress: IngressEgressConfig {
+			deposit_channel_lifetime: 100,
+			witness_safety_margin: Some(2),
+			dust_limits: Default::default(),
+		},
 	},
 	|| {
 		cf_traits::mocks::tracked_data_provider::TrackedDataProvider::<Bitcoin>::set_tracked_data(

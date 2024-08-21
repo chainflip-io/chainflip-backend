@@ -2,9 +2,11 @@
 use cf_primitives::chains::assets::sol;
 #[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
-	chains::assets::{btc, dot, eth},
+	chains::assets::{any::AssetMap, arb, btc, dot, eth},
 	Asset,
 };
+#[cfg(feature = "runtime-benchmarks")]
+use core::str::FromStr;
 
 #[cfg(feature = "runtime-benchmarks")]
 use ethereum_types::{H160, U256};
@@ -134,6 +136,31 @@ impl BenchmarkValueExtended for EvmFetchId {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for crate::sol::SolanaDepositFetchId {
+	fn benchmark_value() -> Self {
+		crate::sol::SolanaDepositFetchId {
+			channel_id: 923_601_931u64,
+			address: crate::sol::SolAddress::from_str(
+				"4Spd3kst7XsA9pdp5ArfdXxEK4xfW88eRKbyQBmMvwQj",
+			)
+			.unwrap(),
+			bump: 255u8,
+		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValueExtended for crate::sol::SolanaDepositFetchId {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		crate::sol::SolanaDepositFetchId {
+			channel_id: id as u64,
+			address: crate::sol::SolAddress([id; 32]),
+			bump: 255u8,
+		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValueExtended for () {
 	fn benchmark_value_by_id(_id: u8) -> Self {
 		Default::default()
@@ -156,6 +183,48 @@ impl BenchmarkValue for EvmTransactionMetadata {
 impl BenchmarkValue for PolkadotTransactionId {
 	fn benchmark_value() -> Self {
 		Self { block_number: 0u32, extrinsic_index: 0u32 }
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for eth::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for btc::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for dot::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for arb::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for sol::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
 	}
 }
 

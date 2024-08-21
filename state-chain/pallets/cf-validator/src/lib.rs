@@ -749,7 +749,7 @@ pub mod pallet {
 			>>::from_ref(&account_id);
 
 			ensure!(
-				(LastExpiredEpoch::<T>::get()..=CurrentEpoch::<T>::get())
+				(LastExpiredEpoch::<T>::get() + 1..=CurrentEpoch::<T>::get())
 					.all(|epoch| !HistoricalAuthorities::<T>::get(epoch).contains(validator_id)),
 				Error::<T>::StillKeyHolder
 			);
@@ -1010,6 +1010,7 @@ impl<T: Config> Pallet<T> {
 		);
 
 		Self::deposit_event(Event::NewEpoch(new_epoch));
+		T::EpochTransitionHandler::on_new_epoch(new_epoch);
 	}
 
 	fn expire_epoch(epoch: EpochIndex) -> Weight {
@@ -1217,10 +1218,10 @@ impl<T: Config> Pallet<T> {
 	/// sorted by bids highest to lowest.
 	pub fn highest_funded_qualified_backup_node_bids(
 	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
-		let mut backups: Vec<_> = Backups::<T>::get()
-			.into_iter()
-			.filter(|(bidder_id, _)| T::KeygenQualification::is_qualified(bidder_id))
-			.collect();
+		let mut backups = T::KeygenQualification::filter_qualified_by_key(
+			Backups::<T>::get().into_iter().collect(),
+			|(bidder_id, _bid)| bidder_id,
+		);
 
 		let limit = Self::backup_reward_nodes_limit();
 		if limit < backups.len() {
@@ -1297,10 +1298,7 @@ impl<T: Config> Pallet<T> {
 
 	pub fn get_qualified_bidders<Q: QualifyNode<ValidatorIdOf<T>>>(
 	) -> Vec<Bid<ValidatorIdOf<T>, T::Amount>> {
-		Self::get_active_bids()
-			.into_iter()
-			.filter(|Bid { ref bidder_id, .. }| Q::is_qualified(bidder_id))
-			.collect()
+		Q::filter_qualified_by_key(Self::get_active_bids(), |Bid { ref bidder_id, .. }| bidder_id)
 	}
 
 	pub fn is_bidding(account_id: &T::AccountId) -> bool {
@@ -1517,7 +1515,7 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByCfeVersi
 		NodeCFEVersion::<T>::get(validator_id) >= MinimumReportedCfeVersion::<T>::get()
 	}
 
-	fn filter_unqualified(
+	fn filter_qualified(
 		validators: BTreeSet<<T as Chainflip>::ValidatorId>,
 	) -> BTreeSet<<T as Chainflip>::ValidatorId> {
 		let min_version = MinimumReportedCfeVersion::<T>::get();

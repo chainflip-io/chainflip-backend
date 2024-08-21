@@ -24,10 +24,10 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, FLIPPERINOS_PER_FLIP,
-	GENESIS_EPOCH, STABLE_ASSET,
+	GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
-use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{Chainflip, EpochInfo, LpBalanceApi};
+use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
+use cf_traits::{BalanceApi, Chainflip, EpochInfo, SwapType};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
@@ -38,17 +38,16 @@ use pallet_cf_broadcast::{
 	RequestSuccessCallbacks,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall};
-use pallet_cf_lp::HistoricalEarnedFees;
-use pallet_cf_pools::{OrderId, RangeOrderSize};
-use pallet_cf_swapping::{CcmIdCounter, SWAP_DELAY_BLOCKS, SWAP_RETRY_DELAY_BLOCKS};
+use pallet_cf_pools::{HistoricalEarnedFees, OrderId, RangeOrderSize};
+use pallet_cf_swapping::{SwapRequestIdCounter, SwapRetryDelay};
 use sp_core::U256;
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, ChainAddressConverter, EthTransactionBuilder,
 		EvmEnvironment,
 	},
-	EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, EthereumInstance,
-	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
+	AssetBalances, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
+	EthereumInstance, LiquidityPools, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
 	System, Timestamp, Validator, Weight, Witnesser,
 };
 
@@ -76,20 +75,20 @@ fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price
 }
 
 fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
-	let original_amount =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default();
-	assert_ok!(LiquidityProvider::try_credit_account(account_id, asset, amount));
+	let original_amount = pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset);
+	assert_ok!(AssetBalances::try_credit_account(account_id, asset, amount));
 	assert_eq!(
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default(),
+		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset),
 		original_amount + amount
 	);
-	assert_events_eq!(
+	assert_has_matching_event!(
 		Runtime,
-		RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountCredited {
-			account_id: account_id.clone(),
-			asset,
-			amount_credited: amount,
-		},)
+		RuntimeEvent::AssetBalances(pallet_cf_asset_balances::Event::AccountCredited {
+			account_id: event_account_id,
+			asset: event_asset,
+			amount_credited,
+			..
+		}) if *amount_credited == amount && event_account_id == account_id && *event_asset == asset
 	);
 	System::reset_events();
 }
@@ -103,9 +102,8 @@ fn set_range_order(
 	range: Option<core::ops::Range<Tick>>,
 	liquidity: Liquidity,
 ) {
-	let balances = [base_asset, quote_asset].map(|asset| {
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
-	});
+	let balances = [base_asset, quote_asset]
+		.map(|asset| pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset));
 	assert_ok!(LiquidityPools::set_range_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		base_asset,
@@ -114,23 +112,23 @@ fn set_range_order(
 		range,
 		RangeOrderSize::Liquidity { liquidity },
 	));
-	let new_balances = [base_asset, quote_asset].map(|asset| {
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, asset).unwrap_or_default()
-	});
+	let new_balances = [base_asset, quote_asset]
+		.map(|asset| pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset));
 
 	assert!(new_balances.into_iter().zip(balances).all(|(new, old)| { new <= old }));
 
-	for ((new_balance, old_balance), asset) in
+	for ((new_balance, old_balance), expected_asset) in
 		new_balances.into_iter().zip(balances).zip([base_asset, quote_asset])
 	{
 		if new_balance < old_balance {
-			assert_events_eq!(
+			assert_has_matching_event!(
 				Runtime,
-				RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
-					account_id: account_id.clone(),
+				RuntimeEvent::AssetBalances(pallet_cf_asset_balances::Event::AccountDebited {
+					account_id: event_account_id,
 					asset,
-					amount_debited: old_balance - new_balance,
-				},)
+					amount_debited,
+					..
+				}) if event_account_id == account_id && *asset == expected_asset && *amount_debited == old_balance - new_balance
 			);
 		}
 	}
@@ -149,9 +147,8 @@ fn set_limit_order(
 	let (asset_pair, order) = pallet_cf_pools::AssetPair::from_swap(sell_asset, buy_asset).unwrap();
 
 	let sell_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
-	let buy_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
+		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, sell_asset);
+	let buy_balance = pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, buy_asset);
 	assert_ok!(LiquidityPools::set_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		asset_pair.assets().base,
@@ -162,21 +159,22 @@ fn set_limit_order(
 		sell_amount,
 	));
 	let new_sell_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, sell_asset).unwrap_or_default();
+		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, sell_asset);
 	let new_buy_balance =
-		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, buy_asset).unwrap_or_default();
+		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, buy_asset);
 
 	assert_eq!(new_sell_balance, sell_balance - sell_amount);
 	assert_eq!(new_buy_balance, buy_balance);
 
 	if new_sell_balance < sell_balance {
-		assert_events_eq!(
+		assert_has_matching_event!(
 			Runtime,
-			RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
-				account_id: account_id.clone(),
-				asset: sell_asset,
-				amount_debited: sell_balance - new_sell_balance,
-			},)
+			RuntimeEvent::AssetBalances(pallet_cf_asset_balances::Event::AccountDebited {
+				account_id: event_account_id,
+				asset,
+				amount_debited,
+				..
+			}) if event_account_id == account_id && *asset == sell_asset && *amount_debited == sell_balance - new_sell_balance
 		);
 	}
 
@@ -189,7 +187,7 @@ pub enum OrderType {
 }
 
 #[track_caller]
-fn setup_pool_and_accounts(assets: Vec<Asset>, order_type: OrderType) {
+pub fn setup_pool_and_accounts(assets: Vec<Asset>, order_type: OrderType) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
 	new_account(&ZION, AccountRole::Broker);
 
@@ -235,137 +233,151 @@ fn setup_pool_and_accounts(assets: Vec<Asset>, order_type: OrderType) {
 #[test]
 fn basic_pool_setup_provision_and_swap() {
 	super::genesis::with_test_defaults()
-	.with_additional_accounts(&[
-		(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
-		(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
-	])
-	.build()
-	.execute_with(|| {
-		new_pool(Asset::Eth, 0, price_at_tick(0).unwrap());
-		new_pool(Asset::Flip, 0, price_at_tick(0).unwrap());
-		register_refund_addresses(&DORIS);
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			new_pool(Asset::Eth, 0, price_at_tick(0).unwrap());
+			new_pool(Asset::Flip, 0, price_at_tick(0).unwrap());
+			register_refund_addresses(&DORIS);
 
-		// Use the same decimals amount for all assets.
-		const DECIMALS: u128 = 10u128.pow(18);
-		credit_account(&DORIS, Asset::Eth, 10_000_000 * DECIMALS);
-		credit_account(&DORIS, Asset::Flip, 10_000_000 * DECIMALS);
-		credit_account(&DORIS, Asset::Usdc, 10_000_000 * DECIMALS);
-		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
-		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
-		assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
+			// Use the same decimals amount for all assets.
+			const DECIMALS: u128 = 10u128.pow(18);
+			credit_account(&DORIS, Asset::Eth, 10_000_000 * DECIMALS);
+			credit_account(&DORIS, Asset::Flip, 10_000_000 * DECIMALS);
+			credit_account(&DORIS, Asset::Usdc, 10_000_000 * DECIMALS);
+			assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
+			assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
+			assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
 
-		set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 1_000_000 * DECIMALS);
-		set_limit_order(&DORIS, Asset::Usdc, Asset::Eth, 0, Some(0), 1_000_000 * DECIMALS);
-		set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 1_000_000 * DECIMALS);
-		set_limit_order(&DORIS, Asset::Usdc, Asset::Flip, 0, Some(0), 1_000_000 * DECIMALS);
+			set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 1_000_000 * DECIMALS);
+			set_limit_order(&DORIS, Asset::Usdc, Asset::Eth, 0, Some(0), 1_000_000 * DECIMALS);
+			set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 1_000_000 * DECIMALS);
+			set_limit_order(&DORIS, Asset::Usdc, Asset::Flip, 0, Some(0), 1_000_000 * DECIMALS);
 
-		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
-			RuntimeOrigin::signed(ZION.clone()),
-			Asset::Eth,
-			Asset::Flip,
-			EncodedAddress::Eth([1u8; 20]),
-			0,
-			None,
-			0u16,
-			Default::default(),
-			None,
-		));
+			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
+				RuntimeOrigin::signed(ZION.clone()),
+				Asset::Eth,
+				Asset::Flip,
+				EncodedAddress::Eth([1u8; 20]),
+				0,
+				None,
+				0u16,
+				Default::default(),
+				None,
+				None,
+			));
 
-		let deposit_address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
-			cf_primitives::chains::assets::eth::Asset::Eth,
-			pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
-		).unwrap();
+			let deposit_address =
+				<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
+					cf_primitives::chains::assets::eth::Asset::Eth,
+					pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
+				)
+				.unwrap();
 
-		System::reset_events();
-		const DEPOSIT_AMOUNT: u128 = 5_000 * DECIMALS;
-		witness_call(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
-			deposit_witnesses: vec![DepositWitness {
-				deposit_address,
-				asset: cf_primitives::chains::assets::eth::Asset::Eth,
-				amount: DEPOSIT_AMOUNT,
-				deposit_details: Default::default(),
-			}],
-			block_height: 0,
-		}));
+			System::reset_events();
+			const DEPOSIT_AMOUNT: u128 = 5_000 * DECIMALS;
+			witness_call(RuntimeCall::EthereumIngressEgress(
+				pallet_cf_ingress_egress::Call::process_deposits {
+					deposit_witnesses: vec![DepositWitness {
+						deposit_address,
+						asset: cf_primitives::chains::assets::eth::Asset::Eth,
+						amount: DEPOSIT_AMOUNT,
+						deposit_details: Default::default(),
+					}],
+					block_height: 0,
+				},
+			));
 
-		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
-			swap_id,
-			deposit_amount: DEPOSIT_AMOUNT,
-			origin: SwapOrigin::DepositChannel {
-				deposit_address: events_deposit_address,
+			let swap_request_id = assert_events_match!(Runtime,
+			RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapRequested {
+			    swap_request_id,
+				input_amount: DEPOSIT_AMOUNT,
+				origin: SwapOrigin::DepositChannel {
+					deposit_address: events_deposit_address,
+					..
+				},
 				..
-			},
-			..
-		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone()).expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address => swap_id);
+			}) if <Ethereum as
+			Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.
+			clone()).expect("we created the deposit address above so it should be
+			valid")).unwrap() == deposit_address => swap_request_id);
 
-		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
-		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
-		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
-		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
+			assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+			state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
+			state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+				3,
+				Weight::from_parts(1_000_000_000_000, 0),
+			);
+			assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+			state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+			state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+				4,
+				Weight::from_parts(1_000_000_000_000, 0),
+			);
 
-		let (.., egress_id) = assert_events_match!(
-			Runtime,
-			RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::AssetSwapped {
-					from: Asset::Eth,
-					to: Asset::Usdc,
-					..
-				},
-			) => (),
-			RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::AssetSwapped {
-					from: Asset::Usdc,
-					to: Asset::Flip,
-					..
-				},
-			) => (),
-			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapExecuted {
-					swap_id: executed_swap_id,
-					..
-				},
-			) if executed_swap_id == swap_id => (),
-			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapEgressScheduled {
-					egress_id: egress_id @ (ForeignChain::Ethereum, _),
-					asset: Asset::Flip,
-					..
-				},
-			) => egress_id
-		);
+			let (.., egress_id) = assert_events_match!(
+				Runtime,
+				RuntimeEvent::LiquidityPools(
+					pallet_cf_pools::Event::AssetSwapped {
+						from: Asset::Eth,
+						to: Asset::Usdc,
+						..
+					},
+				) => (),
+				RuntimeEvent::LiquidityPools(
+					pallet_cf_pools::Event::AssetSwapped {
+						from: Asset::Usdc,
+						to: Asset::Flip,
+						..
+					},
+				) => (),
+				RuntimeEvent::Swapping(
+					pallet_cf_swapping::Event::SwapExecuted {
+						swap_request_id: executed_swap_request_id,
+						..
+					},
+				) if executed_swap_request_id == swap_request_id => (),
+				RuntimeEvent::Swapping(
+					pallet_cf_swapping::Event::SwapEgressScheduled {
+						egress_id: egress_id @ (ForeignChain::Ethereum, _),
+						asset: Asset::Flip,
+						..
+					},
+				) => egress_id
+				);
 
-		assert_events_match!(
-			Runtime,
-			RuntimeEvent::EthereumIngressEgress(
-				pallet_cf_ingress_egress::Event::BatchBroadcastRequested {
-					ref egress_ids,
-					..
-				},
-			) if egress_ids.contains(&egress_id) => ()
-		);
+			assert_events_match!(
+				Runtime,
+				RuntimeEvent::EthereumIngressEgress(
+					pallet_cf_ingress_egress::Event::BatchBroadcastRequested {
+						ref egress_ids,
+						..
+					},
+				) if egress_ids.contains(&egress_id) => ()
+			);
 
-		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
-		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
-		assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
-	});
+			assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
+			assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
+			assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
+		});
 }
 
 #[test]
 fn can_process_ccm_via_swap_deposit_address() {
+	const DECIMALS: u128 = 10u128.pow(18);
+	const GAS_BUDGET: AssetAmount = 50 * DECIMALS;
+	const DEPOSIT_AMOUNT: AssetAmount = 50_000 * DECIMALS;
+
 	super::genesis::with_test_defaults().build().execute_with(|| {
 		// Setup pool and liquidity
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
-		const DECIMALS: u128 = 10u128.pow(18);
-
-		let gas_budget = 50 * DECIMALS;
-		let deposit_amount = 50_000 * DECIMALS;
-
 		let message = CcmChannelMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
-			gas_budget,
+			gas_budget: GAS_BUDGET,
 			cf_parameters: Default::default(),
 		};
 
@@ -378,6 +390,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Some(message),
 			0u16,
 			Default::default(),
+			None,
 			None,
 		));
 
@@ -393,26 +406,40 @@ fn can_process_ccm_via_swap_deposit_address() {
 				deposit_witnesses: vec![DepositWitness {
 					deposit_address,
 					asset: cf_primitives::chains::assets::eth::Asset::Flip,
-					amount: deposit_amount,
+					amount: DEPOSIT_AMOUNT,
 					deposit_details: Default::default(),
 				}],
 				block_height: 0,
 			},
 		));
-		let (principal_swap_id, gas_swap_id) = assert_events_match!(
+
+		let swap_request_id = assert_events_match!(
 		Runtime,
-		RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmDepositReceived {
-			ccm_id,
-			principal_swap_id: Some(principal_swap_id),
-			gas_swap_id: Some(gas_swap_id),
-			deposit_amount: amount,
+		RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapRequested {
+			swap_request_id,
+			input_amount: DEPOSIT_AMOUNT,
 			..
-		}) if ccm_id == CcmIdCounter::<Runtime>::get() &&
-			amount == deposit_amount => (principal_swap_id, gas_swap_id)
+		}) if swap_request_id == SwapRequestIdCounter::<Runtime>::get() => swap_request_id
+		);
+
+		const PRINCIPAL_AMOUNT: AssetAmount = DEPOSIT_AMOUNT - GAS_BUDGET;
+
+		let principal_swap_id = assert_events_match!(
+		Runtime,
+		RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
+			swap_request_id: swap_request_id_in_event,
+			swap_id,
+			input_amount: PRINCIPAL_AMOUNT,
+			swap_type: SwapType::CcmPrincipal,
+			execute_at: 3,
+			..
+		}) if swap_request_id == SwapRequestIdCounter::<Runtime>::get() &&
+			swap_request_id_in_event == swap_request_id => swap_id
 		);
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
+		System::set_block_number(3);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
 			3,
 			Weight::from_parts(1_000_000_000_000, 0),
@@ -420,8 +447,56 @@ fn can_process_ccm_via_swap_deposit_address() {
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
+		System::set_block_number(4);
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
 			4,
+			Weight::from_parts(1_000_000_000_000, 0),
+		);
+
+		let (.., gas_swap_id) = assert_events_match!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Flip,
+					to: Asset::Usdc,
+					input_amount: PRINCIPAL_AMOUNT,
+
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_request_id: executed_swap_request_id,
+					swap_id,
+					..
+				},
+			) if executed_swap_request_id == swap_request_id &&
+				 swap_id == principal_swap_id => (),
+			RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
+				swap_request_id: swap_request_id_in_event,
+				swap_id,
+				input_amount: GAS_BUDGET,
+				swap_type: SwapType::CcmGas,
+				execute_at: 5,
+				..
+			}) if swap_request_id == SwapRequestIdCounter::<Runtime>::get() &&
+				swap_request_id_in_event == swap_request_id => swap_id
+
+		);
+
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(4);
+		System::set_block_number(5);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+			5,
+			Weight::from_parts(1_000_000_000_000, 0),
+		);
+
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(5);
+		System::set_block_number(6);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+			6,
 			Weight::from_parts(1_000_000_000_000, 0),
 		);
 
@@ -431,16 +506,10 @@ fn can_process_ccm_via_swap_deposit_address() {
 				pallet_cf_pools::Event::AssetSwapped {
 					from: Asset::Flip,
 					to: Asset::Usdc,
-					input_amount: amount,
+					input_amount: GAS_BUDGET,
 					..
 				},
-			) if amount == deposit_amount => (),
-			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapExecuted {
-					swap_id,
-					..
-				},
-			) if swap_id == principal_swap_id => (),
+			) => (),
 			RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::AssetSwapped {
 					from: Asset::Usdc,
@@ -450,16 +519,19 @@ fn can_process_ccm_via_swap_deposit_address() {
 			) => (),
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
+					swap_request_id: executed_swap_request_id,
 					swap_id,
 					..
 				},
-			) if swap_id == gas_swap_id => (),
+			) if executed_swap_request_id == swap_request_id &&
+				 swap_id == gas_swap_id => (),
 			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::CcmEgressScheduled {
-					ccm_id,
+				pallet_cf_swapping::Event::SwapEgressScheduled {
+					swap_request_id: swap_request_id_in_event,
 					egress_id: egress_id @ (ForeignChain::Ethereum, _),
+					..
 				},
-			) if ccm_id == CcmIdCounter::<Runtime>::get() => egress_id
+			) if swap_request_id_in_event == swap_request_id => egress_id
 		);
 
 		assert_events_match!(
@@ -491,7 +563,7 @@ fn can_process_ccm_via_direct_deposit() {
 			},
 		};
 
-		witness_call(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit{
+		witness_call(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
 			source_asset: Asset::Flip,
 			deposit_amount,
 			destination_asset: Asset::Usdc,
@@ -500,68 +572,14 @@ fn can_process_ccm_via_direct_deposit() {
 			tx_hash: Default::default(),
 		}));
 
-		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmDepositReceived {
-			ccm_id,
-			principal_swap_id: Some(principal_swap_id),
-			gas_swap_id: Some(gas_swap_id),
-			deposit_amount: amount,
-			..
-		}) if ccm_id == CcmIdCounter::<Runtime>::get() &&
-			amount == deposit_amount => (principal_swap_id, gas_swap_id));
-
-		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
-		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_parts(1_000_000_000_000, 0));
-
-		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
-		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(4, Weight::from_parts(1_000_000_000_000, 0));
-
-		let (.., egress_id) = assert_events_match!(
-			Runtime,
-			RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::AssetSwapped {
-					from: Asset::Flip,
-					to: Asset::Usdc,
-					input_amount,
-					..
-				},
-			) if input_amount == deposit_amount => (),
-			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapExecuted {
-					swap_id,
-					..
-				},
-			) if swap_id == principal_swap_id => (),
-			RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::AssetSwapped {
-					from: Asset::Usdc,
-					to: Asset::Eth,
-					..
-				},
-			) => (),
-			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapExecuted {
-					swap_id,
-					..
-				},
-			) if swap_id == gas_swap_id => (),
-			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::CcmEgressScheduled {
-					ccm_id,
-					egress_id: egress_id @ (ForeignChain::Ethereum, _),
-				},
-			) if ccm_id == CcmIdCounter::<Runtime>::get() => egress_id
-		);
-
-		assert_events_match!(
-			Runtime,
-			RuntimeEvent::EthereumIngressEgress(
-				pallet_cf_ingress_egress::Event::CcmBroadcastRequested {
-					egress_id: actual_egress_id,
-					..
-				},
-			) if actual_egress_id == egress_id => ()
+		// It is sufficient to check that swap is "requested", the rest is
+		// covered by the `can_process_ccm_via_swap_deposit_address` test
+		assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapRequested {
+				swap_request_id,
+				input_amount: amount,
+				..
+			}) if swap_request_id == SwapRequestIdCounter::<Runtime>::get() &&
+				amount == deposit_amount => ()
 		);
 	});
 }
@@ -642,7 +660,7 @@ fn failed_swaps_are_rolled_back() {
 
 		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
 		// shouldn't be drained.
-		Swapping::on_finalize(swaps_scheduled_at + SWAP_RETRY_DELAY_BLOCKS);
+		Swapping::on_finalize(swaps_scheduled_at + SwapRetryDelay::<Runtime>::get());
 		assert_eq!(
 			Some(eth_price),
 			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
@@ -658,7 +676,7 @@ fn failed_swaps_are_rolled_back() {
 		setup_pool_and_accounts(vec![Asset::Flip], OrderType::RangeOrder);
 		System::reset_events();
 
-		Swapping::on_finalize(swaps_scheduled_at + 2 * SWAP_RETRY_DELAY_BLOCKS);
+		Swapping::on_finalize(swaps_scheduled_at + 2 * SwapRetryDelay::<Runtime>::get());
 
 		assert_ne!(
 			Some(eth_price),
@@ -753,6 +771,7 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 				ForeignChain::Ethereum,
 				None,
 				gas_budget,
+				vec![],
 				vec![],
 			)
 			.unwrap()
@@ -853,7 +872,7 @@ fn can_resign_failed_ccm() {
 
 			// Process the swap -> egress -> threshold sign -> broadcast
 			let starting_epoch = Validator::current_epoch();
-			testnet.move_forward_blocks(3);
+			testnet.move_forward_blocks(5);
 			let broadcast_id = BroadcastIdCounter::<Runtime, Instance1>::get();
 
 			// Fail the broadcast

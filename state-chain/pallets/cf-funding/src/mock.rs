@@ -109,6 +109,7 @@ impl ApiCall<EvmCrypto> for MockRegisterRedemption {
 	fn signed(
 		self,
 		_threshold_signature: &<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
+		_signer: <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		unimplemented!()
 	}
@@ -124,10 +125,14 @@ impl ApiCall<EvmCrypto> for MockRegisterRedemption {
 	fn transaction_out_id(
 		&self,
 	) -> <<Ethereum as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
-		todo!()
+		unimplemented!()
 	}
 
 	fn refresh_replay_protection(&mut self) {
+		unimplemented!()
+	}
+
+	fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {
 		unimplemented!()
 	}
 }

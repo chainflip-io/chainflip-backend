@@ -1,10 +1,10 @@
-use crate::{mock::*, Error, FreeBalances, HistoricalEarnedFees, LiquidityRefundAddress};
+use crate::{mock::*, Error, LiquidityRefundAddress};
 
 use cf_chains::{address::EncodedAddress, ForeignChainAddress};
 use cf_primitives::{AccountId, Asset, AssetAmount, ForeignChain};
 
 use cf_test_utilities::assert_events_match;
-use cf_traits::{AccountRoleRegistry, Chainflip, LpBalanceApi, LpDepositHandler, SetSafeMode};
+use cf_traits::{AccountRoleRegistry, BalanceApi, Chainflip, SetSafeMode};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
 use sp_runtime::AccountId32;
 
@@ -26,8 +26,8 @@ fn egress_chain_and_asset_must_match() {
 #[test]
 fn liquidity_providers_can_withdraw_asset() {
 	new_test_ext().execute_with(|| {
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000);
-		FreeBalances::<Test>::insert(AccountId::from(NON_LP_ACCOUNT), Asset::Eth, 1_000);
+		MockBalanceApi::insert_balance(LP_ACCOUNT.into(), 1_000);
+		MockBalanceApi::insert_balance(NON_LP_ACCOUNT.into(), 1_000);
 
 		assert_noop!(
 			LiquidityProvider::withdraw_asset(
@@ -55,8 +55,6 @@ fn liquidity_providers_can_withdraw_asset() {
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 		));
-
-		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(900));
 	});
 }
 
@@ -65,15 +63,8 @@ fn liquidity_providers_can_move_assets_internally() {
 	new_test_ext().execute_with(|| {
 		const BALANCE_LP_1: AssetAmount = 1_000;
 		const TRANSFER_AMOUNT: AssetAmount = 100;
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, BALANCE_LP_1);
 
-		let old_balance_origin = FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth)
-			.expect("balance exists");
-		let old_balance_dest =
-			FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth).unwrap_or(0);
-
-		assert_eq!(old_balance_origin, BALANCE_LP_1);
-		assert_eq!(old_balance_dest, 0);
+		MockBalanceApi::insert_balance(LP_ACCOUNT.into(), BALANCE_LP_1);
 
 		// Cannot move assets to a non-LP account.
 		assert_noop!(
@@ -103,6 +94,7 @@ fn liquidity_providers_can_move_assets_internally() {
 			Asset::Eth,
 			AccountId::from(LP_ACCOUNT_2),
 		));
+
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
 			crate::Event::AssetTransferred {
 				from: AccountId::from(LP_ACCOUNT),
@@ -111,26 +103,13 @@ fn liquidity_providers_can_move_assets_internally() {
 				amount: TRANSFER_AMOUNT,
 			},
 		));
-		// Expect the balances to be moved between the LP accounts.
-		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(900));
-		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth), Some(100));
-
-		let new_balance_origin = FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth)
-			.expect("balance exists");
-		let new_balance_dest = FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT_2), Asset::Eth)
-			.expect("balance exists");
-
-		assert!(
-			old_balance_origin + old_balance_dest == new_balance_origin + new_balance_dest,
-			"Balance integrity check failed!"
-		);
 	});
 }
 
 #[test]
 fn cannot_deposit_and_withdrawal_during_safe_mode() {
 	new_test_ext().execute_with(|| {
-		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000);
+		MockBalanceApi::insert_balance(LP_ACCOUNT.into(), 1_000);
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			EncodedAddress::Eth(Default::default()),
@@ -340,11 +319,8 @@ fn account_registration_and_deregistration() {
 			OriginTrait::signed(LP_ACCOUNT_ID),
 			EncodedAddress::Eth([0x01; 20])
 		));
-		assert_ok!(<LiquidityProvider as LpDepositHandler>::add_deposit(
-			&LP_ACCOUNT_ID,
-			Asset::Eth,
-			DEPOSIT_AMOUNT
-		));
+
+		MockBalanceApi::try_credit_account(&LP_ACCOUNT_ID, Asset::Eth, DEPOSIT_AMOUNT).unwrap();
 
 		assert_noop!(
 			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
@@ -358,6 +334,15 @@ fn account_registration_and_deregistration() {
 			EncodedAddress::Eth(Default::default()),
 		));
 
+		assert_ok!(MockIngressEgressBoostApi::set_boost_funds(100));
+
+		assert_noop!(
+			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
+			Error::<Test>::BoostedFundsRemaining,
+		);
+
+		assert_ok!(MockIngressEgressBoostApi::remove_boost_funds(100));
+
 		assert_ok!(
 			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT_ID)),
 		);
@@ -365,19 +350,9 @@ fn account_registration_and_deregistration() {
 		assert!(
 			LiquidityRefundAddress::<Test>::get(&LP_ACCOUNT_ID, ForeignChain::Ethereum).is_none()
 		);
-		assert!(<LiquidityProvider as LpBalanceApi>::free_balances(&LP_ACCOUNT_ID)
-			.unwrap()
+
+		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT_ID)
 			.iter()
 			.all(|(_, amount)| *amount == 0));
-	});
-}
-
-#[test]
-fn record_fees() {
-	new_test_ext().execute_with(|| {
-		const LP_ACCOUNT_ID: AccountId = AccountId32::new(LP_ACCOUNT);
-		const AMOUNT: AssetAmount = 1_000;
-		LiquidityProvider::record_fees(&LP_ACCOUNT_ID, AMOUNT, Asset::Eth);
-		assert_eq!(HistoricalEarnedFees::<Test>::get(&LP_ACCOUNT_ID, Asset::Eth), AMOUNT);
 	});
 }

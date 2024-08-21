@@ -13,7 +13,7 @@ function loadContractCached(abiPath: string) {
   };
 }
 const CF_ETH_CONTRACT_ABI_TAG = 'v1.1.2';
-const CF_SOL_PROGRAM_IDL_TAG = 'v0.3.1';
+const CF_SOL_PROGRAM_IDL_TAG = 'v1.0.0-rc';
 export const getErc20abi = loadContractCached(
   '../contract-interfaces/eth-contract-abis/IERC20.json',
 );
@@ -28,4 +28,7 @@ export const getKeyManagerAbi = loadContractCached(
 );
 export const getSolanaVaultIdl = loadContractCached(
   `../contract-interfaces/sol-program-idls/${CF_SOL_PROGRAM_IDL_TAG}/vault.json`,
+);
+export const getCfTesterIdl = loadContractCached(
+  `../contract-interfaces/sol-program-idls/${CF_SOL_PROGRAM_IDL_TAG}/cf_tester.json`,
 );

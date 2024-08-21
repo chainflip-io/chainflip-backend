@@ -7,10 +7,10 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	evm::to_evm_address,
 	sol::SolAddress,
-	CcmChannelMetadata, ChannelRefundParameters, ForeignChain, ForeignChainAddress,
+	CcmChannelMetadata, ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{BlockNumber, NetworkEnvironment, Price};
+use cf_primitives::{BlockNumber, DcaParameters, NetworkEnvironment, Price};
 use futures::FutureExt;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
@@ -347,7 +347,7 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
 	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<ChannelRefundParameters>,
+	pub refund_parameters: Option<ChannelRefundParametersGeneric<AddressString>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -392,6 +392,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Affiliates<AccountId32>,
 		refund_parameters: Option<RefundParameters>,
+		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
 		let destination_address =
 			destination_address.try_parse_to_encoded_address(destination_asset.into())?;
@@ -402,16 +403,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			)
 			.await?;
 		let (_tx_hash, events, header, ..) = self
-			.submit_signed_extrinsic_with_dry_run(if affiliate_fees.is_empty() {
-				pallet_cf_swapping::Call::request_swap_deposit_address {
-					source_asset,
-					destination_asset,
-					destination_address,
-					broker_commission,
-					channel_metadata,
-					boost_fee: boost_fee.unwrap_or_default(),
-				}
-			} else {
+			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
 					destination_asset,
@@ -422,7 +414,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					affiliate_fees,
 					refund_parameters: refund_parameters
 						.map(|rpc_params| {
-							Ok::<_, anyhow::Error>(ChannelRefundParameters {
+							Ok::<_, anyhow::Error>(ChannelRefundParametersGeneric {
 								retry_duration: rpc_params.retry_duration,
 								refund_address: rpc_params
 									.refund_address
@@ -434,8 +426,9 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 							})
 						})
 						.transpose()?,
-				}
-			})
+					dca_parameters,
+				},
+			)
 			.await?
 			.until_in_block()
 			.await?;
@@ -463,7 +456,11 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				channel_id: *channel_id,
 				source_chain_expiry_block: (*source_chain_expiry_block).into(),
 				channel_opening_fee: (*channel_opening_fee).into(),
-				refund_parameters: refund_parameters.clone(),
+				refund_parameters: refund_parameters.as_ref().map(|params| {
+					params.map_address(|refund_address| {
+						AddressString::from_encoded_address(&refund_address)
+					})
+				}),
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");
@@ -545,7 +542,10 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 		ForeignChain::Arbitrum => EncodedAddress::Arb(clean_hex_address(address)?),
-		ForeignChain::Solana => EncodedAddress::Sol(SolAddress::from_str(address)?.into()),
+		ForeignChain::Solana => match SolAddress::from_str(address) {
+			Ok(sol_address) => EncodedAddress::Sol(sol_address.into()),
+			Err(_) => EncodedAddress::Sol(clean_hex_address(address)?),
+		},
 	})
 }
 
@@ -732,6 +732,22 @@ mod tests {
 				.unwrap_err()
 				.to_string(),
 				anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
+			);
+		}
+
+		#[test]
+		fn test_sol_address_decoding() {
+			assert_eq!(
+				clean_foreign_chain_address(
+					ForeignChain::Solana,
+					"HGgUaHpsmZpB3pcYt8PE89imca6BQBRqYtbVQQqsso3o"
+				)
+				.unwrap(),
+				clean_foreign_chain_address(
+					ForeignChain::Solana,
+					"0xf1bf5683e0bfb6fffacb2d8d3641faa0008b65cc296c26ec80aee5a71ddf294a"
+				)
+				.unwrap(),
 			);
 		}
 	}

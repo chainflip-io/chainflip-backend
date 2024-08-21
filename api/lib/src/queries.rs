@@ -106,13 +106,12 @@ impl QueryApi {
 			Ok((
 				asset,
 				self.state_chain_client
-					.storage_double_map_entry::<pallet_cf_lp::FreeBalances<state_chain_runtime::Runtime>>(
+					.storage_double_map_entry::<pallet_cf_asset_balances::FreeBalances<state_chain_runtime::Runtime>>(
 						block_hash,
 						&self.state_chain_client.account_id(),
 						&asset,
 					)
-					.await?
-					.unwrap_or_default(),
+					.await?,
 			))
 		}))
 		.await

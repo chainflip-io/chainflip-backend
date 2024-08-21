@@ -1,26 +1,30 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use core::ops::Range;
-
 use cf_amm::{
 	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
 	limit_orders::{self, Collected, PositionInfo},
 	range_orders::{self, Liquidity},
 	PoolState,
 };
+use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_traits::{
-	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapQueueApi, SwappingApi,
+	impl_pallet_safe_mode, BalanceApi, Chainflip, PoolApi, SwapRequestHandler, SwappingApi,
 };
+use core::ops::Range;
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
 	storage::with_storage_layer,
-	traits::{OriginTrait, StorageVersion, UnfilteredDispatchable},
+	traits::{OnKilledAccount, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	transactional,
 };
 
+use cf_traits::HistoricalFeeMigration;
+
+use cf_traits::LpRegistration;
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -147,7 +151,7 @@ pub mod pallet {
 		range_orders::{self, Liquidity},
 		NewError,
 	};
-	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
+	use cf_traits::AccountRoleRegistry;
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::collections::btree_map::BTreeMap;
 
@@ -270,10 +274,13 @@ pub mod pallet {
 		/// The event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Pallet responsible for managing Liquidity Providers.
-		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
+		/// Access to the account balances.
+		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
 
-		type SwapQueueApi: SwapQueueApi;
+		/// LP address registration and verification.
+		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
+
+		type SwapRequestHandler: SwapRequestHandler;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -301,6 +308,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type MaximumPriceImpact<T: Config> =
 		StorageMap<_, Twox64Concat, AssetPair, u32, OptionQuery>;
+
+	#[pallet::storage]
+	/// Historical earned fees for an account.
+	pub type HistoricalEarnedFees<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -1093,13 +1105,51 @@ impl<T: Config> PoolApi for Pallet<T> {
 
 	fn open_order_count(
 		who: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
-		let pool_orders = Self::pool_orders(base_asset, quote_asset, Some(who.clone()))?;
+		let pool_orders =
+			Self::pool_orders(asset_pair.base, asset_pair.quote, Some(who.clone()), true)?;
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
+	}
+
+	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		let mut result: AssetMap<AssetAmount> = AssetMap::from_fn(|_| 0);
+
+		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
+			let pool_orders =
+				match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()), false) {
+					Ok(orders) => orders,
+					Err(_) => continue,
+				};
+			for ask in pool_orders.limit_orders.asks {
+				result[base_asset] = result[base_asset]
+					.saturating_add(ask.sell_amount.saturated_into::<AssetAmount>());
+			}
+			for bid in pool_orders.limit_orders.bids {
+				result[Asset::Usdc] = result[Asset::Usdc]
+					.saturating_add(bid.sell_amount.saturated_into::<AssetAmount>());
+			}
+			for range_order in pool_orders.range_orders {
+				let pair = Self::pool_range_order_liquidity_value(
+					base_asset,
+					Asset::Usdc,
+					range_order.range,
+					range_order.liquidity,
+				)
+				.expect("Cannot fail we are sure the pool exists and the orders too");
+				result[base_asset] =
+					result[base_asset].saturating_add(pair.base.saturated_into::<AssetAmount>());
+				result[Asset::Usdc] =
+					result[Asset::Usdc].saturating_add(pair.quote.saturated_into::<AssetAmount>());
+			}
+		}
+		result
+	}
+
+	fn pools() -> Vec<PoolPairsMap<Asset>> {
+		Self::pools()
 	}
 }
 
@@ -1512,7 +1562,9 @@ impl<T: Config> Pallet<T> {
 			asset_pair.assets().zip(collected.fees).try_map(|(asset, collected_fees)| {
 				AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
 					|collected_fees| {
-						T::LpBalance::record_fees(lp, collected_fees, asset);
+						HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
+							*balance = balance.saturating_add(collected_fees)
+						});
 						T::LpBalance::try_credit_account(lp, asset, collected_fees)
 							.map(|()| collected_fees)
 					},
@@ -1602,7 +1654,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		f: F,
 	) -> Result<R, DispatchError> {
-		T::LpBalance::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
+		T::LpRegistrationApi::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)
@@ -1829,6 +1881,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		option_lp: Option<T::AccountId>,
+		filled_orders: bool,
 	) -> Result<PoolOrders<T>, DispatchError> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
@@ -1859,9 +1912,7 @@ impl<T: Config> Pallet<T> {
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
 							.unwrap();
-						if position_info.amount.is_zero() {
-							None
-						} else {
+						if filled_orders || !position_info.amount.is_zero() {
 							Some(LimitOrder {
 								lp: lp.clone(),
 								id: id.into(),
@@ -1870,6 +1921,8 @@ impl<T: Config> Pallet<T> {
 								fees_earned: collected.accumulative_fees,
 								original_sell_amount: collected.original_amount,
 							})
+						} else {
+							None
 						}
 					})
 					.collect()
@@ -1947,7 +2000,9 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		let collected_fees: AssetAmount = collected.fees.try_into()?;
 		let asset = asset_pair.assets()[!order.to_sold_pair()];
-		T::LpBalance::record_fees(lp, collected_fees, asset);
+		HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
+			*balance = balance.saturating_add(collected_fees)
+		});
 		T::LpBalance::try_credit_account(lp, asset, collected_fees)?;
 
 		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
@@ -1995,5 +2050,25 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 		Ok(())
+	}
+}
+
+impl<T: Config> HistoricalFeeMigration for Pallet<T> {
+	type AccountId = T::AccountId;
+	fn migrate_historical_fee(account_id: Self::AccountId, asset: Asset, amount: AssetAmount) {
+		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
+			*balance = balance.saturating_add(amount)
+		});
+	}
+	fn get_fee_amount(account_id: Self::AccountId, asset: Asset) -> AssetAmount {
+		HistoricalEarnedFees::<T>::get(account_id, asset)
+	}
+}
+
+pub struct DeleteHistoricalEarnedFees<T: Config>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for DeleteHistoricalEarnedFees<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
 	}
 }

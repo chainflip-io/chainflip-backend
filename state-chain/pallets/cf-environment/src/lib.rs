@@ -12,7 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::SolAddress,
+	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, Solana},
 	Chain,
 };
 use cf_primitives::{
@@ -36,7 +36,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(11);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -63,7 +63,7 @@ pub enum SafeModeUpdate<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{btc::Utxo, Arbitrum};
+	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::DefaultNoBound;
@@ -80,6 +80,8 @@ pub mod pallet {
 		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
 		/// On new key witnessed handler for Arbitrum
 		type ArbitrumVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Arbitrum>;
+		/// On new key witnessed handler for Solana
+		type SolanaVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Solana>;
 
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
@@ -103,6 +105,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Eth is not an Erc20 token, so its address can't be updated.
 		EthAddressNotUpdateable,
+		/// The nonce account is currently not being used or does not exist.
+		NonceAccountNotBeingUsedOrDoesNotExist,
 	}
 
 	#[pallet::pallet]
@@ -202,8 +206,22 @@ pub mod pallet {
 
 	// SOLANA CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
-	#[pallet::getter(fn sol_vault_address)]
-	pub type SolanaVaultAddress<T> = StorageValue<_, SolAddress, ValueQuery>;
+	#[pallet::getter(fn solana_available_nonce_accounts)]
+	pub type SolanaAvailableNonceAccounts<T> =
+		StorageValue<_, Vec<DurableNonceAndAccount>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn solana_unavailable_nonce_accounts)]
+	pub type SolanaUnavailableNonceAccounts<T> =
+		StorageMap<_, Blake2_128Concat, SolAddress, SolHash>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn sol_genesis_hash)]
+	pub type SolanaGenesisHash<T> = StorageValue<_, SolHash, OptionQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn solana_api_environment)]
+	pub type SolanaApiEnvironment<T> = StorageValue<_, SolApiEnvironment, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -243,8 +261,12 @@ pub mod pallet {
 		UtxoConsolidationParametersUpdated { params: utxo_selection::ConsolidationParameters },
 		/// Arbitrum Initialized: contract addresses have been set, first key activated
 		ArbitrumInitialized,
+		/// Solana Initialized: contract addresses have been set, first key activated
+		SolanaInitialized,
 		/// Some unspendable Utxos are discarded from storage.
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
+		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
+		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
 	}
 
 	#[pallet::call]
@@ -363,12 +385,12 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Manually witnesses the current Bitcoin block number to complete the pending vault
+		/// Manually witnesses the current Arbitrum block number to complete the pending vault
 		/// rotation.
 		///
 		/// ## Events
 		///
-		/// - [BitcoinBlockNumberSetForVault](Event::BitcoinBlockNumberSetForVault)
+		/// - [OnSuccess](Event::ArbitrumInitialized)
 		///
 		/// ## Errors
 		///
@@ -385,13 +407,119 @@ pub mod pallet {
 
 			use cf_traits::VaultKeyWitnessedHandler;
 
-			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
+			// Witness the agg_key rotation manually in the vaults pallet for Arbitrum
 			let dispatch_result =
 				T::ArbitrumVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::ArbitrumInitialized);
 
 			Ok(dispatch_result)
+		}
+
+		#[pallet::call_index(6)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(Weight::zero())]
+		pub fn witness_initialize_solana_vault(
+			origin: OriginFor<T>,
+			block_number: u64,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for Solana
+			let dispatch_result =
+				T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+
+			Self::deposit_event(Event::<T>::SolanaInitialized);
+
+			Ok(dispatch_result)
+		}
+
+		/// Updates the Durable Nonce for the nonce account upon witnessing that the corresponding
+		/// solana tx was successfully included in a block
+		///
+		/// ## Events
+		///
+		/// - [DurableNonceSetForAccount](Event::DurableNonceSetForAccount)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [NonceAccountIsNotUnavailable](Error::NonceAccountNotBeingUsedOrDoesNotExist)
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::update_sol_nonce())]
+		pub fn update_sol_nonce(
+			origin: OriginFor<T>,
+			nonce_account: SolAddress,
+			durable_nonce: SolHash,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			if SolanaUnavailableNonceAccounts::<T>::take(nonce_account).is_some() {
+				SolanaAvailableNonceAccounts::<T>::append((nonce_account, durable_nonce));
+				Self::deposit_event(Event::<T>::DurableNonceSetForAccount {
+					nonce_account,
+					durable_nonce,
+				});
+				Ok(().into())
+			} else {
+				Err(Error::<T>::NonceAccountNotBeingUsedOrDoesNotExist.into())
+			}
+		}
+
+		/// Allows Governance to recover a used Nonce.
+		/// If a Hash is supplied as well, update the associated Durable Hash as well.
+		/// Requires Governance Origin.
+		///
+		/// ## Events
+		///
+		/// - [DurableNonceSetForAccount](Event::DurableNonceSetForAccount)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		/// - [NonceAccountNotBeingUsed](Error::NonceAccountNotBeingUsedOrDoesNotExist)
+		/// - [NonceHashNotSuppliedWhereRequired](Error::NonceAccountNotBeingUsedOrDoesNotExist)
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::force_recover_sol_nonce())]
+		pub fn force_recover_sol_nonce(
+			origin: OriginFor<T>,
+			nonce_account: SolAddress,
+			durable_nonce: Option<SolHash>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			let new_hash =
+				// If Nonce account is currently Unavailable - reset it as Available again.
+				if let Some(current_hash) = SolanaUnavailableNonceAccounts::<T>::take(nonce_account) {
+					let new_hash = durable_nonce.unwrap_or(current_hash);
+					SolanaAvailableNonceAccounts::<T>::append((nonce_account, new_hash));
+					Ok(new_hash)
+				} else if let Some(new_hash) = durable_nonce {
+					// If the Nonce account is currently Available, update its Hash (therefore the Hash must be passed in)
+					SolanaAvailableNonceAccounts::<T>::try_mutate(|durable_nonces|{
+						durable_nonces
+							.iter()
+							.position(|(account, _)|*account == nonce_account)
+							.map(|idx| {
+								durable_nonces[idx] = (nonce_account, new_hash);
+								new_hash
+							})
+							.ok_or::<DispatchError>(Error::<T>::NonceAccountNotBeingUsedOrDoesNotExist.into())
+					})
+				} else {
+					// The Nonce account currently isn't being used, or no Hash is given when it's required.
+					Err(Error::<T>::NonceAccountNotBeingUsedOrDoesNotExist.into())
+				}?;
+
+			Self::deposit_event(Event::<T>::DurableNonceSetForAccount {
+				nonce_account,
+				durable_nonce: new_hash,
+			});
+
+			Ok(().into())
 		}
 	}
 
@@ -414,7 +542,9 @@ pub mod pallet {
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
-		pub sol_vault_address: SolAddress,
+		pub sol_genesis_hash: Option<SolHash>,
+		pub sol_api_env: SolApiEnvironment,
+		pub sol_durable_nonces_and_accounts: Vec<DurableNonceAndAccount>,
 		pub _config: PhantomData<T>,
 	}
 
@@ -445,7 +575,9 @@ pub mod pallet {
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, self.arb_usdc_address);
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
-			SolanaVaultAddress::<T>::set(self.sol_vault_address);
+			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
+			SolanaApiEnvironment::<T>::set(self.sol_api_env);
+			SolanaAvailableNonceAccounts::<T>::set(self.sol_durable_nonces_and_accounts.clone());
 
 			ChainflipNetworkEnvironment::<T>::set(self.network_environment);
 
@@ -596,6 +728,34 @@ impl<T: Config> Pallet<T> {
 				fee_info.min_fee_required_per_tx() +
 				fee_info.fee_per_output_utxo(),
 		)
+	}
+
+	pub fn get_sol_nonce_and_account() -> Option<DurableNonceAndAccount> {
+		let nonce_and_account = SolanaAvailableNonceAccounts::<T>::mutate(|nonce_and_accounts| {
+			nonce_and_accounts.pop()
+		});
+		nonce_and_account.map(|(account, nonce)| {
+			SolanaUnavailableNonceAccounts::<T>::insert(account, nonce);
+			(account, nonce)
+		})
+	}
+
+	/// IMPORTANT: This fn is used to recover an un-used DurableNonce so it's available again.
+	/// ONLY use this if this nonce is un-used.
+	pub fn recover_sol_durable_nonce(nonce_account: SolAddress) {
+		if let Some(hash) = SolanaUnavailableNonceAccounts::<T>::take(nonce_account) {
+			SolanaAvailableNonceAccounts::<T>::append((nonce_account, hash));
+		}
+	}
+
+	pub fn get_all_sol_nonce_accounts() -> Vec<DurableNonceAndAccount> {
+		let mut nonce_accounts = SolanaAvailableNonceAccounts::<T>::get();
+		nonce_accounts.extend(&mut SolanaUnavailableNonceAccounts::<T>::iter());
+		nonce_accounts
+	}
+
+	pub fn get_number_of_available_sol_nonce_accounts() -> usize {
+		SolanaAvailableNonceAccounts::<T>::decode_len().unwrap_or(0)
 	}
 }
 

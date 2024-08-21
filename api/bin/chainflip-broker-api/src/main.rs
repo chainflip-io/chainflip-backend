@@ -1,7 +1,7 @@
 use cf_utilities::task_scope::{task_scope, Scope};
 use chainflip_api::{
 	self,
-	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata},
+	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
 	settings::StateChain,
 	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
 	SwapDepositAddress, WithdrawFeesDetail,
@@ -32,6 +32,7 @@ pub trait Rpc {
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: Option<RefundParameters>,
+		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress>;
 
 	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
@@ -79,6 +80,7 @@ impl RpcServer for RpcServerImpl {
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: Option<RefundParameters>,
+		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress> {
 		Ok(self
 			.api
@@ -92,6 +94,7 @@ impl RpcServer for RpcServerImpl {
 				boost_fee,
 				affiliate_fees.unwrap_or_default(),
 				refund_parameters,
+				dca_parameters,
 			)
 			.await?)
 	}
@@ -117,7 +120,7 @@ pub struct BrokerOptions {
 	#[clap(
 		long = "max_connections",
 		default_value = "100",
-		help = "The maximum number of conncurrent websocket connections to accept."
+		help = "The maximum number of concurrent websocket connections to accept."
 	)]
 	pub max_connections: u32,
 	#[clap(

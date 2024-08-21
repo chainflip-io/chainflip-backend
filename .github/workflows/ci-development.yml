@@ -14,10 +14,10 @@ jobs:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
   force-version-bump:
-      uses: ./.github/workflows/_05_force_version_bump.yml
-      secrets: inherit
-      with:
-        network-to-check-against: "sisyphos"
+    uses: ./.github/workflows/_05_force_version_bump.yml
+    secrets: inherit
+    with:
+      network-to-check-against: "sisyphos"
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
@@ -28,6 +28,11 @@ jobs:
     secrets: inherit
   build:
     uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "release"
+  build-m2:
+    uses: ./.github/workflows/_21_build_m2.yml
     secrets: inherit
     with:
       profile: "release"

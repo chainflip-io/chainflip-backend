@@ -6,32 +6,32 @@ use crate::{
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TargetChainAccount,
-	WithheldTransactionFees, MAX_SWAP_RETRY_DURATION_BLOCKS,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
-	address::{AddressConverter, IntoForeignChainAddress},
 	evm::{DepositDetails, EvmFetchId},
 	mocks::MockEthereum,
-	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
+	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall,
 	TransferAssetParams,
 };
-use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
-use cf_test_utilities::assert_has_event;
+use cf_primitives::{
+	chains::assets::eth, ChannelId, DcaParameters, ForeignChain, SWAP_DELAY_BLOCKS,
+};
+use cf_test_utilities::{assert_events_eq, assert_has_event};
 use cf_traits::{
 	mocks::{
 		self,
-		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
+		asset_withholding::MockAssetWithholding,
+		balance_api::MockBalance,
 		block_height_provider::BlockHeightProvider,
-		ccm_handler::{CcmRequest, MockCcmHandler},
 		chain_tracking::ChainTracker,
 		funding_info::MockFundingInfo,
-		swap_queue_api::{MockSwap, MockSwapQueueApi},
+		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
-	ScheduledEgressDetails, SwapType,
+	BalanceApi, DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
+	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_ok,
@@ -365,7 +365,6 @@ fn addresses_are_getting_reused() {
 			_ => None,
 		})
 		.then_execute_at_next_block(|(channels, broadcast_ids)| {
-			assert!(broadcast_ids.len() == 1);
 			// This would normally be triggered on broadcast success, should finalise the ingress.
 			for id in broadcast_ids {
 				MockEgressBroadcaster::dispatch_success_callback(id);
@@ -384,10 +383,11 @@ fn addresses_are_getting_reused() {
 			// Address 1 is free to use and in the pool of available addresses
 			assert_eq!(DepositChannelPool::<Test, _>::get(channel_id).unwrap().address, *address);
 		})
-		.request_deposit_addresses(&[(DepositRequest::Liquidity {
-			lp_account: ALICE,
-			asset: eth::Asset::Eth,
-		})])
+		.request_deposit_addresses(&[DepositRequest::SimpleSwap {
+			source_asset: eth::Asset::Eth,
+			destination_asset: eth::Asset::Flip,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}])
 		// The address should have been taken from the pool and the id counter unchanged.
 		.inspect_storage(|_| {
 			expect_size_of_address_pool(0);
@@ -466,93 +466,98 @@ fn reused_address_channel_id_matches() {
 
 #[test]
 fn test_refund_parameter_validation() {
+	fn request_fok_swap(retry_duration: u32) -> Result<(), DispatchError> {
+		IngressEgress::request_swap_deposit_address(
+			eth::Asset::Flip,
+			Asset::Eth,
+			ForeignChainAddress::Eth(Default::default()),
+			Default::default(),
+			1,
+			None,
+			0,
+			Some(ChannelRefundParameters {
+				retry_duration,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+				min_price: Default::default(),
+			}),
+			None,
+		)
+		.map(|_| ())
+	}
+
 	new_test_ext().execute_with(|| {
+		let max_swap_retry_duration_blocks =
+			<Test as crate::pallet::Config>::SwapLimitsProvider::get_swap_limits()
+				.max_swap_retry_duration_blocks;
+
+		assert_ok!(request_fok_swap(0));
+		assert_ok!(request_fok_swap(max_swap_retry_duration_blocks));
 		assert_err!(
-			IngressEgress::request_swap_deposit_address(
-				eth::Asset::Flip,
-				Asset::Eth,
-				ForeignChainAddress::Eth(Default::default()),
-				Default::default(),
-				1,
-				None,
-				0,
-				Some(ChannelRefundParameters {
-					retry_duration: MAX_SWAP_RETRY_DURATION_BLOCKS + 1,
-					refund_address: ForeignChainAddress::Eth(Default::default()),
-					min_price: Default::default(),
-				}),
-			),
-			DispatchError::Other("Retry duration too long")
+			request_fok_swap(max_swap_retry_duration_blocks + 1),
+			DispatchError::from(crate::Error::<Test, _>::SwapRetryDurationTooLong)
 		);
 	});
 }
 
 #[test]
-fn can_process_ccm_deposit() {
-	new_test_ext().execute_with(|| {
-		let from_asset = eth::Asset::Flip;
-		let to_asset = Asset::Eth;
-		let destination_address = ForeignChainAddress::Eth(Default::default());
-		let channel_metadata = CcmChannelMetadata {
-			message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
-			gas_budget: 1_000,
-			cf_parameters: vec![].try_into().unwrap(),
-		};
-		let ccm = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: None,
-			channel_metadata: channel_metadata.clone(),
-		};
-		let amount = 5_000;
-
-		// Register swap deposit with CCM
-
-		let (_, deposit_address, ..) = IngressEgress::request_swap_deposit_address(
-			from_asset,
-			to_asset,
-			destination_address.clone(),
+fn test_dca_parameter_validation() {
+	fn request_dca_swap(number_of_chunks: u32, chunk_interval: u32) -> Result<(), DispatchError> {
+		IngressEgress::request_swap_deposit_address(
+			eth::Asset::Flip,
+			Asset::Eth,
+			ForeignChainAddress::Eth(Default::default()),
 			Default::default(),
 			1,
-			Some(channel_metadata),
+			None,
 			0,
 			None,
+			Some(DcaParameters { number_of_chunks, chunk_interval }),
 		)
-		.unwrap();
+		.map(|_| ())
+	}
 
-		let deposit_address: TargetChainAccount<Test, _> = deposit_address.try_into().unwrap();
+	new_test_ext().execute_with(|| {
+		const MIN_CHUNK_INTERVAL: u32 = SWAP_DELAY_BLOCKS;
+		let max_swap_request_duration_blocks =
+			<Test as crate::pallet::Config>::SwapLimitsProvider::get_swap_limits()
+				.max_swap_request_duration_blocks;
 
-		assert_eq!(
-			DepositChannelLookup::<Test, ()>::get(deposit_address).unwrap().opened_at,
-			BlockHeightProvider::<MockEthereum>::get_block_height()
+		// Trivially ok
+		assert_ok!(request_dca_swap(1, MIN_CHUNK_INTERVAL));
+		assert_ok!(request_dca_swap(2, MIN_CHUNK_INTERVAL));
+
+		// Equal to the limit
+		assert_ok!(request_dca_swap(
+			(max_swap_request_duration_blocks / MIN_CHUNK_INTERVAL) + 1,
+			MIN_CHUNK_INTERVAL
+		));
+		assert_ok!(request_dca_swap(2, max_swap_request_duration_blocks));
+
+		// Limit is ignored because there is only 1 chunk
+		assert_ok!(request_dca_swap(1, max_swap_request_duration_blocks + 100));
+		assert_ok!(request_dca_swap(1, 0));
+
+		// Exceeding limit
+		assert_err!(
+			request_dca_swap(
+				(max_swap_request_duration_blocks / MIN_CHUNK_INTERVAL) + 2,
+				MIN_CHUNK_INTERVAL
+			),
+			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
+		);
+		assert_err!(
+			request_dca_swap(2, max_swap_request_duration_blocks + 1),
+			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
 		);
 
-		// Making a deposit should trigger CcmHandler.
-		assert_ok!(IngressEgress::process_single_deposit(
-			deposit_address,
-			from_asset,
-			amount,
-			Default::default(),
-			Default::default()
-		));
-		assert_eq!(
-			MockCcmHandler::get_ccm_requests(),
-			vec![CcmRequest {
-				source_asset: from_asset.into(),
-				deposit_amount: amount,
-				destination_asset: to_asset,
-				destination_address,
-				deposit_metadata: ccm,
-				origin: SwapOrigin::DepositChannel {
-					deposit_address:
-						MockAddressConverter::to_encoded_address(
-							<<Ethereum as Chain>::ChainAccount as IntoForeignChainAddress<
-								Ethereum,
-							>>::into_foreign_chain_address(deposit_address),
-						),
-					channel_id: 1,
-					deposit_block_height: Default::default()
-				}
-			}]
+		// Below the minimum
+		assert_err!(
+			request_dca_swap(10, 1),
+			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
+		);
+		assert_err!(
+			request_dca_swap(0, MIN_CHUNK_INTERVAL),
+			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
 		);
 	});
 }
@@ -610,6 +615,7 @@ fn can_egress_ccm() {
 			ccm.source_address,
 			GAS_BUDGET,
 			ccm.channel_metadata.message.to_vec(),
+			vec![],
 		).unwrap()]);
 
 		// Storage should be cleared
@@ -714,6 +720,10 @@ fn multi_use_deposit_address_different_blocks() {
 				Default::default(),
 				Default::default()
 			));
+			assert!(
+				MockBalance::get_balance(&ALICE, ETH.into()) > 0,
+				"LP account hasn't earned fees!"
+			);
 			let recycle_block = IngressEgress::expiry_and_recycle_block_height().2;
 			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 
@@ -867,28 +877,6 @@ fn multi_use_deposit_same_block() {
 }
 
 #[test]
-fn can_set_minimum_deposit() {
-	new_test_ext().execute_with(|| {
-		let asset = eth::Asset::Eth;
-		let minimum_deposit = 1_500u128;
-		assert_eq!(MinimumDeposit::<Test, ()>::get(asset), 0);
-		// Set the new minimum deposits
-		assert_ok!(IngressEgress::update_pallet_config(
-			RuntimeOrigin::root(),
-			vec![PalletConfigUpdate::<Test, _>::SetMinimumDeposit { asset, minimum_deposit }]
-				.try_into()
-				.unwrap()
-		));
-
-		assert_eq!(MinimumDeposit::<Test, ()>::get(asset), minimum_deposit);
-
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test, ()>::MinimumDepositSet { asset, minimum_deposit },
-		));
-	});
-}
-
-#[test]
 fn deposits_below_minimum_are_rejected() {
 	new_test_ext().execute_with(|| {
 		let eth = eth::Asset::Eth;
@@ -1029,6 +1017,7 @@ fn handle_pending_deployment() {
 			Default::default(),
 		)
 		.unwrap();
+		assert!(MockBalance::get_balance(&ALICE, ETH.into()) > 0, "LP account hasn't earned fees!");
 		// None-pending requests can still be sent
 		request_address_and_deposit(1u64, eth::Asset::Eth);
 		request_address_and_deposit(2u64, eth::Asset::Eth);
@@ -1058,6 +1047,10 @@ fn handle_pending_deployment_same_block() {
 			Default::default(),
 		)
 		.unwrap();
+		assert!(
+			MockBalance::get_balance(&ALICE, eth::Asset::Eth.into()) > 0,
+			"LP account hasn't earned fees!"
+		);
 		// Expect to have two fetch requests.
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 2);
 		// Process deposits.
@@ -1188,85 +1181,6 @@ fn can_store_failed_vault_transfers() {
 			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
 		);
 	});
-}
-
-#[test]
-fn basic_balance_tracking() {
-	const ETH_DEPOSIT_AMOUNT: u128 = 1_000;
-	const FLIP_DEPOSIT_AMOUNT: u128 = 2_000;
-	const USDC_DEPOSIT_AMOUNT: u128 = 3_000;
-	const FLIP_EGRESS_AMOUNT: u128 = 500;
-
-	new_test_ext()
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, 0),
-			(eth::Asset::Flip, 0),
-			(eth::Asset::Usdc, 0),
-		])
-		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth },
-			ETH_DEPOSIT_AMOUNT,
-		)])
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT),
-			(eth::Asset::Flip, 0),
-			(eth::Asset::Usdc, 0),
-		])
-		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Flip },
-			FLIP_DEPOSIT_AMOUNT,
-		)])
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT),
-			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT),
-			(eth::Asset::Usdc, 0),
-		])
-		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Usdc },
-			USDC_DEPOSIT_AMOUNT,
-		)])
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT),
-			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT),
-			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
-		])
-		.request_address_and_deposit(&[(
-			DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth },
-			ETH_DEPOSIT_AMOUNT,
-		)])
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT * 2),
-			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT),
-			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
-		])
-		.request_address_and_deposit(&[(
-			DepositRequest::SimpleSwap {
-				source_asset: eth::Asset::Eth,
-				destination_asset: eth::Asset::Flip,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-			ETH_DEPOSIT_AMOUNT,
-		)])
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT * 3),
-			// The ETH-FLIP swap uses the mock's hardcoded rate of 1:1.
-			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT - ETH_DEPOSIT_AMOUNT),
-			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
-		])
-		// Trigger a non-swap transfer.
-		.then_execute_at_next_block(|_| {
-			assert_ok!(<IngressEgress as EgressApi<Ethereum>>::schedule_egress(
-				eth::Asset::Flip,
-				FLIP_EGRESS_AMOUNT,
-				Default::default(),
-				None
-			));
-		})
-		.check_deposit_balances(&[
-			(eth::Asset::Eth, ETH_DEPOSIT_AMOUNT * 3),
-			(eth::Asset::Flip, FLIP_DEPOSIT_AMOUNT - ETH_DEPOSIT_AMOUNT - FLIP_EGRESS_AMOUNT),
-			(eth::Asset::Usdc, USDC_DEPOSIT_AMOUNT),
-		]);
 }
 
 #[test]
@@ -1596,30 +1510,55 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 }
 
 #[test]
-fn can_update_multiple_items_at_once() {
+fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
+		const NEW_OPENING_FEE: u128 = 300;
+		const NEW_MIN_DEPOSIT_FLIP: u128 = 100;
+		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
+
+		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), 0);
+
+		// Update all config items at the same time, and updates 2 separate min deposit amounts.
 		assert_ok!(IngressEgress::update_pallet_config(
 			OriginTrait::root(),
 			vec![
-				PalletConfigUpdate::ChannelOpeningFee { fee: 100 },
+				PalletConfigUpdate::ChannelOpeningFee { fee: NEW_OPENING_FEE },
 				PalletConfigUpdate::SetMinimumDeposit {
 					asset: eth::Asset::Flip,
-					minimum_deposit: 100
+					minimum_deposit: NEW_MIN_DEPOSIT_FLIP
 				},
 				PalletConfigUpdate::SetMinimumDeposit {
 					asset: eth::Asset::Eth,
-					minimum_deposit: 200
+					minimum_deposit: NEW_MIN_DEPOSIT_ETH
 				},
 			]
 			.try_into()
 			.unwrap()
 		));
-		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 100);
-		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), 100);
-		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), 200);
+
+		// Check that the new values were set
+		assert_eq!(ChannelOpeningFee::<Test, _>::get(), NEW_OPENING_FEE);
+		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), NEW_MIN_DEPOSIT_FLIP);
+		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), NEW_MIN_DEPOSIT_ETH);
+
+		// Check that the events were emitted
+		assert_events_eq!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::ChannelOpeningFeeSet {
+				fee: NEW_OPENING_FEE
+			}),
+			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::MinimumDepositSet {
+				asset: eth::Asset::Flip,
+				minimum_deposit: NEW_MIN_DEPOSIT_FLIP
+			}),
+			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::MinimumDepositSet {
+				asset: eth::Asset::Eth,
+				minimum_deposit: NEW_MIN_DEPOSIT_ETH
+			}),
+		);
 	});
 }
 
@@ -1639,9 +1578,10 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(
 		// Should not schedule a swap because it is already the gas asset, but should withhold the
 		// fee immediately.
 		test_function(eth::Asset::Eth);
-		assert!(MockSwapQueueApi::get_swap_queue().is_empty());
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
 		assert_eq!(
-			WithheldTransactionFees::<Test, _>::get(eth::Asset::Eth),
+			MockAssetWithholding::withheld_assets(ForeignChain::Ethereum.gas_asset()),
 			GAS_FEE,
 			"Expected ingress egress fee to be withheld for gas asset"
 		);
@@ -1652,25 +1592,25 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(
 		test_function(eth::Asset::Usdt);
 
 		assert_eq!(
-			MockSwapQueueApi::get_swap_queue(),
+			MockSwapRequestHandler::<Test>::get_swap_requests(),
 			vec![
-				MockSwap {
-					from: cf_primitives::Asset::Flip,
-					to: cf_primitives::Asset::Eth,
-					amount: GAS_FEE,
-					swap_type: SwapType::IngressEgressFee
+				MockSwapRequest {
+					input_asset: cf_primitives::Asset::Flip,
+					output_asset: cf_primitives::Asset::Eth,
+					input_amount: GAS_FEE,
+					swap_type: SwapRequestType::IngressEgressFee
 				},
-				MockSwap {
-					from: cf_primitives::Asset::Usdc,
-					to: cf_primitives::Asset::Eth,
-					amount: GAS_FEE,
-					swap_type: SwapType::IngressEgressFee
+				MockSwapRequest {
+					input_asset: cf_primitives::Asset::Usdc,
+					output_asset: cf_primitives::Asset::Eth,
+					input_amount: GAS_FEE,
+					swap_type: SwapRequestType::IngressEgressFee
 				},
-				MockSwap {
-					from: cf_primitives::Asset::Usdt,
-					to: cf_primitives::Asset::Eth,
-					amount: GAS_FEE,
-					swap_type: SwapType::IngressEgressFee
+				MockSwapRequest {
+					input_asset: cf_primitives::Asset::Usdt,
+					output_asset: cf_primitives::Asset::Eth,
+					input_amount: GAS_FEE,
+					swap_type: SwapRequestType::IngressEgressFee
 				}
 			]
 		);

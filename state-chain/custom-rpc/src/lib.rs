@@ -11,8 +11,9 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex,
-	ForeignChain, NetworkEnvironment, SemVer, SwapId,
+	chains::assets::{any, any::AssetMap},
+	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, ForeignChain,
+	NetworkEnvironment, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -43,16 +44,18 @@ use state_chain_runtime::{
 	},
 	runtime_apis::{
 		BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage,
-		FailingWitnessValidators, LiquidityProviderInfo, ValidatorInfo,
+		FailingWitnessValidators, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		ValidatorInfo,
 	},
 	safe_mode::RuntimeSafeMode,
-	NetworkFee,
+	Hash, NetworkFee,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
 	marker::PhantomData,
 	sync::Arc,
 };
+
 pub mod monitoring;
 
 #[derive(Serialize, Deserialize)]
@@ -84,21 +87,8 @@ impl From<RedemptionsInfo> for RpcRedemptionsInfo {
 		Self { total_balance: redemption_info.total_balance.into(), count: redemption_info.count }
 	}
 }
-#[derive(Serialize, Deserialize)]
-pub struct RpcFeeImbalance {
-	pub ethereum: NumberOrHex,
-	pub polkadot: NumberOrHex,
-	pub arbitrum: NumberOrHex,
-}
-impl From<FeeImbalance> for RpcFeeImbalance {
-	fn from(fee_imbalance: FeeImbalance) -> Self {
-		Self {
-			ethereum: fee_imbalance.ethereum.into(),
-			polkadot: fee_imbalance.polkadot.into(),
-			arbitrum: fee_imbalance.arbitrum.into(),
-		}
-	}
-}
+
+pub type RpcFeeImbalance = FeeImbalance<NumberOrHex>;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcFlipSupply {
@@ -136,7 +126,7 @@ impl From<MonitoringData> for RpcMonitoringData {
 		Self {
 			epoch: monitoring_data.epoch.into(),
 			pending_redemptions: monitoring_data.pending_redemptions.into(),
-			fee_imbalance: monitoring_data.fee_imbalance.into(),
+			fee_imbalance: monitoring_data.fee_imbalance.map(|i| (*i).into()),
 			external_chains_height: monitoring_data.external_chains_height,
 			btc_utxos: monitoring_data.btc_utxos,
 			pending_broadcasts: monitoring_data.pending_broadcasts,
@@ -184,11 +174,34 @@ impl ScheduledSwap {
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AssetWithAmount {
-	#[serde(flatten)]
-	pub asset: Asset,
-	pub amount: AssetAmount,
+#[derive(Serialize, Deserialize)]
+pub struct RpcLiquidityProviderBoostPoolInfo {
+	pub fee_tier: u16,
+	pub total_balance: U256,
+	pub available_balance: U256,
+	pub in_use_balance: U256,
+	pub is_withdrawing: bool,
+}
+
+impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo {
+	fn from(info: &LiquidityProviderBoostPoolInfo) -> Self {
+		// pattern matching to ensure exhaustive use of the fields
+		let LiquidityProviderBoostPoolInfo {
+			fee_tier,
+			total_balance,
+			available_balance,
+			in_use_balance,
+			is_withdrawing,
+		} = info;
+
+		Self {
+			fee_tier: *fee_tier,
+			total_balance: (*total_balance).into(),
+			available_balance: (*available_balance).into(),
+			in_use_balance: (*in_use_balance).into(),
+			is_withdrawing: *is_withdrawing,
+		}
+	}
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -206,7 +219,8 @@ pub enum RpcAccountInfo {
 		balances: any::AssetMap<NumberOrHex>,
 		refund_addresses: HashMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
 		flip_balance: NumberOrHex,
-		earned_fees: any::AssetMap<AssetAmount>,
+		earned_fees: any::AssetMap<U256>,
+		boost_balances: any::AssetMap<Vec<RpcLiquidityProviderBoostPoolInfo>>,
 	},
 	Validator {
 		flip_balance: NumberOrHex,
@@ -255,7 +269,16 @@ impl RpcAccountInfo {
 				.into_iter()
 				.map(|(chain, address)| (chain, address.map(|a| a.to_humanreadable(network))))
 				.collect(),
-			earned_fees: info.earned_fees,
+			earned_fees: info
+				.earned_fees
+				.iter()
+				.map(|(asset, balance)| (asset, (*balance).into()))
+				.collect(),
+			boost_balances: info
+				.boost_balances
+				.iter()
+				.map(|(asset, infos)| (asset, infos.iter().map(|info| info.into()).collect()))
+				.collect(),
 		}
 	}
 
@@ -395,6 +418,9 @@ pub struct FundingEnvironment {
 pub struct SwappingEnvironment {
 	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
 	network_fee_hundredth_pips: Permill,
+	swap_retry_delay_blocks: u32,
+	max_swap_retry_duration_blocks: u32,
+	max_swap_request_duration_blocks: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -620,6 +646,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<any::AssetMap<U256>>;
+	#[method(name = "lp_total_balances", aliases = ["lp_total_balances"])]
+	fn cf_lp_total_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<any::AssetMap<U256>>;
 	#[method(name = "penalties")]
 	fn cf_penalties(
 		&self,
@@ -711,6 +743,7 @@ pub trait CustomApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 		lp: Option<state_chain_runtime::AccountId>,
+		filled_orders: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>>;
 	#[method(name = "pool_range_order_liquidity_value")]
@@ -742,6 +775,11 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment>;
+	#[method(name = "available_pools")]
+	fn cf_available_pools(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<PoolPairsMap<Asset>>>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 	#[deprecated(note = "Use direct storage access of `CurrentReleaseVersion` instead.")]
@@ -1083,12 +1121,20 @@ where
 		self.client
 			.runtime_api()
 			.cf_free_balances(self.unwrap_or_best(at), account_id)
+			.map(|asset_map| asset_map.map(Into::into))
 			.map_err(to_rpc_error)
-			.and_then(|result| {
-				result
-					.map(|free_balances| free_balances.map(Into::into))
-					.map_err(map_dispatch_error)
-			})
+	}
+
+	fn cf_lp_total_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<any::AssetMap<U256>> {
+		self.client
+			.runtime_api()
+			.cf_lp_total_balances(self.unwrap_or_best(at), account_id)
+			.map(|asset_map| asset_map.map(Into::into))
+			.map_err(to_rpc_error)
 	}
 
 	fn cf_penalties(
@@ -1344,11 +1390,18 @@ where
 		base_asset: Asset,
 		quote_asset: Asset,
 		lp: Option<state_chain_runtime::AccountId>,
+		filled_orders: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>> {
 		self.client
 			.runtime_api()
-			.cf_pool_orders(self.unwrap_or_best(at), base_asset, quote_asset, lp)
+			.cf_pool_orders(
+				self.unwrap_or_best(at),
+				base_asset,
+				quote_asset,
+				lp,
+				filled_orders.unwrap_or(false),
+			)
 			.map_err(to_rpc_error)
 			.and_then(|result| result.map_err(map_dispatch_error))
 	}
@@ -1431,6 +1484,7 @@ where
 	) -> RpcResult<SwappingEnvironment> {
 		let runtime_api = &self.client.runtime_api();
 		let hash = self.unwrap_or_best(at);
+		let swap_limits = runtime_api.cf_swap_limits(hash).map_err(to_rpc_error)?;
 		Ok(SwappingEnvironment {
 			maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 				runtime_api
@@ -1439,6 +1493,11 @@ where
 					.map(|option| option.map(Into::into))
 			})?,
 			network_fee_hundredth_pips: NetworkFee::get(),
+			swap_retry_delay_blocks: runtime_api
+				.cf_swap_retry_delay_blocks(hash)
+				.map_err(to_rpc_error)?,
+			max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
+			max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
 		})
 	}
 
@@ -1460,13 +1519,21 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolsEnvironment> {
 		Ok(PoolsEnvironment {
-			fees: any::AssetMap::from_fn(|asset| {
-				if asset == Asset::Usdc {
-					None
-				} else {
-					self.cf_pool_info(asset, Asset::Usdc, at).ok().map(Into::into)
-				}
-			}),
+			fees: {
+				let mut map = AssetMap::default();
+				self.client
+					.runtime_api()
+					.cf_pools(self.unwrap_or_best(at))
+					.map_err(to_rpc_error)?
+					.iter()
+					.for_each(|asset_pair| {
+						map[asset_pair.base] = self
+							.cf_pool_info(asset_pair.base, asset_pair.quote, at)
+							.ok()
+							.map(Into::into);
+					});
+				map
+			},
 		})
 	}
 
@@ -1717,6 +1784,13 @@ where
 			.cf_safe_mode_statuses(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)
 	}
+
+	fn cf_available_pools(&self, at: Option<Hash>) -> RpcResult<Vec<PoolPairsMap<Asset>>> {
+		self.client
+			.runtime_api()
+			.cf_pools(self.unwrap_or_best(at))
+			.map_err(to_rpc_error)
+	}
 }
 
 impl<C, B> CustomRpc<C, B>
@@ -1864,6 +1938,7 @@ mod test {
 					(Asset::ArbEth, 0),
 					(Asset::ArbUsdc, 0),
 					(Asset::Sol, 0),
+					(Asset::SolUsdc, 0),
 				]
 			}
 		))
@@ -1900,6 +1975,7 @@ mod test {
 					(Asset::ArbEth, 1),
 					(Asset::ArbUsdc, 2),
 					(Asset::Sol, 3),
+					(Asset::SolUsdc, 4),
 				],
 				earned_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1911,7 +1987,19 @@ mod test {
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 1u32.into(), usdc: 2u32.into() },
-					sol: sol::AssetMap { sol: 2u32.into() },
+					sol: sol::AssetMap { sol: 2u32.into(), usdc: 4u32.into() },
+				},
+				boost_balances: any::AssetMap {
+					btc: btc::AssetMap {
+						btc: vec![LiquidityProviderBoostPoolInfo {
+							fee_tier: 5,
+							total_balance: 100_000_000,
+							available_balance: 50_000_000,
+							in_use_balance: 50_000_000,
+							is_withdrawing: false,
+						}],
+					},
+					..Default::default()
 				},
 			},
 			cf_primitives::NetworkEnvironment::Mainnet,
@@ -1959,9 +2047,12 @@ mod test {
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: None },
 					arb: arb::AssetMap { eth: None, usdc: Some(0u32.into()) },
-					sol: sol::AssetMap { sol: None },
+					sol: sol::AssetMap { sol: None, usdc: None },
 				},
 				network_fee_hundredth_pips: Permill::from_percent(100),
+				swap_retry_delay_blocks: 5,
+				max_swap_retry_duration_blocks: 600,
+				max_swap_request_duration_blocks: 14400,
 			},
 			ingress_egress: IngressEgressEnvironment {
 				minimum_deposit_amounts: any::AssetMap {
@@ -1974,7 +2065,7 @@ mod test {
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
-					sol: sol::AssetMap { sol: 0u32.into() },
+					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 				},
 				ingress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1986,7 +2077,7 @@ mod test {
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
-					sol: sol::AssetMap { sol: Some(0u32.into()) },
+					sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None },
 				},
 				egress_fees: any::AssetMap {
 					eth: eth::AssetMap {
@@ -1998,7 +2089,7 @@ mod test {
 					btc: btc::AssetMap { btc: Some(0u32.into()) },
 					dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 					arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
-					sol: sol::AssetMap { sol: Some(1u32.into()) },
+					sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None },
 				},
 				witness_safety_margins: HashMap::from([
 					(ForeignChain::Bitcoin, Some(3u64)),
@@ -2017,7 +2108,7 @@ mod test {
 					btc: btc::AssetMap { btc: 0u32.into() },
 					dot: dot::AssetMap { dot: 0u32.into() },
 					arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
-					sol: sol::AssetMap { sol: 0u32.into() },
+					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 				},
 				channel_opening_fees: HashMap::from([
 					(ForeignChain::Bitcoin, 0u32.into()),
@@ -2052,7 +2143,7 @@ mod test {
 						btc: btc::AssetMap { btc: Some(pool_info) },
 						dot: dot::AssetMap { dot: Some(pool_info) },
 						arb: arb::AssetMap { eth: Some(pool_info), usdc: Some(pool_info) },
-						sol: sol::AssetMap { sol: Some(pool_info) },
+						sol: sol::AssetMap { sol: Some(pool_info), usdc: None },
 					},
 				}
 			},
