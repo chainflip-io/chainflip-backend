@@ -190,7 +190,14 @@ pub mod pallet {
 	#[derive(
 		PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode, TypeInfo, Default,
 	)]
-	struct UniqueMonotonicIdentifier(u64);
+	pub(crate) struct UniqueMonotonicIdentifier(u64);
+
+	impl UniqueMonotonicIdentifier {
+		#[cfg(feature = "runtime-benchmarks")]
+		pub fn from_u64(value: u64) -> Self {
+			Self(value)
+		}
+	}
 
 	/// A unique identifier for an election with extra details used by the ElectoralSystem
 	/// implementation. These extra details are currently used in composite electoral systems to
@@ -522,7 +529,7 @@ pub mod pallet {
 	/// Stores the elections whose consensus doesn't need to be rechecked, and the epoch when they
 	/// were last checked.
 	#[pallet::storage]
-	type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
+	pub(crate) type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, UniqueMonotonicIdentifier, EpochIndex, OptionQuery>;
 
 	/// Stores the set of authorities whose votes can contribute to consensus. Whether an authority
@@ -532,7 +539,7 @@ pub mod pallet {
 	/// the current authority set, and so it may include authorities that are not in the current
 	/// authority set or exclude authorities that are in the current authority set.
 	#[pallet::storage]
-	type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
+	pub(crate) type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
 
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
@@ -1884,7 +1891,7 @@ pub mod pallet {
 			}
 		}
 
-		fn recheck_contributed_to_consensuses(
+		pub(crate) fn recheck_contributed_to_consensuses(
 			epoch_index: EpochIndex,
 			authority: &T::ValidatorId,
 			authority_index: AuthorityCount,
