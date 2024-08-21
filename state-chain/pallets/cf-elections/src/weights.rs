@@ -18,7 +18,7 @@
 // --output
 // state-chain/pallets/cf-elections/src/weights.rs
 // --steps=20
-// --repeat=10
+// --repeat=20
 // --template=state-chain/chainflip-weight-template.hbs
 // --chain=dev-3
 
@@ -32,7 +32,7 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_elections.
 pub trait WeightInfo {
-	fn vote(n: u32) -> Weight;
+	fn vote(n: u32, ) -> Weight;
 	fn provide_shared_data() -> Weight;
 	fn stop_ignoring_my_votes() -> Weight;
 	fn ignore_my_votes() -> Weight;
@@ -76,5 +76,4 @@ impl WeightInfo for () {
 	fn recheck_contributed_to_consensuses() -> Weight    }
 		Default::default()
 	}
-
 }
