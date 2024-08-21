@@ -142,7 +142,6 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 		<<SolanaEgressWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		tracing::info!("Requesting success witnesses for {:?}", signature);
 		let (sig, _slot, tx_fee) = success_witnesses(&self.client, vec![signature])
 			.await
 			.into_iter()
