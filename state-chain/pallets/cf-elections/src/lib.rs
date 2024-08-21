@@ -115,6 +115,8 @@ pub mod vote_storage;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod weights;
+pub use weights::WeightInfo;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -251,6 +253,11 @@ pub mod pallet {
 				Self {}
 			}
 		}
+		impl Default for CorruptStorageError {
+			fn default() -> Self {
+				Self::new()
+			}
+		}
 	}
 	pub use corrupt_storage_error::CorruptStorageError;
 
@@ -313,6 +320,9 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		type ElectoralSystem: ElectoralSystem<OnFinalizeContext = ()>;
+
+		/// The weights for the pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -570,9 +580,9 @@ pub mod pallet {
 					.find(|settings_boundary| {
 						**settings_boundary <= self.unique_monotonic_identifier()
 					})
-					.ok_or_else(|| CorruptStorageError::new())?;
+					.ok_or_else(CorruptStorageError::new)?;
 				ElectoralSettings::<T, I>::get(settings_boundary)
-					.ok_or_else(|| CorruptStorageError::new())
+					.ok_or_else(CorruptStorageError::new)
 			}
 			fn properties(
 				&self,
@@ -581,14 +591,14 @@ pub mod pallet {
 				CorruptStorageError,
 			> {
 				ElectionProperties::<T, I>::get(self.election_identifier)
-					.ok_or_else(|| CorruptStorageError::new())
+					.ok_or_else(CorruptStorageError::new)
 			}
 			fn state(
 				&self,
 			) -> Result<<T::ElectoralSystem as ElectoralSystem>::ElectionState, CorruptStorageError>
 			{
 				ElectionState::<T, I>::get(self.unique_monotonic_identifier())
-					.ok_or_else(|| CorruptStorageError::new())
+					.ok_or_else(CorruptStorageError::new)
 			}
 		}
 		impl<T: Config<I>, I: 'static> ElectionWriteAccess for ElectionAccess<T, I> {
@@ -804,8 +814,7 @@ pub mod pallet {
 				<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
 				CorruptStorageError,
 			> {
-				ElectoralUnsynchronisedSettings::<T, I>::get()
-					.ok_or_else(|| CorruptStorageError::new())
+				ElectoralUnsynchronisedSettings::<T, I>::get().ok_or_else(CorruptStorageError::new)
 			}
 
 			fn unsynchronised_state(
@@ -814,8 +823,7 @@ pub mod pallet {
 				<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 				CorruptStorageError,
 			> {
-				ElectoralUnsynchronisedState::<T, I>::get()
-					.ok_or_else(|| CorruptStorageError::new())
+				ElectoralUnsynchronisedState::<T, I>::get().ok_or_else(CorruptStorageError::new)
 			}
 
 			fn unsynchronised_state_map(
@@ -845,7 +853,7 @@ pub mod pallet {
 					unique_monotonic_identifier
 						.0
 						.checked_add(1)
-						.ok_or_else(|| CorruptStorageError::new())?,
+						.ok_or_else(CorruptStorageError::new)?,
 				));
 				ElectionProperties::<T, I>::insert(election_identifier, properties);
 				ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
@@ -954,7 +962,7 @@ pub mod pallet {
 															current_epoch,
 															old_authorities
 																.get(authority_old_index)
-																.ok_or_else(|| CorruptStorageError::new())?,
+																.ok_or_else(CorruptStorageError::new)?,
 														) {
 														let authority_new_index =
 															authority_new_index as usize;
@@ -963,7 +971,7 @@ pub mod pallet {
 														);
 														*new_bitmap
 															.get_mut(authority_new_index)
-															.ok_or_else(|| CorruptStorageError::new())? = true;
+															.ok_or_else(CorruptStorageError::new)? = true;
 													}
 													Ok(new_bitmap)
 												},
@@ -1071,14 +1079,13 @@ pub mod pallet {
 					}) {
 					*existing_bitmap
 						.get_mut(authority_index)
-						.ok_or_else(|| CorruptStorageError::new())? = true;
+						.ok_or_else(CorruptStorageError::new)? = true;
 				} else {
 					self.bitmaps.push((bitmap_component.clone(), {
 						let mut bitmap = BitVec::default();
 						bitmap.resize(T::EpochInfo::current_authority_count() as usize, false);
-						*bitmap
-							.get_mut(authority_index)
-							.ok_or_else(|| CorruptStorageError::new())? = true;
+						*bitmap.get_mut(authority_index).ok_or_else(CorruptStorageError::new)? =
+							true;
 						bitmap
 					}));
 					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
@@ -1105,9 +1112,7 @@ pub mod pallet {
 					.bitmaps
 					.iter_mut()
 					.try_find(|(_bitmap_component, bitmap)| -> Result<_, CorruptStorageError> {
-						Ok(*bitmap
-							.get(authority_index)
-							.ok_or_else(|| CorruptStorageError::new())?)
+						Ok(*bitmap.get(authority_index).ok_or_else(CorruptStorageError::new)?)
 					})?
 					.map(|(bitmap_component, bitmap)| {
 						bitmap.set(authority_index, false);
@@ -1125,7 +1130,7 @@ pub mod pallet {
 					.try_find(|(_bitmap_component, bitmap)| -> Result<_, CorruptStorageError> {
 						Ok(*bitmap
 							.get(authority_index as usize)
-							.ok_or_else(|| CorruptStorageError::new())?)
+							.ok_or_else(CorruptStorageError::new)?)
 					})?
 					.map(|(bitmap_component, _)| bitmap_component.clone()))
 			}
@@ -1143,12 +1148,9 @@ pub mod pallet {
 					.flat_map(|(bitmap_component, bitmap)| {
 						debug_assert_eq!(bitmap.len(), current_authorities.len());
 						bitmap.iter_ones().map(|index| {
-							current_authorities
-								.get(index)
-								.ok_or_else(|| CorruptStorageError::new())
-								.map(|validator_id| {
-									(validator_id.clone(), bitmap_component.clone())
-								})
+							current_authorities.get(index).ok_or_else(CorruptStorageError::new).map(
+								|validator_id| (validator_id.clone(), bitmap_component.clone()),
+							)
 						})
 					})
 					.collect()
@@ -1186,7 +1188,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[pallet::call_index(0)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::vote(authority_votes.len() as u32))]
 		pub fn vote(
 			origin: OriginFor<T>,
 			authority_votes: BoundedBTreeMap<

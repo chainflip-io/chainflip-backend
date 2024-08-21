@@ -25,7 +25,7 @@ pub use sol_prim::{
 	consts::{LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
-	Signature as SolSignature,
+	Signature as SolSignature, SlotNumber as SolBlockNumber,
 };
 pub use sol_tx_core::{
 	AccountMeta as SolAccountMeta, CcmAccounts as SolCcmAccounts, CcmAddress as SolCcmAddress,
