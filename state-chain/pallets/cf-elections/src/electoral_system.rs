@@ -503,7 +503,7 @@ pub mod mocks {
 						.elections
 						.get(&self.identifier())
 						.map(f)
-						.ok_or_else(|| CorruptStorageError::new())
+						.ok_or_else(CorruptStorageError::new)
 				}
 				pub fn identifier(&self) -> ElectionIdentifierOf<ES> {
 					self.election_identifier
@@ -538,7 +538,7 @@ pub mod mocks {
 				.elections
 				.get_mut(&self.identifier())
 				.map(f)
-				.ok_or_else(|| CorruptStorageError::new())
+				.ok_or_else(CorruptStorageError::new)
 		}
 		pub fn set_consensus_status(&mut self, consensus_status: ConsensusStatus<ES::Consensus>) {
 			self.with_election_mut(|e| e.consensus_status = consensus_status)
@@ -646,7 +646,7 @@ pub mod mocks {
 		> {
 			self.unsynchronised_state_map
 				.get(&key.using_encoded(Twox64Concat::hash))
-				.ok_or_else(|| CorruptStorageError::new())
+				.ok_or_else(CorruptStorageError::new)
 				.cloned()
 		}
 	}

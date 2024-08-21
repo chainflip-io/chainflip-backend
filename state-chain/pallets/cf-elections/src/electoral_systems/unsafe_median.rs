@@ -199,7 +199,7 @@ mod test_unsafe_median {
 		let consensus = electoral_system
 			.new_election((), (), ())
 			.unwrap()
-			.check_consensus(None, votes, (votes_len + (votes_len / 2)) as u32)
+			.check_consensus(None, votes, votes_len + (votes_len / 2))
 			.unwrap();
 
 		assert_eq!(consensus, Some(3));
