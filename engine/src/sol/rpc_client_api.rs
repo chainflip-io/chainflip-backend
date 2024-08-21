@@ -348,7 +348,7 @@ pub enum UiMessage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiParsedMessage {
-	pub account_keys: Vec<Value>,
+	pub account_keys: Vec<String>,
 	pub recent_blockhash: String,
 	pub instructions: Vec<Value>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]

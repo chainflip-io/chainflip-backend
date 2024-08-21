@@ -143,13 +143,14 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 		<<SolanaEgressWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		let (sig, _slot, tx_fee, _signer_pubkey) = success_witnesses(&self.client, vec![signature])
+		let (sig, _slot, tx_fee, signer) = success_witnesses(&self.client, vec![signature])
 			.await
 			.into_iter()
 			.next()
 			.ok_or(anyhow!("Success querying for {signature} but no items"))?;
 		assert_eq!(sig, signature, "signature we requested should be the same as in the response");
-		Ok(TransactionSuccessDetails { tx_fee, signer: Default::default() })
+		// TODO: Update TransactionSuccessDetails to take an option and not unwrap here
+		Ok(TransactionSuccessDetails { tx_fee, signer: signer.unwrap_or_default() })
 	}
 }
 
@@ -237,7 +238,7 @@ where
 			)
 			.await;
 
-		let fee = match transaction.transaction.meta {
+		let fee = match &transaction.transaction.meta {
 			Some(meta) => meta.fee,
 			// This shouldn't happen. Want to avoid Erroring. We either default to 5000 or return
 			// OK(()) so we don't submit transaction_succeeded and retry again later. Defaulting to
@@ -245,25 +246,23 @@ where
 			None => LAMPORTS_PER_SIGNATURE,
 		};
 
-		let signer_pubkey =
+		let signer =
 			if let EncodedTransaction::Json(ui_transaction) = transaction.transaction.transaction {
-				if let UiMessage::Raw(message) = ui_transaction.message {
-					message
+				match ui_transaction.message {
+					UiMessage::Parsed(message) => message
 						.account_keys
 						.get(0)
-						.and_then(|account| SolAddress::from_str(account).ok())
-				// Not handling UiParsedMessage as it might not be enforced that the first account
-				// is the signer. It shouldn't returned a parsed message anyway.
-				} else {
-					None
+						.and_then(|account| SolAddress::from_str(account).ok()),
+					UiMessage::Raw(message) => message
+						.account_keys
+						.get(0)
+						.and_then(|account| SolAddress::from_str(account).ok()),
 				}
 			} else {
 				None
 			};
 
-		println!("Signer pubkey: {:?}", signer_pubkey);
-
-		finalized_txs_info.push((signature, slot, fee, signer_pubkey));
+		finalized_txs_info.push((signature, slot, fee, signer));
 	}
 
 	finalized_txs_info
