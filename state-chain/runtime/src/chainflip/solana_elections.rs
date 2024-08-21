@@ -1,4 +1,4 @@
-use crate::{Environment, Runtime, SolanaBroadcaster};
+use crate::{Environment, Runtime, SolanaBroadcaster, SolanaThresholdSigner};
 use cf_chains::{
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto},
@@ -92,7 +92,10 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
 	pub tx_fee: u64,
-	pub signer: SolAddress,
+	// An RPC node can return with two different formats. Only the `UiRawMessage`
+	// is guaranteed to have the signer as the first element. Thus we use None
+	// for the case it's not strictly defined.
+	pub signer: Option<SolAddress>,
 }
 
 pub struct SolanaEgressWitnessingHook;
@@ -102,10 +105,14 @@ impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWi
 		signature: SolSignature,
 		TransactionSuccessDetails { tx_fee, signer }: TransactionSuccessDetails,
 	) {
+		use cf_traits::KeyProvider;
+
 		if let Err(err) = SolanaBroadcaster::egress_success(
 			pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 			signature,
-			signer,
+			signer.unwrap_or_else(|| {
+				SolanaThresholdSigner::active_epoch_key().map(|e| e.key).unwrap_or_default()
+			}),
 			tx_fee,
 			(),
 			signature,
