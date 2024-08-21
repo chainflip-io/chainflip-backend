@@ -263,11 +263,6 @@ pub mod pallet {
 				Self {}
 			}
 		}
-		impl Default for CorruptStorageError {
-			fn default() -> Self {
-				Self::new()
-			}
-		}
 	}
 	pub use corrupt_storage_error::CorruptStorageError;
 
