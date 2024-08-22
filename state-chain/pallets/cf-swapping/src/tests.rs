@@ -1838,7 +1838,10 @@ fn swap_broker_fee_cannot_exceed_amount() {
 		})
 		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
 		.then_execute_with(|_| {
-			assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Usdc), 100);
+			// The broker gets nothing: setting fees >100% isn't actually possible due to
+			// parameter validation, so how this is handled isn't really important as long as we
+			// don't create money out of thin air and don't panic:
+			assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Usdc), 0);
 		});
 }
 
