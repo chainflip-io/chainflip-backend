@@ -87,6 +87,31 @@ impl TestRefundParams {
 	}
 }
 
+/// Creates a test swap and corresponding swap request. Both use the same ID.
+fn create_test_swap(
+	id: u64,
+	input_asset: Asset,
+	output_asset: Asset,
+	amount: AssetAmount,
+	dca_params: Option<DcaParameters>,
+) -> Swap {
+	SwapRequests::<Test>::insert(
+		id,
+		SwapRequest {
+			id,
+			input_asset,
+			output_asset,
+			refund_params: None,
+			state: SwapRequestState::Regular {
+				output_address: ForeignChainAddress::Eth(H160::zero()),
+				dca_state: DcaState::create_with_first_chunk(amount, dca_params).0,
+			},
+		},
+	);
+
+	Swap::new(id, id, input_asset, output_asset, amount, None, [FeeType::NetworkFee])
+}
+
 // Returns some test data
 fn generate_test_swaps() -> Vec<TestSwapParams> {
 	vec![
@@ -2000,16 +2025,13 @@ fn test_get_scheduled_swap_legs() {
 	new_test_ext().execute_with(|| {
 		const INIT_AMOUNT: AssetAmount = 1000;
 
-		let swaps: Vec<_> = [
-			(1, Asset::Flip, Asset::Usdc),
-			(2, Asset::Usdc, Asset::Flip),
-			(3, Asset::Btc, Asset::Eth),
-			(4, Asset::Flip, Asset::Btc),
-			(5, Asset::Eth, Asset::Flip),
-		]
-		.into_iter()
-		.map(|(id, from, to)| Swap::new(id, id, from, to, INIT_AMOUNT, None, [FeeType::NetworkFee]))
-		.collect();
+		let swaps = vec![
+			create_test_swap(1, Asset::Flip, Asset::Usdc, INIT_AMOUNT, None),
+			create_test_swap(2, Asset::Usdc, Asset::Flip, INIT_AMOUNT, None),
+			create_test_swap(3, Asset::Btc, Asset::Eth, INIT_AMOUNT, None),
+			create_test_swap(4, Asset::Flip, Asset::Btc, INIT_AMOUNT, None),
+			create_test_swap(5, Asset::Eth, Asset::Flip, INIT_AMOUNT, None),
+		];
 
 		SwapRate::set(2f64);
 		// The amount of USDC in the middle of swap (5):
@@ -2023,39 +2045,51 @@ fn test_get_scheduled_swap_legs() {
 			vec![
 				SwapLegInfo {
 					swap_id: 1,
+					swap_request_id: 1,
 					base_asset: Asset::Flip,
 					quote_asset: Asset::Usdc,
 					side: Side::Sell,
 					amount: INIT_AMOUNT,
 					source_asset: None,
 					source_amount: None,
+					remaining_chunks: 0,
+					chunk_interval: SWAP_DELAY_BLOCKS,
 				},
 				SwapLegInfo {
 					swap_id: 2,
+					swap_request_id: 2,
 					base_asset: Asset::Flip,
 					quote_asset: Asset::Usdc,
 					side: Side::Buy,
 					amount: INIT_AMOUNT,
 					source_asset: None,
 					source_amount: None,
+					remaining_chunks: 0,
+					chunk_interval: SWAP_DELAY_BLOCKS,
 				},
 				SwapLegInfo {
 					swap_id: 4,
+					swap_request_id: 4,
 					base_asset: Asset::Flip,
 					quote_asset: Asset::Usdc,
 					side: Side::Sell,
 					amount: INIT_AMOUNT,
 					source_asset: None,
 					source_amount: None,
+					remaining_chunks: 0,
+					chunk_interval: SWAP_DELAY_BLOCKS,
 				},
 				SwapLegInfo {
 					swap_id: 5,
+					swap_request_id: 5,
 					base_asset: Asset::Flip,
 					quote_asset: Asset::Usdc,
 					side: Side::Buy,
 					amount: INTERMEDIATE_AMOUNT,
 					source_asset: Some(Asset::Eth),
 					source_amount: Some(INIT_AMOUNT),
+					remaining_chunks: 0,
+					chunk_interval: SWAP_DELAY_BLOCKS,
 				},
 			]
 		);
@@ -2068,12 +2102,10 @@ fn test_get_scheduled_swap_legs_fallback() {
 		const INIT_AMOUNT: AssetAmount = 1000000000000000000000;
 		const PRICE: u128 = 2;
 
-		let swaps: Vec<_> = [(1, Asset::Flip, Asset::Eth), (2, Asset::Eth, Asset::Usdc)]
-			.into_iter()
-			.map(|(id, from, to)| {
-				Swap::new(id, id, from, to, INIT_AMOUNT, None, [FeeType::NetworkFee])
-			})
-			.collect();
+		let swaps = vec![
+			create_test_swap(1, Asset::Flip, Asset::Eth, INIT_AMOUNT, None),
+			create_test_swap(2, Asset::Eth, Asset::Usdc, INIT_AMOUNT, None),
+		];
 
 		// Setting the swap rate to something different from the price so that if the fallback is
 		// not used, it will give a different result, avoiding a false positive.
@@ -2089,23 +2121,62 @@ fn test_get_scheduled_swap_legs_fallback() {
 			vec![
 				SwapLegInfo {
 					swap_id: 1,
+					swap_request_id: 1,
 					base_asset: Asset::Eth,
 					quote_asset: Asset::Usdc,
 					side: Side::Buy,
 					amount: INIT_AMOUNT * PRICE,
 					source_asset: Some(Asset::Flip),
 					source_amount: Some(INIT_AMOUNT),
+					remaining_chunks: 0,
+					chunk_interval: SWAP_DELAY_BLOCKS,
 				},
 				SwapLegInfo {
 					swap_id: 2,
+					swap_request_id: 2,
 					base_asset: Asset::Eth,
 					quote_asset: Asset::Usdc,
 					side: Side::Sell,
 					amount: INIT_AMOUNT,
 					source_asset: None,
 					source_amount: None,
+					remaining_chunks: 0,
+					chunk_interval: SWAP_DELAY_BLOCKS,
 				}
 			]
+		);
+	});
+}
+
+#[test]
+fn test_get_scheduled_swap_legs_for_dca() {
+	new_test_ext().execute_with(|| {
+		const INIT_AMOUNT: AssetAmount = 1000000000000000000000;
+		const NUMBER_OF_CHUNKS: u32 = 3;
+		const CHUNK_INTERVAL: u32 = 10;
+		SwapRate::set(1_f64);
+
+		let dca_params =
+			DcaParameters { number_of_chunks: NUMBER_OF_CHUNKS, chunk_interval: CHUNK_INTERVAL };
+
+		let swaps =
+			vec![create_test_swap(1, Asset::Flip, Asset::Eth, INIT_AMOUNT, Some(dca_params))];
+
+		assert_eq!(
+			Swapping::get_scheduled_swap_legs(swaps, Asset::Eth, None),
+			vec![SwapLegInfo {
+				swap_id: 1,
+				swap_request_id: 1,
+				base_asset: Asset::Eth,
+				quote_asset: Asset::Usdc,
+				side: Side::Buy,
+				amount: INIT_AMOUNT,
+				source_asset: Some(Asset::Flip),
+				source_amount: Some(INIT_AMOUNT),
+				// This is the first chunk, so there are 2 remaining
+				remaining_chunks: NUMBER_OF_CHUNKS - 1,
+				chunk_interval: CHUNK_INTERVAL,
+			},]
 		);
 	});
 }
