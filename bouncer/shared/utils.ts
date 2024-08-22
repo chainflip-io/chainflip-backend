@@ -1059,3 +1059,24 @@ export async function startEngines(
 
   console.log('Engines started');
 }
+
+// Check that all Solana Nonces are available
+export async function checkAvailabilityAllSolanaNonces() {
+  // Check that all Solana nonces are available
+  await using chainflip = await getChainflipApi();
+  const maxRetries = 5; // 30 seconds
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .toJSON() as any[];
+    if (availableNonces.length === solanaNumberOfNonces) {
+      break;
+    } else if (attempt === maxRetries - 1) {
+      throw new Error(
+        `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces}`,
+      );
+    } else {
+      await sleep(6000);
+    }
+  }
+}
