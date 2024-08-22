@@ -259,9 +259,17 @@ enum GasSwapState {
 	ToBeScheduled { gas_budget: AssetAmount, other_gas_asset: Asset },
 }
 
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Encode, Decode, TypeInfo)]
+enum DcaStatus {
+	ChunkToBeScheduled,
+	ChunkScheduled(SwapId),
+	AwaitingRefund,
+	Completed,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 struct DcaState {
-	scheduled_chunk_swap_id: Option<SwapId>,
+	status: DcaStatus,
 	remaining_input_amount: AssetAmount,
 	remaining_chunks: u32,
 	chunk_interval: u32,
@@ -276,7 +284,7 @@ impl DcaState {
 		params: Option<DcaParameters>,
 	) -> (DcaState, AssetAmount) {
 		let mut state = DcaState {
-			scheduled_chunk_swap_id: None,
+			status: DcaStatus::ChunkToBeScheduled,
 			remaining_input_amount: input_amount,
 			remaining_chunks: params.as_ref().map(|p| p.number_of_chunks).unwrap_or(1),
 			// Chunk interval won't be used for non-DCA swaps but seems nicer to
@@ -298,7 +306,7 @@ impl DcaState {
 		prev_chunk_and_output: Option<(SwapId, AssetAmount)>,
 	) -> Option<AssetAmount> {
 		if let Some((prev_chunk_swap_id, prev_chunk_output_amount)) = prev_chunk_and_output {
-			if let Some(scheduled_swap_id) = self.scheduled_chunk_swap_id.take() {
+			if let DcaStatus::ChunkScheduled(scheduled_swap_id) = self.status {
 				if scheduled_swap_id != prev_chunk_swap_id {
 					log_or_panic!(
 						"Invariant violation: the recorded chunk id {scheduled_swap_id} does not match executed {prev_chunk_swap_id}"
@@ -310,6 +318,7 @@ impl DcaState {
 				);
 			}
 
+			self.status = DcaStatus::ChunkToBeScheduled;
 			self.accumulated_output_amount += prev_chunk_output_amount;
 		}
 
@@ -1316,76 +1325,136 @@ pub mod pallet {
 		fn refund_failed_swap(swap: Swap<T>) {
 			let swap_request_id = swap.swap_request_id;
 
-			let Some(request) = SwapRequests::<T>::take(swap_request_id) else {
+			let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
 				log_or_panic!("Swap request {swap_request_id} not found");
 				return;
 			};
 
-			let Some(refund_params) = request.refund_params else {
+			let Some(refund_params) = &request.refund_params else {
 				log_or_panic!("Trying to refund swap request {swap_request_id}, but missing refund parameters");
 				return;
 			};
 
-			Self::deposit_event(Event::<T>::SwapRequestCompleted { swap_request_id: request.id });
-
-			match request.state {
+			let swap_request_completed = match &mut request.state {
 				SwapRequestState::UserSwap {
 					ccm,
 					output_address,
-					dca_state: DcaState { remaining_input_amount, accumulated_output_amount, .. },
+					dca_state:
+						DcaState { remaining_input_amount, accumulated_output_amount, status, .. },
 					broker_fees: _,
 				} => {
 					if let Some(ccm) = ccm {
-						// TODO: add remaining DCA input to the refunded amount (DCA isn't yet
-						// implemented for CCM so we always refund the full amount)
+						match ccm.gas_swap_state {
+							GasSwapState::ToBeScheduled { gas_budget, .. } => {
+								// Gas swap has not been scheduled yet, we can refund it,
+								// and there will be no CCM egress
+								Self::egress_for_swap(
+									request.id,
+									swap.input_amount + *remaining_input_amount + gas_budget,
+									request.input_asset,
+									refund_params.refund_address.clone(),
+									None, /* ccm */
+									true, /* refund */
+								);
 
-						let gas_refund = if let GasSwapState::ToBeScheduled { gas_budget, .. } =
-							ccm.gas_swap_state
-						{
-							gas_budget
-						} else {
-							0
-						};
+								true
+							},
+							GasSwapState::OutputReady { gas_budget } => {
+								if *accumulated_output_amount == 0 {
+									// Scenario 1: no chunks have been swapped, and gas is simply
+									// ready because the input happens to be in the gas asset
+									// already. In this case the gas is refunded and there is no ccm
+									// egress:
+									Self::egress_for_swap(
+										request.id,
+										swap.input_amount + *remaining_input_amount + gas_budget,
+										request.input_asset,
+										refund_params.refund_address.clone(),
+										None, /* ccm */
+										true, /* refund */
+									);
 
-						Self::egress_for_swap(
-							request.id,
-							swap.input_amount + gas_refund,
-							request.input_asset,
-							refund_params.refund_address,
-							None, /* ccm */
-							true, /* refund */
-						);
+									true
+								} else {
+									// Scenario 2: we have already swapped one or more chunks, and
+									// we should use gas amount to perform ccm egress (in addition
+									// to refunding unexecuted amount):
+									Self::egress_for_swap(
+										request.id,
+										swap.input_amount + *remaining_input_amount,
+										request.input_asset,
+										refund_params.refund_address.clone(),
+										None, /* ccm */
+										true, /* refund */
+									);
+
+									Self::egress_for_swap(
+										swap.swap_request_id,
+										*accumulated_output_amount,
+										request.output_asset,
+										output_address.clone(),
+										Some((ccm.ccm_deposit_metadata.clone(), gas_budget)), /* ccm */
+										false,                                                /* refund */
+									);
+
+									true
+								}
+							},
+							GasSwapState::Scheduled { .. } => {
+								// It is possible (though somewhat unlikely) that a DCA chunk fails
+								// after gas swap has already been scheduled, but *before* it has
+								// been executed. In this case we simply record the fact of the
+								// failure and process the outcome only once the gas swap is
+								// complete.
+
+								*status = DcaStatus::AwaitingRefund;
+								*remaining_input_amount += swap.input_amount;
+
+								false
+							},
+						}
 					} else {
 						// Refund the failed swap and any unused input amount:
 						Self::egress_for_swap(
 							request.id,
-							swap.input_amount + remaining_input_amount,
+							swap.input_amount + *remaining_input_amount,
 							request.input_asset,
-							refund_params.refund_address,
+							refund_params.refund_address.clone(),
 							None, /* ccm */
 							true, /* refund */
 						);
 
 						// In case of DCA we may have partially swapped and now have some output
 						// asset to egress to the output address:
-						if accumulated_output_amount > 0 {
+						if *accumulated_output_amount > 0 {
 							Self::egress_for_swap(
 								swap.swap_request_id,
-								accumulated_output_amount,
+								*accumulated_output_amount,
 								request.output_asset,
-								output_address,
+								output_address.clone(),
 								None,  /* ccm */
 								false, /* refund */
 							);
 						}
+
+						true
 					}
 				},
 				non_refundable_request => {
 					log_or_panic!(
 						"Refund for swap request is not supported: {non_refundable_request:?}"
 					);
+					true
 				},
 			};
+
+			if swap_request_completed {
+				Self::deposit_event(Event::<T>::SwapRequestCompleted {
+					swap_request_id: request.id,
+				});
+			} else {
+				SwapRequests::<T>::insert(swap_request_id, request);
+			}
 		}
 
 		fn process_swap_outcome(swap: SwapState<T>) {
@@ -1431,7 +1500,7 @@ pub mod pallet {
 								if *gas_swap_id == swap.swap_id() =>
 								true,
 							_ => {
-								if dca_state.scheduled_chunk_swap_id != Some(swap.swap_id()) {
+								if dca_state.status != DcaStatus::ChunkScheduled(swap.swap_id()) {
 									log_or_panic!(
 										"Executed swap with unexpected id {} for swap request {swap_request_id}", swap.swap_id()
 									);
@@ -1447,20 +1516,31 @@ pub mod pallet {
 						} else {
 							// The executed swap must be for the principal amount,
 							// record the output and schedule the next chunk if needed:
-							dca_state.scheduled_chunk_swap_id = dca_state
-								.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
-								.map(|chunk_input_amount| {
-									Self::schedule_swap(
-										request.input_asset,
-										request.output_asset,
-										chunk_input_amount,
-										request.refund_params.as_ref(),
-										SwapType::CcmPrincipal,
-										broker_fees.clone(),
-										swap_request_id,
-										dca_state.chunk_interval.into(),
-									)
-								});
+							dca_state.status = if let Some(chunk_input_amount) =
+								dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
+							{
+								let swap_id = Self::schedule_swap(
+									request.input_asset,
+									request.output_asset,
+									chunk_input_amount,
+									request.refund_params.as_ref(),
+									SwapType::CcmPrincipal,
+									broker_fees.clone(),
+									swap_request_id,
+									dca_state.chunk_interval.into(),
+								);
+
+								if dca_state.status != DcaStatus::ChunkToBeScheduled {
+									log_or_panic!(
+										"Unexpected DCA status {:?} for request id: {swap_request_id}", dca_state.status
+									);
+								}
+
+								DcaStatus::ChunkScheduled(swap_id)
+							} else {
+								// No more chunks to schedule
+								DcaStatus::Completed
+							};
 
 							// See if we still need to schedule the gas swap
 							if let GasSwapState::ToBeScheduled { gas_budget, other_gas_asset } =
@@ -1475,22 +1555,62 @@ pub mod pallet {
 							}
 						}
 
-						// Process outcome if there aren't any more scheduled swaps,
-						// otherwise put the request state back:
-						if let (GasSwapState::OutputReady { gas_budget }, None) =
-							(gas_swap_state, dca_state.scheduled_chunk_swap_id)
-						{
-							Self::egress_for_swap(
-								swap_request_id,
-								dca_state.accumulated_output_amount,
-								request.output_asset,
-								output_address.clone(),
-								Some((ccm_deposit_metadata.clone(), *gas_budget)),
-								false, /* refund */
-							);
+						if let GasSwapState::OutputReady { gas_budget } = gas_swap_state {
+							match dca_state.status {
+								DcaStatus::Completed => {
+									// Success, egress the full output amount
+									Self::egress_for_swap(
+										swap_request_id,
+										dca_state.accumulated_output_amount,
+										request.output_asset,
+										output_address.clone(),
+										Some((ccm_deposit_metadata.clone(), *gas_budget)),
+										false, /* refund */
+									);
 
-							true
+									true
+								},
+								DcaStatus::ChunkScheduled(_) => {
+									// Common case: awaiting for one or more chunks to complete
+									false
+								},
+								DcaStatus::AwaitingRefund => {
+									// Edge case: a DCA chunk failed earlier, and we have been
+									// waiting now to do a partial refund and partial ccm egress:
+
+									if let Some(refund_params) = &request.refund_params {
+										Self::egress_for_swap(
+											request.id,
+											dca_state.remaining_input_amount,
+											request.input_asset,
+											refund_params.refund_address.clone(),
+											None, /* ccm */
+											true, /* refund */
+										);
+									} else {
+										log_or_panic!("Trying to refund swap request {swap_request_id}, but missing refund parameters");
+									}
+
+									Self::egress_for_swap(
+										swap_request_id,
+										dca_state.accumulated_output_amount,
+										request.output_asset,
+										output_address.clone(),
+										Some((ccm_deposit_metadata.clone(), *gas_budget)),
+										false, /* refund */
+									);
+
+									true
+								},
+								DcaStatus::ChunkToBeScheduled => {
+									// At this point either we have processed all chunks, or the
+									// next chunk must have been scheduled:
+									log_or_panic!("Unexpected ChunkToBeScheduled status for request id {swap_request_id}");
+									false
+								},
+							}
 						} else {
+							// Awaiting gas swap to complete
 							false
 						}
 					} else {
@@ -1509,7 +1629,7 @@ pub mod pallet {
 								dca_state.chunk_interval.into(),
 							);
 
-							dca_state.scheduled_chunk_swap_id = Some(swap_id);
+							dca_state.status = DcaStatus::ChunkScheduled(swap_id);
 
 							false
 						} else {
@@ -1970,7 +2090,7 @@ pub mod pallet {
 						SWAP_DELAY_BLOCKS.into(),
 					);
 
-					dca_state.scheduled_chunk_swap_id = Some(swap_id);
+					dca_state.status = DcaStatus::ChunkScheduled(swap_id);
 
 					SwapRequests::<T>::insert(
 						request_id,
@@ -2039,7 +2159,7 @@ pub mod pallet {
 							SWAP_DELAY_BLOCKS.into(),
 						);
 
-						dca_state.scheduled_chunk_swap_id = Some(swap_id);
+						dca_state.status = DcaStatus::ChunkScheduled(swap_id);
 
 						SwapRequests::<T>::insert(
 							request_id,
@@ -2092,7 +2212,7 @@ pub mod pallet {
 									}),
 									output_address,
 									dca_state: DcaState {
-										scheduled_chunk_swap_id: None,
+										status: DcaStatus::Completed,
 										remaining_input_amount: 0,
 										remaining_chunks: 0,
 										chunk_interval: SWAP_DELAY_BLOCKS,

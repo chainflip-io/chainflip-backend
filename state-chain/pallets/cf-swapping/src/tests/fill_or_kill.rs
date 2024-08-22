@@ -201,12 +201,12 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 			// to reaching expiry block
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: FOK_SWAP_REQUEST_ID
-				}),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: FOK_SWAP_REQUEST_ID,
 					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: FOK_SWAP_REQUEST_ID
 				}),
 			);
 		});
@@ -266,12 +266,12 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: FOK_SWAP_REQUEST_ID
-				}),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: FOK_SWAP_REQUEST_ID,
 					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: FOK_SWAP_REQUEST_ID
 				}),
 				// Non-fok swap will continue to be retried:
 				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: REGULAR_SWAP_ID, .. }),
@@ -302,8 +302,8 @@ fn fok_test_zero_refund_duration() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled { swap_request_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1, .. }),
 			);
 		});
 }
@@ -390,13 +390,13 @@ fn fok_ccm_refunded() {
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: REQUEST_ID,
 					// Note that gas is refunded too:
 					amount: INPUT_AMOUNT,
 					..
 				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
 			);
 		});
 }
