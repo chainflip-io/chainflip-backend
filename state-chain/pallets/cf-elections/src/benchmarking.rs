@@ -4,7 +4,7 @@ use crate::{
 	electoral_system::{AuthorityVoteOf, ElectoralSystem},
 	vote_storage::VoteStorage,
 	Config, ContributingAuthorities, ElectionConsensusHistoryUpToDate, ElectoralSystemStatus,
-	Pallet, Status, UniqueMonotonicIdentifier,
+	Pallet, SharedData, SharedDataHash, Status, UniqueMonotonicIdentifier,
 };
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::AccountRole;
@@ -151,11 +151,13 @@ mod benchmarks {
 	fn provide_shared_data() {
 		let validator_id = ready_validator_for_vote::<T, I>();
 
-		let elections = Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
+		let elections = Pallet::<T, I>::electoral_data(&validator_id.clone().into())
+			.unwrap()
+			.current_elections;
 		let next_election = elections.into_iter().next().unwrap();
 
 		assert_ok!(Pallet::<T, I>::vote(
-			RawOrigin::Signed(validator_id.clone().into()).into(),
+			RawOrigin::Signed(validator_id.clone()).into(),
 			BoundedBTreeMap::try_from(
 				[(
 					next_election.0,
@@ -168,17 +170,14 @@ mod benchmarks {
 		));
 
 		#[extrinsic_call]
-		provide_shared_data(
-			RawOrigin::Signed(validator_id.into()),
-			BenchmarkValue::benchmark_value(),
-		);
+		provide_shared_data(RawOrigin::Signed(validator_id), BenchmarkValue::benchmark_value());
 
-		// assert_eq!(
-		// 	SharedData::<T, I>::get(
-		// 		&SharedDataHash::of::<Vote>(&BenchmarkValue::benchmark_value())
-		// 	),
-		// 	Some(BenchmarkValue::benchmark_value())
-		// );
+		assert_eq!(
+			SharedData::<T, I>::get(SharedDataHash::of::<
+				<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote,
+			>(&BenchmarkValue::benchmark_value())),
+			Some(BenchmarkValue::benchmark_value())
+		);
 	}
 
 	#[cfg(test)]

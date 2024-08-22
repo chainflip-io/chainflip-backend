@@ -81,34 +81,3 @@ generate_individual_vote_storage_tuple_impls!(tuple_2_impls: (A, B));
 generate_individual_vote_storage_tuple_impls!(tuple_3_impls: (A, B, C));
 generate_individual_vote_storage_tuple_impls!(tuple_4_impls: (A, B, C, D));
 generate_individual_vote_storage_tuple_impls!(tuple_5_impls: (A, B, C, D, EE));
-
-use crate::vote_storage::composite::tuple_3_impls::CompositeVoteStorageEnum;
-use cf_chains::benchmarking_value::BenchmarkValue;
-impl BenchmarkValue for CompositeVoteStorageEnum<u64, u64, ()> {
-	#[cfg(feature = "runtime-benchmarks")]
-	fn benchmark_value() -> Self {
-		CompositeVoteStorageEnum::A(1_000u64)
-	}
-}
-use crate::electoral_systems::blockchain::delta_based_ingress::{
-	ChannelTotalIngressed, MAXIMUM_CHANNELS_PER_ELECTION,
-};
-use cf_chains::{sol::SolAddress, Solana};
-use frame_support::BoundedBTreeMap;
-use sp_core::ConstU32;
-impl BenchmarkValue
-	for CompositeVoteStorageEnum<
-		u64,
-		u64,
-		BoundedBTreeMap<
-			SolAddress,
-			ChannelTotalIngressed<Solana>,
-			ConstU32<MAXIMUM_CHANNELS_PER_ELECTION>,
-		>,
-	>
-{
-	#[cfg(feature = "runtime-benchmarks")]
-	fn benchmark_value() -> Self {
-		CompositeVoteStorageEnum::A(1_000u64)
-	}
-}

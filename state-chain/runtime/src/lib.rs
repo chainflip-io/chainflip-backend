@@ -1247,7 +1247,6 @@ mod benches {
 		[pallet_timestamp, Timestamp]
 		[pallet_cf_environment, Environment]
 		[pallet_cf_flip, Flip]
-		[pallet_cf_elections, SolanaElections]
 		[pallet_cf_emissions, Emissions]
 		[pallet_cf_funding, Funding]
 		[pallet_session, SessionBench::<Runtime>]

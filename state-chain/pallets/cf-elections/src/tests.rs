@@ -1,17 +1,16 @@
 #![cfg(test)]
 
+use super::*;
 use sp_std::collections::btree_set::BTreeSet;
 use std::collections::BTreeMap;
 
 use cf_traits::EpochInfo;
 
+use electoral_system::{AuthorityVoteOf, ElectoralReadAccess, ElectoralSystem};
 use frame_support::assert_ok;
 use frame_system::RawOrigin;
-
-use electoral_system::{AuthorityVoteOf, ElectoralReadAccess};
 use mock::{new_test_ext, Elections, MockEpochInfo, Test, INITIAL_UNSYNCED_STATE};
-
-use super::*;
+use vote_storage::VoteStorage;
 
 #[test]
 fn happy_path_vote_and_consensus() {
@@ -131,5 +130,12 @@ fn can_provide_shared_data() {
 			RawOrigin::Signed(validator_id).into(),
 			NEW_DATA
 		));
+
+		assert_eq!(
+			SharedData::<Test, Instance1>::get(
+				SharedDataHash::of::<<<<Test as Config<Instance1>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote>(&NEW_DATA)
+			),
+			Some(NEW_DATA)
+		);
 	});
 }
