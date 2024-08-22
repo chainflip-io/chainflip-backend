@@ -1343,7 +1343,6 @@ pub mod pallet {
 		fn execute_batch(swaps: Vec<Swap<T>>) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
 
-			// Swap into Stable asset first, then take network/broker fees:
 			Self::swap_into_stable_taking_fees(&mut swaps)?;
 
 			// Swap from Stable asset, and complete the swap logic.
