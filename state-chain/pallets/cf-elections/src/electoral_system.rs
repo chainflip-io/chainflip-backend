@@ -3,6 +3,7 @@ use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
+use sp_std::vec::Vec;
 
 use crate::{
 	vote_storage::{AuthorityVote, VoteStorage},

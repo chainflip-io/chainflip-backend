@@ -113,6 +113,11 @@ mod mock;
 mod tests;
 pub mod vote_storage;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
+pub use weights::WeightInfo;
+
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
@@ -189,10 +194,15 @@ pub mod pallet {
 	)]
 	pub struct UniqueMonotonicIdentifier(u64);
 
-	#[cfg(test)]
 	impl UniqueMonotonicIdentifier {
+		#[cfg(test)]
 		pub(crate) fn next_identifier(&self) -> Option<Self> {
 			self.0.checked_add(1).map(Self)
+		}
+
+		#[cfg(feature = "runtime-benchmarks")]
+		pub fn from_u64(value: u64) -> Self {
+			Self(value)
 		}
 	}
 
@@ -320,6 +330,9 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		type ElectoralSystem: ElectoralSystem<OnFinalizeContext = ()>;
+
+		/// The weights for the pallet
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::event]
@@ -519,7 +532,7 @@ pub mod pallet {
 	/// Stores the elections whose consensus doesn't need to be rechecked, and the epoch when they
 	/// were last checked.
 	#[pallet::storage]
-	type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
+	pub(crate) type ElectionConsensusHistoryUpToDate<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, UniqueMonotonicIdentifier, EpochIndex, OptionQuery>;
 
 	/// Stores the set of authorities whose votes can contribute to consensus. Whether an authority
@@ -529,7 +542,7 @@ pub mod pallet {
 	/// the current authority set, and so it may include authorities that are not in the current
 	/// authority set or exclude authorities that are in the current authority set.
 	#[pallet::storage]
-	type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
+	pub(crate) type ContributingAuthorities<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, T::ValidatorId, (), OptionQuery>;
 
 	/// Stores the status of the ElectoralSystem, i.e. if it is initialized, paused, or running. If
@@ -1185,7 +1198,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[pallet::call_index(0)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::vote(authority_votes.len() as u32))]
 		pub fn vote(
 			origin: OriginFor<T>,
 			authority_votes: BoundedBTreeMap<
@@ -1881,7 +1894,7 @@ pub mod pallet {
 			}
 		}
 
-		fn recheck_contributed_to_consensuses(
+		pub(crate) fn recheck_contributed_to_consensuses(
 			epoch_index: EpochIndex,
 			authority: &T::ValidatorId,
 			authority_index: AuthorityCount,

@@ -1,8 +1,6 @@
 #[cfg(feature = "runtime-benchmarks")]
-use cf_primitives::chains::assets::sol;
-#[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
-	chains::assets::{any::AssetMap, arb, btc, dot, eth},
+	chains::assets::{any::AssetMap, arb, btc, dot, eth, sol},
 	Asset,
 };
 #[cfg(feature = "runtime-benchmarks")]
@@ -15,15 +13,11 @@ use ethereum_types::{H160, U256};
 use sp_std::vec;
 
 #[cfg(feature = "runtime-benchmarks")]
-use crate::address::EncodedAddress;
-#[cfg(feature = "runtime-benchmarks")]
-use crate::address::ForeignChainAddress;
-#[cfg(feature = "runtime-benchmarks")]
-use crate::dot::PolkadotTransactionId;
-#[cfg(feature = "runtime-benchmarks")]
-use crate::evm;
-#[cfg(feature = "runtime-benchmarks")]
-use crate::evm::{EvmFetchId, EvmTransactionMetadata};
+use crate::{
+	address::{EncodedAddress, ForeignChainAddress},
+	dot::PolkadotTransactionId,
+	evm::{DepositDetails, EvmFetchId, EvmTransactionMetadata},
+};
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
@@ -229,7 +223,7 @@ impl<T: BenchmarkValue> BenchmarkValue for sol::AssetMap<T> {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for evm::DepositDetails {
+impl BenchmarkValue for DepositDetails {
 	fn benchmark_value() -> Self {
 		use sp_core::H256;
 		Self { tx_hashes: Some(vec![H256::default()]) }

@@ -1,5 +1,10 @@
+/// Implements `VoteStorage` for tuples of `VoteStorage` types.
+///
+/// Requires a generic list of tuple identifiers. The first should be named `A` otherwise the impl
+/// for BenchmarkValues doesn't work. For example (A,) or (A, B, C) both work, but not (First,
+/// Second, Third).
 macro_rules! generate_vote_storage_tuple_impls {
-    ($module:ident: ($($t:ident),*$(,)?)) => {
+    ($module:ident: ($($t:ident),* $(,)?)) => {
         pub mod $module {
             #[allow(unused_imports)]
             use crate::{CorruptStorageError, SharedDataHash};
@@ -8,6 +13,7 @@ macro_rules! generate_vote_storage_tuple_impls {
 
             use codec::{Encode, Decode};
             use scale_info::TypeInfo;
+            use cf_chains::benchmarking_value::BenchmarkValue;
 
             #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
             pub enum CompositeVoteProperties<$($t,)*> {
@@ -224,6 +230,25 @@ macro_rules! generate_vote_storage_tuple_impls {
 
             }
             impl<$($t: VoteStorage),*> private::Sealed for ($($t,)*) {}
+
+            impl<$($t),*> BenchmarkValue for CompositeVote<$($t),*>
+            where
+                A: BenchmarkValue,
+            {
+                #[cfg(feature = "runtime-benchmarks")]
+                fn benchmark_value() -> Self {
+                    CompositeVote::A(A::benchmark_value())
+                }
+            }
+            impl<$($t),*> BenchmarkValue for CompositeSharedData<$($t),*>
+            where
+                A: BenchmarkValue,
+            {
+                #[cfg(feature = "runtime-benchmarks")]
+                fn benchmark_value() -> Self {
+                    CompositeSharedData::A(A::benchmark_value())
+                }
+            }
         }
     }
 }
