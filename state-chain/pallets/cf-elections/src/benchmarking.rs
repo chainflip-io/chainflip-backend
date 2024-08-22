@@ -151,16 +151,19 @@ mod benchmarks {
 	fn provide_shared_data() {
 		let validator_id = ready_validator_for_vote::<T, I>();
 
-		let elections = Pallet::<T, I>::electoral_data(&validator_id.clone().into())
-			.unwrap()
-			.current_elections;
-		let next_election = elections.into_iter().next().unwrap();
+		let (election_identifier, ..) =
+			Pallet::<T, I>::electoral_data(&validator_id.clone().into())
+				.unwrap()
+				.current_elections
+				.into_iter()
+				.next()
+				.unwrap();
 
 		assert_ok!(Pallet::<T, I>::vote(
 			RawOrigin::Signed(validator_id.clone()).into(),
 			BoundedBTreeMap::try_from(
 				[(
-					next_election.0,
+					election_identifier,
 					AuthorityVoteOf::<T::ElectoralSystem>::Vote(BenchmarkValue::benchmark_value()),
 				)]
 				.into_iter()

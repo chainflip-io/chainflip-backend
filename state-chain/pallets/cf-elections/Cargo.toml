@@ -54,7 +54,7 @@ cf-test-utilities = { path = '../../test-utilities' }
 rand = "0.8.4"
 
 [features]
-default = ['std', 'runtime-benchmarks']
+default = ['std']
 std = [
   'bitvec/std',
   'cf-chains/std',
