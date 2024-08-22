@@ -231,20 +231,20 @@ macro_rules! generate_vote_storage_tuple_impls {
             }
             impl<$($t: VoteStorage),*> private::Sealed for ($($t,)*) {}
 
+            #[cfg(feature = "runtime-benchmarks")]
             impl<$($t),*> BenchmarkValue for CompositeVote<$($t),*>
             where
                 A: BenchmarkValue,
             {
-                #[cfg(feature = "runtime-benchmarks")]
                 fn benchmark_value() -> Self {
                     CompositeVote::A(A::benchmark_value())
                 }
             }
+            #[cfg(feature = "runtime-benchmarks")]
             impl<$($t),*> BenchmarkValue for CompositeSharedData<$($t),*>
             where
                 A: BenchmarkValue,
             {
-                #[cfg(feature = "runtime-benchmarks")]
                 fn benchmark_value() -> Self {
                     CompositeSharedData::A(A::benchmark_value())
                 }
