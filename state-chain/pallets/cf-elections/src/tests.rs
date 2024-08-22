@@ -259,13 +259,7 @@ fn provide_shared_data() {
 		// Do voting
 		.then_execute_at_next_block(|()| {
 			let current_authorities = MockEpochInfo::current_authorities();
-			let validator_id = current_authorities
-				.into_iter()
-				.take(1)
-				.collect::<BTreeSet<u64>>()
-				.into_iter()
-				.next()
-				.unwrap();
+			let validator_id = *current_authorities.first().unwrap();
 			Pallet::<Test, Instance1>::stop_ignoring_my_votes(
 				RawOrigin::Signed(validator_id).into(),
 			)
@@ -296,4 +290,28 @@ fn provide_shared_data() {
 				referenced_shared_data
 			));
 		});
+}
+
+#[test]
+fn ensure_can_vote() {
+	new_test_ext().then_execute_at_next_block(|()| {
+		let current_authorities = MockEpochInfo::current_authorities();
+		let validator_id = current_authorities.first().unwrap();
+		let none_validator = 1000;
+		assert!(
+			Pallet::<Test, Instance1>::ensure_can_vote(RawOrigin::Signed(none_validator).into())
+				.is_err(),
+			"Should not be able to vote!"
+		);
+		Status::<Test, Instance1>::put(ElectoralSystemStatus::Paused {
+			detected_corrupt_storage: true,
+		});
+		assert_noop!(
+			Pallet::<Test, Instance1>::ensure_can_vote(RawOrigin::Signed(*validator_id).into()),
+			Error::<Test, Instance1>::Paused
+		);
+		Status::<Test, Instance1>::put(ElectoralSystemStatus::Running);
+		Pallet::<Test, Instance1>::ensure_can_vote(RawOrigin::Signed(*validator_id).into())
+			.expect("Can vote!");
+	});
 }
