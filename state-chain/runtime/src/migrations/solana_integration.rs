@@ -22,29 +22,65 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => (
 					SolApiEnvironment {
-						vault_program: SolAddress(bs58_array("11111111111111111111111111111111")),
+						vault_program: SolAddress(bs58_array(
+							"AusZPVXPoUM8QJJ2SL4KwvRGCQ22cDg6Y4rg7EvFrxi7",
+						)),
 						vault_program_data_account: SolAddress(bs58_array(
-							"11111111111111111111111111111111",
+							"ACLMuTFvDAb3oecQQGkTVqpUbhCKHG3EZ9uNXHK1W9ka",
 						)),
 						usdc_token_mint_pubkey: SolAddress(bs58_array(
 							"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 						)),
 						token_vault_pda_account: SolAddress(bs58_array(
-							"11111111111111111111111111111111",
+							"4ZhKJgotJ2tmpYs9Y2NkgJzS7Ac5sghrU4a6cyTLEe7U",
 						)),
 						usdc_token_vault_ata: SolAddress(bs58_array(
-							"11111111111111111111111111111111",
+							"8KNqCBB1LKWbtjNxY9v2g1fSBKm2ZRgNNv7rmx2bE6Ce",
 						)),
 					},
 					Some(SolHash(bs58_array("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"))),
-					vec![(
-						SolAddress(hex_literal::hex!(
-							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)),
-						SolHash(hex_literal::hex!(
-							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)),
-					)],
+					vec![
+						(
+							const_address("BDKywh4jrvMEFRUkX1bzK8JoyXBY7cmjaZh7bRFpMX4o"),
+							const_hash("3pMDqkhnibuv2ARQzjq4K1jn58EvCzC6uF28kiMCUoW2"),
+						),
+						(
+							const_address("2sZp8mnaNZW5FLpbys4rG7RCpVWixmWydRyJmPzNgxi4"),
+							const_hash("5rJzAL24yzaqPNE14xFuhdLtLLmUDF3JAfVbZHoBWAUB"),
+						),
+						(
+							const_address("J4Afw1uLrnsQQwEUHQiPe71H3Y3gJQ1oZer5q1QBMViC"),
+							const_hash("6ChBdxfZ4ZPLZ7zhVavtjXZrNojg1MdT3Du4VnSnhQ6u"),
+						),
+						(
+							const_address("CCqwvHKHuUSRxxbV7RLSnSYt7XaFrQtFEmaVumLVNmJK"),
+							const_hash("6FtBFnt4P25xUnATE6c6XeicKn1ZB6Q5MiGZq4xqqD2D"),
+						),
+						(
+							const_address("3bVqyf58hQHsxbjnqnSkopnoyEHB9v9KQwhZj7h1DucW"),
+							const_hash("8UZPPjjKVVjb7TRDx3ZVBnMqrdqYpp6HP2vQVUrxEhn1"),
+						),
+						(
+							const_address("5iKkv5RTvHKzn4VdYLWu48dYsPz5tVniUEa3wHrG9hjB"),
+							const_hash("FtLgEitvpnSrcj4adHKcvbYG9SF1C7NLZCk2priDTA6e"),
+						),
+						(
+							const_address("3GGKqshYCGcnQKp6iNh8kb5nbZwtNKSbA9Y7H11eAgyU"),
+							const_hash("2xYo9Gv76GGgZs2ikCi8gSgkriEugv5wFhERowyvDx3H"),
+						),
+						(
+							const_address("A2mR1Ytk7R8kGvnRxVLTurZzGr9FwvD8A2ovt3ZRCwQS"),
+							const_hash("79NHKfzzZZ4Fmm5mK7D6E16KvwJKWWZpuqyHHiD1xdQ3"),
+						),
+						(
+							const_address("HS6RiBAt9FbC62xJ6kLAH4ekpCW8ZE7HiuHZKNaUbk7a"),
+							const_hash("CTyzyX8K9Wwo5zGEZmWxtGpYYwHpGv6YTsFRpi6syLJ4"),
+						),
+						(
+							const_address("14AwUr3FG75E66aaLy7jCbVGaxGCGLdqtpVyBNAFwKac"),
+							const_hash("AEzmj9wq8jp7wF46Lrr3Jc2K7xRP58V5Y3cYRVEqtE5J"),
+						),
+					],
 				),
 				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => (
 					SolApiEnvironment {
