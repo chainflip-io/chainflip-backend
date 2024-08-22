@@ -18,7 +18,6 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 		use cf_chains::sol::SolAddress;
 
 		// Initialize Solana's API environment
-		// TODO: PRO-1465 Configure these variables correctly.
 		let (sol_env, genesis_hash, durable_nonces_and_accounts) =
 			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => (
@@ -75,28 +74,64 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 				),
 				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => (
 					SolApiEnvironment {
-						vault_program: SolAddress(bs58_array("11111111111111111111111111111111")),
+						vault_program: SolAddress(bs58_array(
+							"Gvcsg1ADZJSFXFRp7RUR1Z3DtMZec8iWUPoPVCMv4VQh",
+						)),
 						vault_program_data_account: SolAddress(bs58_array(
-							"11111111111111111111111111111111",
+							"DXF45ndZRWkHQvQcFdLuNmT3KHP18VCshJK1mQoLUAWz",
 						)),
 						usdc_token_mint_pubkey: SolAddress(bs58_array(
 							"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
 						)),
 						token_vault_pda_account: SolAddress(bs58_array(
-							"11111111111111111111111111111111",
+							"FsQeQkrTWETD8wbZhKyQVfWQLjprjdRG8GAriauXn972",
 						)),
 						usdc_token_vault_ata: SolAddress(bs58_array(
-							"11111111111111111111111111111111",
+							"B2d8rCk5jXUfjgYMpVRARQqZ4xh49XNMf7GYUFtdZd6q",
 						)),
 					},
 					Some(SolHash(bs58_array("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"))),
 					vec![(
-						SolAddress(hex_literal::hex!(
-							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)),
-						SolHash(hex_literal::hex!(
-							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)),
+						(
+							const_address("Cr5YnF9p4M91CrQGHJhP3Syy4aGZNVAwF6zvTxkAZZfj"),
+							const_hash("9QVwTXtwGTbq4U3KPN9THdnxQ38bVFu6P15cwhURJqNC"),
+						),
+						(
+							const_address("3E14JFszKMCDcxXuGk4mDsBddHxSpXrzZ2ZpGHGr8WJv"),
+							const_hash("DkYbyJ5P576ekMQYUuWizejxoWHUUZN3nLrQzVFe2mjd"),
+						),
+						(
+							const_address("C5qNSCcusHvkPrWEt7fQQ8TbgFMkoEetfpigpJEvwam"),
+							const_hash("FWUwBbVbRFtaWhpptZ9vsUtiZtc8c6MKKsAnQfRn6uRV"),
+						),
+						(
+							const_address("FG2Akgw76D5GbQZHpmwPNBSMi3pXq4ffZeYrY7sfUCp4"),
+							const_hash("3niQmTX5qKD69gdNRLwxRm1o4d65Vkw1QxQH27GLiDCD"),
+						),
+						(
+							const_address("HmqRHTmDbQEhkD3RPR58VM6XtF5Gytod5XmgYz9r5Lyx"),
+							const_hash("5ngBYFzxZ2sTFetLY92LiQVzjXZTYbqTjc58ShVZC19d"),
+						),
+						(
+							const_address("FgRZqCYnmjpBY5WA16y73TqRbkLD3zr5btQiSB2B8sr7"),
+							const_hash("9C1RDEeKLFT2txok1zvqZ3Fu5K1dxCqDCJc3KPfuBqTn"),
+						),
+						(
+							const_address("BR7Zn41M6enmL5vcfKHnTzr3F5g6rMAG64uDiZYQ5W3Z"),
+							const_hash("B8PDaqM9TUjyuKwT8K2C4tiF2p5jTiBX7r1B9gogVen6"),
+						),
+						(
+							const_address("4TdqxPvxST91mbTyup2Pc87MBhVywpt2T7JQP6bAazsp"),
+							const_hash("Dne5GaxYgG2KzgpC7aD7XX3pFQp3qvj3vfCFy3kfjaJw"),
+						),
+						(
+							const_address("5c4JZKCroL3Sg6Sm7giqdh57cvatJpSPHpmcJX3uJAMm"),
+							const_hash("FKU1qKCydv3TjE1ZDimvevA4khGakkJFRmyVorZvYR7D"),
+						),
+						(
+							const_address("DcEmNXySnth2FNhsHmt64oB15pjtakKhfG3nez7qB52w"),
+							const_hash("3iiniRfNTFmBn6Y9ZhovefUDaGaJ7buB2vYemnbFoHN3"),
+						),
 					)],
 				),
 				_ => (
