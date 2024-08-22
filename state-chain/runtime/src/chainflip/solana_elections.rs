@@ -92,10 +92,6 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
 	pub tx_fee: u64,
-	// An RPC node can return with two different formats. Only the `UiRawMessage`
-	// is guaranteed to have the signer as the first element. Thus we use None
-	// for the case it's not strictly defined.
-	pub signer: Option<SolAddress>,
 }
 
 pub struct SolanaEgressWitnessingHook;
@@ -103,16 +99,15 @@ pub struct SolanaEgressWitnessingHook;
 impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
 	fn on_egress_success(
 		signature: SolSignature,
-		TransactionSuccessDetails { tx_fee, signer }: TransactionSuccessDetails,
+		TransactionSuccessDetails { tx_fee }: TransactionSuccessDetails,
 	) {
 		use cf_traits::KeyProvider;
 
 		if let Err(err) = SolanaBroadcaster::egress_success(
 			pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 			signature,
-			signer.unwrap_or_else(|| {
-				SolanaThresholdSigner::active_epoch_key().map(|e| e.key).unwrap_or_default()
-			}),
+			// Assign any owed fees to the current key.
+			SolanaThresholdSigner::active_epoch_key().map(|e| e.key).unwrap_or_default(),
 			tx_fee,
 			(),
 			signature,

@@ -695,7 +695,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			transaction_out_id: tx_out_id,
 			transaction_ref,
 		});
-		Ok(().into())
+		Ok(())
 	}
 
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {

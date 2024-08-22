@@ -148,7 +148,7 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 			.next()
 			.ok_or(anyhow!("Success querying for {signature} but no items"))?;
 		assert_eq!(sig, signature, "signature we requested should be the same as in the response");
-		Ok(TransactionSuccessDetails { tx_fee, signer: Default::default() })
+		Ok(TransactionSuccessDetails { tx_fee })
 	}
 }
 
