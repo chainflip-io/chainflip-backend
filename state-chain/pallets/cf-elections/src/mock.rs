@@ -33,6 +33,7 @@ impl pallet_cf_elections::Config<Instance1> for Test {
 impl_mock_chainflip!(Test);
 
 pub const INITIAL_UNSYNCED_STATE: u64 = 44;
+pub const NEW_DATA: u64 = 23;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
