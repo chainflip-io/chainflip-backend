@@ -48,6 +48,8 @@ export type Chain = SDKChain;
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
+export const solanaNumberOfNonces = 10;
+
 export function getContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
     case 'Ethereum':

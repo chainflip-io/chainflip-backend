@@ -1,7 +1,7 @@
 #!/usr/bin/env -S NODE_OPTIONS=--max-old-space-size=6144 pnpm tsx
 import { SwapContext, testAllSwaps } from '../shared/swapping';
 import { testEvmDeposits } from '../shared/evm_deposits';
-import { runWithTimeout } from '../shared/utils';
+import { runWithTimeout, sleep, solanaNumberOfNonces } from '../shared/utils';
 import { testFundRedeem } from '../shared/fund_redeem';
 import { testMultipleMembersGovernance } from '../shared/multiple_members_governance';
 import { testLpApi } from '../shared/lp_api_test';
@@ -9,7 +9,7 @@ import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot
 import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
 import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
 import { testBoostingSwap } from '../shared/boost';
-import { observeBadEvent } from '../shared/utils/substrate';
+import { getChainflipApi, observeBadEvent } from '../shared/utils/substrate';
 import { testFillOrKill } from '../shared/fill_or_kill';
 
 const swapContext = new SwapContext();
@@ -51,6 +51,25 @@ async function runAllConcurrentTests() {
   await Promise.all(tests);
 
   await Promise.all([broadcastAborted.stop(), feeDeficitRefused.stop()]);
+
+  // Check that all Solana nonces are available
+  await using chainflip = await getChainflipApi();
+  const maxRetries = 5; // 30 seconds
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const availableNonces = (
+      await chainflip.query.environment.solanaAvailableNonceAccounts()
+    ).toJSON() as any[];
+    if (availableNonces.length === solanaNumberOfNonces) {
+      break;
+    } else if (attempt === maxRetries - 1) {
+      throw new Error(
+        `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces}`,
+      );
+    } else {
+      await sleep(6000);
+    }
+  }
 }
 
 runWithTimeout(runAllConcurrentTests(), 2000000)
