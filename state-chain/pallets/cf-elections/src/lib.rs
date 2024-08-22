@@ -409,7 +409,7 @@ pub mod pallet {
 	/// data instead of the full data, any validator who has the associated data will randomly
 	/// choose to submit it, where the probability increases over time.
 	#[pallet::storage]
-	type SharedData<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub(crate) type SharedData<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Identity,
 		SharedDataHash,
