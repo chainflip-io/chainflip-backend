@@ -1324,7 +1324,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::ignore_my_votes())]
 		pub fn ignore_my_votes(origin: OriginFor<T>) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
@@ -1336,7 +1336,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(3)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::stop_ignoring_my_votes())]
 		pub fn stop_ignoring_my_votes(origin: OriginFor<T>) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
@@ -1349,7 +1349,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::delete_vote())]
 		pub fn delete_vote(
 			origin: OriginFor<T>,
 			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,

@@ -35,6 +35,7 @@ pub trait WeightInfo {
 	fn vote(n: u32, ) -> Weight;
 	fn stop_ignoring_my_votes() -> Weight;
 	fn ignore_my_votes() -> Weight;
+	fn delete_vote() -> Weight;
 	fn recheck_contributed_to_consensuses() -> Weight;
 }
 
@@ -133,6 +134,17 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+
+	fn delete_vote() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `543`
+		//  Estimated: `6483`
+		// Minimum execution time: 21_000_000 picoseconds.
+		Weight::from_parts(22_000_000, 6483)
+			.saturating_add(T::DbWeight::get().reads(5_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+
 }
 
 // For backwards compatibility and tests
@@ -221,6 +233,15 @@ impl WeightInfo for () {
 	/// Storage: `SolanaElections::SharedData` (r:1 w:0)
 	/// Proof: `SolanaElections::SharedData` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn recheck_contributed_to_consensuses() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `543`
+		//  Estimated: `6483`
+		// Minimum execution time: 21_000_000 picoseconds.
+		Weight::from_parts(22_000_000, 6483)
+			.saturating_add(RocksDbWeight::get().reads(5_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	fn delete_vote() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `543`
 		//  Estimated: `6483`
