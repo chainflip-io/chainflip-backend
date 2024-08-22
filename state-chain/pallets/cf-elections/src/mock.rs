@@ -30,6 +30,7 @@ impl pallet_cf_elections::Config<Instance1> for Test {
 }
 
 impl_mock_chainflip!(Test);
+pub const NEW_DATA: u64 = 42;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,

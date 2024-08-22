@@ -250,3 +250,50 @@ fn authority_removes_and_re_adds_itself_from_contributing_set() {
 		.submit_votes(&[1], VOTE, None)
 		.expect_consensus(ConsensusStatus::Changed { previous: 2, new: 3 });
 }
+
+#[test]
+fn provide_shared_data() {
+	new_test_ext()
+		// Run one block, which on_finalise will create the election for the median
+		.then_execute_at_next_block(|()| {})
+		// Do voting
+		.then_execute_at_next_block(|()| {
+			let current_authorities = MockEpochInfo::current_authorities();
+			let validator_id = current_authorities
+				.into_iter()
+				.take(1)
+				.collect::<BTreeSet<u64>>()
+				.into_iter()
+				.next()
+				.unwrap();
+			Pallet::<Test, Instance1>::stop_ignoring_my_votes(
+				RawOrigin::Signed(validator_id).into(),
+			)
+			.unwrap();
+			submit_vote_for(validator_id, NEW_DATA);
+			validator_id
+		})
+		// Provide shared data for an election.
+		.then_execute_at_next_block(|validator_id| {
+			assert_eq!(
+				SharedData::<Test, Instance1>::iter().count(),
+				1,
+				"No shared data found in storage!"
+			);
+			let referenced_shared_data = SharedData::<Test, Instance1>::iter().next().unwrap().1;
+			let unreferenced_shared_data = referenced_shared_data + 1;
+			// Provide unreferenced shared data
+			assert_noop!(
+				Pallet::<Test, Instance1>::provide_shared_data(
+					RawOrigin::Signed(validator_id).into(),
+					unreferenced_shared_data
+				),
+				Error::<Test, Instance1>::UnreferencedSharedData
+			);
+			// Provide referenced shared data
+			assert_ok!(Pallet::<Test, Instance1>::provide_shared_data(
+				RawOrigin::Signed(validator_id).into(),
+				referenced_shared_data
+			));
+		});
+}
