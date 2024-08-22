@@ -1,8 +1,7 @@
-use crate::Runtime;
+use crate::{chainflip::solana_elections, Runtime};
 use cf_chains::{
 	instances::SolanaInstance,
-	sol::{SolApiEnvironment, SolHash, SolTrackedData},
-	ChainState,
+	sol::{SolApiEnvironment, SolHash},
 };
 use cf_utilities::bs58_array;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
@@ -19,7 +18,7 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 
 		// Initialize Solana's API environment
 		// TODO: PRO-1465 Configure these variables correctly.
-		let (sol_env, genesis_hash, durable_nonces_and_accounts) =
+		let (sol_env, genesis_hash, durable_nonces_and_accounts, deposit_channel_lifetime) =
 			match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() {
 				cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => (
 					SolApiEnvironment {
@@ -46,6 +45,8 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
 					)],
+					// 24 hours in Solana blocks
+					24 * 3600 * 10 / 4,
 				),
 				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => (
 					SolApiEnvironment {
@@ -72,6 +73,8 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
 					)],
+					// 2 hours in solana blocks
+					2 * 60 * 60 * 10 / 4,
 				),
 				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => (
 					SolApiEnvironment {
@@ -98,6 +101,8 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 						)),
 					)],
+					// 2 hours in solana blocks
+					2 * 60 * 60 * 10 / 4,
 				),
 				_ => (
 					// Assume testnet
@@ -161,6 +166,8 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							const_hash("HKnmg7JM1F8J2m6sDGdo7Pf5cDkRxaQRbf3fnL3sMsHQ"),
 						),
 					],
+					// 2 hours in solana blocks
+					2 * 60 * 60 * 10 / 4,
 				),
 			};
 
@@ -169,10 +176,17 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 		pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
 			durable_nonces_and_accounts,
 		);
-		pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::put(ChainState {
-			block_height: 0,
-			tracked_data: SolTrackedData { priority_fee: 100000u32.into() },
-		});
+		// Ignore errors as it is not dangerous if the pallet fails to initialize
+		let _result = pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::internally_initialize(
+			solana_elections::initial_state(
+				100000,
+				sol_env.vault_program,
+				sol_env.usdc_token_mint_pubkey,
+			),
+		);
+		pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, SolanaInstance>::put(
+			deposit_channel_lifetime,
+		);
 		Weight::zero()
 	}
 

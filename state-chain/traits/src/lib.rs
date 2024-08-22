@@ -19,8 +19,11 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, assets::any::AssetMap, ApiCall, CcmChannelMetadata,
-	CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters, DepositChannel, Ethereum,
+	address::ForeignChainAddress,
+	assets::any::AssetMap,
+	sol::{SolAddress, SolHash},
+	ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters,
+	DepositChannel, Ethereum,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BlockNumber,
@@ -1014,4 +1017,84 @@ pub trait BalanceApi {
 
 	/// Returns the balance of the given account for the given asset.
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount;
+}
+
+pub trait IngressSink {
+	type Chain: Chain;
+
+	fn on_ingress(
+		channel: <Self::Chain as Chain>::ChainAccount,
+		asset: <Self::Chain as Chain>::ChainAsset,
+		amount: <Self::Chain as Chain>::ChainAmount,
+		block_number: <Self::Chain as Chain>::ChainBlockNumber,
+		details: <Self::Chain as Chain>::DepositDetails,
+	);
+	fn on_ingress_reverted(
+		channel: <Self::Chain as Chain>::ChainAccount,
+		asset: <Self::Chain as Chain>::ChainAsset,
+		amount: <Self::Chain as Chain>::ChainAmount,
+	);
+	fn on_channel_closed(channel: <Self::Chain as Chain>::ChainAccount);
+}
+
+pub trait IngressSource {
+	type Chain: Chain;
+
+	fn open_channel(
+		channel: <Self::Chain as Chain>::ChainAccount,
+		asset: <Self::Chain as Chain>::ChainAsset,
+		close_block: <Self::Chain as Chain>::ChainBlockNumber,
+	) -> DispatchResult;
+}
+pub struct DummyIngressSource<TargetChain: Chain> {
+	_phantom: core::marker::PhantomData<TargetChain>,
+}
+impl<TargetChain: Chain> IngressSource for DummyIngressSource<TargetChain> {
+	type Chain = TargetChain;
+
+	fn open_channel(
+		_channel: <Self::Chain as Chain>::ChainAccount,
+		_asset: <Self::Chain as Chain>::ChainAsset,
+		_close_block: <Self::Chain as Chain>::ChainBlockNumber,
+	) -> DispatchResult {
+		Ok(())
+	}
+}
+
+pub trait SolanaNonceWatch {
+	fn watch_for_nonce_change(
+		nonce_account: SolAddress,
+		previous_nonce_value: SolHash,
+	) -> DispatchResult;
+}
+
+impl SolanaNonceWatch for () {
+	fn watch_for_nonce_change(
+		_nonce_account: SolAddress,
+		_previous_nonce_value: SolHash,
+	) -> DispatchResult {
+		Ok(())
+	}
+}
+
+pub trait ElectionEgressWitnesser {
+	type Chain: ChainCrypto;
+
+	fn watch_for_egress_success(
+		tx_out_id: <Self::Chain as ChainCrypto>::TransactionOutId,
+	) -> DispatchResult;
+}
+
+pub struct DummyEgressSuccessWitnesser<C> {
+	_phantom: core::marker::PhantomData<C>,
+}
+
+impl<C: ChainCrypto> ElectionEgressWitnesser for DummyEgressSuccessWitnesser<C> {
+	type Chain = C;
+
+	fn watch_for_egress_success(
+		_tx_out_id: <Self::Chain as ChainCrypto>::TransactionOutId,
+	) -> DispatchResult {
+		Ok(())
+	}
 }

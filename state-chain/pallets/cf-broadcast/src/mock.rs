@@ -16,7 +16,7 @@ use cf_traits::{
 		liability_tracker::MockLiabilityTracker, signer_nomination::MockNominator,
 		threshold_signer::MockThresholdSigner,
 	},
-	AccountRoleRegistry, OnBroadcastReady,
+	AccountRoleRegistry, DummyEgressSuccessWitnesser, OnBroadcastReady,
 };
 use codec::{Decode, Encode};
 use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
@@ -149,6 +149,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
+	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<MockEthereumChainCrypto>;
 	type RetryPolicy = MockRetryPolicy;
 	type LiabilityTracker = MockLiabilityTracker;
 	type CfeBroadcastRequest = MockCfeInterface;

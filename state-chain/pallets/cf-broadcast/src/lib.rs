@@ -19,7 +19,8 @@ use cf_chains::{
 };
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
-	CfeBroadcastRequest, Chainflip, EpochInfo, GetBlockHeight, ThresholdSigner,
+	CfeBroadcastRequest, Chainflip, ElectionEgressWitnesser, EpochInfo, GetBlockHeight,
+	ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -189,6 +190,10 @@ pub mod pallet {
 		type RetryPolicy: RetryPolicy<
 			BlockNumber = BlockNumberFor<Self>,
 			AttemptCount = AttemptCount,
+		>;
+
+		type ElectionEgressWitnesser: ElectionEgressWitnesser<
+			Chain = <Self::TargetChain as Chain>::ChainCrypto,
 		>;
 
 		type CfeBroadcastRequest: CfeBroadcastRequest<Self, Self::TargetChain>;
@@ -475,6 +480,10 @@ pub mod pallet {
 
 				T::BroadcastReadyProvider::on_broadcast_ready(&signed_api_call);
 
+				let _ = T::ElectionEgressWitnesser::watch_for_egress_success(
+					transaction_out_id.clone(),
+				);
+
 				// The Engine uses this.
 				TransactionOutIdToBroadcastId::<T, I>::insert(
 					&transaction_out_id,
@@ -528,99 +537,10 @@ pub mod pallet {
 			tx_fee: TransactionFeeFor<T, I>,
 			tx_metadata: TransactionMetadataFor<T, I>,
 			transaction_ref: TransactionRefFor<T, I>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
-			let (broadcast_id, _initiated_at) =
-				TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
-					.ok_or(Error::<T, I>::InvalidPayload)?;
-
-			Self::remove_pending_broadcast(&broadcast_id);
-
-			if IncomingKeyAndBroadcastId::<T, I>::exists() {
-				let (incoming_key, rotation_broadcast_id) =
-					IncomingKeyAndBroadcastId::<T, I>::get().unwrap();
-				if rotation_broadcast_id == broadcast_id {
-					CurrentOnChainKey::<T, I>::put(incoming_key);
-					IncomingKeyAndBroadcastId::<T, I>::kill();
-				}
-			}
-
-			if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
-				if tx_metadata.verify_metadata(&expected_tx_metadata) {
-					if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
-						let to_refund =
-							broadcast_data.transaction_payload.return_fee_refund(tx_fee);
-
-						let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
-							T::TargetChain,
-						>>::into_foreign_chain_address(signer_id.clone());
-
-						T::LiabilityTracker::record_liability(
-							address_to_refund,
-							<T::TargetChain as Chain>::GAS_ASSET.into(),
-							to_refund.into(),
-						);
-
-						Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
-							beneficiary: signer_id,
-							amount: to_refund,
-						});
-					} else {
-						log::warn!(
-							"Unable to attribute transaction fee refund for broadcast {}.",
-							broadcast_id
-						);
-					}
-				} else {
-					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRefused {
-						beneficiary: signer_id,
-					});
-					log::warn!(
-						"Transaction metadata verification failed for broadcast {}. Deficit will not be recorded.",
-						broadcast_id
-					);
-				}
-			} else {
-				log::error!(
-					"Transaction metadata not found for broadcast {}. Deficit will be ignored.",
-					broadcast_id
-				);
-			}
-
-			if let Some(callback) = RequestSuccessCallbacks::<T, I>::take(broadcast_id) {
-				RequestFailureCallbacks::<T, I>::remove(broadcast_id);
-				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
-					broadcast_id,
-					result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(
-						|e| {
-							log::warn!(
-								"Callback execution has failed for broadcast {}.",
-								broadcast_id
-							);
-							e.error
-						},
-					),
-				});
-			}
-
-			// Report the people who failed to broadcast this tx during its whole lifetime.
-			let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
-			if !failed_broadcasters.is_empty() {
-				T::OffenceReporter::report_many(
-					PalletOffence::FailedToBroadcastTransaction,
-					failed_broadcasters,
-				);
-			}
-
-			Self::clean_up_broadcast_storage(broadcast_id);
-
-			Self::deposit_event(Event::<T, I>::BroadcastSuccess {
-				broadcast_id,
-				transaction_out_id: tx_out_id,
-				transaction_ref,
-			});
-			Ok(().into())
+			Self::egress_success(origin, tx_out_id, signer_id, tx_fee, tx_metadata, transaction_ref)
 		}
 
 		#[pallet::weight(Weight::zero())]
@@ -684,6 +604,100 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn egress_success(
+		origin: OriginFor<T>,
+		tx_out_id: TransactionOutIdFor<T, I>,
+		signer_id: SignerIdFor<T, I>,
+		tx_fee: TransactionFeeFor<T, I>,
+		tx_metadata: TransactionMetadataFor<T, I>,
+		transaction_ref: TransactionRefFor<T, I>,
+	) -> DispatchResult {
+		let (broadcast_id, _initiated_at) = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
+			.ok_or(Error::<T, I>::InvalidPayload)?;
+
+		Self::remove_pending_broadcast(&broadcast_id);
+
+		if IncomingKeyAndBroadcastId::<T, I>::exists() {
+			let (incoming_key, rotation_broadcast_id) =
+				IncomingKeyAndBroadcastId::<T, I>::get().unwrap();
+			if rotation_broadcast_id == broadcast_id {
+				CurrentOnChainKey::<T, I>::put(incoming_key);
+				IncomingKeyAndBroadcastId::<T, I>::kill();
+			}
+		}
+
+		if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
+			if tx_metadata.verify_metadata(&expected_tx_metadata) {
+				if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
+					let to_refund = broadcast_data.transaction_payload.return_fee_refund(tx_fee);
+
+					let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
+						T::TargetChain,
+					>>::into_foreign_chain_address(signer_id.clone());
+
+					use cf_traits::LiabilityTracker;
+					T::LiabilityTracker::record_liability(
+						address_to_refund,
+						<T::TargetChain as Chain>::GAS_ASSET.into(),
+						to_refund.into(),
+					);
+
+					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
+						beneficiary: signer_id,
+						amount: to_refund,
+					});
+				} else {
+					log::warn!(
+						"Unable to attribute transaction fee refund for broadcast {}.",
+						broadcast_id
+					);
+				}
+			} else {
+				Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRefused {
+					beneficiary: signer_id,
+				});
+				log::warn!(
+				"Transaction metadata verification failed for broadcast {}. Deficit will not be recorded.",
+				broadcast_id
+			);
+			}
+		} else {
+			log::error!(
+				"Transaction metadata not found for broadcast {}. Deficit will be ignored.",
+				broadcast_id
+			);
+		}
+
+		if let Some(callback) = RequestSuccessCallbacks::<T, I>::take(broadcast_id) {
+			RequestFailureCallbacks::<T, I>::remove(broadcast_id);
+			Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
+				broadcast_id,
+				result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(|e| {
+					log::warn!("Callback execution has failed for broadcast {}.", broadcast_id);
+					e.error
+				}),
+			});
+		}
+
+		// Report the people who failed to broadcast this tx during its whole lifetime.
+		let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
+		if !failed_broadcasters.is_empty() {
+			T::OffenceReporter::report_many(
+				PalletOffence::FailedToBroadcastTransaction,
+				failed_broadcasters,
+			);
+		}
+
+		Self::clean_up_broadcast_storage(broadcast_id);
+
+		Self::deposit_event(Event::<T, I>::BroadcastSuccess {
+			broadcast_id,
+			transaction_out_id: tx_out_id,
+			transaction_ref,
+		});
+		Ok(())
+	}
+
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {
 		AwaitingBroadcast::<T, I>::remove(broadcast_id);
 		TransactionMetadata::<T, I>::remove(broadcast_id);

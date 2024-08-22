@@ -21,6 +21,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
+	SolanaNonceWatch,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -91,6 +92,8 @@ pub mod pallet {
 
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
+
+		type SolanaNonceWatch: SolanaNonceWatch;
 
 		/// Used to access the current Chainflip runtime's release version (distinct from the
 		/// substrate RuntimeVersion)
@@ -437,38 +440,6 @@ pub mod pallet {
 			Ok(dispatch_result)
 		}
 
-		/// Updates the Durable Nonce for the nonce account upon witnessing that the corresponding
-		/// solana tx was successfully included in a block
-		///
-		/// ## Events
-		///
-		/// - [DurableNonceSetForAccount](Event::DurableNonceSetForAccount)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		/// - [NonceAccountIsNotUnavailable](Error::NonceAccountNotBeingUsedOrDoesNotExist)
-		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::update_sol_nonce())]
-		pub fn update_sol_nonce(
-			origin: OriginFor<T>,
-			nonce_account: SolAddress,
-			durable_nonce: SolHash,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			if SolanaUnavailableNonceAccounts::<T>::take(nonce_account).is_some() {
-				SolanaAvailableNonceAccounts::<T>::append((nonce_account, durable_nonce));
-				Self::deposit_event(Event::<T>::DurableNonceSetForAccount {
-					nonce_account,
-					durable_nonce,
-				});
-				Ok(().into())
-			} else {
-				Err(Error::<T>::NonceAccountNotBeingUsedOrDoesNotExist.into())
-			}
-		}
-
 		/// Allows Governance to recover a used Nonce.
 		/// If a Hash is supplied as well, update the associated Durable Hash as well.
 		/// Requires Governance Origin.
@@ -482,7 +453,7 @@ pub mod pallet {
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		/// - [NonceAccountNotBeingUsed](Error::NonceAccountNotBeingUsedOrDoesNotExist)
 		/// - [NonceHashNotSuppliedWhereRequired](Error::NonceAccountNotBeingUsedOrDoesNotExist)
-		#[pallet::call_index(8)]
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::force_recover_sol_nonce())]
 		pub fn force_recover_sol_nonce(
 			origin: OriginFor<T>,
@@ -736,6 +707,9 @@ impl<T: Config> Pallet<T> {
 		});
 		nonce_and_account.map(|(account, nonce)| {
 			SolanaUnavailableNonceAccounts::<T>::insert(account, nonce);
+			if let Err(err) = T::SolanaNonceWatch::watch_for_nonce_change(account, nonce) {
+				log::error!("Error initiating watch for nonce change: {:?}", err);
+			}
 			(account, nonce)
 		})
 	}
@@ -756,6 +730,18 @@ impl<T: Config> Pallet<T> {
 
 	pub fn get_number_of_available_sol_nonce_accounts() -> usize {
 		SolanaAvailableNonceAccounts::<T>::decode_len().unwrap_or(0)
+	}
+
+	pub fn update_sol_nonce(nonce_account: SolAddress, durable_nonce: SolHash) {
+		if let Some(_nonce) = SolanaUnavailableNonceAccounts::<T>::take(nonce_account) {
+			SolanaAvailableNonceAccounts::<T>::append((nonce_account, durable_nonce));
+			Self::deposit_event(Event::<T>::DurableNonceSetForAccount {
+				nonce_account,
+				durable_nonce,
+			});
+		} else {
+			log::error!("Nonce account {nonce_account} not found in unavailable nonce accounts");
+		}
 	}
 }
 

@@ -102,15 +102,7 @@ impl Chain for MockEthereum {
 	type TrackedData = MockTrackedData;
 	type ChainAsset = assets::eth::Asset;
 	type ChainAssetMap<
-		T: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ BenchmarkValue
-			+ FullCodec
-			+ Unpin
-			+ Default,
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::eth::AssetMap<T>;
 	type ChainAccount = u64;
 	type DepositFetchId = MockEthereumChannelId;

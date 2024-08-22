@@ -320,13 +320,9 @@ macro_rules! assets {
 				}
 			}
 
-			pub trait GetChainAssetMap<T> {
-				type Asset ;
+			pub trait GetChainAssetMap<T>: IndexMut<Self::Asset, Output = T> + Index<Self::Asset, Output = T> {
+				type Asset;
 				fn from_fn<F: FnMut(Self::Asset) -> T>(f: F) -> Self;
-			}
-			impl<T> GetChainAssetMap<T> for () {
-				type Asset = ();
-				fn from_fn<F: FnMut(Self::Asset) -> T>(_f: F) -> Self {}
 			}
 			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 			pub struct AssetMap<T> {

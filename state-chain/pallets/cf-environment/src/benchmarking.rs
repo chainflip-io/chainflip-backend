@@ -37,27 +37,6 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn update_sol_nonce() {
-		let nonce_account = SolAddress([0x01; 32]);
-		let old_hash = SolHash([0x02; 32]);
-		let new_hash = SolHash([0x10; 32]);
-
-		// Setup unavailable Nonce
-		SolanaUnavailableNonceAccounts::<T>::insert(nonce_account, old_hash);
-
-		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
-		let call = Call::<T>::update_sol_nonce { nonce_account, durable_nonce: new_hash };
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(origin));
-		}
-
-		assert!(SolanaAvailableNonceAccounts::<T>::get().contains(&(nonce_account, new_hash)));
-		assert!(SolanaUnavailableNonceAccounts::<T>::get(nonce_account).is_none());
-	}
-
-	#[benchmark]
 	fn force_recover_sol_nonce() {
 		let nonce_account = SolAddress([0x01; 32]);
 		let old_hash = SolHash([0x02; 32]);

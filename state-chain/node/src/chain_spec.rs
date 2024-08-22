@@ -4,8 +4,8 @@ use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData, BITCOIN_DUST_LIMIT},
 	dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, SolTrackedData},
-	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
+	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash},
+	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use cf_primitives::{
 	AccountRole, AuthorityCount, NetworkEnvironment, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
@@ -20,8 +20,10 @@ use sp_core::{
 	Pair, Public,
 };
 use state_chain_runtime::{
-	chainflip::Offence, opaque::SessionKeys, AccountId, BlockNumber, FlipBalance,
-	RuntimeGenesisConfig, SetSizeParameters, Signature, WASM_BINARY,
+	chainflip::{solana_elections, Offence},
+	opaque::SessionKeys,
+	AccountId, BlockNumber, FlipBalance, RuntimeGenesisConfig, SetSizeParameters, Signature,
+	SolanaElectionsConfig, WASM_BINARY,
 };
 
 use std::{
@@ -348,6 +350,13 @@ pub fn inner_cf_development_config(
 			devnet::ARBITRUM_SAFETY_MARGIN,
 			devnet::SOLANA_SAFETY_MARGIN,
 			devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
+			SolanaElectionsConfig {
+				option_initial_state: Some(solana_elections::initial_state(
+					100000,
+					sol_vault_program,
+					sol_usdc_token_mint_pubkey,
+				)),
+			},
 		))
 		.build())
 }
@@ -497,6 +506,13 @@ macro_rules! network_spec {
 						ARBITRUM_SAFETY_MARGIN,
 						SOLANA_SAFETY_MARGIN,
 						AUCTION_BID_CUTOFF_PERCENTAGE,
+						SolanaElectionsConfig {
+							option_initial_state: Some(solana_elections::initial_state(
+								100000,
+								sol_vault_program,
+								sol_usdc_token_mint_pubkey,
+							)),
+						},
 					))
 					.build())
 			}
@@ -548,6 +564,7 @@ fn testnet_genesis(
 	arbitrum_safety_margin: u64,
 	solana_safety_margin: u64,
 	auction_bid_cutoff_percentage: Percent,
+	solana_elections: state_chain_runtime::SolanaElectionsConfig,
 ) -> serde_json::Value {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -775,12 +792,6 @@ fn testnet_genesis(
 				},
 			},
 		},
-		solana_chain_tracking: state_chain_runtime::SolanaChainTrackingConfig {
-			init_chain_state: ChainState::<Solana> {
-				block_height: 0,
-				tracked_data: SolTrackedData { priority_fee: 100000u32.into() },
-			},
-		},
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: state_chain_runtime::BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
@@ -806,6 +817,7 @@ fn testnet_genesis(
 			witness_safety_margin: Some(solana_safety_margin),
 			..Default::default()
 		},
+		solana_elections,
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.
