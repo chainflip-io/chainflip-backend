@@ -11,6 +11,7 @@ import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
 import { testBoostingSwap } from '../shared/boost';
 import { observeBadEvent } from '../shared/utils/substrate';
 import { testFillOrKill } from '../shared/fill_or_kill';
+import { testDCASwaps } from '../shared/DCA_test';
 
 const swapContext = new SwapContext();
 
@@ -32,13 +33,14 @@ async function runAllConcurrentTests() {
   const tests = [
     swapLessThanED(),
     testAllSwaps(swapContext),
-    testEvmDeposits(),
+    testEvmDeposits(numberOfNodes),
     testFundRedeem('redeem'),
     testMultipleMembersGovernance(),
     testLpApi(),
     testBrokerFeeCollection(),
     testBoostingSwap(),
     testFillOrKill(),
+    testDCASwaps(),
   ];
 
   // Tests that only work if there is more than one node

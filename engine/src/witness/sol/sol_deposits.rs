@@ -1,22 +1,21 @@
-use crate::witness::common::{RuntimeCallHasChain, RuntimeHasChain};
 use anyhow::ensure;
 use base64::Engine;
 use cf_chains::{
-	instances::ChainInstanceFor,
 	sol::{
 		sol_tx_core::address_derivation::{derive_associated_token_account, derive_fetch_account},
-		SolAddress, SolAsset, SolHash,
+		SolAddress, SolAmount,
 	},
-	Chain,
+	Solana,
 };
-use cf_primitives::{chains::assets::sol::Asset, EpochIndex};
-use futures_core::Future;
-
-use crate::witness::common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses;
-
-use super::super::common::chunked_chain_source::chunked_by_vault::{
-	builder::ChunkedByVaultBuilder, ChunkedByVault,
+use cf_primitives::chains::assets::sol::Asset;
+use futures::{stream, StreamExt, TryStreamExt};
+use pallet_cf_elections::electoral_systems::blockchain::delta_based_ingress::{
+	ChannelTotalIngressed, OpenChannelDetails,
 };
+use serde_json::Value;
+use sp_runtime::SaturatedConversion;
+use std::{collections::BTreeMap, str::FromStr};
+
 use crate::sol::{
 	commitment_config::CommitmentConfig,
 	retry_rpc::SolRetryRpcApi,
@@ -24,181 +23,89 @@ use crate::sol::{
 		ParsedAccount, Response, RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding,
 	},
 };
-use serde_json::Value;
-pub use sol_prim::consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID};
-use std::str::FromStr;
 
-use crate::common::Mutex;
-use std::{collections::HashMap, sync::Arc};
+pub use sol_prim::consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID};
 
 // 16 (u128) + 8 (discriminator)
 const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
 const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
+const MAXIMUM_CONCURRENT_RPCS: usize = 16;
 
-impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	/// We track Solana (Sol and SPL-token) deposits by periodically querying the
-	/// state of the deposit channel accounts. To ensure that no deposits are missed
-	/// upon fetch, we use a helper program for each deposit channel (FetchHistoricalAccount)
-	/// that keeps track of the cumulative amount fetched from the corresponding deposit
-	/// channel.
-	/// Using the deposit channel's balance and the cumulative amount fetched from it we
-	/// can reliably track the amount deposited to a deposit channel.
-	/// As a reminder, for token deposit channels the account to witness is the derived
-	/// associated account from the actual deposit channel provided by the State Chain.
-	/// Native asset and tokens are processed together reusing the getMultipleAccounts
-	/// for any combination of deposit channels and assets.
-	pub async fn sol_deposits<ProcessCall, ProcessingFut, SolRetryRpcClient>(
-		self,
-		process_call: ProcessCall,
-		sol_rpc: SolRetryRpcClient,
-		vault_address: SolAddress,
-		cached_balances: Arc<Mutex<HashMap<SolAddress, u128>>>,
-		token_pubkey: SolAddress,
-	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
-	where
-		Inner::Chain: cf_chains::Chain<
-			ChainAmount = u64,
-			DepositDetails = (),
-			ChainAccount = SolAddress,
-			ChainAsset = SolAsset,
-		>,
-		Inner: ChunkedByVault<Index = u64, Hash = SolHash, Data = ((), Addresses<Inner>)>,
-		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-			+ Send
-			+ Sync
-			+ Clone
-			+ 'static,
-		ProcessingFut: Future<Output = ()> + Send + 'static,
-		SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
-		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		state_chain_runtime::RuntimeCall:
-			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
-	{
-		self.then(move |epoch, header| {
-			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
-
-			let sol_rpc = sol_rpc.clone();
-			let process_call = process_call.clone();
-			let cached_balances = Arc::clone(&cached_balances);
-
-			async move {
-				let (_, deposit_channels) = header.data;
-
-				// Genesis block cannot contain any transactions
-				if !deposit_channels.is_empty() {
-					let deposit_channels_info = deposit_channels
-						.into_iter()
-						.map(|deposit_channel| {
-							match deposit_channel.deposit_channel.asset {
-								// Native deposit channel
-								Asset::Sol => DepositChannelType::NativeDepositChannel(
-									deposit_channel.deposit_channel.address,
-								),
-								// Token deposit channel. If we ever want to add another
-								// token we should add a match arm here and adequately
-								// pass a corresponding token_pubkey to this function.
-								Asset::SolUsdc => DepositChannelType::TokenDepositChannel(
-									deposit_channel.deposit_channel.address,
-									derive_associated_token_account(
-										deposit_channel.deposit_channel.address,
-										token_pubkey,
-									)
-									.expect("Failed to derive associated token account")
-									.address,
-									token_pubkey,
-									deposit_channel.deposit_channel.asset,
-								),
-							}
-						})
-						.collect::<Vec<_>>();
-
-					if !deposit_channels_info.is_empty() {
-						let chunked_deposit_channels_info = deposit_channels_info
-							.chunks(MAX_MULTIPLE_ACCOUNTS_QUERY / 2)
-							.map(|chunk| chunk.to_vec())
-							.collect::<Vec<Vec<_>>>();
-
-						for chunk_deposit_channels_info in chunked_deposit_channels_info {
-							let (ingresses, slot) = ingress_amounts(
-								&sol_rpc,
-								chunk_deposit_channels_info,
-								vault_address,
-							)
-							.await?;
-
-							if !ingresses.is_empty() {
-								let mut cached_balances = cached_balances.lock().await;
-
-								// Filter out the deposit channels that have the same balance
-								let new_ingresses: Vec<(DepositChannelType, u128)> = ingresses
-									.into_iter()
-									.filter_map(|(deposit_channel, amount)| {
-										let deposit_channel_cached_balance = cached_balances
-											.get(deposit_channel.address_to_witness())
-											.unwrap_or(&0);
-
-										if amount > *deposit_channel_cached_balance {
-											// TODO: This is a workaround for the current pallet.
-											// With the new pallet we could submit "amount" as is
-											// but we'd still need to keep track of the cached
-											// balance to avoid continous submissions.
-											// Some((deposit_channel, amount))
-											Some((
-												deposit_channel,
-												amount - deposit_channel_cached_balance,
-											))
-										} else {
-											None
-										}
-									})
-									.collect::<Vec<_>>();
-
-								if !new_ingresses.is_empty() {
-									process_call(
-										pallet_cf_ingress_egress::Call::<
-											_,
-											ChainInstanceFor<Inner::Chain>,
-										>::process_deposits {
-											deposit_witnesses: new_ingresses
-												.clone()
-												.into_iter()
-												.map(|(deposit_channel, amount)| {
-													pallet_cf_ingress_egress::DepositWitness {
-												deposit_address: *deposit_channel.address(),
-												asset: deposit_channel.asset(),
-												amount: amount
-													.try_into()
-													.expect("Ingress witness transfer value should fit u64"),
-												deposit_details: (),
-											}
-												})
-												.collect(),
-											block_height: slot,
-										}
-										.into(),
-										epoch.index,
-									)
-									.await;
-
-									// Update hashmap
-									new_ingresses.into_iter().for_each(
-										|(deposit_channel, value)| {
-											cached_balances.insert(
-												*deposit_channel.address_to_witness(),
-												value,
-											);
-										},
-									);
-								}
-							}
-						}
-					}
+/// We track Solana (Sol and SPL-token) deposits by periodically querying the
+/// state of the deposit channel accounts. To ensure that no deposits are missed
+/// upon fetch, we use a helper program for each deposit channel (FetchHistoricalAccount)
+/// that keeps track of the cumulative amount fetched from the corresponding deposit
+/// channel.
+/// Using the deposit channel's balance and the cumulative amount fetched from it we
+/// can reliably track the amount deposited to a deposit channel.
+/// As a reminder, for token deposit channels the account to witness is the derived
+/// associated account from the actual deposit channel provided by the State Chain.
+/// Native asset and tokens are processed together reusing the getMultipleAccounts
+/// for any combination of deposit channels and assets.
+pub async fn get_channel_ingress_amounts<SolRetryRpcClient>(
+	sol_rpc: &SolRetryRpcClient,
+	vault_address: SolAddress,
+	token_pubkey: SolAddress,
+	deposit_channels: BTreeMap<
+		SolAddress,
+		(OpenChannelDetails<Solana>, ChannelTotalIngressed<Solana>),
+	>,
+) -> Result<BTreeMap<SolAddress, ChannelTotalIngressed<Solana>>, anyhow::Error>
+where
+	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
+{
+	let deposit_channels = &deposit_channels;
+	stream::iter(
+		deposit_channels
+			.clone() // https://github.com/rust-lang/rust/issues/110338 && https://github.com/rust-lang/rust/issues/126551
+			.into_iter()
+			.map(|(address, (open_channel_details, _current_total_ingressed))| {
+				match open_channel_details.asset {
+					// Native deposit channel
+					Asset::Sol => DepositChannelType::NativeDepositChannel(address),
+					// Token deposit channel. If we ever want to add another
+					// token we should add a match arm here and adequately
+					// pass a corresponding token_pubkey to this function.
+					Asset::SolUsdc => DepositChannelType::TokenDepositChannel(
+						address,
+						derive_associated_token_account(address, token_pubkey)
+							.expect("Failed to derive associated token account")
+							.address,
+						token_pubkey,
+					),
 				}
-				Ok::<_, anyhow::Error>(())
-			}
-		})
-	}
+			}),
+	)
+	.chunks(MAX_MULTIPLE_ACCOUNTS_QUERY / 2)
+	.map(|deposit_channels_chunk| ingress_amounts(sol_rpc, deposit_channels_chunk, vault_address))
+	.buffered(MAXIMUM_CONCURRENT_RPCS)
+	.map_ok(|(ingress_amounts_chunk, slot)| {
+		stream::iter(
+			ingress_amounts_chunk
+				.into_iter()
+				.filter_map(move |(deposit_channel, amount)| {
+					let amount: SolAmount = amount.saturated_into(); // TODO: Change the DeltaBasedIngress to not use the Chains Amount type but
+												 // instead use u256 or u128 or some generic.
+					let (_, current_total_ingressed) =
+						deposit_channels.get(deposit_channel.address()).unwrap();
+					if amount != current_total_ingressed.amount ||
+						slot < current_total_ingressed.block_number
+					{
+						Some((
+							*deposit_channel.address(),
+							ChannelTotalIngressed { block_number: slot, amount },
+						))
+					} else {
+						None
+					}
+				})
+				.map(Ok),
+		)
+	})
+	.try_flatten()
+	.try_collect()
+	.await
 }
 
 // Returns the ingress amounts per deposit channel from a vector of deposit channels that contain
@@ -277,13 +184,10 @@ where
 			_ => Err(anyhow::anyhow!("Unexpected number of accounts returned")),
 		}?;
 
-		// Filter for amount already here for efficiency
-		if accumulated_amount > 0 {
-			ingresses.push((deposit_channel.clone(), accumulated_amount));
-		}
+		ingresses.push((deposit_channel.clone(), accumulated_amount));
 	}
 
-	ensure!(ingresses.len() <= deposit_channels.len());
+	ensure!(ingresses.len() == deposit_channels.len());
 
 	Ok((ingresses, slot))
 }
@@ -302,12 +206,7 @@ fn parse_account_amount_from_data(
 			);
 			Ok(deposit_channel_info.lamports as u128)
 		},
-		DepositChannelType::TokenDepositChannel(
-			deposit_channel_address,
-			_,
-			token_mint_pubkey,
-			_,
-		) => {
+		DepositChannelType::TokenDepositChannel(deposit_channel_address, _, token_mint_pubkey) => {
 			ensure!(
 				owner_pub_key == TOKEN_PROGRAM_ID,
 				"Unexpected owner for token deposit channel"
@@ -391,14 +290,14 @@ enum DepositChannelType {
 	// Deposit channel address
 	NativeDepositChannel(SolAddress),
 	// Deposit channel address, Deposit Channel ATA, mintPubkey, asset
-	TokenDepositChannel(SolAddress, SolAddress, SolAddress, Asset),
+	TokenDepositChannel(SolAddress, SolAddress, SolAddress),
 }
 impl DepositChannelType {
 	fn address(&self) -> &SolAddress {
 		match self {
 			DepositChannelType::NativeDepositChannel(deposit_channel_address) =>
 				deposit_channel_address,
-			DepositChannelType::TokenDepositChannel(deposit_channel_address, _, _, _) =>
+			DepositChannelType::TokenDepositChannel(deposit_channel_address, _, _) =>
 				deposit_channel_address,
 		}
 	}
@@ -406,14 +305,8 @@ impl DepositChannelType {
 		match self {
 			DepositChannelType::NativeDepositChannel(native_deposit_channel) =>
 				native_deposit_channel,
-			DepositChannelType::TokenDepositChannel(_, deposit_channel_ata, _, _) =>
+			DepositChannelType::TokenDepositChannel(_, deposit_channel_ata, _) =>
 				deposit_channel_ata,
-		}
-	}
-	fn asset(&self) -> Asset {
-		match self {
-			DepositChannelType::NativeDepositChannel(_) => Asset::Sol,
-			DepositChannelType::TokenDepositChannel(_, _, _, asset) => *asset,
 		}
 	}
 }
@@ -467,7 +360,6 @@ mod tests {
 							.unwrap(),
 						SolAddress::from_str("MAZEnmTmMsrjcoD6vymnSoZjzGF7i7Lvr2EXjffCiUo")
 							.unwrap(),
-						Asset::SolUsdc,
 					),
 				];
 
@@ -510,7 +402,6 @@ mod tests {
 							.unwrap(),
 						SolAddress::from_str("MAZEnmTmMsrjcoD6vymnSoZjzGF7i7Lvr2EXjffCiUo")
 							.unwrap(),
-						Asset::SolUsdc,
 					),
 				];
 				let ingresses =
@@ -518,7 +409,8 @@ mod tests {
 						.await
 						.unwrap();
 
-				assert!(ingresses.0.is_empty());
+				assert_eq!(ingresses.0[0].1, 0);
+				assert_eq!(ingresses.0[1].1, 0);
 
 				let vault_program_account =
 					SolAddress::from_str("EMxiTBPTkGVkkbCMncu7j17gHyySojii4KhHwM36Hgz2").unwrap();
@@ -539,7 +431,6 @@ mod tests {
 							.unwrap(),
 						SolAddress::from_str("MAZEnmTmMsrjcoD6vymnSoZjzGF7i7Lvr2EXjffCiUo")
 							.unwrap(),
-						Asset::SolUsdc,
 					),
 				];
 

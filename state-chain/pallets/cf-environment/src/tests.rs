@@ -387,8 +387,7 @@ fn test_sol_nonces_and_accounts_usage() {
 		);
 
 		// put back the first nonce account with a new nonce
-		Environment::update_sol_nonce(RuntimeOrigin::root(), account1, SolHash([100u8; 32]))
-			.unwrap();
+		Environment::update_sol_nonce(account1, SolHash([100; 32]));
 		assert_eq!(SolanaUnavailableNonceAccounts::<Test>::get(account1), None);
 		assert_eq!(
 			SolanaUnavailableNonceAccounts::<Test>::iter_keys().collect::<Vec<_>>().len(),
@@ -405,8 +404,7 @@ fn test_sol_nonces_and_accounts_usage() {
 		);
 
 		// put back the second nonce account with a new nonce
-		Environment::update_sol_nonce(RuntimeOrigin::root(), account2, SolHash([200u8; 32]))
-			.unwrap();
+		Environment::update_sol_nonce(account2, SolHash([200; 32]));
 		assert_eq!(SolanaUnavailableNonceAccounts::<Test>::get(account2), None);
 		assert_eq!(
 			SolanaUnavailableNonceAccounts::<Test>::iter_keys().collect::<Vec<_>>().len(),

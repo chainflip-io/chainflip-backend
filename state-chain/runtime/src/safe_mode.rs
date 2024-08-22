@@ -83,8 +83,6 @@ pub struct WitnesserCallPermission {
 
 	// Solana pallets
 	pub solana_broadcast: bool,
-	pub solana_chain_tracking: bool,
-	pub solana_ingress_egress: bool,
 	pub solana_vault: bool,
 }
 
@@ -111,8 +109,6 @@ impl WitnesserCallPermission {
 			arbitrum_ingress_egress: true,
 			arbitrum_vault: true,
 			solana_broadcast: true,
-			solana_chain_tracking: true,
-			solana_ingress_egress: true,
 			solana_vault: true,
 		}
 	}
@@ -146,8 +142,6 @@ impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 			RuntimeCall::ArbitrumVault(..) => self.arbitrum_vault,
 
 			RuntimeCall::SolanaBroadcaster(..) => self.solana_broadcast,
-			RuntimeCall::SolanaChainTracking(..) => self.solana_chain_tracking,
-			RuntimeCall::SolanaIngressEgress(..) => self.solana_ingress_egress,
 			RuntimeCall::SolanaVault(..) => self.solana_vault,
 
 			_ => {

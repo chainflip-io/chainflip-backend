@@ -10,20 +10,21 @@
 /engine/config/CI/config/Settings.toml @chainflip-io/platform
 /localnet/ @chainflip-io/platform
 
-/state-chain/pallets/cf-pools/ @AlastairHolmes
-/state-chain/amm/ @AlastairHolmes
+/state-chain/pallets/cf-pools/ @martin-chainflip
+/state-chain/pallets/cf-elections/ @kylezs
+/state-chain/amm/ @martin-chainflip
 
 /state-chain/ @dandanlen
 
-/utilities/with_std/task_scope @AlastairHolmes
+/utilities/with_std/task_scope @kylezs
 
 /engine/multisig/ @msgmaxim
 /engine/src/p2p/ @msgmaxim
 /engine/src/p2p.rs @msgmaxim
 
-/engine/state_chain_observer/client/ @AlastairHolmes
-/engine/src/witness/ @kylezs @AlastairHolmes
-/engine/src/witness.rs @kylezs @AlastairHolmes
+/engine/state_chain_observer/client/ @kylezs
+/engine/src/witness/ @kylezs
+/engine/src/witness.rs @kylezs
 /engine/src/eth/ @kylezs
 /engine/src/btc/ @kylezs
 /engine/src/dot/ @kylezs

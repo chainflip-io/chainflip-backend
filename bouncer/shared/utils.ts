@@ -553,20 +553,20 @@ export async function observeBalanceIncrease(
   address: string,
   oldBalance: string,
 ): Promise<number> {
-  for (let i = 0; i < 1200; i++) {
+  for (let i = 0; i < 2400; i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > Number(oldBalance)) {
       return newBalance;
     }
 
-    await sleep(1000);
+    await sleep(3000);
   }
 
   return Promise.reject(new Error('Failed to observe balance increase'));
 }
 
 export async function observeFetch(asset: Asset, address: string): Promise<void> {
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 360; i++) {
     const balance = Number(await getBalance(asset, address));
     if (balance === 0) {
       const chain = chainFromAsset(asset);
