@@ -1,7 +1,7 @@
 import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
-import { deferredPromise } from '../utils';
+import { deferredPromise, sleep } from '../utils';
 
 // @ts-expect-error polyfilling
 Symbol.asyncDispose ??= Symbol('asyncDispose');
@@ -112,6 +112,122 @@ export type Event<T = any> = {
   eventIndex: number;
 };
 
+// Iterate over all the events, reshaping them for the consumer
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapEvents(events: any[], blockNumber: number): Event[] {
+  return events.map(({ event }, index) => ({
+    name: { section: event.section, method: event.method },
+    data: event.toHuman().data,
+    block: blockNumber,
+    eventIndex: index,
+  }));
+}
+
+class EventCache {
+  private cache: Map<string, Event[]>;
+
+  private blockNumberToHash: Map<number, string>;
+
+  private cacheSizeBlocks: number;
+
+  private chain: SubstrateChain;
+
+  private finalisedBlockNumber: number | undefined;
+
+  private pendingRequests: number[];
+
+  constructor(cacheSizeBlocks: number, chain: SubstrateChain) {
+    this.cache = new Map();
+    this.blockNumberToHash = new Map();
+    this.cacheSizeBlocks = cacheSizeBlocks;
+    this.chain = chain;
+    this.finalisedBlockNumber = undefined;
+    this.pendingRequests = [];
+  }
+
+  addEvents(blockHash: string, events: Event[], isFinalised = false) {
+    if (this.cache.has(blockHash)) {
+      return; // Event already in cache
+    }
+    // Removed old block with different hash
+    const blockNumber = events[0].block;
+    if (this.blockNumberToHash.has(blockNumber)) {
+      this.cache.delete(this.blockNumberToHash.get(blockNumber)!);
+      this.blockNumberToHash.delete(blockNumber);
+    }
+
+    // Add new block to cache
+    this.cache.set(blockHash, events);
+    this.blockNumberToHash.set(blockNumber, blockHash);
+    if (isFinalised) {
+      this.finalisedBlockNumber = blockNumber;
+    }
+
+    // Remove old blocks to maintain cache size
+    if (this.cache.size > this.cacheSizeBlocks) {
+      const oldestBlockNumber = Array.from(this.blockNumberToHash.keys()).reduce(
+        (oldest, current) => (current < oldest! ? current : oldest),
+      );
+      this.cache.delete(this.blockNumberToHash.get(oldestBlockNumber)!);
+      this.blockNumberToHash.delete(oldestBlockNumber);
+    }
+  }
+
+  async getEvents(fromBlock: number, toBlock: number): Promise<Event[]> {
+    const api = await apiMap[this.chain]();
+    const events: Event[] = [];
+
+    // Update the finalised block number if needed
+    if (this.finalisedBlockNumber === undefined || this.finalisedBlockNumber! < toBlock) {
+      const newFinalisedHash = await api.rpc.chain.getFinalizedHead();
+      this.finalisedBlockNumber = (
+        await api.rpc.chain.getHeader(newFinalisedHash)
+      ).number.toNumber();
+    }
+
+    // Get events from cache or fetch them from the node
+    for (let i = fromBlock; i <= toBlock; i++) {
+      let blockHash = this.blockNumberToHash.get(i);
+      // No need to fetch the hash if it is already finalised and in the cache
+      if (
+        blockHash === undefined ||
+        this.finalisedBlockNumber === undefined ||
+        i > this.finalisedBlockNumber!
+      ) {
+        blockHash = (await api.rpc.chain.getBlockHash(i)).toString();
+      }
+      // Wait for the block to be fetched if someone else already requested it
+      let timeout = 0;
+      while (this.pendingRequests.includes(i)) {
+        if (timeout++ > 50) {
+          break;
+        }
+        await sleep(100);
+      }
+      if (this.cache.has(blockHash)) {
+        events.push(...this.cache.get(blockHash)!);
+      } else {
+        this.pendingRequests.push(i);
+        const historicApi = await api.at(blockHash);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
+        const mappedEvents = mapEvents(rawEvents, i);
+        this.addEvents(blockHash, mappedEvents);
+        this.pendingRequests = this.pendingRequests.filter((block) => block !== i);
+        events.push(...mappedEvents);
+      }
+    }
+    return events;
+  }
+}
+
+const chainflipEventCache = new EventCache(100, 'chainflip');
+const polkadotEventCache = new EventCache(100, 'polkadot');
+const eventCacheMap = {
+  chainflip: chainflipEventCache,
+  polkadot: polkadotEventCache,
+} as const;
+
 async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortSignal) {
   // async generator is pull-based, but the observable is push-based
   // if the consumer takes too long, we need to buffer the events
@@ -175,33 +291,24 @@ const subscribeHeads = getCachedDisposable(
   async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
     // prepare a stack for cleanup
     const stack = new AsyncDisposableStack();
+    // Take the correct substrate API
     const api = stack.use(await apiMap[chain]());
-    // take the correct substrate API
+
+    const subject = new Subject<Event[]>();
 
     // subscribe to the correct head based on the finalized flag
     const subscribe = finalized
       ? api.rpc.chain.subscribeFinalizedHeads
       : api.rpc.chain.subscribeNewHeads;
-    const subject = new Subject<Event[]>();
 
     const unsubscribe = await subscribe(async (header) => {
       const historicApi = await api.at(header.hash);
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawEvents = (await historicApi.query.system.events()) as unknown as any[];
-      const events: Event[] = [];
-
-      // iterate over all the events, reshaping them for the consumer
-      rawEvents.forEach(({ event }, index) => {
-        events.push({
-          name: { section: event.section, method: event.method },
-          data: event.toHuman().data,
-          block: header.number.toNumber(),
-          eventIndex: index,
-        });
-      });
-
-      subject.next(events);
+      const mappedEvents = mapEvents(rawEvents, header.number.toNumber());
+      const cache = eventCacheMap[chain];
+      cache.addEvents(header.hash.toString(), mappedEvents, finalized);
+      subject.next(mappedEvents);
     });
 
     // automatic cleanup!
@@ -217,12 +324,28 @@ const subscribeHeads = getCachedDisposable(
   },
 );
 
+async function getPastEvents(
+  chain: SubstrateChain,
+  historicalCheckBlocks: number,
+): Promise<Event[]> {
+  if (historicalCheckBlocks <= 0) {
+    throw new Error('Invalid Historical Check Blocks');
+  }
+  const api = await apiMap[chain]();
+  const latestHeader = await api.rpc.chain.getHeader();
+  const latestBlockNumber = latestHeader.number.toNumber();
+  const startAtBlock = Math.max(latestBlockNumber - historicalCheckBlocks, 0);
+  const cache = eventCacheMap[chain];
+  return cache.getEvents(startAtBlock, latestBlockNumber);
+}
+
 type EventTest<T> = (event: Event<T>) => boolean;
 
 interface BaseOptions<T> {
   chain?: SubstrateChain;
   test?: EventTest<T>;
   finalized?: boolean;
+  historicalCheckBlocks?: number;
 }
 
 interface Options<T> extends BaseOptions<T> {
@@ -236,27 +359,28 @@ interface AbortableOptions<T> extends BaseOptions<T> {
 type EventName = `${string}:${string}`;
 
 type Observer<T> = {
-  event: Promise<Event<T>>;
+  events: Promise<Event<T>[]>;
 };
 
 type AbortableObserver<T> = {
   stop: () => void;
-  event: Promise<Event<T> | null>;
+  events: Promise<Event<T>[] | null>;
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export function observeEvent<T = any>(eventName: EventName): Observer<T>;
-export function observeEvent<T = any>(eventName: EventName, opts: Options<T>): Observer<T>;
-export function observeEvent<T = any>(
+export function observeEvents<T = any>(eventName: EventName): Observer<T>;
+export function observeEvents<T = any>(eventName: EventName, opts: Options<T>): Observer<T>;
+export function observeEvents<T = any>(
   eventName: EventName,
   opts: AbortableOptions<T>,
 ): AbortableObserver<T>;
-export function observeEvent<T = any>(
+export function observeEvents<T = any>(
   eventName: EventName,
   {
     chain = 'chainflip',
     test = () => true,
     finalized = false,
+    historicalCheckBlocks = 0,
     abortable = false,
   }: Options<T> | AbortableOptions<T> = {},
 ) {
@@ -265,27 +389,110 @@ export function observeEvent<T = any>(
   const controller = abortable ? new AbortController() : undefined;
 
   const findEvent = async () => {
+    const foundEvents: Event[] = [];
+
+    // Check historic events first
+    if (historicalCheckBlocks > 0) {
+      const historicEvents = await getPastEvents(chain, historicalCheckBlocks);
+      for (const event of historicEvents) {
+        if (
+          event.name.section.includes(expectedSection) &&
+          event.name.method.includes(expectedMethod) &&
+          test(event)
+        ) {
+          foundEvents.push(event);
+        }
+      }
+    }
+    if (foundEvents.length > 0) {
+      // No need to continue if we found event(s) in the past
+      return foundEvents;
+    }
+
+    // Subscribe to new events and wait for the first match
     await using subscription = await subscribeHeads({ chain, finalized });
-    const it = observableToIterable(subscription.observable, controller?.signal);
-    for await (const events of it) {
+    const subscriptionIterator = observableToIterable(subscription.observable, controller?.signal);
+    for await (const events of subscriptionIterator) {
       for (const event of events) {
         if (
           event.name.section.includes(expectedSection) &&
           event.name.method.includes(expectedMethod) &&
           test(event)
         ) {
-          return event as Event<T>;
+          foundEvents.push(event);
         }
+      }
+      if (foundEvents.length > 0) {
+        return foundEvents;
       }
     }
 
     return null;
   };
 
-  if (!controller) return { event: findEvent() } as Observer<T>;
+  if (!controller) return { events: findEvent() } as Observer<T>;
 
-  return { stop: () => controller.abort(), event: findEvent() } as AbortableObserver<T>;
+  return { stop: () => controller.abort(), events: findEvent() } as AbortableObserver<T>;
 }
+
+type SingleEventAbortableObserver<T> = {
+  stop: () => void;
+  event: Promise<Event<T> | null>;
+};
+
+type SingleEventObserver<T> = {
+  event: Promise<Event<T>>;
+};
+
+export function observeEvent<T = any>(eventName: EventName): SingleEventObserver<T>;
+export function observeEvent<T = any>(
+  eventName: EventName,
+  opts: Options<T>,
+): SingleEventObserver<T>;
+export function observeEvent<T = any>(
+  eventName: EventName,
+  opts: AbortableOptions<T>,
+): SingleEventAbortableObserver<T>;
+
+export function observeEvent<T = any>(
+  eventName: EventName,
+  {
+    chain = 'chainflip',
+    test = () => true,
+    finalized = false,
+    historicalCheckBlocks = 0,
+    abortable = false,
+  }: Options<T> | AbortableOptions<T> = {},
+): SingleEventObserver<T> | SingleEventAbortableObserver<T> {
+  if (abortable) {
+    const observer = observeEvents(eventName, {
+      chain,
+      test,
+      finalized,
+      historicalCheckBlocks,
+      abortable,
+    });
+
+    return {
+      stop: () => observer.stop(),
+      event: observer.events.then((events) => events?.[0]),
+    } as SingleEventAbortableObserver<T>;
+  }
+
+  const observer = observeEvents(eventName, {
+    chain,
+    test,
+    finalized,
+    historicalCheckBlocks,
+    abortable,
+  });
+
+  return {
+    // Just return the first matching event
+    event: observer.events.then((events) => events[0]),
+  } as SingleEventObserver<T>;
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function observeBadEvent<T = any>(
   eventName: EventName,

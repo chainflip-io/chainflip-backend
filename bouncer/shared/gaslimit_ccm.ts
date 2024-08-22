@@ -6,6 +6,7 @@ import {
   ccmSupportedChains,
   chainFromAsset,
   chainGasAsset,
+  EgressId,
   getEvmEndpoint,
   getSolConnection,
   observeCcmReceived,
@@ -28,6 +29,9 @@ const DEFAULT_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 260000, Arbi
 // The base overhead increases with message lenght. This is an approximation => BASE_GAS_OVERHEAD + messageLength * gasPerByte
 // EVM requires 16 gas per calldata byte so a reasonable approximation is 17 to cover hashing and other operations over the data.
 const EVM_GAS_PER_BYTE = 17;
+
+// After the swap is complete, we search for the expected swap event in this many past blocks.
+const CHECK_PAST_BLOCKS_FOR_EVENTS = 30;
 
 function getMinGasOverhead(chain: Chain): number {
   switch (chain) {
@@ -119,6 +123,7 @@ async function trackGasLimitSwap(
     ` GasLimit${testTag || ''}`,
   );
 
+  // Do the swap
   const { depositAddress, channelId } = await requestNewSwap(
     sourceAsset,
     destAsset,
@@ -126,123 +131,62 @@ async function trackGasLimitSwap(
     tag,
     messageMetadata,
   );
-
   const swapRequestedHandle = observeSwapRequested(
     sourceAsset,
     destAsset,
     channelId,
     SwapRequestType.Ccm,
   );
-
-  const reqIdToPrincipalSwapId: { [key: string]: string } = {};
-  const reqIdToGasSwapId: { [key: string]: string } = {};
-  const swapScheduledHandle = observeEvent('swapping:SwapScheduled', {
-    test: (event) => {
-      const data = event.data;
-
-      switch (data.swapType) {
-        case SwapType.CcmPrincipal:
-          reqIdToPrincipalSwapId[data.swapRequestId] = data.swapId;
-          break;
-        case SwapType.CcmGas:
-          reqIdToGasSwapId[data.swapRequestId] = data.swapId;
-          break;
-        default:
-        // not interested in other swap types here
-      }
-      return false;
-    },
-    abortable: true,
-  });
-
-  // SwapExecuted is emitted at the same time as swapScheduled so we can't wait for swapId to be known.
-  const swapIdToEgressAmount: { [key: string]: string } = {};
-  const swapExecutedHandle = observeEvent('swapping:SwapExecuted', {
-    test: (event) => {
-      swapIdToEgressAmount[event.data.swapId] = event.data.outputAmount;
-      return false;
-    },
-    abortable: true,
-  });
-  const swapRequestIdToEgressId: { [key: string]: string } = {};
-  const swapEgressHandle = observeEvent('swapping:SwapEgressScheduled', {
-    test: (event) => {
-      swapRequestIdToEgressId[event.data.swapRequestId] = event.data.egressId;
-      return false;
-    },
-    abortable: true,
-  });
-
-  const egressIdToBroadcastId: { [key: string]: string } = {};
-  const ccmBroadcastHandle = observeEvent(
-    `${destChain.toString().toLowerCase()}IngressEgress:CcmBroadcastRequested`,
-    {
-      test: (event) => {
-        egressIdToBroadcastId[event.data.egressId] = event.data.broadcastId;
-        return false;
-      },
-      abortable: true,
-    },
-  );
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const broadcastIdToTxPayload: { [key: string]: any } = {};
-  const broadcastRequesthandle = observeEvent(
-    `${destChain.toString().toLowerCase()}Broadcaster:TransactionBroadcastRequest`,
-    {
-      test: (event) => {
-        broadcastIdToTxPayload[event.data.broadcastId] = event.data.transactionPayload;
-        return false;
-      },
-      abortable: true,
-    },
-  );
-
   await send(sourceAsset, depositAddress);
+  const swapRequestId = Number((await swapRequestedHandle).data.swapRequestId.replaceAll(',', ''));
 
-  const swapRequestId = (await swapRequestedHandle).data.swapRequestId;
+  // Find all of the swap events
+  const egressId = (
+    await observeEvent('swapping:SwapEgressScheduled', {
+      test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
+      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+    }).event
+  ).data.egressId as EgressId;
 
-  while (
-    !(
-      swapRequestId in reqIdToPrincipalSwapId &&
-      reqIdToPrincipalSwapId[swapRequestId] in swapIdToEgressAmount &&
-      swapRequestId in swapRequestIdToEgressId &&
-      swapRequestIdToEgressId[swapRequestId] in egressIdToBroadcastId &&
-      egressIdToBroadcastId[swapRequestIdToEgressId[swapRequestId]] in broadcastIdToTxPayload
-    )
-  ) {
-    await sleep(3000);
+  const broadcastId = (
+    await observeEvent(`${destChain.toLowerCase()}IngressEgress:CcmBroadcastRequested`, {
+      test: (event) =>
+        event.data.egressId[0] === egressId[0] && event.data.egressId[1] === egressId[1],
+      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+    }).event
+  ).data.broadcastId;
+
+  const txPayload = (
+    await observeEvent(`${destChain.toLowerCase()}Broadcaster:TransactionBroadcastRequest`, {
+      test: (event) => event.data.broadcastId === broadcastId,
+      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+    }).event
+  ).data.transactionPayload;
+
+  // Only look for a gas swap if we expect one
+  async function lookForGasSwapAmount(): Promise<number> {
+    const gasSwapId = (
+      await observeEvent('swapping:SwapScheduled', {
+        test: (event) =>
+          Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId &&
+          event.data.swapType === SwapType.CcmGas,
+        historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+      }).event
+    ).data.swapId;
+
+    return (
+      await observeEvent('swapping:SwapExecuted', {
+        test: (event) => event.data.swapId === gasSwapId,
+        historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+      }).event
+    ).data.outputAmount;
   }
 
-  const egressId = swapRequestIdToEgressId[swapRequestId];
-  const broadcastId = egressIdToBroadcastId[egressId];
+  const egressBudgetAmount =
+    chainGasAsset(destChain as Chain) === sourceAsset
+      ? messageMetadata.gasBudget
+      : await lookForGasSwapAmount();
 
-  console.log(`${tag} Swap events found`);
-
-  swapExecutedHandle.stop();
-  swapEgressHandle.stop();
-  ccmBroadcastHandle.stop();
-  broadcastRequesthandle.stop();
-  swapScheduledHandle.stop();
-
-  await Promise.all([
-    swapExecutedHandle.event,
-    swapEgressHandle.event,
-    ccmBroadcastHandle.event,
-    broadcastRequesthandle.event,
-    swapScheduledHandle.event,
-  ]);
-
-  let egressBudgetAmount;
-
-  if (chainGasAsset(destChain) === sourceAsset) {
-    egressBudgetAmount = messageMetadata.gasBudget;
-  } else {
-    const gasSwapId = reqIdToGasSwapId[swapRequestId];
-    egressBudgetAmount = Number(swapIdToEgressAmount[gasSwapId].replace(/,/g, ''));
-  }
-
-  const txPayload = broadcastIdToTxPayload[broadcastId];
   return { tag, destAddress, egressBudgetAmount, broadcastId, txPayload };
 }
 
@@ -272,7 +216,7 @@ async function testGasLimitSwapToSolana(
   const { priorityFee: computePrice } = await getChainFees('Solana');
 
   if (computePrice === 0) {
-    throw new Error('Compute price shouldnt be 0');
+    throw new Error('Compute price should not be 0');
   }
   const gasLimitBudget = Math.floor(
     (Math.max(0, egressBudgetAmount - LAMPORTS_PER_SIGNATURE) * 10 ** 6) / computePrice,

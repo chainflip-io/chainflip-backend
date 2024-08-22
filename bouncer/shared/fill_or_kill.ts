@@ -62,15 +62,15 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
   console.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
 
   const swapRequestedEvent = await swapRequestedHandle;
-  console.log(`Swap requested: ${JSON.stringify(swapRequestedEvent)}`);
   const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
-  console.log(`${inputAsset} swap requested, swapId: ${swapRequestId}`);
+  console.log(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
-  // TODO: Observing after the SwapScheduled event means its possible to miss the events, but we need to the swap id.
   const observeSwapExecuted = observeEvent(`swapping:SwapExecuted`, {
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
+    historicalCheckBlocks: 10,
   }).event;
 
+  // Wait for the swap to execute or get refunded
   const executeOrRefund = await Promise.race([
     observeSwapExecuted,
     observeBalanceIncrease(inputAsset, refundAddress, refundBalanceBefore),
