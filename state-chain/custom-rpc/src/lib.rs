@@ -13,7 +13,7 @@ use cf_chains::{
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, ForeignChain,
-	NetworkEnvironment, Price, SemVer, SwapId,
+	NetworkEnvironment, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -157,8 +157,6 @@ pub struct ScheduledSwap {
 	pub execute_at: BlockNumber,
 	pub remaining_chunks: u32,
 	pub chunk_interval: u32,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub min_price: Option<Price>,
 }
 
 impl ScheduledSwap {
@@ -174,7 +172,6 @@ impl ScheduledSwap {
 			source_amount,
 			remaining_chunks,
 			chunk_interval,
-			min_price,
 		}: SwapLegInfo,
 		execute_at: BlockNumber,
 	) -> Self {
@@ -190,7 +187,6 @@ impl ScheduledSwap {
 			execute_at,
 			remaining_chunks,
 			chunk_interval,
-			min_price,
 		}
 	}
 }

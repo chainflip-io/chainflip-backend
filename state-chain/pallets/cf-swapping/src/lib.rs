@@ -12,7 +12,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber, ChannelId,
-	DcaParameters, ForeignChain, Price, SwapId, SwapLeg, SwapRequestId, TransactionHash,
+	DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash,
 	BASIS_POINTS_PER_MILLION, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -173,7 +173,6 @@ pub struct SwapLegInfo {
 	pub source_amount: Option<AssetAmount>,
 	pub remaining_chunks: u32,
 	pub chunk_interval: u32,
-	pub min_price: Option<Price>,
 }
 
 impl Swap {
@@ -1188,7 +1187,6 @@ pub mod pallet {
 						dca_state.as_ref().map(|dca| dca.remaining_chunks).unwrap_or(0);
 					let chunk_interval =
 						dca_state.map(|dca| dca.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS);
-					let min_price = swap_request.refund_params.map(|params| params.min_price);
 
 					if swap.input_asset() == base_asset {
 						Some(SwapLegInfo {
@@ -1203,7 +1201,6 @@ pub mod pallet {
 							source_amount: None,
 							remaining_chunks,
 							chunk_interval,
-							min_price,
 						})
 					} else if swap.output_asset() == base_asset {
 						// In case the swap is "simulated", the amount is just an estimate,
@@ -1238,7 +1235,6 @@ pub mod pallet {
 							source_amount,
 							remaining_chunks,
 							chunk_interval,
-							min_price,
 						})
 					} else {
 						None

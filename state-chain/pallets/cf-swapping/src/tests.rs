@@ -2054,7 +2054,6 @@ fn test_get_scheduled_swap_legs() {
 					source_amount: None,
 					remaining_chunks: 0,
 					chunk_interval: SWAP_DELAY_BLOCKS,
-					min_price: None,
 				},
 				SwapLegInfo {
 					swap_id: 2,
@@ -2067,7 +2066,6 @@ fn test_get_scheduled_swap_legs() {
 					source_amount: None,
 					remaining_chunks: 0,
 					chunk_interval: SWAP_DELAY_BLOCKS,
-					min_price: None,
 				},
 				SwapLegInfo {
 					swap_id: 4,
@@ -2080,7 +2078,6 @@ fn test_get_scheduled_swap_legs() {
 					source_amount: None,
 					remaining_chunks: 0,
 					chunk_interval: SWAP_DELAY_BLOCKS,
-					min_price: None,
 				},
 				SwapLegInfo {
 					swap_id: 5,
@@ -2093,7 +2090,6 @@ fn test_get_scheduled_swap_legs() {
 					source_amount: Some(INIT_AMOUNT),
 					remaining_chunks: 0,
 					chunk_interval: SWAP_DELAY_BLOCKS,
-					min_price: None,
 				},
 			]
 		);
@@ -2134,7 +2130,6 @@ fn test_get_scheduled_swap_legs_fallback() {
 					source_amount: Some(INIT_AMOUNT),
 					remaining_chunks: 0,
 					chunk_interval: SWAP_DELAY_BLOCKS,
-					min_price: None,
 				},
 				SwapLegInfo {
 					swap_id: 2,
@@ -2147,7 +2142,6 @@ fn test_get_scheduled_swap_legs_fallback() {
 					source_amount: None,
 					remaining_chunks: 0,
 					chunk_interval: SWAP_DELAY_BLOCKS,
-					min_price: None,
 				}
 			]
 		);
@@ -2182,7 +2176,6 @@ fn test_get_scheduled_swap_legs_for_dca() {
 				// This is the first chunk, so there are 2 remaining
 				remaining_chunks: NUMBER_OF_CHUNKS - 1,
 				chunk_interval: CHUNK_INTERVAL,
-				min_price: None,
 			},]
 		);
 	});
