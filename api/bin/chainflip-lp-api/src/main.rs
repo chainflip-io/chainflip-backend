@@ -539,6 +539,7 @@ impl RpcServer for RpcServerImpl {
 						pool.quote_asset,
 						Some(self.api.state_chain_client.account_id()),
 						None,
+						None,
 					)
 					.await?;
 				for order in orders.range_orders {
