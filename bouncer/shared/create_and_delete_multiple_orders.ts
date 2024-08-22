@@ -3,7 +3,8 @@ import { handleSubstrateError, lpMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { limitOrder } from './limit_order';
 
-export async function createAndDeleteAllOrders(numberOfOrders: number) {
+export async function createAndDeleteMultipleOrders(numberOfOrders: number) {
+  console.log(`=== cancel_orders_batch test ===`);
   await using chainflip = await getChainflipApi();
 
   const keyring = new Keyring({ type: 'sr25519' });
@@ -32,7 +33,6 @@ export async function createAndDeleteAllOrders(numberOfOrders: number) {
   console.log(`Number of open orders: ${openOrders}`);
 
   for (const order of orders.range_orders) {
-    console.log(order);
     orderToDelete.push({
       Range: { base_asset: 'BTC', quote_asset: 'USDC', id: parseInt(order.id) },
     });
@@ -55,4 +55,5 @@ export async function createAndDeleteAllOrders(numberOfOrders: number) {
   openOrders += orders.limit_orders.bids.length;
   openOrders += orders.range_orders.length;
   console.log(`Number of open orders: ${openOrders}`);
+  console.log(`=== cancel_orders_batch test complete ===`);
 }

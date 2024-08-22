@@ -8,7 +8,7 @@
 // will create 5 limit_order and then delete them all with a single extrinsic
 
 import { executeWithTimeout } from '../shared/utils';
-import { createAndDeleteAllOrders } from '../shared/create_and_delete_all_open_orders';
+import { createAndDeleteMultipleOrders } from '../shared/create_and_delete_multiple_orders';
 
 async function main(): Promise<void> {
   if (!process.argv[2]) {
@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   }
   const numberOfOrders = process.argv[2];
 
-  await createAndDeleteAllOrders(Number(numberOfOrders));
+  await createAndDeleteMultipleOrders(Number(numberOfOrders));
 }
 
 await executeWithTimeout(main(), 240);

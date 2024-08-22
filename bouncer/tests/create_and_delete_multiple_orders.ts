@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm tsx
 import { executeWithTimeout } from '../shared/utils';
-import { createAndDeleteAllOrders } from '../shared/create_and_delete_all_open_orders';
+import { createAndDeleteAllOrders } from '../shared/create_and_delete_multiple_orders';
 
 await executeWithTimeout(createAndDeleteAllOrders(25), 240);
 
