@@ -56,10 +56,9 @@ async function runAllConcurrentTests() {
   await using chainflip = await getChainflipApi();
   const maxRetries = 5; // 30 seconds
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const availableNonces = (
-      await chainflip.query.environment.solanaAvailableNonceAccounts()
-    ).toJSON() as any[];
+    const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .toJSON() as any[];
     if (availableNonces.length === solanaNumberOfNonces) {
       break;
     } else if (attempt === maxRetries - 1) {
