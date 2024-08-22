@@ -30,7 +30,7 @@ pub use sol_prim::consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID};
 const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
 const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
-const MAXIMUM_CONCURRNET_RPCS: usize = 16;
+const MAXIMUM_CONCURRENT_RPCS: usize = 16;
 
 /// We track Solana (Sol and SPL-token) deposits by periodically querying the
 /// state of the deposit channel accounts. To ensure that no deposits are missed
@@ -79,7 +79,7 @@ where
 	)
 	.chunks(MAX_MULTIPLE_ACCOUNTS_QUERY / 2)
 	.map(|deposit_channels_chunk| ingress_amounts(sol_rpc, deposit_channels_chunk, vault_address))
-	.buffered(MAXIMUM_CONCURRNET_RPCS)
+	.buffered(MAXIMUM_CONCURRENT_RPCS)
 	.map_ok(|(ingress_amounts_chunk, slot)| {
 		stream::iter(
 			ingress_amounts_chunk

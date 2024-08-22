@@ -700,6 +700,8 @@ pub mod pallet {
 				.unwrap_or_default()
 				.saturated_into::<usize>();
 
+			// In some instances, like Solana, the channel lifetime is managed by the electoral
+			// system.
 			if T::MANAGE_CHANNEL_LIFETIME {
 				let addresses_to_recycle =
 					DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {

@@ -740,7 +740,7 @@ impl<T: Config> Pallet<T> {
 				durable_nonce,
 			});
 		} else {
-			log::error!("Nonce account not found in unavailable nonce accounts");
+			log::error!("Nonce account {nonce_account} not found in unavailable nonce accounts");
 		}
 	}
 }
