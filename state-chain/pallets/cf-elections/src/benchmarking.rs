@@ -4,7 +4,7 @@ use crate::{
 	electoral_system::{AuthorityVoteOf, ElectoralSystem},
 	vote_storage::VoteStorage,
 	Config, ContributingAuthorities, ElectionConsensusHistoryUpToDate, ElectoralSystemStatus,
-	Pallet, SharedData, SharedDataHash, Status, UniqueMonotonicIdentifier,
+	Pallet, SharedData, SharedDataHash, Status,
 };
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::AccountRole;
@@ -112,7 +112,6 @@ mod benchmarks {
 		let caller = ready_validator_for_vote::<T, I>();
 		let validator_id: T::ValidatorId = caller.clone().into();
 		let epoch = T::EpochInfo::epoch_index();
-		let umi = epoch - 1;
 
 		let elections = Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
 		let next_election = elections.into_iter().next().unwrap();
@@ -120,21 +119,18 @@ mod benchmarks {
 		Pallet::<T, I>::vote(
 			RawOrigin::Signed(caller).into(),
 			BoundedBTreeMap::try_from(
-				iter::repeat((
+				[(
 					next_election.0,
 					AuthorityVoteOf::<T::ElectoralSystem>::Vote(BenchmarkValue::benchmark_value()),
-				))
-				.take(epoch as usize)
+				)]
+				.into_iter()
 				.collect::<BTreeMap<_, _>>(),
 			)
 			.unwrap(),
 		)
 		.unwrap();
 
-		ElectionConsensusHistoryUpToDate::<T, I>::insert(
-			UniqueMonotonicIdentifier::from_u64(umi as u64),
-			epoch,
-		);
+		ElectionConsensusHistoryUpToDate::<T, I>::insert(next_election.0.unique_monotonic(), epoch);
 
 		#[block]
 		{
@@ -145,6 +141,42 @@ mod benchmarks {
 			ElectionConsensusHistoryUpToDate::<T, I>::iter().count() == 0,
 			"Expected ElectionConsensusHistoryUpToDate to be empty! Benchmark requirement are not met!"
 		);
+	}
+
+	#[benchmark]
+	fn delete_vote() {
+		let caller = ready_validator_for_vote::<T, I>();
+		let validator_id: T::ValidatorId = caller.clone().into();
+		let epoch = T::EpochInfo::epoch_index();
+
+		let elections = Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
+		let next_election = elections.into_iter().next().unwrap();
+
+		Pallet::<T, I>::vote(
+			RawOrigin::Signed(caller).into(),
+			BoundedBTreeMap::try_from(
+				[(
+					next_election.0,
+					AuthorityVoteOf::<T::ElectoralSystem>::Vote(BenchmarkValue::benchmark_value()),
+				)]
+				.into_iter()
+				.collect::<BTreeMap<_, _>>(),
+			)
+			.unwrap(),
+		)
+		.unwrap();
+
+		ElectionConsensusHistoryUpToDate::<T, I>::insert(next_election.0.unique_monotonic(), epoch);
+
+		#[extrinsic_call]
+		delete_vote(RawOrigin::Signed(validator_id.clone().into()), next_election.0);
+
+		assert!(
+            ElectionConsensusHistoryUpToDate::<T, I>::iter().count() == 0,
+            "Expected ElectionConsensusHistoryUpToDate to be empty! Benchmark requirement are not met!"
+        );
+
+		assert!(SharedData::<T, I>::iter().count() == 0, "Expected SharedData to be deleted!");
 	}
 
 	#[benchmark]
@@ -192,9 +224,6 @@ mod benchmarks {
 	#[test]
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {
-			_recheck_contributed_to_consensuses::<Test, Instance1>(true);
-		});
-		new_test_ext().execute_with(|| {
 			_vote::<Test, Instance1>(10, true);
 		});
 		new_test_ext().execute_with(|| {
@@ -202,6 +231,12 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_ignore_my_votes::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_recheck_contributed_to_consensuses::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_delete_vote::<Test, Instance1>(true);
 		});
 		new_test_ext().execute_with(|| {
 			_provide_shared_data::<Test, Instance1>(true);

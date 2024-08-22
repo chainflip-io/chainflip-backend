@@ -33,7 +33,6 @@ use frame_support::{
 	testing_prelude::bounded_vec,
 	traits::{Hooks, OriginTrait},
 };
-use itertools::Itertools;
 use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
 use sp_std::iter;
@@ -41,7 +40,7 @@ use sp_std::iter;
 const GAS_BUDGET: AssetAmount = 1_000u128;
 const SWAP_REQUEST_ID: u64 = 1;
 const INIT_BLOCK: u64 = 1;
-const BROKER_FEE_BPS: u16 = 2;
+const BROKER_FEE_BPS: u16 = 10;
 
 static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
 	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
@@ -94,7 +93,7 @@ fn create_test_swap(
 	output_asset: Asset,
 	amount: AssetAmount,
 	dca_params: Option<DcaParameters>,
-) -> Swap {
+) -> Swap<Test> {
 	SwapRequests::<Test>::insert(
 		id,
 		SwapRequest {
@@ -102,9 +101,11 @@ fn create_test_swap(
 			input_asset,
 			output_asset,
 			refund_params: None,
-			state: SwapRequestState::Regular {
+			state: SwapRequestState::UserSwap {
 				output_address: ForeignChainAddress::Eth(H160::zero()),
 				dca_state: DcaState::create_with_first_chunk(amount, dca_params).0,
+				ccm: None,
+				broker_fees: Default::default(),
 			},
 		},
 	);
@@ -278,15 +279,26 @@ fn process_all_swaps() {
 		assert_swaps_queue_is_empty();
 		let mut expected = swaps
 			.iter()
-			.map(|swap| MockEgressParameter::<AnyChain>::Swap {
-				asset: swap.output_asset,
-				amount: if swap.input_asset == Asset::Usdc || swap.output_asset == Asset::Usdc {
-					swap.input_amount * DEFAULT_SWAP_RATE
+			.map(|swap| {
+				let output_amount = if swap.input_asset == Asset::Usdc {
+					let fee = swap.input_amount * BROKER_FEE_BPS as u128 / 10_000;
+					(swap.input_amount - fee) * DEFAULT_SWAP_RATE
+				} else if swap.output_asset == Asset::Usdc {
+					let output_before_fee = swap.input_amount * DEFAULT_SWAP_RATE;
+					let fee = output_before_fee * BROKER_FEE_BPS as u128 / 10_000;
+					output_before_fee - fee
 				} else {
-					swap.input_amount * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE
-				},
-				destination_address: swap.output_address.clone(),
-				fee: 0,
+					let intermediate_amount = swap.input_amount * DEFAULT_SWAP_RATE;
+					let fee = intermediate_amount * BROKER_FEE_BPS as u128 / 10_000;
+					(intermediate_amount - fee) * DEFAULT_SWAP_RATE
+				};
+
+				MockEgressParameter::<AnyChain>::Swap {
+					asset: swap.output_asset,
+					amount: output_amount,
+					destination_address: swap.output_address.clone(),
+					fee: 0,
+				}
 			})
 			.collect::<Vec<_>>();
 		expected.sort();
@@ -300,40 +312,119 @@ fn process_all_swaps() {
 
 #[test]
 fn expect_earned_fees_to_be_recorded() {
-	new_test_ext().execute_with(|| {
-		const ALICE: u64 = 2_u64;
-		const BOB: u64 = 3_u64;
+	const INPUT_AMOUNT: AssetAmount = 10_000;
+	const INTERMEDIATE_AMOUNT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE;
 
-		swap_with_custom_broker_fee(
-			Asset::Flip,
-			Asset::Usdc,
-			100,
-			bounded_vec![Beneficiary { account: ALICE, bps: 200 }],
-		);
+	const NETWORK_FEE_PERCENT: u32 = 1;
+	NetworkFee::set(Permill::from_percent(NETWORK_FEE_PERCENT));
 
-		assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Flip), 2);
+	const ALICE: u64 = 2_u64;
+	const BOB: u64 = 3_u64;
 
-		swap_with_custom_broker_fee(
-			Asset::Flip,
-			Asset::Usdc,
-			100,
-			bounded_vec![Beneficiary { account: ALICE, bps: 200 }],
-		);
+	const ALICE_FEE_BPS: u16 = 200;
+	const BOB_FEE_BPS: u16 = 100;
 
-		assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Flip), 4);
+	// Expected values:
+	const NETWORK_FEE_1: AssetAmount = INTERMEDIATE_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
+	const ALICE_FEE_1: AssetAmount =
+		(INTERMEDIATE_AMOUNT - NETWORK_FEE_1) * ALICE_FEE_BPS as u128 / 10_000;
 
-		swap_with_custom_broker_fee(
-			Asset::Eth,
-			Asset::Usdc,
-			100,
-			bounded_vec![
-				Beneficiary { account: ALICE, bps: 200 },
-				Beneficiary { account: BOB, bps: 200 }
-			],
-		);
-		assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Eth), 2);
-		assert_eq!(get_broker_balance::<Test>(&BOB, cf_primitives::Asset::Eth), 2);
-	});
+	// This swap starts with USDC, so the fees are deducted from the input amount:
+	const NETWORK_FEE_2: AssetAmount = INPUT_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
+	const ALICE_FEE_2: AssetAmount =
+		(INPUT_AMOUNT - NETWORK_FEE_2) * ALICE_FEE_BPS as u128 / 10_000;
+
+	const NETWORK_FEE_3: AssetAmount = INTERMEDIATE_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
+	const ALICE_FEE_3: AssetAmount =
+		(INTERMEDIATE_AMOUNT - NETWORK_FEE_3) * ALICE_FEE_BPS as u128 / 10_000;
+	const BOB_FEE_1: AssetAmount =
+		(INTERMEDIATE_AMOUNT - NETWORK_FEE_3) * BOB_FEE_BPS as u128 / 10_000;
+
+	new_test_ext()
+		.execute_with(|| {
+			swap_with_custom_broker_fee(
+				Asset::Flip,
+				Asset::Usdc,
+				INPUT_AMOUNT,
+				bounded_vec![Beneficiary { account: ALICE, bps: ALICE_FEE_BPS }],
+			);
+		})
+		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
+		.then_execute_with(|_| {
+			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+				swap_request_id: 1,
+				swap_id: 1,
+				network_fee: NETWORK_FEE_1,
+				broker_fee: ALICE_FEE_1,
+				input_amount: INPUT_AMOUNT,
+				input_asset: Asset::Flip,
+				output_asset: Asset::Usdc,
+				output_amount: INTERMEDIATE_AMOUNT - NETWORK_FEE_1 - ALICE_FEE_1,
+				intermediate_amount: None,
+			}));
+
+			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), ALICE_FEE_1);
+		})
+		.execute_with(|| {
+			swap_with_custom_broker_fee(
+				Asset::Usdc,
+				Asset::Flip,
+				INPUT_AMOUNT,
+				bounded_vec![Beneficiary { account: ALICE, bps: ALICE_FEE_BPS }],
+			);
+		})
+		.then_execute_at_block(5u32, |_| {})
+		.then_execute_with(|_| {
+			const AMOUNT_AFTER_FEES: AssetAmount = INPUT_AMOUNT - NETWORK_FEE_2 - ALICE_FEE_2;
+			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+				swap_request_id: 2,
+				swap_id: 2,
+				network_fee: NETWORK_FEE_2,
+				broker_fee: ALICE_FEE_2,
+				input_amount: AMOUNT_AFTER_FEES,
+				input_asset: Asset::Usdc,
+				output_asset: Asset::Flip,
+				output_amount: AMOUNT_AFTER_FEES * DEFAULT_SWAP_RATE,
+				intermediate_amount: None,
+			}));
+
+			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), ALICE_FEE_1 + ALICE_FEE_2);
+		})
+		.execute_with(|| {
+			swap_with_custom_broker_fee(
+				Asset::ArbEth,
+				Asset::Flip,
+				INPUT_AMOUNT,
+				bounded_vec![
+					Beneficiary { account: ALICE, bps: ALICE_FEE_BPS },
+					Beneficiary { account: BOB, bps: BOB_FEE_BPS }
+				],
+			);
+		})
+		.then_execute_at_block(7u32, |_| {})
+		.then_execute_with(|_| {
+			const TOTAL_BROKER_FEES: AssetAmount = ALICE_FEE_3 + BOB_FEE_1;
+			const INTERMEDIATE_AMOUNT_AFTER_FEES: AssetAmount =
+				INTERMEDIATE_AMOUNT - NETWORK_FEE_3 - TOTAL_BROKER_FEES;
+
+			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+				swap_request_id: 3,
+				swap_id: 3,
+				network_fee: NETWORK_FEE_3,
+				broker_fee: TOTAL_BROKER_FEES,
+				input_amount: INPUT_AMOUNT,
+				input_asset: Asset::ArbEth,
+				output_asset: Asset::Flip,
+				output_amount: INTERMEDIATE_AMOUNT_AFTER_FEES * DEFAULT_SWAP_RATE,
+				intermediate_amount: Some(INTERMEDIATE_AMOUNT_AFTER_FEES),
+			}));
+
+			assert_eq!(
+				get_broker_balance::<Test>(&ALICE, Asset::Usdc),
+				ALICE_FEE_1 + ALICE_FEE_2 + ALICE_FEE_3
+			);
+			assert_eq!(get_broker_balance::<Test>(&BOB, Asset::Usdc), BOB_FEE_1);
+		});
 }
 
 #[test]
@@ -620,7 +711,6 @@ mod ccm {
 			input_asset,
 			output_asset,
 			input_amount,
-			broker_fee: 0,
 			request_type: SwapRequestTypeEncoded::Ccm {
 				ccm_deposit_metadata,
 				output_address: encoded_output_address,
@@ -995,7 +1085,6 @@ fn swap_by_witnesser_happy_path() {
 			input_asset: INPUT_ASSET,
 			output_asset: OUTPUT_ASSET,
 			input_amount: AMOUNT,
-			broker_fee: 0,
 			request_type: SwapRequestTypeEncoded::Regular {
 				output_address: encoded_output_address,
 			},
@@ -1248,6 +1337,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					swap_request_id: 1,
 					swap_id: 1,
 					network_fee: 0,
+					broker_fee: 0,
 					input_amount: PRINCIPAL_AMOUNT,
 					input_asset: Asset::Usdc,
 					output_asset: Asset::Eth,
@@ -1264,6 +1354,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					swap_request_id: 1,
 					swap_id: 2,
 					network_fee: 0,
+					broker_fee: 0,
 					input_amount: GAS_BUDGET,
 					input_asset: Asset::Usdc,
 					output_asset: Asset::Eth,
@@ -1602,6 +1693,7 @@ fn input_amount_excludes_network_fee() {
 				input_asset: FROM_ASSET,
 				output_asset: TO_ASSET,
 				network_fee,
+				broker_fee: 0,
 				input_amount: expected_input_amount,
 				output_amount: expected_input_amount * DEFAULT_SWAP_RATE,
 				intermediate_amount: None,
@@ -1678,7 +1770,7 @@ fn swap_with_custom_broker_fee(
 	amount: AssetAmount,
 	broker_fees: Beneficiaries<u64>,
 ) {
-	assert_ok!(<Pallet<Test> as SwapRequestHandler>::init_swap_request(
+	assert_ok!(Swapping::init_swap_request(
 		from,
 		amount,
 		to,
@@ -1698,98 +1790,61 @@ fn swap_with_custom_broker_fee(
 
 #[test]
 fn swap_broker_fee_calculated_correctly() {
-	new_test_ext().execute_with(|| {
-		let fees: [BasisPoints; 12] =
-			[1, 5, 10, 100, 200, 500, 1000, 1500, 2000, 5000, 7500, 10000];
-		const AMOUNT: AssetAmount = 100000;
+	const FEES_BPS: [BasisPoints; 12] =
+		[1, 5, 10, 100, 200, 500, 1000, 1500, 2000, 5000, 7500, 10000];
+	const INPUT_AMOUNT: AssetAmount = 100000;
 
-		// calculate broker fees for each asset available
-		Asset::all().for_each(|asset| {
-			let total_fees: u128 =
-				fees.iter().fold(0, |total_fees: u128, fee_bps: &BasisPoints| {
-					swap_with_custom_broker_fee(
-						asset,
-						Asset::Usdc,
-						AMOUNT,
-						bounded_vec![Beneficiary { account: ALICE, bps: *fee_bps }],
-					);
-					total_fees +
-						Permill::from_parts(*fee_bps as u32 * BASIS_POINTS_PER_MILLION) * AMOUNT
-				});
+	const INTERMEDIATE_AMOUNT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE;
 
-			assert_eq!(get_broker_balance::<Test>(&ALICE, asset), total_fees);
+	let mut total_fees = 0;
+	for asset in Asset::all() {
+		if asset != Asset::Usdc {
+			for fee_bps in FEES_BPS {
+				total_fees += Permill::from_parts(fee_bps as u32 * BASIS_POINTS_PER_MILLION) *
+					INTERMEDIATE_AMOUNT;
+			}
+		}
+	}
+
+	new_test_ext()
+		.execute_with(|| {
+			Asset::all().for_each(|asset| {
+				if asset != Asset::Usdc {
+					for fee_bps in FEES_BPS {
+						swap_with_custom_broker_fee(
+							asset,
+							Asset::Usdc,
+							INPUT_AMOUNT,
+							bounded_vec![Beneficiary { account: ALICE, bps: fee_bps }],
+						);
+					}
+				}
+			});
+		})
+		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
+		.then_execute_with(|_| {
+			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), total_fees);
 		});
-	});
 }
 
 #[test]
 fn swap_broker_fee_cannot_exceed_amount() {
-	new_test_ext().execute_with(|| {
-		swap_with_custom_broker_fee(
-			Asset::Usdc,
-			Asset::Flip,
-			100,
-			bounded_vec![Beneficiary { account: ALICE, bps: 15000 }],
-		);
-
-		assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Usdc), 100);
-	});
-}
-
-#[test]
-fn swap_broker_fee_subtracted_from_swap_amount() {
-	new_test_ext().execute_with(|| {
-		let amounts: [AssetAmount; 6] = [50, 100, 200, 500, 1000, 10000];
-		let fees: [BasisPoints; 4] = [100, 1000, 5000, 10000];
-
-		const OUTPUT_ASSET: Asset = Asset::Flip;
-
-		let combinations = amounts.iter().cartesian_product(fees);
-
-		let execute_at = System::block_number() + SWAP_DELAY_BLOCKS as u64;
-
-		let mut swap_request_id = 1;
-		Asset::all().for_each(|asset| {
-			let mut total_fees = 0;
-			combinations.clone().for_each(|(amount, broker_fee)| {
-				swap_with_custom_broker_fee(
-					asset,
-					OUTPUT_ASSET,
-					*amount,
-					bounded_vec![Beneficiary { account: ALICE, bps: broker_fee }],
-				);
-				let broker_fee =
-					Permill::from_parts(broker_fee as u32 * BASIS_POINTS_PER_MILLION) * *amount;
-				total_fees += broker_fee;
-				assert_eq!(get_broker_balance::<Test>(&ALICE, asset), total_fees);
-
-				assert_has_matching_event!(
-					Test,
-					RuntimeEvent::Swapping(Event::SwapRequested {
-						swap_request_id: swap_request_id_in_event,
-						input_asset,
-						input_amount,
-						output_asset: OUTPUT_ASSET,
-						broker_fee: broker_fee_in_event,
-						..
-					}) if swap_request_id_in_event == &swap_request_id &&
-						  input_amount == amount &&
-						  input_asset == &asset &&
-						  broker_fee_in_event == &broker_fee
-				);
-
-				System::assert_has_event(RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id,
-					swap_id: swap_request_id,
-					input_amount: amount - broker_fee,
-					swap_type: SwapType::Swap,
-					execute_at,
-				}));
-
-				swap_request_id += 1;
-			})
+	new_test_ext()
+		.execute_with(|| {
+			swap_with_custom_broker_fee(
+				Asset::Usdc,
+				Asset::Flip,
+				100,
+				bounded_vec![Beneficiary { account: ALICE, bps: 15000 }],
+			);
+		})
+		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
+		.then_execute_with(|_| {
+			// The broker gets nothing: setting fees >100% isn't actually possible due to
+			// parameter validation, so how this is handled isn't really important as long as we
+			// don't create money out of thin air and don't panic:
+			assert_eq!(get_broker_balance::<Test>(&ALICE, cf_primitives::Asset::Usdc), 0);
 		});
-	});
 }
 
 #[test]
@@ -2285,7 +2340,6 @@ fn network_fee_swap_gets_burnt() {
 				input_asset: INPUT_ASSET,
 				input_amount: AMOUNT,
 				output_asset: OUTPUT_ASSET,
-				broker_fee: 0,
 				request_type: SwapRequestTypeEncoded::NetworkFee,
 				origin: SwapOrigin::Internal,
 			}));
@@ -2326,7 +2380,6 @@ fn transaction_fees_are_collected() {
 				input_asset: INPUT_ASSET,
 				input_amount: AMOUNT,
 				output_asset: OUTPUT_ASSET,
-				broker_fee: 0,
 				request_type: SwapRequestTypeEncoded::IngressEgressFee,
 				origin: SwapOrigin::Internal,
 			}));
@@ -2454,7 +2507,7 @@ fn test_buy_back_flip() {
 		NetworkFee::set(NETWORK_FEE);
 
 		// Get some network fees, just like we did a swap.
-		let NetworkFeeTaken { remaining_amount, network_fee } =
+		let FeeTaken { remaining_amount, fee: network_fee } =
 			Swapping::take_network_fee(SWAP_AMOUNT);
 
 		// Sanity check the network fee.
