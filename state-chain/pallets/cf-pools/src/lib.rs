@@ -8,17 +8,20 @@ use cf_amm::{
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_traits::{
-	impl_pallet_safe_mode, Chainflip, LpBalanceApi, PoolApi, SwapRequestHandler, SwappingApi,
+	impl_pallet_safe_mode, BalanceApi, Chainflip, PoolApi, SwapRequestHandler, SwappingApi,
 };
 use core::ops::Range;
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
 	storage::with_storage_layer,
-	traits::{OriginTrait, StorageVersion, UnfilteredDispatchable},
+	traits::{OnKilledAccount, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	transactional,
 };
 
+use cf_traits::HistoricalFeeMigration;
+
+use cf_traits::LpRegistration;
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -128,7 +131,7 @@ pub mod pallet {
 		range_orders::{self, Liquidity},
 		NewError,
 	};
-	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
+	use cf_traits::AccountRoleRegistry;
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::collections::btree_map::BTreeMap;
 
@@ -251,8 +254,11 @@ pub mod pallet {
 		/// The event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Pallet responsible for managing Liquidity Providers.
-		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
+		/// Access to the account balances.
+		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
+
+		/// LP address registration and verification.
+		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 
 		type SwapRequestHandler: SwapRequestHandler;
 
@@ -282,6 +288,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type MaximumPriceImpact<T: Config> =
 		StorageMap<_, Twox64Concat, AssetPair, u32, OptionQuery>;
+
+	#[pallet::storage]
+	/// Historical earned fees for an account.
+	pub type HistoricalEarnedFees<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -1444,7 +1455,9 @@ impl<T: Config> Pallet<T> {
 			asset_pair.assets().zip(collected.fees).try_map(|(asset, collected_fees)| {
 				AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
 					|collected_fees| {
-						T::LpBalance::record_fees(lp, collected_fees, asset);
+						HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
+							*balance = balance.saturating_add(collected_fees)
+						});
 						T::LpBalance::try_credit_account(lp, asset, collected_fees)
 							.map(|()| collected_fees)
 					},
@@ -1534,7 +1547,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		f: F,
 	) -> Result<R, DispatchError> {
-		T::LpBalance::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
+		T::LpRegistrationApi::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)
@@ -1880,7 +1893,9 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		let collected_fees: AssetAmount = collected.fees.try_into()?;
 		let asset = asset_pair.assets()[!order.to_sold_pair()];
-		T::LpBalance::record_fees(lp, collected_fees, asset);
+		HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
+			*balance = balance.saturating_add(collected_fees)
+		});
 		T::LpBalance::try_credit_account(lp, asset, collected_fees)?;
 
 		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
@@ -1928,5 +1943,25 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 		Ok(())
+	}
+}
+
+impl<T: Config> HistoricalFeeMigration for Pallet<T> {
+	type AccountId = T::AccountId;
+	fn migrate_historical_fee(account_id: Self::AccountId, asset: Asset, amount: AssetAmount) {
+		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
+			*balance = balance.saturating_add(amount)
+		});
+	}
+	fn get_fee_amount(account_id: Self::AccountId, asset: Asset) -> AssetAmount {
+		HistoricalEarnedFees::<T>::get(account_id, asset)
+	}
+}
+
+pub struct DeleteHistoricalEarnedFees<T: Config>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> OnKilledAccount<T::AccountId> for DeleteHistoricalEarnedFees<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
 	}
 }

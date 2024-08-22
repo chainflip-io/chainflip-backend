@@ -37,10 +37,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
-	AssetWithholding, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi, EpochInfo,
-	FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, LpBalanceApi,
-	LpDepositHandler, NetworkEnvironmentProvider, OnDeposit, ScheduledEgressDetails,
-	SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
+	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
+	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
+	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapLimitsProvider,
+	SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -220,12 +220,9 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{LpDepositHandler, OnDeposit, SwapLimitsProvider};
+	use cf_traits::{OnDeposit, SwapLimitsProvider};
 	use core::marker::PhantomData;
-	use frame_support::{
-		traits::{ConstU128, EnsureOrigin, IsType},
-		DefaultNoBound,
-	};
+	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
 	use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
@@ -311,55 +308,6 @@ pub mod pallet {
 		BoostersCredited { prewitnessed_deposit_id: PrewitnessedDepositId },
 	}
 
-	/// Tracks funds that are owned by the vault and available for egress.
-	#[derive(
-		CloneNoBound,
-		DefaultNoBound,
-		RuntimeDebug,
-		PartialEq,
-		Eq,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-	)]
-	#[scale_info(skip_type_params(T, I))]
-	pub struct DepositTracker<T: Config<I>, I: 'static> {
-		pub unfetched: TargetChainAmount<T, I>,
-		pub fetched: TargetChainAmount<T, I>,
-	}
-
-	// TODO: make this chain-specific. Something like:
-	// Replace Amount with an type representing a single deposit (ie. a single UTXO).
-	// Register transfer would store the change UTXO.
-	impl<T: Config<I>, I: 'static> DepositTracker<T, I> {
-		pub fn total(&self) -> TargetChainAmount<T, I> {
-			self.unfetched.saturating_add(self.fetched)
-		}
-
-		pub fn register_deposit(&mut self, amount: TargetChainAmount<T, I>) {
-			self.unfetched.saturating_accrue(amount);
-		}
-
-		pub fn register_transfer(&mut self, amount: TargetChainAmount<T, I>) {
-			if amount > self.fetched {
-				log::error!("Transfer amount is greater than available funds");
-			}
-			self.fetched.saturating_reduce(amount);
-		}
-
-		pub fn mark_as_fetched(&mut self, amount: TargetChainAmount<T, I>) {
-			// This is a bug that causes test to fail when gas fee is > 0
-			// To be fixed in PRO-1485
-			// debug_assert!(
-			// 	self.unfetched >= amount,
-			// 	"Accounting error: not enough unfetched funds."
-			// );
-			self.unfetched.saturating_reduce(amount);
-			self.fetched.saturating_accrue(amount);
-		}
-	}
-
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub deposit_channel_lifetime: TargetChainBlockNumber<T, I>,
@@ -414,9 +362,9 @@ pub mod pallet {
 		/// representation.
 		type AddressConverter: AddressConverter;
 
-		/// Pallet responsible for managing Liquidity Providers.
-		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>
-			+ LpDepositHandler<AccountId = Self::AccountId>;
+		type Balance: BalanceApi<AccountId = Self::AccountId>;
+
+		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain>
@@ -540,10 +488,6 @@ pub mod pallet {
 	#[pallet::getter(fn failed_foreign_chain_calls)]
 	pub type FailedForeignChainCalls<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, EpochIndex, Vec<FailedForeignChainCall>, ValueQuery>;
-
-	#[pallet::storage]
-	pub type DepositBalances<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, DepositTracker<T, I>, ValueQuery>;
 
 	#[pallet::storage]
 	pub type DepositChannelRecycleBlocks<T: Config<I>, I: 'static = ()> =
@@ -1078,13 +1022,18 @@ pub mod pallet {
 			pool_tier: BoostPoolTier,
 		) -> DispatchResult {
 			let booster_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
 			ensure!(
 				T::SafeMode::get().add_boost_funds_enabled,
 				Error::<T, I>::AddBoostFundsDisabled
 			);
 			ensure!(amount > Zero::zero(), Error::<T, I>::AddBoostAmountMustBeNonZero);
 
-			T::LpBalance::try_debit_account(&booster_id, asset.into(), amount.into())?;
+			// `try_debit_account` does not account for any unswept open positions, so we sweep to
+			// ensure we have the funds in our free balance before attempting to debit the account.
+			T::PoolApi::sweep(&booster_id)?;
+
+			T::Balance::try_debit_account(&booster_id, asset.into(), amount.into())?;
 
 			BoostPools::<T, I>::mutate(asset, pool_tier, |pool| {
 				let pool = pool.as_mut().ok_or(Error::<T, I>::BoostPoolDoesNotExist)?;
@@ -1118,7 +1067,7 @@ pub mod pallet {
 					pool.stop_boosting(booster.clone())
 				})?;
 
-			T::LpBalance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
+			T::Balance::try_credit_account(&booster, asset.into(), unlocked_amount.into())?;
 
 			Self::deposit_event(Event::StoppedBoosting {
 				booster_id: booster,
@@ -1254,16 +1203,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset,
 					deposit_address,
 					deposit_fetch_id,
-					amount,
+					..
 				} => {
 					fetch_params.push(FetchAssetParams {
 						deposit_fetch_id: deposit_fetch_id.expect("Checked in extract_if"),
 						asset,
 					});
 					addresses.push(deposit_address.clone());
-					DepositBalances::<T, I>::mutate(asset, |tracker| {
-						tracker.mark_as_fetched(amount);
-					});
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer {
 					asset,
@@ -1551,8 +1497,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let action = match action {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
-				T::LpBalance::add_deposit(&lp_account, asset.into(), amount_after_fees.into())?;
-
+				T::Balance::try_credit_account(
+					&lp_account,
+					asset.into(),
+					amount_after_fees.into(),
+				)?;
 				DepositAction::LiquidityProvision { lp_account }
 			},
 			ChannelAction::Swap {
@@ -1686,17 +1635,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some((prewitnessed_deposit_id, used_pools)) = maybe_boost_to_process {
 			// Note that ingress fee is not payed here, as it has already been payed at the time
 			// of boosting
-			DepositBalances::<T, I>::mutate(asset, |deposits| {
-				deposits.register_deposit(deposit_amount)
-			});
-
 			for boost_tier in used_pools {
 				BoostPools::<T, I>::mutate(asset, boost_tier, |maybe_pool| {
 					if let Some(pool) = maybe_pool {
 						for (booster_id, finalised_withdrawn_amount) in
 							pool.process_deposit_as_finalised(prewitnessed_deposit_id)
 						{
-							if let Err(err) = T::LpBalance::try_credit_account(
+							if let Err(err) = T::Balance::try_credit_account(
 								&booster_id,
 								asset.into(),
 								finalised_withdrawn_amount.into(),
@@ -1735,10 +1680,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					deposit_channel_details.deposit_channel.asset,
 					deposit_amount,
 				);
-
-			DepositBalances::<T, I>::mutate(asset, |deposits| {
-				deposits.register_deposit(amount_after_fees)
-			});
 
 			if amount_after_fees.is_zero() {
 				Self::deposit_event(Event::<T, I>::DepositIgnored {
@@ -1954,7 +1895,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		destination_address: TargetChainAccount<T, I>,
 		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, TargetChainAmount<T, I>)>,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
-		let result = EgressIdCounter::<T, I>::try_mutate(|id_counter| {
+		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
 			let egress_id = (<T as Config<I>>::TargetChain::get(), *id_counter);
 
@@ -2015,17 +1956,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 					}
 				},
 			}
-		});
-
-		if let Ok(ScheduledEgressDetails { egress_amount, .. }) = result {
-			// Only the egress_amount will be transferred. The fee was converted to the native
-			// asset and will be consumed in terms of the native asset.
-			DepositBalances::<T, I>::mutate(asset, |tracker| {
-				tracker.register_transfer(egress_amount);
-			});
-		};
-
-		result
+		})
 	}
 }
 
@@ -2141,11 +2072,6 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 				<T::TargetChain as Chain>::GAS_ASSET.into(),
 				fee.into(),
 			);
-			// Since we credit the fees to the withheld fees, we need to take these from somewhere,
-			// ie. we effectively have transferred them from the vault.
-			DepositBalances::<T, I>::mutate(<T::TargetChain as Chain>::GAS_ASSET, |tracker| {
-				tracker.register_transfer(fee);
-			});
 		}
 	}
 }

@@ -12,40 +12,29 @@ pub trait LpDepositHandler {
 	fn add_deposit(who: &Self::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult;
 }
 
-pub trait LpBalanceApi {
+/// API for interacting with the liquidity provider pallet.
+pub trait LpRegistration {
 	type AccountId;
 
+	/// Register an address for an given account. This is for benchmarking purposes only.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn register_liquidity_refund_address(
 		who: &Self::AccountId,
 		address: cf_chains::ForeignChainAddress,
 	);
 
+	/// Ensure that the given account has a refund address set for the given asset.
 	fn ensure_has_refund_address_for_pair(
 		who: &Self::AccountId,
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> DispatchResult;
+}
 
-	/// Attempt to credit the account with the given asset and amount.
-	fn try_credit_account(
-		who: &Self::AccountId,
-		asset: Asset,
-		amount: AssetAmount,
-	) -> DispatchResult;
-
-	/// Attempt to debit the account with the given asset and amount.
-	fn try_debit_account(
-		who: &Self::AccountId,
-		asset: Asset,
-		amount: AssetAmount,
-	) -> DispatchResult;
-
-	/// Record the fees collected by the account.
-	fn record_fees(who: &Self::AccountId, amount: AssetAmount, asset: Asset);
-
-	/// Returns the asset free balances of the given account.
-	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError>;
+pub trait HistoricalFeeMigration {
+	type AccountId;
+	fn migrate_historical_fee(account_id: Self::AccountId, asset: Asset, amount: AssetAmount);
+	fn get_fee_amount(account_id: Self::AccountId, asset: Asset) -> AssetAmount;
 }
 
 pub trait PoolApi {

@@ -8,8 +8,9 @@ use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler, ingress_egress_fee_handler::MockIngressEgressFeeHandler,
+		address_converter::MockAddressConverter, balance_api::MockBalance,
+		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
+		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
 	AccountRoleRegistry, SwappingApi,
 };
@@ -155,6 +156,7 @@ impl pallet_cf_swapping::Config for Test {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = MockFeePayment<Self>;
 	type IngressEgressFeeHandler = MockIngressEgressFeeHandler<AnyChain>;
+	type BalanceApi = MockBalance;
 	type CcmValidityChecker = AlwaysValid;
 	type NetworkFee = NetworkFee;
 }

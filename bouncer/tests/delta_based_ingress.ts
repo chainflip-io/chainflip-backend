@@ -93,6 +93,7 @@ async function deltaBasedIngressTest(
 
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
+  console.log('Killing the engines');
   await killEngines();
   await startEngines(localnetInitPath, binariesPath, numberOfNodes);
 
@@ -127,6 +128,9 @@ async function deltaBasedIngressTest(
   // and check that swap completes.
   console.log('Waiting for 40 seconds to ensure no extra swap is being triggered after restart');
   await sleep(40000);
+  console.log(
+    `Waiting for ${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit to complete`,
+  );
   await swapHandle;
   swapScheduledHandle.stop();
 
@@ -166,7 +170,7 @@ async function main(): Promise<void> {
       },
       async (args) => {
         console.log(
-          'delta based ingress test subcommand with args: ' + args.bins + ' ' + args.runtime,
+          'delta based ingress test subcommand with args: ' + args.bins + ' ' + args.localnet_init,
         );
 
         await deltaBasedIngressTest(

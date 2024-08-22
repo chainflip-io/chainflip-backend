@@ -1,5 +1,5 @@
 pub use crate::{self as pallet_cf_ingress_egress};
-use crate::{DepositBalances, DepositWitness, PalletSafeMode};
+use crate::{DepositWitness, PalletSafeMode};
 
 use cf_chains::eth::EthereumTrackedData;
 pub use cf_chains::{
@@ -20,10 +20,10 @@ use cf_traits::{
 		api_call::{MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
+		balance_api::MockBalance,
 		broadcaster::MockBroadcaster,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
-		lp_balance::MockBalance,
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
@@ -116,7 +116,8 @@ impl crate::Config for Test {
 	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
-	type LpBalance = MockBalance;
+	type Balance = MockBalance;
+	type PoolApi = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
@@ -269,32 +270,6 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 					.unwrap(),
 				})
 				.collect()
-		})
-	}
-}
-
-pub trait CheckDepositBalances {
-	fn check_deposit_balances(
-		self,
-		expected_balances: &[(TestChainAsset, TestChainAmount)],
-	) -> Self;
-}
-
-impl<Ctx: Clone> CheckDepositBalances for TestExternalities<Test, Ctx> {
-	#[track_caller]
-	fn check_deposit_balances(
-		self,
-		expected_balances: &[(TestChainAsset, TestChainAmount)],
-	) -> Self {
-		self.inspect_storage(|_| {
-			for (asset, expected_balance) in expected_balances {
-				assert_eq!(
-					DepositBalances::<Test, _>::get(asset).total(),
-					*expected_balance,
-					"Unexpected balance for {asset:?}. Expected {expected_balance}, got {:?}.",
-					DepositBalances::<Test, _>::get(asset)
-				);
-			}
 		})
 	}
 }

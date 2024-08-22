@@ -1,4 +1,4 @@
-use crate::{LpBalanceApi, LpDepositHandler};
+use crate::{BalanceApi, LpDepositHandler};
 use cf_chains::assets::any::{Asset, AssetMap};
 use cf_primitives::AssetAmount;
 use frame_support::sp_runtime::{
@@ -10,6 +10,8 @@ use frame_support::sp_runtime::{
 use cf_chains::ForeignChainAddress;
 
 use super::{MockPallet, MockPalletStorage};
+
+use crate::LpRegistration;
 
 pub struct MockBalance;
 
@@ -31,19 +33,8 @@ impl MockPallet for MockBalance {
 
 const FREE_BALANCES: &[u8] = b"FREE_BALANCES";
 
-impl LpBalanceApi for MockBalance {
+impl BalanceApi for MockBalance {
 	type AccountId = u64;
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn register_liquidity_refund_address(_who: &Self::AccountId, _address: ForeignChainAddress) {}
-
-	fn ensure_has_refund_address_for_pair(
-		_who: &Self::AccountId,
-		_base_asset: Asset,
-		_quote_asset: Asset,
-	) -> DispatchResult {
-		Ok(())
-	}
 
 	fn try_credit_account(
 		who: &Self::AccountId,
@@ -80,12 +71,31 @@ impl LpBalanceApi for MockBalance {
 		)
 	}
 
-	fn record_fees(_who: &Self::AccountId, _amount: AssetAmount, _asset: Asset) {}
-
-	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
-		Ok(AssetMap::try_from_iter(Asset::all().map(|asset| {
+	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		AssetMap::try_from_iter(Asset::all().map(|asset| {
 			(asset, Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default())
 		}))
-		.unwrap())
+		.unwrap()
+	}
+
+	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
+		Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default()
+	}
+}
+
+pub struct MockLpRegistration;
+
+impl LpRegistration for MockLpRegistration {
+	type AccountId = u64;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn register_liquidity_refund_address(_: &Self::AccountId, _: ForeignChainAddress) {}
+
+	fn ensure_has_refund_address_for_pair(
+		_who: &Self::AccountId,
+		_base_asset: Asset,
+		_quote_asset: Asset,
+	) -> DispatchResult {
+		Ok(())
 	}
 }
