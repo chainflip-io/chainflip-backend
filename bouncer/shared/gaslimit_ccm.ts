@@ -141,22 +141,6 @@ async function trackGasLimitSwap(
   const swapRequestId = Number((await swapRequestedHandle).data.swapRequestId.replaceAll(',', ''));
 
   // Find all of the swap events
-  const gasSwapId = (
-    await observeEvent('swapping:SwapScheduled', {
-      test: (event) =>
-        Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId &&
-        event.data.swapType === SwapType.CcmGas,
-      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
-    }).event
-  ).data.swapId;
-
-  const gasSwapOutputAmount = (
-    await observeEvent('swapping:SwapExecuted', {
-      test: (event) => event.data.swapId === gasSwapId,
-      historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
-    }).event
-  ).data.outputAmount;
-
   const egressId = (
     await observeEvent('swapping:SwapEgressScheduled', {
       test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
@@ -179,10 +163,29 @@ async function trackGasLimitSwap(
     }).event
   ).data.transactionPayload;
 
+  // Only look for a gas swap if we expect one
+  async function lookForGasSwapAmount(): Promise<number> {
+    const gasSwapId = (
+      await observeEvent('swapping:SwapScheduled', {
+        test: (event) =>
+          Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId &&
+          event.data.swapType === SwapType.CcmGas,
+        historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+      }).event
+    ).data.swapId;
+
+    return (
+      await observeEvent('swapping:SwapExecuted', {
+        test: (event) => event.data.swapId === gasSwapId,
+        historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
+      }).event
+    ).data.outputAmount;
+  }
+
   const egressBudgetAmount =
     chainGasAsset(destChain as Chain) === sourceAsset
       ? messageMetadata.gasBudget
-      : gasSwapOutputAmount;
+      : await lookForGasSwapAmount();
 
   return { tag, destAddress, egressBudgetAmount, broadcastId, txPayload };
 }
