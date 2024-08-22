@@ -55,6 +55,7 @@ fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
 	));
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,

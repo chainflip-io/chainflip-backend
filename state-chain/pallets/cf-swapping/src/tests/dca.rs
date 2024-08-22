@@ -1,26 +1,138 @@
+use core::u128;
+
 use super::*;
 
 const INPUT_AMOUNT: AssetAmount = 40_000;
-const CHUNK_INTERVAL: u32 = 3;
 const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 const NET_AMOUNT: AssetAmount = INPUT_AMOUNT - BROKER_FEE;
 
-const INPUT_ASSET: Asset = Asset::Usdc;
-const OUTPUT_ASSET: Asset = Asset::Eth;
-
-fn params(
-	dca_params: Option<DcaParameters>,
+#[derive(Debug, Clone)]
+struct DcaTestParams {
+	input_amount: AssetAmount,
+	dca_params: DcaParameters,
 	refund_params: Option<TestRefundParams>,
 	is_ccm: bool,
-) -> TestSwapParams {
-	TestSwapParams {
-		input_asset: INPUT_ASSET,
-		output_asset: OUTPUT_ASSET,
-		input_amount: INPUT_AMOUNT,
-		refund_params: refund_params.map(|params| params.into_channel_params(INPUT_AMOUNT)),
-		dca_params,
-		output_address: (*EVM_OUTPUT_ADDRESS).clone(),
-		is_ccm,
+}
+
+impl DcaTestParams {
+	fn new(number_of_chunks: u32) -> Self {
+		Self {
+			input_amount: INPUT_AMOUNT,
+			dca_params: DcaParameters { number_of_chunks, chunk_interval: 10 },
+			refund_params: None,
+			is_ccm: false,
+		}
+	}
+
+	fn with_refund_params(mut self, params: SwapRefundParameters) -> Self {
+		self.refund_params.insert(params);
+		self
+	}
+
+	fn num_chunks(&self) -> u32 {
+		self.dca_params.number_of_chunks
+	}
+
+	fn chunk_interval(&self) -> u32 {
+		self.dca_params.chunk_interval
+	}
+
+	fn chunk_size(&self) -> AssetAmount {
+		NET_AMOUNT / self.num_chunks() as u128
+	}
+
+	fn expected_execution_block(&self, chunk: u32) -> u64 {
+		INIT_BLOCK + (SWAP_DELAY_BLOCKS + (chunk - 1) * self.chunk_interval()) as u64
+	}
+}
+
+impl From<DcaTestParams> for TestSwapParams {
+	fn from(params: DcaTestParams) -> Self {
+		const INPUT_ASSET: Asset = Asset::Usdc;
+		const OUTPUT_ASSET: Asset = Asset::Eth;
+
+		TestSwapParams {
+			input_asset: INPUT_ASSET,
+			output_asset: OUTPUT_ASSET,
+			input_amount: params.input_amount,
+			refund_params: params.refund_params: refund_params.map(|params| params.into_channel_params(INPUT_AMOUNT)),
+			dca_params: Some(params.dca_params),
+			output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+			is_ccm: params.is_ccm,
+		}
+	}
+}
+
+trait DcaTestsSetup {
+	fn setup(self, swaps: DcaTestParams) -> TestRunner<DcaTestParams>;
+}
+trait DcaTestsExt {
+	fn expect_chunk_execution(self, chunk: u32) -> TestRunner<DcaTestParams>;
+}
+
+impl DcaTestsSetup for TestRunner<()> {
+	fn setup(self, params: DcaTestParams) -> TestRunner<DcaTestParams> {
+		self.execute_with(move || {
+			assert_eq!(System::block_number(), INIT_BLOCK);
+
+			insert_swaps(&[params.into()]);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested { input_amount, .. }) if *input_amount == params.input_amount
+			);
+
+			let swap_request_id = assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_request_id,
+					swap_id: 1,
+					input_amount,
+					execute_at,
+					..
+				}) if *input_amount == params.chunk_size() && *execute_at == params.chunk_interval() as u64
+				=> swap_request_id
+			);
+
+			assert_eq!(
+				get_dca_state(swap_request_id),
+				DcaState {
+					scheduled_chunk_swap_id: Some(1),
+					remaining_input_amount: params.chunk_size(),
+					remaining_chunks: 1,
+					chunk_interval: params.chunk_interval(),
+					accumulated_output_amount: 0
+				}
+			);
+			params
+		})
+	}
+}
+
+impl DcaTestsExt for TestRunner<DcaTestParams> {
+	fn expect_chunk_execution(self, chunk: u32) -> Self {
+		self.then_process_blocks_until(|test_params| {
+			System::block_number() >= test_params.expected_execution_block(chunk) ||
+				// TODO: a more robust limit
+				System::block_number() > 1_000
+		})
+		.then_process_events(|test_params, event| {
+			match event {
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id,
+					swap_id,
+					input_amount,
+					..
+				}) => {
+					assert_eq!(input_amount, test_params.chunk_size());
+					assert_eq!(swap_request_id, SWAP_REQUEST_ID);
+					assert_eq!(swap_id, chunk as u64);
+				},
+				_ => {},
+			}
+			None::<()>
+		})
+		.map_context(|(test_params, _)| test_params)
 	}
 }
 
@@ -60,83 +172,29 @@ fn dca_happy_path() {
 	const TOTAL_OUTPUT_AMOUNT: AssetAmount = NET_AMOUNT * DEFAULT_SWAP_RATE;
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
-			insert_swaps(&[params(
-				Some(DcaParameters { number_of_chunks: 2, chunk_interval: CHUNK_INTERVAL }),
-				None,
-				false,
-			)]);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					swap_request_id: SWAP_REQUEST_ID,
-					input_amount: INPUT_AMOUNT,
-					..
-				})
-			);
-
-			assert_has_matching_event!(
-				Test,
+		.setup(DcaTestParams::new(2))
+		.expect_chunk_execution(1)
+		.then_process_events(|test_params, event| {
+			match event {
 				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
-					execute_at: CHUNK_1_BLOCK,
+					swap_request_id,
+					swap_id,
+					input_amount,
+					execute_at,
 					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					scheduled_chunk_swap_id: Some(1),
-					remaining_input_amount: CHUNK_AMOUNT,
-					remaining_chunks: 1,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: 0
-				}
-			);
+				}) => {
+					assert_eq!(input_amount, test_params.chunk_size());
+					assert_eq!(swap_request_id, SWAP_REQUEST_ID);
+					assert_eq!(swap_id, 2);
+				},
+				_ => {},
+			};
+			None::<()>
 		})
-		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
-		.then_execute_with(|_| {
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
-					output_amount: CHUNK_OUTPUT,
-					..
-				})
-			);
-
-			// Second chunk should be scheduled 2 blocks after the first is executed:
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 2,
-					input_amount: CHUNK_AMOUNT,
-					execute_at: CHUNK_2_BLOCK,
-					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					scheduled_chunk_swap_id: Some(2),
-					remaining_input_amount: 0,
-					remaining_chunks: 0,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: CHUNK_AMOUNT * DEFAULT_SWAP_RATE
-				}
-			);
+		.map_context(|(test_params, _)| test_params)
+		.then_process_blocks_until(|test_params| {
+			System::block_number() >= test_params.expected_execution_block(2)
 		})
-		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
@@ -169,46 +227,7 @@ fn dca_single_chunk() {
 	const EGRESS_AMOUNT: AssetAmount = NET_AMOUNT * DEFAULT_SWAP_RATE;
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
-			insert_swaps(&[params(
-				Some(DcaParameters { number_of_chunks: 1, chunk_interval: CHUNK_INTERVAL }),
-				None,
-				false,
-			)]);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					swap_request_id: SWAP_REQUEST_ID,
-					input_amount: INPUT_AMOUNT,
-					..
-				})
-			);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: NET_AMOUNT,
-					execute_at: CHUNK_1_BLOCK,
-					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					scheduled_chunk_swap_id: Some(1),
-					remaining_input_amount: 0,
-					remaining_chunks: 0,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: 0
-				}
-			);
-		})
+		.setup(DcaTestParams::new(1))
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
@@ -244,54 +263,12 @@ fn dca_with_fok_full_refund() {
 	const REFUND_BLOCK: u64 = CHUNK_1_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
-			insert_swaps(&[params(
-				Some(DcaParameters {
-					number_of_chunks: NUMBER_OF_CHUNKS,
-					chunk_interval: CHUNK_INTERVAL,
-				}),
-				Some(TestRefundParams {
+		.setup(DcaTestParams::new(NUMBER_OF_CHUNKS).with_refund_params(TestRefundParams {
 					// Allow for exactly 1 retry
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					// This ensures the swap is refunded:
 					min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
-				}),
-				false,
-			)]);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					swap_request_id: SWAP_REQUEST_ID,
-					input_amount: INPUT_AMOUNT,
-					..
-				})
-			);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
-					execute_at: CHUNK_1_BLOCK,
-					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					scheduled_chunk_swap_id: Some(1),
-					remaining_input_amount: CHUNK_AMOUNT,
-					remaining_chunks: 1,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: 0
-				}
-			);
-		})
+				}))
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
 		.then_execute_with(|_| {
 			assert_has_matching_event!(

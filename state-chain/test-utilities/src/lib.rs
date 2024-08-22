@@ -23,17 +23,24 @@ pub fn assert_has_event<T: frame_system::Config>(event: <T as frame_system::Conf
 
 #[macro_export]
 macro_rules! assert_has_matching_event {
-	( $runtime:ty, $event:pat $(if $guard:expr )? $(,)? ) => {
+	( $runtime:ty, $event:pat $(if $guard:expr )? $( => $ret:expr )? $(,)? ) => {
 		let events = frame_system::Pallet::<$runtime>::events()
 			.into_iter()
 			.map(|e| e.event)
 			.collect::<Vec<_>>();
+		let first = events.iter().find(|e| matches!(e, $event $(if $guard)?));
 		assert!(
-			events.iter().any(|e| matches!(e, $event $(if $guard)?)),
+			first.is_some(),
 			"No event matching {:#?} found in {:#?}",
 			stringify!($event $(if $guard)?),
 			events,
 		);
+		match first.unwrap() {
+			$event $(if $guard)? => {
+				$ret
+			}
+			_ => unreachable!(),
+		}
 	};
 }
 
