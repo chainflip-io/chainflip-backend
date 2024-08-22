@@ -334,7 +334,6 @@ where
 		BitcoinChainTracking(_) |
 		PolkadotChainTracking(_) |
 		ArbitrumChainTracking(_) |
-		SolanaChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
@@ -351,7 +350,8 @@ where
 		SolanaBroadcaster(_) |
 		Swapping(_) |
 		LiquidityProvider(_) |
-		LiquidityPools(_) => {},
+		LiquidityPools(_) |
+		SolanaElections(_) => {},
 	};
 
 	Ok(())

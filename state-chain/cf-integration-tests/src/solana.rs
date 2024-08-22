@@ -12,17 +12,20 @@ use cf_chains::{
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
 		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
-		SolTrackedData, SolanaCrypto,
+		SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ExecutexSwapAndCallError,
-	ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError,
-	Solana, SwapOrigin, TransactionBuilder,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ExecutexSwapAndCallError, ForeignChainAddress,
+	RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin,
+	TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
 use cf_utilities::bs58_array;
 use codec::Encode;
-use frame_support::traits::{OnFinalize, UnfilteredDispatchable};
+use frame_support::{
+	assert_err,
+	traits::{OnFinalize, UnfilteredDispatchable},
+};
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_validator::RotationPhase;
 use state_chain_runtime::{
@@ -45,7 +48,6 @@ const ALICE: AccountId = AccountId::new([0x33; 32]);
 const BOB: AccountId = AccountId::new([0x44; 32]);
 
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
-const COMPUTE_PRICE: u64 = 1_000u64;
 
 fn setup_sol_environments() {
 	// Environment::SolanaApiEnvironment
@@ -56,12 +58,6 @@ fn setup_sol_environments() {
 		usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
 		usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 	});
-
-	// SolanaChainTracking::ChainState
-	pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::set(Some(ChainState {
-		block_height: 0,
-		tracked_data: SolTrackedData { priority_fee: COMPUTE_PRICE },
-	}));
 
 	// Environment::AvailableDurableNonces
 	pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
@@ -148,6 +144,8 @@ fn can_build_solana_batch_all() {
 		])
 		.build()
 		.execute_with(|| {
+			setup_sol_environments();
+
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
@@ -155,7 +153,6 @@ fn can_build_solana_batch_all() {
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
 
-			setup_sol_environments();
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
 
@@ -213,11 +210,12 @@ fn can_rotate_solana_vault() {
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
+			setup_sol_environments();
+
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {})
 				.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into())
 			);
-			setup_sol_environments();
 			testnet.move_to_the_next_epoch();
 
 			assert_eq!(Validator::epoch_index(), 2);
@@ -276,6 +274,8 @@ fn can_send_solana_ccm() {
 		])
 		.build()
 		.execute_with(|| {
+			setup_sol_environments();
+
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
@@ -283,7 +283,6 @@ fn can_send_solana_ccm() {
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
 
-			setup_sol_environments();
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
 
@@ -351,6 +350,8 @@ fn solana_ccm_fails_with_invalid_input() {
 		])
 		.build()
 		.execute_with(|| {
+			setup_sol_environments();
+
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
@@ -358,7 +359,6 @@ fn solana_ccm_fails_with_invalid_input() {
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
 
-			setup_sol_environments();
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
 
@@ -489,6 +489,8 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 		])
 		.build()
 		.execute_with(|| {
+			setup_sol_environments();
+
 			let (mut testnet, _, _) = network::fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_ok!(RuntimeCall::SolanaVault(
 				pallet_cf_vaults::Call::<Runtime, SolanaInstance>::initialize_chain {}
@@ -496,7 +498,6 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
 
-			setup_sol_environments();
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
 
@@ -514,7 +515,8 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 			pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
 				available_nonces.clone(),
 			);
-			assert_noop!(
+
+			assert_err!(
 				<cf_chains::sol::api::SolanaApi<SolEnvironment> as SetAggKeyWithAggKey<
 					SolanaCrypto,
 				>>::new_unsigned(None, SolAddress([0xff; 32]),),

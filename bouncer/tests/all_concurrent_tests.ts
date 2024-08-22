@@ -32,7 +32,7 @@ async function runAllConcurrentTests() {
   const tests = [
     swapLessThanED(),
     testAllSwaps(swapContext),
-    testEvmDeposits(),
+    testEvmDeposits(numberOfNodes),
     testFundRedeem('redeem'),
     testMultipleMembersGovernance(),
     testLpApi(),

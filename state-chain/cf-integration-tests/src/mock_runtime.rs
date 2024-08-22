@@ -2,15 +2,23 @@ use chainflip_node::{
 	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
 	test_account_from_seed,
 };
+use pallet_cf_elections::InitialState;
 use pallet_cf_validator::SetSizeParameters;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::{Percent, Permill};
+use sp_runtime::{FixedU128, Percent, Permill};
 use state_chain_runtime::{
-	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
-	AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumVaultConfig, EmissionsConfig,
-	EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
-	ReputationConfig, SessionConfig, SolanaChainTrackingConfig, SolanaVaultConfig, ValidatorConfig,
+	chainflip::{
+		solana_elections::{SolanaFeeUnsynchronisedSettings, SolanaIngressSettings},
+		Offence,
+	},
+	constants::common::*,
+	opaque::SessionKeys,
+	test_runner::*,
+	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumVaultConfig,
+	EmissionsConfig, EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig,
+	GovernanceConfig, ReputationConfig, SessionConfig, SolanaElectionsConfig, SolanaVaultConfig,
+	ValidatorConfig,
 };
 
 use cf_chains::{
@@ -18,8 +26,8 @@ use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
 	dot::{PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	sol::SolTrackedData,
-	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
+	sol::sol_tx_core::sol_test_values,
+	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use state_chain_runtime::{
 	BitcoinChainTrackingConfig, EthereumChainTrackingConfig, PolkadotChainTrackingConfig,
@@ -31,6 +39,8 @@ pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 
 pub const ACCRUAL_RATIO: (i32, u32) = (1, 1);
+
+const COMPUTE_PRICE: u64 = 1_000u64;
 
 /// The offences committable within the protocol and their respective reputation penalty and
 /// suspension durations.
@@ -255,12 +265,6 @@ impl ExtBuilder {
 					},
 				},
 			},
-			solana_chain_tracking: SolanaChainTrackingConfig {
-				init_chain_state: ChainState::<Solana> {
-					block_height: 0,
-					tracked_data: SolTrackedData { priority_fee: 100000u32.into() },
-				},
-			},
 			bitcoin_threshold_signer: Default::default(),
 			evm_threshold_signer: EvmThresholdSignerConfig {
 				key: Some(ethereum_vault_key),
@@ -282,6 +286,36 @@ impl ExtBuilder {
 			ethereum_ingress_egress: Default::default(),
 			arbitrum_ingress_egress: Default::default(),
 			solana_ingress_egress: Default::default(),
+			solana_elections: SolanaElectionsConfig {
+				option_initial_state: Some(InitialState {
+					unsynchronised_state: (
+						/* chain tracking */ Default::default(),
+						/* priority_fee */ COMPUTE_PRICE,
+						(),
+						(),
+						(),
+					),
+					unsynchronised_settings: (
+						(),
+						SolanaFeeUnsynchronisedSettings {
+							fee_multiplier: FixedU128::from_u32(1u32),
+						},
+						(),
+						(),
+						(),
+					),
+					settings: (
+						(),
+						(),
+						SolanaIngressSettings {
+							vault_program: sol_test_values::VAULT_PROGRAM,
+							usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
+						},
+						(),
+						(),
+					),
+				}),
+			},
 		})
 	}
 }

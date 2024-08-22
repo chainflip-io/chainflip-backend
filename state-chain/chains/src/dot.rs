@@ -329,15 +329,7 @@ impl Chain for Polkadot {
 	type TrackedData = PolkadotTrackedData;
 	type ChainAsset = assets::dot::Asset;
 	type ChainAssetMap<
-		T: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ BenchmarkValue
-			+ FullCodec
-			+ Unpin
-			+ Default,
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::dot::AssetMap<T>;
 	type ChainAccount = PolkadotAccountId;
 	type DepositFetchId = PolkadotChannelId;
