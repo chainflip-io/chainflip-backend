@@ -293,12 +293,14 @@ impl ExtBuilder {
 						/* priority_fee */ COMPUTE_PRICE,
 						(),
 						(),
+						(),
 					),
 					unsynchronised_settings: (
 						(),
 						SolanaFeeUnsynchronisedSettings {
 							fee_multiplier: FixedU128::from_u32(1u32),
 						},
+						(),
 						(),
 						(),
 					),
@@ -309,6 +311,7 @@ impl ExtBuilder {
 							vault_program: sol_test_values::VAULT_PROGRAM,
 							usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
 						},
+						(),
 						(),
 					),
 				}),

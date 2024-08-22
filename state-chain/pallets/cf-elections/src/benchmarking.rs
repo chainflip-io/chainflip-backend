@@ -190,9 +190,6 @@ mod benchmarks {
 	#[cfg(test)]
 	use crate::mock::*;
 
-	#[cfg(test)]
-	use crate::Instance1;
-
 	#[test]
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {

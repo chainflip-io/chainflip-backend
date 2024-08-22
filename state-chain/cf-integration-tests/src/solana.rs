@@ -516,14 +516,12 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 				available_nonces.clone(),
 			);
 
-			println!("checking noop");
 			assert_err!(
 				<cf_chains::sol::api::SolanaApi<SolEnvironment> as SetAggKeyWithAggKey<
 					SolanaCrypto,
 				>>::new_unsigned(None, SolAddress([0xff; 32]),),
 				SetAggKeyWithAggKeyError::FinalTransactionExceededMaxLength
 			);
-			println!("Checked noop");
 
 			assert_eq!(
 				available_nonces,
