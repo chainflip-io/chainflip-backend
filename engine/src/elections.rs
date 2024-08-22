@@ -28,6 +28,8 @@ use voter_api::VoterApi;
 const MAXIMUM_CONCURRENT_FILTER_REQUESTS: usize = 16;
 const LIFETIME_OF_SHARED_DATA_IN_CACHE: std::time::Duration = std::time::Duration::from_secs(90);
 const MAXIMUM_SHARED_DATA_CACHE_ITEMS: usize = 1024;
+const MAXIMUM_CONCURRENT_VOTER_REQUESTS: u32 = 32;
+const INITIAL_VOTER_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 pub struct Voter<
 	Instance: 'static,
@@ -62,11 +64,11 @@ where
 			state_chain_client,
 			voter: RetrierClient::new(
 				scope,
-				"test",
+				"Voter",
 				futures::future::ready(voter),
 				None,
-				std::time::Duration::from_millis(10000),
-				32,
+				INITIAL_VOTER_REQUEST_TIMEOUT,
+				MAXIMUM_CONCURRENT_VOTER_REQUESTS,
 			),
 			_phantom: Default::default(),
 		}
