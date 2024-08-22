@@ -12,7 +12,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber, ChannelId,
-	DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash,
+	DcaParameters, ForeignChain, Price, SwapId, SwapLeg, SwapRequestId, TransactionHash,
 	BASIS_POINTS_PER_MILLION, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -164,12 +164,16 @@ pub struct Swap {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct SwapLegInfo {
 	pub swap_id: SwapId,
+	pub swap_request_id: SwapRequestId,
 	pub base_asset: Asset,
 	pub quote_asset: Asset,
 	pub side: Side,
 	pub amount: AssetAmount,
 	pub source_asset: Option<Asset>,
 	pub source_amount: Option<AssetAmount>,
+	pub remaining_chunks: u32,
+	pub chunk_interval: u32,
+	pub min_price: Option<Price>,
 }
 
 impl Swap {
@@ -1173,9 +1177,23 @@ pub mod pallet {
 			swaps
 				.into_iter()
 				.filter_map(|swap| {
+					let swap_request = SwapRequests::<T>::get(swap.swap.swap_request_id)
+						.expect("Swap request should exist");
+					let dca_state = match swap_request.state {
+						SwapRequestState::Ccm { dca_state, .. } => Some(dca_state),
+						SwapRequestState::Regular { dca_state, .. } => Some(dca_state),
+						_ => None,
+					};
+					let remaining_chunks =
+						dca_state.as_ref().map(|dca| dca.remaining_chunks).unwrap_or(0);
+					let chunk_interval =
+						dca_state.map(|dca| dca.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS);
+					let min_price = swap_request.refund_params.map(|params| params.min_price);
+
 					if swap.input_asset() == base_asset {
 						Some(SwapLegInfo {
 							swap_id: swap.swap_id(),
+							swap_request_id: swap.swap.swap_request_id,
 							base_asset,
 							// All swaps from `base_asset` have to go through the stable asset:
 							quote_asset: STABLE_ASSET,
@@ -1183,6 +1201,9 @@ pub mod pallet {
 							amount: swap.input_amount(),
 							source_asset: None,
 							source_amount: None,
+							remaining_chunks,
+							chunk_interval,
+							min_price,
 						})
 					} else if swap.output_asset() == base_asset {
 						// In case the swap is "simulated", the amount is just an estimate,
@@ -1207,6 +1228,7 @@ pub mod pallet {
 
 						Some(SwapLegInfo {
 							swap_id: swap.swap_id(),
+							swap_request_id: swap.swap.swap_request_id,
 							base_asset,
 							// All swaps to `base_asset` have to go through the stable asset:
 							quote_asset: STABLE_ASSET,
@@ -1214,6 +1236,9 @@ pub mod pallet {
 							amount,
 							source_asset,
 							source_amount,
+							remaining_chunks,
+							chunk_interval,
+							min_price,
 						})
 					} else {
 						None

@@ -11,9 +11,9 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::{any, any::AssetMap},
+	chains::assets::any::{self, AssetMap},
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, ForeignChain,
-	NetworkEnvironment, SemVer, SwapId,
+	NetworkEnvironment, Price, SemVer, SwapId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -145,6 +145,7 @@ impl From<MonitoringData> for RpcMonitoringData {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
 	pub swap_id: SwapId,
+	pub swap_request_id: SwapId,
 	pub base_asset: Asset,
 	pub quote_asset: Asset,
 	pub side: Side,
@@ -154,15 +155,32 @@ pub struct ScheduledSwap {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub source_amount: Option<U256>,
 	pub execute_at: BlockNumber,
+	pub remaining_chunks: u32,
+	pub chunk_interval: u32,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub min_price: Option<Price>,
 }
 
 impl ScheduledSwap {
 	fn new(
-		SwapLegInfo { swap_id, base_asset, quote_asset, side, amount, source_asset, source_amount}: SwapLegInfo,
+		SwapLegInfo {
+			swap_id,
+			swap_request_id,
+			base_asset,
+			quote_asset,
+			side,
+			amount,
+			source_asset,
+			source_amount,
+			remaining_chunks,
+			chunk_interval,
+			min_price,
+		}: SwapLegInfo,
 		execute_at: BlockNumber,
 	) -> Self {
 		ScheduledSwap {
 			swap_id,
+			swap_request_id,
 			base_asset,
 			quote_asset,
 			side,
@@ -170,6 +188,9 @@ impl ScheduledSwap {
 			source_asset,
 			source_amount: source_amount.map(Into::into),
 			execute_at,
+			remaining_chunks,
+			chunk_interval,
+			min_price,
 		}
 	}
 }
