@@ -93,7 +93,7 @@ fn create_test_swap(
 	output_asset: Asset,
 	amount: AssetAmount,
 	dca_params: Option<DcaParameters>,
-) -> Swap {
+) -> Swap<Test> {
 	SwapRequests::<Test>::insert(
 		id,
 		SwapRequest {
@@ -101,9 +101,11 @@ fn create_test_swap(
 			input_asset,
 			output_asset,
 			refund_params: None,
-			state: SwapRequestState::Regular {
+			state: SwapRequestState::UserSwap {
 				output_address: ForeignChainAddress::Eth(H160::zero()),
 				dca_state: DcaState::create_with_first_chunk(amount, dca_params).0,
+				ccm: None,
+				broker_fees: Default::default(),
 			},
 		},
 	);

@@ -18,8 +18,7 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, BalanceApi, DepositApi, ExecutionCondition, IngressEgressFeeApi,
-	NetworkFeeTaken, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi,
+	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1189,8 +1188,7 @@ pub mod pallet {
 					let swap_request = SwapRequests::<T>::get(swap.swap.swap_request_id)
 						.expect("Swap request should exist");
 					let dca_state = match swap_request.state {
-						SwapRequestState::Ccm { dca_state, .. } => Some(dca_state),
-						SwapRequestState::Regular { dca_state, .. } => Some(dca_state),
+						SwapRequestState::UserSwap { dca_state, .. } => Some(dca_state),
 						_ => None,
 					};
 					let remaining_chunks =
