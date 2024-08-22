@@ -48,29 +48,65 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 				),
 				cf_runtime_upgrade_utilities::genesis_hashes::PERSEVERANCE => (
 					SolApiEnvironment {
-						vault_program: SolAddress(bs58_array("11111111111111111111111111111111")),
+						vault_program: SolAddress(bs58_array(
+							"7ThGuS6a4KmX2rMFhqeCPHrRmmYEF7XoimGG53171xJa",
+						)),
 						vault_program_data_account: SolAddress(bs58_array(
-							"11111111111111111111111111111111",
+							"GpTqSHz4JzQimjfDiBgDhJzYcTonj3t6kMhKTigCKHfc",
 						)),
 						usdc_token_mint_pubkey: SolAddress(bs58_array(
 							"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
 						)),
 						token_vault_pda_account: SolAddress(bs58_array(
-							"11111111111111111111111111111111",
+							"2Uv7dCnuxuvyFnTRCyEyQpvwyYBhgFkWDm3b5Qdz9Agd",
 						)),
 						usdc_token_vault_ata: SolAddress(bs58_array(
-							"11111111111111111111111111111111",
+							"FYQrMSUQx3jrJMpu21mR8qzhpLXfa1nn65ZVqp4QSdEa",
 						)),
 					},
 					Some(SolHash(bs58_array("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"))),
-					vec![(
-						SolAddress(hex_literal::hex!(
-							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)),
-						SolHash(hex_literal::hex!(
-							"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-						)),
-					)],
+					vec![
+						(
+							const_address("DiNM3dmV4tmJ9sihpXqE6R2MkdyNoArbdU8qfcDHUaRf"),
+							const_hash("4DEDrSVk4FRKFQkU1p9Zywi5MK64AGxC16RQZvhyFngq"),
+						),
+						(
+							const_address("65GZq92jgKDX7Bw1DARPZ26JER1Puv9wxo51CE4PWtJo"),
+							const_hash("5s1V7bXByHPquC1AYD94w4f8SgEhDjEnGeBtiPsuzXYU"),
+						),
+						(
+							const_address("Yr7ZBvZCnCe2ktQkhjLujvyW8N9nAat2GdoaicJoK3Y"),
+							const_hash("7Y1PvrW65rZp3RqmJksix3XxQ9MrFdQ62NNbhdB97qwc"),
+						),
+						(
+							const_address("J35Cfq65BdDz2qH1nqDigJTXhyBik6vApM6AVEy63vmH"),
+							const_hash("F1fe16vREumonQurbFAfmbKytfEE9khjy9UPjjgbGnG9"),
+						),
+						(
+							const_address("62hNXX6cW9QSAqSxQEdE6k5c4mQXg8S3h3ZA2CQdFMuJ"),
+							const_hash("D6osW2CyHmpLqg8ymDAeNEjZZETqHGWdQBekh3cVjAUQ"),
+						),
+						(
+							const_address("DSKBQs1Zj4QMRt7JPrytJBJKCDmYiWKa5pqnLQQmwADF"),
+							const_hash("7qDGqASPR3VannmDosTXUVMd5ZWbqDnawCA3auEHsq6r"),
+						),
+						(
+							const_address("GFUNNyfQVX82yMYYAwhzV5c3eqXegPVt8qTN54TGXwq1"),
+							const_hash("4TFDiBqjU5istaaAovdgKBNDKJFdZ318W6XuC9MZiDBC"),
+						),
+						(
+							const_address("ExGFeiZMJf4HBWZZAFfXacY4EnT7TJQrsNsGBaVW1Rtv"),
+							const_hash("7ua7UjY1Csouw7K1nMDyWhL7Lx5PE9ernETcKciWALFH"),
+						),
+						(
+							const_address("E2jV7bm8sBNAFDy96Nar5GtsX6n5U18EHM7prUfoDpNt"),
+							const_hash("742EN3zJUt6Xcrs1KAH4jfyLLVp8BYV2bSmjEpsFpMFo"),
+						),
+						(
+							const_address("6WcamLU38f1asFanFXYugVJuHN4TXHZicmJgPz9Xr6U7"),
+							const_hash("FS1PdTqsDSEa9xUrLAS5k471MQsT28H2FW5CpUHiTmGF"),
+						),
+					],
 				),
 				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS => (
 					SolApiEnvironment {
@@ -91,7 +127,7 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 						)),
 					},
 					Some(SolHash(bs58_array("EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"))),
-					vec![(
+					vec![
 						(
 							const_address("Cr5YnF9p4M91CrQGHJhP3Syy4aGZNVAwF6zvTxkAZZfj"),
 							const_hash("9QVwTXtwGTbq4U3KPN9THdnxQ38bVFu6P15cwhURJqNC"),
@@ -132,7 +168,7 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 							const_address("DcEmNXySnth2FNhsHmt64oB15pjtakKhfG3nez7qB52w"),
 							const_hash("3iiniRfNTFmBn6Y9ZhovefUDaGaJ7buB2vYemnbFoHN3"),
 						),
-					)],
+					],
 				),
 				_ => (
 					// Assume testnet
