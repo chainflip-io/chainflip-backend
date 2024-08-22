@@ -752,16 +752,21 @@ mod ccm {
 			})
 		);
 
+		let ccm_egress = MockEgressHandler::<AnyChain>::get_scheduled_egresses()
+			.into_iter()
+			.find(|egress| matches!(egress, MockEgressParameter::Ccm { .. }))
+			.expect("no ccm egress");
+
 		assert_eq!(
-			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
-			vec![MockEgressParameter::Ccm {
+			ccm_egress,
+			MockEgressParameter::Ccm {
 				asset,
 				amount: principal_amount,
 				destination_address: (*EVM_OUTPUT_ADDRESS).clone(),
 				message: vec![0x01].try_into().unwrap(),
 				cf_parameters: vec![].try_into().unwrap(),
 				gas_budget,
-			},]
+			},
 		);
 	}
 

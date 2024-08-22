@@ -34,10 +34,10 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 		.execute_with(|| {
 			assert_eq!(System::block_number(), INIT_BLOCK);
 
-			insert_swaps(&vec![
+			insert_swaps(&[
 				fok_swap(None),
 				fok_swap(Some(TestRefundParams {
-					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					min_output: (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE,
 				})),
 			]);
@@ -203,12 +203,12 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 			// to reaching expiry block
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: FOK_SWAP_REQUEST_ID
-				}),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: FOK_SWAP_REQUEST_ID,
 					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: FOK_SWAP_REQUEST_ID
 				}),
 			);
 		});
@@ -270,12 +270,12 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: FOK_SWAP_REQUEST_ID
-				}),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: FOK_SWAP_REQUEST_ID,
 					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: FOK_SWAP_REQUEST_ID
 				}),
 				// Non-fok swap will continue to be retried:
 				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: REGULAR_SWAP_ID, .. }),
@@ -306,8 +306,8 @@ fn fok_test_zero_refund_duration() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1, .. }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled { swap_request_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1, .. }),
 			);
 		});
 }
@@ -327,8 +327,8 @@ fn fok_ccm_happy_path() {
 		.execute_with(|| {
 			assert_eq!(System::block_number(), INIT_BLOCK);
 
-			insert_swaps(&vec![fok_swap_ccm(Some(TestRefundParams {
-				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u32,
+			insert_swaps(&[fok_swap_ccm(Some(TestRefundParams {
+				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 				min_output: EXPECTED_OUTPUT,
 			}))]);
 
@@ -373,7 +373,7 @@ fn fok_ccm_refunded() {
 		.execute_with(|| {
 			assert_eq!(System::block_number(), INIT_BLOCK);
 
-			insert_swaps(&vec![fok_swap_ccm(Some(TestRefundParams {
+			insert_swaps(&[fok_swap_ccm(Some(TestRefundParams {
 				retry_duration: 0,
 				min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
 			}))]);
@@ -394,13 +394,13 @@ fn fok_ccm_refunded() {
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: REQUEST_ID,
 					// Note that gas is refunded too:
 					amount: INPUT_AMOUNT,
 					..
 				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
 			);
 		});
 }
