@@ -13,7 +13,7 @@ use cf_chains::{
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber, ChannelId,
 	DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash,
-	BASIS_POINTS_PER_MILLION, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	BASIS_POINTS_PER_MILLION, MAX_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -1257,26 +1257,44 @@ pub mod pallet {
 			stable_amount: AssetAmount,
 			broker_fees: &Beneficiaries<T::AccountId>,
 		) -> FeeTaken {
-			let total_fee =
-				broker_fees.iter().fold(0u128, |fee_accumulator, Beneficiary { account, bps }| {
-					let fee =
-						Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) * stable_amount;
-
-					if let Err(err) = T::BalanceApi::try_credit_account(account, STABLE_ASSET, fee)
-					{
-						log_or_panic!(
-							"Failed to credit broker fee to account {:?} with error: {:?}",
-							account,
-							err
-						);
-					}
-
-					fee_accumulator.saturating_add(fee)
+			// Sanity check: it should already not be possible to open a channel with broker fees
+			// this high, but if the total broker fee would exceed 100% we charge no broker fee
+			// instead (for simplicity):
+			let total_fee_bps =
+				broker_fees.iter().fold(0u16, |fee_accumulator, Beneficiary { bps, .. }| {
+					fee_accumulator.saturating_add(*bps)
 				});
 
-			assert!(total_fee <= stable_amount, "Broker fee cannot be more than the amount");
+			if total_fee_bps > MAX_BASIS_POINTS {
+				FeeTaken { remaining_amount: stable_amount, fee: 0 }
+			} else {
+				let total_fee = broker_fees.iter().fold(
+					0u128,
+					|fee_accumulator, Beneficiary { account, bps }| {
+						let fee = Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) *
+							stable_amount;
 
-			FeeTaken { remaining_amount: stable_amount.saturating_sub(total_fee), fee: total_fee }
+						if let Err(err) =
+							T::BalanceApi::try_credit_account(account, STABLE_ASSET, fee)
+						{
+							log_or_panic!(
+								"Failed to credit broker fee to account {:?} with error: {:?}",
+								account,
+								err
+							);
+						}
+
+						fee_accumulator.saturating_add(fee)
+					},
+				);
+
+				assert!(total_fee <= stable_amount, "Broker fee cannot be more than the amount");
+
+				FeeTaken {
+					remaining_amount: stable_amount.saturating_sub(total_fee),
+					fee: total_fee,
+				}
+			}
 		}
 
 		fn swap_into_stable_taking_fees(
