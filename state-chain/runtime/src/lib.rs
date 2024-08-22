@@ -13,7 +13,10 @@ mod weights;
 use crate::{
 	chainflip::{
 		calculate_account_apy,
-		solana_elections::{SolanaChainTracking, SolanaIngress, SolanaNonceTrackingTrigger},
+		solana_elections::{
+			SolanaChainTracking, SolanaEgressWitnessingTrigger, SolanaIngress,
+			SolanaNonceTrackingTrigger,
+		},
 		Offence,
 	},
 	monitoring_apis::{
@@ -50,8 +53,8 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
 use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{
-	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyIngressSource, GetBlockHeight,
-	NoLimit, SwapLimits, SwapLimitsProvider,
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
+	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -851,6 +854,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
+	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<EvmCrypto>;
 }
 
 impl pallet_cf_broadcast::Config<Instance2> for Runtime {
@@ -876,6 +880,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
+	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<PolkadotCrypto>;
 }
 
 impl pallet_cf_broadcast::Config<Instance3> for Runtime {
@@ -901,6 +906,7 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type RetryPolicy = BitcoinRetryPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
+	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<BitcoinCrypto>;
 }
 
 impl pallet_cf_broadcast::Config<Instance4> for Runtime {
@@ -926,6 +932,7 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
+	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<EvmCrypto>;
 }
 
 impl pallet_cf_asset_balances::Config for Runtime {
@@ -958,6 +965,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
+	type ElectionEgressWitnesser = SolanaEgressWitnessingTrigger;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance1> for Runtime {

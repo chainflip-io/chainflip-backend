@@ -104,7 +104,6 @@ async function getChainFees(chain: Chain) {
       const trackedData = await chainflip.query.solanaElections.electoralUnsynchronisedState();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       priorityFee = Number((trackedData.toJSON() as any[])[1].toString().replace(/,/g, ''));
-      console.log(`Priority fee: ${priorityFee}`);
       break;
     }
     default:
