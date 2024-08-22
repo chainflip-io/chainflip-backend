@@ -20,3 +20,4 @@ jobs:
       - name: Run tests 🧪
         run: |
           cargo cf-test-ci --locked
+        timeout-minutes: 23

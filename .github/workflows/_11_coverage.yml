@@ -24,6 +24,7 @@ jobs:
       - name: cargo cf-test-ci --locked
         run: |
           cargo cf-test-ci --locked
+        timeout-minutes: 23
 
   coverage:
     runs-on: namespace-profile-rust-builder
