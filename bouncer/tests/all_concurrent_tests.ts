@@ -1,7 +1,7 @@
 #!/usr/bin/env -S NODE_OPTIONS=--max-old-space-size=6144 pnpm tsx
 import { SwapContext, testAllSwaps } from '../shared/swapping';
 import { testEvmDeposits } from '../shared/evm_deposits';
-import { runWithTimeout } from '../shared/utils';
+import { checkAvailabilityAllSolanaNonces, runWithTimeout } from '../shared/utils';
 import { testFundRedeem } from '../shared/fund_redeem';
 import { testMultipleMembersGovernance } from '../shared/multiple_members_governance';
 import { testLpApi } from '../shared/lp_api_test';
@@ -53,6 +53,8 @@ async function runAllConcurrentTests() {
   await Promise.all(tests);
 
   await Promise.all([broadcastAborted.stop(), feeDeficitRefused.stop()]);
+
+  await checkAvailabilityAllSolanaNonces();
 }
 
 runWithTimeout(runAllConcurrentTests(), 2000000)
