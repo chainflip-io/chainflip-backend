@@ -315,3 +315,30 @@ fn ensure_can_vote() {
 			.expect("Can vote!");
 	});
 }
+
+#[test]
+fn delete_vote() {
+	new_test_ext()
+		// Run one block, which on_finalise will create the election for the median
+		.then_execute_at_next_block(|()| {})
+		// Do voting
+		.then_execute_at_next_block(|()| {
+			let current_authorities = MockEpochInfo::current_authorities();
+			let validator_id = *current_authorities.first().unwrap();
+			Pallet::<Test, Instance1>::stop_ignoring_my_votes(
+				RawOrigin::Signed(validator_id).into(),
+			)
+			.unwrap();
+			submit_vote_for(validator_id, NEW_DATA);
+			validator_id
+		})
+		// Delete vote
+		.then_execute_at_next_block(|validator_id| {
+			let electoral_data = Pallet::<Test, Instance1>::electoral_data(&validator_id).unwrap();
+			let election_identifier = electoral_data.current_elections.keys().next().unwrap();
+			assert_ok!(Pallet::<Test, Instance1>::delete_vote(
+				RawOrigin::Signed(validator_id).into(),
+				election_identifier.clone()
+			));
+		});
+}
