@@ -209,7 +209,7 @@ fn assert_failed_ccm(
 			destination_address: ref address_in_event,
 			deposit_metadata: ref metadata_in_event,
 			..
-		}) if reason_in_event == &reason && address_in_event == &MockAddressConverter::to_encoded_address(destination_address) && metadata_in_event == &ccm,
+		}) if reason_in_event == &reason && address_in_event == &MockAddressConverter::to_encoded_address(destination_address) && metadata_in_event == &ccm.to_encoded::<<Test as pallet::Config>::AddressConverter>(),
 		RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 	);
 }
@@ -731,9 +731,12 @@ mod ccm {
 			output_asset,
 			input_amount,
 			request_type: SwapRequestTypeEncoded::Ccm {
-				ccm_deposit_metadata,
+				ccm_deposit_metadata: ccm_deposit_metadata
+					.to_encoded::<<Test as pallet::Config>::AddressConverter>(),
 				output_address: encoded_output_address,
 			},
+			dca_parameters: None,
+			refund_parameters: None,
 			origin,
 		}));
 	}
@@ -1112,6 +1115,8 @@ fn swap_by_witnesser_happy_path() {
 			request_type: SwapRequestTypeEncoded::Regular {
 				output_address: encoded_output_address,
 			},
+			refund_parameters: None,
+			dca_parameters: None,
 			origin: ORIGIN,
 		}));
 
@@ -2365,6 +2370,8 @@ fn network_fee_swap_gets_burnt() {
 				input_amount: AMOUNT,
 				output_asset: OUTPUT_ASSET,
 				request_type: SwapRequestTypeEncoded::NetworkFee,
+				refund_parameters: None,
+				dca_parameters: None,
 				origin: SwapOrigin::Internal,
 			}));
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapScheduled { .. }),);
@@ -2405,6 +2412,8 @@ fn transaction_fees_are_collected() {
 				input_amount: AMOUNT,
 				output_asset: OUTPUT_ASSET,
 				request_type: SwapRequestTypeEncoded::IngressEgressFee,
+				refund_parameters: None,
+				dca_parameters: None,
 				origin: SwapOrigin::Internal,
 			}));
 

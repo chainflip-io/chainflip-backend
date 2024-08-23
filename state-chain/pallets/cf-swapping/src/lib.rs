@@ -7,7 +7,7 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
-	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataEncoded, ChannelRefundParameters,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
@@ -536,6 +536,8 @@ pub mod pallet {
 			output_asset: Asset,
 			origin: SwapOrigin,
 			request_type: SwapRequestTypeEncoded,
+			refund_parameters: Option<ChannelRefundParametersEncoded>,
+			dca_parameters: Option<DcaParameters>,
 		},
 		SwapRequestCompleted {
 			swap_request_id: SwapRequestId,
@@ -615,7 +617,7 @@ pub mod pallet {
 		CcmFailed {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
-			deposit_metadata: CcmDepositMetadata,
+			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
 		},
 		MaximumSwapAmountSet {
@@ -2091,10 +2093,16 @@ pub mod pallet {
 							output_address: T::AddressConverter::to_encoded_address(
 								output_address.clone(),
 							),
-							ccm_deposit_metadata: ccm_deposit_metadata.clone(),
+							ccm_deposit_metadata: ccm_deposit_metadata
+								.clone()
+								.to_encoded::<T::AddressConverter>(),
 						},
 				},
 				origin: origin.clone(),
+				refund_parameters: refund_params
+					.clone()
+					.map(|params| params.map_address(T::AddressConverter::to_encoded_address)),
+				dca_parameters: dca_params.clone(),
 			});
 
 			match request_type {
@@ -2200,7 +2208,9 @@ pub mod pallet {
 								Self::deposit_event(Event::<T>::CcmFailed {
 									reason,
 									destination_address: encoded_destination_address,
-									deposit_metadata: ccm_deposit_metadata.clone(),
+									deposit_metadata: ccm_deposit_metadata
+										.clone()
+										.to_encoded::<T::AddressConverter>(),
 									origin: origin.clone(),
 								});
 
