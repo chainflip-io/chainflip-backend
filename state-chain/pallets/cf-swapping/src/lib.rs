@@ -7,7 +7,7 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
-	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataEncoded, ChannelRefundParameters,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
@@ -606,7 +606,7 @@ pub mod pallet {
 		CcmFailed {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
-			deposit_metadata: CcmDepositMetadata,
+			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
 		},
 		MaximumSwapAmountSet {
@@ -1966,14 +1966,9 @@ pub mod pallet {
 							output_address: T::AddressConverter::to_encoded_address(
 								output_address.clone(),
 							),
-							ccm_deposit_metadata: cf_chains::CcmDepositMetadataEncoded {
-								source_chain: ccm_deposit_metadata.source_chain,
-								source_address: ccm_deposit_metadata
-									.source_address
-									.clone()
-									.map(T::AddressConverter::to_encoded_address),
-								channel_metadata: ccm_deposit_metadata.channel_metadata.clone(),
-							},
+							ccm_deposit_metadata: utilities::to_ccm_deposit_metadata_encoded::<
+								T::AddressConverter,
+							>(ccm_deposit_metadata.clone()),
 						},
 				},
 				origin: origin.clone(),
@@ -2082,7 +2077,9 @@ pub mod pallet {
 								Self::deposit_event(Event::<T>::CcmFailed {
 									reason,
 									destination_address: encoded_destination_address,
-									deposit_metadata: ccm_deposit_metadata.clone(),
+									deposit_metadata: utilities::to_ccm_deposit_metadata_encoded::<
+										T::AddressConverter,
+									>(ccm_deposit_metadata.clone()),
 									origin: origin.clone(),
 								});
 
@@ -2266,6 +2263,8 @@ impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
 }
 
 pub(crate) mod utilities {
+	use cf_chains::{address::AddressConverter, CcmDepositMetadataEncoded};
+
 	use super::*;
 
 	pub(crate) fn calculate_network_fee(
@@ -2309,6 +2308,16 @@ pub(crate) mod utilities {
 				params.min_price,
 			))
 			.unwrap_or(u128::MAX),
+		}
+	}
+
+	pub(super) fn to_ccm_deposit_metadata_encoded<Converter: AddressConverter>(
+		ccm_deposit_metadata: CcmDepositMetadata,
+	) -> CcmDepositMetadataEncoded {
+		CcmDepositMetadataEncoded {
+			source_chain: ccm_deposit_metadata.source_chain,
+			source_address: ccm_deposit_metadata.source_address.map(Converter::to_encoded_address),
+			channel_metadata: ccm_deposit_metadata.channel_metadata,
 		}
 	}
 }

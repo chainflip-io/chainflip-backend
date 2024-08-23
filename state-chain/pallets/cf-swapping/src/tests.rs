@@ -182,6 +182,10 @@ fn assert_failed_ccm(
 	)
 	.is_err());
 
+	let ccm_metadata_encoded = utilities::to_ccm_deposit_metadata_encoded::<
+		<Test as pallet::Config>::AddressConverter,
+	>(ccm.clone());
+
 	assert_event_sequence!(
 		Test,
 		RuntimeEvent::Swapping(Event::SwapRequested { .. }),
@@ -190,7 +194,7 @@ fn assert_failed_ccm(
 			destination_address: ref address_in_event,
 			deposit_metadata: ref metadata_in_event,
 			..
-		}) if reason_in_event == &reason && address_in_event == &MockAddressConverter::to_encoded_address(destination_address) && metadata_in_event == &ccm,
+		}) if reason_in_event == &reason && address_in_event == &MockAddressConverter::to_encoded_address(destination_address) && metadata_in_event == &ccm_metadata_encoded,
 		RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 	);
 }
@@ -688,14 +692,9 @@ mod ccm {
 	#[track_caller]
 	fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) {
 		let ccm_deposit_metadata = generate_ccm_deposit();
-		let ccm_deposit_metadata_encoded = cf_chains::CcmDepositMetadataEncoded {
-			source_chain: ccm_deposit_metadata.source_chain,
-			source_address: ccm_deposit_metadata
-				.clone()
-				.source_address
-				.map(MockAddressConverter::to_encoded_address),
-			channel_metadata: ccm_deposit_metadata.channel_metadata.clone(),
-		};
+		let ccm_deposit_metadata_encoded = utilities::to_ccm_deposit_metadata_encoded::<
+			<Test as pallet::Config>::AddressConverter,
+		>(ccm_deposit_metadata.clone());
 		let output_address = (*EVM_OUTPUT_ADDRESS).clone();
 		let encoded_output_address =
 			MockAddressConverter::to_encoded_address(output_address.clone());
