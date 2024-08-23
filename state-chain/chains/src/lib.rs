@@ -628,11 +628,14 @@ pub struct CcmChannelMetadata {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct CcmDepositMetadata {
+pub struct CcmDepositMetadataGeneric<Address> {
 	pub source_chain: ForeignChain,
-	pub source_address: Option<ForeignChainAddress>,
+	pub source_address: Option<Address>,
 	pub channel_metadata: CcmChannelMetadata,
 }
+
+pub type CcmDepositMetadata = CcmDepositMetadataGeneric<ForeignChainAddress>;
+pub type CcmDepositMetadataEncoded = CcmDepositMetadataGeneric<EncodedAddress>;
 
 #[derive(
 	PartialEqNoBound,

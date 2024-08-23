@@ -688,6 +688,14 @@ mod ccm {
 	#[track_caller]
 	fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) {
 		let ccm_deposit_metadata = generate_ccm_deposit();
+		let ccm_deposit_metadata_encoded = cf_chains::CcmDepositMetadataEncoded {
+			source_chain: ccm_deposit_metadata.source_chain,
+			source_address: ccm_deposit_metadata
+				.clone()
+				.source_address
+				.map(MockAddressConverter::to_encoded_address),
+			channel_metadata: ccm_deposit_metadata.channel_metadata.clone(),
+		};
 		let output_address = (*EVM_OUTPUT_ADDRESS).clone();
 		let encoded_output_address =
 			MockAddressConverter::to_encoded_address(output_address.clone());
@@ -696,10 +704,7 @@ mod ccm {
 			input_asset,
 			input_amount,
 			output_asset,
-			SwapRequestType::Ccm {
-				ccm_deposit_metadata: ccm_deposit_metadata.clone(),
-				output_address
-			},
+			SwapRequestType::Ccm { ccm_deposit_metadata, output_address },
 			Default::default(),
 			None,
 			None,
@@ -712,7 +717,7 @@ mod ccm {
 			output_asset,
 			input_amount,
 			request_type: SwapRequestTypeEncoded::Ccm {
-				ccm_deposit_metadata,
+				ccm_deposit_metadata: ccm_deposit_metadata_encoded,
 				output_address: encoded_output_address,
 			},
 			origin,

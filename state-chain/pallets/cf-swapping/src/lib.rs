@@ -1966,7 +1966,14 @@ pub mod pallet {
 							output_address: T::AddressConverter::to_encoded_address(
 								output_address.clone(),
 							),
-							ccm_deposit_metadata: ccm_deposit_metadata.clone(),
+							ccm_deposit_metadata: cf_chains::CcmDepositMetadataEncoded {
+								source_chain: ccm_deposit_metadata.source_chain,
+								source_address: ccm_deposit_metadata
+									.source_address
+									.clone()
+									.map(T::AddressConverter::to_encoded_address),
+								channel_metadata: ccm_deposit_metadata.channel_metadata.clone(),
+							},
 						},
 				},
 				origin: origin.clone(),
