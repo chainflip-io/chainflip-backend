@@ -12,8 +12,8 @@ use crate::{
 };
 pub use address::ForeignChainAddress;
 use address::{
-	AddressDerivationApi, AddressDerivationError, EncodedAddress, IntoForeignChainAddress,
-	ToHumanreadableAddress,
+	AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
+	IntoForeignChainAddress, ToHumanreadableAddress,
 };
 use cf_primitives::{
 	AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TransactionHash,
@@ -636,6 +636,16 @@ pub struct CcmDepositMetadataGeneric<Address> {
 
 pub type CcmDepositMetadata = CcmDepositMetadataGeneric<ForeignChainAddress>;
 pub type CcmDepositMetadataEncoded = CcmDepositMetadataGeneric<EncodedAddress>;
+
+impl CcmDepositMetadata {
+	pub fn to_encoded<Converter: AddressConverter>(self) -> CcmDepositMetadataEncoded {
+		CcmDepositMetadataEncoded {
+			source_chain: self.source_chain,
+			source_address: self.source_address.map(Converter::to_encoded_address),
+			channel_metadata: self.channel_metadata,
+		}
+	}
+}
 
 #[derive(
 	PartialEqNoBound,
