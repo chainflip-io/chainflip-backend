@@ -4,7 +4,7 @@ use crate::{
 	electoral_system::{AuthorityVoteOf, ElectoralSystem},
 	vote_storage::VoteStorage,
 	Config, ContributingAuthorities, ElectionConsensusHistoryUpToDate, ElectoralSystemStatus,
-	Pallet, SharedData, Status,
+	Pallet, SharedData, SharedDataHash, Status,
 };
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::AccountRole;
@@ -179,6 +179,42 @@ mod benchmarks {
 		assert!(SharedData::<T, I>::iter().count() == 0, "Expected SharedData to be deleted!");
 	}
 
+	#[benchmark]
+	fn provide_shared_data() {
+		let validator_id = ready_validator_for_vote::<T, I>();
+
+		let (election_identifier, ..) =
+			Pallet::<T, I>::electoral_data(&validator_id.clone().into())
+				.unwrap()
+				.current_elections
+				.into_iter()
+				.next()
+				.unwrap();
+
+		assert_ok!(Pallet::<T, I>::vote(
+			RawOrigin::Signed(validator_id.clone()).into(),
+			BoundedBTreeMap::try_from(
+				[(
+					election_identifier,
+					AuthorityVoteOf::<T::ElectoralSystem>::Vote(BenchmarkValue::benchmark_value()),
+				)]
+				.into_iter()
+				.collect::<BTreeMap<_, _>>(),
+			)
+			.unwrap(),
+		));
+
+		#[extrinsic_call]
+		provide_shared_data(RawOrigin::Signed(validator_id), BenchmarkValue::benchmark_value());
+
+		assert_eq!(
+			SharedData::<T, I>::get(SharedDataHash::of::<
+				<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote,
+			>(&BenchmarkValue::benchmark_value())),
+			Some(BenchmarkValue::benchmark_value())
+		);
+	}
+
 	#[cfg(test)]
 	use crate::mock::*;
 
@@ -188,9 +224,6 @@ mod benchmarks {
 	#[test]
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {
-			_recheck_contributed_to_consensuses::<Test, Instance1>(true);
-		});
-		new_test_ext().execute_with(|| {
 			_vote::<Test, Instance1>(10, true);
 		});
 		new_test_ext().execute_with(|| {
@@ -198,6 +231,15 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_ignore_my_votes::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_recheck_contributed_to_consensuses::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_delete_vote::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_provide_shared_data::<Test, Instance1>(true);
 		});
 	}
 }

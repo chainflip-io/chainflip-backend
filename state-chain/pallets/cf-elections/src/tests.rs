@@ -1,15 +1,14 @@
 #![cfg(test)]
 
+use super::*;
+use sp_std::collections::btree_set::BTreeSet;
 use std::collections::BTreeMap;
 
 use cf_traits::EpochInfo;
+
 use electoral_system::{AuthorityVoteOf, ElectoralReadAccess};
 use frame_system::RawOrigin;
-use sp_std::collections::btree_set::BTreeSet;
-
 use mock::{new_test_ext, MockEpochInfo, Test, INITIAL_UNSYNCED_STATE};
-
-use super::*;
 
 #[test]
 fn happy_path_vote_and_consensus() {
