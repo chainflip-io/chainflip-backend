@@ -108,42 +108,6 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn recheck_contributed_to_consensuses() {
-		let caller = ready_validator_for_vote::<T, I>();
-		let validator_id: T::ValidatorId = caller.clone().into();
-		let epoch = T::EpochInfo::epoch_index();
-
-		let elections = Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
-		let next_election = elections.into_iter().next().unwrap();
-
-		Pallet::<T, I>::vote(
-			RawOrigin::Signed(caller).into(),
-			BoundedBTreeMap::try_from(
-				[(
-					next_election.0,
-					AuthorityVoteOf::<T::ElectoralSystem>::Vote(BenchmarkValue::benchmark_value()),
-				)]
-				.into_iter()
-				.collect::<BTreeMap<_, _>>(),
-			)
-			.unwrap(),
-		)
-		.unwrap();
-
-		ElectionConsensusHistoryUpToDate::<T, I>::insert(next_election.0.unique_monotonic(), epoch);
-
-		#[block]
-		{
-			let _ = Pallet::<T, I>::recheck_contributed_to_consensuses(epoch, &validator_id, epoch);
-		}
-
-		assert!(
-			ElectionConsensusHistoryUpToDate::<T, I>::iter().count() == 0,
-			"Expected ElectionConsensusHistoryUpToDate to be empty! Benchmark requirement are not met!"
-		);
-	}
-
-	#[benchmark]
 	fn delete_vote() {
 		let caller = ready_validator_for_vote::<T, I>();
 		let validator_id: T::ValidatorId = caller.clone().into();
@@ -188,9 +152,6 @@ mod benchmarks {
 	#[test]
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {
-			_recheck_contributed_to_consensuses::<Test, Instance1>(true);
-		});
-		new_test_ext().execute_with(|| {
 			_vote::<Test, Instance1>(10, true);
 		});
 		new_test_ext().execute_with(|| {
@@ -198,6 +159,9 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_ignore_my_votes::<Test, Instance1>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_delete_vote::<Test, Instance1>(true);
 		});
 	}
 }

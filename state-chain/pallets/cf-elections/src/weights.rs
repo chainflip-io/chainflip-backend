@@ -36,7 +36,6 @@ pub trait WeightInfo {
 	fn stop_ignoring_my_votes() -> Weight;
 	fn ignore_my_votes() -> Weight;
 	fn delete_vote() -> Weight;
-	fn recheck_contributed_to_consensuses() -> Weight;
 }
 
 /// Weights for pallet_cf_elections using the Substrate node and recommended hardware.
@@ -116,23 +115,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Minimum execution time: 28_000_000 picoseconds.
 		Weight::from_parts(29_000_000, 4850)
 			.saturating_add(T::DbWeight::get().reads(5_u64))
-	}
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:2 w:1)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::BitmapComponents` (r:1 w:0)
-	/// Proof: `SolanaElections::BitmapComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::IndividualComponents` (r:1 w:0)
-	/// Proof: `SolanaElections::IndividualComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::SharedData` (r:1 w:0)
-	/// Proof: `SolanaElections::SharedData` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn recheck_contributed_to_consensuses() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `543`
-		//  Estimated: `6483`
-		// Minimum execution time: 21_000_000 picoseconds.
-		Weight::from_parts(22_000_000, 6483)
-			.saturating_add(T::DbWeight::get().reads(5_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 
 	fn delete_vote() -> Weight {
@@ -223,23 +205,6 @@ impl WeightInfo for () {
 		// Minimum execution time: 28_000_000 picoseconds.
 		Weight::from_parts(29_000_000, 4850)
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
-	}
-	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:2 w:1)
-	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::BitmapComponents` (r:1 w:0)
-	/// Proof: `SolanaElections::BitmapComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::IndividualComponents` (r:1 w:0)
-	/// Proof: `SolanaElections::IndividualComponents` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `SolanaElections::SharedData` (r:1 w:0)
-	/// Proof: `SolanaElections::SharedData` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn recheck_contributed_to_consensuses() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `543`
-		//  Estimated: `6483`
-		// Minimum execution time: 21_000_000 picoseconds.
-		Weight::from_parts(22_000_000, 6483)
-			.saturating_add(RocksDbWeight::get().reads(5_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 	fn delete_vote() -> Weight {
 		// Proof Size summary in bytes:
