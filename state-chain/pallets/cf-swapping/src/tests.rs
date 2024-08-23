@@ -38,9 +38,12 @@ use sp_core::{H160, U256};
 use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
+const INPUT_AMOUNT: AssetAmount = 40_000;
 const SWAP_REQUEST_ID: u64 = 1;
 const INIT_BLOCK: u64 = 1;
 const BROKER_FEE_BPS: u16 = 10;
+const INPUT_ASSET: Asset = Asset::Usdc;
+const OUTPUT_ASSET: Asset = Asset::Eth;
 
 static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
 	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
@@ -52,6 +55,22 @@ fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
 			.try_into()
 			.unwrap()
 	));
+}
+
+fn params(
+	dca_params: Option<DcaParameters>,
+	refund_params: Option<TestRefundParams>,
+	is_ccm: bool,
+) -> TestSwapParams {
+	TestSwapParams {
+		input_asset: INPUT_ASSET,
+		output_asset: OUTPUT_ASSET,
+		input_amount: INPUT_AMOUNT,
+		refund_params: refund_params.map(|params| params.into_channel_params(INPUT_AMOUNT)),
+		dca_params,
+		output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+		is_ccm,
+	}
 }
 
 struct TestSwapParams {
@@ -733,16 +752,21 @@ mod ccm {
 			})
 		);
 
+		let ccm_egress = MockEgressHandler::<AnyChain>::get_scheduled_egresses()
+			.into_iter()
+			.find(|egress| matches!(egress, MockEgressParameter::Ccm { .. }))
+			.expect("no ccm egress");
+
 		assert_eq!(
-			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
-			vec![MockEgressParameter::Ccm {
+			ccm_egress,
+			MockEgressParameter::Ccm {
 				asset,
 				amount: principal_amount,
 				destination_address: (*EVM_OUTPUT_ADDRESS).clone(),
 				message: vec![0x01].try_into().unwrap(),
 				cf_parameters: vec![].try_into().unwrap(),
 				gas_budget,
-			},]
+			},
 		);
 	}
 
