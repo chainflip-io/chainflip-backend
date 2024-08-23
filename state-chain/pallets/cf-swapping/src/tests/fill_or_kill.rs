@@ -38,13 +38,26 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 		.execute_with(|| {
 			assert_eq!(System::block_number(), INIT_BLOCK);
 
-			insert_swaps(&vec![
-				new_swap(None),
-				new_swap(Some(TestRefundParams {
-					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-					min_output: INPUT_AMOUNT,
-				})),
-			]);
+			const REFUND_PARAMS: TestRefundParams = TestRefundParams {
+				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
+				min_output: INPUT_AMOUNT,
+			};
+
+			let refund_parameters_encoded =
+				REFUND_PARAMS.into_channel_params(INPUT_AMOUNT).map_address(|refund_address| {
+					MockAddressConverter::to_encoded_address(refund_address)
+				});
+
+			insert_swaps(&vec![new_swap(None), new_swap(Some(REFUND_PARAMS))]);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					swap_request_id: FOK_REQUEST_ID,
+					refund_parameters,
+					..
+				}) if refund_parameters.as_ref() == Some(&refund_parameters_encoded),
+			);
 
 			assert_swaps_scheduled_for_block(
 				&[REGULAR_SWAP_ID, FOK_SWAP_ID],

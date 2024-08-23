@@ -62,17 +62,17 @@ fn dca_happy_path() {
 		.execute_with(|| {
 			assert_eq!(System::block_number(), INIT_BLOCK);
 
-			insert_swaps(&[params(
-				Some(DcaParameters { number_of_chunks: 2, chunk_interval: CHUNK_INTERVAL }),
-				None,
-				false,
-			)]);
+			const DCA_PARAMS: DcaParameters =
+				DcaParameters { number_of_chunks: 2, chunk_interval: CHUNK_INTERVAL };
+
+			insert_swaps(&[params(Some(DCA_PARAMS), None, false)]);
 
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					swap_request_id: SWAP_REQUEST_ID,
 					input_amount: INPUT_AMOUNT,
+					dca_parameters: Some(DCA_PARAMS),
 					..
 				})
 			);
