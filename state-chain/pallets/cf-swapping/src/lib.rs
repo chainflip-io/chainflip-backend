@@ -1416,19 +1416,34 @@ pub mod pallet {
 						DcaState { remaining_input_amount, accumulated_output_amount, status, .. },
 					broker_fees: _,
 				} => {
+					let refund = |amount: AssetAmount| {
+						Self::egress_for_swap(
+							request.id,
+							amount,
+							request.input_asset,
+							refund_params.refund_address.clone(),
+							None, /* refunds don't use ccm parameters */
+							true, /* refund */
+						);
+					};
+
 					if let Some(ccm) = ccm {
+						let egress_ccm = |amount: AssetAmount, gas_budget: AssetAmount| {
+							Self::egress_for_swap(
+								request.id,
+								amount,
+								request.output_asset,
+								output_address.clone(),
+								Some((ccm.ccm_deposit_metadata.clone(), gas_budget)), /* ccm */
+								false,                                                /* refund */
+							);
+						};
+
 						match ccm.gas_swap_state {
 							GasSwapState::ToBeScheduled { gas_budget, .. } => {
 								// Gas swap has not been scheduled yet, we can refund it,
 								// and there will be no CCM egress
-								Self::egress_for_swap(
-									request.id,
-									swap.input_amount + *remaining_input_amount + gas_budget,
-									request.input_asset,
-									refund_params.refund_address.clone(),
-									None, /* ccm */
-									true, /* refund */
-								);
+								refund(swap.input_amount + *remaining_input_amount + gas_budget);
 
 								// Sanity check:
 								if *accumulated_output_amount > 0 {
@@ -1445,13 +1460,8 @@ pub mod pallet {
 									// ready because the input happens to be in the gas asset
 									// already. In this case the gas is refunded and there is no ccm
 									// egress:
-									Self::egress_for_swap(
-										request.id,
+									refund(
 										swap.input_amount + *remaining_input_amount + gas_budget,
-										request.input_asset,
-										refund_params.refund_address.clone(),
-										None, /* ccm */
-										true, /* refund */
 									);
 
 									true
@@ -1459,23 +1469,8 @@ pub mod pallet {
 									// Scenario 2: we have already swapped one or more chunks, and
 									// we should use gas amount to perform ccm egress (in addition
 									// to refunding unexecuted amount):
-									Self::egress_for_swap(
-										request.id,
-										swap.input_amount + *remaining_input_amount,
-										request.input_asset,
-										refund_params.refund_address.clone(),
-										None, /* ccm */
-										true, /* refund */
-									);
-
-									Self::egress_for_swap(
-										swap.swap_request_id,
-										*accumulated_output_amount,
-										request.output_asset,
-										output_address.clone(),
-										Some((ccm.ccm_deposit_metadata.clone(), gas_budget)), /* ccm */
-										false,                                                /* refund */
-									);
+									refund(swap.input_amount + *remaining_input_amount);
+									egress_ccm(*accumulated_output_amount, gas_budget);
 
 									true
 								}
@@ -1495,14 +1490,7 @@ pub mod pallet {
 						}
 					} else {
 						// Refund the failed swap and any unused input amount:
-						Self::egress_for_swap(
-							request.id,
-							swap.input_amount + *remaining_input_amount,
-							request.input_asset,
-							refund_params.refund_address.clone(),
-							None, /* ccm */
-							true, /* refund */
-						);
+						refund(swap.input_amount + *remaining_input_amount);
 
 						// In case of DCA we may have partially swapped and now have some output
 						// asset to egress to the output address:
