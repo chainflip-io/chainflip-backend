@@ -127,6 +127,8 @@ jobs:
         working-directory: bouncer
         run: |
           ./full_bouncer.sh
+          # TODO: Temporary to test the new pallet. Improve in PRO-1599
+          ./tests/delta_based_ingress.ts prebuilt --bins ./../ --localnet_init ./../localnet/init
 
       - name: Run HeuteLeiderNicht.einfach.exe 🦺
         if: ${{ ! inputs.full_bouncer }}
