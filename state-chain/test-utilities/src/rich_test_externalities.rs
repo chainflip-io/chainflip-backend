@@ -167,6 +167,21 @@ where
 		self.ext.execute_at_next_block(move || f(context))
 	}
 
+	/// Process the next `n` blocks, including hooks.
+	#[track_caller]
+	pub fn then_process_blocks(mut self, n: u32) -> TestExternalities<Runtime, Ctx> {
+		for _ in 0..n {
+			self = self.then_process_next_block();
+		}
+		self
+	}
+
+	/// Process the next block, including hooks.
+	#[track_caller]
+	pub fn then_process_next_block(self) -> TestExternalities<Runtime, Ctx> {
+		self.then_execute_at_next_block(|context| context)
+	}
+
 	/// Execute the given closure as if it was an extrinsic at a specific block number.
 	///
 	/// The closure's return value is next context.
@@ -236,7 +251,7 @@ where
 			if should_break {
 				break next
 			} else {
-				self = next.then_execute_at_next_block(|context| context);
+				self = next.then_process_next_block();
 			}
 		}
 	}
