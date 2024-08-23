@@ -720,6 +720,8 @@ mod ccm {
 				ccm_deposit_metadata: ccm_deposit_metadata_encoded,
 				output_address: encoded_output_address,
 			},
+			dca_parameters: None,
+			refund_parameters: None,
 			origin,
 		}));
 	}
@@ -1093,6 +1095,8 @@ fn swap_by_witnesser_happy_path() {
 			request_type: SwapRequestTypeEncoded::Regular {
 				output_address: encoded_output_address,
 			},
+			refund_parameters: None,
+			dca_parameters: None,
 			origin: ORIGIN,
 		}));
 
@@ -2346,6 +2350,8 @@ fn network_fee_swap_gets_burnt() {
 				input_amount: AMOUNT,
 				output_asset: OUTPUT_ASSET,
 				request_type: SwapRequestTypeEncoded::NetworkFee,
+				refund_parameters: None,
+				dca_parameters: None,
 				origin: SwapOrigin::Internal,
 			}));
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapScheduled { .. }),);
@@ -2386,6 +2392,8 @@ fn transaction_fees_are_collected() {
 				input_amount: AMOUNT,
 				output_asset: OUTPUT_ASSET,
 				request_type: SwapRequestTypeEncoded::IngressEgressFee,
+				refund_parameters: None,
+				dca_parameters: None,
 				origin: SwapOrigin::Internal,
 			}));
 
