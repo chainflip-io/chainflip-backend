@@ -265,6 +265,7 @@ impl ExtBuilder {
 					},
 				},
 			},
+			solana_chain_tracking: Default::default(),
 			bitcoin_threshold_signer: Default::default(),
 			evm_threshold_signer: EvmThresholdSignerConfig {
 				key: Some(ethereum_vault_key),

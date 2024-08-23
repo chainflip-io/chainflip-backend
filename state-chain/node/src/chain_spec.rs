@@ -792,6 +792,7 @@ fn testnet_genesis(
 				},
 			},
 		},
+		solana_chain_tracking: Default::default(),
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: state_chain_runtime::BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
