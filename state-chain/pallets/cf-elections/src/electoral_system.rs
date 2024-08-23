@@ -428,11 +428,11 @@ pub mod mocks {
 
 	pub struct MockReadAccess<'es, ES: ElectoralSystem> {
 		election_identifier: ElectionIdentifierOf<ES>,
-		electoral_system: &'es MockElectoralSystem<ES>,
+		electoral_system: &'es MockAccess<ES>,
 	}
 	pub struct MockWriteAccess<'es, ES: ElectoralSystem> {
 		election_identifier: ElectionIdentifierOf<ES>,
-		electoral_system: &'es mut MockElectoralSystem<ES>,
+		electoral_system: &'es mut MockAccess<ES>,
 	}
 
 	pub struct MockElection<ES: ElectoralSystem> {
@@ -442,7 +442,7 @@ pub mod mocks {
 		consensus_status: ConsensusStatus<ES::Consensus>,
 	}
 
-	pub struct MockElectoralSystem<ES: ElectoralSystem> {
+	pub struct MockAccess<ES: ElectoralSystem> {
 		electoral_settings: ES::ElectoralSettings,
 		unsynchronised_state: ES::ElectoralUnsynchronisedState,
 		unsynchronised_state_map:
@@ -451,7 +451,7 @@ pub mod mocks {
 		unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
 	}
 
-	impl<ES: ElectoralSystem> MockElectoralSystem<ES> {
+	impl<ES: ElectoralSystem> MockAccess<ES> {
 		pub fn election_read_access(&self, id: ElectionIdentifierOf<ES>) -> MockReadAccess<'_, ES> {
 			MockReadAccess { election_identifier: id, electoral_system: self }
 		}
@@ -587,7 +587,7 @@ pub mod mocks {
 		}
 	}
 
-	impl<ES: ElectoralSystem> MockElectoralSystem<ES> {
+	impl<ES: ElectoralSystem> MockAccess<ES> {
 		pub fn new(
 			unsynchronised_state: ES::ElectoralUnsynchronisedState,
 			unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
@@ -617,7 +617,7 @@ pub mod mocks {
 		}
 	}
 
-	impl<ES: ElectoralSystem> ElectoralReadAccess for MockElectoralSystem<ES> {
+	impl<ES: ElectoralSystem> ElectoralReadAccess for MockAccess<ES> {
 		type ElectoralSystem = ES;
 		type ElectionReadAccess<'es> = MockReadAccess<'es, ES>;
 
@@ -659,7 +659,7 @@ pub mod mocks {
 		}
 	}
 
-	impl<ES: ElectoralSystem> ElectoralWriteAccess for MockElectoralSystem<ES> {
+	impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
 		type ElectionWriteAccess<'a> = MockWriteAccess<'a, ES>;
 
 		fn new_election(
