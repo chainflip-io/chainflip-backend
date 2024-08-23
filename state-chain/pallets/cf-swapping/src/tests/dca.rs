@@ -2,6 +2,7 @@ use super::*;
 
 const CHUNK_INTERVAL: u32 = 3;
 
+#[track_caller]
 fn get_dca_state(request_id: SwapRequestId) -> DcaState {
 	match SwapRequests::<Test>::get(request_id)
 		.expect("request state does not exist")
@@ -14,6 +15,7 @@ fn get_dca_state(request_id: SwapRequestId) -> DcaState {
 	}
 }
 
+#[track_caller]
 fn get_ccm_gas_state(request_id: SwapRequestId) -> GasSwapState {
 	if let SwapRequestState::UserSwap { ccm: Some(ccm), .. } = SwapRequests::<Test>::get(request_id)
 		.expect("request state does not exist")
