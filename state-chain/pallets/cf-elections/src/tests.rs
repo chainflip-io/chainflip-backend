@@ -338,7 +338,7 @@ fn delete_vote() {
 			let election_identifier = electoral_data.current_elections.keys().next().unwrap();
 			assert_ok!(Pallet::<Test, Instance1>::delete_vote(
 				RawOrigin::Signed(validator_id).into(),
-				election_identifier.clone()
+				*election_identifier
 			));
 		});
 }
