@@ -7,7 +7,6 @@ echo "Running full bouncer 🧪"
 ./tests/btc_utxo_consolidation.ts
 ./tests/rotation_barrier.ts
 ./tests/minimum_deposit.ts
-./tests/create_and_delete_multiple_orders.ts
 
 if [[ $LOCALNET == false ]]; then
   echo "🤫 Skipping tests that require localnet"
@@ -15,3 +14,5 @@ else
   echo "🚀 Running tests that require localnet"
   ./tests/swap_after_temp_disconnecting_chains.ts
 fi
+
+./tests/create_and_delete_multiple_orders.ts
