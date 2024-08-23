@@ -285,8 +285,6 @@ jobs:
           pnpm install --frozen-lockfile
           ./commands/setup_sol_vault.ts
           ./tests/all_concurrent_tests.ts
-          # TODO: Temporary to test the new pallet. Improve in PRO-1599
-          ./tests/delta_based_ingress.ts prebuilt --bins ./../ --localnet_init ./../localnet/init
 
       - name: Print chainflip-engine logs 🚗
         if: always()
