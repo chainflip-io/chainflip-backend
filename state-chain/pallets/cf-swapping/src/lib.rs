@@ -1430,6 +1430,13 @@ pub mod pallet {
 									true, /* refund */
 								);
 
+								// Sanity check:
+								if *accumulated_output_amount > 0 {
+									log_or_panic!(
+									   "Unexpected output amount of {accumulated_output_amount} when refunding DCA CCM (gas isn't scheduled) in request id {}", request.id
+    								);
+								}
+
 								true
 							},
 							GasSwapState::OutputReady { gas_budget } => {
@@ -1649,7 +1656,8 @@ pub mod pallet {
 								},
 								DcaStatus::AwaitingRefund => {
 									// Edge case: a DCA chunk failed earlier, and we have been
-									// waiting now to do a partial refund and partial ccm egress:
+									// waiting until now to do a partial refund and partial ccm
+									// egress:
 
 									if let Some(refund_params) = &request.refund_params {
 										Self::egress_for_swap(

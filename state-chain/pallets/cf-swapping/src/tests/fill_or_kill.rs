@@ -404,3 +404,62 @@ fn fok_ccm_refunded() {
 			);
 		});
 }
+
+#[test]
+fn fok_ccm_refunded_no_gas_swap() {
+	const PRINCIPAL_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+	const REQUEST_ID: u64 = 1;
+	const PRINCIPAL_SWAP_ID: u64 = 1;
+
+	const PRINCIPAL_AMOUNT: AssetAmount = INPUT_AMOUNT - GAS_BUDGET;
+
+	const INPUT_ASSET: Asset = Asset::Eth;
+	const OUTPUT_ASSET: Asset = Asset::Usdc;
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_eq!(System::block_number(), INIT_BLOCK);
+
+			let refund_params = TestRefundParams {
+				retry_duration: 0,
+				min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
+			}
+			.into_channel_params(INPUT_AMOUNT);
+
+			insert_swaps(&[TestSwapParams {
+				input_asset: INPUT_ASSET,
+				output_asset: OUTPUT_ASSET,
+				input_amount: INPUT_AMOUNT,
+				refund_params: Some(refund_params),
+				dca_params: None,
+				output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+				is_ccm: true,
+			}]);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_id: PRINCIPAL_SWAP_ID,
+					swap_type: SwapType::CcmPrincipal,
+					input_amount: PRINCIPAL_AMOUNT,
+					..
+				}),
+			);
+
+			assert_swaps_scheduled_for_block(&[PRINCIPAL_SWAP_ID], PRINCIPAL_BLOCK);
+		})
+		.then_execute_at_block(PRINCIPAL_BLOCK, |_| {})
+		.then_execute_with(|_| {
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
+					swap_request_id: REQUEST_ID,
+					// Note that gas is refunded too:
+					amount: INPUT_AMOUNT,
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
+			);
+		});
+}
