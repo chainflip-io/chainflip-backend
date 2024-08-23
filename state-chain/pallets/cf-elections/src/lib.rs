@@ -610,6 +610,10 @@ pub mod pallet {
 				ElectionState::<T, I>::get(self.unique_monotonic_identifier())
 					.ok_or_else(CorruptStorageError::new)
 			}
+			#[cfg(test)]
+			fn election_identifier(&self) -> ElectionIdentifierOf<Self::ElectoralSystem> {
+				self.election_identifier
+			}
 		}
 		impl<T: Config<I>, I: 'static> ElectionWriteAccess for ElectionAccess<T, I> {
 			fn set_state(

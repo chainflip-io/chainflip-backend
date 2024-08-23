@@ -425,6 +425,14 @@ macro_rules! generate_electoral_system_tuple_impls {
                     _ => Err(CorruptStorageError::new())
                 }
             }
+            #[cfg(test)]
+            fn election_identifier(&self) -> ElectionIdentifierOf<Self::ElectoralSystem> {
+                let extra = match self.ea.borrow().election_identifier().extra() {
+                    CompositeElectionIdentifierExtra::$current(extra) => extra,
+                    _ => unreachable!(),
+                };
+                self.ea.borrow().election_identifier().with_extra(*extra)
+            }
         }
         impl<$($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static,  EA: ElectionWriteAccess<ElectoralSystem = Composite<($($electoral_system,)*), H>>> ElectionWriteAccess for CompositeElectionAccess<tags::$current, EA, EA> {
             fn set_state(&mut self, state: $current::ElectionState) -> Result<(), CorruptStorageError> {
