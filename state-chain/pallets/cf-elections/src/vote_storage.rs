@@ -51,10 +51,8 @@ pub trait VoteStorage: private::Sealed + Sized {
 	/// validator's votes.
 	type SharedData: Parameter + Member;
 
-	fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
-		vote: &Self::Vote,
-		h: H,
-	) -> Self::PartialVote;
+	fn vote_into_partial_vote(vote: &Self::Vote) -> Self::PartialVote;
+
 	fn partial_vote_into_components(
 		properties: Self::Properties,
 		partial_vote: Self::PartialVote,
@@ -72,7 +70,7 @@ pub trait VoteStorage: private::Sealed + Sized {
 		CorruptStorageError,
 	>;
 
-	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: FnMut(Self::SharedData) -> Result<(), E>>(
 		vote: Self::Vote,
 		f: F,
 	) -> Result<(), E>;

@@ -163,16 +163,20 @@ where
 					Ok(vote) => {
 						info!("Voting task for election: '{:?}' succeeded.", election_identifier);
 						// Create the partial_vote early so that SharedData can be provided as soon as the vote has been generated, rather than only after it is submitted.
-						let partial_vote = <<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(&vote, |shared_data| {
-							let shared_data_hash = SharedDataHash::of(&shared_data);
-							if shared_data_cache.len() > MAXIMUM_SHARED_DATA_CACHE_ITEMS {
-								for shared_data_hash in shared_data_cache.keys().cloned().take(shared_data_cache.len() - MAXIMUM_SHARED_DATA_CACHE_ITEMS).collect::<Vec<_>>() {
-									shared_data_cache.remove(&shared_data_hash);
-								}
+
+						// Here we can just return the partial vault, and do the if statement outside the closure.
+						let partial_vote = <<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(&vote);
+
+						if shared_data_cache.len() > MAXIMUM_SHARED_DATA_CACHE_ITEMS {
+							for shared_data_hash in shared_data_cache.keys().cloned().take(shared_data_cache.len() - MAXIMUM_SHARED_DATA_CACHE_ITEMS).collect::<Vec<_>>() {
+								shared_data_cache.remove(&shared_data_hash);
 							}
-							shared_data_cache.insert(shared_data_hash, (shared_data, std::time::Instant::now()));
-							shared_data_hash
-						});
+						}
+
+						<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_in_vote(vote.clone(), |shared_data| {
+							shared_data_cache.insert(SharedDataHash::of(&shared_data), (shared_data, std::time::Instant::now()));
+							Ok::<(), ()>(())
+						}).unwrap();
 
 						pending_submissions.insert(election_identifier,	(partial_vote, vote));
 					},

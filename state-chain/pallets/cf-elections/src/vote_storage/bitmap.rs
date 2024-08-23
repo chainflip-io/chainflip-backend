@@ -20,11 +20,8 @@ impl<T: Parameter + Member> VoteStorage for Bitmap<T> {
 	type BitmapComponent = SharedDataHash;
 	type SharedData = T;
 
-	fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
-		vote: &Self::Vote,
-		mut h: H,
-	) -> Self::PartialVote {
-		h(vote.clone())
+	fn vote_into_partial_vote(vote: &Self::Vote) -> Self::PartialVote {
+		SharedDataHash::of(vote)
 	}
 	fn partial_vote_into_components(
 		_properties: Self::Properties,
@@ -53,9 +50,9 @@ impl<T: Parameter + Member> VoteStorage for Bitmap<T> {
 			_ => None,
 		})
 	}
-	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: FnMut(Self::SharedData) -> Result<(), E>>(
 		vote: Self::Vote,
-		f: F,
+		mut f: F,
 	) -> Result<(), E> {
 		f(vote)
 	}

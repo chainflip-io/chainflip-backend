@@ -1227,7 +1227,6 @@ pub mod pallet {
 						(
 							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
 								&vote,
-								|shared_data| SharedDataHash::of(&shared_data)
 							),
 							Some(vote)
 						)
@@ -1860,7 +1859,6 @@ pub mod pallet {
 														AuthorityVote::Vote(existing_vote) => {
 															<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
 																existing_vote,
-																|shared_data| SharedDataHash::of(&shared_data)
 															)
 														},
 														AuthorityVote::PartialVote(existing_partial_vote) => existing_partial_vote.clone(),
@@ -1870,7 +1868,6 @@ pub mod pallet {
 												(
 													<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
 														proposed_vote,
-														|shared_data| SharedDataHash::of(&shared_data)
 													),
 													proposed_vote.clone(),
 												),

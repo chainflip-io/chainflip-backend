@@ -14,11 +14,8 @@ impl<T: Parameter + Member> IndividualVoteStorage for Shared<T> {
 
 	type SharedData = T;
 
-	fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
-		vote: &Self::Vote,
-		mut h: H,
-	) -> Self::PartialVote {
-		h(vote.clone())
+	fn vote_into_partial_vote(vote: &Self::Vote) -> Self::PartialVote {
+		SharedDataHash::of(vote)
 	}
 	fn partial_vote_into_vote<
 		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
@@ -29,9 +26,9 @@ impl<T: Parameter + Member> IndividualVoteStorage for Shared<T> {
 		get_shared_data(*partial_vote)
 	}
 
-	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: FnMut(Self::SharedData) -> Result<(), E>>(
 		vote: Self::Vote,
-		f: F,
+		mut f: F,
 	) -> Result<(), E> {
 		f(vote)
 	}

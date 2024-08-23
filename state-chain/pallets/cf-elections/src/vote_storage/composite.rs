@@ -52,15 +52,12 @@ macro_rules! generate_vote_storage_tuple_impls {
                 type BitmapComponent = CompositeBitmapComponent<$(<$t as VoteStorage>::BitmapComponent,)*>;
                 type SharedData = CompositeSharedData<$(<$t as VoteStorage>::SharedData,)*>;
 
-                fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
+                fn vote_into_partial_vote(
                     vote: &Self::Vote,
-                    mut h: H,
                 ) -> Self::PartialVote {
                     match vote {
                         $(
-                            CompositeVote::$t(vote) => CompositePartialVote::$t(<$t as VoteStorage>::vote_into_partial_vote(vote, |shared_data| {
-                                h(CompositeSharedData::$t(shared_data))
-                            })),
+                            CompositeVote::$t(vote) => CompositePartialVote::$t(<$t as VoteStorage>::vote_into_partial_vote(vote)),
                         )*
                     }
                 }
@@ -180,9 +177,9 @@ macro_rules! generate_vote_storage_tuple_impls {
                     }
                 }
 
-                fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+                fn visit_shared_data_in_vote<E, F: FnMut(Self::SharedData) -> Result<(), E>>(
                     vote: Self::Vote,
-                    f: F,
+                    mut f: F,
                 ) -> Result<(), E> {
                     match vote {
                         $(CompositeVote::$t(vote) => {

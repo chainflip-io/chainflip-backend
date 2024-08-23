@@ -9,12 +9,7 @@ fn test_bitmap_vote_storage() {
 	let test_vote: <BitmapStorageTest as VoteStorage>::Vote = 67u64;
 	let test_shared_data_hash = SharedDataHash::of(&test_vote);
 
-	let partial_vote = BitmapStorageTest::vote_into_partial_vote(
-		&test_vote,
-		|shared_data: <BitmapStorageTest as VoteStorage>::SharedData| {
-			SharedDataHash::of(&shared_data)
-		},
-	);
+	let partial_vote = BitmapStorageTest::vote_into_partial_vote(&test_vote);
 	assert_eq!(partial_vote, test_shared_data_hash);
 
 	let vote_components =

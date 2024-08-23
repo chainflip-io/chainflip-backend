@@ -15,12 +15,7 @@ fn test_individual_vote_storage() {
 	let test_vote: <IndividualStorageTest as VoteStorage>::Vote =
 		(test_individual_vote, test_shared_vote);
 
-	let partial_vote = IndividualStorageTest::vote_into_partial_vote(
-		&test_vote,
-		|shared_data: <IndividualStorageTest as VoteStorage>::SharedData| {
-			SharedDataHash::of(&shared_data)
-		},
-	);
+	let partial_vote = IndividualStorageTest::vote_into_partial_vote(&test_vote);
 	assert_eq!(partial_vote, (test_individual_vote, test_shared_data_hash),);
 
 	let vote_components = assert_ok!(IndividualStorageTest::partial_vote_into_components(

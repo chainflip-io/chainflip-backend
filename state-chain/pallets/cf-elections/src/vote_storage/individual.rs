@@ -24,11 +24,8 @@ impl<P: Parameter + Member, T: IndividualVoteStorage> VoteStorage for Individual
 	type BitmapComponent = ();
 	type SharedData = T::SharedData;
 
-	fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
-		vote: &Self::Vote,
-		h: H,
-	) -> Self::PartialVote {
-		T::vote_into_partial_vote(vote, h)
+	fn vote_into_partial_vote(vote: &Self::Vote) -> Self::PartialVote {
+		T::vote_into_partial_vote(vote)
 	}
 	fn partial_vote_into_components(
 		properties: Self::Properties,
@@ -62,7 +59,7 @@ impl<P: Parameter + Member, T: IndividualVoteStorage> VoteStorage for Individual
 			_ => None,
 		})
 	}
-	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: FnMut(Self::SharedData) -> Result<(), E>>(
 		vote: Self::Vote,
 		f: F,
 	) -> Result<(), E> {
@@ -88,10 +85,7 @@ pub trait IndividualVoteStorage: private::Sealed + Sized {
 
 	type SharedData: Parameter + Member;
 
-	fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
-		vote: &Self::Vote,
-		h: H,
-	) -> Self::PartialVote;
+	fn vote_into_partial_vote(vote: &Self::Vote) -> Self::PartialVote;
 	fn partial_vote_into_vote<
 		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
 	>(
@@ -99,7 +93,7 @@ pub trait IndividualVoteStorage: private::Sealed + Sized {
 		get_shared_data: GetSharedData,
 	) -> Result<Option<Self::Vote>, CorruptStorageError>;
 
-	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
+	fn visit_shared_data_in_vote<E, F: FnMut(Self::SharedData) -> Result<(), E>>(
 		vote: Self::Vote,
 		f: F,
 	) -> Result<(), E>;

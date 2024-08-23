@@ -29,11 +29,9 @@ macro_rules! generate_individual_vote_storage_tuple_impls {
                 type SharedData = SharedDataEnum<$(<$t as IndividualVoteStorage>::SharedData,)*>;
 
                 #[allow(clippy::unused_unit)]
-                fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(($($t,)*): &Self::Vote, mut h: H) -> Self::PartialVote {
+                fn vote_into_partial_vote(($($t,)*): &Self::Vote) -> Self::PartialVote {
                     ($(
-                        <$t as IndividualVoteStorage>::vote_into_partial_vote($t, |shared_data| {
-                            (&mut h)(SharedDataEnum::$t(shared_data))
-                        })
+                        <$t as IndividualVoteStorage>::vote_into_partial_vote($t)
                     ,)*)
                 }
 
@@ -56,7 +54,7 @@ macro_rules! generate_individual_vote_storage_tuple_impls {
                     )*)))
                 }
 
-                fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(($($t,)*): Self::Vote, f: F) -> Result<(), E> {
+                fn visit_shared_data_in_vote<E, F: FnMut(Self::SharedData) -> Result<(), E>>(($($t,)*): Self::Vote, mut f: F) -> Result<(), E> {
                     $(
                         <$t as IndividualVoteStorage>::visit_shared_data_in_vote($t, |shared_data| {
                             f(SharedDataEnum::$t(shared_data))
