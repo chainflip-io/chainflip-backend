@@ -1,5 +1,5 @@
 use crate::{
-	self as pallet_cf_pools, mock::*, AskBidMap, AssetAmounts, AssetPair, Error, Event,
+	self as pallet_cf_pools, mock::*, AskBidMap, AssetAmounts, AssetPair, CloseOrder, Error, Event,
 	HistoricalEarnedFees, LimitOrder, PoolInfo, PoolOrders, PoolPairsMap, Pools, RangeOrder,
 	RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
@@ -8,7 +8,8 @@ use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
 use cf_traits::{PoolApi, SwappingApi};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
-use sp_core::{bounded_vec, U256};
+use sp_core::{bounded_vec, ConstU32, U256};
+use sp_runtime::BoundedVec;
 
 #[test]
 fn can_create_new_trading_pool() {
@@ -1125,5 +1126,115 @@ fn can_accept_additional_limit_orders() {
 			LiquidityPools::swap_single_leg(STABLE_ASSET, to, first_leg).unwrap(),
 			3006110200
 		);
+	});
+}
+
+#[test]
+fn test_cancel_orders_batch() {
+	new_test_ext().execute_with(|| {
+		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
+		const FLIP: Asset = Asset::Flip;
+		const TICK: Tick = 12;
+		let mut orders_to_delete: BoundedVec<CloseOrder, ConstU32<100>> = BoundedVec::new();
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			FLIP,
+			STABLE_ASSET,
+			Default::default(),
+			price_at_tick(0).unwrap(),
+		));
+		assert_ok!(LiquidityPools::set_range_order(
+			RuntimeOrigin::signed(ALICE),
+			FLIP,
+			STABLE_ASSET,
+			0,
+			Some(POSITION),
+			RangeOrderSize::AssetAmounts {
+				maximum: AssetAmounts { base: 1_000_000, quote: 1_000_000 },
+				minimum: AssetAmounts { base: 900_000, quote: 900_000 },
+			}
+		));
+		assert_events_match!(
+			Test,
+			RuntimeEvent::LiquidityPools(
+				Event::RangeOrderUpdated {
+					..
+				},
+			) => ()
+		);
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			FLIP,
+			STABLE_ASSET,
+			Side::Sell,
+			0,
+			Some(TICK),
+			12
+		));
+		assert_events_match!(
+			Test,
+			RuntimeEvent::LiquidityPools(
+				Event::LimitOrderUpdated {
+					..
+				},
+			) => ()
+		);
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			FLIP,
+			STABLE_ASSET,
+			Side::Sell,
+			1,
+			Some(TICK + 1),
+			15
+		));
+		assert_events_match!(
+			Test,
+			RuntimeEvent::LiquidityPools(
+				Event::LimitOrderUpdated {
+					..
+				},
+			) => ()
+		);
+		orders_to_delete
+			.try_push(CloseOrder::Limit {
+				base_asset: FLIP,
+				quote_asset: STABLE_ASSET,
+				side: Side::Sell,
+				id: 0,
+			})
+			.expect("Len should be below 100");
+		orders_to_delete
+			.try_push(CloseOrder::Limit {
+				base_asset: FLIP,
+				quote_asset: STABLE_ASSET,
+				side: Side::Sell,
+				id: 1,
+			})
+			.expect("Len should be below 100");
+		orders_to_delete
+			.try_push(CloseOrder::Range { base_asset: FLIP, quote_asset: STABLE_ASSET, id: 0 })
+			.expect("Len should be below 100");
+		assert_eq!(
+			LiquidityPools::open_order_count(
+				&ALICE,
+				&PoolPairsMap { base: FLIP, quote: STABLE_ASSET }
+			)
+			.unwrap(),
+			3
+		);
+		assert_ok!(LiquidityPools::cancel_orders_batch(
+			RuntimeOrigin::signed(ALICE),
+			orders_to_delete
+		));
+		assert_eq!(
+			LiquidityPools::open_order_count(
+				&ALICE,
+				&PoolPairsMap { base: FLIP, quote: STABLE_ASSET }
+			)
+			.unwrap(),
+			0
+		)
 	});
 }
