@@ -527,6 +527,8 @@ pub mod pallet {
 			output_asset: Asset,
 			origin: SwapOrigin,
 			request_type: SwapRequestTypeEncoded,
+			refund_parameters: Option<ChannelRefundParametersEncoded>,
+			dca_parameters: Option<DcaParameters>,
 		},
 		SwapRequestCompleted {
 			swap_request_id: SwapRequestId,
@@ -1972,6 +1974,10 @@ pub mod pallet {
 						},
 				},
 				origin: origin.clone(),
+				refund_parameters: refund_params
+					.clone()
+					.map(|params| params.map_address(T::AddressConverter::to_encoded_address)),
+				dca_parameters: dca_params.clone(),
 			});
 
 			match request_type {
