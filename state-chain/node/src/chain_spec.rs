@@ -4,11 +4,12 @@ use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinTrackedData, BITCOIN_DUST_LIMIT},
 	dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash},
+	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, SolTrackedData},
 	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use cf_primitives::{
-	AccountRole, AuthorityCount, NetworkEnvironment, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+	chains::Solana, AccountRole, AuthorityCount, NetworkEnvironment,
+	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 };
 use common::FLIPPERINOS_PER_FLIP;
 pub use sc_service::{ChainType, Properties};
@@ -792,7 +793,12 @@ fn testnet_genesis(
 				},
 			},
 		},
-		solana_chain_tracking: Default::default(),
+		solana_chain_tracking: state_chain_runtime::SolanaChainTrackingConfig {
+			init_chain_state: ChainState::<Solana> {
+				block_height: 0,
+				tracked_data: SolTrackedData { priority_fee: 100_000 },
+			},
+		},
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: state_chain_runtime::BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
