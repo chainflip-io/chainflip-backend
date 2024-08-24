@@ -1,4 +1,4 @@
-use crate::{Environment, Runtime, SolanaBroadcaster, SolanaThresholdSigner};
+use crate::{Environment, Runtime, SolanaBroadcaster, SolanaChainTracking, SolanaThresholdSigner};
 use cf_chains::{
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto},
@@ -9,6 +9,7 @@ use cf_traits::{
 	AdjustedFeeEstimationApi, ElectionEgressWitnesser, GetBlockHeight, IngressSource,
 	SolanaNonceWatch,
 };
+
 use codec::{Decode, Encode};
 use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
@@ -17,6 +18,7 @@ use pallet_cf_elections::{
 		change::OnChangeHook,
 		composite::{tuple_5_impls::Hooks, Composite, Translator},
 		egress_success::OnEgressSuccess,
+		monotonic_median::MedianChangeHook,
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 };
@@ -66,8 +68,11 @@ pub fn initial_state(
 	}
 }
 
-pub type SolanaBlockHeightTracking =
-	electoral_systems::monotonic_median::MonotonicMedian<<Solana as Chain>::ChainBlockNumber, ()>;
+pub type SolanaBlockHeightTracking = electoral_systems::monotonic_median::MonotonicMedian<
+	<Solana as Chain>::ChainBlockNumber,
+	(),
+	SolanaBlockHeightTrackingHook,
+>;
 pub type SolanaFeeTracking = electoral_systems::unsafe_median::UnsafeMedian<
 	<Solana as Chain>::ChainAmount,
 	SolanaFeeUnsynchronisedSettings,
@@ -122,6 +127,21 @@ pub struct SolanaNonceTrackingHook;
 impl OnChangeHook<SolAddress, SolHash> for SolanaNonceTrackingHook {
 	fn on_change(nonce_account: SolAddress, durable_nonce: SolHash) {
 		Environment::update_sol_nonce(nonce_account, durable_nonce);
+	}
+}
+
+pub struct SolanaBlockHeightTrackingHook;
+
+impl MedianChangeHook<<Solana as Chain>::ChainBlockNumber> for SolanaBlockHeightTrackingHook {
+	fn on_change(block_height: <Solana as Chain>::ChainBlockNumber) {
+		if let Err(err) = SolanaChainTracking::inner_update_chain_state(cf_chains::ChainState {
+			block_height,
+			tracked_data: SolTrackedData {
+				priority_fee: SolanaChainTrackingProvider::priority_fee().unwrap_or_default(),
+			},
+		}) {
+			log::error!("Failed to update chain state: {:?}", err);
+		}
 	}
 }
 
@@ -234,8 +254,8 @@ pub struct SolanaIngressSettings {
 	pub usdc_token_mint_pubkey: SolAddress,
 }
 
-pub struct SolanaChainTracking;
-impl GetBlockHeight<Solana> for SolanaChainTracking {
+pub struct SolanaChainTrackingProvider;
+impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
 	fn get_block_height() -> <Solana as Chain>::ChainBlockNumber {
 		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
 			|electoral_access| {
@@ -256,7 +276,7 @@ impl GetBlockHeight<Solana> for SolanaChainTracking {
 		})
 	}
 }
-impl SolanaChainTracking {
+impl SolanaChainTrackingProvider {
 	pub fn priority_fee() -> Option<<Solana as Chain>::ChainAmount> {
 		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
 			|electoral_access| {
@@ -297,7 +317,7 @@ impl SolanaChainTracking {
 		})
 	}
 }
-impl AdjustedFeeEstimationApi<Solana> for SolanaChainTracking {
+impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
 	fn estimate_ingress_fee(
 		asset: <Solana as Chain>::ChainAsset,
 	) -> <Solana as Chain>::ChainAmount {

@@ -14,7 +14,7 @@ use crate::{
 	chainflip::{
 		calculate_account_apy,
 		solana_elections::{
-			SolanaChainTracking, SolanaEgressWitnessingTrigger, SolanaIngress,
+			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
 			SolanaNonceTrackingTrigger,
 		},
 		Offence,
@@ -338,7 +338,7 @@ impl pallet_cf_vaults::Config<Instance5> for Runtime {
 	type SetAggKeyWithAggKey = cf_chains::sol::api::SolanaApi<SolEnvironment>;
 	type Broadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type ChainTracking = SolanaChainTracking;
+	type ChainTracking = SolanaChainTrackingProvider;
 	type SafeMode = RuntimeSafeMode;
 	type CfeMultisigRequest = CfeInterface;
 }
@@ -459,7 +459,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type Broadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DepositHandler;
-	type ChainTracking = SolanaChainTracking;
+	type ChainTracking = SolanaChainTrackingProvider;
 	type NetworkEnvironment = Environment;
 	type AssetConverter = Swapping;
 	type FeePayment = Flip;
@@ -961,7 +961,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type ChainTracking = SolanaChainTracking;
+	type ChainTracking = SolanaChainTrackingProvider;
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
@@ -989,6 +989,12 @@ impl pallet_cf_chain_tracking::Config<Instance3> for Runtime {
 impl pallet_cf_chain_tracking::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Arbitrum;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+}
+
+impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type TargetChain = Solana;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
@@ -1058,6 +1064,7 @@ construct_runtime!(
 		SolanaBroadcaster: pallet_cf_broadcast::<Instance5>,
 		SolanaIngressEgress: pallet_cf_ingress_egress::<Instance5>,
 		SolanaElections: pallet_cf_elections::<Instance5>,
+		SolanaChainTracking: pallet_cf_chain_tracking::<Instance5>,
 
 		AssetBalances: pallet_cf_asset_balances,
 	}
@@ -1140,6 +1147,7 @@ pub type PalletExecutionOrder = (
 	PolkadotChainTracking,
 	BitcoinChainTracking,
 	ArbitrumChainTracking,
+	SolanaChainTracking,
 	// Elections
 	SolanaElections,
 	// Vaults
@@ -1638,7 +1646,7 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_ingress_fee(asset)
 					)
 				},
-				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTracking::
+				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::
 				estimate_ingress_fee(asset).into()),
 			}
 		}
@@ -1659,7 +1667,7 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_egress_fee(asset)
 					)
 				},
-				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTracking::
+				ForeignChainAndAsset::Solana(asset) => Some(SolanaChainTrackingProvider::
 				estimate_egress_fee(asset).into()),
 			}
 		}
@@ -2030,7 +2038,7 @@ impl_runtime_apis! {
 			let eth = pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get().unwrap();
 			let dot = pallet_cf_chain_tracking::CurrentChainState::<Runtime, PolkadotInstance>::get().unwrap();
 			let arb = pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get().unwrap();
-			let sol = SolanaChainTracking::get_block_height();
+			let sol = SolanaChainTrackingProvider::get_block_height();
 
 			ExternalChainsBlockHeight {
 				bitcoin: btc.block_height,
@@ -2119,7 +2127,7 @@ impl_runtime_apis! {
 				bitcoin: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, BitcoinInstance>, BitcoinInstance>(),
 				polkadot: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, PolkadotInstance>, PolkadotInstance>(),
 				arbitrum: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, ArbitrumInstance>, ArbitrumInstance>(),
-				solana: open_channels::<SolanaChainTracking, SolanaInstance>(),
+				solana: open_channels::<SolanaChainTrackingProvider, SolanaInstance>(),
 			}
 		}
 		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount> {
