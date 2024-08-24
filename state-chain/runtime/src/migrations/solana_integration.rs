@@ -1,7 +1,8 @@
 use crate::{chainflip::solana_elections, Runtime};
 use cf_chains::{
 	instances::SolanaInstance,
-	sol::{SolApiEnvironment, SolHash},
+	ChainState,
+	sol::{SolApiEnvironment, SolHash, SolTrackedData},
 };
 use cf_utilities::bs58_array;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
@@ -9,6 +10,7 @@ use sol_prim::consts::{const_address, const_hash};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 use sp_std::vec;
+
 
 pub struct SolanaIntegration;
 
@@ -293,6 +295,14 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 		);
 		pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, SolanaInstance>::put(
 			deposit_channel_lifetime,
+		);
+		pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::put(
+			ChainState {
+				block_height: 0,
+				tracked_data: SolTrackedData {
+					priority_fee: 100_000,
+				},
+			},
 		);
 		Weight::zero()
 	}
