@@ -47,6 +47,7 @@ export async function setupSwaps(): Promise<void> {
   console.log('LP Pools created');
 
   await Promise.all([
+    // provide liquidity to LP_1
     depositLiquidity('Usdc', deposits.get('Usdc')!),
     depositLiquidity('Eth', deposits.get('Eth')!),
     depositLiquidity('Dot', deposits.get('Dot')!),
@@ -57,6 +58,17 @@ export async function setupSwaps(): Promise<void> {
     depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
     depositLiquidity('Sol', deposits.get('Sol')!),
     depositLiquidity('SolUsdc', deposits.get('SolUsdc')!),
+    // provide liquidity to LP_3
+    depositLiquidity('Usdc', 10000, false, '//LP_3'),
+    depositLiquidity('Eth', deposits.get('Eth')!, false, '//LP_3'),
+    depositLiquidity('Dot', deposits.get('Dot')!, false, '//LP_3'),
+    depositLiquidity('Btc', deposits.get('Btc')!, false, '//LP_3'),
+    depositLiquidity('Flip', deposits.get('Flip')!, false, '//LP_3'),
+    depositLiquidity('Usdt', deposits.get('Usdt')!, false, '//LP_3'),
+    depositLiquidity('ArbEth', deposits.get('ArbEth')!, false, '//LP_3'),
+    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_3'),
+    depositLiquidity('Sol', deposits.get('Sol')!, false, '//LP_3'),
+    depositLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, '//LP_3'),
   ]);
 
   console.log('Liquidity provided');
