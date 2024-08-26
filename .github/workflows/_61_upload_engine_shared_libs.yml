@@ -7,6 +7,16 @@ permissions:
 jobs:
   upload:
     runs-on: namespace-profile-default
+    strategy:
+      matrix:
+        include:
+          - artifact: chainflip-backend-bin
+            target_dir: bin
+            file_type: .so
+          - artifact: chainflip-backend-bin-mac-m2
+            target_dir: bin_m2
+            file_type: .dylib
+
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -14,29 +24,23 @@ jobs:
       - name: Download Artifacts 📥
         uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         with:
-          name: chainflip-backend-bin
-          path: chainflip-backend-bin
-
-      - name: Download M2 binaries 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
-        with:
-          name: chainflip-backend-bin-mac-m2
-          path: chainflip-backend-bin-mac-m2
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
 
       - name: Set Version 🔦
         id: version
         shell: bash
         run: |
-          chmod +x chainflip-backend-bin/chainflip-node
-          VERSION=$(./ci/scripts/extract_version.sh "$(./chainflip-backend-bin/chainflip-node --version)" full)
+          chmod +x ${{ matrix.artifact }}/chainflip-node
+          VERSION=$(./ci/scripts/extract_version.sh "$(${{ matrix.artifact }}/chainflip-node --version)" full)
           echo "Version: $VERSION"
           echo "url_friendly_version=$(echo $VERSION | tr . _)" >> $GITHUB_OUTPUT
 
       - name: Move shared library files 📂
         run: |
-          mkdir -p /tmp/chainflip-engine-shared-libs/
-          mv chainflip-backend-bin/libchainflip_engine_v${{ steps.version.outputs.url_friendly_version }}.so /tmp/chainflip-engine-shared-libs/
-          mv chainflip-backend-bin-mac-m2/libchainflip_engine_v${{ steps.version.outputs.url_friendly_version }}.dylib /tmp/chainflip-engine-shared-libs/
+          mkdir -p /tmp/chainflip-engine-shared-libs/${{ matrix.target_dir }}
+          find ${{ matrix.artifact }} -type f -exec grep -IL . "{}" \; | xargs -n1 mv -t /tmp/chainflip-engine-shared-libs/${{ matrix.target_dir }}/
+          mv ${{ matrix.artifact }}/libchainflip_engine_v${{ needs.setup.outputs.url_friendly_version }}${{ matrix.file_type }} /tmp/chainflip-engine-shared-libs/
 
       - name: Configure AWS credentials using OIDC 🪪
         uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
