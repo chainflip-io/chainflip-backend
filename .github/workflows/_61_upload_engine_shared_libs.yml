@@ -29,18 +29,17 @@ jobs:
 
       - name: Set Version 🔦
         id: version
-        shell: bash
         run: |
           chmod +x ${{ matrix.artifact }}/chainflip-node
           VERSION=$(./ci/scripts/extract_version.sh "$(${{ matrix.artifact }}/chainflip-node --version)" full)
           echo "Version: $VERSION"
-          echo "url_friendly_version=$(echo $VERSION | tr . _)" >> $GITHUB_OUTPUT
+          echo "url_friendly_version=$(echo $VERSION | tr . _)" >> $GITHUB_ENV
 
       - name: Move shared library files 📂
         run: |
           mkdir -p /tmp/chainflip-engine-shared-libs/${{ matrix.target_dir }}
           find ${{ matrix.artifact }} -type f -exec grep -IL . "{}" \; | xargs -n1 mv -t /tmp/chainflip-engine-shared-libs/${{ matrix.target_dir }}/
-          mv ${{ matrix.artifact }}/libchainflip_engine_v${{ needs.setup.outputs.url_friendly_version }}${{ matrix.file_type }} /tmp/chainflip-engine-shared-libs/
+          mv ${{ matrix.artifact }}/libchainflip_engine_v${{ env.url_friendly_version }}${{ matrix.file_type }} /tmp/chainflip-engine-shared-libs/
 
       - name: Configure AWS credentials using OIDC 🪪
         uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
@@ -50,4 +49,4 @@ jobs:
 
       - name: Upload engine shared libraries S3 🚀
         run: |
-          aws s3 cp /tmp/chainflip-engine-shared-libs/ s3://repo.chainflip.io/lib/${{ steps.version.outputs.url_friendly_version }}/ --recursive
+          aws s3 cp /tmp/chainflip-engine-shared-libs/ s3://repo.chainflip.io/lib/${{ env.url_friendly_version }}/ --recursive
