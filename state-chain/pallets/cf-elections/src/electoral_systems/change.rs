@@ -153,8 +153,8 @@ mod test_change {
 		pub static HOOK_HAS_BEEN_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	}
 
-	pub struct MyChangeHook;
-	impl OnChangeHook<(), u64> for MyChangeHook {
+	pub struct MockHook;
+	impl OnChangeHook<(), u64> for MockHook {
 		fn on_change(_id: (), _value: u64) {
 			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.set(true));
 		}
@@ -164,7 +164,7 @@ mod test_change {
 	#[test]
 	fn consensus_not_possible_because_of_different_votes() {
 		let mut electoral_system =
-			MockElectoralSystem::<Change<(), u64, (), MyChangeHook>>::new((), (), ());
+			MockElectoralSystem::<Change<(), u64, (), MockHook>>::new((), (), ());
 		let consensus = electoral_system
 			.new_election((), ((), 1), ())
 			.unwrap()
@@ -176,7 +176,7 @@ mod test_change {
 	#[test]
 	fn consensus_when_all_votes_the_same() {
 		let mut electoral_system =
-			MockElectoralSystem::<Change<(), u64, (), MyChangeHook>>::new((), (), ());
+			MockElectoralSystem::<Change<(), u64, (), MockHook>>::new((), (), ());
 		let consensus = electoral_system
 			.new_election((), ((), 1), ())
 			.unwrap()
@@ -186,14 +186,27 @@ mod test_change {
 	}
 
 	#[test]
-	fn if_it_consensus_then_call_hook() {
+	fn not_enough_votes_for_consensus() {
 		let mut electoral_system =
-			MockElectoralSystem::<Change<(), u64, (), MyChangeHook>>::new((), (), ());
+			MockElectoralSystem::<Change<(), u64, (), MockHook>>::new((), (), ());
+		let consensus = electoral_system
+			.new_election((), ((), 1), ())
+			.unwrap()
+			.check_consensus(None, vec![((), 1)], 3)
+			.unwrap();
+		assert_eq!(consensus, None);
+	}
+
+	#[test]
+	fn finalize_election() {
+		let mut electoral_system =
+			MockElectoralSystem::<Change<(), u64, (), MockHook>>::new((), (), ());
 		electoral_system
 			.new_election((), ((), 1), ())
 			.unwrap()
 			.set_consensus_status(ConsensusStatus::Changed { previous: 1, new: 2 });
 		electoral_system.finalize_elections(&()).unwrap();
+		// Hook should have been called
 		assert!(HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get()));
 	}
 }

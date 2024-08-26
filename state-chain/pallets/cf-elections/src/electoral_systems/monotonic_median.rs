@@ -118,12 +118,20 @@ impl<
 #[cfg(test)]
 mod test_monotonic_median {
 	use super::*;
-	use crate::electoral_system::mocks::MockElectoralSystem;
+	use crate::electoral_system::{
+		mocks::MockElectoralSystem, ConsensusStatus, ElectoralReadAccess,
+	};
 
 	pub struct MockHook;
 
 	impl MedianChangeHook<u64> for MockHook {
-		fn on_change(_value: u64) {}
+		fn on_change(_value: u64) {
+			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.set(true));
+		}
+	}
+
+	thread_local! {
+		pub static HOOK_HAS_BEEN_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	}
 
 	const INIT_UNSYNCHRONISED_STATE: u64 = 22;
@@ -207,5 +215,26 @@ mod test_monotonic_median {
 			.unwrap(),
 			None
 		);
+	}
+
+	#[test]
+	fn finalize_election() {
+		const INIT_UNSYNCHRONISED_STATE: u64 = 1;
+		const NEXT_UNSYNCHRONISED_STATE: u64 = 2;
+		let mut electoral_system = MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(
+			INIT_UNSYNCHRONISED_STATE,
+			(),
+			(),
+		);
+		let mut election = electoral_system.new_election((), (), ()).unwrap();
+		election.set_consensus_status(ConsensusStatus::Changed {
+			previous: INIT_UNSYNCHRONISED_STATE,
+			new: NEXT_UNSYNCHRONISED_STATE,
+		});
+		electoral_system.finalize_elections(&()).unwrap();
+		// Hock has been called
+		assert!(HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get()));
+		// Unsynchronised state has been updated
+		assert_eq!(electoral_system.unsynchronised_state().unwrap(), NEXT_UNSYNCHRONISED_STATE);
 	}
 }
