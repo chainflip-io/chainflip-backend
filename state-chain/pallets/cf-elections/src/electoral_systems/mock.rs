@@ -1,44 +1,33 @@
 use crate::{
 	electoral_system::{
-		AuthorityVoteOf, ElectionReadAccess, ElectoralSystem, ElectoralWriteAccess,
-		VotePropertiesOf,
+		AuthorityVoteOf, ConsensusStatus, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
+		ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
+	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
 use cf_primitives::AuthorityCount;
-use codec::{Decode, Encode};
-use scale_info::TypeInfo;
 use sp_std::vec::Vec;
-use std::{cell::RefCell, ops::Deref};
-
-/// Simple wrapped data type for testing.
-macro_rules! impl_wrapped_data {
-	( $name:ident, $t:ty ) => {
-		#[derive(
-			Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, TypeInfo, Default,
-		)]
-		pub struct $name($t);
-		impl Deref for $name {
-			type Target = $t;
-			fn deref(&self) -> &Self::Target {
-				&self.0
-			}
-		}
-	};
-}
+use std::{cell::RefCell, collections::BTreeMap};
 
 thread_local! {
 	static VOTE_DESIRED: RefCell<bool> = RefCell::new(true);
 	static VOTE_NEEDED: RefCell<bool> = RefCell::new(true);
 	static VOTE_VALID: RefCell<bool> = RefCell::new(true);
-	static CONSENSUS: RefCell<Option<Consensus>> = RefCell::new(None);
-	static ON_FINALIZE_RETURN: RefCell<OnFinalizeReturn> = RefCell::new(Default::default());
+	static ASSUME_CONSENSUS: RefCell<bool> = RefCell::new(false);
+	static CONSENSUS_STATUS: RefCell<
+		BTreeMap<UniqueMonotonicIdentifier, ConsensusStatus<AuthorityCount>>
+	> = RefCell::new(Default::default());
 }
 
-impl_wrapped_data!(OnFinalizeReturn, u32);
-impl_wrapped_data!(Consensus, u32);
-
+/// Mock electoral system for testing.
+///
+/// It behaves as follows:
+/// - `vote_desired`, `vote_needed`, and `vote_valid` are all set to `true` by default.
+/// - `assume_consensus` is set to `false` by default.
+/// - `consensus_status` is set to `None` by default.
+///
+/// If assume_consensus is set to `true`, then the consensus value will be the number of votes.
 pub struct MockElectoralSystem;
 
 impl MockElectoralSystem {
@@ -66,20 +55,50 @@ impl MockElectoralSystem {
 		VOTE_VALID.with(|v| *v.borrow())
 	}
 
-	pub fn set_consensus(consensus: Option<Consensus>) {
-		CONSENSUS.with(|v| *v.borrow_mut() = consensus);
+	pub fn set_assume_consensus(assume: bool) {
+		ASSUME_CONSENSUS.with(|v| *v.borrow_mut() = assume);
 	}
 
-	pub fn consensus() -> Option<Consensus> {
-		CONSENSUS.with(|v| *v.borrow())
+	pub fn should_assume_consensus() -> bool {
+		ASSUME_CONSENSUS.with(|v| *v.borrow())
 	}
 
-	pub fn set_on_finalize_return(on_finalize_return: OnFinalizeReturn) {
-		ON_FINALIZE_RETURN.with(|v| *v.borrow_mut() = on_finalize_return);
+	pub fn consensus_status(umi: UniqueMonotonicIdentifier) -> ConsensusStatus<AuthorityCount> {
+		CONSENSUS_STATUS.with_borrow(|v| v.get(&umi).cloned().unwrap_or(ConsensusStatus::None))
 	}
 
-	pub fn on_finalize_return() -> OnFinalizeReturn {
-		ON_FINALIZE_RETURN.with(|v| *v.borrow())
+	pub fn set_consensus_status(
+		umi: UniqueMonotonicIdentifier,
+		consensus_status: ConsensusStatus<AuthorityCount>,
+	) {
+		CONSENSUS_STATUS.with_borrow_mut(|v| {
+			v.insert(umi, consensus_status);
+		});
+	}
+
+	pub fn reset() {
+		Self::set_vote_desired(true);
+		Self::set_vote_needed(true);
+		Self::set_vote_valid(true);
+		Self::set_assume_consensus(false);
+	}
+
+	pub fn delete_elections<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
+		electoral_access: &mut ElectoralAccess,
+		election_identifiers: Vec<ElectionIdentifier<()>>,
+	) -> Result<(), CorruptStorageError> {
+		for id in election_identifiers {
+			electoral_access.election_mut(id)?.delete();
+		}
+
+		Ok(())
+	}
+
+	pub fn delete_all_elections<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
+		electoral_access: &mut ElectoralAccess,
+		election_identifiers: Vec<ElectionIdentifier<()>>,
+	) -> Result<(), CorruptStorageError> {
+		Self::delete_elections(electoral_access, election_identifiers)
 	}
 }
 
@@ -96,34 +115,42 @@ impl ElectoralSystem for MockElectoralSystem {
 	// TODO: mock the vote storage
 	type Vote =
 		vote_storage::individual::Individual<(), vote_storage::individual::shared::Shared<()>>;
-	type Consensus = Consensus;
+	type Consensus = AuthorityCount;
 	type OnFinalizeContext = ();
-	type OnFinalizeReturn = OnFinalizeReturn;
+	type OnFinalizeReturn = ();
 
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 		_vote: &<Self::Vote as VoteStorage>::PartialVote,
 	) -> Result<(), CorruptStorageError> {
-		todo!()
+		Ok(())
 	}
 
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		_electoral_access: &mut ElectoralAccess,
-		_election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
+		electoral_access: &mut ElectoralAccess,
+		election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
 		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
-		Ok(Self::on_finalize_return())
+		for id in election_identifiers {
+			// Read the current consensus status and save it.
+			Self::set_consensus_status(
+				*id.unique_monotonic(),
+				electoral_access.election_mut(id)?.check_consensus()?,
+			);
+		}
+
+		Ok(())
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		_votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
+		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
 		_authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-		Ok(Self::consensus())
+		Ok(if Self::should_assume_consensus() { Some(votes.len() as AuthorityCount) } else { None })
 	}
 
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
