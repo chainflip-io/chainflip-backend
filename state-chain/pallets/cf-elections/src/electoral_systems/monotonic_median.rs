@@ -114,3 +114,98 @@ impl<
 		})
 	}
 }
+
+#[cfg(test)]
+mod test_monotonic_median {
+	use super::*;
+	use crate::electoral_system::mocks::MockElectoralSystem;
+
+	pub struct MockHook;
+
+	impl MedianChangeHook<u64> for MockHook {
+		fn on_change(_value: u64) {}
+	}
+
+	const INIT_UNSYNCHRONISED_STATE: u64 = 22;
+
+	#[test]
+	fn check_consensus_correctly_calculates_median_when_all_authorities_vote() {
+		let mut electoral_system = MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(
+			INIT_UNSYNCHRONISED_STATE,
+			(),
+			(),
+		);
+		let mut votes = vec![((), 1), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6), ((), 9)];
+		let number_of_authorities = votes.len() as u32;
+
+		use rand::{seq::SliceRandom, thread_rng};
+
+		votes.shuffle(&mut thread_rng());
+
+		let consensus = electoral_system
+			.new_election((), (), ())
+			.unwrap()
+			.check_consensus(None, votes, number_of_authorities)
+			.unwrap();
+
+		assert_eq!(consensus, Some(3));
+	}
+
+	#[test]
+	fn check_consensus_correctly_calculates_median_when_exactly_super_majority_authorities_vote() {
+		let mut electoral_system = MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(
+			INIT_UNSYNCHRONISED_STATE,
+			(),
+			(),
+		);
+		let mut votes = vec![((), 1), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6), ((), 9)];
+		let number_of_authorities = votes.len() as u32;
+
+		use rand::{seq::SliceRandom, thread_rng};
+
+		votes.shuffle(&mut thread_rng());
+
+		let consensus = electoral_system
+			.new_election((), (), ())
+			.unwrap()
+			.check_consensus(None, votes, number_of_authorities + (number_of_authorities / 2))
+			.unwrap();
+
+		assert_eq!(consensus, Some(5));
+	}
+
+	#[test]
+	fn to_few_votes_consensus_not_possible() {
+		let mut electoral_system = MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(
+			INIT_UNSYNCHRONISED_STATE,
+			(),
+			(),
+		);
+		let votes = vec![((), 1), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6)];
+		let number_of_authorities = votes.len() as u32;
+
+		let consensus = electoral_system
+			.new_election((), (), ())
+			.unwrap()
+			.check_consensus(None, votes, number_of_authorities * 2)
+			.unwrap();
+
+		assert_eq!(consensus, None);
+	}
+
+	#[test]
+	fn no_votes_consensus_not_possible() {
+		assert_eq!(
+			MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(
+				INIT_UNSYNCHRONISED_STATE,
+				(),
+				()
+			)
+			.new_election((), (), ())
+			.unwrap()
+			.check_consensus(None, vec![], 10)
+			.unwrap(),
+			None
+		);
+	}
+}
