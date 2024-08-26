@@ -143,3 +143,57 @@ impl<
 		)
 	}
 }
+
+#[cfg(test)]
+mod test_change {
+
+	use crate::electoral_system::{mocks::MockElectoralSystem, ConsensusStatus};
+
+	thread_local! {
+		pub static HOOK_HAS_BEEN_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	}
+
+	pub struct MyChangeHook;
+	impl OnChangeHook<(), u64> for MyChangeHook {
+		fn on_change(_id: (), _value: u64) {
+			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.set(true));
+		}
+	}
+
+	use super::*;
+	#[test]
+	fn consensus_not_possible_because_of_different_votes() {
+		let mut electoral_system =
+			MockElectoralSystem::<Change<(), u64, (), MyChangeHook>>::new((), (), ());
+		let consensus = electoral_system
+			.new_election((), ((), 1), ())
+			.unwrap()
+			.check_consensus(None, vec![((), 1), ((), 5), ((), 3)], 3)
+			.unwrap();
+		assert_eq!(consensus, None);
+	}
+
+	#[test]
+	fn consensus_when_all_votes_the_same() {
+		let mut electoral_system =
+			MockElectoralSystem::<Change<(), u64, (), MyChangeHook>>::new((), (), ());
+		let consensus = electoral_system
+			.new_election((), ((), 1), ())
+			.unwrap()
+			.check_consensus(None, vec![((), 1), ((), 1), ((), 1)], 3)
+			.unwrap();
+		assert_eq!(consensus, Some(1));
+	}
+
+	#[test]
+	fn if_it_consensus_then_call_hook() {
+		let mut electoral_system =
+			MockElectoralSystem::<Change<(), u64, (), MyChangeHook>>::new((), (), ());
+		electoral_system
+			.new_election((), ((), 1), ())
+			.unwrap()
+			.set_consensus_status(ConsensusStatus::Changed { previous: 1, new: 2 });
+		electoral_system.finalize_elections(&()).unwrap();
+		assert!(HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get()));
+	}
+}
