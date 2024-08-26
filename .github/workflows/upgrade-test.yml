@@ -147,9 +147,11 @@ jobs:
         uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
         with:
           workflow: release-${{ inputs.upgrade-from-release }}.yml
+          workflow_conclusion: ""
           name: chainflip-backend-bin
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           path: latest-release-bins
+          commit: ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
 
       - name: Permissions for latest binaries 🛡️
         if: inputs.run-job
