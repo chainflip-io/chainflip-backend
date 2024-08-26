@@ -1,3 +1,4 @@
+#![feature(closure_track_caller)]
 use frame_system::Config;
 
 mod rich_test_externalities;
