@@ -427,11 +427,12 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
             #[cfg(test)]
             fn election_identifier(&self) -> ElectionIdentifierOf<Self::ElectoralSystem> {
-                let extra = match self.ea.borrow().election_identifier().extra() {
+                let composite_identifier = self.ea.borrow().election_identifier();
+                let extra = match composite_identifier.extra() {
                     CompositeElectionIdentifierExtra::$current(extra) => extra,
                     _ => unreachable!(),
                 };
-                self.ea.borrow().election_identifier().with_extra(*extra)
+                composite_identifier.with_extra(*extra)
             }
         }
         impl<$($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static,  EA: ElectionWriteAccess<ElectoralSystem = Composite<($($electoral_system,)*), H>>> ElectionWriteAccess for CompositeElectionAccess<tags::$current, EA, EA> {
