@@ -152,7 +152,7 @@ jobs:
           name: chainflip-backend-bin
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
           path: latest-release-bins
-          commit: ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
+          search_artifacts: true
 
       - name: Permissions for latest binaries 🛡️
         if: inputs.run-job
