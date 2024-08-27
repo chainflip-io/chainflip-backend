@@ -459,13 +459,13 @@ pub mod pallet {
 
 	/// Stores the next valid election identifier.
 	#[pallet::storage]
-	type NextElectionIdentifier<T: Config<I>, I: 'static = ()> =
+	pub(crate) type NextElectionIdentifier<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, UniqueMonotonicIdentifier, ValueQuery>;
 
 	/// Stores governance-controlled settings regarding the electoral system. These settings can be
 	/// changed by governance at anytime.
 	#[pallet::storage]
-	type ElectoralUnsynchronisedSettings<T: Config<I>, I: 'static = ()> = StorageValue<
+	pub(crate) type ElectoralUnsynchronisedSettings<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
 		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
 		OptionQuery,
@@ -473,7 +473,7 @@ pub mod pallet {
 
 	/// Stores persistent state the electoral system needs.
 	#[pallet::storage]
-	type ElectoralUnsynchronisedState<T: Config<I>, I: 'static = ()> = StorageValue<
+	pub(crate) type ElectoralUnsynchronisedState<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
 		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 		OptionQuery,
@@ -492,7 +492,7 @@ pub mod pallet {
 	/// Stores governance-controlled settings regarding the elections. These settings can be changed
 	/// at anytime, but that change will only affect newly created elections.
 	#[pallet::storage]
-	type ElectoralSettings<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub(crate) type ElectoralSettings<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -1404,7 +1404,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(17)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::update_settings())]
 		pub fn update_settings(
 			origin: OriginFor<T>,
 			unsynchronised_settings: Option<

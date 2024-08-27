@@ -25,6 +25,8 @@ use crate::Call;
 	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote: BenchmarkValue,
 	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData: BenchmarkValue,
 	InitialStateOf<T, I>: BenchmarkValue,
+	<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings: BenchmarkValue,
+	<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings: BenchmarkValue,
 )]
 mod benchmarks {
 	use super::*;
@@ -228,8 +230,41 @@ mod benchmarks {
 			);
 		}
 
-		// Ensure elections are unpaused
+		// Ensure elections are initialised
+		assert!(ElectoralUnsynchronisedState::<T, I>::get().is_some());
+		assert!(ElectoralUnsynchronisedSettings::<T, I>::get().is_some());
+		assert!(ElectoralSettings::<T, I>::get(NextElectionIdentifier::<T, I>::get()).is_some());
 		assert_eq!(Status::<T, I>::get(), Some(ElectoralSystemStatus::Running));
+	}
+
+	#[benchmark]
+	fn update_settings() {
+		// Initialize the elections
+		Status::<T, I>::set(None);
+		assert_ok!(Call::<T, I>::initialize { initial_state: BenchmarkValue::benchmark_value() }
+			.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
+		let next_election = NextElectionIdentifier::<T, I>::get();
+
+		// Clear the storage so it can be "re-set".
+		ElectoralUnsynchronisedSettings::<T, I>::set(None);
+		ElectoralSettings::<T, I>::remove(next_election);
+
+		let call = Call::<T, I>::update_settings {
+			unsynchronised_settings: Some(BenchmarkValue::benchmark_value()),
+			settings: Some(BenchmarkValue::benchmark_value()),
+			ignore_corrupt_storage: CorruptStorageAdherance::Ignore,
+		};
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		// Settings are updated.
+		assert!(ElectoralUnsynchronisedSettings::<T, I>::get().is_some());
+		assert!(ElectoralSettings::<T, I>::get(next_election).is_some());
 	}
 
 	#[benchmark]
