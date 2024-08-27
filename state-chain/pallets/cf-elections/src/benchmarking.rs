@@ -3,16 +3,20 @@
 use crate::{
 	electoral_system::{AuthorityVoteOf, ElectoralSystem},
 	vote_storage::VoteStorage,
-	Config, ContributingAuthorities, ElectionConsensusHistoryUpToDate, ElectoralSystemStatus,
-	Pallet, SharedData, SharedDataHash, Status,
+	*,
 };
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
+use core::iter;
 use frame_benchmarking::v2::*;
-use frame_support::{assert_ok, storage::bounded_btree_map::BoundedBTreeMap};
+use frame_support::{
+	assert_ok,
+	storage::bounded_btree_map::BoundedBTreeMap,
+	traits::{EnsureOrigin, Hooks, UnfilteredDispatchable},
+};
 use frame_system::RawOrigin;
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec};
 
 use crate::Call;
 
@@ -20,12 +24,9 @@ use crate::Call;
 	where
 	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote: BenchmarkValue,
 	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData: BenchmarkValue,
+	InitialStateOf<T, I>: BenchmarkValue,
 )]
 mod benchmarks {
-	use core::iter;
-	use frame_support::traits::OnFinalize;
-	use sp_std::vec;
-
 	use super::*;
 
 	fn ready_validator_for_vote<T: crate::pallet::Config<I>, I: 'static>() -> T::AccountId {
@@ -215,6 +216,66 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn initialize() {
+		Status::<T, I>::set(None);
+		let call = Call::<T, I>::initialize { initial_state: BenchmarkValue::benchmark_value() };
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		// Ensure elections are unpaused
+		assert_eq!(Status::<T, I>::get(), Some(ElectoralSystemStatus::Running));
+	}
+
+	#[benchmark]
+	fn pause_elections() {
+		let _validator_id = ready_validator_for_vote::<T, I>();
+		let call = Call::<T, I>::pause_elections {};
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		// Ensure elections are paused
+		assert_eq!(
+			Status::<T, I>::get(),
+			Some(ElectoralSystemStatus::Paused { detected_corrupt_storage: false })
+		);
+	}
+
+	#[benchmark]
+	fn unpause_elections() {
+		let _validator_id = ready_validator_for_vote::<T, I>();
+
+		// Pause the elections
+		assert_ok!(Call::<T, I>::pause_elections {}
+			.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
+		assert_eq!(
+			Status::<T, I>::get(),
+			Some(ElectoralSystemStatus::Paused { detected_corrupt_storage: false })
+		);
+
+		let call = Call::<T, I>::unpause_elections { require_votes_cleared: true };
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		// Ensure elections are unpaused
+		assert_eq!(Status::<T, I>::get(), Some(ElectoralSystemStatus::Running));
+	}
+
 	#[cfg(test)]
 	mod tests {
 		use super::*;
@@ -243,6 +304,9 @@ mod benchmarks {
 			test_recheck_contributed_to_consensuses: _recheck_contributed_to_consensuses(),
 			test_delete_vote: _delete_vote(),
 			test_provide_shared_data: _provide_shared_data(),
+			test_initialize: _initialize(),
+			test_pause_elections: _pause_elections(),
+			test_unpause_elections: _unpause_elections(),
 		}
 	}
 }

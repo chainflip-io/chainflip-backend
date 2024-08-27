@@ -132,6 +132,7 @@ pub use pallet::UniqueMonotonicIdentifier;
 pub mod pallet {
 	use super::*;
 
+	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_primitives::{AuthorityCount, EpochIndex};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
 
@@ -289,6 +290,19 @@ pub mod pallet {
 		pub unsynchronised_state: ElectoralUnsynchronisedState,
 		pub unsynchronised_settings: ElectoralUnsynchronisedSettings,
 		pub settings: ElectoralSettings,
+	}
+
+	impl<A: BenchmarkValue, B: BenchmarkValue, C: BenchmarkValue> BenchmarkValue
+		for InitialState<A, B, C>
+	{
+		#[cfg(feature = "runtime-benchmarks")]
+		fn benchmark_value() -> Self {
+			InitialState::<A, B, C> {
+				unsynchronised_state: A::benchmark_value(),
+				unsynchronised_settings: B::benchmark_value(),
+				settings: C::benchmark_value(),
+			}
+		}
 	}
 
 	#[allow(type_alias_bounds)]
@@ -1379,7 +1393,7 @@ pub mod pallet {
 		// ------------------------------------------------------------------------------------ //
 
 		#[pallet::call_index(16)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::initialize())] // TODO: Benchmarks
 		pub fn initialize(
 			origin: OriginFor<T>,
 			initial_state: InitialStateOf<T, I>,
@@ -1467,7 +1481,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(34)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::pause_elections())]
 		pub fn pause_elections(origin: OriginFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			match Status::<T, I>::get() {
@@ -1483,7 +1497,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(35)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::pause_elections())]
 		pub fn unpause_elections(
 			origin: OriginFor<T>,
 			require_votes_cleared: bool,
