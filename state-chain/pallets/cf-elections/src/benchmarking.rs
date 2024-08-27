@@ -268,6 +268,30 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	fn set_shared_data_reference_lifetime() {
+		// Initialize the elections
+		Status::<T, I>::set(None);
+		assert_ok!(Call::<T, I>::initialize { initial_state: BenchmarkValue::benchmark_value() }
+			.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
+
+		assert_eq!(SharedDataReferenceLifetime::<T, I>::get(), Default::default());
+		let lifetime = BlockNumberFor::<T>::from(100u32);
+		let call = Call::<T, I>::set_shared_data_reference_lifetime {
+			blocks: lifetime,
+			ignore_corrupt_storage: CorruptStorageAdherance::Ignore,
+		};
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		assert_eq!(SharedDataReferenceLifetime::<T, I>::get(), lifetime);
+	}
+
+	#[benchmark]
 	fn pause_elections() {
 		let _validator_id = ready_validator_for_vote::<T, I>();
 		let call = Call::<T, I>::pause_elections {};
@@ -340,8 +364,10 @@ mod benchmarks {
 			test_delete_vote: _delete_vote(),
 			test_provide_shared_data: _provide_shared_data(),
 			test_initialize: _initialize(),
+			test_update_settings: _update_settings(),
 			test_pause_elections: _pause_elections(),
 			test_unpause_elections: _unpause_elections(),
+			set_shared_data_reference_lifetime: _set_shared_data_reference_lifetime(),
 		}
 	}
 }

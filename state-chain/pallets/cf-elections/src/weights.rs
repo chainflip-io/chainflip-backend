@@ -40,6 +40,7 @@ pub trait WeightInfo {
 	fn provide_shared_data() -> Weight;
 	fn initialize() -> Weight;
 	fn update_settings() -> Weight;
+	fn set_shared_data_reference_lifetime() -> Weight;
 	fn pause_elections() -> Weight;
 	fn unpause_elections() -> Weight;
 }
@@ -259,6 +260,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	fn set_shared_data_reference_lifetime() -> Weight {
+		Default::default()
+	}
 }
 
 // For backwards compatibility and tests
@@ -474,5 +478,8 @@ impl WeightInfo for () {
 		Weight::from_parts(27_000_000, 4224)
 			.saturating_add(RocksDbWeight::get().reads(6_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	fn set_shared_data_reference_lifetime() -> Weight {
+		Default::default()
 	}
 }

@@ -390,7 +390,7 @@ pub mod pallet {
 	/// invalidated. This should be set as low as possible, I'd suggest using 8 blocks, which
 	/// equates to 48 seconds.
 	#[pallet::storage]
-	type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
+	pub(crate) type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Stores the number of references to a shared vote. We also store the block number at which
@@ -1426,7 +1426,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(18)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::set_shared_data_reference_lifetime())]
 		pub fn set_shared_data_reference_lifetime(
 			origin: OriginFor<T>,
 			blocks: BlockNumberFor<T>,
