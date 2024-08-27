@@ -25,7 +25,7 @@ pub struct SolRetryRpcClient {
 	witness_period: u64,
 }
 
-const SOLANA_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
+const SOLANA_RPC_TIMEOUT: Duration = Duration::from_secs(4);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 const MAX_BROADCAST_RETRIES: Attempt = 10;
