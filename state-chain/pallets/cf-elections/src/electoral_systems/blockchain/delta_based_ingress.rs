@@ -471,3 +471,75 @@ fn test_longest_increasing_subsequence_by_key() {
 		vec![23, 23, 45, 64, 64]
 	);
 }
+
+#[cfg(test)]
+mod test_delta_based_ingress {
+	use super::*;
+	use crate::electoral_system::mocks::MockElectoralSystem;
+	use cf_chains::mocks::MockEthereum;
+
+	// fn new_vote() -> (
+	// 	VotePropertiesOf<DeltaBasedIngress<MockResink, ()>>,
+	// 	<VoteStorage as VoteStorage>::Vote,
+	// ) {
+	// 	(
+	// 		Default::default(),
+	// 		BoundedBTreeMap::try_from(
+	// 			[((), ChannelTotalIngressed { block_number: 1, amount: 1 })]
+	// 				.into_iter()
+	// 				.collect(),
+	// 		)
+	// 		.unwrap(),
+	// 	)
+	// }
+
+	#[test]
+	fn check_consensus() {
+		// TODO: Write tests for `check_consensus`
+		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
+		pub struct MockResink;
+
+		impl IngressSink for MockResink {
+			type Chain = MockEthereum;
+
+			fn on_ingress(
+				channel: <Self::Chain as Chain>::ChainAccount,
+				asset: <Self::Chain as Chain>::ChainAsset,
+				amount: <Self::Chain as Chain>::ChainAmount,
+				block_number: <Self::Chain as Chain>::ChainBlockNumber,
+				details: <Self::Chain as Chain>::DepositDetails,
+			) {
+				unimplemented!()
+			}
+			fn on_ingress_reverted(
+				channel: <Self::Chain as Chain>::ChainAccount,
+				asset: <Self::Chain as Chain>::ChainAsset,
+				amount: <Self::Chain as Chain>::ChainAmount,
+			) {
+				unimplemented!()
+			}
+			fn on_channel_closed(channel: <Self::Chain as Chain>::ChainAccount) {
+				unimplemented!()
+			}
+		}
+
+		let mut votes = vec![((), 1u64), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6)];
+		let votes_len = votes.len() as u32;
+
+		use rand::{seq::SliceRandom, thread_rng};
+
+		let mut electoral_system =
+			MockElectoralSystem::<DeltaBasedIngress<MockResink, ()>>::new((), (), ());
+
+		// let consensus = electoral_system
+		// 	.new_election((), (), ())
+		// 	.unwrap()
+		// 	.check_consensus(None, votes, votes_len)
+		// 	.unwrap();
+	}
+
+	#[test]
+	fn on_finalize() {
+		// TODO: Write tests for `on_finalize`
+	}
+}
