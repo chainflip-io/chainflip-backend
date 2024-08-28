@@ -19,6 +19,12 @@ jobs:
           pattern: chainflip-backend-bin*
           merge-multiple: false
 
+      - name: Download runtime 📥
+        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        with:
+          name: chainflip-node-runtime-production
+          path: artifacts
+
       - name: Set Version 🔦
         id: version
         run: |
@@ -35,4 +41,4 @@ jobs:
 
       - name: Upload engine shared libraries S3 🚀
         run: |
-          aws s3 cp ./artifacts/ s3://repo.chainflip.io/lib/${{ env.url_friendly_version }}/ --recursive
+          aws s3 cp ./artifacts/ s3://repo.chainflip.io/${{ env.url_friendly_version }}/ --recursive
