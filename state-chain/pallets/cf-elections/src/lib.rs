@@ -437,7 +437,7 @@ pub mod pallet {
 	/// A mapping from election id and validator id to shared vote hash that uses bitmaps to
 	/// decrease space requirements assuming most validators submit the same hashes.
 	#[pallet::storage]
-	type BitmapComponents<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub(crate) type BitmapComponents<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -570,7 +570,7 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	mod access_impls {
+	pub(crate) mod access_impls {
 		use super::*;
 
 		/// Implements traits to allow electoral systems to read/write an Election's details.
@@ -579,13 +579,13 @@ pub mod pallet {
 			_phantom: core::marker::PhantomData<(T, I)>,
 		}
 		impl<T: Config<I>, I: 'static> ElectionAccess<T, I> {
-			pub(super) fn new(
+			pub(crate) fn new(
 				election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
 			) -> Self {
 				Self { election_identifier, _phantom: Default::default() }
 			}
 
-			fn unique_monotonic_identifier(&self) -> UniqueMonotonicIdentifier {
+			pub(crate) fn unique_monotonic_identifier(&self) -> UniqueMonotonicIdentifier {
 				*self.election_identifier.unique_monotonic()
 			}
 		}
@@ -940,7 +940,7 @@ pub mod pallet {
 
 		#[derive(Encode, Decode, TypeInfo)]
 		#[scale_info(skip_type_params(T, I))]
-		pub(super) struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
+		pub(crate) struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
 			epoch: EpochIndex,
 			#[allow(clippy::type_complexity)]
 			bitmaps: Vec<(BitmapComponentOf<T::ElectoralSystem>, BitVec<u8, bitvec::order::Lsb0>)>,
@@ -1443,7 +1443,7 @@ pub mod pallet {
 		// but they should not be needed unless there is a bug.
 
 		#[pallet::call_index(32)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::clear_election_votes())]
 		pub fn clear_election_votes(
 			origin: OriginFor<T>,
 			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,

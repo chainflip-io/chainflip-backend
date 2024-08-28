@@ -16,7 +16,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Hooks, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
-use sp_std::{collections::btree_map::BTreeMap, vec};
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 use crate::Call;
 
@@ -31,29 +31,35 @@ use crate::Call;
 mod benchmarks {
 	use super::*;
 
-	fn ready_validator_for_vote<T: crate::pallet::Config<I>, I: 'static>() -> T::AccountId {
-		let caller =
-			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Validator).unwrap();
-		let validator_id: T::ValidatorId = caller.clone().into();
+	fn ready_validator_for_vote<T: crate::pallet::Config<I>, I: 'static>(
+		validator_counts: u32,
+	) -> Vec<T::AccountId> {
+		let validators = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
+			AccountRole::Validator,
+			validator_counts,
+		)
+		.unwrap();
 
 		let epoch = T::EpochInfo::epoch_index();
-		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id.clone()]);
+		T::EpochInfo::add_authority_info_for_epoch(
+			epoch,
+			validators.clone().into_iter().map(|v| v.into()).collect(),
+		);
 
 		// kick off an election
 		Pallet::<T, I>::on_finalize(frame_system::Pallet::<T>::block_number());
 
-		assert_ok!(Pallet::<T, I>::ignore_my_votes(RawOrigin::Signed(caller.clone()).into()));
+		validators.iter().for_each(|v| {
+			assert_ok!(Pallet::<T, I>::ignore_my_votes(RawOrigin::Signed(v.clone()).into()));
+			assert_ok!(Pallet::<T, I>::stop_ignoring_my_votes(RawOrigin::Signed(v.clone()).into()));
+		});
 
-		assert_ok!(Pallet::<T, I>::stop_ignoring_my_votes(
-			RawOrigin::Signed(caller.clone()).into()
-		));
-
-		caller
+		validators
 	}
 
 	#[benchmark]
 	fn vote(n: Linear<1, 10>) {
-		let validator_id: T::ValidatorId = ready_validator_for_vote::<T, I>().into();
+		let validator_id: T::ValidatorId = ready_validator_for_vote::<T, I>(1)[0].clone().into();
 
 		let elections = Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
 		let next_election = elections.into_iter().next().unwrap();
@@ -112,14 +118,14 @@ mod benchmarks {
 
 	#[benchmark]
 	fn recheck_contributed_to_consensuses() {
-		let caller = ready_validator_for_vote::<T, I>();
+		let caller = ready_validator_for_vote::<T, I>(1)[0].clone();
 		let validator_id: T::ValidatorId = caller.clone().into();
 		let epoch = T::EpochInfo::epoch_index();
 
 		let elections = Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
 		let next_election = elections.into_iter().next().unwrap();
 
-		Pallet::<T, I>::vote(
+		assert_ok!(Pallet::<T, I>::vote(
 			RawOrigin::Signed(caller).into(),
 			BoundedBTreeMap::try_from(
 				[(
@@ -130,8 +136,7 @@ mod benchmarks {
 				.collect::<BTreeMap<_, _>>(),
 			)
 			.unwrap(),
-		)
-		.unwrap();
+		));
 
 		ElectionConsensusHistoryUpToDate::<T, I>::insert(next_election.0.unique_monotonic(), epoch);
 
@@ -148,14 +153,14 @@ mod benchmarks {
 
 	#[benchmark]
 	fn delete_vote() {
-		let caller = ready_validator_for_vote::<T, I>();
+		let caller = ready_validator_for_vote::<T, I>(1)[0].clone();
 		let validator_id: T::ValidatorId = caller.clone().into();
 		let epoch = T::EpochInfo::epoch_index();
 
 		let elections = Pallet::<T, I>::electoral_data(&validator_id).unwrap().current_elections;
 		let next_election = elections.into_iter().next().unwrap();
 
-		Pallet::<T, I>::vote(
+		assert_ok!(Pallet::<T, I>::vote(
 			RawOrigin::Signed(caller).into(),
 			BoundedBTreeMap::try_from(
 				[(
@@ -166,8 +171,7 @@ mod benchmarks {
 				.collect::<BTreeMap<_, _>>(),
 			)
 			.unwrap(),
-		)
-		.unwrap();
+		));
 
 		ElectionConsensusHistoryUpToDate::<T, I>::insert(next_election.0.unique_monotonic(), epoch);
 
@@ -184,7 +188,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn provide_shared_data() {
-		let validator_id = ready_validator_for_vote::<T, I>();
+		let validator_id = ready_validator_for_vote::<T, I>(1)[0].clone();
 
 		let (election_identifier, ..) =
 			Pallet::<T, I>::electoral_data(&validator_id.clone().into())
@@ -292,8 +296,56 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	fn clear_election_votes() {
+		// Setup a validator set of 150 as in the case of Mainnet.
+		let validators = ready_validator_for_vote::<T, I>(150);
+		let caller = validators[0].clone();
+		let (election_identifier, ..) = Pallet::<T, I>::electoral_data(&caller.clone().into())
+			.unwrap()
+			.current_elections
+			.into_iter()
+			.next()
+			.unwrap();
+
+		validators.iter().for_each(|v| {
+			assert_ok!(Pallet::<T, I>::vote(
+				RawOrigin::Signed(v.clone()).into(),
+				BoundedBTreeMap::try_from(
+					[(
+						election_identifier,
+						AuthorityVoteOf::<T::ElectoralSystem>::Vote(
+							BenchmarkValue::benchmark_value()
+						),
+					)]
+					.into_iter()
+					.collect::<BTreeMap<_, _>>(),
+				)
+				.unwrap(),
+			));
+		});
+
+		let call = Call::<T, I>::clear_election_votes {
+			election_identifier,
+			ignore_corrupt_storage: CorruptStorageAdherance::Ignore,
+			check_election_exists: true,
+		};
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		assert!(!ElectionConsensusHistoryUpToDate::<T, I>::contains_key(
+			access_impls::ElectionAccess::<T, I>::new(election_identifier)
+				.unique_monotonic_identifier()
+		));
+	}
+
+	#[benchmark]
 	fn pause_elections() {
-		let _validator_id = ready_validator_for_vote::<T, I>();
+		let _validator_id = ready_validator_for_vote::<T, I>(1);
 		let call = Call::<T, I>::pause_elections {};
 
 		#[block]
@@ -312,7 +364,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn unpause_elections() {
-		let _validator_id = ready_validator_for_vote::<T, I>();
+		let _validator_id = ready_validator_for_vote::<T, I>(1);
 
 		// Pause the elections
 		assert_ok!(Call::<T, I>::pause_elections {}
@@ -365,9 +417,10 @@ mod benchmarks {
 			test_provide_shared_data: _provide_shared_data(),
 			test_initialize: _initialize(),
 			test_update_settings: _update_settings(),
+			set_shared_data_reference_lifetime: _set_shared_data_reference_lifetime(),
+			clear_election_votes: _clear_election_votes(),
 			test_pause_elections: _pause_elections(),
 			test_unpause_elections: _unpause_elections(),
-			set_shared_data_reference_lifetime: _set_shared_data_reference_lifetime(),
 		}
 	}
 }
