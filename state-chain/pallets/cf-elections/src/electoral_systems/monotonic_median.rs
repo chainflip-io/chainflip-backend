@@ -130,20 +130,21 @@ mod test_monotonic_median {
 		}
 	}
 
+	impl MockHook {
+		pub fn get_hook_state() -> bool {
+			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get())
+		}
+	}
+
 	thread_local! {
 		pub static HOOK_HAS_BEEN_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	}
 
-	const INIT_UNSYNCHRONISED_STATE: u64 = 22;
-
 	#[test]
 	fn check_consensus_correctly_calculates_median_when_all_authorities_vote() {
-		let mut electoral_system = MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(
-			INIT_UNSYNCHRONISED_STATE,
-			(),
-			(),
-		);
-		let mut votes = vec![((), 1), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6), ((), 9)];
+		let mut electoral_system =
+			MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(0, (), ());
+		let mut votes = vec![((), 1), ((), 2), ((), 3), ((), 5), ((), 6), ((), 8), ((), 9)];
 		let number_of_authorities = votes.len() as u32;
 
 		use rand::{seq::SliceRandom, thread_rng};
@@ -161,12 +162,9 @@ mod test_monotonic_median {
 
 	#[test]
 	fn check_consensus_correctly_calculates_median_when_exactly_super_majority_authorities_vote() {
-		let mut electoral_system = MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(
-			INIT_UNSYNCHRONISED_STATE,
-			(),
-			(),
-		);
-		let mut votes = vec![((), 1), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6), ((), 9)];
+		let mut electoral_system =
+			MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(0, (), ());
+		let mut votes = vec![((), 1), ((), 2), ((), 3), ((), 5), ((), 6), ((), 8), ((), 9)];
 		let number_of_authorities = votes.len() as u32;
 
 		use rand::{seq::SliceRandom, thread_rng};
@@ -184,12 +182,9 @@ mod test_monotonic_median {
 
 	#[test]
 	fn to_few_votes_consensus_not_possible() {
-		let mut electoral_system = MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(
-			INIT_UNSYNCHRONISED_STATE,
-			(),
-			(),
-		);
-		let votes = vec![((), 1), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6)];
+		let mut electoral_system =
+			MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(0, (), ());
+		let votes = vec![((), 1), ((), 2), ((), 3), ((), 5), ((), 6), ((), 8)];
 		let number_of_authorities = votes.len() as u32;
 
 		let consensus = electoral_system
@@ -204,15 +199,11 @@ mod test_monotonic_median {
 	#[test]
 	fn no_votes_consensus_not_possible() {
 		assert_eq!(
-			MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(
-				INIT_UNSYNCHRONISED_STATE,
-				(),
-				()
-			)
-			.new_election((), (), ())
-			.unwrap()
-			.check_consensus(None, vec![], 10)
-			.unwrap(),
+			MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(0, (), ())
+				.new_election((), (), ())
+				.unwrap()
+				.check_consensus(None, vec![], 10)
+				.unwrap(),
 			None
 		);
 	}
@@ -233,8 +224,54 @@ mod test_monotonic_median {
 		});
 		electoral_system.finalize_elections(&()).unwrap();
 		// Hock has been called
-		assert!(HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get()));
+		assert!(MockHook::get_hook_state(), "Hook should have been called!");
 		// Unsynchronised state has been updated
 		assert_eq!(electoral_system.unsynchronised_state().unwrap(), NEXT_UNSYNCHRONISED_STATE);
+	}
+
+	#[test]
+	fn finalize_election_state_can_not_decrease() {
+		const INIT_UNSYNCHRONISED_STATE: u64 = 2;
+		const NEXT_UNSYNCHRONISED_STATE: u64 = 1;
+		let mut electoral_system = MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(
+			INIT_UNSYNCHRONISED_STATE,
+			(),
+			(),
+		);
+		let mut election = electoral_system.new_election((), (), ()).unwrap();
+		election.set_consensus_status(ConsensusStatus::Changed {
+			previous: INIT_UNSYNCHRONISED_STATE,
+			new: NEXT_UNSYNCHRONISED_STATE,
+		});
+		electoral_system.finalize_elections(&()).unwrap();
+		// Hock has not been called
+		assert!(
+			MockHook::get_hook_state(),
+			"Hook should not have been called if the consensus didn't change!"
+		);
+		// Unsynchronised state has not been updated
+		assert_eq!(electoral_system.unsynchronised_state().unwrap(), INIT_UNSYNCHRONISED_STATE);
+	}
+
+	#[test]
+	fn minority_can_not_influence_consensus() {
+		const CONSENT_VALUE: u64 = 5;
+		const WRONG_VALUE: u64 = 1;
+		const NUMBER_OF_AUTHORITIES: u32 = 10;
+
+		let mut electoral_system =
+			MockElectoralSystem::<MonotonicMedian<u64, (), MockHook>>::new(0, (), ());
+
+		let votes: Vec<((), u64)> = (1..=NUMBER_OF_AUTHORITIES)
+			.map(|id| if id % 3 == 0 { ((), WRONG_VALUE) } else { ((), CONSENT_VALUE) })
+			.collect();
+
+		let consensus = electoral_system
+			.new_election((), (), ())
+			.unwrap()
+			.check_consensus(None, votes, NUMBER_OF_AUTHORITIES)
+			.unwrap();
+
+		assert_eq!(consensus, Some(CONSENT_VALUE));
 	}
 }

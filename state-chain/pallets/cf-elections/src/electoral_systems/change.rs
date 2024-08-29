@@ -160,6 +160,12 @@ mod test_change {
 		}
 	}
 
+	impl MockHook {
+		pub fn get_hook_state() -> bool {
+			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get())
+		}
+	}
+
 	use super::*;
 	#[test]
 	fn consensus_not_possible_because_of_different_votes() {
@@ -201,12 +207,31 @@ mod test_change {
 	fn finalize_election() {
 		let mut electoral_system =
 			MockElectoralSystem::<Change<(), u64, (), MockHook>>::new((), (), ());
+
+		electoral_system
+			.new_election((), ((), 1), ())
+			.unwrap()
+			.set_consensus_status(ConsensusStatus::Changed { previous: 1, new: 1 });
+
+		electoral_system.finalize_elections(&()).unwrap();
+
+		assert!(
+			!MockHook::get_hook_state(),
+			"Hook should not have been called if the consensus changed didn't change!"
+		);
+
 		electoral_system
 			.new_election((), ((), 1), ())
 			.unwrap()
 			.set_consensus_status(ConsensusStatus::Changed { previous: 1, new: 2 });
+
 		electoral_system.finalize_elections(&()).unwrap();
-		// Hook should have been called
+
 		assert!(HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get()));
+
+		assert!(
+			MockHook::get_hook_state(),
+			"Hook should have been called if the consensus changed!"
+		);
 	}
 }
