@@ -111,7 +111,7 @@ impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter};
+	use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, RotationBroadcastsPending};
 	use frame_support::sp_runtime::app_crypto::RuntimePublic;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
@@ -134,6 +134,9 @@ pub mod pallet {
 		type EpochTransitionHandler: EpochTransitionHandler;
 
 		type KeyRotator: KeyRotator<ValidatorId = ValidatorIdOf<Self>>;
+
+		/// checks if there are any rotation txs pending from the last rotation
+		type RotationBroadcastsPending: RotationBroadcastsPending;
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
@@ -384,7 +387,7 @@ pub mod pallet {
 			weight.saturating_accrue(match CurrentRotationPhase::<T>::get() {
 				RotationPhase::Idle => {
 					if block_number.saturating_sub(CurrentEpochStartedAt::<T>::get()) >=
-						BlocksPerEpoch::<T>::get()
+						BlocksPerEpoch::<T>::get() && !T::RotationBroadcastsPending::rotation_broadcasts_pending()
 					{
 						Self::start_authority_rotation()
 					} else {

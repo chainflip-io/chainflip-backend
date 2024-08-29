@@ -1098,3 +1098,7 @@ impl<C: ChainCrypto> ElectionEgressWitnesser for DummyEgressSuccessWitnesser<C> 
 		Ok(())
 	}
 }
+
+pub trait RotationBroadcastsPending {
+	fn rotation_broadcasts_pending() -> bool;
+}
