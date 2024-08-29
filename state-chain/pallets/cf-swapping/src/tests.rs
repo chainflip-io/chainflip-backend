@@ -57,22 +57,7 @@ fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
 	));
 }
 
-fn params(
-	dca_params: Option<DcaParameters>,
-	refund_params: Option<TestRefundParams>,
-	is_ccm: bool,
-) -> TestSwapParams {
-	TestSwapParams {
-		input_asset: INPUT_ASSET,
-		output_asset: OUTPUT_ASSET,
-		input_amount: INPUT_AMOUNT,
-		refund_params: refund_params.map(|params| params.into_channel_params(INPUT_AMOUNT)),
-		dca_params,
-		output_address: (*EVM_OUTPUT_ADDRESS).clone(),
-		is_ccm,
-	}
-}
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
@@ -83,8 +68,27 @@ struct TestSwapParams {
 	is_ccm: bool,
 }
 
+impl TestSwapParams {
+	fn new(
+		dca_params: Option<DcaParameters>,
+		refund_params: Option<TestRefundParams>,
+		is_ccm: bool,
+	) -> TestSwapParams {
+		TestSwapParams {
+			input_asset: INPUT_ASSET,
+			output_asset: OUTPUT_ASSET,
+			input_amount: INPUT_AMOUNT,
+			refund_params: refund_params.map(|params| params.into_channel_params(INPUT_AMOUNT)),
+			dca_params,
+			output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+			is_ccm,
+		}
+	}
+}
+
 // Convenience struct used in tests allowing to specify refund parameters
 // with min output rather than min price:
+#[derive(Debug, Clone)]
 struct TestRefundParams {
 	retry_duration: u32,
 	min_output: AssetAmount,

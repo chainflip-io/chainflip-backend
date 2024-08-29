@@ -3,11 +3,11 @@ use super::*;
 const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 
 fn fok_swap(refund_params: Option<TestRefundParams>) -> TestSwapParams {
-	params(None, refund_params, false)
+	TestSwapParams::new(None, refund_params, false)
 }
 
 fn fok_swap_ccm(refund_params: Option<TestRefundParams>) -> TestSwapParams {
-	params(None, refund_params, true)
+	TestSwapParams::new(None, refund_params, true)
 }
 
 #[track_caller]
