@@ -216,30 +216,33 @@ mod benchmarks {
 	}
 
 	#[cfg(test)]
-	use crate::mock::*;
+	mod tests {
+		use super::*;
 
-	#[cfg(test)]
-	use crate::Instance1;
+		use crate::{mock::*, tests::ElectoralSystemTestExt, Instance1};
 
-	#[test]
-	fn benchmark_works() {
-		new_test_ext().execute_with(|| {
-			_vote::<Test, Instance1>(10, true);
-		});
-		new_test_ext().execute_with(|| {
-			_stop_ignoring_my_votes::<Test, Instance1>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_ignore_my_votes::<Test, Instance1>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_recheck_contributed_to_consensuses::<Test, Instance1>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_delete_vote::<Test, Instance1>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_provide_shared_data::<Test, Instance1>(true);
-		});
+		macro_rules! benchmark_tests {
+			( $( $test_name:ident: $test_fn:ident ( $( $arg:expr ),* ) ),+ $(,)? ) => {
+				$(
+					#[test]
+					fn $test_name() {
+						election_test_ext(Default::default())
+							.new_election()
+							.then_execute_with(|_| {
+								$test_fn::<Test, Instance1>( $( $arg, )* true );
+							});
+					}
+				)+
+			};
+		}
+
+		benchmark_tests! {
+			test_vote: _vote(10),
+			test_stop_ignoring_my_votes: _stop_ignoring_my_votes(),
+			test_ignore_my_votes: _ignore_my_votes(),
+			test_recheck_contributed_to_consensuses: _recheck_contributed_to_consensuses(),
+			test_delete_vote: _delete_vote(),
+			test_provide_shared_data: _provide_shared_data(),
+		}
 	}
 }
