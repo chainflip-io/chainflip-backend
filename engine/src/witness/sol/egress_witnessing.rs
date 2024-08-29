@@ -57,6 +57,8 @@ pub async fn get_finalized_fee(
 			other_status,
 			TransactionConfirmationStatus::Finalized
 		)),
+		// TODO: Consider distinguishing this case as `Ok(None)` to indicate that the
+		// request returned a response, but the tx is not available yet.
 		None => Err(anyhow::anyhow!("Unknown Transaction.")),
 	}
 }

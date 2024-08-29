@@ -4,17 +4,15 @@ use crate::sol::{
 };
 
 pub async fn get_median_prioritization_fee(sol_client: &SolRetryRpcClient) -> Option<u64> {
-	let mut fees = sol_client
-		.get_recent_prioritization_fees()
-		.await
-		.into_iter()
-		.map(|RpcPrioritizationFee { prioritization_fee, .. }| prioritization_fee)
-		.collect::<Vec<_>>();
+	let fees = sol_client.get_recent_prioritization_fees().await;
 
 	if fees.is_empty() {
-		// No fees were paid, we should not need to pay any either.
 		None
 	} else {
+		let mut fees = fees
+			.into_iter()
+			.map(|RpcPrioritizationFee { prioritization_fee, .. }| prioritization_fee)
+			.collect::<Vec<_>>();
 		let median_index = fees.len().saturating_sub(1) / 2;
 		// Note `select_nth_unstable` panics on an empty slice, but we've already handled that
 		// case.
