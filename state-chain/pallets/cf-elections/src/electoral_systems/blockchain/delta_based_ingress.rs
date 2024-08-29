@@ -6,7 +6,7 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
-use cf_chains::Chain;
+use cf_chains::{assets::any::Asset, Chain};
 use cf_primitives::AuthorityCount;
 use cf_traits::IngressSink;
 use cf_utilities::success_threshold_from_share_count;
@@ -478,64 +478,176 @@ mod test_delta_based_ingress {
 	use crate::electoral_system::mocks::MockElectoralSystem;
 	use cf_chains::mocks::MockEthereum;
 
-	// fn new_vote() -> (
-	// 	VotePropertiesOf<DeltaBasedIngress<MockResink, ()>>,
-	// 	<VoteStorage as VoteStorage>::Vote,
-	// ) {
-	// 	(
-	// 		Default::default(),
-	// 		BoundedBTreeMap::try_from(
-	// 			[((), ChannelTotalIngressed { block_number: 1, amount: 1 })]
-	// 				.into_iter()
-	// 				.collect(),
-	// 		)
-	// 		.unwrap(),
-	// 	)
-	// }
+	const EXPECTED_ASSET_AMOUNT: u128 = 200;
+	const UNEXPECTED_ASSET_AMOUNT: u128 = 100;
 
-	#[test]
-	fn check_consensus() {
-		// TODO: Write tests for `check_consensus`
-		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
-		pub struct MockResink;
+	const INITIAL_ASSET_AMOUNT: u128 = 50;
 
-		impl IngressSink for MockResink {
-			type Chain = MockEthereum;
+	const EXPECTED_BLOCK_NUMBER: u64 = 1;
+	pub struct MockResink;
 
-			fn on_ingress(
-				channel: <Self::Chain as Chain>::ChainAccount,
-				asset: <Self::Chain as Chain>::ChainAsset,
-				amount: <Self::Chain as Chain>::ChainAmount,
-				block_number: <Self::Chain as Chain>::ChainBlockNumber,
-				details: <Self::Chain as Chain>::DepositDetails,
-			) {
-				unimplemented!()
-			}
-			fn on_ingress_reverted(
-				channel: <Self::Chain as Chain>::ChainAccount,
-				asset: <Self::Chain as Chain>::ChainAsset,
-				amount: <Self::Chain as Chain>::ChainAmount,
-			) {
-				unimplemented!()
-			}
-			fn on_channel_closed(channel: <Self::Chain as Chain>::ChainAccount) {
-				unimplemented!()
-			}
+	impl IngressSink for MockResink {
+		type Chain = MockEthereum;
+
+		fn on_ingress(
+			channel: <Self::Chain as Chain>::ChainAccount,
+			asset: <Self::Chain as Chain>::ChainAsset,
+			amount: <Self::Chain as Chain>::ChainAmount,
+			block_number: <Self::Chain as Chain>::ChainBlockNumber,
+			details: <Self::Chain as Chain>::DepositDetails,
+		) {
+			unimplemented!()
+		}
+		fn on_ingress_reverted(
+			channel: <Self::Chain as Chain>::ChainAccount,
+			asset: <Self::Chain as Chain>::ChainAsset,
+			amount: <Self::Chain as Chain>::ChainAmount,
+		) {
+			unimplemented!()
+		}
+		fn on_channel_closed(channel: <Self::Chain as Chain>::ChainAccount) {
+			unimplemented!()
+		}
+	}
+
+	mod helpers {
+		use super::*;
+
+		pub fn generate_election_channels(
+			amount_of_channels_to_create: u64,
+			asset: <MockEthereum as Chain>::ChainAsset,
+			expected_amount: <MockEthereum as Chain>::ChainAmount,
+		) -> BTreeMap<u64, (OpenChannelDetails<MockEthereum>, ChannelTotalIngressed<MockEthereum>)>
+		{
+			(1..=amount_of_channels_to_create)
+				.map(|i| {
+					(
+						i,
+						(
+							OpenChannelDetails { asset, close_block: i },
+							ChannelTotalIngressed { block_number: i, amount: expected_amount },
+						),
+					)
+				})
+				.collect()
 		}
 
-		let mut votes = vec![((), 1u64), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6)];
-		let votes_len = votes.len() as u32;
+		pub fn generate_vote(
+			channel_id: u64,
+			channel_to_ingressed: ChannelTotalIngressed<MockEthereum>,
+		) -> BoundedBTreeMap<u64, ChannelTotalIngressed<MockEthereum>, ConstU32<50>> {
+			BoundedBTreeMap::try_from(
+				[(channel_id, channel_to_ingressed)].into_iter().collect::<BTreeMap<_, _>>(),
+			)
+			.unwrap()
+		}
 
-		use rand::{seq::SliceRandom, thread_rng};
+		pub fn check_consensus(
+			authorities: u64,
+			number_of_elections: u64,
+			is_voting_factor: u64,
+			correct_vote_factor: u64,
+			state: BTreeMap<u64, ChannelTotalIngressed<MockEthereum>>,
+			consensus_callback: impl Fn(Option<BTreeMap<u64, ChannelTotalIngressed<MockEthereum>>>),
+		) {
+			let mut electoral_system =
+				MockElectoralSystem::<DeltaBasedIngress<MockResink, ()>>::new((), (), ());
+			let election_channels =
+				generate_election_channels(3, MockEthereum::GAS_ASSET, INITIAL_ASSET_AMOUNT);
+			let mut votes = vec![];
 
-		let mut electoral_system =
-			MockElectoralSystem::<DeltaBasedIngress<MockResink, ()>>::new((), (), ());
+			for (channel_id, _) in election_channels.iter().enumerate() {
+				for i in 1..=authorities {
+					if i % is_voting_factor == 0 {
+						let amount = if i % correct_vote_factor == 0 {
+							EXPECTED_ASSET_AMOUNT
+						} else {
+							UNEXPECTED_ASSET_AMOUNT
+						};
+						votes.push((
+							(),
+							generate_vote(
+								channel_id.try_into().unwrap(),
+								ChannelTotalIngressed {
+									block_number: channel_id.try_into().unwrap(),
+									amount,
+								},
+							),
+						));
+					}
+				}
+			}
 
-		// let consensus = electoral_system
-		// 	.new_election((), (), ())
-		// 	.unwrap()
-		// 	.check_consensus(None, votes, votes_len)
-		// 	.unwrap();
+			consensus_callback(
+				electoral_system
+					.new_election(1, election_channels, state.clone())
+					.unwrap()
+					.check_consensus(None, votes, authorities.try_into().unwrap())
+					.expect("No storage error!"),
+			);
+		}
+	}
+
+	#[test]
+	fn consensus_with_majority() {
+		use helpers::check_consensus;
+
+		const NUMBER_OF_AUTHORITIES: u64 = 10;
+		const NUMBER_OF_ELECTIONS: u64 = 3;
+		// Every authority is voting correct.
+		const CORRECT_VOTE_FACTOR: u64 = 1;
+		// Every authority gives a vote.
+		const IS_VOTING_FACTOR: u64 = 1;
+
+		let expected_state: BTreeMap<u64, ChannelTotalIngressed<MockEthereum>> =
+			BTreeMap::from_iter((1..=NUMBER_OF_ELECTIONS).map(|i| {
+				(i, ChannelTotalIngressed { block_number: i, amount: EXPECTED_ASSET_AMOUNT })
+			}));
+
+		// Dosent matter for the consensus function.
+		let empty_state: BTreeMap<u64, ChannelTotalIngressed<MockEthereum>> = BTreeMap::new();
+
+		// 2/3 of the authorities vote for the expected amount, the rest vote for the unexpected
+		// amount -> consensus should be the expected amount
+		helpers::check_consensus(
+			NUMBER_OF_AUTHORITIES,
+			NUMBER_OF_ELECTIONS,
+			IS_VOTING_FACTOR,
+			CORRECT_VOTE_FACTOR,
+			empty_state,
+			|state| {
+				assert_eq!(state, Some(expected_state.clone()));
+			},
+		);
+	}
+
+	#[test]
+	fn no_consensus_threshold_not_reached() {
+		use helpers::check_consensus;
+
+		const NUMBER_OF_AUTHORITIES: u64 = 10;
+		const NUMBER_OF_ELECTIONS: u64 = 3;
+		// Every second authority votes for the unexpected amount.
+		const FALSE_VOTE_FACTOR: u64 = 2;
+		// Every third authority gives a vote.
+		const IS_VOTING_FACTOR: u64 = 3;
+
+		let expected_state: BTreeMap<u64, ChannelTotalIngressed<MockEthereum>> =
+			BTreeMap::from_iter((1..=NUMBER_OF_ELECTIONS).map(|i| {
+				(i, ChannelTotalIngressed { block_number: i, amount: EXPECTED_ASSET_AMOUNT })
+			}));
+		// 2/3 of the authorities vote for the expected amount, the rest vote for the unexpected
+		// amount -> consensus should be the expected amount
+		helpers::check_consensus(
+			NUMBER_OF_AUTHORITIES,
+			NUMBER_OF_ELECTIONS,
+			IS_VOTING_FACTOR,
+			FALSE_VOTE_FACTOR,
+			expected_state.clone(),
+			|state| {
+				assert_eq!(state, None);
+			},
+		);
 	}
 
 	#[test]
