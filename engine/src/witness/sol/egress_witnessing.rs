@@ -35,7 +35,9 @@ pub async fn get_finalized_fee(
 						// doesn't get the tx. But "Processed" is timing out so we better
 						// retry with finalized.
 						commitment: Some(CommitmentConfig::finalized()),
-						// Getting also type 0 even if we don't use them atm
+						// Using 0 as max_supported_transaction_version to ensure we query all
+						// transactions regardless of version. This is not strictly necessary, but
+						// ensures we don't miss anything.
 						max_supported_transaction_version: Some(0),
 					},
 				)
