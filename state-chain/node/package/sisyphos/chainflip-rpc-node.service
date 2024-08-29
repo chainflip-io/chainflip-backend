@@ -13,6 +13,7 @@ ExecStart=/usr/bin/chainflip-node \
     --rpc-cors=all \
     --rpc-methods=unsafe \
     --unsafe-rpc-external \
+    --max-runtime-instances 32 \
     --sync=warp
 
 [Install]
