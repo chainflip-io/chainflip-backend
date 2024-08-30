@@ -5,6 +5,8 @@ import { handleSubstrateError, lpMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { limitOrder } from './limit_order';
 import { rangeOrder } from './range_order';
+import { depositLiquidity } from './deposit_liquidity';
+import { deposits } from './setup_swaps';
 
 const LP: string = '//LP_3';
 
@@ -38,6 +40,20 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number)
   keyring.setSS58Format(2112);
   const lpUri = process.env.LP_URI || LP;
   const lp = keyring.createFromUri(lpUri);
+
+  await Promise.all([
+    // provide liquidity to LP_3
+    depositLiquidity('Usdc', 10000, false, LP),
+    depositLiquidity('Eth', deposits.get('Eth')!, false, LP),
+    depositLiquidity('Dot', deposits.get('Dot')!, false, LP),
+    depositLiquidity('Btc', deposits.get('Btc')!, false, LP),
+    depositLiquidity('Flip', deposits.get('Flip')!, false, LP),
+    depositLiquidity('Usdt', deposits.get('Usdt')!, false, LP),
+    depositLiquidity('ArbEth', deposits.get('ArbEth')!, false, LP),
+    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, LP),
+    depositLiquidity('Sol', deposits.get('Sol')!, false, LP),
+    depositLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, LP),
+  ]);
 
   // create a series of limit_order and save their info to delete them later on
   const promises = [];
