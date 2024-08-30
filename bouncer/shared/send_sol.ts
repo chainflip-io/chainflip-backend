@@ -74,7 +74,7 @@ export async function sendSol(solAddress: string, solAmount: string, log = true)
       lamports: BigInt(lamportsAmount),
     }),
   );
-  await signAndSendTxSol(transaction, log);
+  return signAndSendTxSol(transaction, log);
 }
 
 export async function spamSolana(prioFee: number, periodMilisec: number, spam: () => boolean) {
