@@ -122,11 +122,17 @@ pub use weights::WeightInfo;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
+use frame_support::dispatch::{DispatchResultWithPostInfo, PostDispatchInfo};
 pub use pallet::*;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
 pub use pallet::UniqueMonotonicIdentifier;
+
+/// This is used to calculate a static worst-case weight for the `clear_all_votes` extrinsic.
+/// Dynamic weights calculated with actual storage lengths will reduce this amount, but never
+/// increase it.
+const WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN: u32 = 100u32;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -245,6 +251,13 @@ pub mod pallet {
 	impl SharedDataHash {
 		pub fn of<Vote: frame_support::Hashable>(vote: &Vote) -> Self {
 			Self(vote.blake2_256().into())
+		}
+	}
+
+	impl BenchmarkValue for SharedDataHash {
+		#[cfg(feature = "runtime-benchmarks")]
+		fn benchmark_value() -> Self {
+			Self(Default::default())
 		}
 	}
 
@@ -400,7 +413,7 @@ pub mod pallet {
 	/// added the reference will be removed which will invalidate any votes that reference it,
 	/// forcing validators who referenced it to revote.
 	#[pallet::storage]
-	type SharedDataReferenceCount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub(crate) type SharedDataReferenceCount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Identity,
 		SharedDataHash,
@@ -447,7 +460,7 @@ pub mod pallet {
 
 	/// A mapping from election id and validator id to individual vote components.
 	#[pallet::storage]
-	type IndividualComponents<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub(crate) type IndividualComponents<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -922,7 +935,7 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	mod bitmap_components {
+	pub(crate) mod bitmap_components {
 		use super::{
 			BitmapComponents, Config, CorruptStorageError, Pallet, UniqueMonotonicIdentifier,
 		};
@@ -1072,7 +1085,7 @@ pub mod pallet {
 				Ok(r)
 			}
 
-			pub(super) fn with<R, F: for<'a> FnOnce(&'a Self) -> Result<R, CorruptStorageError>>(
+			pub(crate) fn with<R, F: for<'a> FnOnce(&'a Self) -> Result<R, CorruptStorageError>>(
 				current_epoch: EpochIndex,
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,
 				f: F,
@@ -1527,13 +1540,27 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(36)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::clear_all_votes(
+			WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN,
+			WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN,
+			WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN,
+			WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN,
+			WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN
+		))]
 		pub fn clear_all_votes(
 			origin: OriginFor<T>,
 			limit: u32,
 			ignore_corrupt_storage: CorruptStorageAdherance,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			Self::ensure_governance(origin, ignore_corrupt_storage)?;
+
+			let weight = T::WeightInfo::clear_all_votes(
+				SharedDataReferenceCount::<T, I>::iter_keys().count() as u32,
+				SharedData::<T, I>::iter_keys().count() as u32,
+				BitmapComponents::<T, I>::iter_keys().count() as u32,
+				IndividualComponents::<T, I>::iter_keys().count() as u32,
+				ElectionConsensusHistoryUpToDate::<T, I>::iter_keys().count() as u32,
+			);
 
 			Self::deposit_event(
 				// Note: non-short circuiting `&` is to ensure as much data as possible is deleted
@@ -1559,7 +1586,7 @@ pub mod pallet {
 				},
 			);
 
-			Ok(())
+			Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No })
 		}
 
 		// TODO Write list of things to check before calling

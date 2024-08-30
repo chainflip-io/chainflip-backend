@@ -1,7 +1,11 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use crate::{
-	electoral_system::{AuthorityVoteOf, ElectionIdentifierOf, ElectoralSystem},
+	bitmap_components::ElectionBitmapComponents,
+	electoral_system::{
+		AuthorityVoteOf, ElectionIdentifierOf, ElectoralSystem, IndividualComponentOf,
+		VotePropertiesOf,
+	},
 	vote_storage::VoteStorage,
 	*,
 };
@@ -24,6 +28,8 @@ use crate::Call;
 	where
 	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote: BenchmarkValue,
 	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData: BenchmarkValue,
+	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Properties: BenchmarkValue,
+	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::IndividualComponent: BenchmarkValue,
 	InitialStateOf<T, I>: BenchmarkValue,
 	<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings: BenchmarkValue,
 	<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings: BenchmarkValue,
@@ -451,6 +457,79 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn clear_all_votes(
+		a: Linear<1, 10>,
+		b: Linear<1, 10>,
+		c: Linear<1, 10>,
+		d: Linear<1, 10>,
+		e: Linear<1, 10>,
+	) {
+		let validators = ready_validator_for_vote::<T, I>(10);
+		let epoch = T::EpochInfo::epoch_index();
+
+		let reference_details = ReferenceDetails::<BlockNumberFor<T>> {
+			count: 1u32,
+			created: BlockNumberFor::<T>::from(1u32),
+			expires: BlockNumberFor::<T>::from(10u32),
+		};
+
+		(0..a).for_each(|i| {
+			SharedDataReferenceCount::<T, I>::insert(
+				SharedDataHash::of(&i),
+				UniqueMonotonicIdentifier::from_u64(i as u64),
+				reference_details.clone(),
+			);
+		});
+
+		(0..b).for_each(|i| {
+			SharedData::<T, I>::insert(
+				SharedDataHash::of(&i),
+				<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData::benchmark_value());
+		});
+
+		(0..c).for_each(|i| {
+			ElectionBitmapComponents::<T, I>::with(
+				epoch,
+				UniqueMonotonicIdentifier::from_u64(i as u64),
+				|_a| Ok(i),
+			)
+			.unwrap();
+		});
+
+		(0..d).for_each(|i| {
+			IndividualComponents::<T, I>::insert(
+				UniqueMonotonicIdentifier::from_u64(i as u64),
+				T::ValidatorId::from(validators[i as usize].clone()),
+				(
+					VotePropertiesOf::<T::ElectoralSystem>::benchmark_value(),
+					IndividualComponentOf::<T::ElectoralSystem>::benchmark_value(),
+				),
+			);
+		});
+
+		(0..e).for_each(|i| {
+			ElectionConsensusHistoryUpToDate::<T, I>::insert(
+				UniqueMonotonicIdentifier::from_u64(i as u64),
+				epoch,
+			);
+		});
+
+		let call = Call::<T, I>::clear_all_votes {
+			limit: 1_000u32,
+			ignore_corrupt_storage: CorruptStorageAdherance::Heed,
+		};
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		assert_eq!(ElectionConsensusHistoryUpToDate::<T, I>::iter_keys().count(), 0);
+	}
+
 	#[cfg(test)]
 	mod tests {
 		use super::*;
@@ -487,6 +566,7 @@ mod benchmarks {
 			test_pause_elections: _pause_elections(),
 			test_unpause_elections: _unpause_elections(),
 			test_validate_storage: _validate_storage(),
+			test_clear_all_votes: _clear_all_votes(10, 10, 10, 10, 10),
 		}
 	}
 }
