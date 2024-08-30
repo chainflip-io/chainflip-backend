@@ -1393,7 +1393,7 @@ pub mod pallet {
 		// ------------------------------------------------------------------------------------ //
 
 		#[pallet::call_index(16)]
-		#[pallet::weight(T::WeightInfo::initialize())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::initialize())]
 		pub fn initialize(
 			origin: OriginFor<T>,
 			initial_state: InitialStateOf<T, I>,
@@ -1564,7 +1564,7 @@ pub mod pallet {
 
 		// TODO Write list of things to check before calling
 		#[pallet::call_index(37)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::validate_storage())]
 		pub fn validate_storage(origin: OriginFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			match Status::<T, I>::get() {

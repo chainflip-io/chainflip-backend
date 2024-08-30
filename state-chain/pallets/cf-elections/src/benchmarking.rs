@@ -427,6 +427,30 @@ mod benchmarks {
 		assert_eq!(Status::<T, I>::get(), Some(ElectoralSystemStatus::Running));
 	}
 
+	#[benchmark]
+	fn validate_storage() {
+		let _validator_id = ready_validator_for_vote::<T, I>(1);
+
+		// Pause the election, and set corrupt storage to `true`
+		assert_ok!(Call::<T, I>::pause_elections {}
+			.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
+		Status::<T, I>::put(ElectoralSystemStatus::Paused { detected_corrupt_storage: true });
+
+		let call = Call::<T, I>::validate_storage {};
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		assert_eq!(
+			Status::<T, I>::get(),
+			Some(ElectoralSystemStatus::Paused { detected_corrupt_storage: false })
+		);
+	}
+
 	#[cfg(test)]
 	mod tests {
 		use super::*;
@@ -462,6 +486,7 @@ mod benchmarks {
 			test_invalidate_election_consensus_cache: _invalidate_election_consensus_cache(),
 			test_pause_elections: _pause_elections(),
 			test_unpause_elections: _unpause_elections(),
+			test_validate_storage: _validate_storage(),
 		}
 	}
 }
