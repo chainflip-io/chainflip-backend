@@ -1461,7 +1461,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(33)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::invalidate_election_consensus_cache())]
 		pub fn invalidate_election_consensus_cache(
 			origin: OriginFor<T>,
 			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
@@ -1497,7 +1497,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(35)]
-		#[pallet::weight(T::WeightInfo::pause_elections())]
+		#[pallet::weight(T::WeightInfo::unpause_elections())]
 		pub fn unpause_elections(
 			origin: OriginFor<T>,
 			require_votes_cleared: bool,

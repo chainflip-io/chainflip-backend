@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use crate::{
-	electoral_system::{AuthorityVoteOf, ElectoralSystem},
+	electoral_system::{AuthorityVoteOf, ElectionIdentifierOf, ElectoralSystem},
 	vote_storage::VoteStorage,
 	*,
 };
@@ -55,6 +55,37 @@ mod benchmarks {
 		});
 
 		validators
+	}
+
+	fn setup_validators_and_vote<T: crate::pallet::Config<I>, I: 'static>(
+		validator_counts: u32,
+		vote_value: <<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote,
+	) -> ElectionIdentifierOf<T::ElectoralSystem> {
+		// Setup a validator set of 150 as in the case of Mainnet.
+		let validators = ready_validator_for_vote::<T, I>(validator_counts);
+		let caller = validators[0].clone();
+		let (election_identifier, ..) = Pallet::<T, I>::electoral_data(&caller.clone().into())
+			.unwrap()
+			.current_elections
+			.into_iter()
+			.next()
+			.unwrap();
+
+		validators.iter().for_each(|v| {
+			assert_ok!(Pallet::<T, I>::vote(
+				RawOrigin::Signed(v.clone()).into(),
+				BoundedBTreeMap::try_from(
+					[(
+						election_identifier,
+						AuthorityVoteOf::<T::ElectoralSystem>::Vote(vote_value.clone()),
+					)]
+					.into_iter()
+					.collect::<BTreeMap<_, _>>(),
+				)
+				.unwrap(),
+			));
+		});
+		election_identifier
 	}
 
 	#[benchmark]
@@ -256,7 +287,7 @@ mod benchmarks {
 		let call = Call::<T, I>::update_settings {
 			unsynchronised_settings: Some(BenchmarkValue::benchmark_value()),
 			settings: Some(BenchmarkValue::benchmark_value()),
-			ignore_corrupt_storage: CorruptStorageAdherance::Ignore,
+			ignore_corrupt_storage: CorruptStorageAdherance::Heed,
 		};
 
 		#[block]
@@ -282,7 +313,7 @@ mod benchmarks {
 		let lifetime = BlockNumberFor::<T>::from(100u32);
 		let call = Call::<T, I>::set_shared_data_reference_lifetime {
 			blocks: lifetime,
-			ignore_corrupt_storage: CorruptStorageAdherance::Ignore,
+			ignore_corrupt_storage: CorruptStorageAdherance::Heed,
 		};
 
 		#[block]
@@ -298,35 +329,12 @@ mod benchmarks {
 	#[benchmark]
 	fn clear_election_votes() {
 		// Setup a validator set of 150 as in the case of Mainnet.
-		let validators = ready_validator_for_vote::<T, I>(150);
-		let caller = validators[0].clone();
-		let (election_identifier, ..) = Pallet::<T, I>::electoral_data(&caller.clone().into())
-			.unwrap()
-			.current_elections
-			.into_iter()
-			.next()
-			.unwrap();
-
-		validators.iter().for_each(|v| {
-			assert_ok!(Pallet::<T, I>::vote(
-				RawOrigin::Signed(v.clone()).into(),
-				BoundedBTreeMap::try_from(
-					[(
-						election_identifier,
-						AuthorityVoteOf::<T::ElectoralSystem>::Vote(
-							BenchmarkValue::benchmark_value()
-						),
-					)]
-					.into_iter()
-					.collect::<BTreeMap<_, _>>(),
-				)
-				.unwrap(),
-			));
-		});
+		let election_identifier =
+			setup_validators_and_vote::<T, I>(150, BenchmarkValue::benchmark_value());
 
 		let call = Call::<T, I>::clear_election_votes {
 			election_identifier,
-			ignore_corrupt_storage: CorruptStorageAdherance::Ignore,
+			ignore_corrupt_storage: CorruptStorageAdherance::Heed,
 			check_election_exists: true,
 		};
 
@@ -341,6 +349,38 @@ mod benchmarks {
 			access_impls::ElectionAccess::<T, I>::new(election_identifier)
 				.unique_monotonic_identifier()
 		));
+	}
+
+	#[benchmark]
+	fn invalidate_election_consensus_cache() {
+		// Setup a validator set of 150 and reach consensus
+		let election_identifier =
+			setup_validators_and_vote::<T, I>(150, BenchmarkValue::benchmark_value());
+
+		let call = Call::<T, I>::invalidate_election_consensus_cache {
+			election_identifier,
+			ignore_corrupt_storage: CorruptStorageAdherance::Heed,
+			check_election_exists: true,
+		};
+
+		let epoch = T::EpochInfo::epoch_index();
+		let monotonic_identifier = access_impls::ElectionAccess::<T, I>::new(election_identifier)
+			.unique_monotonic_identifier();
+
+		Pallet::<T, I>::on_finalize(frame_system::Pallet::<T>::block_number());
+		assert_eq!(
+			ElectionConsensusHistoryUpToDate::<T, I>::get(monotonic_identifier),
+			Some(epoch),
+		);
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		assert!(!ElectionConsensusHistoryUpToDate::<T, I>::contains_key(monotonic_identifier));
 	}
 
 	#[benchmark]
@@ -417,8 +457,9 @@ mod benchmarks {
 			test_provide_shared_data: _provide_shared_data(),
 			test_initialize: _initialize(),
 			test_update_settings: _update_settings(),
-			set_shared_data_reference_lifetime: _set_shared_data_reference_lifetime(),
-			clear_election_votes: _clear_election_votes(),
+			test_set_shared_data_reference_lifetime: _set_shared_data_reference_lifetime(),
+			test_clear_election_votes: _clear_election_votes(),
+			test_invalidate_election_consensus_cache: _invalidate_election_consensus_cache(),
 			test_pause_elections: _pause_elections(),
 			test_unpause_elections: _unpause_elections(),
 		}
