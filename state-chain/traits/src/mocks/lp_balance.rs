@@ -83,9 +83,8 @@ impl LpBalanceApi for MockBalance {
 	fn record_fees(_who: &Self::AccountId, _amount: AssetAmount, _asset: Asset) {}
 
 	fn free_balances(who: &Self::AccountId) -> Result<AssetMap<AssetAmount>, DispatchError> {
-		Ok(AssetMap::try_from_iter(Asset::all().map(|asset| {
+		Ok(AssetMap::from_iter_or_default(Asset::all().map(|asset| {
 			(asset, Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default())
-		}))
-		.unwrap())
+		})))
 	}
 }
