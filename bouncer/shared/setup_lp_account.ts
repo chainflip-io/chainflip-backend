@@ -1,7 +1,7 @@
 import type { HexString } from '@polkadot/util/types';
 import { fundStateChainAccount } from '@chainflip/cli';
 import { Wallet, ethers } from 'ethers';
-import { Keyring } from './polkadot/keyring';
+import { Keyring } from '../polkadot/keyring';
 import { getNextEvmNonce } from './send_evm';
 import {
   getContractAddress,
