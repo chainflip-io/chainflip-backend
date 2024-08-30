@@ -66,8 +66,8 @@ use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
 };
 use pallet_cf_pools::{
-	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
-	PoolPriceV2, UnidirectionalPoolDepth,
+	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, Pool, PoolLiquidity, PoolOrderbook,
+	PoolPriceV1, PoolPriceV2, UnidirectionalPoolDepth,
 };
 
 use crate::chainflip::EvmLimit;
@@ -1571,6 +1571,20 @@ impl_runtime_apis! {
 			LiquidityPools::pool_info(base_asset, quote_asset).map_err(Into::into)
 		}
 
+		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>> {
+
+
+			System::read_events_no_consensus().filter_map(|event_record| {
+
+				if let RuntimeEvent::LiquidityPools(pools_event) = event_record.event {
+					Some(pools_event)
+				} else {
+					None
+				}
+			}).collect()
+
+		}
+
 		fn cf_pool_depth(base_asset: Asset, quote_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchErrorWithMessage> {
 			LiquidityPools::pool_depth(base_asset, quote_asset, tick_range).map_err(Into::into)
 		}
@@ -2023,8 +2037,14 @@ impl_runtime_apis! {
 			pallet_cf_environment::RuntimeSafeMode::<Runtime>::get()
 		}
 
-		fn cf_pools() -> Vec<PoolPairsMap<Asset>> {
+		fn cf_pool_pairs() -> Vec<PoolPairsMap<Asset>> {
 			LiquidityPools::pools()
+		}
+
+		fn cf_pools() -> BTreeMap<AssetPair, Pool<Runtime>> {
+
+			pallet_cf_pools::Pools::<Runtime>::iter().collect()
+
 		}
 	}
 

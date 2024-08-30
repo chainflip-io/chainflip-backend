@@ -23,6 +23,7 @@ use jsonrpsee::{
 	types::error::{CallError, SubscriptionEmptyError},
 	SubscriptionSink,
 };
+use order_fills::OrderFills;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
 use pallet_cf_swapping::SwapLegInfo;
@@ -57,6 +58,7 @@ use std::{
 };
 
 pub mod monitoring;
+pub mod order_fills;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcEpochState {
@@ -816,6 +818,9 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_scheduled_swaps", item = BlockUpdate<SwapResponse>)]
 	fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
 
+	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
+	fn cf_subscribe_lp_order_fills(&self);
+
 	#[method(name = "scheduled_swaps")]
 	fn cf_scheduled_swaps(
 		&self,
@@ -1553,7 +1558,7 @@ where
 				let mut map = AssetMap::default();
 				self.client
 					.runtime_api()
-					.cf_pools(self.unwrap_or_best(at))
+					.cf_pool_pairs(self.unwrap_or_best(at))
 					.map_err(to_rpc_error)?
 					.iter()
 					.for_each(|asset_pair| {
@@ -1601,7 +1606,9 @@ where
 			true,  /* only_on_changes */
 			false, /* end_on_error */
 			sink,
-			move |api, hash| api.cf_pool_price(hash, from_asset, to_asset),
+			move |api, _, hash| {
+				api.cf_pool_price(hash, from_asset, to_asset).map(|price| (price, ()))
+			},
 		)
 	}
 
@@ -1615,11 +1622,11 @@ where
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
-			move |api, hash| {
+			move |api, _, hash| {
 				api.cf_pool_price_v2(hash, base_asset, quote_asset)
 					.map_err(to_rpc_error)
 					.and_then(|result| result.map_err(map_dispatch_error))
-					.map(|price| PoolPriceV2 { base_asset, quote_asset, price })
+					.map(|price| (PoolPriceV2 { base_asset, quote_asset, price }, ()))
 			},
 		)
 	}
@@ -1643,14 +1650,17 @@ where
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
-			move |api, hash| {
-				Ok::<_, ApiError>(SwapResponse {
-					swaps: api
-						.cf_scheduled_swaps(hash, base_asset, quote_asset)?
-						.into_iter()
-						.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
-						.collect(),
-				})
+			move |api, _, hash| {
+				Ok::<_, ApiError>((
+					SwapResponse {
+						swaps: api
+							.cf_scheduled_swaps(hash, base_asset, quote_asset)?
+							.into_iter()
+							.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
+							.collect(),
+					},
+					(),
+				))
 			},
 		)
 	}
@@ -1689,18 +1699,21 @@ where
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
-			move |api, hash| {
-				Ok::<RpcPrewitnessedSwap, jsonrpsee::core::Error>(RpcPrewitnessedSwap {
-					base_asset,
-					quote_asset,
-					side,
-					amounts: api
-						.cf_prewitness_swaps(hash, base_asset, quote_asset, side)
-						.map_err(to_rpc_error)?
-						.into_iter()
-						.map(|s| s.into())
-						.collect(),
-				})
+			move |api, _, hash| {
+				Ok::<_, jsonrpsee::core::Error>((
+					RpcPrewitnessedSwap {
+						base_asset,
+						quote_asset,
+						side,
+						amounts: api
+							.cf_prewitness_swaps(hash, base_asset, quote_asset, side)
+							.map_err(to_rpc_error)?
+							.into_iter()
+							.map(|s| s.into())
+							.collect(),
+					},
+					(),
+				))
 			},
 		)
 	}
@@ -1725,6 +1738,37 @@ where
 				.map(|s| s.into())
 				.collect(),
 		})
+	}
+
+	fn cf_subscribe_lp_order_fills(
+		&self,
+		sink: SubscriptionSink,
+	) -> Result<(), SubscriptionEmptyError> {
+		self.new_subscription(
+			false, /* only_on_changes */
+			true,  /* end_on_error */
+			sink,
+			move |api, prev_pools, hash| {
+				let pools = api.cf_pools(hash).map_err(to_rpc_error)?;
+
+				let Some(prev_pools) = prev_pools else {
+					// Report 0 changes on the very first processed block
+					return Ok((OrderFills { fills: vec![] }, pools));
+				};
+
+				let pools = api.cf_pools(hash).map_err(to_rpc_error)?;
+
+				let pools_events = api.cf_lp_events(hash).map_err(to_rpc_error)?;
+
+				let fills = order_fills::order_fills_from_block_updates(
+					prev_pools.clone(),
+					pools.clone(),
+					pools_events,
+				);
+
+				Ok::<_, jsonrpsee::core::Error>((fills, pools))
+			},
+		)
 	}
 
 	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
@@ -1818,7 +1862,7 @@ where
 	fn cf_available_pools(&self, at: Option<Hash>) -> RpcResult<Vec<PoolPairsMap<Asset>>> {
 		self.client
 			.runtime_api()
-			.cf_pools(self.unwrap_or_best(at))
+			.cf_pool_pairs(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)
 	}
 
@@ -1871,7 +1915,12 @@ where
 	fn new_subscription<
 		T: Serialize + Send + Clone + Eq + 'static,
 		E: std::error::Error + Send + Sync + 'static,
-		F: Fn(&C::Api, state_chain_runtime::Hash) -> Result<T, E> + Send + Clone + 'static,
+		// State to carry forward between calls to the closure.
+		S: 'static + Clone + Send,
+		F: Fn(&C::Api, Option<S>, state_chain_runtime::Hash) -> Result<(T, S), E>
+			+ Send
+			+ Clone
+			+ 'static,
 	>(
 		&self,
 		only_on_changes: bool,
@@ -1883,19 +1932,21 @@ where
 
 		let info = self.client.info();
 
-		let initial = match f(&self.client.runtime_api(), info.best_hash) {
-			Ok(initial) => initial,
-			Err(e) => {
-				let _ = sink.reject(jsonrpsee::core::Error::from(
-					sc_rpc_api::state::error::Error::Client(Box::new(e)),
-				));
-				return Ok(())
-			},
-		};
+		let (initial_item, initial_state) =
+			match f(&self.client.runtime_api(), None, info.best_hash) {
+				Ok(initial) => initial,
+				Err(e) => {
+					let _ = sink.reject(jsonrpsee::core::Error::from(
+						sc_rpc_api::state::error::Error::Client(Box::new(e)),
+					));
+					return Ok(())
+				},
+			};
+
 		let stream = futures::stream::iter(std::iter::once(Ok(BlockUpdate {
 			block_hash: info.best_hash,
 			block_number: info.best_number,
-			data: initial.clone(),
+			data: initial_item.clone(),
 		})))
 		.chain(
 			self.client
@@ -1903,20 +1954,26 @@ where
 				.filter(|n| futures::future::ready(n.is_new_best))
 				.filter_map({
 					let client = self.client.clone();
-					let mut previous = initial;
+
+					let mut previous = initial_item;
+					let mut previous_state = initial_state;
+
 					move |n| {
-						futures::future::ready(match f(&client.runtime_api(), n.hash) {
-							Ok(new) if !only_on_changes || new != previous => {
-								previous = new.clone();
-								Some(Ok(BlockUpdate {
-									block_hash: n.hash,
-									block_number: *n.header.number(),
-									data: new,
-								}))
+						futures::future::ready(
+							match f(&client.runtime_api(), Some(previous_state.clone()), n.hash) {
+								Ok((new, state)) if !only_on_changes || new != previous => {
+									previous = new.clone();
+									previous_state = state;
+									Some(Ok(BlockUpdate {
+										block_hash: n.hash,
+										block_number: *n.header.number(),
+										data: new,
+									}))
+								},
+								Err(error) if end_on_error => Some(Err(error)),
+								_ => None,
 							},
-							Err(error) if end_on_error => Some(Err(error)),
-							_ => None,
-						})
+						)
 					}
 				}),
 		);
