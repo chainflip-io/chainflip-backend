@@ -327,9 +327,6 @@ export async function upgradeNetworkPrebuilt(
 
   console.log("Version we're upgrading from: " + cleanOldVersion);
 
-  if (cleanOldVersion === '1.6.1') {
-    await setupLpAccount('//LP_3');
-  }
   const nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
   const nodeVersion = nodeBinaryVersion.match(versionRegex)?.[0] ?? '';
   console.log("Node version we're upgrading to: " + nodeVersion);
@@ -352,6 +349,10 @@ export async function upgradeNetworkPrebuilt(
   } else {
     console.log('The versions are incompatible.');
     await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
+  }
+
+  if (cleanOldVersion === '1.6.1') {
+    await setupLpAccount('//LP_3');
   }
 
   console.log('Upgrade complete.');
