@@ -2,6 +2,72 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.1] - 2024-08-30
+
+### Fixes
+
+- Downgrade log message severity for voting / retrier
+
+## [1.6.0] - 2024-08-23
+
+### Features
+
+- Solana gas tweaks ([#5140](https://github.com/chainflip-io/chainflip-backend/issues/5140))
+- Core DCA ([#5106](https://github.com/chainflip-io/chainflip-backend/issues/5106))
+- Add DCA details to scheduled swaps subscription ([#5182](https://github.com/chainflip-io/chainflip-backend/issues/5182))
+- Solana deployments ([#5188](https://github.com/chainflip-io/chainflip-backend/issues/5188))
+- Charging broker fee per chunk and in USDC ([#5161](https://github.com/chainflip-io/chainflip-backend/issues/5161))
+- FoK for CCM swaps ([#5187](https://github.com/chainflip-io/chainflip-backend/issues/5187))
+- Return early if no client ready on retry limited requests ([#5057](https://github.com/chainflip-io/chainflip-backend/issues/5057))
+- Expose zero remaining value orders from cf_pool_orders RPC ([#5042](https://github.com/chainflip-io/chainflip-backend/issues/5042))
+- Upload `chainflip-engine` shared libraries to S3 💾 ([#5061](https://github.com/chainflip-io/chainflip-backend/issues/5061))
+- Exclude validators with negative rep from auction ([#5062](https://github.com/chainflip-io/chainflip-backend/issues/5062))
+- RPC to return available pools ([#5065](https://github.com/chainflip-io/chainflip-backend/issues/5065))
+- Add boost balances to account info ([#5028](https://github.com/chainflip-io/chainflip-backend/issues/5028))
+- Apicall stores signer, store current on chain key ([#5063](https://github.com/chainflip-io/chainflip-backend/issues/5063))
+- Allow arbitrary accounts to be used as affiliate broker ([#5097](https://github.com/chainflip-io/chainflip-backend/issues/5097))
+- Add FoK config items to `cf_swapping_environment` ([#5099](https://github.com/chainflip-io/chainflip-backend/issues/5099))
+- Emit swap request first ([#5102](https://github.com/chainflip-io/chainflip-backend/issues/5102))
+- Solana chain integration ([#4849](https://github.com/chainflip-io/chainflip-backend/issues/4849))
+- Governance extrinsic to recover Solana Durable Nonces ([#5130](https://github.com/chainflip-io/chainflip-backend/issues/5130))
+- Add maybe_ccm_limit ([#5151](https://github.com/chainflip-io/chainflip-backend/issues/5151))
+- Solana resigning ([#5124](https://github.com/chainflip-io/chainflip-backend/issues/5124))
+- Sol event encoding tests ([#5156](https://github.com/chainflip-io/chainflip-backend/issues/5156))
+- DCA parameter validation ([#5144](https://github.com/chainflip-io/chainflip-backend/issues/5144))
+- Move asset balances into asset-balances pallet (([PRO-1422](https://linear.app/chainflip/issue/PRO-1422))) ([#5083](https://github.com/chainflip-io/chainflip-backend/issues/5083))
+- Bouncer can observe past events ([#5136](https://github.com/chainflip-io/chainflip-backend/issues/5136))
+- Generic configurable election-based witnessing pallet ([#5060](https://github.com/chainflip-io/chainflip-backend/issues/5060))
+- Added benchmark for delete vote ([#5189](https://github.com/chainflip-io/chainflip-backend/issues/5189))
+- Use encoded address in ccm deposit metadata in events ([#5192](https://github.com/chainflip-io/chainflip-backend/issues/5192))
+- Add the ability to close all open orders ([#5038](https://github.com/chainflip-io/chainflip-backend/issues/5038))
+- Solana chain tracking events ([#5195](https://github.com/chainflip-io/chainflip-backend/issues/5195))
+
+### Fixes
+
+- Add missing Arbitrum block_height ([#5126](https://github.com/chainflip-io/chainflip-backend/issues/5126))
+- Account deletion logic to keep boost funds into consideration ([#5059](https://github.com/chainflip-io/chainflip-backend/issues/5059))
+- Grep correct spec_version ([#5070](https://github.com/chainflip-io/chainflip-backend/issues/5070))
+- 3-node localnet in CI 🥽 ([#5085](https://github.com/chainflip-io/chainflip-backend/issues/5085))
+- Pallet versions should match release + bump old dylib version to 1.5.1 ([#5142](https://github.com/chainflip-io/chainflip-backend/issues/5142))
+- Qualify nodes based on reputation ([#5118](https://github.com/chainflip-io/chainflip-backend/issues/5118))
+- Don't panic in SCC extrinsic detection (([PRO-1250](https://linear.app/chainflip/issue/PRO-1250))) ([#5146](https://github.com/chainflip-io/chainflip-backend/issues/5146))
+- Use encoded addresses in refund params for events ([#5138](https://github.com/chainflip-io/chainflip-backend/issues/5138))
+- Expose solana ws rpc endpoint 🐛☀️ ([#5162](https://github.com/chainflip-io/chainflip-backend/issues/5162))
+- Allow unswept funds to be used in boost ([#5164](https://github.com/chainflip-io/chainflip-backend/issues/5164))
+
+### Refactor
+
+- Impl_pallet_safe_mode for instantiable pallets ([#5058](https://github.com/chainflip-io/chainflip-backend/issues/5058))
+- Bouncer cmd for FoK swap ([#5103](https://github.com/chainflip-io/chainflip-backend/issues/5103))
+- Move info to correct environment ([#5115](https://github.com/chainflip-io/chainflip-backend/issues/5115))
+
+### Testing
+
+- Bouncer Fill or Kill test ([#5056](https://github.com/chainflip-io/chainflip-backend/issues/5056))
+- FoK 0 refund duration ([#5111](https://github.com/chainflip-io/chainflip-backend/issues/5111))
+- Add Solana delta ingress witnessing test to bouncer ([#5155](https://github.com/chainflip-io/chainflip-backend/issues/5155))
+- Bouncer test for DCA Swap ([#5137](https://github.com/chainflip-io/chainflip-backend/issues/5137))
+
 ## [1.5.1] - 2024-08-13
 
 ### Documentation
