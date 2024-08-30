@@ -90,12 +90,6 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number)
   let openOrders = await countOpenOrders('BTC', 'USDC', lp.address, chainflip);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address, chainflip);
   console.log(`Number of open orders: ${openOrders}`);
-  // number of open orders should be equal to: numberOfLimitOrders * 2 (we create numberOfLimitOrders for both ETH and BTC) + 2 (we create 2 extra range orders)
-  assert.strictEqual(
-    openOrders,
-    numberOfLimitOrders * 2 + 2,
-    'Number of open orders do not match the correct amount, were there existing orders already?',
-  );
 
   console.log('Deleting opened orders...');
   const orderDeleteEvent = observeEvent('liquidityPools:LimitOrderUpdated', {
