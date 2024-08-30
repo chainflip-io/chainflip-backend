@@ -54,7 +54,7 @@ http_endpoint = "http://localhost:8547"
 
 [sol.rpc]
 http_endpoint = "http://localhost:8899"
-ws_endpoint = "ws://unused"
+ws_endpoint = "ws://unused:1234"
 
 # optional
 #[sol.backup_rpc]
