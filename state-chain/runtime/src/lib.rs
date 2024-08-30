@@ -1573,7 +1573,6 @@ impl_runtime_apis! {
 
 		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>> {
 
-
 			System::read_events_no_consensus().filter_map(|event_record| {
 
 				if let RuntimeEvent::LiquidityPools(pools_event) = event_record.event {

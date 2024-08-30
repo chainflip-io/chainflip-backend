@@ -1606,9 +1606,7 @@ where
 			true,  /* only_on_changes */
 			false, /* end_on_error */
 			sink,
-			move |api, _, hash| {
-				api.cf_pool_price(hash, from_asset, to_asset).map(|price| (price, ()))
-			},
+			move |api, hash| api.cf_pool_price(hash, from_asset, to_asset),
 		)
 	}
 
@@ -1622,11 +1620,11 @@ where
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
-			move |api, _, hash| {
+			move |api, hash| {
 				api.cf_pool_price_v2(hash, base_asset, quote_asset)
 					.map_err(to_rpc_error)
 					.and_then(|result| result.map_err(map_dispatch_error))
-					.map(|price| (PoolPriceV2 { base_asset, quote_asset, price }, ()))
+					.map(|price| PoolPriceV2 { base_asset, quote_asset, price })
 			},
 		)
 	}
@@ -1650,17 +1648,14 @@ where
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
-			move |api, _, hash| {
-				Ok::<_, ApiError>((
-					SwapResponse {
-						swaps: api
-							.cf_scheduled_swaps(hash, base_asset, quote_asset)?
-							.into_iter()
-							.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
-							.collect(),
-					},
-					(),
-				))
+			move |api, hash| {
+				Ok::<_, ApiError>(SwapResponse {
+					swaps: api
+						.cf_scheduled_swaps(hash, base_asset, quote_asset)?
+						.into_iter()
+						.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
+						.collect(),
+				})
 			},
 		)
 	}
@@ -1699,21 +1694,18 @@ where
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
-			move |api, _, hash| {
-				Ok::<_, jsonrpsee::core::Error>((
-					RpcPrewitnessedSwap {
-						base_asset,
-						quote_asset,
-						side,
-						amounts: api
-							.cf_prewitness_swaps(hash, base_asset, quote_asset, side)
-							.map_err(to_rpc_error)?
-							.into_iter()
-							.map(|s| s.into())
-							.collect(),
-					},
-					(),
-				))
+			move |api, hash| {
+				Ok::<_, jsonrpsee::core::Error>(RpcPrewitnessedSwap {
+					base_asset,
+					quote_asset,
+					side,
+					amounts: api
+						.cf_prewitness_swaps(hash, base_asset, quote_asset, side)
+						.map_err(to_rpc_error)?
+						.into_iter()
+						.map(|s| s.into())
+						.collect(),
+				})
 			},
 		)
 	}
@@ -1744,7 +1736,7 @@ where
 		&self,
 		sink: SubscriptionSink,
 	) -> Result<(), SubscriptionEmptyError> {
-		self.new_subscription(
+		self.new_subscription_with_state(
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
@@ -1908,11 +1900,30 @@ where
 		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
+	fn new_subscription<
+		T: Serialize + Send + Clone + Eq + 'static,
+		E: std::error::Error + Send + Sync + 'static,
+		F: Fn(&C::Api, state_chain_runtime::Hash) -> Result<T, E> + Send + Clone + 'static,
+	>(
+		&self,
+		only_on_changes: bool,
+		end_on_error: bool,
+		sink: SubscriptionSink,
+		f: F,
+	) -> Result<(), SubscriptionEmptyError> {
+		self.new_subscription_with_state(
+			only_on_changes,
+			end_on_error,
+			sink,
+			move |api, _state, hash| f(api, hash).map(|res| (res, ())),
+		)
+	}
+
 	/// The subscription will return the first value immediately and then either return new values
 	/// only when it changes, or every new block. Note in both cases this can skip blocks. Also this
 	/// subscription can either filter out, or end the stream if the provided async closure returns
 	/// an error.
-	fn new_subscription<
+	fn new_subscription_with_state<
 		T: Serialize + Send + Clone + Eq + 'static,
 		E: std::error::Error + Send + Sync + 'static,
 		// State to carry forward between calls to the closure.
