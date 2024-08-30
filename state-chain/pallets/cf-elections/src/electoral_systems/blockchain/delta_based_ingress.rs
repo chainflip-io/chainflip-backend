@@ -360,16 +360,18 @@ where
 							|channel_vote| channel_vote.amount,
 						);
 						if contributing_channel_votes.len() >= threshold {
+							let new_block_number =
+								contributing_channel_votes[threshold - 1].block_number;
+							let new_amount = contributing_channel_votes
+								[contributing_channel_votes.len() - threshold]
+								.amount;
 							Some((
 								account,
 								ChannelTotalIngressed {
 									// Requires 2/3 to decrease the block_number,
-									block_number: contributing_channel_votes[threshold - 1]
-										.block_number,
+									block_number: new_block_number,
 									// Requires 2/3 to increase the amount
-									amount: contributing_channel_votes
-										[contributing_channel_votes.len() - threshold]
-										.amount,
+									amount: new_amount,
 								},
 							))
 						} else {
@@ -477,13 +479,16 @@ mod test_delta_based_ingress {
 	use super::*;
 	use crate::electoral_system::mocks::MockElectoralSystem;
 	use cf_chains::mocks::MockEthereum;
+	use itertools::Itertools;
 
 	const EXPECTED_ASSET_AMOUNT: u128 = 200;
 	const UNEXPECTED_ASSET_AMOUNT: u128 = 100;
 
-	const INITIAL_ASSET_AMOUNT: u128 = 50;
+	const INITIAL_ASSET_AMOUNT: u128 = 3;
 
-	const EXPECTED_BLOCK_NUMBER: u64 = 1;
+	const EXPECTED_BLOCK_NUMBER: u64 = 2;
+	const INITIAL_BLOCK_NUMBER: u64 = 1;
+
 	pub struct MockResink;
 
 	impl IngressSink for MockResink {
@@ -516,7 +521,6 @@ mod test_delta_based_ingress {
 		pub fn generate_election_channels(
 			amount_of_channels_to_create: u64,
 			asset: <MockEthereum as Chain>::ChainAsset,
-			expected_amount: <MockEthereum as Chain>::ChainAmount,
 		) -> BTreeMap<u64, (OpenChannelDetails<MockEthereum>, ChannelTotalIngressed<MockEthereum>)>
 		{
 			(1..=amount_of_channels_to_create)
@@ -524,8 +528,11 @@ mod test_delta_based_ingress {
 					(
 						i,
 						(
-							OpenChannelDetails { asset, close_block: i },
-							ChannelTotalIngressed { block_number: i, amount: expected_amount },
+							OpenChannelDetails { asset, close_block: INITIAL_BLOCK_NUMBER },
+							ChannelTotalIngressed {
+								block_number: INITIAL_BLOCK_NUMBER,
+								amount: INITIAL_ASSET_AMOUNT,
+							},
 						),
 					)
 				})
@@ -552,25 +559,19 @@ mod test_delta_based_ingress {
 		) {
 			let mut electoral_system =
 				MockElectoralSystem::<DeltaBasedIngress<MockResink, ()>>::new((), (), ());
-			let election_channels =
-				generate_election_channels(3, MockEthereum::GAS_ASSET, INITIAL_ASSET_AMOUNT);
+			let election_channels = generate_election_channels(3, MockEthereum::GAS_ASSET);
 			let mut votes = vec![];
 
 			for (channel_id, _) in election_channels.iter().enumerate() {
 				for i in 1..=authorities {
 					if i % is_voting_factor == 0 {
-						let amount = if i % correct_vote_factor == 0 {
-							EXPECTED_ASSET_AMOUNT
-						} else {
-							UNEXPECTED_ASSET_AMOUNT
-						};
 						votes.push((
 							(),
 							generate_vote(
 								channel_id.try_into().unwrap(),
 								ChannelTotalIngressed {
-									block_number: channel_id.try_into().unwrap(),
-									amount,
+									block_number: EXPECTED_BLOCK_NUMBER,
+									amount: 4u128,
 								},
 							),
 						));
@@ -586,6 +587,63 @@ mod test_delta_based_ingress {
 					.expect("No storage error!"),
 			);
 		}
+	}
+
+	#[test]
+	fn consensus_easy_path() {
+		const NUMBER_OF_AUTHORITIES: u32 = 10;
+		const NUMBER_OF_CHANNELS: u64 = 3;
+
+		let mut electoral_system =
+			MockElectoralSystem::<DeltaBasedIngress<MockResink, ()>>::new((), (), ());
+
+		// Setup the channels for an election
+		let election_channels =
+			helpers::generate_election_channels(NUMBER_OF_CHANNELS, MockEthereum::GAS_ASSET);
+
+		let voted_amounts: Vec<u128> = vec![1, 5, 3, 4, 7, 100, 8, 2, 9, 10];
+
+		// Verify the underlying expectations around the math is correct.
+		assert_eq!(
+			longest_increasing_subsequence_by_key(&voted_amounts, |x| *x),
+			vec![1, 3, 4, 7, 8, 9, 10]
+		);
+
+		let mut votes = vec![];
+
+		for channel_id in 1..=NUMBER_OF_CHANNELS {
+			for amount in voted_amounts.iter() {
+				votes.push((
+					(),
+					helpers::generate_vote(
+						channel_id,
+						ChannelTotalIngressed {
+							block_number: EXPECTED_BLOCK_NUMBER,
+							amount: *amount,
+						},
+					),
+				));
+			}
+		}
+
+		let empty_state: BTreeMap<u64, ChannelTotalIngressed<MockEthereum>> = BTreeMap::new();
+
+		let consensus = electoral_system
+			.new_election(1, election_channels.clone(), empty_state.clone())
+			.unwrap()
+			.check_consensus(None, votes, NUMBER_OF_AUTHORITIES)
+			.expect("No storage error!");
+
+		let consensus = consensus.expect("To have consensus!");
+
+		let expected_state: BTreeMap<u64, ChannelTotalIngressed<MockEthereum>> = election_channels
+			.iter()
+			.map(|(channel_id, (_, channel_total_ingressed))| {
+				(*channel_id, *channel_total_ingressed)
+			})
+			.collect();
+
+		assert_eq!(consensus, empty_state);
 	}
 
 	#[test]
@@ -653,5 +711,13 @@ mod test_delta_based_ingress {
 	#[test]
 	fn on_finalize() {
 		// TODO: Write tests for `on_finalize`
+	}
+
+	#[test]
+	fn contributing_channels() {
+		assert_eq!(
+			longest_increasing_subsequence_by_key(&[1, 5, 3, 6, 10, 8, 9, 14, 2, 3], |x| *x),
+			vec![1, 3, 6, 10, 14]
+		);
 	}
 }
