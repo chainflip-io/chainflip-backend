@@ -822,10 +822,11 @@ impl ArbOptions {
 
 impl SolOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "sol.rpc.ws_endpoint", &self.sol_ws_endpoint);
-		insert_command_line_option(map, "sol.rpc.http_endpoint", &self.sol_http_endpoint);
+		// Defaulting to hardcoded unused ws endpoint because they are not used now
+		insert_command_line_option(map, "sol.rpc.ws_endpoint", &Some("ws://unused:4321"));
+		insert_command_line_option(map, "sol.backup_rpc.ws_endpoint", &Some("ws://second.unused:4321"));
 
-		insert_command_line_option(map, "sol.backup_rpc.ws_endpoint", &self.sol_backup_ws_endpoint);
+		insert_command_line_option(map, "sol.rpc.http_endpoint", &self.sol_http_endpoint);
 		insert_command_line_option(
 			map,
 			"sol.backup_rpc.http_endpoint",
