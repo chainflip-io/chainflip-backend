@@ -11,7 +11,7 @@ pub mod build_helpers;
 // relevant crates.
 // Should also check that the compatibility function below `args_compatible_with_old` is correct.
 pub const OLD_VERSION: &str = "1.5.1";
-pub const NEW_VERSION: &str = "1.6.1";
+pub const NEW_VERSION: &str = "1.6.2";
 
 pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
 pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
