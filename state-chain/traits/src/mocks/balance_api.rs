@@ -72,10 +72,9 @@ impl BalanceApi for MockBalance {
 	}
 
 	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
-		AssetMap::try_from_iter(Asset::all().map(|asset| {
+		AssetMap::from_iter_or_default(Asset::all().map(|asset| {
 			(asset, Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default())
 		}))
-		.unwrap()
 	}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
