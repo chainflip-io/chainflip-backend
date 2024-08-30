@@ -264,23 +264,21 @@ impl RpcAccountInfo {
 	fn broker(balance: u128, broker_info: BrokerInfo) -> Self {
 		Self::Broker {
 			flip_balance: balance.into(),
-			earned_fees: cf_chains::assets::any::AssetMap::try_from_iter(
+			earned_fees: cf_chains::assets::any::AssetMap::from_iter_or_default(
 				broker_info
 					.earned_fees
 					.iter()
 					.map(|(asset, balance)| (*asset, (*balance).into())),
-			)
-			.unwrap(),
+			),
 		}
 	}
 
 	fn lp(info: LiquidityProviderInfo, network: NetworkEnvironment, balance: u128) -> Self {
 		Self::LiquidityProvider {
 			flip_balance: balance.into(),
-			balances: cf_chains::assets::any::AssetMap::try_from_iter(
+			balances: cf_chains::assets::any::AssetMap::from_iter_or_default(
 				info.balances.iter().map(|(asset, balance)| (*asset, (*balance).into())),
-			)
-			.unwrap(),
+			),
 			refund_addresses: info
 				.refund_addresses
 				.into_iter()

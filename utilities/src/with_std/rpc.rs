@@ -8,6 +8,12 @@ pub enum NumberOrHex {
 	Hex(U256),
 }
 
+impl Default for NumberOrHex {
+	fn default() -> Self {
+		Self::Hex(Default::default())
+	}
+}
+
 impl Serialize for NumberOrHex {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
