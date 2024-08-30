@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.2] - 2024-08-30
+
+### Fixes
+
+- Change try_from_iter into from_iter_or_default
+
 ## [1.6.1] - 2024-08-30
 
 ### Fixes
