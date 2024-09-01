@@ -230,8 +230,8 @@ impl_default_benchmark_value!(u64);
 #[macro_export]
 macro_rules! impl_tuple_benchmark_value {
 	($($t:ident),* $(,)?) => {
+		#[cfg(feature = "runtime-benchmarks")]
 		impl<$($t: BenchmarkValue, )*> BenchmarkValue for ($($t,)*) {
-			#[cfg(feature = "runtime-benchmarks")]
 			fn benchmark_value() -> Self {
 				(
 					$($t::benchmark_value(),)*

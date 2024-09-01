@@ -138,6 +138,7 @@ const WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN: u32 = 100u32;
 pub mod pallet {
 	use super::*;
 
+	#[cfg(feature = "runtime-benchmarks")]
 	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_primitives::{AuthorityCount, EpochIndex};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
@@ -254,8 +255,8 @@ pub mod pallet {
 		}
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	impl BenchmarkValue for SharedDataHash {
-		#[cfg(feature = "runtime-benchmarks")]
 		fn benchmark_value() -> Self {
 			Self(Default::default())
 		}
@@ -305,10 +306,10 @@ pub mod pallet {
 		pub settings: ElectoralSettings,
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	impl<A: BenchmarkValue, B: BenchmarkValue, C: BenchmarkValue> BenchmarkValue
 		for InitialState<A, B, C>
 	{
-		#[cfg(feature = "runtime-benchmarks")]
 		fn benchmark_value() -> Self {
 			InitialState::<A, B, C> {
 				unsynchronised_state: A::benchmark_value(),

@@ -249,8 +249,8 @@ pub struct SolanaFeeUnsynchronisedSettings {
 	pub fee_multiplier: FixedU128,
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for SolanaFeeUnsynchronisedSettings {
-	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self {
 		Self { fee_multiplier: 1u128.into() }
 	}
@@ -261,8 +261,9 @@ pub struct SolanaIngressSettings {
 	pub vault_program: SolAddress,
 	pub usdc_token_mint_pubkey: SolAddress,
 }
+
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for SolanaIngressSettings {
-	#[cfg(feature = "runtime-benchmarks")]
 	fn benchmark_value() -> Self {
 		Self {
 			vault_program: SolAddress([0xf0; 32]),
