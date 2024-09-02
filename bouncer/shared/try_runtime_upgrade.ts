@@ -61,7 +61,7 @@ export async function tryRuntimeUpgrade(
   api: ApiPromise,
   networkUrl: string,
   runtimePath: string,
-  lastN = 50,
+  lastN = 2,
 ) {
   if (block === 'all') {
     const latestBlock = await api.rpc.chain.getBlockHash();
