@@ -26,7 +26,7 @@ use cf_primitives::{
 	GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
-use cf_traits::{BalanceApi, EpochInfo, SwapType};
+use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, SwapType};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
@@ -283,7 +283,7 @@ fn basic_pool_setup_provision_and_swap() {
 					deposit_witnesses: vec![DepositWitness {
 						deposit_address,
 						asset: cf_primitives::chains::assets::eth::Asset::Eth,
-						amount: DEPOSIT_AMOUNT,
+						amount: (DEPOSIT_AMOUNT + EthereumChainTracking::estimate_ingress_fee(cf_primitives::chains::assets::eth::Asset::Eth)),
 						deposit_details: Default::default(),
 					}],
 					block_height: 0,
@@ -400,12 +400,22 @@ fn can_process_ccm_via_swap_deposit_address() {
 				pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 			)
 			.unwrap();
+		let ingress_fee = sp_std::cmp::min(
+			Swapping::calculate_input_for_gas_output::<Ethereum>(
+				cf_primitives::chains::assets::eth::Asset::Flip,
+				EthereumChainTracking::estimate_ingress_fee(
+					cf_primitives::chains::assets::eth::Asset::Flip,
+				),
+			)
+			.unwrap(),
+			u128::MAX,
+		);
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::process_deposits {
 				deposit_witnesses: vec![DepositWitness {
 					deposit_address,
 					asset: cf_primitives::chains::assets::eth::Asset::Flip,
-					amount: DEPOSIT_AMOUNT,
+					amount: (DEPOSIT_AMOUNT + ingress_fee),
 					deposit_details: Default::default(),
 				}],
 				block_height: 0,
@@ -452,13 +462,15 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Weight::from_parts(1_000_000_000_000, 0),
 		);
 
+		let _source_asset_swap_amount = PRINCIPAL_AMOUNT + ingress_fee;
+
 		let (.., gas_swap_id) = assert_events_match!(
 			Runtime,
 			RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::AssetSwapped {
 					from: Asset::Flip,
 					to: Asset::Usdc,
-					input_amount: PRINCIPAL_AMOUNT,
+					input_amount: _source_asset_swap_amount,
 
 					..
 				},

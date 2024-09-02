@@ -226,8 +226,8 @@ impl ExtBuilder {
 				init_chain_state: ChainState::<Ethereum> {
 					block_height: 0,
 					tracked_data: EthereumTrackedData {
-						base_fee: 0u32.into(),
-						priority_fee: 0u32.into(),
+						base_fee: 100000u32.into(),
+						priority_fee: 1u32.into(),
 					},
 				},
 			},
