@@ -1,7 +1,7 @@
 use crate::{
 	electoral_system::{
-		AuthorityVoteOf, ElectionIdentifierOf, ElectionReadAccess, ElectionWriteAccess,
-		ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
+		AuthorityVoteOf, ConsensusStatus, ElectionIdentifierOf, ElectionReadAccess,
+		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError,
@@ -111,5 +111,66 @@ impl<
 				None
 			},
 		)
+	}
+}
+
+#[cfg(test)]
+mod test_egress_success {
+
+	use crate::electoral_system::mocks::MockElectoralSystem;
+
+	use super::*;
+
+	thread_local! {
+		pub static HOOK_HAS_BEEN_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	}
+
+	pub struct MockHook;
+	impl OnEgressSuccess<(), u64> for MockHook {
+		fn on_egress_success(_id: (), _value: u64) {
+			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.set(true));
+		}
+	}
+
+	impl MockHook {
+		pub fn get_hook_state() -> bool {
+			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get())
+		}
+	}
+
+	#[test]
+	fn positive_consensus() {
+		let mut electoral_system =
+			MockElectoralSystem::<EgressSuccess<(), u64, (), MockHook>>::new((), (), ());
+		let consensus = electoral_system
+			.new_election((), (), ())
+			.unwrap()
+			.check_consensus(None, vec![((), 2), ((), 2), ((), 2)], 3)
+			.unwrap();
+		assert_eq!(consensus, Some(2));
+	}
+
+	#[test]
+	fn no_consensus_possible_because_of_wrong_vote() {
+		let mut electoral_system =
+			MockElectoralSystem::<EgressSuccess<(), u64, (), MockHook>>::new((), (), ());
+		let consensus = electoral_system
+			.new_election((), (), ())
+			.unwrap()
+			.check_consensus(None, vec![((), 2), ((), 1), ((), 2)], 3)
+			.unwrap();
+		assert_eq!(consensus, None);
+	}
+
+	#[test]
+	fn on_finalize() {
+		let mut electoral_system =
+			MockElectoralSystem::<EgressSuccess<(), u64, (), MockHook>>::new((), (), ());
+		electoral_system
+			.new_election((), (), ())
+			.unwrap()
+			.set_consensus_status(ConsensusStatus::Changed { previous: 1, new: 2 });
+		electoral_system.finalize_elections(&()).unwrap();
+		assert!(MockHook::get_hook_state());
 	}
 }
