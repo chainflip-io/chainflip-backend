@@ -223,8 +223,9 @@ jobs:
         env:
           BINARY_ROOT_PATH: ./latest-release-bins
           DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.*log
+          # Hard coded to 1.6.1 commit - will be changed as part of PRO-1606
         run: |
-          git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
+          git checkout 630706a6547e3c604fd98ae03ad38bdf5c29e4b2
           set -x
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p /tmp/chainflip/bashful
@@ -247,8 +248,9 @@ jobs:
       - name: Run bouncer on latest release 🙅‍♂️
         if: inputs.run-job
         id: pre-upgrade-bouncer
+        # Hard coded to 1.6.1 commit - will be changed as part of PRO-1606
         run: |
-          git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
+          git checkout 630706a6547e3c604fd98ae03ad38bdf5c29e4b2
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
