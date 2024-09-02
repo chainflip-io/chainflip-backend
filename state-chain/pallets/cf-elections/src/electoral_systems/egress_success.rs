@@ -124,19 +124,22 @@ mod test_egress_success {
 	use crate::electoral_system::ConsensusStatus;
 
 	thread_local! {
-		pub static HOOK_HAS_BEEN_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+		pub static HOOK_VALUE: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
 	}
 
 	pub struct MockHook;
 	impl OnEgressSuccess<(), u64> for MockHook {
-		fn on_egress_success(_id: (), _value: u64) {
-			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.set(true));
+		fn on_egress_success(_id: (), value: u64) {
+			HOOK_VALUE.with(|cell| cell.set(Some(value)));
 		}
 	}
 
 	impl MockHook {
-		pub fn get_hook_state() -> bool {
-			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get())
+		pub fn hook_called() -> bool {
+			HOOK_VALUE.with(|value| value.get().is_some())
+		}
+		pub fn hook_value() -> Option<u64> {
+			HOOK_VALUE.with(|value| value.get())
 		}
 	}
 
@@ -192,13 +195,15 @@ mod test_egress_success {
 
 	#[test]
 	fn on_finalize() {
+		const NEW_CONSENSUS: u64 = 2;
 		let mut electoral_system =
 			MockElectoralSystem::<EgressSuccess<(), u64, (), MockHook>>::new((), (), ());
-		electoral_system
-			.new_election((), (), ())
-			.unwrap()
-			.set_consensus_status(ConsensusStatus::Changed { previous: 1, new: 2 });
+		electoral_system.new_election((), (), ()).unwrap().set_consensus_status(
+			ConsensusStatus::Gained { most_recent: None, new: NEW_CONSENSUS },
+		);
+		assert!(!MockHook::hook_called());
 		electoral_system.finalize_elections(&()).unwrap();
-		assert!(MockHook::get_hook_state());
+		assert!(MockHook::hook_called());
+		assert_eq!(MockHook::hook_value(), Some(NEW_CONSENSUS));
 	}
 }
