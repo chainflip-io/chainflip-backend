@@ -11,7 +11,7 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::{any, any::AssetMap},
+	chains::assets::any::{self, AssetMap},
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, ForeignChain,
 	NetworkEnvironment, SemVer, SwapId,
 };
@@ -44,11 +44,11 @@ use state_chain_runtime::{
 	},
 	runtime_apis::{
 		BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage,
-		FailingWitnessValidators, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		ValidatorInfo,
+		ElectoralRuntimeApi, FailingWitnessValidators, LiquidityProviderBoostPoolInfo,
+		LiquidityProviderInfo, ValidatorInfo,
 	},
 	safe_mode::RuntimeSafeMode,
-	Hash, NetworkFee,
+	Hash, NetworkFee, SolanaInstance,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -145,6 +145,7 @@ impl From<MonitoringData> for RpcMonitoringData {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
 	pub swap_id: SwapId,
+	pub swap_request_id: SwapId,
 	pub base_asset: Asset,
 	pub quote_asset: Asset,
 	pub side: Side,
@@ -154,15 +155,29 @@ pub struct ScheduledSwap {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub source_amount: Option<U256>,
 	pub execute_at: BlockNumber,
+	pub remaining_chunks: u32,
+	pub chunk_interval: u32,
 }
 
 impl ScheduledSwap {
 	fn new(
-		SwapLegInfo { swap_id, base_asset, quote_asset, side, amount, source_asset, source_amount}: SwapLegInfo,
+		SwapLegInfo {
+			swap_id,
+			swap_request_id,
+			base_asset,
+			quote_asset,
+			side,
+			amount,
+			source_asset,
+			source_amount,
+			remaining_chunks,
+			chunk_interval,
+		}: SwapLegInfo,
 		execute_at: BlockNumber,
 	) -> Self {
 		ScheduledSwap {
 			swap_id,
+			swap_request_id,
 			base_asset,
 			quote_asset,
 			side,
@@ -170,6 +185,8 @@ impl ScheduledSwap {
 			source_asset,
 			source_amount: source_amount.map(Into::into),
 			execute_at,
+			remaining_chunks,
+			chunk_interval,
 		}
 	}
 }
@@ -866,6 +883,21 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RuntimeSafeMode>;
+
+	#[method(name = "solana_electoral_data")]
+	fn cf_solana_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "solana_filter_votes")]
+	fn cf_solana_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -915,7 +947,7 @@ where
 		+ 'static
 		+ HeaderBackend<B>
 		+ BlockchainEvents<B>,
-	C::Api: CustomRuntimeApi<B>,
+	C::Api: CustomRuntimeApi<B> + ElectoralRuntimeApi<B, SolanaInstance>,
 {
 	fn cf_is_auction_phase(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<bool> {
 		self.client
@@ -1790,6 +1822,36 @@ where
 			.runtime_api()
 			.cf_pools(self.unwrap_or_best(at))
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_solana_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		let runtime_api = self.client.runtime_api();
+		ElectoralRuntimeApi::<_, SolanaInstance>::cf_electoral_data(
+			&*runtime_api,
+			self.unwrap_or_best(at),
+			validator,
+		)
+		.map_err(to_rpc_error)
+	}
+
+	fn cf_solana_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		let runtime_api = self.client.runtime_api();
+		ElectoralRuntimeApi::<_, SolanaInstance>::cf_filter_votes(
+			&*runtime_api,
+			self.unwrap_or_best(at),
+			validator,
+			proposed_votes,
+		)
+		.map_err(to_rpc_error)
 	}
 }
 

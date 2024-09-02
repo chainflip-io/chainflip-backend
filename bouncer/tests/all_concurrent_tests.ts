@@ -1,7 +1,7 @@
 #!/usr/bin/env -S NODE_OPTIONS=--max-old-space-size=6144 pnpm tsx
 import { SwapContext, testAllSwaps } from '../shared/swapping';
 import { testEvmDeposits } from '../shared/evm_deposits';
-import { runWithTimeout } from '../shared/utils';
+import { checkAvailabilityAllSolanaNonces, runWithTimeout } from '../shared/utils';
 import { testFundRedeem } from '../shared/fund_redeem';
 import { testMultipleMembersGovernance } from '../shared/multiple_members_governance';
 import { testLpApi } from '../shared/lp_api_test';
@@ -11,6 +11,7 @@ import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
 import { testBoostingSwap } from '../shared/boost';
 import { observeBadEvent } from '../shared/utils/substrate';
 import { testFillOrKill } from '../shared/fill_or_kill';
+import { testDCASwaps } from '../shared/DCA_test';
 
 const swapContext = new SwapContext();
 
@@ -32,13 +33,14 @@ async function runAllConcurrentTests() {
   const tests = [
     swapLessThanED(),
     testAllSwaps(swapContext),
-    testEvmDeposits(),
+    testEvmDeposits(numberOfNodes),
     testFundRedeem('redeem'),
     testMultipleMembersGovernance(),
     testLpApi(),
     testBrokerFeeCollection(),
     testBoostingSwap(),
     testFillOrKill(),
+    testDCASwaps(),
   ];
 
   // Tests that only work if there is more than one node
@@ -51,6 +53,8 @@ async function runAllConcurrentTests() {
   await Promise.all(tests);
 
   await Promise.all([broadcastAborted.stop(), feeDeficitRefused.stop()]);
+
+  await checkAvailabilityAllSolanaNonces();
 }
 
 runWithTimeout(runAllConcurrentTests(), 2000000)

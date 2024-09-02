@@ -3,7 +3,7 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = 'build.rs'
 edition = '2021'
 name = "chainflip-engine"
-version = "1.6.0"
+version = "1.7.0"
 
 [lib]
 crate-type = ["lib"]
@@ -78,6 +78,7 @@ multisig = { path = "multisig" }
 pallet-cf-account-roles = { path = "../state-chain/pallets/cf-account-roles" }
 pallet-cf-broadcast = { path = "../state-chain/pallets/cf-broadcast" }
 pallet-cf-chain-tracking = { path = "../state-chain/pallets/cf-chain-tracking" }
+pallet-cf-elections = { path = "../state-chain/pallets/cf-elections" }
 pallet-cf-environment = { path = "../state-chain/pallets/cf-environment" }
 pallet-cf-flip = { path = "../state-chain/pallets/cf-flip" }
 pallet-cf-governance = { path = "../state-chain/pallets/cf-governance" }

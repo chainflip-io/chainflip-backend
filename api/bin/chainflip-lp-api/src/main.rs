@@ -8,7 +8,7 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		types::{LimitOrder, RangeOrder},
+		types::{LimitOrRangeOrder, LimitOrder, RangeOrder},
 		ApiWaitForResult, LpApi, PoolPairsMap, Side, Tick,
 	},
 	primitives::{
@@ -29,9 +29,11 @@ use jsonrpsee::{
 	types::SubscriptionResult,
 	SubscriptionSink,
 };
-use pallet_cf_pools::{AssetPair, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{
+	AssetPair, CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE,
+};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
-use sp_core::{H256, U256};
+use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
 use std::{
 	collections::{HashMap, HashSet},
 	ops::Range,
@@ -198,6 +200,19 @@ pub trait Rpc {
 
 	#[method(name = "order_fills")]
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
+
+	#[method(name = "cancel_all_orders")]
+	async fn cancel_all_orders(
+		&self,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<Vec<ApiWaitForResult<Vec<LimitOrRangeOrder>>>>;
+
+	#[method(name = "cancel_orders_batch")]
+	async fn cancel_orders_batch(
+		&self,
+		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
 }
 
 pub struct RpcServerImpl {
@@ -497,6 +512,93 @@ impl RpcServer for RpcServerImpl {
 		};
 
 		Ok(order_fills(state_chain_client.clone(), block).await?)
+	}
+
+	async fn cancel_all_orders(
+		&self,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<Vec<ApiWaitForResult<Vec<LimitOrRangeOrder>>>> {
+		let mut orders_to_delete: Vec<CloseOrder> = vec![];
+		let pool_environment = self
+			.api
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_pools_environment(None)
+			.await?;
+
+		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
+			if let Some(pool) = pool_environment.fees[base_asset] {
+				let orders = self
+					.api
+					.state_chain_client
+					.base_rpc_client
+					.raw_rpc_client
+					.cf_pool_orders(
+						base_asset,
+						pool.quote_asset,
+						Some(self.api.state_chain_client.account_id()),
+						None,
+						None,
+					)
+					.await?;
+				for order in orders.range_orders {
+					orders_to_delete.push(CloseOrder::Range {
+						base_asset,
+						quote_asset: pool.quote_asset,
+						id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
+					});
+				}
+				for order in orders.limit_orders.asks {
+					orders_to_delete.push(CloseOrder::Limit {
+						base_asset,
+						quote_asset: pool.quote_asset,
+						side: Side::Sell,
+						id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
+					});
+				}
+				for order in orders.limit_orders.bids {
+					orders_to_delete.push(CloseOrder::Limit {
+						base_asset,
+						quote_asset: pool.quote_asset,
+						side: Side::Buy,
+						id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
+					});
+				}
+			}
+		}
+
+		// in case there are more than 100 elements we need to split the orders into chunks of 100
+		// and submit multiple extrinsics
+		let mut extrinsic_submissions = vec![];
+		for order_chunk in orders_to_delete.chunks(MAX_ORDERS_DELETE as usize) {
+			extrinsic_submissions.push(
+				self.api
+					.lp_api()
+					.cancel_orders_batch(
+						BoundedVec::<_, ConstU32<MAX_ORDERS_DELETE>>::try_from(
+							order_chunk.to_vec(),
+						)
+						.expect("Guaranteed by `chunk` method."),
+						wait_for.unwrap_or_default(),
+					)
+					.await?,
+			);
+		}
+
+		Ok(extrinsic_submissions)
+	}
+
+	async fn cancel_orders_batch(
+		&self,
+		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
+		Ok(self
+			.api
+			.lp_api()
+			.cancel_orders_batch(orders, wait_for.unwrap_or_default())
+			.await?)
 	}
 }
 

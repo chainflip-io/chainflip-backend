@@ -7,7 +7,12 @@ import {
   TransactionInstruction,
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
-import { getContractAddress, getSolWhaleKeyPair, encodeSolAddress } from '../shared/utils';
+import {
+  getContractAddress,
+  getSolWhaleKeyPair,
+  encodeSolAddress,
+  solanaNumberOfNonces,
+} from '../shared/utils';
 import { sendSol, signAndSendTxSol } from '../shared/send_sol';
 import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
 import { signAndSendTxEvm } from '../shared/send_evm';
@@ -164,8 +169,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
 
   // Set nonce authority to the new AggKey
   tx = new Transaction();
-  const numberOfNonceAccounts = 10;
-  for (let i = 0; i < numberOfNonceAccounts; i++) {
+  for (let i = 0; i < solanaNumberOfNonces; i++) {
     // Using the index stringified as the seed ('0', '1', '2' ...)
     const seed = i.toString();
 

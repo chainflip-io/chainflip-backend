@@ -1472,7 +1472,7 @@ dependencies = [
 
 [[package]]
 name = "cf-engine-dylib"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "chainflip-engine",
  "engine-proc-macros",
@@ -1504,6 +1504,7 @@ dependencies = [
  "pallet-cf-asset-balances",
  "pallet-cf-broadcast",
  "pallet-cf-chain-tracking",
+ "pallet-cf-elections",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",
@@ -1716,7 +1717,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-api"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1762,7 +1763,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-broker-api"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "chainflip-api",
@@ -1783,7 +1784,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-cli"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "cf-chains",
@@ -1803,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-engine"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "async-broadcast 0.5.1",
@@ -1851,6 +1852,7 @@ dependencies = [
  "pallet-cf-broadcast",
  "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",
+ "pallet-cf-elections",
  "pallet-cf-environment",
  "pallet-cf-flip",
  "pallet-cf-funding",
@@ -1938,7 +1940,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-lp-api"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "cf-primitives",
@@ -1963,7 +1965,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-node"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
@@ -3380,7 +3382,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "engine-proc-macros"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "engine-upgrade-utils",
  "proc-macro2",
@@ -3390,7 +3392,7 @@ dependencies = [
 
 [[package]]
 name = "engine-runner"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -5427,6 +5429,15 @@ name = "itertools"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
 dependencies = [
  "either",
 ]
@@ -7539,6 +7550,29 @@ dependencies = [
  "sp-io 23.0.0",
  "sp-runtime 24.0.0",
  "sp-std 8.0.0",
+]
+
+[[package]]
+name = "pallet-cf-elections"
+version = "0.1.0"
+dependencies = [
+ "bitvec",
+ "cf-chains",
+ "cf-primitives",
+ "cf-test-utilities",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "itertools 0.13.0",
+ "log",
+ "parity-scale-codec",
+ "rand 0.8.5",
+ "scale-info",
+ "serde",
+ "sp-core 21.0.0",
+ "sp-std 8.0.0",
+ "utilities",
 ]
 
 [[package]]
@@ -12628,7 +12662,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "state-chain-runtime"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "cf-amm",
  "cf-chains",
@@ -12657,6 +12691,7 @@ dependencies = [
  "pallet-cf-broadcast",
  "pallet-cf-cfe-interface",
  "pallet-cf-chain-tracking",
+ "pallet-cf-elections",
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",

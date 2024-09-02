@@ -1,0 +1,85 @@
+[package]
+name = 'pallet-cf-elections'
+version = '0.1.0'
+authors = ['Chainflip <https://chainflip.io>']
+description = 'FRAME pallet for chainflip witnessing.'
+edition = '2021'
+homepage = 'https://chainflip.io'
+license = 'TBC'
+publish = false
+repository = 'https://github.com/chainflip-io/chainflip-backend/pallets/'
+
+[package.metadata.docs.rs]
+targets = ['x86_64-unknown-linux-gnu']
+
+[lints]
+workspace = true
+
+[dependencies]
+
+# Internal deps
+cf-chains = { path = '../../chains', default-features = false }
+cf-traits = { path = '../../traits', default-features = false }
+cf-primitives = { path = '../../primitives', default-features = false }
+
+# Local deps
+cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
+
+# Non-substrate external deps
+bitvec = { default-features = false, version = '1.0', features = ['alloc'] }
+itertools = { version = "0.13", default_features = false }
+log = { version = '0.4.16', default-features = false }
+serde = { default_features = false, version = '1.0.195', features = [
+  'alloc',
+  'derive',
+] }
+
+# Parity deps
+codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
+  'derive',
+  'bit-vec',
+] }
+frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true, default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+scale-info = { version = '2.10.0', default-features = false, features = [
+  'derive',
+  'bit-vec',
+] }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+
+[dev-dependencies]
+cf-test-utilities = { path = '../../test-utilities' }
+rand = "0.8.4"
+
+[features]
+default = ['std']
+std = [
+  'bitvec/std',
+  'cf-chains/std',
+  'cf-traits/std',
+  'cf-primitives/std',
+  'cf-utilities/std',
+  'codec/std',
+  'frame-support/std',
+  'frame-system/std',
+  'scale-info/std',
+  'sp-std/std',
+  'sp-core/std',
+  'log/std',
+  'serde/std',
+]
+try-runtime = [
+  'frame-support/try-runtime',
+  'frame-system/try-runtime',
+  'cf-traits/try-runtime',
+]
+runtime-benchmarks = [
+  'cf-chains/runtime-benchmarks',
+  'cf-primitives/runtime-benchmarks',
+  'cf-traits/runtime-benchmarks',
+  'frame-benchmarking/runtime-benchmarks',
+  'frame-support/runtime-benchmarks',
+  'frame-system/runtime-benchmarks',
+]

@@ -48,6 +48,8 @@ export type Chain = SDKChain;
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
+export const solanaNumberOfNonces = 10;
+
 export function getContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
     case 'Ethereum':
@@ -553,20 +555,20 @@ export async function observeBalanceIncrease(
   address: string,
   oldBalance: string,
 ): Promise<number> {
-  for (let i = 0; i < 1200; i++) {
+  for (let i = 0; i < 2400; i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > Number(oldBalance)) {
       return newBalance;
     }
 
-    await sleep(1000);
+    await sleep(3000);
   }
 
   return Promise.reject(new Error('Failed to observe balance increase'));
 }
 
 export async function observeFetch(asset: Asset, address: string): Promise<void> {
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 360; i++) {
     const balance = Number(await getBalance(asset, address));
     if (balance === 0) {
       const chain = chainFromAsset(asset);
@@ -1056,4 +1058,25 @@ export async function startEngines(
   await sleep(7000);
 
   console.log('Engines started');
+}
+
+// Check that all Solana Nonces are available
+export async function checkAvailabilityAllSolanaNonces() {
+  // Check that all Solana nonces are available
+  await using chainflip = await getChainflipApi();
+  const maxRetries = 5; // 30 seconds
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .toJSON() as any[];
+    if (availableNonces.length === solanaNumberOfNonces) {
+      break;
+    } else if (attempt === maxRetries - 1) {
+      throw new Error(
+        `Unexpected number of available nonces: ${availableNonces.length}, expected ${solanaNumberOfNonces}`,
+      );
+    } else {
+      await sleep(6000);
+    }
+  }
 }

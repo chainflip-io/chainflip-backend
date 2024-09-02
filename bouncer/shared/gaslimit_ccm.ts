@@ -18,7 +18,7 @@ import {
 import { requestNewSwap } from './perform_swap';
 import { send } from './send';
 import { spamEvm } from './send_evm';
-import { observeEvent, observeBadEvent } from './utils/substrate';
+import { observeEvent, observeBadEvent, getChainflipApi } from './utils/substrate';
 import { CcmDepositMetadata } from './new_swap';
 import { spamSolana } from './send_sol';
 
@@ -87,20 +87,32 @@ function getChainMinFee(chain: Chain): number {
 }
 
 async function getChainFees(chain: Chain) {
-  const trackedData = (
-    await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
-  ).data.newChainState.trackedData;
-
   let baseFee = 0;
-  if (chain !== 'Solana') {
-    baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
-  }
-  // Arbitrum doesn't have priority fee
   let priorityFee = 0;
-  if (chain !== 'Arbitrum') {
-    priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
-  }
 
+  switch (chain) {
+    case 'Ethereum':
+    case 'Arbitrum': {
+      const trackedData = (
+        await observeEvent(`${chain.toLowerCase()}ChainTracking:ChainStateUpdated`).event
+      ).data.newChainState.trackedData;
+      baseFee = Number(trackedData.baseFee.replace(/,/g, ''));
+
+      if (chain === 'Ethereum') {
+        priorityFee = Number(trackedData.priorityFee.replace(/,/g, ''));
+      }
+      break;
+    }
+    case 'Solana': {
+      await using chainflip = await getChainflipApi();
+      const trackedData = await chainflip.query.solanaElections.electoralUnsynchronisedState();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      priorityFee = Number((trackedData.toJSON() as any[])[1].toString().replace(/,/g, ''));
+      break;
+    }
+    default:
+      throw new Error(`Chain ${chain} is not supported for CCM`);
+  }
   return { baseFee, priorityFee };
 }
 
@@ -490,6 +502,9 @@ async function spamChain(chain: Chain) {
 }
 
 export async function testGasLimitCcmSwaps() {
+  console.log('=== Starting gasLimit CCM test ===');
+  console.log('Spamming chains to increase fees...');
+
   const spammingEth = spamChain('Ethereum');
   const spammingArb = spamChain('Arbitrum');
   const spammingSol = spamChain('Solana');

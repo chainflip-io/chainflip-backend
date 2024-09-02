@@ -21,6 +21,16 @@ jobs:
     secrets: inherit
     with:
       profile: "release"
+  build-benchmarks:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "benchmarks"
+      upload-name: "chainflip-backend-bin-benchmarks"
+      binary-subdir: release
+  test-benchmarks:
+    needs: [build-benchmarks]
+    uses: ./.github/workflows/_41_test_benchmarks.yml
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
     uses: ./.github/workflows/_20_build.yml

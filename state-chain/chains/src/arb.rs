@@ -37,15 +37,7 @@ impl Chain for Arbitrum {
 	type TrackedData = ArbitrumTrackedData;
 	type ChainAsset = assets::arb::Asset;
 	type ChainAssetMap<
-		T: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ BenchmarkValue
-			+ FullCodec
-			+ Unpin
-			+ Default,
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::arb::AssetMap<T>;
 	type ChainAccount = eth::Address;
 	type DepositFetchId = EvmFetchId;
