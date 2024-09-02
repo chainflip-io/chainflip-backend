@@ -79,8 +79,8 @@ impl<
 				electoral_access.mutate_unsynchronised_state(
 					|_electoral_access, unsynchronised_state| {
 						if consensus > *unsynchronised_state {
-							*unsynchronised_state = consensus;
-							Hook::on_change(consensus.clone());
+							*unsynchronised_state = consensus.clone();
+							Hook::on_change(consensus);
 						}
 
 						Ok(())
