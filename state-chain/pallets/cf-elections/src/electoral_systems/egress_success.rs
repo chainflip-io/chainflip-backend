@@ -1,7 +1,7 @@
 use crate::{
 	electoral_system::{
-		AuthorityVoteOf, ConsensusStatus, ElectionIdentifierOf, ElectionReadAccess,
-		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
+		AuthorityVoteOf, ElectionIdentifierOf, ElectionReadAccess, ElectionWriteAccess,
+		ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError,
@@ -120,6 +120,8 @@ mod test_egress_success {
 	use crate::electoral_system::mocks::MockElectoralSystem;
 
 	use super::*;
+
+	use crate::electoral_system::ConsensusStatus;
 
 	thread_local! {
 		pub static HOOK_HAS_BEEN_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
