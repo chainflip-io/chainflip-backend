@@ -163,6 +163,32 @@ mod test_egress_success {
 	}
 
 	#[test]
+	fn too_few_or_no_votes() {
+		let mut electoral_system =
+			MockElectoralSystem::<EgressSuccess<(), u64, (), MockHook>>::new((), (), ());
+
+		// Assert no consensus when no votes are cast.
+		assert_eq!(
+			electoral_system
+				.new_election((), (), ())
+				.unwrap()
+				.check_consensus(None, vec![], 3)
+				.unwrap(),
+			None
+		);
+
+		// Assert no consensus when not enough votes are cast.
+		assert_eq!(
+			electoral_system
+				.new_election((), (), ())
+				.unwrap()
+				.check_consensus(None, vec![((), 2)], 3)
+				.unwrap(),
+			None
+		);
+	}
+
+	#[test]
 	fn on_finalize() {
 		let mut electoral_system =
 			MockElectoralSystem::<EgressSuccess<(), u64, (), MockHook>>::new((), (), ());
