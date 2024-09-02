@@ -327,6 +327,9 @@ pub mod pallet {
 		StoppedBidding { account_id: T::AccountId },
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
+		/// The rotation transaction(s) for the previous rotation are still pending to be
+		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
+		PreviousRotationStillPending,
 	}
 
 	#[pallet::error]
@@ -387,9 +390,14 @@ pub mod pallet {
 			weight.saturating_accrue(match CurrentRotationPhase::<T>::get() {
 				RotationPhase::Idle => {
 					if block_number.saturating_sub(CurrentEpochStartedAt::<T>::get()) >=
-						BlocksPerEpoch::<T>::get() && !T::RotationBroadcastsPending::rotation_broadcasts_pending()
-					{
-						Self::start_authority_rotation()
+						BlocksPerEpoch::<T>::get() {
+						if T::RotationBroadcastsPending::rotation_broadcasts_pending() {
+							Self::deposit_event(Event::PreviousRotationStillPending);
+							T::ValidatorWeightInfo::rotation_phase_idle()
+						}
+						else {
+							Self::start_authority_rotation()
+						}
 					} else {
 						T::ValidatorWeightInfo::rotation_phase_idle()
 					}

@@ -14,7 +14,7 @@ use pallet_cf_environment::SafeModeUpdate;
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
 	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip, PolkadotInstance,
-	PolkadotThresholdSigner, Runtime, RuntimeOrigin, SolanaInstance, SolanaThresholdSigner,
+	PolkadotThresholdSigner, Runtime, RuntimeOrigin, SolanaInstance, SolanaThresholdSigner, System,
 	Validator,
 };
 
@@ -515,5 +515,40 @@ fn can_move_through_multiple_epochs() {
 				witness_rotation_broadcasts([i + 1, i, i, i, i]);
 			}
 			assert_eq!(GENESIS_EPOCH + 21, Validator::epoch_index());
+		});
+}
+
+#[test]
+fn cant_rotate_if_previous_rotation_is_pending() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
+			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
+
+			testnet.move_to_the_next_epoch();
+			let epoch_index = Validator::epoch_index();
+
+			// we try to rotate again but cant since the rotation broadcast txs of the last epoch
+			// are still pending.
+			testnet.move_to_the_end_of_epoch();
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+			System::assert_last_event(state_chain_runtime::RuntimeEvent::Validator(
+				pallet_cf_validator::Event::<Runtime>::PreviousRotationStillPending,
+			));
+			// we are still in the older epoch
+			assert_eq!(epoch_index, Validator::epoch_index());
+
+			// we witness the rotation txs of the older epoch which then causes the rotation to
+			// start on the next block.
+			witness_rotation_broadcasts([2, 1, 1, 1, 1]);
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+			assert_eq!(epoch_index + 1, Validator::epoch_index());
 		});
 }
