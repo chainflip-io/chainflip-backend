@@ -285,7 +285,9 @@ mod access {
 			&self,
 		) -> Result<<Self::ElectoralSystem as ElectoralSystem>::ElectionState, CorruptStorageError>;
 		#[cfg(test)]
-		fn election_identifier(&self) -> ElectionIdentifierOf<Self::ElectoralSystem>;
+		fn election_identifier(
+			&self,
+		) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError>;
 	}
 
 	/// A trait allowing write access to the details about a single election
@@ -497,8 +499,10 @@ pub mod mocks {
 				}
 
 				#[cfg(test)]
-				fn election_identifier(&self) -> ElectionIdentifierOf<Self::ElectoralSystem> {
-					self.election_identifier
+				fn election_identifier(
+					&self,
+				) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError> {
+					Ok(self.election_identifier)
 				}
 			}
 

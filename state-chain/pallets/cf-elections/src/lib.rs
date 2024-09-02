@@ -612,8 +612,10 @@ pub mod pallet {
 					.ok_or_else(CorruptStorageError::new)
 			}
 			#[cfg(test)]
-			fn election_identifier(&self) -> ElectionIdentifierOf<Self::ElectoralSystem> {
-				self.election_identifier
+			fn election_identifier(
+				&self,
+			) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError> {
+				Ok(self.election_identifier)
 			}
 		}
 		impl<T: Config<I>, I: 'static> ElectionWriteAccess for ElectionAccess<T, I> {
