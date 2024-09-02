@@ -150,6 +150,8 @@ jobs:
           workflow_conclusion: ""
           name: chainflip-backend-bin
           github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
+          # Hard coded to 1.6.1 commit - will be changed as part of PRO-1606
+          commit: "630706a6547e3c604fd98ae03ad38bdf5c29e4b2"
           path: latest-release-bins
           search_artifacts: true
 
