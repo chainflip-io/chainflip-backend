@@ -1,5 +1,6 @@
 use crate::{
-	genesis, get_validator_state, network, AllVaults, ChainflipAccountState, NodeId,
+	genesis, get_validator_state, network, witness_ethereum_rotation_broadcast,
+	witness_rotation_broadcasts, AllVaults, ChainflipAccountState, NodeId,
 	HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 };
 
@@ -70,6 +71,7 @@ fn authority_rotates_with_correct_sequence() {
 			// Skip the first authority rotation, as key handover is guaranteed to succeed
 			// when rotating for the first time.
 			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
 
 			assert!(matches!(Validator::current_rotation_phase(), RotationPhase::Idle));
 			assert_eq!(
@@ -430,6 +432,8 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 			testnet.move_to_the_next_epoch();
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 
+			witness_ethereum_rotation_broadcast(1);
+
 			// Begin the second rotation.
 			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(4);
@@ -503,10 +507,13 @@ fn can_move_through_multiple_epochs() {
 		.execute_with(|| {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
+			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
 
-			for _ in 0..20 {
+			for i in 1..21 {
 				testnet.move_to_the_next_epoch();
+				witness_rotation_broadcasts([i + 1, i, i, i, i]);
 			}
-			assert_eq!(GENESIS_EPOCH + 20, Validator::epoch_index());
+			assert_eq!(GENESIS_EPOCH + 21, Validator::epoch_index());
 		});
 }
