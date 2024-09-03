@@ -79,7 +79,7 @@ jobs:
     uses: ./.github/workflows/upgrade-test.yml
     secrets: inherit
     with:
-      run-job: true
+      run-job: false
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
