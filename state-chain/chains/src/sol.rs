@@ -45,6 +45,11 @@ pub const CCM_BYTES_PER_ACCOUNT: usize = 33usize;
 pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 527usize; // 705 bytes left
 pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 740usize; // 492 bytes left
 
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct SolanaTransactionData {
+	pub serialized_transaction: Vec<u8>,
+}
+
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
@@ -63,7 +68,7 @@ impl Chain for Solana {
 	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
 	type DepositDetails = ();
-	type Transaction = SolTransaction;
+	type Transaction = SolanaTransactionData;
 	type TransactionMetadata = ();
 	// There is no need for replay protection on Solana since it uses blockhashes.
 	type ReplayProtectionParams = ();

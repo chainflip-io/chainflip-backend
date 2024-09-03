@@ -338,7 +338,11 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	fn build_transaction(
 		signed_call: &SolanaApi<SolEnvironment>,
 	) -> <Solana as Chain>::Transaction {
-		signed_call.transaction.clone()
+		signed_call
+			.transaction
+			.clone()
+			.finalize_and_serialize()
+			.expect("Failed to serialize payload")
 	}
 
 	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
