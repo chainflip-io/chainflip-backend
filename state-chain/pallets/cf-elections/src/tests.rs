@@ -260,10 +260,9 @@ fn provide_shared_data() {
 		.then_execute_at_next_block(|()| {
 			let current_authorities = MockEpochInfo::current_authorities();
 			let validator_id = *current_authorities.first().unwrap();
-			Pallet::<Test, Instance1>::stop_ignoring_my_votes(
+			assert_ok!(Pallet::<Test, Instance1>::stop_ignoring_my_votes(
 				RawOrigin::Signed(validator_id).into(),
-			)
-			.unwrap();
+			));
 			submit_vote_for(validator_id, NEW_DATA);
 			validator_id
 		})
@@ -318,27 +317,48 @@ fn ensure_can_vote() {
 
 #[test]
 fn delete_vote() {
+	const DATA_TO_DELETE: u64 = 10;
+
 	new_test_ext()
 		// Run one block, which on_finalise will create the election for the median
 		.then_execute_at_next_block(|()| {})
-		// Do voting
+		// Vote so the initial value is the Consensus.
 		.then_execute_at_next_block(|()| {
 			let current_authorities = MockEpochInfo::current_authorities();
-			let validator_id = *current_authorities.first().unwrap();
-			Pallet::<Test, Instance1>::stop_ignoring_my_votes(
-				RawOrigin::Signed(validator_id).into(),
-			)
-			.unwrap();
-			submit_vote_for(validator_id, NEW_DATA);
-			validator_id
+			for validator_id in current_authorities.clone() {
+				assert_ok!(Pallet::<Test, Instance1>::stop_ignoring_my_votes(
+					RawOrigin::Signed(validator_id).into(),
+				));
+				submit_vote_for(validator_id, NEW_DATA);
+			}
+			current_authorities
 		})
-		// Delete vote
-		.then_execute_at_next_block(|validator_id| {
-			let electoral_data = Pallet::<Test, Instance1>::electoral_data(&validator_id).unwrap();
+		.then_execute_at_next_block(|current_authorities| {
+			// Consensus is reached and a new election began.
+			assert_ok!(Pallet::<Test, Instance1>::with_electoral_access(|electoral_access| {
+				assert_eq!(electoral_access.unsynchronised_state().unwrap(), NEW_DATA);
+				Ok(())
+			}));
+
+			// Get the identifier for the next election.
+			let electoral_data =
+				Pallet::<Test, Instance1>::electoral_data(&current_authorities[0]).unwrap();
 			let election_identifier = electoral_data.current_elections.keys().next().unwrap();
-			assert_ok!(Pallet::<Test, Instance1>::delete_vote(
-				RawOrigin::Signed(validator_id).into(),
-				*election_identifier
-			));
+
+			// Submit vote for a new value, then delete the vote.
+			for validator_id in current_authorities.clone() {
+				submit_vote_for(validator_id, DATA_TO_DELETE);
+				assert_ok!(Pallet::<Test, Instance1>::delete_vote(
+					RawOrigin::Signed(validator_id).into(),
+					*election_identifier
+				));
+			}
+		})
+		.then_execute_at_next_block(|_| {
+			// Since no vote for the new value is submitted, Consensus value is not changed.
+			assert_ok!(Pallet::<Test, Instance1>::with_electoral_access(|electoral_access| {
+				assert_eq!(electoral_access.unsynchronised_state().unwrap(), NEW_DATA);
+				Ok(())
+			}));
 		});
 }
