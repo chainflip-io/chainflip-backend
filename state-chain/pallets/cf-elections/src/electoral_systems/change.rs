@@ -146,8 +146,7 @@ impl<
 
 #[cfg(test)]
 mod test_change {
-
-	use crate::electoral_system::{mocks::MockElectoralSystem, ConsensusStatus};
+	use crate::electoral_system::{mocks::MockAccess, ConsensusStatus};
 
 	thread_local! {
 		pub static HOOK_HAS_BEEN_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -169,8 +168,7 @@ mod test_change {
 	use super::*;
 	#[test]
 	fn consensus_not_possible_because_of_different_votes() {
-		let mut electoral_system =
-			MockElectoralSystem::<Change<(), u64, (), MockHook>>::new((), (), ());
+		let mut electoral_system = MockAccess::<Change<(), u64, (), MockHook>>::new((), (), ());
 		let consensus = electoral_system
 			.new_election((), ((), 1), ())
 			.unwrap()
@@ -181,8 +179,7 @@ mod test_change {
 
 	#[test]
 	fn consensus_when_all_votes_the_same() {
-		let mut electoral_system =
-			MockElectoralSystem::<Change<(), u64, (), MockHook>>::new((), (), ());
+		let mut electoral_system = MockAccess::<Change<(), u64, (), MockHook>>::new((), (), ());
 		let consensus = electoral_system
 			.new_election((), ((), 1), ())
 			.unwrap()
@@ -193,8 +190,7 @@ mod test_change {
 
 	#[test]
 	fn not_enough_votes_for_consensus() {
-		let mut electoral_system =
-			MockElectoralSystem::<Change<(), u64, (), MockHook>>::new((), (), ());
+		let mut electoral_system = MockAccess::<Change<(), u64, (), MockHook>>::new((), (), ());
 		let consensus = electoral_system
 			.new_election((), ((), 1), ())
 			.unwrap()
@@ -205,8 +201,7 @@ mod test_change {
 
 	#[test]
 	fn finalize_election() {
-		let mut electoral_system =
-			MockElectoralSystem::<Change<(), u64, (), MockHook>>::new((), (), ());
+		let mut electoral_system = MockAccess::<Change<(), u64, (), MockHook>>::new((), (), ());
 
 		electoral_system
 			.new_election((), ((), 1), ())
