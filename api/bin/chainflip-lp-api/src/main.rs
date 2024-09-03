@@ -552,7 +552,7 @@ impl RpcServer for RpcServerImpl {
 					base_asset: pool.base,
 					quote_asset: pool.quote,
 					side: Side::Sell,
-					id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
 				});
 			}
 			for order in orders.limit_orders.bids {
@@ -560,7 +560,7 @@ impl RpcServer for RpcServerImpl {
 					base_asset: pool.base,
 					quote_asset: pool.quote,
 					side: Side::Buy,
-					id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
 				});
 			}
 		}
