@@ -425,7 +425,9 @@ pub mod mocks {
 	use super::*;
 	use crate::electoral_system::{ConsensusStatus, ElectionIdentifierOf, ElectoralReadAccess};
 	use codec::Encode;
-	use frame_support::{StorageHasher, Twox64Concat};
+	use frame_support::{
+		CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound, StorageHasher, Twox64Concat,
+	};
 	use std::collections::BTreeMap;
 
 	pub struct MockReadAccess<'es, ES: ElectoralSystem> {
@@ -437,6 +439,7 @@ pub mod mocks {
 		electoral_system: &'es mut MockAccess<ES>,
 	}
 
+	#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]
 	pub struct MockElection<ES: ElectoralSystem> {
 		properties: ES::ElectionProperties,
 		state: ES::ElectionState,
@@ -444,6 +447,7 @@ pub mod mocks {
 		consensus_status: ConsensusStatus<ES::Consensus>,
 	}
 
+	#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]
 	pub struct MockAccess<ES: ElectoralSystem> {
 		electoral_settings: ES::ElectoralSettings,
 		unsynchronised_state: ES::ElectoralUnsynchronisedState,
@@ -618,6 +622,10 @@ pub mod mocks {
 			context: &ES::OnFinalizeContext,
 		) -> Result<ES::OnFinalizeReturn, CorruptStorageError> {
 			ES::on_finalize(self, self.elections.keys().cloned().collect(), context)
+		}
+
+		pub fn election_identifiers(&self) -> Vec<ElectionIdentifierOf<ES>> {
+			self.elections.keys().cloned().collect()
 		}
 	}
 
