@@ -1,10 +1,4 @@
-use std::{
-	env,
-	error::Error,
-	fs::File,
-	io::{copy, BufWriter},
-	path::Path,
-};
+use std::{env, error::Error, fs::File, io::BufWriter, path::Path};
 
 use engine_upgrade_utils::{
 	build_helpers::toml_with_package_version, ENGINE_LIB_PREFIX, NEW_VERSION, OLD_VERSION,
@@ -30,16 +24,16 @@ fn download_old_dylib(dest_folder: &Path) -> Result<(), Box<dyn Error>> {
 	// or added another commit on top then we get the latest build artifacts for a particular
 	// version.
 	if prebuilt_supported {
-		let response = get(format!("https://artifacts.chainflip.io/{OLD_VERSION}/{dylib_name}"))?;
+		let download_url = format!("https://artifacts.chainflip.io/{OLD_VERSION}/{dylib_name}");
+		let mut response = get(&download_url)?;
 
 		if response.status().is_success() {
 			std::fs::create_dir_all(dest_folder)?;
 			let mut dest: BufWriter<File> = BufWriter::new(File::create(dylib_location)?);
-			let content = response.bytes()?;
-			copy(&mut content.as_ref(), &mut dest)?;
+			response.copy_to(&mut dest)?;
 			Ok(())
 		} else {
-			Err(Box::from(format!("Failed to download file: {}", response.status())))
+			Err(Box::from(format!("Failed to download from {download_url}: {}", response.status())))
 		}
 	} else if dylib_location.exists() {
 		// They've already been built and moved to the correct folder, so we can continue the
