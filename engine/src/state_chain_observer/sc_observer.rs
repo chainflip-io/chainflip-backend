@@ -574,7 +574,7 @@ where
                                             let sol_rpc = sol_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
-                                                match sol_rpc.broadcast_transaction(payload).await {
+                                                match sol_rpc.broadcast_transaction(payload.serialized_transaction).await {
                                                     Ok(tx_signature) => info!("Solana TransactionBroadcastRequest {broadcast_id:?} success: tx_signature: {tx_signature:?}"),
                                                     Err(error) => {
                                                         error!("Error on Solana TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
