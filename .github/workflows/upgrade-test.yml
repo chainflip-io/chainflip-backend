@@ -1,19 +1,8 @@
-name: Test upgrade from latest release to main
+name: Test upgrade
 
 on:
   workflow_dispatch:
     inputs:
-      upgrade-from-release:
-        description: 'The release we want to upgrade *from*: "sisyphos", "perseverance" or "berghain"'
-        required: true
-        default: "sisyphos"
-      upgrade-to-workflow-name:
-        description: "Name of the workflow to pull the upgrade-to artefacts from"
-        required: true
-        default: "ci-main.yml"
-      upgrade-to-commit:
-        description: "Commit to run the upgrade test against. Leave blank to use the latest workflow run."
-        required: false
       # Allows us to create a workflow call that doesn't run the job
       # so that branch protection rules can skip when running on push, but not in merge queue.
       run-job:
@@ -24,18 +13,6 @@ on:
 
   workflow_call:
     inputs:
-      upgrade-from-release:
-        type: string
-        description: 'The release we want to upgrade *from*: "perseverance" or "berghain"'
-        default: "sisyphos"
-      upgrade-to-workflow-name:
-        type: string
-        description: "Name of the workflow to pull the upgrade-to artefacts from"
-        default: "ci-main.yml"
-      upgrade-to-commit:
-        type: string
-        description: "Commit to run the upgrade test against. Leave blank to use the latest successful workflow run."
-        required: false
       # Allows us to create a workflow call that doesn't run the job
       # so that branch protection rules can skip when running on push, but not in merge queue.
       run-job:
@@ -63,27 +40,6 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           fetch-depth: 0
-
-      - name: Get upgrade-to-commit SHA 📜
-        if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
-        uses: ./.github/actions/get-workflow-commit
-        id: get-upgrade-to-commit
-        with:
-          workflow-name: ${{ inputs.upgrade-to-workflow-name }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set upgrade-to-commit 📲
-        if: inputs.run-job
-        run: |
-          if [ -z "${{ inputs.upgrade-to-commit }}" ]; then
-          if [[ "${{ github.event_name }}" == "workflow_call" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "UPGRADE_TO_COMMIT=${{ steps.get-upgrade-to-commit.outputs.commit-sha }}" >> $GITHUB_ENV
-          else
-            echo "UPGRADE_TO_COMMIT=${{ github.sha }}" >> $GITHUB_ENV
-          fi
-          else
-            echo "UPGRADE_TO_COMMIT=${{ inputs.upgrade-to-commit }}" >> $GITHUB_ENV
-          fi
 
       - name: Login to Github Container Registry 🔑
         if: inputs.run-job
@@ -129,75 +85,51 @@ jobs:
           rename-to: try-runtime
           chmod: 0755
 
-      - name: Get upgrade-from-commit 📜
-        if: inputs.run-job
-        uses: ./.github/actions/get-workflow-commit
-        id: get-upgrade-from-commit
-        with:
-          workflow-name: release-${{ inputs.upgrade-from-release }}.yml
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: echo upgrade from commit 🔊
+      - name: Read old version from CFE upgrade-utils
         if: inputs.run-job
         run: |
-          echo "The upgrade-from-commit is: ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}"
+          OLD_VERSION=$(grep -oP 'pub const OLD_VERSION: &str = "\K[^"]+' ./engine-upgrade-utils/src/lib.rs)
+          echo "OLD_VERSION=${OLD_VERSION}" >> $GITHUB_ENV
+          echo "OLD_VERSION=${OLD_VERSION}"
 
-      - name: Download latest release binaries 📥
+      - name: Download upgrade-from binaries from S3 📥
         if: inputs.run-job
-        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
-        with:
-          workflow: release-${{ inputs.upgrade-from-release }}.yml
-          workflow_conclusion: ""
-          name: chainflip-backend-bin
-          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
-          path: latest-release-bins
-          search_artifacts: true
+        run: |
+          mkdir -p upgrade-from-bins && cd upgrade-from-bins
+          curl https://artifacts.chainflip.io/${{ env.OLD_VERSION }}/chainflip-backend-bin.zip --output chainflip-backend-bin.zip
+          unzip chainflip-backend-bin.zip -d .
+          cd .. && ls -l upgrade-from-bins
 
       - name: Permissions for latest binaries 🛡️
         if: inputs.run-job
         run: |
-          chmod +x ./latest-release-bins/chainflip-*
-          chmod +x ./latest-release-bins/engine-runner
+          chmod +x ./upgrade-from-bins/chainflip-*
+          chmod +x ./upgrade-from-bins/engine-runner
 
-      - name: Get version of the latest release ✍️
+      - name: Get version of the upgrade-from binaries ✍️
         if: inputs.run-job
         run: |
           set -x
-          RELEASE_VERSION=$(./latest-release-bins/chainflip-node --version)
-          echo $RELEASE_VERSION
-          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_ENV
+          OLD_BIN_VERSION=$(./upgrade-from-bins/chainflip-node --version)
+          echo $OLD_BIN_VERSION
+          echo "OLD_BIN_VERSION=${OLD_BIN_VERSION}" >> $GITHUB_ENV
+          OLD_BIN_COMMIT_HASH=$(echo $OLD_BIN_VERSION | sed 's/.*-\([a-f0-9]\{7,\}\)$/\1/')
+          echo "Release version commit hash: $OLD_BIN_COMMIT_HASH"
+          echo "OLD_BIN_COMMIT_HASH=${OLD_BIN_COMMIT_HASH}" >> $GITHUB_ENV
 
-      - name: Download upgrade-to binaries for push or pull request 📥
+      - name: Download upgrade-to binaries 📥
         if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-try-runtime
           path: upgrade-to-bins
 
-      - name: Download upgrade-to binaries for workflow call 📥
-        if: inputs.run-job && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch')
-        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
-        with:
-          workflow: ${{ inputs.upgrade-to-workflow-name }}
-          name: chainflip-backend-bin-try-runtime
-          path: upgrade-to-bins
-          commit: ${{ env.UPGRADE_TO_COMMIT }}
-
-      - name: Download upgrade-to runtime for push or pull request 📥
+      - name: Download upgrade-to runtime 📥
         if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
         uses: actions/download-artifact@v3
         with:
           name: chainflip-node-runtime-try-runtime
-          path: main-runtime
-
-      - name: Download upgrade-to runtime for workflow call 📥
-        if: inputs.run-job && (github.event_name == 'workflow_call' || github.event_name == 'workflow_dispatch')
-        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
-        with:
-          workflow: ${{ inputs.upgrade-to-workflow-name }}
-          name: chainflip-node-runtime-try-runtime
-          path: main-runtime
-          commit: ${{ env.UPGRADE_TO_COMMIT }}
+          path: upgrade-to-runtime
 
       - name: Permissions for latest binaries 🛡️
         if: inputs.run-job
@@ -216,13 +148,13 @@ jobs:
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
 
-      - name: Start a localnet from current release 🚀
+      - name: Start a localnet from upgrade-from version 🚀
         if: inputs.run-job
         env:
-          BINARY_ROOT_PATH: ./latest-release-bins
+          BINARY_ROOT_PATH: ./upgrade-from-bins
           DEBUG_OUTPUT_DESTINATION: /tmp/chainflip/debug.*log
         run: |
-          git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
+          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           set -x
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p /tmp/chainflip/bashful
@@ -233,8 +165,6 @@ jobs:
           chmod +x ${{ env.BINARY_ROOT_PATH }}/engine-runner
           echo "/usr/lib before copy of .so files"
           ls -l /usr/lib
-          # TODO: Remove this once we have implemented fetching the shared libs in the engine-runner build script
-          curl https://repo.chainflip.io/lib/1_5_1/libchainflip_engine_v1_5_1.so -o /usr/lib/libchainflip_engine_v1_5_1.so
           sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
           sudo cp ./upgrade-to-bins/libchainflip_engine_v*.so /usr/lib/
           echo "/usr/lib after copy of .so files"
@@ -242,11 +172,11 @@ jobs:
           touch ./localnet/.setup_complete
           ./localnet/manage.sh
 
-      - name: Run bouncer on latest release 🙅‍♂️
+      - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
         id: pre-upgrade-bouncer
         run: |
-          git checkout ${{ steps.get-upgrade-from-commit.outputs.commit-sha }}
+          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
@@ -254,8 +184,6 @@ jobs:
           # TODO: Temporary to discard the fixes above
           git reset --hard
 
-      # we need to be sure that when this fails, we catch the error, any panics etc. that occur
-      # TODO: Run swaps simultaneously to the upgrade - we could do that inside the `upgrade_network` command itself.
       - name: Upgrade network 🚀
         if: inputs.run-job
         shell: bash
@@ -264,19 +192,18 @@ jobs:
           git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer
-          mv ./../upgrade-to-bins/*.so ./../old-engine-dylib/
           pnpm install --frozen-lockfile
           ./commands/upgrade_network.ts prebuilt \
-            --runtime ./../main-runtime/state_chain_runtime.compact.compressed.wasm \
+            --runtime ./../upgrade-to-runtime/state_chain_runtime.compact.compressed.wasm \
             --bins ./../upgrade-to-bins \
             --localnet_init ./../localnet/init \
-            --oldVersion "${{ env.RELEASE_VERSION }}"
+            --oldVersion "${{ env.OLD_BIN_VERSION }}"
 
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
         id: post-upgrade-bouncer
         run: |
-          git checkout ${{ env.UPGRADE_TO_COMMIT }}
+          git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
