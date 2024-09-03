@@ -361,8 +361,6 @@ fn input_amount_excludes_network_fee() {
 				intermediate_amount: None,
 			}));
 		});
-
-	NetworkFee::set(Default::default());
 }
 
 #[test]

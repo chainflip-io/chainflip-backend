@@ -484,6 +484,137 @@ fn dca_with_fok_fully_executed() {
 		});
 }
 
+#[test]
+fn can_handle_dca_chunk_size_of_zero() {
+	// The input amount is smaller than the number of chunks, so the chunk size will round down to 0
+	const INPUT_AMOUNT: AssetAmount = 1;
+	const NUMBER_OF_CHUNKS: u32 = 3;
+	const ZERO_CHUNK_AMOUNT: AssetAmount = 0;
+	// Even though the chunk size is 0, the end output should still the full amount * swap rate.
+	// Note that the broker fee is 0 in this case because the input is too small.
+	const OUTPUT_AMOUNT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE;
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_eq!(System::block_number(), INIT_BLOCK);
+
+			// Start the dca swap
+			let dca_params = DcaParameters {
+				number_of_chunks: NUMBER_OF_CHUNKS,
+				chunk_interval: CHUNK_INTERVAL,
+			};
+			let swap_params = TestSwapParams {
+				input_asset: INPUT_ASSET,
+				output_asset: OUTPUT_ASSET,
+				input_amount: INPUT_AMOUNT,
+				refund_params: None,
+				dca_params: Some(dca_params.clone()),
+				output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+				is_ccm: false,
+			};
+			insert_swaps(&[swap_params]);
+
+			// Check that the swap request was received;
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					swap_request_id: SWAP_REQUEST_ID,
+					input_amount: INPUT_AMOUNT,
+					dca_parameters,
+					..
+				}) if dca_parameters == &Some(dca_params.clone())
+			);
+
+			// Check that the first chunk was scheduled
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: 1,
+					input_amount,
+					..
+					// All chunks should be 0 amount except the last one
+				}) if *input_amount == ZERO_CHUNK_AMOUNT
+			);
+
+			// Check the DCA state is correct
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					status: DcaStatus::ChunkScheduled(1),
+					// Still the full amount remaining because the first chunk is 0
+					remaining_input_amount: INPUT_AMOUNT,
+					remaining_chunks: NUMBER_OF_CHUNKS - 1,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: 0,
+				}
+			);
+		})
+		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: 1,
+					input_amount,
+					output_amount,
+					..
+					// The first chunk should 0 in and out
+				}) if *input_amount == ZERO_CHUNK_AMOUNT && *output_amount == ZERO_CHUNK_AMOUNT
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: 2,
+					input_amount,
+					..
+					// All chunks should be 0 amount except the last one
+				}) if *input_amount == ZERO_CHUNK_AMOUNT
+			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					status: DcaStatus::ChunkScheduled(2),
+					remaining_input_amount: INPUT_AMOUNT,
+					remaining_chunks: NUMBER_OF_CHUNKS - 2,
+					chunk_interval: CHUNK_INTERVAL,
+					// Should still be 0
+					accumulated_output_amount: 0,
+				}
+			);
+		})
+		.then_execute_at_block(INIT_BLOCK + (SWAP_DELAY_BLOCKS + CHUNK_INTERVAL) as u64, |_| {})
+		.then_execute_at_block(
+			INIT_BLOCK + SWAP_DELAY_BLOCKS as u64 + (CHUNK_INTERVAL * 2) as u64,
+			|_| {},
+		)
+		.then_execute_with(|_| {
+			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: 3,
+					input_amount,
+					output_amount,
+					..
+					// The last chunk should be the full amount
+				}) if *input_amount == INPUT_AMOUNT && *output_amount == OUTPUT_AMOUNT
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SWAP_REQUEST_ID
+				}),
+			);
+		});
+}
+
 mod ccm_tests {
 
 	use super::*;
