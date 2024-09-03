@@ -100,7 +100,6 @@ jobs:
           ls -l /usr/lib/
           # TODO: These shouldn't be required: PRO-1510
           sudo cp ${{ env.BINARY_ROOT_PATH }}/libchainflip_engine_v*.so /usr/lib/
-          sudo cp ./old-engine-dylib/libchainflip_engine_v*.so /usr/lib/
           echo "Check /usr/lib after copy"
           ls -l /usr/lib/
           touch ./localnet/.setup_complete

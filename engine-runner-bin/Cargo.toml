@@ -13,8 +13,6 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 [package.metadata.deb]
 assets = [
     # target/release is a special path in cargo-deb, it auto resolves to the correct path.
-    # thus old-engine-dylib requires a relative path to the old engine dylib directory, but the new dylib
-    #  and the runner can just use target/release.
     [
         "target/release/engine-runner",
         "usr/bin/chainflip-engine",
@@ -77,3 +75,4 @@ tempfile = "3.7.0"
 
 [build-dependencies]
 engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+reqwest = { version = "0.11.4", features = ["blocking"] }

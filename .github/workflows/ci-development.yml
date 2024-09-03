@@ -80,8 +80,6 @@ jobs:
     secrets: inherit
     with:
       run-job: false
-      upgrade-from-release: "sisyphos"
-      upgrade-to-workflow-name: "ci-main.yml"
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
