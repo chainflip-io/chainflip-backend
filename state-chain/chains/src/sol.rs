@@ -125,15 +125,15 @@ impl ChainCrypto for SolanaCrypto {
 pub mod compute_units_costs {
 	use super::{SolAmount, SolComputeLimit};
 
-	// Applying a 100% buffer to ensure we'll have enough compute units to cover the actual cost.
+	// Applying a 50% buffer to ensure we'll have enough compute units to cover the actual cost.
 	pub const fn compute_limit_with_buffer(
 		compute_limit_value: SolComputeLimit,
 	) -> SolComputeLimit {
-		compute_limit_value * 2
+		compute_limit_value * 3 / 2
 	}
 
 	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 450u32;
-	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 15_000u32;
+	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 30_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32;
 	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 45_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 50_000u32;
