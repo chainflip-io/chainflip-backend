@@ -52,7 +52,7 @@ use cf_chains::{
 			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
 			DurableNonceAndAccount, RecoverDurableNonce, SolanaApi, SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto,
+		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
