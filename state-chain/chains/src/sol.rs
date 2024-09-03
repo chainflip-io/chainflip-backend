@@ -8,7 +8,7 @@ use sol_prim::{AccountBump, SlotNumber};
 
 use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
-use frame_support::Parameter;
+use frame_support::{sp_runtime::RuntimeDebug, Parameter};
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::Member;
 
@@ -222,7 +222,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 	}
 }
 
-impl FeeRefundCalculator<Solana> for SolTransaction {
+impl FeeRefundCalculator<Solana> for SolanaTransactionData {
 	fn return_fee_refund(
 		&self,
 		fee_paid: <Solana as Chain>::TransactionFee,
