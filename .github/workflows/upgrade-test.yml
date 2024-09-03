@@ -95,10 +95,10 @@ jobs:
       - name: Download upgrade-from binaries from S3 📥
         if: inputs.run-job
         run: |
-          mkdir -p upgrade-from-bins && cd upgrade-from-bins
+          mkdir -p upgrade-from-bins; ( cd upgrade-from-bins
           curl https://artifacts.chainflip.io/${{ env.OLD_VERSION }}/chainflip-backend-bin.zip --output chainflip-backend-bin.zip
           unzip chainflip-backend-bin.zip -d .
-          cd .. && ls -l upgrade-from-bins
+          ); ls -l upgrade-from-bins
 
       - name: Permissions for latest binaries 🛡️
         if: inputs.run-job
