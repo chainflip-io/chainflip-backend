@@ -24,7 +24,6 @@ import {
   tryRuntimeUpgradeWithCompileRuntime,
 } from '../shared/try_runtime_upgrade';
 import { executeWithTimeout } from '../shared/utils';
-import { getChainflipApi } from '../shared/utils/substrate';
 
 async function main(): Promise<void> {
   const args = await yargs(hideBin(process.argv))
@@ -54,7 +53,6 @@ async function main(): Promise<void> {
     }).argv;
 
   const endpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
-  await using chainflipApi = await getChainflipApi();
 
   const block = args.block as number | 'latest' | 'all' | 'last-n';
 
@@ -62,14 +60,13 @@ async function main(): Promise<void> {
     console.log('Try runtime after compiling.');
     await tryRuntimeUpgradeWithCompileRuntime(
       block,
-      chainflipApi,
       path.dirname(process.cwd()),
       endpoint,
       args.lastN,
     );
   } else {
     console.log('Try runtime using runtime at ' + args.runtime);
-    await tryRuntimeUpgrade(block, chainflipApi, endpoint, args.runtime, args.lastN);
+    await tryRuntimeUpgrade(block, endpoint, args.runtime, args.lastN);
   }
 }
 
