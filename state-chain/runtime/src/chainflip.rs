@@ -338,9 +338,7 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	fn build_transaction(
 		signed_call: &SolanaApi<SolEnvironment>,
 	) -> <Solana as Chain>::Transaction {
-		SolanaTransactionData {
-			serialized_transaction: signed_call.chain_encoded(),
-		}
+		SolanaTransactionData { serialized_transaction: signed_call.chain_encoded() }
 	}
 
 	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
