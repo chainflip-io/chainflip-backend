@@ -964,7 +964,6 @@ mod tests {
 	use crate::{
 		sol::{
 			signing_key::SolSigningKey,
-			sol_tx_core,
 			sol_tx_core::{
 				address_derivation::{
 					derive_associated_token_account, derive_deposit_address, derive_fetch_account,
@@ -1656,49 +1655,49 @@ mod tests {
 					num_readonly_unsigned_accounts: 8,
 				},
 				account_keys: vec![
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"2e8944a76efbece296221e736627f4528a947578263a1172a9786410702d2ef2"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"22020a74fd97df45db96d2bbf4e485ccbec56945155ff8f668856be26c9de4a9"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"79c03bceb9ddea819e956b2b332e87fbbf49fc8968df78488e88cfaa366f3036"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"8cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adb"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"8d9871ed5fb2ee05765af23b7cabcc0d6b08ed370bb9f616a0d4dea40a25f870"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"b5b9d633289c8fd72fb05f33349bf4cc44e82add5d865311ae346d7c9a67b7dd"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"f53a2f4350451db5595a75e231519bc2758798f72550e57487722e7cbe954dbc"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"0000000000000000000000000000000000000000000000000000000000000000"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"0306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a40000000"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"06a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"a140fd3d05766f0087d57bf99df05731e894392ffcc8e8d7e960ba73c09824aa"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00b"
 					)),
 				],
@@ -1756,70 +1755,70 @@ mod tests {
 					num_readonly_unsigned_accounts: 9,
 				},
 				account_keys: vec![
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"2e8944a76efbece296221e736627f4528a947578263a1172a9786410702d2ef2"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"114f68f4ee9add615457c9a7791269b4d4ab3168d43d5da0e018e2d547d8be92"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"287f3b39b93c6699d704cb3d3edcf633cb8068010c5e5f6e64583078f5cd370e"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"3e1cb8c1bfc20346cebcaa28a53b234acf92771f72151b2d6aaa1d765be4b93c"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"45f3121cddc0bab152917a22710c9fab5be66d121bf2474d4d484f0f2eed9780"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"4813c8373d2bfc1592855e2d93b70ecd407fe9338b11ff0bb10650716709f6a7"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"491102d3be1d348108b41a801904392e50cd5b443a0991f3c1db0427634627da"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"5d89a80ca1700def3a784b845b59f9c2a61bb07941ddcb4fd2d709c3243c1350"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"79c03bceb9ddea819e956b2b332e87fbbf49fc8968df78488e88cfaa366f3036"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"c9b5b17535d2dcb7a1a505fbadc9ea27cddada4b7c144e549cf880e8db046d77"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"ca586493b85289057a8661f9f2a81e546fcf8cc6f5c9df1f5441c822f6fabfc9"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"efe57cc00ff8edda422ba876d38f5905694bfbef1c35deaea90295968dc13339"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"0000000000000000000000000000000000000000000000000000000000000000"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"0306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a40000000"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"06a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"2b635a1da73cd5bf15a26f1170f49366f0f48d28b0a8b1cebc5f98c75e475e68"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"42be1bb8dfd763b0e83541c9767712ad0d89cecea13b46504370096a20c762fb"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
 					)),
-					sol_tx_core::Pubkey(hex_literal::hex!(
+					Pubkey(hex_literal::hex!(
 						"a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00b"
 					)),
 				],
