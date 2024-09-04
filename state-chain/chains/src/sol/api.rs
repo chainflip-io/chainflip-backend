@@ -1,3 +1,4 @@
+use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
@@ -5,7 +6,6 @@ use scale_info::TypeInfo;
 use sol_prim::consts::SOL_USDC_DECIMAL;
 use sp_core::RuntimeDebug;
 use sp_std::{boxed::Box, vec, vec::Vec};
-use cf_runtime_utilities::log_or_panic;
 
 use crate::{
 	ccm_checker::{
@@ -390,7 +390,8 @@ impl<Env: 'static> ApiCall<SolanaCrypto> for SolanaApi<Env> {
 	fn chain_encoded(&self) -> Vec<u8> {
 		self.transaction.clone().finalize_and_serialize().unwrap_or_else(|err| {
 			log_or_panic!(
-				"Failed to serialize Solana Transaction {:?}.",
+				"Failed to serialize Solana Transaction {:?}. Error: {:?}",
+				self.transaction,
 				err
 			);
 			Vec::default()
