@@ -3,6 +3,7 @@ use cf_chains::{
 	sol::{api::SolanaEnvironment, sol_tx_core::address_derivation::derive_deposit_address},
 	Solana,
 };
+use sol_prim::PdaAndBump;
 
 use super::AddressDerivation;
 use crate::SolEnvironment;
