@@ -30,8 +30,8 @@ use cf_traits::{
 		funding_info::MockFundingInfo,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	BalanceApi, DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
-	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
+	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
+	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_ok,
@@ -1669,5 +1669,31 @@ fn safe_mode_prevents_deposit_channel_creation() {
 			),
 			crate::Error::<Test, _>::DepositChannelCreationDisabled
 		);
+	});
+}
+
+#[test]
+fn dont_batch_more_transfers_than_allowed() {
+	new_test_ext().execute_with(|| {
+		const EXCESS_TRANSFERS: usize = 1;
+		let transfer_limits = MockFetchesTransfersLimitProvider::maybe_transfers_limit().unwrap();
+
+		for _ in 1..=transfer_limits + EXCESS_TRANSFERS {
+			assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS, None));
+		}
+
+		let schedule_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(
+			schedule_egresses.len(),
+			transfer_limits + 1,
+			"Wrong amount of scheduled egresses!"
+		);
+
+		IngressEgress::on_finalize(1);
+
+		let schedule_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(schedule_egresses.len(), EXCESS_TRANSFERS, "Wrong amount of left egresses!");
 	});
 }

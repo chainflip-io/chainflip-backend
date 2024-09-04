@@ -27,7 +27,8 @@ use cf_traits::{
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
+	DepositApi, DummyIngressSource, FetchesTransfersLimitProvider, NetworkEnvironmentProvider,
+	OnDeposit,
 };
 use frame_support::derive_impl;
 use frame_system as system;
@@ -110,6 +111,22 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 
 impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<()> }
 
+pub struct MockFetchesTransfersLimitProvider;
+
+impl FetchesTransfersLimitProvider for MockFetchesTransfersLimitProvider {
+	fn maybe_transfers_limit() -> Option<usize> {
+		Some(20)
+	}
+
+	fn maybe_ccm_limit() -> Option<usize> {
+		None
+	}
+
+	fn maybe_fetches_limit() -> Option<usize> {
+		Some(10)
+	}
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -131,7 +148,7 @@ impl crate::Config for Test {
 	type SwapRequestHandler =
 		MockSwapRequestHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
 	type AssetWithholding = MockAssetWithholding;
-	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
+	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 }
