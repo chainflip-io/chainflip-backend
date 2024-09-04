@@ -133,7 +133,7 @@ pub mod compute_units_costs {
 	}
 
 	pub const BASE_COMPUTE_UNITS_PER_TX: SolComputeLimit = 450u32;
-	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 30_000u32;
+	pub const COMPUTE_UNITS_PER_FETCH_NATIVE: SolComputeLimit = 25_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_NATIVE: SolComputeLimit = 150u32;
 	pub const COMPUTE_UNITS_PER_FETCH_TOKEN: SolComputeLimit = 45_000u32;
 	pub const COMPUTE_UNITS_PER_TRANSFER_TOKEN: SolComputeLimit = 50_000u32;
