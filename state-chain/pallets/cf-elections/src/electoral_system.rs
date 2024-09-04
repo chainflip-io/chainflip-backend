@@ -214,7 +214,7 @@ mod access {
 
 	/// Represents the current consensus, and how it has changed since it was last checked (i.e.
 	/// 'check_consensus' was called).
-	#[cfg_attr(test, derive(Clone))]
+	#[cfg_attr(test, derive(Clone, PartialEq, Eq, Debug))]
 	pub enum ConsensusStatus<Consensus> {
 		/// You did not have consensus when previously checked, but now consensus has been gained.
 		Gained {
@@ -284,6 +284,10 @@ mod access {
 		fn state(
 			&self,
 		) -> Result<<Self::ElectoralSystem as ElectoralSystem>::ElectionState, CorruptStorageError>;
+		#[cfg(test)]
+		fn election_identifier(
+			&self,
+		) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError>;
 	}
 
 	/// A trait allowing write access to the details about a single election
@@ -426,11 +430,11 @@ pub mod mocks {
 
 	pub struct MockReadAccess<'es, ES: ElectoralSystem> {
 		election_identifier: ElectionIdentifierOf<ES>,
-		electoral_system: &'es MockElectoralSystem<ES>,
+		electoral_system: &'es MockAccess<ES>,
 	}
 	pub struct MockWriteAccess<'es, ES: ElectoralSystem> {
 		election_identifier: ElectionIdentifierOf<ES>,
-		electoral_system: &'es mut MockElectoralSystem<ES>,
+		electoral_system: &'es mut MockAccess<ES>,
 	}
 
 	pub struct MockElection<ES: ElectoralSystem> {
@@ -440,7 +444,7 @@ pub mod mocks {
 		consensus_status: ConsensusStatus<ES::Consensus>,
 	}
 
-	pub struct MockElectoralSystem<ES: ElectoralSystem> {
+	pub struct MockAccess<ES: ElectoralSystem> {
 		electoral_settings: ES::ElectoralSettings,
 		unsynchronised_state: ES::ElectoralUnsynchronisedState,
 		unsynchronised_state_map:
@@ -449,7 +453,7 @@ pub mod mocks {
 		unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
 	}
 
-	impl<ES: ElectoralSystem> MockElectoralSystem<ES> {
+	impl<ES: ElectoralSystem> MockAccess<ES> {
 		pub fn election_read_access(&self, id: ElectionIdentifierOf<ES>) -> MockReadAccess<'_, ES> {
 			MockReadAccess { election_identifier: id, electoral_system: self }
 		}
@@ -492,6 +496,13 @@ pub mod mocks {
 					CorruptStorageError,
 				> {
 					self.with_election(|e| e.state.clone())
+				}
+
+				#[cfg(test)]
+				fn election_identifier(
+					&self,
+				) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError> {
+					Ok(self.election_identifier)
 				}
 			}
 
@@ -580,7 +591,7 @@ pub mod mocks {
 		}
 	}
 
-	impl<ES: ElectoralSystem> MockElectoralSystem<ES> {
+	impl<ES: ElectoralSystem> MockAccess<ES> {
 		pub fn new(
 			unsynchronised_state: ES::ElectoralUnsynchronisedState,
 			unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
@@ -610,7 +621,7 @@ pub mod mocks {
 		}
 	}
 
-	impl<ES: ElectoralSystem> ElectoralReadAccess for MockElectoralSystem<ES> {
+	impl<ES: ElectoralSystem> ElectoralReadAccess for MockAccess<ES> {
 		type ElectoralSystem = ES;
 		type ElectionReadAccess<'es> = MockReadAccess<'es, ES>;
 
@@ -652,7 +663,7 @@ pub mod mocks {
 		}
 	}
 
-	impl<ES: ElectoralSystem> ElectoralWriteAccess for MockElectoralSystem<ES> {
+	impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
 		type ElectionWriteAccess<'a> = MockWriteAccess<'a, ES>;
 
 		fn new_election(
