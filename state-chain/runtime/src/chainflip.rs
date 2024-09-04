@@ -339,11 +339,7 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 		signed_call: &SolanaApi<SolEnvironment>,
 	) -> <Solana as Chain>::Transaction {
 		SolanaTransactionData {
-			serialized_transaction: signed_call
-				.transaction
-				.clone()
-				.finalize_and_serialize()
-				.expect("Failed to serialize payload"),
+			serialized_transaction: signed_call.chain_encoded(),
 		}
 	}
 
