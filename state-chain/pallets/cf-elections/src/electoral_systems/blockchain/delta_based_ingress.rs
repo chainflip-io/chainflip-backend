@@ -478,7 +478,7 @@ fn test_longest_increasing_subsequence_by_key() {
 #[cfg(test)]
 mod test_delta_based_ingress {
 	use super::*;
-	use crate::electoral_system::mocks::MockElectoralSystem;
+	use crate::electoral_system::{mocks::MockElectoralSystem, ConsensusStatus};
 	use cf_chains::mocks::MockEthereum;
 
 	const INITIAL_ASSET_AMOUNT: u128 = 3;
@@ -513,6 +513,7 @@ mod test_delta_based_ingress {
 	}
 
 	mod helpers {
+
 		use super::*;
 
 		pub fn generate_election_channels(
@@ -546,6 +547,17 @@ mod test_delta_based_ingress {
 				[(channel_id, channel_to_ingressed)].into_iter().collect::<BTreeMap<_, _>>(),
 			)
 			.unwrap()
+		}
+
+		pub fn consensus_from(
+			channel_id: u64,
+			block_number: u64,
+			amount: u128,
+		) -> BTreeMap<u64, ChannelTotalIngressed<MockEthereum>> {
+			BTreeMap::<u64, ChannelTotalIngressed<MockEthereum>>::from_iter(vec![(
+				channel_id,
+				ChannelTotalIngressed { block_number, amount },
+			)])
 		}
 	}
 
@@ -615,5 +627,40 @@ mod test_delta_based_ingress {
 	}
 
 	#[test]
-	fn on_finalize() {}
+	// You did not have consensus when previously checked, and still do not.
+	fn on_finalize_none_consensus() {
+		let mut electoral_system =
+			MockElectoralSystem::<DeltaBasedIngress<MockResink, ()>>::new((), (), ());
+		let empty_state: BTreeMap<u64, ChannelTotalIngressed<MockEthereum>> = BTreeMap::new();
+		// Setup the channels for an election
+		let election_channels = helpers::generate_election_channels(1);
+		electoral_system
+			.new_election(1, election_channels, empty_state.clone())
+			.unwrap()
+			.set_consensus_status(ConsensusStatus::None);
+		electoral_system.finalize_elections(&1).expect("No storage error!");
+		// TODO: Verify that the hooks have not been called!
+	}
+
+	#[test]
+	// You had consensus when previously checked, but the consensus has now changed.
+	fn on_finalize_changed_consensus() {
+		let mut electoral_system =
+			MockElectoralSystem::<DeltaBasedIngress<MockResink, ()>>::new((), (), ());
+		// Setup the channels for an election
+		let election_channels = helpers::generate_election_channels(2);
+
+		// Pending ingress total
+		let previous = helpers::consensus_from(1, 1, 5);
+		// Consensus ingress total
+		let new = helpers::consensus_from(1, 3, 8);
+
+		electoral_system
+			.new_election(1, election_channels, previous.clone())
+			.unwrap()
+			.set_consensus_status(ConsensusStatus::Changed { previous, new });
+
+		let result = electoral_system.finalize_elections(&2);
+		assert_eq!(result, Ok(()));
+	}
 }
