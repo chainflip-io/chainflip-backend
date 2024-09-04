@@ -1,6 +1,6 @@
 use crate::{
 	retrier::{Attempt, RequestLog, RetrierClient},
-	settings::{NodeContainer, WsHttpEndpoints},
+	settings::{HttpEndpoint, NodeContainer},
 	witness::common::chain_source::{ChainClient, Header},
 };
 use cf_chains::{
@@ -35,7 +35,7 @@ const GET_STATUS_BROADCAST_RETRIES: u64 = 10;
 impl SolRetryRpcClient {
 	pub async fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		nodes: NodeContainer<WsHttpEndpoints>,
+		nodes: NodeContainer<HttpEndpoint>,
 		expected_genesis_hash: Option<SolHash>,
 		witness_period: u64,
 	) -> Result<Self> {
@@ -328,8 +328,7 @@ mod tests {
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
-						primary: WsHttpEndpoints {
-							ws_endpoint: "wss://api.testnet.solana.com".into(),
+						primary: HttpEndpoint {
 							http_endpoint: "https://api.testnet.solana.com".into(),
 						},
 						backup: None,
@@ -376,8 +375,7 @@ mod tests {
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
-						primary: WsHttpEndpoints {
-							ws_endpoint: "wss://api.devnet.solana.com".into(),
+						primary: HttpEndpoint {
 							http_endpoint: "https://api.devnet.solana.com".into(),
 						},
 						backup: None,
@@ -429,8 +427,7 @@ mod tests {
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
-						primary: WsHttpEndpoints {
-							ws_endpoint: "ws://localhost:8899".into(),
+						primary: HttpEndpoint {
 							http_endpoint: "http://localhost:8899".into(),
 						},
 						backup: None,
