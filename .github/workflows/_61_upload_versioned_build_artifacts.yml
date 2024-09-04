@@ -31,7 +31,12 @@ jobs:
           chmod +x artifacts/chainflip-backend-bin/chainflip-node
           VERSION=$(./ci/scripts/extract_version.sh "$(artifacts/chainflip-backend-bin/chainflip-node --version)" full)
           echo "Version: $VERSION"
-          echo "url_friendly_version=$(echo $VERSION | tr . _)" >> $GITHUB_ENV
+          echo "binary_version=$VERSION" >> $GITHUB_ENV
+
+      - name: Compress Artifacts into Zip Files 📦
+        run: |
+          find ./artifacts -name "*.so" -o -name "*.dylib" | xargs -n1 -I% cp -v % ./artifacts
+          find ./artifacts -mindepth 1 -maxdepth 1 -type d | xargs -I % zip -rm "%.zip" "%"
 
       - name: Configure AWS credentials using OIDC 🪪
         uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
@@ -41,4 +46,4 @@ jobs:
 
       - name: Upload engine shared libraries S3 🚀
         run: |
-          aws s3 cp ./artifacts/ s3://repo.chainflip.io/${{ env.url_friendly_version }}/ --recursive
+          aws s3 sync ./artifacts/ s3://artifacts.chainflip.io/${{ env.binary_version }}/
