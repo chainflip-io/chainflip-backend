@@ -945,14 +945,15 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 pub struct EthereumLimit;
 impl FetchesTransfersLimitProvider for EthereumLimit {
 	fn maybe_transfers_limit() -> Option<usize> {
-		None
+		Some(50)
 	}
 
 	fn maybe_ccm_limit() -> Option<usize> {
+		// For ccm calls we don't batch
 		None
 	}
 
 	fn maybe_fetches_limit() -> Option<usize> {
-		None
+		Some(20)
 	}
 }
