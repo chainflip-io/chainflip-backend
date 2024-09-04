@@ -75,12 +75,12 @@ impl<
 			let mut election_access = electoral_access.election_mut(election_identifier)?;
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
 				election_access.delete();
-				Hook::on_change(consensus.clone());
 				electoral_access.new_election((), (), ())?;
 				electoral_access.mutate_unsynchronised_state(
 					|_electoral_access, unsynchronised_state| {
 						if consensus > *unsynchronised_state {
-							*unsynchronised_state = consensus;
+							*unsynchronised_state = consensus.clone();
+							Hook::on_change(consensus);
 						}
 
 						Ok(())
