@@ -52,7 +52,8 @@ fn token_program_id() -> SolAddress {
 pub struct SolanaTransactionBuilder;
 
 impl SolanaTransactionBuilder {
-	// Compute extra compute units for each bump derivation required on-chain
+	// Compute extra compute units for each bump derivation required on-chain. Bumps
+	// start in reverse from `AccountBump::MAX` and decrease by 1 for each derivation.
 	fn derivation_compute_units(bump: AccountBump) -> SolComputeLimit {
 		(AccountBump::MAX - bump) as u32 * COMPUTE_UNITS_PER_BUMP_DERIVATION
 	}
