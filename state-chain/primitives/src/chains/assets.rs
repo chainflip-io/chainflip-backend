@@ -350,17 +350,22 @@ macro_rules! assets {
 					}
 				}
 
-				/// TODO: Remove this function, once PRO-1202 is complete
-				pub fn try_from_iter<Iter: Iterator<Item = (Asset, T)> + Clone>(iter: Iter) -> Option<Self> {
-					Self::try_from_fn(|required_asset| {
-						iter.clone().find(|(asset, _t)| *asset == required_asset).ok_or(()).map(|x| x.1)
-					}).ok()
-				}
-
 				pub fn iter(&self) -> impl Iterator<Item = (Asset, &T)> + Clone {
 					Asset::all().map(|asset| {
 						(asset, &self[asset])
 					})
+				}
+			}
+			impl<T: Copy + Default> AssetMap<T> {
+				pub fn from_iter_or_default<Iter: Clone + Iterator<Item = (Asset, T)>>(pairs: Iter) -> Self {
+					Self::try_from_fn(|required_asset| {
+						Ok::<_, ()>(
+							pairs
+								.clone()
+								.find_map(|(asset, thing)| (asset == required_asset).then(|| thing))
+								.unwrap_or_default()
+						)
+					}).expect("Cannot fail because closure is infallible")
 				}
 			}
 
@@ -1010,6 +1015,18 @@ mod test_assets {
 			sol(Sol, SolUsdc)
 		);
 
-		assert_ok!(any::AssetMap::try_from_iter(any::AssetMap::from_fn(|_asset| 1u32).iter()));
+		let asset_map = any::AssetMap::from_iter_or_default(
+			any::Asset::all().enumerate().map(|(i, asset)| (asset, i)),
+		);
+		for (i, asset) in any::Asset::all().enumerate() {
+			assert_eq!(asset_map[asset], i);
+		}
+		// Works with a subset of assets.
+		let asset_map = any::AssetMap::from_iter_or_default(
+			[(any::Asset::Eth, 1u32), (any::Asset::Dot, 2u32)].into_iter(),
+		);
+		assert_eq!(asset_map[any::Asset::Eth], 1);
+		assert_eq!(asset_map[any::Asset::Dot], 2);
+		assert_eq!(asset_map[any::Asset::Flip], 0);
 	}
 }
