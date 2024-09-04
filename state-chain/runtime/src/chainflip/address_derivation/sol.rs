@@ -30,9 +30,7 @@ impl AddressDerivationApi<Solana> for AddressDerivation {
 			.map_err(|_| AddressDerivationError::MissingSolanaApiEnvironment)?;
 
 		derive_deposit_address(channel_id, api_env.vault_program)
-			.map(|derived_address_and_bump| {
-				(derived_address_and_bump.address, derived_address_and_bump.bump)
-			})
+			.map(|PdaAndBump { address, bump }| (address, bump))
 			.map_err(AddressDerivationError::SolanaDerivationError)
 	}
 }
