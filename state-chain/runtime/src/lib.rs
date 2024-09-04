@@ -69,6 +69,8 @@ use pallet_cf_pools::{
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
 
+use crate::chainflip::EthereumLimit;
+
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
@@ -365,7 +367,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
 	type AssetWithholding = AssetBalances;
-	type FetchesTransfersLimitProvider = NoLimit;
+	type FetchesTransfersLimitProvider = EthereumLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 }

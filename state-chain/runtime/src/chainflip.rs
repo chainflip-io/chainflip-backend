@@ -941,3 +941,18 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 		})
 	}
 }
+
+pub struct EthereumLimit;
+impl FetchesTransfersLimitProvider for EthereumLimit {
+	fn maybe_transfers_limit() -> Option<usize> {
+		None
+	}
+
+	fn maybe_ccm_limit() -> Option<usize> {
+		None
+	}
+
+	fn maybe_fetches_limit() -> Option<usize> {
+		None
+	}
+}
