@@ -1149,7 +1149,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 	}
 
 	fn pools() -> Vec<PoolPairsMap<Asset>> {
-		Self::pools()
+		Pools::<T>::iter_keys().map(|asset_pair| asset_pair.assets()).collect()
 	}
 }
 
@@ -1831,10 +1831,6 @@ impl<T: Config> Pallet<T> {
 			pool.range_orders_cache.keys().cloned(),
 		)
 		.collect())
-	}
-
-	pub fn pools() -> Vec<PoolPairsMap<Asset>> {
-		Pools::<T>::iter_keys().map(|asset_pair| asset_pair.assets()).collect()
 	}
 
 	pub fn pool_info(
