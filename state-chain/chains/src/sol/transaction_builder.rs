@@ -54,8 +54,8 @@ fn token_program_id() -> SolAddress {
 
 impl PdaAndBump {
 	// Compute extra compute units for each bump derivation required on-chain
-	fn derivation_compute_units(&self) -> SolAddress {
-		(AccountBump::MAX - fetch_pda_and_bump.bump) as u32 * COMPUTE_UNITS_PER_BUMP_DERIVATION;
+	fn derivation_compute_units(&self) -> SolComputeLimit {
+		(AccountBump::MAX - self.bump) as u32 * COMPUTE_UNITS_PER_BUMP_DERIVATION;
 	}
 }
 pub struct SolanaTransactionBuilder;
