@@ -35,7 +35,7 @@ impl BenchmarkValue for SolMessage {
 impl BenchmarkValue for SolanaTransactionData {
 	fn benchmark_value() -> Self {
 		SolanaTransactionData {
-			serialized_transaction: SolTransaction::new_unsigned(SolMessage::benchmark_value())
+			serialized_transaction: SolTransaction::benchmark_value()
 				.finalize_and_serialize()
 				.expect("Failed to serialize payload"),
 		}
