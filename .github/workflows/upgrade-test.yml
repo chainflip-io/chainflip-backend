@@ -119,14 +119,14 @@ jobs:
 
       - name: Download upgrade-to binaries 📥
         if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-try-runtime
           path: upgrade-to-bins
 
       - name: Download upgrade-to runtime 📥
         if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        uses: actions/download-artifact@v3
         with:
           name: chainflip-node-runtime-try-runtime
           path: upgrade-to-runtime
