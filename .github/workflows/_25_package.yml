@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download binaries from same run 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: chainflip-backend-bin
           path: ./target/release
@@ -152,7 +152,7 @@ jobs:
           cargo deb -v --no-build --no-strip -p chainflip-lp-api --deb-revision "${{ steps.get-date.outputs.date }}"
 
       - name: Upload packages 📤
-        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
           name: chainflip-backend-packages
           path: |
