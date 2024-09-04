@@ -4,9 +4,12 @@
 //! Instructions and Instruction sets with some level of abstraction.
 //! This avoids the need to deal with low level Solana core types.
 
-use sol_prim::consts::{
-	LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT, SOL_USDC_DECIMAL,
-	SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
+use sol_prim::{
+	consts::{
+		LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT,
+		SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
+	},
+	PdaAndBump,
 };
 
 use crate::{
@@ -47,6 +50,13 @@ fn sys_var_instructions() -> SolAddress {
 
 fn token_program_id() -> SolAddress {
 	TOKEN_PROGRAM_ID
+}
+
+impl PdaAndBump {
+	// Compute extra compute units for each bump derivation required on-chain
+	fn derivation_compute_units(&self) -> SolAddress {
+		(AccountBump::MAX - fetch_pda_and_bump.bump) as u32 * COMPUTE_UNITS_PER_BUMP_DERIVATION;
+	}
 }
 pub struct SolanaTransactionBuilder;
 
@@ -120,9 +130,8 @@ impl SolanaTransactionBuilder {
 						)
 						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
-						// Add extra compute units for each bump derivation required on-chain
-						compute_limit += (AccountBump::MAX - fetch_pda_and_bump.bump) as u32 *
-							COMPUTE_UNITS_PER_BUMP_DERIVATION;
+						// Add extra compute units for on-chain derivation
+						compute_limit += fetch_pda_and_bump.derivation_compute_units();
 
 						Ok(VaultProgram::with_id(sol_api_environment.vault_program).fetch_native(
 							param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
@@ -147,9 +156,8 @@ impl SolanaTransactionBuilder {
 							derive_fetch_account(ata.address, sol_api_environment.vault_program)
 								.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
-						// Add extra compute units for each bump derivation required on-chain
-						compute_limit += (AccountBump::MAX - fetch_pda_and_bump.bump) as u32 *
-							COMPUTE_UNITS_PER_BUMP_DERIVATION;
+						// Add extra compute units for on-chain derivation
+						compute_limit += fetch_pda_and_bump.derivation_compute_units();
 
 						Ok(VaultProgram::with_id(sol_api_environment.vault_program).fetch_tokens(
 							param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
@@ -449,10 +457,7 @@ mod test {
 		TransferAssetParams,
 	};
 
-	use sol_prim::{
-		consts::{MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL},
-		PdaAndBump,
-	};
+	use sol_prim::consts::{MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL};
 
 	// Arbitrary number used for testing
 	const TEST_COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
