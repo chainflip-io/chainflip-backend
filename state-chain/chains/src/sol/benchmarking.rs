@@ -32,6 +32,12 @@ impl BenchmarkValue for SolMessage {
 	}
 }
 
+impl BenchmarkValue for SolTransaction {
+	fn benchmark_value() -> Self {
+		SolTransaction::new_unsigned(SolMessage::benchmark_value())
+	}
+}
+
 impl BenchmarkValue for SolanaTransactionData {
 	fn benchmark_value() -> Self {
 		SolanaTransactionData {
