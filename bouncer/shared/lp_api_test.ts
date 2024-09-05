@@ -18,6 +18,10 @@ import { depositLiquidity } from './deposit_liquidity';
 import { sendEvmNative } from './send_evm';
 import { getBalance } from './get_balance';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { ExecutableTest } from './executable_test';
+
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testLpApi = new ExecutableTest('LP-API', main, 200);
 
 type RpcAsset = {
   asset: string;
@@ -68,7 +72,6 @@ async function provideLiquidityAndTestAssetBalances() {
 }
 
 async function testRegisterLiquidityRefundAddress() {
-  console.log('=== Starting testRegisterLiquidityRefundAddress ===');
   const observeRefundAddressRegisteredEvent = observeEvent(
     'liquidityProvider:LiquidityRefundAddressRegistered',
     {
@@ -86,11 +89,9 @@ async function testRegisterLiquidityRefundAddress() {
   await observeRefundAddressRegisteredEvent.event;
 
   // TODO: Check that the correct address is now set on the SC
-  console.log('=== testRegisterLiquidityRefundAddress complete ===');
 }
 
 async function testLiquidityDeposit() {
-  console.log('=== Starting testLiquidityDeposit ===');
   const observeLiquidityDepositAddressReadyEvent = observeEvent(
     'liquidityProvider:LiquidityDepositAddressReady',
     {
@@ -124,11 +125,9 @@ async function testLiquidityDeposit() {
   }).event;
   await sendEvmNative(chainFromAsset(testAsset), liquidityDepositAddress, String(testAmount));
   await observeAccountCreditedEvent;
-  console.log('=== testLiquidityDeposit complete ===');
 }
 
 async function testWithdrawAsset() {
-  console.log('=== Starting testWithdrawAsset ===');
   const oldBalance = await getBalance(testAsset, testAddress);
 
   const result = await lpApiRpc(`lp_withdraw_asset`, [
@@ -143,12 +142,10 @@ async function testWithdrawAsset() {
   assert(egressId > 0, `Unexpected egressId: ${egressId}`);
 
   await observeBalanceIncrease(testAsset, testAddress, oldBalance);
-  console.log('=== testWithdrawAsset complete ===');
 }
 
 async function testTransferAsset() {
   await using chainflip = await getChainflipApi();
-  console.log('=== Starting testTransferAsset ===');
   const amountToTransfer = testAssetAmount.toString(16);
 
   const getLpBalance = async (account: string) =>
@@ -196,12 +193,9 @@ async function testTransferAsset() {
     newBalancesSource < oldBalanceSource,
     `Failed to observe balance decrease after transfer for source account!`,
   );
-
-  console.log('=== testTransferAsset complete ===');
 }
 
 async function testRegisterWithExistingLpAccount() {
-  console.log('=== Starting testRegisterWithExistingLpAccount ===');
   try {
     await lpApiRpc(`lp_register_account`, []);
     throw new Error(`Unexpected lp_register_account result`);
@@ -213,12 +207,10 @@ async function testRegisterWithExistingLpAccount() {
       throw new Error(`Unexpected lp_register_account error: ${error}`);
     }
   }
-  console.log('=== testRegisterWithExistingLpAccount complete ===');
 }
 
 /// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
 async function testRangeOrder() {
-  console.log('=== Starting testRangeOrder ===');
   const range = { start: 1, end: 2 };
   const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
   const zeroAssetAmounts = {
@@ -312,24 +304,19 @@ async function testRangeOrder() {
     }
   });
   assert.strictEqual(matchBurn, true, `Expected burn of range order to decrease liquidity to 0`);
-
-  console.log('=== testRangeOrder complete ===');
 }
 
 async function testGetOpenSwapChannels() {
-  console.log('=== Starting testGetOpenSwapChannels ===');
   // TODO: Test with some SwapChannelInfo data
   const openSwapChannels = await lpApiRpc(`lp_get_open_swap_channels`, []);
   assert(openSwapChannels.ethereum, `Missing ethereum swap channel info`);
   assert(openSwapChannels.polkadot, `Missing polkadot swap channel info`);
   assert(openSwapChannels.bitcoin, `Missing bitcoin swap channel info`);
-  console.log('=== testGetOpenSwapChannels complete ===');
 }
 
 /// Test lp_set_limit_order and lp_update_limit_order by minting, updating, and burning a limit order.
 
 async function testLimitOrder() {
-  console.log('=== Starting testLimitOrder ===');
   const orderId = 98432; // Arbitrary order id so it does not interfere with other tests
   const tick = 2;
 
@@ -408,28 +395,48 @@ async function testLimitOrder() {
     }
   });
   assert.strictEqual(matchBurn, true, `Expected burn of limit order to decrease liquidity to 0`);
-
-  console.log('=== testLimitOrder complete ===');
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
-export async function testLpApi() {
-  console.log('=== Starting LP API test ===');
+async function main() {
+  // Sub tests
+  const registerLiquidityRefundAddress = new ExecutableTest(
+    'LP-API::Register-Liquidity-Refund-Address',
+    testRegisterLiquidityRefundAddress,
+    500,
+  );
+  const LiquidityDeposit = new ExecutableTest(
+    'LP-API::Liquidity-Deposit',
+    testLiquidityDeposit,
+    500,
+  );
+  const WithdrawAsset = new ExecutableTest('LP-API::Withdraw-Asset', testWithdrawAsset, 500);
+  const RegisterWithExistingLpAccount = new ExecutableTest(
+    'LP-API::testRegisterWithExistingLpAccount',
+    testRegisterWithExistingLpAccount,
+    500,
+  );
+  const RangeOrder = new ExecutableTest('LP-API::Range-Order', testRangeOrder, 500);
+  const LimitOrder = new ExecutableTest('LP-API::Limit-Order', testLimitOrder, 500);
+  const GetOpenSwapChannels = new ExecutableTest(
+    'LP-API::Get-Open-Swap-Channels',
+    testGetOpenSwapChannels,
+    500,
+  );
+  const TransferAsset = new ExecutableTest('LP-API::TransferAsset', testTransferAsset, 500);
 
   // Provide the amount of liquidity needed for the tests
   await provideLiquidityAndTestAssetBalances();
 
   await Promise.all([
-    testRegisterLiquidityRefundAddress(),
-    testLiquidityDeposit(),
-    testWithdrawAsset(),
-    testRegisterWithExistingLpAccount(),
-    testRangeOrder(),
-    testLimitOrder(),
-    testGetOpenSwapChannels(),
+    registerLiquidityRefundAddress.run(),
+    LiquidityDeposit.run(),
+    WithdrawAsset.run(),
+    RegisterWithExistingLpAccount.run(),
+    RangeOrder.run(),
+    LimitOrder.run(),
+    GetOpenSwapChannels.run(),
   ]);
 
-  await testTransferAsset();
-
-  console.log('=== LP API test complete ===');
+  await TransferAsset.run();
 }

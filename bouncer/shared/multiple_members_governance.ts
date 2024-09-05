@@ -3,6 +3,14 @@ import Keyring from '../polkadot/keyring';
 import { tryUntilSuccess } from '../shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { ExecutableTest } from './executable_test';
+
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testMultipleMembersGovernance = new ExecutableTest(
+  'Multiple-Members-Governance',
+  main,
+  120,
+);
 
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
@@ -22,6 +30,11 @@ const alice = keyring.createFromUri('//Alice');
 
 async function addAliceToGovernance() {
   const initMembers = await getGovernanceMembers();
+  if (initMembers.includes(alice.address)) {
+    testMultipleMembersGovernance.log('Warning: Alice is already in governance!');
+    return;
+  }
+
   assert(initMembers.length === 1, 'Governance should only have 1 member');
 
   const newMembers = [...initMembers, alice.address];
@@ -32,7 +45,7 @@ async function addAliceToGovernance() {
 
   await tryUntilSuccess(async () => (await getGovernanceMembers()).length === 2, 3000, 10);
 
-  console.log('Added Alice to governance!');
+  testMultipleMembersGovernance.log('Added Alice to governance!');
 }
 
 async function submitWithMultipleGovernanceMembers() {
@@ -57,13 +70,10 @@ async function submitWithMultipleGovernanceMembers() {
     'Governance should have been restored to 1 member',
   );
 
-  console.log('Removed Alice from governance!');
+  testMultipleMembersGovernance.log('Removed Alice from governance!');
 }
 
-export async function testMultipleMembersGovernance() {
-  console.log('=== Testing multiple members governance ===');
+async function main() {
   await addAliceToGovernance();
   await submitWithMultipleGovernanceMembers();
-
-  console.log('=== Multiple members governance test complete ===');
 }

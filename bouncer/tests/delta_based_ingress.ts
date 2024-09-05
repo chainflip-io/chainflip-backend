@@ -24,13 +24,16 @@ import {
   amountToFineAmount,
   Asset,
   assetDecimals,
-  executeWithTimeout,
   killEngines,
   observeFetch,
   sleep,
   startEngines,
 } from '../shared/utils';
 import { observeEvent } from '../shared/utils/substrate';
+import { ExecutableTest } from '../shared/executable_test';
+
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testDeltaBasedIngress = new ExecutableTest('Delta-Based-Ingress', main, 800);
 
 async function deltaBasedIngressTest(
   sourceAsset: 'Sol' | 'SolUsdc',
@@ -62,7 +65,7 @@ async function deltaBasedIngressTest(
     }
 
     swapsWitnessed++;
-    console.log('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
+    testDeltaBasedIngress.log('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
 
     if (swapsWitnessed > maxTotalSwapsExpected) {
       throw new Error('More than one swaps were initiated');
@@ -93,12 +96,14 @@ async function deltaBasedIngressTest(
 
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  console.log('Killing the engines');
+  testDeltaBasedIngress.log('Killing the engines');
   await killEngines();
   await startEngines(localnetInitPath, binariesPath, numberOfNodes);
 
   // Wait to ensure no new swap is being triggered after restart.
-  console.log('Waiting for 40 seconds to ensure no swap is being triggered after restart');
+  testDeltaBasedIngress.log(
+    'Waiting for 40 seconds to ensure no swap is being triggered after restart',
+  );
   await sleep(40000);
   swapScheduledHandle.stop();
 
@@ -106,7 +111,7 @@ async function deltaBasedIngressTest(
     throw new Error('No swap was initiated. Swaps witnessed: ' + swapsWitnessed);
   }
 
-  console.log('Killing the engines');
+  testDeltaBasedIngress.log('Killing the engines');
   await killEngines();
 
   // Start another swap doing another deposit to the same address
@@ -126,9 +131,11 @@ async function deltaBasedIngressTest(
 
   // Wait to ensure no additional new swap is being triggered after restart
   // and check that swap completes.
-  console.log('Waiting for 40 seconds to ensure no extra swap is being triggered after restart');
+  testDeltaBasedIngress.log(
+    'Waiting for 40 seconds to ensure no extra swap is being triggered after restart',
+  );
   await sleep(40000);
-  console.log(
+  testDeltaBasedIngress.log(
     `Waiting for ${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit to complete`,
   );
   await swapHandle;
@@ -141,13 +148,13 @@ async function deltaBasedIngressTest(
 
 // Test Solana's delta based ingress
 async function main(): Promise<void> {
-  console.log('Starting delta based ingress test');
+  testDeltaBasedIngress.log('Starting delta based ingress test');
   await yargs(hideBin(process.argv))
     .command(
       'prebuilt',
       'specify paths to the prebuilt binaries and runtime you wish to upgrade to',
       (args) => {
-        console.log('prebuilt selected');
+        testDeltaBasedIngress.log('prebuilt selected');
         return args
           .option('bins', {
             describe: 'paths to the binaries and runtime you wish to upgrade to',
@@ -169,7 +176,7 @@ async function main(): Promise<void> {
           });
       },
       async (args) => {
-        console.log(
+        testDeltaBasedIngress.log(
           'delta based ingress test subcommand with args: ' + args.bins + ' ' + args.localnet_init,
         );
 
@@ -191,7 +198,7 @@ async function main(): Promise<void> {
     )
     .demandCommand(1)
     .help().argv;
-  console.log('main function ended');
+  testDeltaBasedIngress.log('main function ended');
 }
 
-await executeWithTimeout(main(), 800);
+await testDeltaBasedIngress.execute();

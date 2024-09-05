@@ -21,6 +21,11 @@ import { spamEvm } from './send_evm';
 import { observeEvent, observeBadEvent, getChainflipApi } from './utils/substrate';
 import { CcmDepositMetadata } from './new_swap';
 import { spamSolana } from './send_sol';
+import { ExecutableTest } from './executable_test';
+
+// Run this test separately from all the concurrent tests because there will be BroadcastAborted events emitted.
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testGasLimitCcmSwaps = new ExecutableTest('Gas-Limit-Ccm-Swaps', main, 1800);
 
 const LOOP_TIMEOUT = 15;
 const LAMPORTS_PER_SIGNATURE = 5000;
@@ -159,6 +164,7 @@ async function trackGasLimitSwap(
       historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.egressId as EgressId;
+  testGasLimitCcmSwaps.debugLog(`${tag} Found egressId: ${egressId}`);
 
   const broadcastId = (
     await observeEvent(`${destChain.toLowerCase()}IngressEgress:CcmBroadcastRequested`, {
@@ -167,6 +173,7 @@ async function trackGasLimitSwap(
       historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.broadcastId;
+  testGasLimitCcmSwaps.debugLog(`${tag} Found broadcastId: ${broadcastId}`);
 
   const txPayload = (
     await observeEvent(`${destChain.toLowerCase()}Broadcaster:TransactionBroadcastRequest`, {
@@ -174,6 +181,7 @@ async function trackGasLimitSwap(
       historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.transactionPayload;
+  testGasLimitCcmSwaps.debugLog(`${tag} Found txPayload: ${txPayload}`);
 
   // Only look for a gas swap if we expect one
   async function lookForGasSwapAmount(): Promise<number> {
@@ -223,7 +231,7 @@ async function testGasLimitSwapToSolana(
     testTag,
   );
 
-  console.log(`${tag} Finished tracking events`);
+  testGasLimitCcmSwaps.log(`${tag} Finished tracking events`);
 
   const { priorityFee: computePrice } = await getChainFees('Solana');
 
@@ -239,7 +247,7 @@ async function testGasLimitSwapToSolana(
   const connection = getSolConnection();
 
   if (minGasLimitRequired >= gasLimitBudget + solanaBaseComputeOverHead) {
-    console.log(`${tag} Gas too low, transaction expected to revert`);
+    testGasLimitCcmSwaps.log(`${tag} Gas too low, transaction expected to revert`);
     let confirmedSignaturesInfo;
     let attempts = 0;
     let transaction;
@@ -258,7 +266,7 @@ async function testGasLimitSwapToSolana(
           commitment: 'confirmed',
         });
         if (transaction !== null) {
-          console.log(`${tag} Transaction found: ${transaction?.meta}`);
+          testGasLimitCcmSwaps.log(`${tag} Transaction found: ${transaction?.meta}`);
           // This doesn't throw an error, for now it's fine to print it.
           if (transaction?.meta?.err === null) {
             throw new Error('Transaction should have reverted');
@@ -273,13 +281,15 @@ async function testGasLimitSwapToSolana(
     if (transaction === null) {
       throw new Error('Transaction not found');
     }
-    console.log(`${tag} CCM Swap success!`);
+    testGasLimitCcmSwaps.log(`${tag} CCM Swap success!`);
   } else if (minGasLimitRequired + solanaBaseComputeOverHead < gasLimitBudget) {
-    console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
+    testGasLimitCcmSwaps.log(
+      `${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`,
+    );
 
     const ccmEvent = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
     const txSignature = ccmEvent?.txHash as string;
-    console.log(`${tag} CCM event emitted!`);
+    testGasLimitCcmSwaps.log(`${tag} CCM event emitted!`);
 
     const transaction = await connection.getTransaction(txSignature, {
       commitment: 'confirmed',
@@ -303,12 +313,12 @@ async function testGasLimitSwapToSolana(
         `${tag} Transaction fee paid is higher than the budget paid by the user! totalFee: ${totalFee} egressBudgetAmount: ${egressBudgetAmount}`,
       );
     }
-    console.log(`${tag} CCM Swap success! TxHash: ${txSignature}!`);
-    console.log(`${tag} Waiting for a fee deficit to be recorded...`);
+    testGasLimitCcmSwaps.log(`${tag} CCM Swap success! TxHash: ${txSignature}!`);
+    testGasLimitCcmSwaps.log(`${tag} Waiting for a fee deficit to be recorded...`);
     await feeDeficitHandle.event;
-    console.log(`${tag} Fee deficit recorded!`);
+    testGasLimitCcmSwaps.log(`${tag} Fee deficit recorded!`);
   } else {
-    console.log(`${tag} Budget too tight, can't determine if swap should succeed.`);
+    testGasLimitCcmSwaps.log(`${tag} Budget too tight, can't determine if swap should succeed.`);
   }
 }
 
@@ -351,7 +361,7 @@ async function testGasLimitSwapToEvm(
     ccmMetadata,
     testTag,
   );
-  console.log(`${tag} Finished tracking events`);
+  testGasLimitCcmSwaps.log(`${tag} Finished tracking events`);
 
   const maxFeePerGas = Number(txPayload.maxFeePerGas.replace(/,/g, ''));
   const gasLimitBudget = Number(txPayload.gasLimit.replace(/,/g, ''));
@@ -365,7 +375,7 @@ async function testGasLimitSwapToEvm(
   if (minGasLimitRequired >= gasLimitBudget + evmBaseComputeOverHead) {
     let stopObservingCcmReceived = false;
 
-    console.log(
+    testGasLimitCcmSwaps.log(
       `${tag} Gas budget of ${gasLimitBudget} is too low. Expecting BroadcastAborted event. Time to wait for CCM event`,
     );
 
@@ -385,16 +395,18 @@ async function testGasLimitSwapToEvm(
       }
     });
     // Expect Broadcast Aborted
-    console.log(
+    testGasLimitCcmSwaps.log(
       `${tag} Gas budget of ${gasLimitBudget} is too low. Expecting BroadcastAborted event.`,
     );
     await observeEvent(`${destChain.toLowerCase()}Broadcaster:BroadcastAborted`, {
       test: (event) => event.data.broadcastId === broadcastId,
     }).event;
     stopObservingCcmReceived = true;
-    console.log(`${tag} Broadcast Aborted found! broadcastId: ${broadcastId}`);
+    testGasLimitCcmSwaps.log(`${tag} Broadcast Aborted found! broadcastId: ${broadcastId}`);
   } else if (minGasLimitRequired + evmBaseComputeOverHead < gasLimitBudget) {
-    console.log(`${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`);
+    testGasLimitCcmSwaps.log(
+      `${tag} Gas budget ${gasLimitBudget}. Expecting successful broadcast.`,
+    );
 
     // Check that broadcast is not aborted
     const observeBroadcastFailure = observeBadEvent(
@@ -403,7 +415,7 @@ async function testGasLimitSwapToEvm(
         test: (event) => {
           const aborted = event.data.broadcastId === broadcastId;
           if (aborted) {
-            console.log(
+            testGasLimitCcmSwaps.log(
               `${tag} FAILURE! Broadcast Aborted unexpected! broadcastId: ${
                 event.data.broadcastId
               }. Gas budget: ${gasLimitBudget} while limit is ${
@@ -417,7 +429,7 @@ async function testGasLimitSwapToEvm(
       },
     );
 
-    console.log(`${tag} Waiting for CCM event...`);
+    testGasLimitCcmSwaps.log(`${tag} Waiting for CCM event...`);
 
     // Expecting success
     const ccmReceived = await observeCcmReceived(sourceAsset, destAsset, destAddress, ccmMetadata);
@@ -425,7 +437,7 @@ async function testGasLimitSwapToEvm(
       throw new Error(`${tag} CCM event emitted. Gas consumed is less than expected!`);
     }
 
-    console.log(`${tag} CCM event emitted!`);
+    testGasLimitCcmSwaps.log(`${tag} CCM event emitted!`);
 
     // Stop listening for broadcast failure
     await observeBroadcastFailure.stop();
@@ -455,13 +467,13 @@ async function testGasLimitSwapToEvm(
         `${tag} Transaction fee paid is higher than the budget paid by the user! totalFee: ${totalFee} egressBudgetAmount: ${egressBudgetAmount}`,
       );
     }
-    console.log(`${tag} Swap success! TxHash: ${ccmReceived?.txHash}!`);
+    testGasLimitCcmSwaps.log(`${tag} Swap success! TxHash: ${ccmReceived?.txHash}!`);
 
-    console.log(`${tag} Waiting for a fee deficit to be recorded...`);
+    testGasLimitCcmSwaps.log(`${tag} Waiting for a fee deficit to be recorded...`);
     await feeDeficitHandle.event;
-    console.log(`${tag} Fee deficit recorded!`);
+    testGasLimitCcmSwaps.log(`${tag} Fee deficit recorded!`);
   } else {
-    console.log(`${tag} Budget too tight, can't determine if swap should succeed.`);
+    testGasLimitCcmSwaps.log(`${tag} Budget too tight, can't determine if swap should succeed.`);
   }
 }
 
@@ -501,9 +513,9 @@ async function spamChain(chain: Chain) {
   }
 }
 
-export async function testGasLimitCcmSwaps() {
-  console.log('=== Starting gasLimit CCM test ===');
-  console.log('Spamming chains to increase fees...');
+export async function main() {
+  const feeDeficitRefused = observeBadEvent(':TransactionFeeDeficitRefused', {});
+  testGasLimitCcmSwaps.log('Spamming chains to increase fees...');
 
   const spammingEth = spamChain('Ethereum');
   const spammingArb = spamChain('Arbitrum');
@@ -524,7 +536,9 @@ export async function testGasLimitCcmSwaps() {
       await spammingEth;
       await spammingArb;
       await spammingSol;
-      console.log("=== Skipping gasLimit CCM test as the priority fee didn't increase enough. ===");
+      testGasLimitCcmSwaps.log(
+        "Skipping gasLimit CCM test as the priority fee didn't increase enough",
+      );
       return;
     }
     await sleep(500);
@@ -601,4 +615,5 @@ export async function testGasLimitCcmSwaps() {
 
   // Make sure all the spamming has stopped to avoid triggering connectivity issues when running the next test.
   await sleep(10000);
+  await feeDeficitRefused.stop();
 }

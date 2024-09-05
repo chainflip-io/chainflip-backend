@@ -6,6 +6,10 @@ import { newAddress, observeBalanceIncrease, observeSwapRequested, SwapRequestTy
 import { send } from './send';
 import { observeEvent, observeEvents } from './utils/substrate';
 import { getBalance } from './get_balance';
+import { ExecutableTest } from './executable_test';
+
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testDCASwaps = new ExecutableTest('DCA-Swaps', main, 150);
 
 // Requested number of blocks between each chunk
 const CHUNK_INTERVAL = 2;
@@ -77,8 +81,6 @@ async function testDCASwap(inputAsset: Asset, amount: number, numberOfChunks: nu
   await observeBalanceIncrease(destAsset, destAddress, destBalanceBefore);
 }
 
-export async function testDCASwaps() {
-  console.log('\x1b[36m%s\x1b[0m', '=== Running DCA test ===');
+export async function main() {
   await testDCASwap(Assets.Eth, 1, 2);
-  console.log('\x1b[32m%s\x1b[0m', '=== DCA test complete ===');
 }

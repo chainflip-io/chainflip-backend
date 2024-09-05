@@ -1,4 +1,3 @@
-#!/usr/bin/env -S pnpm tsx
 import assert from 'assert';
 import { randomBytes } from 'crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
@@ -18,9 +17,9 @@ import {
   observeSwapRequested,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
-import { getChainflipApi, observeEvent } from './utils/substrate';
-import { send } from './send';
-import { ExecutableTest } from './executable_test';
+import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
+import { send } from '../shared/send';
+import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testBrokerFeeCollection = new ExecutableTest('Broker-Fee-Collection', main, 200);

@@ -14,13 +14,17 @@ import { send } from './send';
 import { getBalance } from './get_balance';
 import { observeEvent } from './utils/substrate';
 import { RefundParameters } from './new_swap';
+import { ExecutableTest } from './executable_test';
+
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testFillOrKill = new ExecutableTest('FoK', main, 600);
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund(inputAsset: Asset, amount: number) {
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const refundAddress = await newAddress(inputAsset, randomBytes(32).toString('hex'));
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
-  console.log(`Swap destination address: ${destAddress}`);
+  testFillOrKill.debugLog(`Swap destination address: ${destAddress}`);
 
   const refundBalanceBefore = await getBalance(inputAsset, refundAddress);
 
@@ -35,7 +39,9 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
     ),
   };
 
-  console.log(`Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`);
+  testFillOrKill.log(
+    `Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`,
+  );
   const swapRequest = await requestNewSwap(
     inputAsset,
     destAsset,
@@ -59,11 +65,11 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
 
   // Deposit the asset
   await send(inputAsset, depositAddress, amount.toString());
-  console.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
+  testFillOrKill.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
 
   const swapRequestedEvent = await swapRequestedHandle;
   const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
-  console.log(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
+  testFillOrKill.log(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
   const observeSwapExecuted = observeEvent(`swapping:SwapExecuted`, {
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
@@ -82,12 +88,10 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
     );
   }
 
-  console.log(`FoK ${inputAsset} swap refunded`);
+  testFillOrKill.log(`FoK ${inputAsset} swap refunded`);
 }
 
-export async function testFillOrKill() {
-  console.log('\x1b[36m%s\x1b[0m', '=== Running FoK test ===');
-
+async function main() {
   await Promise.all([
     testMinPriceRefund(Assets.Flip, 500),
     testMinPriceRefund(Assets.Eth, 1),
@@ -95,6 +99,4 @@ export async function testFillOrKill() {
     testMinPriceRefund(Assets.Btc, 0.1),
     testMinPriceRefund(Assets.Usdc, 1000),
   ]);
-
-  console.log('\x1b[32m%s\x1b[0m', '=== FoK test complete ===');
 }

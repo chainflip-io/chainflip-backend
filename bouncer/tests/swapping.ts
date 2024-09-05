@@ -1,22 +1,4 @@
 #!/usr/bin/env -S pnpm tsx
-import { SwapContext, testAllSwaps } from '../shared/swapping';
-import { runWithTimeout } from '../shared/utils';
+import { testAllSwaps } from '../shared/swapping';
 
-const swapContext = new SwapContext();
-
-async function main(): Promise<void> {
-  await testAllSwaps(swapContext);
-}
-
-runWithTimeout(main(), 3000000)
-  .then(() => {
-    // There are some dangling resources that prevent the process from exiting
-    process.exit(0);
-  })
-  .catch((error) => {
-    swapContext.print_report();
-    const now = new Date();
-    const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-    console.error(`${timestamp} ${error}`);
-    process.exit(-1);
-  });
+await testAllSwaps.execute();

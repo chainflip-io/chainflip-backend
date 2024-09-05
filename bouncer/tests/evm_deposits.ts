@@ -17,12 +17,12 @@ import {
   observeSwapRequested,
   SwapRequestType,
 } from '../shared/utils';
-import { signAndSendTxEvm } from './send_evm';
-import { getCFTesterAbi } from './contract_interfaces';
-import { send } from './send';
+import { signAndSendTxEvm } from '../shared/send_evm';
+import { getCFTesterAbi } from '../shared/contract_interfaces';
+import { send } from '../shared/send';
 
-import { observeEvent, observeBadEvent } from './utils/substrate';
-import { ExecutableTest } from './executable_test';
+import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
+import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testEvmDeposits = new ExecutableTest('Evm-Deposits', main, 250);
@@ -175,8 +175,6 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
 }
 
 async function main(numberOfNodes = 1) {
-  console.log('Running EVM deposit tests', numberOfNodes);
-  return;
   // There is some issue in CI with 3-nodes and these swaps.
   // To investigate in PRO-1591
   const depositTests = [];

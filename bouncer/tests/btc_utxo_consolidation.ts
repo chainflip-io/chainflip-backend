@@ -1,10 +1,12 @@
-#!/usr/bin/env -S pnpm tsx
 import assert from 'assert';
 
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { depositLiquidity } from '../shared/deposit_liquidity';
-import { executeWithTimeout } from '../shared/utils';
 import { observeEvent, getChainflipApi } from '../shared/utils/substrate';
+import { ExecutableTest } from '../shared/executable_test';
+
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testBtcUtxoConsolidation = new ExecutableTest('BTC-UTXO-Consolidation', main, 200);
 
 interface Utxo {
   id: string;
@@ -24,11 +26,10 @@ async function queryUtxos(): Promise<{ amount: number; count: number }> {
   };
 }
 
-async function test() {
-  console.log('=== Testing BTC UTXO Consolidation ===');
+async function main() {
   const initialUtxos = await queryUtxos();
 
-  console.log(`Initial utxo count: ${initialUtxos.count}`);
+  testBtcUtxoConsolidation.log(`Initial utxo count: ${initialUtxos.count}`);
 
   if (initialUtxos.count === 0) {
     throw new Error('Test precondition violated: btc vault should have at least 1 utxo');
@@ -53,9 +54,9 @@ async function test() {
   await depositLiquidity('Btc', 3);
 
   const amountBeforeConsolidation = (await queryUtxos()).amount;
-  console.log(`Total amount in BTC vault is: ${amountBeforeConsolidation}`);
+  testBtcUtxoConsolidation.log(`Total amount in BTC vault is: ${amountBeforeConsolidation}`);
 
-  console.log(
+  testBtcUtxoConsolidation.log(
     `Setting consolidation threshold to: ${consolidationThreshold} and size to: ${consolidationSize}`,
   );
 
@@ -70,9 +71,11 @@ async function test() {
     }),
   );
 
-  console.log(`Waiting for the consolidation event`);
+  testBtcUtxoConsolidation.log(`Waiting for the consolidation event`);
   const consolidationBroadcastId = (await consolidationEventPromise).data.broadcastId;
-  console.log(`Consolidation event is observed! Broadcast id: ${consolidationBroadcastId}`);
+  testBtcUtxoConsolidation.log(
+    `Consolidation event is observed! Broadcast id: ${consolidationBroadcastId}`,
+  );
 
   const broadcastSuccessPromise = observeEvent('bitcoinBroadcaster:BroadcastSuccess', {
     test: (event) => consolidationBroadcastId === event.data.broadcastId,
@@ -80,18 +83,20 @@ async function test() {
 
   const feeDeficitPromise = observeEvent('bitcoinBroadcaster:TransactionFeeDeficitRecorded').event;
 
-  console.log(`Waiting for broadcast ${consolidationBroadcastId} to succeed`);
+  testBtcUtxoConsolidation.log(`Waiting for broadcast ${consolidationBroadcastId} to succeed`);
   await broadcastSuccessPromise;
-  console.log(`Broadcast ${consolidationBroadcastId} is successful!`);
+  testBtcUtxoConsolidation.log(`Broadcast ${consolidationBroadcastId} is successful!`);
 
   const feeDeficit = (await feeDeficitPromise).data.amount;
-  console.log(`Fee deficit: ${feeDeficit}`);
+  testBtcUtxoConsolidation.log(`Fee deficit: ${feeDeficit}`);
 
   // After consolidation we should have exactly 2 UTXOs
   // with the total amount unchanged (minus fees):
   const utxos = await queryUtxos();
 
-  console.log(`Total utxo count after consolidation: ${utxos.count} (amount: ${utxos.amount})`);
+  testBtcUtxoConsolidation.log(
+    `Total utxo count after consolidation: ${utxos.count} (amount: ${utxos.amount})`,
+  );
   assert(utxos.count === 2, 'should have 2 total utxos');
   assert(
     utxos.amount === amountBeforeConsolidation - Number(feeDeficit),
@@ -105,8 +110,4 @@ async function test() {
       consolidationThreshold: 200,
     }),
   );
-
-  console.log('=== BTC UTXO Consolidation test completed ===');
 }
-
-await executeWithTimeout(test(), 200);
