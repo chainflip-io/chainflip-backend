@@ -419,6 +419,11 @@ mod benchmarks {
 			Status::<T, I>::get(),
 			Some(ElectoralSystemStatus::Paused { detected_corrupt_storage: false })
 		);
+		assert_ok!(Call::<T, I>::clear_all_votes {
+			limit: 100u32,
+			ignore_corrupt_storage: CorruptStorageAdherance::Ignore,
+		}
+		.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
 
 		let call = Call::<T, I>::unpause_elections { require_votes_cleared: true };
 
