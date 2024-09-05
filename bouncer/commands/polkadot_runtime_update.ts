@@ -8,7 +8,7 @@
 import {
   bumpAndBuildPolkadotRuntime,
   pushPolkadotRuntimeUpdate,
-} from '../shared/polkadot_runtime_update';
+} from '../tests/polkadot_runtime_update';
 import { executeWithTimeout } from '../shared/utils';
 import { getNetworkRuntimeVersion } from '../shared/utils/spec_version';
 

@@ -12,7 +12,7 @@
 
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { executeWithTimeout } from '../shared/utils';
-import { addBoostFunds } from '../shared/boost';
+import { addBoostFunds } from '../tests/boost';
 
 await executeWithTimeout(
   addBoostFunds(

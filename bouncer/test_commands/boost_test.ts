@@ -1,4 +1,4 @@
 #!/usr/bin/env -S pnpm tsx
-import { testBoostingSwap } from '../shared/boost';
+import { testBoostingSwap } from '../tests/boost';
 
 await testBoostingSwap.execute();

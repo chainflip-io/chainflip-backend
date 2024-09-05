@@ -1,17 +1,17 @@
 #!/usr/bin/env -S NODE_OPTIONS=--max-old-space-size=6144 pnpm tsx
-import { testEvmDeposits } from '../shared/evm_deposits';
+import { testEvmDeposits } from './evm_deposits';
 import { checkAvailabilityAllSolanaNonces, executeWithTimeout } from '../shared/utils';
-import { testFundRedeem } from '../shared/fund_redeem';
-import { testMultipleMembersGovernance } from '../shared/multiple_members_governance';
-import { testLpApi } from '../shared/lp_api_test';
-import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot';
-import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
-import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
-import { testBoostingSwap } from '../shared/boost';
+import { testFundRedeem } from './fund_redeem';
+import { testMultipleMembersGovernance } from './multiple_members_governance';
+import { testLpApi } from './lp_api_test';
+import { swapLessThanED } from './swap_less_than_existential_deposit_dot';
+import { testPolkadotRuntimeUpdate } from './polkadot_runtime_update';
+import { testBrokerFeeCollection } from './broker_fee_collection';
+import { testBoostingSwap } from './boost';
 import { observeBadEvent } from '../shared/utils/substrate';
-import { testFillOrKill } from '../shared/fill_or_kill';
-import { testDCASwaps } from '../shared/DCA_test';
-import { testAllSwaps } from '../shared/swapping';
+import { testFillOrKill } from './fill_or_kill';
+import { testDCASwaps } from './DCA_test';
+import { testAllSwaps } from './all_swaps';
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.

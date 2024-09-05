@@ -13,14 +13,14 @@ import {
   calculateFeeWithBps,
   amountToFineAmountBigInt,
   newAddress,
-} from './utils';
-import { send } from './send';
-import { depositLiquidity } from './deposit_liquidity';
-import { requestNewSwap } from './perform_swap';
-import { createBoostPools } from './setup_boost_pools';
-import { jsonRpc } from './json_rpc';
-import { observeEvent, Event, getChainflipApi } from './utils/substrate';
-import { ExecutableTest } from './executable_test';
+} from '../shared/utils';
+import { send } from '../shared/send';
+import { depositLiquidity } from '../shared/deposit_liquidity';
+import { requestNewSwap } from '../shared/perform_swap';
+import { createBoostPools } from '../shared/setup_boost_pools';
+import { jsonRpc } from '../shared/json_rpc';
+import { observeEvent, Event, getChainflipApi } from '../shared/utils/substrate';
+import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testBoostingSwap = new ExecutableTest('Boosting-For-Asset', main, 120);

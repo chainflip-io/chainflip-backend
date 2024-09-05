@@ -1,8 +1,8 @@
 #!/usr/bin/env -S pnpm tsx
-import { ExecutableTest } from './executable_test';
-import { getDotBalance } from './get_dot_balance';
-import { performAndTrackSwap } from './perform_swap';
-import { getSwapRate, newAddress } from './utils';
+import { ExecutableTest } from '../shared/executable_test';
+import { getDotBalance } from '../shared/get_dot_balance';
+import { performAndTrackSwap } from '../shared/perform_swap';
+import { getSwapRate, newAddress } from '../shared/utils';
 
 const DOT_EXISTENTIAL_DEPOSIT = 1;
 

@@ -11,7 +11,7 @@
 
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { executeWithTimeout } from '../shared/utils';
-import { stopBoosting } from '../shared/boost';
+import { stopBoosting } from '../tests/boost';
 
 async function main(): Promise<void> {
   const event = await stopBoosting(

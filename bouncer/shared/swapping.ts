@@ -1,8 +1,8 @@
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import Web3 from 'web3';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
-import { performSwap, SwapParams } from '../shared/perform_swap';
+import { performSwap } from '../shared/perform_swap';
 import {
   newAddress,
   chainFromAsset,
@@ -12,10 +12,9 @@ import {
   ccmSupportedChains,
   assetDecimals,
 } from '../shared/utils';
-import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
+import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { performSwapViaContract, ContractSwapParams } from '../shared/contract_swap';
-import { ExecutableTest } from './executable_test';
+import { performSwapViaContract } from '../shared/contract_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 
 enum SolidityType {
@@ -26,9 +25,6 @@ enum SolidityType {
 }
 
 let swapCount = 1;
-
-/* eslint-disable @typescript-eslint/no-use-before-define */
-export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
 
 function newAbiEncodedMessage(types?: SolidityType[]): string {
   const web3 = new Web3();
@@ -278,66 +274,4 @@ export async function testSwapViaContract(
     swapContext,
     log,
   );
-}
-
-async function main() {
-  const allSwaps: Promise<SwapParams | ContractSwapParams>[] = [];
-
-  function appendSwap(
-    sourceAsset: Asset,
-    destAsset: Asset,
-    functionCall: typeof testSwap | typeof testSwapViaContract,
-    ccmSwap: boolean = false,
-  ) {
-    if (destAsset === 'Btc') {
-      const btcAddressTypesArray = Object.values(btcAddressTypes);
-      allSwaps.push(
-        functionCall(
-          sourceAsset,
-          destAsset,
-          btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-          testAllSwaps.swapContext,
-        ),
-      );
-    } else {
-      allSwaps.push(
-        functionCall(
-          sourceAsset,
-          destAsset,
-          undefined,
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-          testAllSwaps.swapContext,
-        ),
-      );
-    }
-  }
-
-  Object.values(Assets).forEach((sourceAsset) => {
-    Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset)
-      .forEach((destAsset) => {
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
-
-        const sourceChain = chainFromAsset(sourceAsset);
-        const destChain = chainFromAsset(destAsset);
-        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
-          // Contract Swaps
-          appendSwap(sourceAsset, destAsset, testSwapViaContract);
-
-          if (ccmSupportedChains.includes(destChain)) {
-            // CCM contract swaps
-            appendSwap(sourceAsset, destAsset, testSwapViaContract, true);
-          }
-        }
-
-        if (ccmSupportedChains.includes(destChain)) {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, true);
-        }
-      });
-  });
-
-  await Promise.all(allSwaps);
 }
