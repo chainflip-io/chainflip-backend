@@ -152,6 +152,7 @@ fn can_build_solana_batch_all() {
 			)
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
 
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
@@ -217,6 +218,7 @@ fn can_rotate_solana_vault() {
 				.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into())
 			);
 			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
 
 			assert_eq!(Validator::epoch_index(), 2);
 			System::reset_events();
@@ -282,6 +284,7 @@ fn can_send_solana_ccm() {
 			)
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
 
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
@@ -358,6 +361,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			)
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
 
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
@@ -497,6 +501,7 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 			)
 			.dispatch_bypass_filter(pallet_cf_governance::RawOrigin::GovernanceApproval.into()));
 			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
 
 			register_refund_addresses(&DORIS);
 			setup_pool_and_accounts(vec![Asset::Sol, Asset::SolUsdc], OrderType::LimitOrder);
