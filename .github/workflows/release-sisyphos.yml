@@ -88,8 +88,6 @@ jobs:
     secrets: inherit
     with:
       run-job: true
-      upgrade-from-release: "perseverance"
-      upgrade-to-workflow-name: "ci-main.yml"
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml

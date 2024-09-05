@@ -219,6 +219,13 @@ impl pallet_cf_validator::Config for Runtime {
 		BitcoinThresholdSigner,
 		SolanaThresholdSigner
 	);
+	type RotationBroadcastsPending = cons_rotation_broadcasts_pending!(
+		EthereumBroadcaster,
+		PolkadotBroadcaster,
+		BitcoinBroadcaster,
+		ArbitrumBroadcaster,
+		SolanaBroadcaster
+	);
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type KeygenQualification = (
 		HeartbeatQualification<Self>,

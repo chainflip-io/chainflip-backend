@@ -519,52 +519,49 @@ impl RpcServer for RpcServerImpl {
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<Vec<ApiWaitForResult<Vec<LimitOrRangeOrder>>>> {
 		let mut orders_to_delete: Vec<CloseOrder> = vec![];
-		let pool_environment = self
+		let pool_pairs = self
 			.api
 			.state_chain_client
 			.base_rpc_client
 			.raw_rpc_client
-			.cf_pools_environment(None)
+			.cf_available_pools(None)
 			.await?;
-
-		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
-			if let Some(pool) = pool_environment.fees[base_asset] {
-				let orders = self
-					.api
-					.state_chain_client
-					.base_rpc_client
-					.raw_rpc_client
-					.cf_pool_orders(
-						base_asset,
-						pool.quote_asset,
-						Some(self.api.state_chain_client.account_id()),
-						None,
-						None,
-					)
-					.await?;
-				for order in orders.range_orders {
-					orders_to_delete.push(CloseOrder::Range {
-						base_asset,
-						quote_asset: pool.quote_asset,
-						id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
-					});
-				}
-				for order in orders.limit_orders.asks {
-					orders_to_delete.push(CloseOrder::Limit {
-						base_asset,
-						quote_asset: pool.quote_asset,
-						side: Side::Sell,
-						id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
-					});
-				}
-				for order in orders.limit_orders.bids {
-					orders_to_delete.push(CloseOrder::Limit {
-						base_asset,
-						quote_asset: pool.quote_asset,
-						side: Side::Buy,
-						id: order.id.try_into().expect("Internal AMM OrderId is be u64"),
-					});
-				}
+		for pool in pool_pairs {
+			let orders = self
+				.api
+				.state_chain_client
+				.base_rpc_client
+				.raw_rpc_client
+				.cf_pool_orders(
+					pool.base,
+					pool.quote,
+					Some(self.api.state_chain_client.account_id()),
+					None,
+					None,
+				)
+				.await?;
+			for order in orders.range_orders {
+				orders_to_delete.push(CloseOrder::Range {
+					base_asset: pool.base,
+					quote_asset: pool.quote,
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
+				});
+			}
+			for order in orders.limit_orders.asks {
+				orders_to_delete.push(CloseOrder::Limit {
+					base_asset: pool.base,
+					quote_asset: pool.quote,
+					side: Side::Sell,
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
+				});
+			}
+			for order in orders.limit_orders.bids {
+				orders_to_delete.push(CloseOrder::Limit {
+					base_asset: pool.base,
+					quote_asset: pool.quote,
+					side: Side::Buy,
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
+				});
 			}
 		}
 

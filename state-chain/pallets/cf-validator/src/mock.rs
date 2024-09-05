@@ -10,7 +10,7 @@ use cf_traits::{
 		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 	},
-	AccountRoleRegistry,
+	AccountRoleRegistry, RotationBroadcastsPending,
 };
 use frame_support::{construct_runtime, derive_impl, parameter_types};
 use sp_core::H256;
@@ -163,12 +163,20 @@ impl Bonding for MockBonder {
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
 
+pub struct MockRotationBroadcastsPending;
+impl RotationBroadcastsPending for MockRotationBroadcastsPending {
+	fn rotation_broadcasts_pending() -> bool {
+		false
+	}
+}
+
 impl_mock_runtime_safe_mode!(validator: PalletSafeMode);
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type KeyRotator = MockKeyRotatorA;
+	type RotationBroadcastsPending = MockRotationBroadcastsPending;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type OffenceReporter = MockOffenceReporter;
 	type Bonder = MockBonder;

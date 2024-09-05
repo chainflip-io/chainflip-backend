@@ -20,7 +20,7 @@ use cf_chains::{
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
 	CfeBroadcastRequest, Chainflip, ElectionEgressWitnesser, EpochInfo, GetBlockHeight,
-	ThresholdSigner,
+	RotationBroadcastsPending, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -1043,5 +1043,11 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		IncomingKeyAndBroadcastId::<T, I>::put((new_key, broadcast_id));
 
 		(broadcast_id, request_id)
+	}
+}
+
+impl<T: Config<I>, I: 'static> RotationBroadcastsPending for Pallet<T, I> {
+	fn rotation_broadcasts_pending() -> bool {
+		IncomingKeyAndBroadcastId::<T, I>::exists()
 	}
 }
