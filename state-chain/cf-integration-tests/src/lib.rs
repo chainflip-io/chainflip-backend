@@ -85,9 +85,9 @@ pub fn witness_call(call: RuntimeCall) {
 	}
 }
 
-// this function witnesses the rotation tx broadcasts for all chains. It takes in the broadcast ids
-// of the rotation tx in the following chains order: Ethereum, Polkadot, Bitcoin, Arbitrum, Solana
-// (the order in which these chains were integrated in chainflip)
+/// this function witnesses the rotation tx broadcasts for all chains. It takes in the broadcast ids
+/// of the rotation tx in the following chains order: Ethereum, Polkadot, Bitcoin, Arbitrum, Solana
+/// (the order in which these chains were integrated in chainflip)
 pub fn witness_rotation_broadcasts(broadcast_ids: [cf_primitives::BroadcastId; 5]) {
 	witness_ethereum_rotation_broadcast(broadcast_ids[0]);
 	witness_call(RuntimeCall::PolkadotBroadcaster(

@@ -1099,6 +1099,8 @@ impl<C: ChainCrypto> ElectionEgressWitnesser for DummyEgressSuccessWitnesser<C> 
 	}
 }
 
+/// This trait is used by the validator pallet to check if a rotation tx is still pending for any of
+/// the chains. This is needed by the validator pallet to decide whether to start a new rotation.
 pub trait RotationBroadcastsPending {
 	fn rotation_broadcasts_pending() -> bool;
 }

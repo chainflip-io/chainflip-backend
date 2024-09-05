@@ -396,16 +396,14 @@ fn can_process_ccm_via_swap_deposit_address() {
 		// Deposit funds for the ccm.
 		let deposit_address =
 			<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
-				cf_primitives::chains::assets::eth::Asset::Flip,
+				EthAsset::Flip,
 				pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 			)
 			.unwrap();
 		let ingress_fee = sp_std::cmp::min(
 			Swapping::calculate_input_for_gas_output::<Ethereum>(
-				cf_primitives::chains::assets::eth::Asset::Flip,
-				EthereumChainTracking::estimate_ingress_fee(
-					cf_primitives::chains::assets::eth::Asset::Flip,
-				),
+				EthAsset::Flip,
+				EthereumChainTracking::estimate_ingress_fee(EthAsset::Flip),
 			)
 			.unwrap(),
 			u128::MAX,
@@ -414,7 +412,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			pallet_cf_ingress_egress::Call::process_deposits {
 				deposit_witnesses: vec![DepositWitness {
 					deposit_address,
-					asset: cf_primitives::chains::assets::eth::Asset::Flip,
+					asset: EthAsset::Flip,
 					amount: (DEPOSIT_AMOUNT + ingress_fee),
 					deposit_details: Default::default(),
 				}],
@@ -904,6 +902,8 @@ fn can_resign_failed_ccm() {
 
 			// On the next epoch, the call is asked to be resigned
 			testnet.move_to_the_next_epoch();
+			// the rotation tx for ethereum is the third broadcast overall (2 broadcasts already
+			// created above) whereas for other chains it is the first broadcast
 			witness_rotation_broadcasts([3, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(2);
 
@@ -915,6 +915,9 @@ fn can_resign_failed_ccm() {
 
 			// On the next epoch, the failed call is removed from storage.
 			testnet.move_to_the_next_epoch();
+			// the rotation tx for ethereum is the fourth broadcast overall (3 broadcasts already
+			// created above) whereas for other chains it is the second broadcast (first broadcast
+			// was the previous rotation)
 			witness_rotation_broadcasts([4, 2, 2, 2, 2]);
 			testnet.move_forward_blocks(2);
 			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
@@ -1003,6 +1006,8 @@ fn can_handle_failed_vault_transfer() {
 
 			// On the next epoch, the call is asked to be resigned
 			testnet.move_to_the_next_epoch();
+			// the rotation tx for ethereum is the third broadcast (2 broadcasts already created
+			// above) whereas for other chains it is the first broadcast
 			witness_rotation_broadcasts([3, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(2);
 
