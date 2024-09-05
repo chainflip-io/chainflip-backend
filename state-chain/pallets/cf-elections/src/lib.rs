@@ -103,6 +103,7 @@
 
 #![feature(try_find)]
 #![feature(option_take_if)]
+#![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
@@ -609,6 +610,12 @@ pub mod pallet {
 			{
 				ElectionState::<T, I>::get(self.unique_monotonic_identifier())
 					.ok_or_else(CorruptStorageError::new)
+			}
+			#[cfg(test)]
+			fn election_identifier(
+				&self,
+			) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError> {
+				Ok(self.election_identifier)
 			}
 		}
 		impl<T: Config<I>, I: 'static> ElectionWriteAccess for ElectionAccess<T, I> {
@@ -1617,6 +1624,20 @@ pub mod pallet {
 					},
 				}
 			}
+		}
+
+		fn integrity_test() {
+			let properties_keys = ElectionProperties::<T, I>::iter_keys()
+				.map(|id| *id.unique_monotonic())
+				.collect::<BTreeSet<_>>();
+			let state_keys = ElectionState::<T, I>::iter_keys().collect::<BTreeSet<_>>();
+			debug_assert_eq!(
+				properties_keys,
+				state_keys,
+				"Expected election properties and state to have the same keys. In properties but not in state: {:?}. In state but not in properties: {:?}.",
+				properties_keys.difference(&state_keys).collect::<Vec<_>>(),
+				state_keys.difference(&properties_keys).collect::<Vec<_>>(),
+			);
 		}
 	}
 

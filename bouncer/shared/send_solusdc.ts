@@ -37,5 +37,5 @@ export async function sendSolUsdc(solAddress: string, usdcAmount: string, log = 
       BigInt(usdcFineAmount),
     ),
   );
-  await signAndSendTxSol(transaction, log);
+  return signAndSendTxSol(transaction, log);
 }

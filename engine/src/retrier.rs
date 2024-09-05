@@ -443,9 +443,9 @@ where
 
 							let error_message = format!("Retrier {name}: Error for request `{request_log}` with id `{request_id}` requested with `{primary_or_backup:?}`, attempt `{attempt}`: {e}. Delaying for {:?}", sleep_duration);
 							if attempt == 0 && !matches!(retry_limit, RetryLimit::Limit(1)) {
-								tracing::warn!(error_message);
+								tracing::debug!(error_message);
 							} else {
-								tracing::error!(error_message);
+								tracing::warn!(error_message);
 							}
 
 							client_selector.request_failed(primary_or_backup);

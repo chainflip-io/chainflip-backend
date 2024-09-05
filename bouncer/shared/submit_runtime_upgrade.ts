@@ -25,7 +25,7 @@ export async function submitRuntimeUpgradeWithRestrictions(
 
   if (tryRuntime) {
     console.log('Running try-runtime before submitting the runtime upgrade.');
-    await tryRuntimeUpgrade('last-n', chainflip, networkUrl, wasmPath);
+    await tryRuntimeUpgrade('last-n', networkUrl, wasmPath);
   }
 
   let versionPercentRestriction;

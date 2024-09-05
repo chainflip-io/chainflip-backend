@@ -112,11 +112,8 @@ mod test_unsafe_median {
 	fn if_consensus_update_unsynchronised_state() {
 		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
 		const NEW_UNSYNCHRONISED_STATE: u64 = 33;
-		let mut electoral_system = MockElectoralSystem::<UnsafeMedian<u64, (), ()>>::new(
-			INIT_UNSYNCHRONISED_STATE,
-			(),
-			(),
-		);
+		let mut electoral_system =
+			MockAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, (), ());
 
 		electoral_system.new_election((), (), ()).unwrap().set_consensus_status(
 			ConsensusStatus::Changed {
@@ -133,11 +130,8 @@ mod test_unsafe_median {
 	#[test]
 	fn if_no_consensus_do_not_update_unsynchronised_state() {
 		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
-		let mut electoral_system = MockElectoralSystem::<UnsafeMedian<u64, (), ()>>::new(
-			INIT_UNSYNCHRONISED_STATE,
-			(),
-			(),
-		);
+		let mut electoral_system =
+			MockAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, (), ());
 
 		electoral_system
 			.new_election((), (), ())
@@ -152,11 +146,8 @@ mod test_unsafe_median {
 	#[test]
 	fn check_consensus_correctly_calculates_median_when_all_authorities_vote() {
 		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
-		let mut electoral_system = MockElectoralSystem::<UnsafeMedian<u64, (), ()>>::new(
-			INIT_UNSYNCHRONISED_STATE,
-			(),
-			(),
-		);
+		let mut electoral_system =
+			MockAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, (), ());
 
 		let mut votes = (1..=10).map(|v| ((), v)).collect::<Vec<_>>();
 
@@ -186,7 +177,7 @@ mod test_unsafe_median {
 	#[test]
 	fn check_consensus_correctly_calculates_median_when_exactly_super_majority_authorities_vote() {
 		let mut electoral_system =
-			MockElectoralSystem::<UnsafeMedian<u64, (), ()>>::new(Default::default(), (), ());
+			MockAccess::<UnsafeMedian<u64, (), ()>>::new(Default::default(), (), ());
 
 		let mut votes = vec![((), 1u64), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6)];
 
@@ -209,7 +200,7 @@ mod test_unsafe_median {
 	#[test]
 	fn fewer_than_supermajority_votes_does_not_get_consensus() {
 		let mut electoral_system =
-			MockElectoralSystem::<UnsafeMedian<u64, (), ()>>::new(Default::default(), (), ());
+			MockAccess::<UnsafeMedian<u64, (), ()>>::new(Default::default(), (), ());
 
 		let all_votes = vec![((), 1u64), ((), 5), ((), 3), ((), 2), ((), 8)];
 
