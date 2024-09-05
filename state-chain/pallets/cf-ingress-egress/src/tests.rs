@@ -1673,7 +1673,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 }
 
 #[test]
-fn dont_batch_more_transfers_than_allowed() {
+fn do_not_batch_more_transfers_than_the_limit_allows() {
 	new_test_ext().execute_with(|| {
 		const EXCESS_TRANSFERS: usize = 1;
 		let transfer_limits = MockFetchesTransfersLimitProvider::maybe_transfers_limit().unwrap();
@@ -1695,5 +1695,56 @@ fn dont_batch_more_transfers_than_allowed() {
 		let schedule_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
 		assert_eq!(schedule_egresses.len(), EXCESS_TRANSFERS, "Wrong amount of left egresses!");
+
+		IngressEgress::on_finalize(2);
+
+		let schedule_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(schedule_egresses.len(), 0, "Left egresses have been fully processed!");
+	});
+}
+
+#[test]
+fn do_not_batch_more_fetches_than_the_limit_allows() {
+	new_test_ext().execute_with(|| {
+		const EXCESS_FETCHES: usize = 1;
+		const ASSET: eth::Asset = eth::Asset::Eth;
+
+		let fetch_limits = MockFetchesTransfersLimitProvider::maybe_fetches_limit().unwrap();
+
+		for i in 1..=fetch_limits + EXCESS_FETCHES {
+			let (_, address, ..) =
+				IngressEgress::request_liquidity_deposit_address(i.try_into().unwrap(), ASSET, 0)
+					.unwrap();
+			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+
+			assert_ok!(IngressEgress::process_single_deposit(
+				address,
+				ASSET,
+				DEFAULT_DEPOSIT_AMOUNT,
+				Default::default(),
+				Default::default()
+			));
+		}
+
+		let schedule_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(
+			schedule_egresses.len(),
+			fetch_limits + EXCESS_FETCHES,
+			"Wrong amount of scheduled egresses!"
+		);
+
+		IngressEgress::on_finalize(1);
+
+		let schedule_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(schedule_egresses.len(), EXCESS_FETCHES, "Wrong amount of left egresses!");
+
+		IngressEgress::on_finalize(2);
+
+		let schedule_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(schedule_egresses.len(), 0, "Left egresses have been fully processed!");
 	});
 }
