@@ -178,6 +178,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 	]
 }
 
+#[track_caller]
 fn assert_failed_ccm(
 	from: Asset,
 	amount: AssetAmount,
@@ -2649,4 +2650,30 @@ fn test_fee_estimation_basis() {
 	         );
 		}
 	}
+}
+
+#[test]
+fn failed_ccm_deposit_can_deposit_event() {
+	new_test_ext().execute_with(|| {
+		let ccm = generate_ccm_deposit();
+
+		let destination_address = EncodedAddress::Dot(Default::default());
+		// Expect to panic with invalid CCM.
+		assert_ok!(Swapping::ccm_deposit(
+			RuntimeOrigin::root(),
+			Asset::Btc,
+			1_000_000,
+			Asset::Dot,
+			destination_address.clone(),
+			ccm.clone(),
+			Default::default(),
+		));
+
+		System::assert_has_event(RuntimeEvent::Swapping(crate::Event::<Test>::CcmFailed {
+			reason: CcmFailReason::UnsupportedForTargetChain,
+			destination_address,
+			deposit_metadata: ccm.to_encoded::<MockAddressConverter>(),
+			origin: SwapOrigin::Vault { tx_hash: Default::default() },
+		}));
+	});
 }

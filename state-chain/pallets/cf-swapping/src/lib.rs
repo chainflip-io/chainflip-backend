@@ -978,7 +978,7 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			Self::init_swap_request(
+			if Self::init_swap_request(
 				source_asset,
 				deposit_amount,
 				destination_asset,
@@ -992,7 +992,11 @@ pub mod pallet {
 				// NOTE: DCA not yet supported for swaps from the contract
 				None,
 				SwapOrigin::Vault { tx_hash },
-			)?;
+			)
+			.is_err()
+			{
+				log::error!("Ccm failed. Check `CcmFailed` event.");
+			}
 
 			Ok(())
 		}
@@ -2218,7 +2222,7 @@ pub mod pallet {
 									swap_request_id: request_id,
 								});
 
-								return Err(DispatchError::Other("Invalid CCM parameters"));
+								return Err(Error::<T>::InvalidCcm.into());
 							},
 						};
 
