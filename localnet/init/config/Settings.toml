@@ -56,7 +56,7 @@ http_endpoint = "http://localhost:8547"
 http_endpoint = "http://localhost:8899"
 
 # optional
-#[sol.backup_rpc]
+# [sol.backup_rpc]
 # http_endpoint = "http://localhost:8899"
 
 # optional

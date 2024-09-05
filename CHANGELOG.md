@@ -9,6 +9,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Decrease broadcast timeout constants for sol and arb
 - More accurate compute unit limits for Solana
 - Only call monotonic median hook if state is updated. ([#5223](https://github.com/chainflip-io/chainflip-backend/issues/5223))
+- Remove WS endpoint from Solana settings as it's not used.
 
 ## [1.6.2] - 2024-08-30
 

@@ -54,6 +54,11 @@ pub struct WsHttpEndpoints {
 	pub http_endpoint: SecretUrl,
 }
 
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct HttpEndpoint {
+	pub http_endpoint: SecretUrl,
+}
+
 pub trait ValidateSettings {
 	fn validate(&self) -> Result<(), ConfigError>;
 }
@@ -63,6 +68,15 @@ impl ValidateSettings for WsHttpEndpoints {
 	fn validate(&self) -> Result<(), ConfigError> {
 		validate_websocket_endpoint(self.ws_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		validate_http_endpoint(self.http_endpoint.clone())
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		Ok(())
+	}
+}
+
+impl ValidateSettings for HttpEndpoint {
+	/// Ensure the endpoints are valid HTTP and WS endpoints.
+	fn validate(&self) -> Result<(), ConfigError> {
 		validate_http_endpoint(self.http_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
@@ -171,7 +185,7 @@ impl Btc {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Sol {
 	#[serde(flatten)]
-	pub nodes: NodeContainer<WsHttpEndpoints>,
+	pub nodes: NodeContainer<HttpEndpoint>,
 }
 
 impl Sol {
@@ -179,14 +193,12 @@ impl Sol {
 		self.nodes.validate()?;
 
 		// Check that all endpoints have a port number
-		let validate_sol_endpoints = |endpoints: &WsHttpEndpoints| -> Result<(), ConfigError> {
-			validate_port_exists(&endpoints.ws_endpoint)
-				.and_then(|_| validate_port_exists(&endpoints.http_endpoint))
-				.map_err(|e| {
-					ConfigError::Message(format!(
-						"Solana node endpoints must include a port number: {e}"
-					))
-				})
+		let validate_sol_endpoints = |endpoint: &HttpEndpoint| -> Result<(), ConfigError> {
+			validate_port_exists(&endpoint.http_endpoint).map_err(|e| {
+				ConfigError::Message(format!(
+					"Solana node endpoints must include a port number: {e}"
+				))
+			})
 		};
 		validate_sol_endpoints(&self.nodes.primary)?;
 		if let Some(backup) = &self.nodes.backup {
@@ -296,13 +308,8 @@ pub struct ArbOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct SolOptions {
-	#[clap(long = "sol.rpc.ws_endpoint")]
-	pub sol_ws_endpoint: Option<String>,
 	#[clap(long = "sol.rpc.http_endpoint")]
 	pub sol_http_endpoint: Option<String>,
-
-	#[clap(long = "sol.backup_rpc.ws_endpoint")]
-	pub sol_backup_ws_endpoint: Option<String>,
 	#[clap(long = "sol.backup_rpc.http_endpoint")]
 	pub sol_backup_http_endpoint: Option<String>,
 }
@@ -822,14 +829,6 @@ impl ArbOptions {
 
 impl SolOptions {
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		// Defaulting to hardcoded unused ws endpoint because they are not used now
-		insert_command_line_option(map, "sol.rpc.ws_endpoint", &Some("ws://unused:4321"));
-		insert_command_line_option(
-			map,
-			"sol.backup_rpc.ws_endpoint",
-			&if self.sol_backup_http_endpoint.is_some() { Some("ws://unused:4321") } else { None },
-		);
-
 		insert_command_line_option(map, "sol.rpc.http_endpoint", &self.sol_http_endpoint);
 		insert_command_line_option(
 			map,
@@ -907,7 +906,7 @@ pub mod tests {
 		BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT,
 		DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
 		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS, SOL_BACKUP_HTTP_ENDPOINT,
-		SOL_BACKUP_WS_ENDPOINT, SOL_HTTP_ENDPOINT, SOL_WS_ENDPOINT,
+		SOL_HTTP_ENDPOINT,
 	};
 
 	use super::*;
@@ -952,10 +951,8 @@ pub mod tests {
 		BTC_BACKUP_RPC_PASSWORD => "second.password",
 
 		SOL_HTTP_ENDPOINT => "http://localhost:8899",
-		SOL_WS_ENDPOINT => "ws://localhost:8899",
 
 		SOL_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8899",
-		SOL_BACKUP_WS_ENDPOINT => "ws://second.localhost:8899",
 
 		DOT_WS_ENDPOINT => "wss://my_fake_polkadot_rpc:443/<secret_key>",
 		DOT_HTTP_ENDPOINT => "https://my_fake_polkadot_rpc:443/<secret_key>",
@@ -1108,9 +1105,7 @@ pub mod tests {
 			},
 			sol_opts: SolOptions {
 				sol_http_endpoint: Some("http://sol-endpoint:4321".to_owned()),
-				sol_ws_endpoint: Some("ws://sol-endpoint:4321".to_owned()),
 				sol_backup_http_endpoint: Some("http://second.sol-endpoint:4321".to_owned()),
-				sol_backup_ws_endpoint: Some("ws://second.sol-endpoint:4321".to_owned()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
