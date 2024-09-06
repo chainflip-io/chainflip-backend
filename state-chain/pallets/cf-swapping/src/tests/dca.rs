@@ -57,12 +57,10 @@ fn setup_dca_swap(
 }
 
 #[track_caller]
-fn assert_chunk_1_executed(
-	number_of_chunks: u32,
-	chunk_interval: u32,
-	chunk_amount: AssetAmount,
-	chunk_amount_after_fee: AssetAmount,
-) {
+fn assert_chunk_1_executed(number_of_chunks: u32) {
+	let chunk_amount = INPUT_AMOUNT / number_of_chunks as u128;
+	let chunk_amount_after_fee = chunk_amount - (chunk_amount * BROKER_FEE_BPS as u128 / 10_000);
+
 	assert_has_matching_event!(
 		Test,
 		RuntimeEvent::Swapping(Event::SwapExecuted {
@@ -83,7 +81,7 @@ fn assert_chunk_1_executed(
 			input_amount,
 			execute_at,
 			..
-		}) if *execute_at == System::block_number() + chunk_interval as u64 && *input_amount == chunk_amount
+		}) if *execute_at == System::block_number() + CHUNK_INTERVAL as u64 && *input_amount == chunk_amount
 	);
 
 	assert_eq!(
@@ -92,7 +90,7 @@ fn assert_chunk_1_executed(
 			status: DcaStatus::ChunkScheduled(2),
 			remaining_input_amount: INPUT_AMOUNT - (chunk_amount * 2),
 			remaining_chunks: number_of_chunks - 2,
-			chunk_interval,
+			chunk_interval: CHUNK_INTERVAL,
 			accumulated_output_amount: chunk_amount_after_fee * DEFAULT_SWAP_RATE
 		}
 	);
@@ -143,12 +141,7 @@ fn dca_happy_path() {
 		})
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
 		.then_execute_with(|_| {
-			assert_chunk_1_executed(
-				NUMBER_OF_CHUNKS,
-				CHUNK_INTERVAL,
-				CHUNK_AMOUNT,
-				CHUNK_AMOUNT_AFTER_FEE,
-			);
+			assert_chunk_1_executed(NUMBER_OF_CHUNKS);
 		})
 		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
 		.then_execute_with(|_| {
@@ -310,12 +303,7 @@ fn dca_with_fok_partial_refund() {
 		})
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
 		.then_execute_with(|_| {
-			assert_chunk_1_executed(
-				NUMBER_OF_CHUNKS,
-				CHUNK_INTERVAL,
-				CHUNK_AMOUNT,
-				CHUNK_AMOUNT_AFTER_FEE,
-			);
+			assert_chunk_1_executed(NUMBER_OF_CHUNKS);
 		})
 		.then_execute_at_block(CHUNK_2_BLOCK, |_| {
 			// Adjusting the swap rate, so that the second chunk fails due to FoK:
@@ -494,6 +482,10 @@ fn can_handle_dca_chunk_size_of_zero() {
 	// Note that the broker fee is 0 in this case because the input is too small.
 	const OUTPUT_AMOUNT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE;
 
+	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
+	const CHUNK_3_BLOCK: u64 = CHUNK_2_BLOCK + CHUNK_INTERVAL as u64;
+
 	new_test_ext()
 		.execute_with(|| {
 			assert_eq!(System::block_number(), INIT_BLOCK);
@@ -550,7 +542,7 @@ fn can_handle_dca_chunk_size_of_zero() {
 				}
 			);
 		})
-		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
+		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
 				Test,
@@ -587,11 +579,8 @@ fn can_handle_dca_chunk_size_of_zero() {
 				}
 			);
 		})
-		.then_execute_at_block(INIT_BLOCK + (SWAP_DELAY_BLOCKS + CHUNK_INTERVAL) as u64, |_| {})
-		.then_execute_at_block(
-			INIT_BLOCK + SWAP_DELAY_BLOCKS as u64 + (CHUNK_INTERVAL * 2) as u64,
-			|_| {},
-		)
+		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
+		.then_execute_at_block(CHUNK_3_BLOCK, |_| {})
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 			assert_has_matching_event!(
