@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.4] - 2024-09-06
+
+### Fixes
+
+- Consensus for Change elections should not require unanimity
+
 ## [1.6.3] - 2024-09-04
 
 ### Fixes
