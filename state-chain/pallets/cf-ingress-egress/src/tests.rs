@@ -1684,25 +1684,25 @@ fn do_not_batch_more_transfers_than_the_limit_allows() {
 			assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS, None));
 		}
 
-		let sheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
 		assert_eq!(
-			sheduled_egresses.len(),
+			scheduled_egresses.len(),
 			transfer_limits + 1,
 			"Wrong amount of scheduled egresses!"
 		);
 
 		IngressEgress::on_finalize(1);
 
-		let sheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
-		assert_eq!(sheduled_egresses.len(), EXCESS_TRANSFERS, "Wrong amount of left egresses!");
+		assert_eq!(scheduled_egresses.len(), EXCESS_TRANSFERS, "Wrong amount of left egresses!");
 
 		IngressEgress::on_finalize(2);
 
-		let sheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
-		assert_eq!(sheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
+		assert_eq!(scheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
 
 		MockFetchesTransfersLimitProvider::enable_limits(false);
 	});
@@ -1733,27 +1733,25 @@ fn do_not_batch_more_fetches_than_the_limit_allows() {
 			));
 		}
 
-		let sheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
 		assert_eq!(
-			sheduled_egresses.len(),
+			scheduled_egresses.len(),
 			fetch_limits + EXCESS_FETCHES,
 			"Wrong amount of scheduled egresses!"
 		);
 
 		IngressEgress::on_finalize(1);
 
-		let sheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
-		assert_eq!(sheduled_egresses.len(), EXCESS_FETCHES, "Wrong amount of left egresses!");
+		assert_eq!(scheduled_egresses.len(), EXCESS_FETCHES, "Wrong amount of left egresses!");
 
 		IngressEgress::on_finalize(2);
 
-		let sheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
-		assert_eq!(sheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
-
-		MockFetchesTransfersLimitProvider::enable_limits(false);
+		assert_eq!(scheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
 	});
 }
 
@@ -1785,26 +1783,24 @@ fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 			));
 		}
 
-		let sheduled_egresses = ScheduledEgressCcm::<Test, ()>::get();
+		let scheduled_egresses = ScheduledEgressCcm::<Test, ()>::get();
 
 		assert_eq!(
-			sheduled_egresses.len(),
+			scheduled_egresses.len(),
 			ccm_limits + EXCESS_CCMS,
 			"Wrong amount of scheduled egresses!"
 		);
 
 		IngressEgress::on_finalize(1);
 
-		let sheduled_egresses = ScheduledEgressCcm::<Test, ()>::get();
+		let scheduled_egresses = ScheduledEgressCcm::<Test, ()>::get();
 
-		assert_eq!(sheduled_egresses.len(), EXCESS_CCMS, "Wrong amount of left egresses!");
+		assert_eq!(scheduled_egresses.len(), EXCESS_CCMS, "Wrong amount of left egresses!");
 
 		IngressEgress::on_finalize(2);
 
-		let sheduled_egresses = ScheduledEgressCcm::<Test, ()>::get();
+		let scheduled_egresses = ScheduledEgressCcm::<Test, ()>::get();
 
-		assert_eq!(sheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
-
-		MockFetchesTransfersLimitProvider::enable_limits(false);
+		assert_eq!(scheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
 	});
 }
