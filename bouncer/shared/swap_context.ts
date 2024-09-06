@@ -24,28 +24,37 @@ export class SwapContext {
     // Sanity checks:
     switch (status) {
       case SwapStatus.Initiated: {
-        assert(currentStatus === undefined, `Unexpected status transition for ${tag}`);
+        assert(
+          currentStatus === undefined,
+          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
+        );
         break;
       }
       case SwapStatus.Funded: {
-        assert(currentStatus === SwapStatus.Initiated, `Unexpected status transition for ${tag}`);
+        assert(
+          currentStatus === SwapStatus.Initiated,
+          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
+        );
         break;
       }
       case SwapStatus.ContractApproved: {
-        assert(currentStatus === SwapStatus.Initiated, `Unexpected status transition for ${tag}`);
+        assert(
+          currentStatus === SwapStatus.Initiated,
+          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
+        );
         break;
       }
       case SwapStatus.ContractExecuted: {
         assert(
           currentStatus === SwapStatus.ContractApproved,
-          `Unexpected status transition for ${tag}`,
+          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
         );
         break;
       }
       case SwapStatus.SwapScheduled: {
         assert(
           currentStatus === SwapStatus.ContractExecuted || currentStatus === SwapStatus.Funded,
-          `Unexpected status transition for ${tag}`,
+          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
         );
         break;
       }
@@ -53,7 +62,7 @@ export class SwapContext {
         assert(
           currentStatus === SwapStatus.SwapScheduled ||
             currentStatus === SwapStatus.ContractExecuted,
-          `Unexpected status transition for ${tag}`,
+          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
         );
         break;
       }

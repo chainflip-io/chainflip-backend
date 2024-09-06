@@ -186,6 +186,7 @@ export async function prepareSwap(
   messageMetadata?: CcmDepositMetadata,
   tagSuffix?: string,
   log = true,
+  swapContext?: SwapContext,
 ) {
   // Seed needs to be unique per swap:
   const seed = randomAsHex(32);
@@ -194,7 +195,7 @@ export async function prepareSwap(
 
   let tag = `[${(swapCount++).toString().concat(':').padEnd(4, ' ')} ${sourceAsset}->${destAsset}`;
   tag += messageMetadata ? ' CCM' : '';
-  tag += tagSuffix ? `${tagSuffix}]` : ']';
+  tag += tagSuffix ? ` ${tagSuffix}]` : ']';
 
   // For swaps with a message force the address to be the CF Tester address.
   if (
@@ -209,6 +210,8 @@ export async function prepareSwap(
     destAddress = await newAddress(destAsset, seed, addressType);
     if (log) console.log(`${tag} Created new ${destAsset} address: ${destAddress}`);
   }
+
+  swapContext?.updateStatus(tag, SwapStatus.Initiated);
 
   return { destAddress, tag };
 }
@@ -230,9 +233,8 @@ export async function testSwap(
     messageMetadata,
     tagSuffix,
     log,
+    swapContext,
   );
-
-  swapContext?.updateStatus(tag, SwapStatus.Initiated);
 
   return performSwap(
     sourceAsset,
@@ -264,7 +266,6 @@ export async function testSwapViaContract(
     (tagSuffix ?? '') + ' Contract',
   );
 
-  swapContext?.updateStatus(tag, SwapStatus.Initiated);
   return performSwapViaContract(
     sourceAsset,
     destAsset,

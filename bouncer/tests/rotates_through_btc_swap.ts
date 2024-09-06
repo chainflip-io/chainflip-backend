@@ -1,19 +1,29 @@
-import { requestNewSwap, performSwap, doPerformSwap } from '../shared/perform_swap';
-import { newAddress } from '../shared/utils';
+import { requestNewSwap, doPerformSwap } from '../shared/perform_swap';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { observeEvent } from '../shared/utils/substrate';
 import { ExecutableTest } from '../shared/executable_test';
+import { prepareSwap, testSwap } from '../shared/swapping';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testRotatesThroughBtcSwap = new ExecutableTest('Rotates-Through-BTC-Swap', main, 1200); // TODO JAMIE: unknown timeout
+export const testRotatesThroughBtcSwap = new ExecutableTest('Rotates-Through-BTC-Swap', main, 360);
 
 async function rotatesThroughBtcSwap() {
-  const tag = `Btc -> Dot (through rotation)`;
-  const address = await newAddress('Dot', 'foo');
+  const sourceAsset = 'Btc';
+  const destAsset = 'Dot';
 
-  testRotatesThroughBtcSwap.log('Generated Dot address: ' + address);
+  const { destAddress, tag } = await prepareSwap(
+    sourceAsset,
+    destAsset,
+    undefined,
+    undefined,
+    'through rotation',
+    true,
+    testRotatesThroughBtcSwap.swapContext,
+  );
 
-  const swapParams = await requestNewSwap('Btc', 'Dot', address, tag);
+  testRotatesThroughBtcSwap.log('Generated Dot address: ' + destAddress);
+
+  const swapParams = await requestNewSwap(sourceAsset, destAsset, destAddress, tag);
 
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   testRotatesThroughBtcSwap.log(`Vault rotation initiated. Awaiting new epoch.`);
@@ -31,28 +41,14 @@ async function rotatesThroughBtcSwap() {
   );
 }
 
-async function swapAfterRotation() {
-  const sourceAsset = 'Dot';
-  const destAsset = 'Btc';
-
-  const address = await newAddress(destAsset, 'bar');
-  const tag = `${sourceAsset} -> ${destAsset} (after rotation)`;
-
-  await performSwap(
-    sourceAsset,
-    destAsset,
-    address,
-    tag,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    true,
-    testRotatesThroughBtcSwap.swapContext,
-  );
-}
-
 async function main() {
   await rotatesThroughBtcSwap();
-  await swapAfterRotation();
+  await testSwap(
+    'Dot',
+    'Btc',
+    undefined,
+    undefined,
+    testRotatesThroughBtcSwap.swapContext,
+    'after rotation',
+  );
 }
