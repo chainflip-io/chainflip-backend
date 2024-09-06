@@ -8,6 +8,7 @@ pub mod epoch_transition;
 pub mod evm_vault_activator;
 mod missed_authorship_slots;
 mod offences;
+pub mod pending_rotation_broadcasts;
 mod signer_nomination;
 pub mod solana_elections;
 

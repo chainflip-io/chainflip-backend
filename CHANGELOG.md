@@ -2,6 +2,20 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.3] - 2024-09-04
+
+### Fixes
+
+- Decrease broadcast timeout constants for sol, arb, eth, dot
+- More accurate compute unit limits for Solana
+- Only call monotonic median hook if state is updated. ([#5223](https://github.com/chainflip-io/chainflip-backend/issues/5223))
+
+## [1.6.2] - 2024-08-30
+
+### Fixes
+
+- Change try_from_iter into from_iter_or_default
+
 ## [1.6.1] - 2024-08-30
 
 ### Fixes

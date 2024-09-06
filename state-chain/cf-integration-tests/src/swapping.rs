@@ -7,7 +7,7 @@ use crate::{
 		fund_authorities_and_join_auction, new_account, register_refund_addresses,
 		setup_account_and_peer_mapping, Cli, Network,
 	},
-	witness_call,
+	witness_call, witness_ethereum_rotation_broadcast, witness_rotation_broadcasts,
 };
 use cf_amm::{
 	common::{price_at_tick, Price, Tick},
@@ -17,7 +17,6 @@ use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
 	assets::eth::Asset as EthAsset,
 	eth::{api::EthereumApi, EthereumTrackedData},
-	evm::TransactionFee,
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, DefaultRetryPolicy, Ethereum,
 	ExecutexSwapAndCall, ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin,
 	TransactionBuilder, TransferAssetParams,
@@ -27,7 +26,7 @@ use cf_primitives::{
 	GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
-use cf_traits::{BalanceApi, Chainflip, EpochInfo, SwapType};
+use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, SwapType};
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
@@ -48,7 +47,7 @@ use state_chain_runtime::{
 	},
 	AssetBalances, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
 	EthereumInstance, LiquidityPools, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
-	System, Timestamp, Validator, Weight, Witnesser,
+	System, Timestamp, Validator, Weight,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -284,7 +283,7 @@ fn basic_pool_setup_provision_and_swap() {
 					deposit_witnesses: vec![DepositWitness {
 						deposit_address,
 						asset: cf_primitives::chains::assets::eth::Asset::Eth,
-						amount: DEPOSIT_AMOUNT,
+						amount: (DEPOSIT_AMOUNT + EthereumChainTracking::estimate_ingress_fee(cf_primitives::chains::assets::eth::Asset::Eth)),
 						deposit_details: Default::default(),
 					}],
 					block_height: 0,
@@ -397,16 +396,24 @@ fn can_process_ccm_via_swap_deposit_address() {
 		// Deposit funds for the ccm.
 		let deposit_address =
 			<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
-				cf_primitives::chains::assets::eth::Asset::Flip,
+				EthAsset::Flip,
 				pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 			)
 			.unwrap();
+		let ingress_fee = sp_std::cmp::min(
+			Swapping::calculate_input_for_gas_output::<Ethereum>(
+				EthAsset::Flip,
+				EthereumChainTracking::estimate_ingress_fee(EthAsset::Flip),
+			)
+			.unwrap(),
+			u128::MAX,
+		);
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::process_deposits {
 				deposit_witnesses: vec![DepositWitness {
 					deposit_address,
-					asset: cf_primitives::chains::assets::eth::Asset::Flip,
-					amount: DEPOSIT_AMOUNT,
+					asset: EthAsset::Flip,
+					amount: (DEPOSIT_AMOUNT + ingress_fee),
 					deposit_details: Default::default(),
 				}],
 				block_height: 0,
@@ -453,13 +460,15 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Weight::from_parts(1_000_000_000_000, 0),
 		);
 
+		let _source_asset_swap_amount = PRINCIPAL_AMOUNT + ingress_fee;
+
 		let (.., gas_swap_id) = assert_events_match!(
 			Runtime,
 			RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::AssetSwapped {
 					from: Asset::Flip,
 					to: Asset::Usdc,
-					input_amount: PRINCIPAL_AMOUNT,
+					input_amount: _source_asset_swap_amount,
 
 					..
 				},
@@ -825,29 +834,8 @@ fn can_resign_failed_ccm() {
 				fund_authorities_and_join_auction(MAX_AUTHORITIES);
 
 			testnet.move_to_the_next_epoch();
-			let tx_out_id =
-				AwaitingBroadcast::<Runtime, Instance1>::get(1).unwrap().transaction_out_id;
 
-			for node in Validator::current_authorities() {
-				// Broadcast success for id 1, which is the rotation transaction.
-				// This needs to succeed because it's a barrier broadcast.
-				assert_ok!(Witnesser::witness_at_epoch(
-					RuntimeOrigin::signed(node),
-					Box::new(RuntimeCall::EthereumBroadcaster(
-						pallet_cf_broadcast::Call::transaction_succeeded {
-							tx_out_id,
-							signer_id: Default::default(),
-							tx_fee: TransactionFee {
-								effective_gas_price: Default::default(),
-								gas_used: Default::default()
-							},
-							tx_metadata: Default::default(),
-							transaction_ref: Default::default()
-						}
-					)),
-					<Runtime as Chainflip>::EpochInfo::current_epoch()
-				));
-			}
+			witness_ethereum_rotation_broadcast(1);
 			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
 			// Deposit CCM and process the swap
@@ -914,6 +902,9 @@ fn can_resign_failed_ccm() {
 
 			// On the next epoch, the call is asked to be resigned
 			testnet.move_to_the_next_epoch();
+			// the rotation tx for ethereum is the third broadcast overall (2 broadcasts already
+			// created above) whereas for other chains it is the first broadcast
+			witness_rotation_broadcasts([3, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(2);
 
 			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
@@ -924,6 +915,10 @@ fn can_resign_failed_ccm() {
 
 			// On the next epoch, the failed call is removed from storage.
 			testnet.move_to_the_next_epoch();
+			// the rotation tx for ethereum is the fourth broadcast overall (3 broadcasts already
+			// created above) whereas for other chains it is the second broadcast (first broadcast
+			// was the previous rotation)
+			witness_rotation_broadcasts([4, 2, 2, 2, 2]);
 			testnet.move_forward_blocks(2);
 			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
 			assert_eq!(
@@ -968,6 +963,7 @@ fn can_handle_failed_vault_transfer() {
 			}
 
 			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
 
 			// Report a failed vault transfer
 			let starting_epoch = Validator::current_epoch();
@@ -1010,6 +1006,9 @@ fn can_handle_failed_vault_transfer() {
 
 			// On the next epoch, the call is asked to be resigned
 			testnet.move_to_the_next_epoch();
+			// the rotation tx for ethereum is the third broadcast (2 broadcasts already created
+			// above) whereas for other chains it is the first broadcast
+			witness_rotation_broadcasts([3, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(2);
 
 			assert_eq!(EthereumIngressEgress::failed_foreign_chain_calls(starting_epoch), vec![]);
