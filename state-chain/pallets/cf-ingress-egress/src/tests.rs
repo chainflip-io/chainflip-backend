@@ -27,6 +27,7 @@ use cf_traits::{
 		balance_api::MockBalance,
 		block_height_provider::BlockHeightProvider,
 		chain_tracking::ChainTracker,
+		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		funding_info::MockFundingInfo,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
@@ -1675,7 +1676,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 #[test]
 fn do_not_batch_more_transfers_than_the_limit_allows() {
 	new_test_ext().execute_with(|| {
-		MockFetchesTransfersLimitProvider::enable_limits(true);
+		MockFetchesTransfersLimitProvider::enable_limits();
 
 		const EXCESS_TRANSFERS: usize = 1;
 		let transfer_limits = MockFetchesTransfersLimitProvider::maybe_transfers_limit().unwrap();
@@ -1703,15 +1704,13 @@ fn do_not_batch_more_transfers_than_the_limit_allows() {
 		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
 
 		assert_eq!(scheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
-
-		MockFetchesTransfersLimitProvider::enable_limits(false);
 	});
 }
 
 #[test]
 fn do_not_batch_more_fetches_than_the_limit_allows() {
 	new_test_ext().execute_with(|| {
-		MockFetchesTransfersLimitProvider::enable_limits(true);
+		MockFetchesTransfersLimitProvider::enable_limits();
 
 		const EXCESS_FETCHES: usize = 1;
 		const ASSET: eth::Asset = eth::Asset::Eth;
@@ -1758,7 +1757,7 @@ fn do_not_batch_more_fetches_than_the_limit_allows() {
 #[test]
 fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 	new_test_ext().execute_with(|| {
-		MockFetchesTransfersLimitProvider::enable_limits(true);
+		MockFetchesTransfersLimitProvider::enable_limits();
 
 		const EXCESS_CCMS: usize = 1;
 		let ccm_limits = MockFetchesTransfersLimitProvider::maybe_ccm_limit().unwrap();

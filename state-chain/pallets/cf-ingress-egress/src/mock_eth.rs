@@ -24,17 +24,16 @@ use cf_traits::{
 		broadcaster::MockBroadcaster,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
+		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	DepositApi, DummyIngressSource, FetchesTransfersLimitProvider, NetworkEnvironmentProvider,
-	OnDeposit,
+	DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
-use sp_std::cell::RefCell;
 
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -111,44 +110,6 @@ impl NetworkEnvironmentProvider for MockNetworkEnvironmentProvider {
 }
 
 impl_mock_runtime_safe_mode! { ingress_egress_ethereum: PalletSafeMode<()> }
-
-thread_local! {
-	pub static USE_LIMITS: RefCell<bool> = RefCell::new(false);
-}
-
-pub struct MockFetchesTransfersLimitProvider;
-
-impl FetchesTransfersLimitProvider for MockFetchesTransfersLimitProvider {
-	fn maybe_transfers_limit() -> Option<usize> {
-		if USE_LIMITS.with(|v| *v.borrow()) {
-			Some(20)
-		} else {
-			None
-		}
-	}
-
-	fn maybe_ccm_limit() -> Option<usize> {
-		if USE_LIMITS.with(|v| *v.borrow()) {
-			Some(5)
-		} else {
-			None
-		}
-	}
-
-	fn maybe_fetches_limit() -> Option<usize> {
-		if USE_LIMITS.with(|v| *v.borrow()) {
-			Some(20)
-		} else {
-			None
-		}
-	}
-}
-
-impl MockFetchesTransfersLimitProvider {
-	pub fn enable_limits(enable: bool) {
-		USE_LIMITS.with(|v| *v.borrow_mut() = enable);
-	}
-}
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
