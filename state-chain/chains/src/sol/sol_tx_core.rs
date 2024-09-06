@@ -1638,8 +1638,9 @@ mod tests {
 	// necessary after PR#5229 it might be needed before that if we need to debug and/or manually
 	// broadcast a transaction. The serialized output (hex string) can be broadcasted via the Solana
 	// RPC call `sendTransaction` or the web3js `sendRawTransaction.
-	// The signature of the transaction is what in storage is named `transactionOutId`, since in
-	// Solana the signature is the transaction identifier.
+	// The Transaction values to serialize are obtained from querying storage element
+	// solanaBroadcaster < pendingApiCalls. The signature of the transaction is what in storage is
+	// named `transactionOutId`, since in Solana the signature is the transaction identifier.
 	// The test parameters are from a localnet run where we get both the Transaction and the
 	// resulting serialized transaction so we can compare that this serialization matches the
 	// successful one.
