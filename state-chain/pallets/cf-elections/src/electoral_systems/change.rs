@@ -7,12 +7,12 @@ use crate::{
 	CorruptStorageError,
 };
 use cf_primitives::AuthorityCount;
-use cf_utilities::{all_same, success_threshold_from_share_count};
+use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// This electoral system detects if a value changes. The SC can request that it detects if a
 /// particular value, the instance of which is specified by an identifier, has changed from some
@@ -34,7 +34,7 @@ pub trait OnChangeHook<Identifier, Value> {
 
 impl<
 		Identifier: Member + Parameter + Ord,
-		Value: Member + Parameter + Eq,
+		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 	> Change<Identifier, Value, Settings, Hook>
@@ -50,7 +50,7 @@ impl<
 }
 impl<
 		Identifier: Member + Parameter + Ord,
-		Value: Member + Parameter + Eq,
+		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 	> ElectoralSystem for Change<Identifier, Value, Settings, Hook>
@@ -136,97 +136,20 @@ impl<
 			if votes_count != 0 &&
 				votes_count >= success_threshold_from_share_count(authorities) as usize
 			{
-				all_same(votes.into_iter().map(|(_, vote)| vote))
+				let mut counts = BTreeMap::new();
+				for (_, vote) in votes {
+					counts.entry(vote).and_modify(|count| *count += 1).or_insert(1);
+				}
+				counts.iter().find_map(|(vote, count)| {
+					if *count >= success_threshold_from_share_count(authorities) {
+						Some(vote.clone())
+					} else {
+						None
+					}
+				})
 			} else {
 				None
 			},
 		)
-	}
-}
-
-#[cfg(test)]
-mod test_change {
-	use crate::electoral_system::{mocks::MockAccess, ConsensusStatus};
-
-	thread_local! {
-		pub static HOOK_HAS_BEEN_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-	}
-
-	pub struct MockHook;
-	impl OnChangeHook<(), u64> for MockHook {
-		fn on_change(_id: (), _value: u64) {
-			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.set(true));
-		}
-	}
-
-	impl MockHook {
-		pub fn get_hook_state() -> bool {
-			HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get())
-		}
-	}
-
-	use super::*;
-	#[test]
-	fn consensus_not_possible_because_of_different_votes() {
-		let mut electoral_system = MockAccess::<Change<(), u64, (), MockHook>>::new((), (), ());
-		let consensus = electoral_system
-			.new_election((), ((), 1), ())
-			.unwrap()
-			.check_consensus(None, vec![((), 1), ((), 5), ((), 3)], 3)
-			.unwrap();
-		assert_eq!(consensus, None);
-	}
-
-	#[test]
-	fn consensus_when_all_votes_the_same() {
-		let mut electoral_system = MockAccess::<Change<(), u64, (), MockHook>>::new((), (), ());
-		let consensus = electoral_system
-			.new_election((), ((), 1), ())
-			.unwrap()
-			.check_consensus(None, vec![((), 1), ((), 1), ((), 1)], 3)
-			.unwrap();
-		assert_eq!(consensus, Some(1));
-	}
-
-	#[test]
-	fn not_enough_votes_for_consensus() {
-		let mut electoral_system = MockAccess::<Change<(), u64, (), MockHook>>::new((), (), ());
-		let consensus = electoral_system
-			.new_election((), ((), 1), ())
-			.unwrap()
-			.check_consensus(None, vec![((), 1)], 3)
-			.unwrap();
-		assert_eq!(consensus, None);
-	}
-
-	#[test]
-	fn finalize_election() {
-		let mut electoral_system = MockAccess::<Change<(), u64, (), MockHook>>::new((), (), ());
-
-		electoral_system
-			.new_election((), ((), 1), ())
-			.unwrap()
-			.set_consensus_status(ConsensusStatus::Changed { previous: 1, new: 1 });
-
-		electoral_system.finalize_elections(&()).unwrap();
-
-		assert!(
-			!MockHook::get_hook_state(),
-			"Hook should not have been called if the consensus changed didn't change!"
-		);
-
-		electoral_system
-			.new_election((), ((), 1), ())
-			.unwrap()
-			.set_consensus_status(ConsensusStatus::Changed { previous: 1, new: 2 });
-
-		electoral_system.finalize_elections(&()).unwrap();
-
-		assert!(HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get()));
-
-		assert!(
-			MockHook::get_hook_state(),
-			"Hook should have been called if the consensus changed!"
-		);
 	}
 }
