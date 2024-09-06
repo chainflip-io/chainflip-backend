@@ -148,8 +148,10 @@ impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for Bitc
 
 // transfer_fallback is unsupported for Bitcoin.
 impl<E: ReplayProtectionProvider<Bitcoin>> TransferFallback<Bitcoin> for BitcoinApi<E> {
-	fn new_unsigned(_transfer_param: TransferAssetParams<Bitcoin>) -> Result<Self, DispatchError> {
-		Err(DispatchError::Other("Bitcoin's TransferFallback is not supported."))
+	fn new_unsigned(
+		_transfer_param: TransferAssetParams<Bitcoin>,
+	) -> Result<Self, TransferFallbackError> {
+		Err(TransferFallbackError::Unsupported)
 	}
 }
 

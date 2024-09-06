@@ -918,10 +918,10 @@ pub mod pallet {
 				},
 				// The only way this can fail is if the target chain is unsupported, which should
 				// never happen.
-				Err(_) => {
+				Err(err) => {
 					log_or_panic!(
-						"Failed to construct TransferFallback call. Asset: {:?}, amount: {:?}, Destination: {:?}",
-						asset, amount, destination_address
+						"Failed to construct TransferFallback call. Asset: {:?}, amount: {:?}, Destination: {:?}, Error: {:?}",
+						asset, amount, destination_address, err
 					);
 				},
 			};
