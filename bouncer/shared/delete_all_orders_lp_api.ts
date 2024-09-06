@@ -1,8 +1,8 @@
 import { Keyring } from '../polkadot/keyring';
+import { lpApiRpc } from '../tests/lp_api_test';
 import { getChainflipApi } from './utils/substrate';
-import { lpApiRpc } from './lp_api_test';
 
-export async function createAndDeleteAllOrdersLpApi() {
+export async function DeleteAllOrdersLpApi() {
   await using chainflip = await getChainflipApi();
 
   const keyring = new Keyring({ type: 'sr25519' });
