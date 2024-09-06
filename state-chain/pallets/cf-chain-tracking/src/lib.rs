@@ -136,19 +136,8 @@ pub mod pallet {
 				<T::TargetChain as Chain>::is_block_witness_root(new_chain_state.block_height),
 				Error::<T, I>::InvalidBlockHeight
 			);
-			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
-				ensure!(
-					new_chain_state.block_height >
-						previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
-					Error::<T, I>::StaleDataSubmitted
-				);
-				*previous_chain_state = Some(new_chain_state.clone());
 
-				Ok(())
-			})?;
-			Self::deposit_event(Event::<T, I>::ChainStateUpdated { new_chain_state });
-
-			Ok(().into())
+			Self::inner_update_chain_state(new_chain_state)
 		}
 
 		/// Update the fee multiplier with the provided value
@@ -167,6 +156,27 @@ pub mod pallet {
 
 			Ok(())
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn inner_update_chain_state(
+		new_chain_state: ChainState<T::TargetChain>,
+	) -> DispatchResultWithPostInfo {
+		CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
+			ensure!(
+				new_chain_state.block_height >
+					previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
+				Error::<T, I>::StaleDataSubmitted
+			);
+			*previous_chain_state = Some(new_chain_state.clone());
+
+			Ok(())
+		})?;
+
+		Self::deposit_event(Event::<T, I>::ChainStateUpdated { new_chain_state });
+
+		Ok(().into())
 	}
 }
 

@@ -1,3 +1,11 @@
+use cf_chains::{
+	arb::ArbitrumTrackedData,
+	btc::{BitcoinFeeInfo, BitcoinTrackedData},
+	dot::{PolkadotTrackedData, RuntimeVersion},
+	eth::EthereumTrackedData,
+	sol::{sol_tx_core::sol_test_values, SolTrackedData},
+	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
+};
 use chainflip_node::{
 	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
 	test_account_from_seed,
@@ -15,22 +23,11 @@ use state_chain_runtime::{
 	constants::common::*,
 	opaque::SessionKeys,
 	test_runner::*,
-	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumVaultConfig,
-	EmissionsConfig, EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig,
-	GovernanceConfig, ReputationConfig, SessionConfig, SolanaElectionsConfig, SolanaVaultConfig,
-	ValidatorConfig,
-};
-
-use cf_chains::{
-	arb::ArbitrumTrackedData,
-	btc::{BitcoinFeeInfo, BitcoinTrackedData},
-	dot::{PolkadotTrackedData, RuntimeVersion},
-	eth::EthereumTrackedData,
-	sol::sol_tx_core::sol_test_values,
-	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
-};
-use state_chain_runtime::{
-	BitcoinChainTrackingConfig, EthereumChainTrackingConfig, PolkadotChainTrackingConfig,
+	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, BitcoinChainTrackingConfig,
+	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumVaultConfig,
+	EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
+	PolkadotChainTrackingConfig, ReputationConfig, SessionConfig, SolanaChainTrackingConfig,
+	SolanaElectionsConfig, ValidatorConfig,
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
@@ -210,11 +207,7 @@ impl ExtBuilder {
 				deployment_block: Some(0),
 				chain_initialized: true,
 			},
-			arbitrum_vault: ArbitrumVaultConfig {
-				deployment_block: None,
-				chain_initialized: false,
-			},
-			solana_vault: SolanaVaultConfig { deployment_block: None, chain_initialized: false },
+
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -233,8 +226,8 @@ impl ExtBuilder {
 				init_chain_state: ChainState::<Ethereum> {
 					block_height: 0,
 					tracked_data: EthereumTrackedData {
-						base_fee: 0u32.into(),
-						priority_fee: 0u32.into(),
+						base_fee: 100000u32.into(),
+						priority_fee: 1u32.into(),
 					},
 				},
 			},
@@ -265,6 +258,12 @@ impl ExtBuilder {
 					},
 				},
 			},
+			solana_chain_tracking: SolanaChainTrackingConfig {
+				init_chain_state: ChainState::<Solana> {
+					block_height: 0,
+					tracked_data: SolTrackedData { priority_fee: COMPUTE_PRICE },
+				},
+			},
 			bitcoin_threshold_signer: Default::default(),
 			evm_threshold_signer: EvmThresholdSignerConfig {
 				key: Some(ethereum_vault_key),
@@ -273,11 +272,21 @@ impl ExtBuilder {
 				amount_to_slash: FLIPPERINOS_PER_FLIP,
 				_instance: std::marker::PhantomData,
 			},
+			environment: EnvironmentConfig {
+				sol_durable_nonces_and_accounts: vec![
+					(Default::default(), Default::default()),
+					(Default::default(), Default::default()),
+					(Default::default(), Default::default()),
+					(Default::default(), Default::default()),
+				],
+				..Default::default()
+			},
 			polkadot_threshold_signer: Default::default(),
 			solana_threshold_signer: Default::default(),
 			bitcoin_vault: Default::default(),
 			polkadot_vault: Default::default(),
-			environment: Default::default(),
+			arbitrum_vault: Default::default(),
+			solana_vault: Default::default(),
 			swapping: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),

@@ -1,4 +1,5 @@
 use cf_chains::sol::{SolAddress, SolHash};
+use itertools::Itertools;
 
 use crate::sol::{
 	commitment_config::CommitmentConfig,
@@ -11,16 +12,16 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 use std::str::FromStr;
 
-pub async fn get_durable_nonces<SolRetryRpcClient>(
+pub async fn get_durable_nonce<SolRetryRpcClient>(
 	sol_client: &SolRetryRpcClient,
-	nonce_accounts: Vec<SolAddress>,
-) -> Result<Vec<(SolAddress, SolHash)>>
+	nonce_account: SolAddress,
+) -> Result<Option<SolHash>>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
-	let accounts_info = sol_client
+	let account_info = sol_client
 		.get_multiple_accounts(
-			nonce_accounts.clone().as_slice(),
+			&[nonce_account],
 			RpcAccountInfoConfig {
 				// Using JsonParsed will return the token accounts and the sol deposit channels
 				// in a nicely parsed format. For our fetch token accounts it will return it encoded
@@ -32,14 +33,16 @@ where
 			},
 		)
 		.await
-		.value;
+		.value
+		.into_iter()
+		.exactly_one()
+		.expect("We queried for exactly one account.");
 
-	let mut result = Vec::new();
-
-	for (nonce_account, nonce_account_info) in nonce_accounts.iter().zip(accounts_info) {
-		if let Some(UiAccount { data: UiAccountData::Json(account_data), .. }) = nonce_account_info
-		{
-			let ParsedAccount { program, space, parsed } = account_data;
+	match account_info {
+		Some(UiAccount {
+			data: UiAccountData::Json(ParsedAccount { program, space, parsed }),
+			..
+		}) => {
 			// Check that the program string is "nonce"
 			if program != "nonce" {
 				return Err(anyhow!("Expected nonce account, got program {}", program));
@@ -49,20 +52,21 @@ where
 				return Err(anyhow!("Expected nonce account, got space {:?}", space));
 			}
 
-			let info =
-				parsed.get("info").and_then(Value::as_object).ok_or(anyhow!("Info not found"))?;
+			let info = parsed
+				.get("info")
+				.and_then(Value::as_object)
+				.ok_or_else(|| anyhow!("Info not found"))?;
 			let hash = SolHash::from_str(
 				info.get("blockhash")
 					.and_then(Value::as_str)
-					.ok_or(anyhow!("Blockhash not found"))?,
+					.ok_or_else(|| anyhow!("Blockhash not found"))?,
 			)?;
 
-			result.push((*nonce_account, hash));
-		} else {
-			return Err(anyhow!("Expected UiAccountData::Json(ParsedAccount)"));
-		}
+			Ok(Some(hash))
+		},
+		Some(_) => Err(anyhow!("Expected UiAccountData::Json(ParsedAccount)")),
+		None => Ok(None),
 	}
-	Ok(result)
 }
 
 #[cfg(test)]
@@ -97,22 +101,17 @@ mod tests {
 				.await
 				.unwrap();
 
-				let nonce_accounts = get_durable_nonces(
+				let nonce_account = get_durable_nonce(
 					&retry_client,
-					vec![SolAddress::from_str("6TcAavZQgsTCGJkrxrtu8X26H7DuzMH4Y9FfXXgoyUGe")
-						.unwrap()],
+					SolAddress::from_str("6TcAavZQgsTCGJkrxrtu8X26H7DuzMH4Y9FfXXgoyUGe").unwrap(),
 				)
 				.await
+				.unwrap()
 				.unwrap();
-				let nonce_account = nonce_accounts.first().unwrap();
 
 				println!("Durable Nonce Info: {:?}", nonce_account);
 				assert_eq!(
-					nonce_account.0,
-					SolAddress::from_str("6TcAavZQgsTCGJkrxrtu8X26H7DuzMH4Y9FfXXgoyUGe").unwrap(),
-				);
-				assert_eq!(
-					nonce_account.1,
+					nonce_account,
 					SolHash::from_str("F9X2sMsGGJUGrVPs42vQc3fyi9rGqd7NFUWKT8SQTkCW").unwrap(),
 				);
 

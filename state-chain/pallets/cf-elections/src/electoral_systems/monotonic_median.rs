@@ -15,6 +15,10 @@ use frame_support::{
 use itertools::Itertools;
 use sp_std::vec::Vec;
 
+pub trait MedianChangeHook<Value> {
+	fn on_change(value: Value);
+}
+
 /// This electoral system is for tracking a monotonically increasing `Value` that authorities may
 /// not have the same view of, i.e. they may see slightly different values. It calculates a median
 /// of all the authority votes and stores the latest median in the `ElectoralUnsynchronisedState`,
@@ -26,13 +30,14 @@ use sp_std::vec::Vec;
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-pub struct MonotonicMedian<Value, Settings> {
-	_phantom: core::marker::PhantomData<(Value, Settings)>,
+pub struct MonotonicMedian<Value, Settings, Hook> {
+	_phantom: core::marker::PhantomData<(Value, Settings, Hook)>,
 }
 impl<
 		Value: MaybeSerializeDeserialize + Member + Parameter + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-	> ElectoralSystem for MonotonicMedian<Value, Settings>
+		Hook: MedianChangeHook<Value> + 'static,
+	> ElectoralSystem for MonotonicMedian<Value, Settings, Hook>
 {
 	type ElectoralUnsynchronisedState = Value;
 	type ElectoralUnsynchronisedStateMapKey = ();
@@ -74,7 +79,8 @@ impl<
 				electoral_access.mutate_unsynchronised_state(
 					|_electoral_access, unsynchronised_state| {
 						if consensus > *unsynchronised_state {
-							*unsynchronised_state = consensus;
+							*unsynchronised_state = consensus.clone();
+							Hook::on_change(consensus);
 						}
 
 						Ok(())

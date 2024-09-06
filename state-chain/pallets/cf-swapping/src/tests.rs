@@ -38,9 +38,12 @@ use sp_core::{H160, U256};
 use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 1_000u128;
+const INPUT_AMOUNT: AssetAmount = 40_000;
 const SWAP_REQUEST_ID: u64 = 1;
 const INIT_BLOCK: u64 = 1;
 const BROKER_FEE_BPS: u16 = 10;
+const INPUT_ASSET: Asset = Asset::Usdc;
+const OUTPUT_ASSET: Asset = Asset::Eth;
 
 static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
 	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
@@ -52,6 +55,22 @@ fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
 			.try_into()
 			.unwrap()
 	));
+}
+
+fn params(
+	dca_params: Option<DcaParameters>,
+	refund_params: Option<TestRefundParams>,
+	is_ccm: bool,
+) -> TestSwapParams {
+	TestSwapParams {
+		input_asset: INPUT_ASSET,
+		output_asset: OUTPUT_ASSET,
+		input_amount: INPUT_AMOUNT,
+		refund_params: refund_params.map(|params| params.into_channel_params(INPUT_AMOUNT)),
+		dca_params,
+		output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+		is_ccm,
+	}
 }
 
 struct TestSwapParams {
@@ -190,7 +209,7 @@ fn assert_failed_ccm(
 			destination_address: ref address_in_event,
 			deposit_metadata: ref metadata_in_event,
 			..
-		}) if reason_in_event == &reason && address_in_event == &MockAddressConverter::to_encoded_address(destination_address) && metadata_in_event == &ccm,
+		}) if reason_in_event == &reason && address_in_event == &MockAddressConverter::to_encoded_address(destination_address) && metadata_in_event == &ccm.to_encoded::<<Test as pallet::Config>::AddressConverter>(),
 		RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 	);
 }
@@ -712,9 +731,12 @@ mod ccm {
 			output_asset,
 			input_amount,
 			request_type: SwapRequestTypeEncoded::Ccm {
-				ccm_deposit_metadata,
+				ccm_deposit_metadata: ccm_deposit_metadata
+					.to_encoded::<<Test as pallet::Config>::AddressConverter>(),
 				output_address: encoded_output_address,
 			},
+			dca_parameters: None,
+			refund_parameters: None,
 			origin,
 		}));
 	}
@@ -733,16 +755,21 @@ mod ccm {
 			})
 		);
 
+		let ccm_egress = MockEgressHandler::<AnyChain>::get_scheduled_egresses()
+			.into_iter()
+			.find(|egress| matches!(egress, MockEgressParameter::Ccm { .. }))
+			.expect("no ccm egress");
+
 		assert_eq!(
-			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
-			vec![MockEgressParameter::Ccm {
+			ccm_egress,
+			MockEgressParameter::Ccm {
 				asset,
 				amount: principal_amount,
 				destination_address: (*EVM_OUTPUT_ADDRESS).clone(),
 				message: vec![0x01].try_into().unwrap(),
 				cf_parameters: vec![].try_into().unwrap(),
 				gas_budget,
-			},]
+			},
 		);
 	}
 
@@ -1088,6 +1115,8 @@ fn swap_by_witnesser_happy_path() {
 			request_type: SwapRequestTypeEncoded::Regular {
 				output_address: encoded_output_address,
 			},
+			refund_parameters: None,
+			dca_parameters: None,
 			origin: ORIGIN,
 		}));
 
@@ -2341,6 +2370,8 @@ fn network_fee_swap_gets_burnt() {
 				input_amount: AMOUNT,
 				output_asset: OUTPUT_ASSET,
 				request_type: SwapRequestTypeEncoded::NetworkFee,
+				refund_parameters: None,
+				dca_parameters: None,
 				origin: SwapOrigin::Internal,
 			}));
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapScheduled { .. }),);
@@ -2381,6 +2412,8 @@ fn transaction_fees_are_collected() {
 				input_amount: AMOUNT,
 				output_asset: OUTPUT_ASSET,
 				request_type: SwapRequestTypeEncoded::IngressEgressFee,
+				refund_parameters: None,
+				dca_parameters: None,
 				origin: SwapOrigin::Internal,
 			}));
 

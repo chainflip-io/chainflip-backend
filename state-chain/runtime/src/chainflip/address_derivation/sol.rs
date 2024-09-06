@@ -3,6 +3,7 @@ use cf_chains::{
 	sol::{api::SolanaEnvironment, sol_tx_core::address_derivation::derive_deposit_address},
 	Solana,
 };
+use sol_prim::PdaAndBump;
 
 use super::AddressDerivation;
 use crate::SolEnvironment;
@@ -30,7 +31,7 @@ impl AddressDerivationApi<Solana> for AddressDerivation {
 			.map_err(|_| AddressDerivationError::MissingSolanaApiEnvironment)?;
 
 		derive_deposit_address(channel_id, api_env.vault_program)
-			.map(|derived_ata| (derived_ata.address, derived_ata.bump))
+			.map(|PdaAndBump { address, bump }| (address, bump))
 			.map_err(AddressDerivationError::SolanaDerivationError)
 	}
 }

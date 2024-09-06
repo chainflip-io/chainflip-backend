@@ -1,7 +1,8 @@
 use crate::{chainflip::solana_elections, Runtime};
 use cf_chains::{
 	instances::SolanaInstance,
-	sol::{SolApiEnvironment, SolHash},
+	sol::{SolApiEnvironment, SolHash, SolTrackedData},
+	ChainState,
 };
 use cf_utilities::bs58_array;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
@@ -294,6 +295,10 @@ impl OnRuntimeUpgrade for SolanaIntegration {
 		pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, SolanaInstance>::put(
 			deposit_channel_lifetime,
 		);
+		pallet_cf_chain_tracking::CurrentChainState::<Runtime, SolanaInstance>::put(ChainState {
+			block_height: 0,
+			tracked_data: SolTrackedData { priority_fee: 100_000 },
+		});
 		Weight::zero()
 	}
 

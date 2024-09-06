@@ -11,6 +11,7 @@ use frame_support::{
 	traits::{EnsureOrigin, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
+use sp_std::vec;
 
 fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 	let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
@@ -265,6 +266,48 @@ mod benchmarks {
 				assert_eq!(MaximumPriceImpact::<T>::get(asset_pair), None);
 			}
 		}
+	}
+
+	#[benchmark]
+	fn cancel_orders_batch() {
+		let caller = new_lp_account::<T>();
+		assert_ok!(Pallet::<T>::new_pool(
+			T::EnsureGovernance::try_successful_origin().unwrap(),
+			Asset::Eth,
+			Asset::Usdc,
+			0,
+			price_at_tick(0).unwrap()
+		));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Eth, 1_000_000_000,));
+		assert_ok!(T::LpBalance::try_credit_account(&caller, Asset::Usdc, 1_000_000_000,));
+		let mut orders_to_delete: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>> =
+			vec![].try_into().unwrap();
+		for i in 1..101i32 {
+			assert_ok!(Pallet::<T>::set_range_order(
+				RawOrigin::Signed(caller.clone()).into(),
+				Asset::Eth,
+				Asset::Usdc,
+				i as u64,
+				Some(-i..i),
+				RangeOrderSize::AssetAmounts {
+					maximum: AssetAmounts { base: 1_000_000, quote: 1_000_000 },
+					minimum: AssetAmounts { base: 500_000, quote: 500_000 },
+				},
+			));
+			orders_to_delete
+				.try_push(CloseOrder::Range {
+					base_asset: Asset::Eth,
+					quote_asset: Asset::Usdc,
+					id: i as u64,
+				})
+				.expect("cannot fail");
+		}
+
+		#[extrinsic_call]
+		crate::benchmarking::benchmarks::cancel_orders_batch(
+			RawOrigin::Signed(caller.clone()),
+			orders_to_delete,
+		);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

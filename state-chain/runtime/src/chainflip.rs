@@ -8,6 +8,7 @@ pub mod epoch_transition;
 pub mod evm_vault_activator;
 mod missed_authorship_slots;
 mod offences;
+pub mod pending_rotation_broadcasts;
 mod signer_nomination;
 pub mod solana_elections;
 
@@ -17,8 +18,8 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	SolanaBroadcaster, SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner, System,
-	Validator, YEAR,
+	SolanaBroadcaster, SolanaChainTrackingProvider, SolanaIngressEgress, SolanaThresholdSigner,
+	System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -559,7 +560,7 @@ impl ChainEnvironment<CurrentAggKey, SolAddress> for SolEnvironment {
 
 impl ChainEnvironment<ComputePrice, SolAmount> for SolEnvironment {
 	fn lookup(_s: ComputePrice) -> Option<u64> {
-		SolanaChainTracking::priority_fee()
+		SolanaChainTrackingProvider::priority_fee()
 	}
 }
 

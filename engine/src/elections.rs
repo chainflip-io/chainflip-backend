@@ -21,7 +21,7 @@ use std::{
 	collections::{BTreeMap, HashMap},
 	sync::Arc,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
 use voter_api::VoterApi;
 
@@ -177,7 +177,7 @@ where
 						pending_submissions.insert(election_identifier,	(partial_vote, vote));
 					},
 					Err(error) => {
-						error!("Voting task for election '{:?}' failed with error: '{:?}'.", election_identifier, error);
+						warn!("Voting task for election '{:?}' failed with error: '{:?}'.", election_identifier, error);
 					}
 				}
 			},

@@ -334,6 +334,7 @@ where
 		BitcoinChainTracking(_) |
 		PolkadotChainTracking(_) |
 		ArbitrumChainTracking(_) |
+		SolanaChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
