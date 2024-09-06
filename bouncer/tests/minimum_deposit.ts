@@ -5,7 +5,7 @@ import { sendDot } from '../shared/send_dot';
 import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testMinimumDeposit = new ExecutableTest('Minimum-Deposit', main, 1200); // TODO JAMIE: unknown timeout
+export const testMinimumDeposit = new ExecutableTest('Minimum-Deposit', main, 150);
 
 async function main() {
   await setMinimumDeposit('Dot', BigInt(200000000000));

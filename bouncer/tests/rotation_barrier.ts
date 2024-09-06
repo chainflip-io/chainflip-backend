@@ -5,7 +5,7 @@ import { testSwapViaContract } from '../shared/swapping';
 import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testRotateAndSwap = new ExecutableTest('Rotation-Barrier', main, 1200); // TODO JAMIE: unknown timeout
+export const testRotateAndSwap = new ExecutableTest('Rotation-Barrier', main, 280);
 
 // Testing broadcast through vault rotations
 async function main() {

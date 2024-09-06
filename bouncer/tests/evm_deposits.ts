@@ -35,8 +35,8 @@ async function testSuccessiveDepositEvm(sourceAsset: Asset, destAsset: Asset) {
     destAsset,
     undefined,
     undefined,
-    undefined,
-    ' EvmDepositTestFirstDeposit',
+    testEvmDeposits.swapContext,
+    'EvmDepositTestFirstDeposit',
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
@@ -51,8 +51,8 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
     destAsset,
     undefined,
     undefined,
-    undefined,
-    ' NoDuplicateWitnessingTest',
+    testEvmDeposits.swapContext,
+    'NoDuplicateWitnessingTest',
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.

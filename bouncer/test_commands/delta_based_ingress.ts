@@ -89,8 +89,8 @@ async function deltaBasedIngressTest(
     destAsset,
     undefined,
     undefined,
-    undefined,
-    ' DeltaBasedIngress',
+    testDeltaBasedIngress.swapContext,
+    'DeltaBasedIngress',
     amountFirstDeposit.toString(),
   );
 
