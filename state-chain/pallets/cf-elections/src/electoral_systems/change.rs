@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ElectionIdentifierOf, ElectionReadAccess, ElectionWriteAccess,
@@ -7,7 +9,7 @@ use crate::{
 	CorruptStorageError,
 };
 use cf_primitives::AuthorityCount;
-use cf_utilities::{all_same, success_threshold_from_share_count};
+use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
@@ -34,7 +36,7 @@ pub trait OnChangeHook<Identifier, Value> {
 
 impl<
 		Identifier: Member + Parameter + Ord,
-		Value: Member + Parameter + Eq,
+		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 	> Change<Identifier, Value, Settings, Hook>
@@ -50,7 +52,7 @@ impl<
 }
 impl<
 		Identifier: Member + Parameter + Ord,
-		Value: Member + Parameter + Eq,
+		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 	> ElectoralSystem for Change<Identifier, Value, Settings, Hook>
@@ -136,7 +138,17 @@ impl<
 			if votes_count != 0 &&
 				votes_count >= success_threshold_from_share_count(authorities) as usize
 			{
-				all_same(votes.into_iter().map(|(_, vote)| vote))
+				let mut counts = BTreeMap::new();
+				for (_, vote) in votes {
+					counts.entry(vote).and_modify(|count| *count += 1).or_insert(1);
+				}
+				counts.iter().find_map(|(vote, count)| {
+					if *count >= success_threshold_from_share_count(authorities) {
+						Some(vote.clone())
+					} else {
+						None
+					}
+				})
 			} else {
 				None
 			},
