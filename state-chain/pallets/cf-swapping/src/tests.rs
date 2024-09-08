@@ -2658,7 +2658,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 		let ccm = generate_ccm_deposit();
 
 		let destination_address = EncodedAddress::Dot(Default::default());
-		// Expect to panic with invalid CCM.
+
 		assert_ok!(Swapping::ccm_deposit(
 			RuntimeOrigin::root(),
 			Asset::Btc,
