@@ -37,6 +37,7 @@ import { swapLessThanED } from '../tests/swap_less_than_existential_deposit_dot'
 import { testAllSwaps } from '../tests/all_swaps';
 import { testBoostingSwap } from '../tests/boost';
 import { ConsoleColors, ConsoleLogColors } from '../shared/utils';
+import { testDeltaBasedIngress } from '../tests/delta_based_ingress';
 
 async function main() {
   const testName = process.argv[2];
@@ -61,6 +62,7 @@ async function main() {
     testRotateAndSwap,
     testGasLimitCcmSwaps,
     testSwapAfterDisconnection,
+    testDeltaBasedIngress,
   ];
 
   // Help message
