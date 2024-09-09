@@ -164,14 +164,37 @@ fn minority_can_not_influence_consensus() {
 	// This is why use the lower 33rd percentile vote. If we used the median, a simple majority
 	// could influence the consensus value.
 
+	// Assumption: the dishonest value is *higher* than the honest value. (Dishonest nodes are
+	// trying to 'speed up' the advancement.)
 	const HONEST_VALUE: u64 = 5;
 	const DISHONEST_VALUE: u64 = 10;
-	const AUTHORITY_COUNT: u32 = 10;
 
-	let threshold = cf_utilities::threshold_from_share_count(AUTHORITY_COUNT);
-	let dishonest_votes = (0..threshold).map(|_| ((), DISHONEST_VALUE));
-	let consent_votes = (0..(AUTHORITY_COUNT - threshold)).map(|_| ((), HONEST_VALUE));
+	const AUTHORITY_COUNT: AuthorityCount = 10;
+	const THRESHOLD: AuthorityCount = cf_utilities::threshold_from_share_count(AUTHORITY_COUNT);
+	const SUCCESS_THRESHOLD: AuthorityCount =
+		cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT);
+
+	// We reach consensus after SUCCESS_THRESHOLD votes.
+	// Assumption: everyone votes (not voting is equivalent to dishonest voting).
+	//  - The above is a key assumption. If dishonest nodes are capable of preventing honest nodes
+	//    from voting, or or preventing them from voting in time, then the 'no-fast-forward'
+	//    property is not guaranteed.
+
+	// A superminority can prevent consensus value from advancing.
+	let dishonest_votes = (0..THRESHOLD).map(|_| ((), DISHONEST_VALUE));
+	let consent_votes = (0..(AUTHORITY_COUNT - THRESHOLD)).map(|_| ((), HONEST_VALUE));
 	let all_votes = dishonest_votes.chain(consent_votes).collect::<Vec<_>>();
-
 	with_default_context().expect_consensus(AUTHORITY_COUNT, all_votes, Some(HONEST_VALUE));
+
+	// A supermajority is required to advance the consensus value.
+	let dishonest_votes = (0..SUCCESS_THRESHOLD).map(|_| ((), DISHONEST_VALUE));
+	let consent_votes = (0..(AUTHORITY_COUNT - SUCCESS_THRESHOLD)).map(|_| ((), HONEST_VALUE));
+	let all_votes = dishonest_votes.chain(consent_votes).collect::<Vec<_>>();
+	with_default_context().expect_consensus(AUTHORITY_COUNT, all_votes, Some(DISHONEST_VALUE));
+
+	// Demonstration that incomplete votes break the assumption.
+	// Here, we advance the state despite *not* having a dishonest supermajority.
+	let dishonest_votes = (0..THRESHOLD).map(|_| ((), DISHONEST_VALUE));
+	let all_votes = dishonest_votes.chain(core::iter::once(((), HONEST_VALUE))).collect();
+	with_default_context().expect_consensus(AUTHORITY_COUNT, all_votes, Some(DISHONEST_VALUE));
 }
