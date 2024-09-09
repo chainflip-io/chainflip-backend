@@ -253,12 +253,14 @@ export function stateChainAssetFromAsset(asset: Asset): string {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> =>
+export const runWithTimeout = async <T>(promise: Promise<T>, seconds: number): Promise<T> =>
   Promise.race([
     promise,
-    sleep(millis, new Error(`Timed out after ${millis} ms.`), { ref: false }).then((error) => {
-      throw error;
-    }),
+    sleep(seconds * 1000, new Error(`Timed out after ${seconds}s.`), { ref: false }).then(
+      (error) => {
+        throw error;
+      },
+    ),
   ]);
 
 /// Runs the given promise with a timeout and handles exiting the process. Used for running commands.
@@ -267,7 +269,7 @@ export async function runWithTimeoutAndExit<T>(
   seconds: number,
 ): Promise<void> {
   const start = Date.now();
-  await runWithTimeout(promise, seconds * 1000).catch((error) => {
+  await runWithTimeout(promise, seconds).catch((error) => {
     console.error(error);
     process.exit(-1);
   });
@@ -1126,4 +1128,13 @@ export async function checkAvailabilityAllSolanaNonces() {
       await sleep(6000);
     }
   }
+}
+
+// Get the current time in the format HH:MM:SS
+export function getTimeStamp(): string {
+  const now = new Date();
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const seconds = now.getSeconds().toString().padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
 }

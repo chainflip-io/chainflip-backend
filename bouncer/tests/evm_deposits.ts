@@ -174,7 +174,7 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
   }
 }
 
-async function main(numberOfNodes = 1) {
+async function main(numberOfNodes: 1 | 3 = 1) {
   // There is some issue in CI with 3-nodes and these swaps.
   // To investigate in PRO-1591
   const depositTests = [];

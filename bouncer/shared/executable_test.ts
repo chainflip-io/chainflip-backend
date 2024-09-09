@@ -1,5 +1,5 @@
 import { SwapContext } from './swap_context';
-import { ConsoleLogColors, runWithTimeout } from './utils';
+import { ConsoleLogColors, getTimeStamp, runWithTimeout } from './utils';
 
 export enum TestStatus {
   Ready = 'ready',
@@ -36,8 +36,7 @@ function getCallerFile(stackIndex: number): string {
 export class ExecutableTest {
   public status: TestStatus = TestStatus.Ready;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private runFunction: (...args: any[]) => Promise<void>;
+  private runFunction: (...args: unknown[]) => Promise<void>;
 
   timeoutSeconds: number;
 
@@ -62,22 +61,22 @@ export class ExecutableTest {
   }
 
   /// Run the test with the pre-defined timeout and any given arguments
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async run(...args: any[]) {
+  async run(...args: unknown[]) {
     if (this.status === TestStatus.Running) {
       throw new Error(`${this.name} Test is already running`);
     }
     console.log(ConsoleLogColors.LightBlue, `=== Running ${this.name} test ===`);
     this.status = TestStatus.Running;
-    await runWithTimeout(this.runFunction(...args), this.timeoutSeconds * 1000).catch((error) => {
+    await runWithTimeout(this.runFunction(...args), this.timeoutSeconds).catch((error) => {
       // Print the swap report if the swap context was used
       if (this.swapContext.allSwaps.size > 0) {
         this.swapContext.print_report();
       }
       // Print a timestamped error message with the test name
-      const now = new Date();
-      const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-      console.error(ConsoleLogColors.RedSolid, `=== ${this.name} test failed (${timestamp}) ===`);
+      console.error(
+        ConsoleLogColors.RedSolid,
+        `=== ${this.name} test failed (${getTimeStamp()}) ===`,
+      );
       this.status = TestStatus.Failed;
       // Rethrow the error to be caught by the caller
       throw error;
@@ -86,23 +85,24 @@ export class ExecutableTest {
     console.log(ConsoleLogColors.Green, `=== ${this.name} test complete ===`);
   }
 
+  private logWithName(color: string, message: string, ...optionalParams: unknown[]) {
+    console.log(color, `[${this.name}] ${message}`, ...optionalParams);
+  }
+
   /// Log a message with the test name prefixed
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  log(message: string, ...optionalParams: any[]) {
-    console.log(ConsoleLogColors.WhiteBold, `[${this.name}] ${message}`, ...optionalParams);
+  log(message: string, ...optionalParams: unknown[]) {
+    this.logWithName(ConsoleLogColors.WhiteBold, message, ...optionalParams);
   }
 
   /// Only logs a message if the debug flag is enabled for this test
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  debugLog(message: string, ...optionalParams: any[]) {
+  debugLog(message: string, ...optionalParams: unknown[]) {
     if (this.debug) {
-      console.log(ConsoleLogColors.Grey, `[${this.name}] ${message}`, ...optionalParams);
+      this.logWithName(ConsoleLogColors.Grey, message, ...optionalParams);
     }
   }
 
   /// Runs the test with debug enabled and handles exiting the process. Used when running the test as a command.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async runAndExit(...args: any[]) {
+  async runAndExit(...args: unknown[]) {
     const start = Date.now();
 
     this.debug = true;

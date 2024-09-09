@@ -60,10 +60,10 @@ export async function stopBoosting<T = any>(
     errorOnFail,
   );
   if (!extrinsicResult?.dispatchError) {
-    testBoostingSwap.log('waiting for stop boosting event');
+    console.log('waiting for stop boosting event');
     return observeStoppedBoosting;
   }
-  testBoostingSwap.log('Already stopped boosting');
+  console.log('Already stopped boosting');
   return undefined;
 }
 
@@ -91,7 +91,7 @@ export async function addBoostFunds(
   );
 
   // Add funds to the boost pool
-  testBoostingSwap.log(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
+  console.log(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
   await extrinsicSubmitter.submit(
     chainflip.tx[ingressEgressPalletForChain(chainFromAsset(asset))].addBoostFunds(
       shortChainFromAsset(asset).toUpperCase(),
