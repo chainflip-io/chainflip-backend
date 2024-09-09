@@ -305,12 +305,34 @@ fn cannot_withdraw_in_safe_mode() {
 		// Change back to code green
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
-		// withdraws are now alloed
+		// withdraws are now allowed
 		assert_ok!(Swapping::withdraw(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 		));
 		assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Eth), 0);
+	});
+}
+
+#[test]
+fn cannot_register_as_broker_in_safe_mode() {
+	pub const BROKER: <Test as frame_system::Config>::AccountId = 6969u64;
+
+	new_test_ext().execute_with(|| {
+		// Activate code red
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+
+		// Cannot register as broker
+		assert_noop!(
+			Swapping::register_as_broker(RuntimeOrigin::signed(BROKER)),
+			Error::<Test>::BrokerRegistrationDisabled
+		);
+
+		// Change back to code green
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
+
+		// Register as broker is now allowed
+		assert_ok!(Swapping::register_as_broker(RuntimeOrigin::signed(BROKER)));
 	});
 }
