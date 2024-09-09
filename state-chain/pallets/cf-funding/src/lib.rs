@@ -560,22 +560,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// This call is now deprecated.
-		/// The functionality has been moved to the Validator pallet
-		#[pallet::call_index(4)]
-		#[pallet::weight(Weight::from_parts(0, 0))]
-		pub fn stop_bidding(_origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			Err(DispatchError::Other("Deprecated").into())
-		}
-
-		/// This call is now deprecated.
-		/// The functionality has been moved to the Validator pallet
-		#[pallet::call_index(5)]
-		#[pallet::weight(Weight::from_parts(0, 0))]
-		pub fn start_bidding(_origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			Err(DispatchError::Other("Deprecated").into())
-		}
-
 		/// Updates the minimum funding required for an account, the extrinsic is gated with
 		/// governance.
 		///

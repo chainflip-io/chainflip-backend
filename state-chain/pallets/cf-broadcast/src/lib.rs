@@ -421,16 +421,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// DEPRECATED. This call is no longer used.
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::transaction_failed())]
-		pub fn transaction_signing_failure(
-			_origin: OriginFor<T>,
-			_broadcast_attempt_id: (BroadcastId, AttemptCount),
-		) -> DispatchResultWithPostInfo {
-			Err(DispatchError::Other("Deprecated").into())
-		}
-
 		/// A callback to be used when a threshold signature request completes. Retrieves the
 		/// requested signature, uses the configured [TransactionBuilder] to build the transaction.
 		/// Initiates the broadcast sequence if `should_broadcast` is set to true, otherwise insert

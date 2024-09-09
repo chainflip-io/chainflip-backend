@@ -110,6 +110,8 @@ pub mod pallet {
 		EthAddressNotUpdateable,
 		/// The nonce account is currently not being used or does not exist.
 		NonceAccountNotBeingUsedOrDoesNotExist,
+		/// The given UTXO parameters are invalid.
+		InvalidUtxoParameters,
 	}
 
 	#[pallet::pallet]
@@ -379,7 +381,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			ensure!(params.are_valid(), DispatchError::Other("Invalid parameters"));
+			ensure!(params.are_valid(), Error::<T>::InvalidUtxoParameters);
 
 			ConsolidationParameters::<T>::set(params);
 

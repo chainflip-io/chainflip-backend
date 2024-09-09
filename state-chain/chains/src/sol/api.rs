@@ -1,12 +1,10 @@
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use frame_support::{
-	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
-};
-use scale_info::{prelude::format, TypeInfo};
+use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
+use scale_info::TypeInfo;
 use sol_prim::consts::SOL_USDC_DECIMAL;
 use sp_core::RuntimeDebug;
-use sp_std::{boxed::Box, vec, vec::Vec};
+use sp_std::{vec, vec::Vec};
 
 use crate::{
 	ccm_checker::{
@@ -20,7 +18,7 @@ use crate::{
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, Chain, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
 	FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, SetGovKeyWithAggKey, Solana,
-	TransferAssetParams, TransferFallback,
+	TransferAssetParams, TransferFallback, TransferFallbackError,
 };
 
 use cf_primitives::{EgressId, ForeignChain};
@@ -101,17 +99,9 @@ impl sp_std::fmt::Display for SolanaTransactionBuildingError {
 	}
 }
 
-impl From<SolanaTransactionBuildingError> for DispatchError {
-	fn from(value: SolanaTransactionBuildingError) -> DispatchError {
-		DispatchError::Other(Box::leak(
-			format!("Failed to build Solana Transaction. {:?}", value).into_boxed_str(),
-		))
-	}
-}
-
 impl From<SolanaTransactionBuildingError> for AllBatchError {
-	fn from(value: SolanaTransactionBuildingError) -> AllBatchError {
-		AllBatchError::DispatchError(value.into())
+	fn from(err: SolanaTransactionBuildingError) -> AllBatchError {
+		AllBatchError::FailedToBuildSolanaTransaction(err)
 	}
 }
 
@@ -475,8 +465,10 @@ impl<Env: 'static + SolanaEnvironment> AllBatch<Solana> for SolanaApi<Env> {
 }
 
 impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
-	fn new_unsigned(_transfer_param: TransferAssetParams<Solana>) -> Result<Self, DispatchError> {
-		Err(DispatchError::Other("Solana does not support TransferFallback."))
+	fn new_unsigned(
+		_transfer_param: TransferAssetParams<Solana>,
+	) -> Result<Self, TransferFallbackError> {
+		Err(TransferFallbackError::Unsupported)
 	}
 }
 

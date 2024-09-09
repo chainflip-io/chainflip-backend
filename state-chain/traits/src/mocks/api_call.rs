@@ -4,7 +4,7 @@ use cf_chains::{
 	btc::BitcoinCrypto, evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Bitcoin, Chain,
 	ChainCrypto, ChainEnvironment, ConsolidationError, Ethereum, ExecutexSwapAndCall,
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
-	TransferFallback,
+	TransferFallback, TransferFallbackError,
 };
 use cf_primitives::{chains::assets, EgressId, ForeignChain};
 use codec::{Decode, Encode};
@@ -175,9 +175,11 @@ pub struct MockEthTransferFallback<MockEvmEnvironment> {
 }
 
 impl TransferFallback<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
-	fn new_unsigned(transfer_param: TransferAssetParams<Ethereum>) -> Result<Self, DispatchError> {
+	fn new_unsigned(
+		transfer_param: TransferAssetParams<Ethereum>,
+	) -> Result<Self, TransferFallbackError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
-			Err(DispatchError::CannotLookup)
+			Err(TransferFallbackError::CannotLookupTokenAddress)
 		} else {
 			Ok(Self::TransferFallback(MockEthTransferFallback {
 				nonce: Default::default(),
@@ -259,8 +261,10 @@ pub struct MockBtcTransferFallback<MockBtcEnvironment> {
 }
 
 impl TransferFallback<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
-	fn new_unsigned(_transfer_param: TransferAssetParams<Bitcoin>) -> Result<Self, DispatchError> {
-		Err(DispatchError::CannotLookup)
+	fn new_unsigned(
+		_transfer_param: TransferAssetParams<Bitcoin>,
+	) -> Result<Self, TransferFallbackError> {
+		Err(TransferFallbackError::Unsupported)
 	}
 }
 
