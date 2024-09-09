@@ -252,3 +252,4 @@ jobs:
         with:
           name: chainflip-backend-${{ matrix.artifact }}-images
           pattern: chainflip-backend-${{ matrix.artifact }}-images-*
+          delete-merged: true
