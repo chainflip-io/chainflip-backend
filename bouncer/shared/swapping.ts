@@ -264,6 +264,8 @@ export async function testSwapViaContract(
     addressType,
     messageMetadata,
     (tagSuffix ?? '') + ' Contract',
+    log,
+    swapContext,
   );
 
   return performSwapViaContract(
