@@ -9,7 +9,7 @@
 // For example: ./commands/set_minimum_deposit.ts ETH 0.01
 // will reject any ETH deposit below 0.01 ETH.
 
-import { executeWithTimeout, parseAssetString, amountToFineAmountBigInt } from '../shared/utils';
+import { runWithTimeoutAndExit, parseAssetString, amountToFineAmountBigInt } from '../shared/utils';
 import { setMinimumDeposit } from '../shared/set_minimum_deposit';
 
 async function main() {
@@ -18,4 +18,4 @@ async function main() {
   await setMinimumDeposit(asset, amount);
 }
 
-await executeWithTimeout(main(), 120);
+await runWithTimeoutAndExit(main(), 120);

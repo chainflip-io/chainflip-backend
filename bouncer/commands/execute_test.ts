@@ -86,12 +86,12 @@ async function main() {
       testName.includes(test.fileName.replace('.ts', ''))
     ) {
       // This will exit the process when the test is done.
-      await test.execute(...additionalArgs);
+      await test.runAndExit(...additionalArgs);
     }
   }
 
   console.error(`Test "${testName}" not found. Use -h for a list of available tests.`);
-  process.exit(1);
+  process.exit(-1);
 }
 
 await main();

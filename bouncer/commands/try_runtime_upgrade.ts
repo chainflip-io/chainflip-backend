@@ -23,7 +23,7 @@ import {
   tryRuntimeUpgrade,
   tryRuntimeUpgradeWithCompileRuntime,
 } from '../shared/try_runtime_upgrade';
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 
 async function main(): Promise<void> {
   const args = await yargs(hideBin(process.argv))
@@ -70,4 +70,4 @@ async function main(): Promise<void> {
   }
 }
 
-await executeWithTimeout(main(), 1200);
+await runWithTimeoutAndExit(main(), 1200);

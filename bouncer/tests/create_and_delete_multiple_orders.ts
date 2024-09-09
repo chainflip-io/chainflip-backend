@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { createAndDeleteMultipleOrders } from '../shared/create_and_delete_multiple_orders';
 
 async function main(): Promise<void> {
@@ -8,4 +8,4 @@ async function main(): Promise<void> {
   await createAndDeleteMultipleOrders(25);
 }
 
-await executeWithTimeout(main(), 240);
+await runWithTimeoutAndExit(main(), 240);

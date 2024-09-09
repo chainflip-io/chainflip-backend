@@ -9,7 +9,7 @@ import {
   bumpAndBuildPolkadotRuntime,
   pushPolkadotRuntimeUpdate,
 } from '../tests/polkadot_runtime_update';
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { getNetworkRuntimeVersion } from '../shared/utils/spec_version';
 
 async function main(): Promise<void> {
@@ -28,4 +28,4 @@ async function main(): Promise<void> {
   }
 }
 
-await executeWithTimeout(main(), 400);
+await runWithTimeoutAndExit(main(), 400);

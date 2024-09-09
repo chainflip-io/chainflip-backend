@@ -102,7 +102,7 @@ export class ExecutableTest {
 
   /// Runs the test with debug enabled and handles exiting the process. Used when running the test as a command.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async execute(...args: any[]) {
+  async runAndExit(...args: any[]) {
     const start = Date.now();
 
     this.debug = true;

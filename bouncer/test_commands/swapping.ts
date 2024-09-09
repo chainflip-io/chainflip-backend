@@ -1,4 +1,4 @@
 #!/usr/bin/env -S pnpm tsx
 import { testAllSwaps } from '../tests/all_swaps';
 
-await testAllSwaps.execute();
+await testAllSwaps.runAndExit();

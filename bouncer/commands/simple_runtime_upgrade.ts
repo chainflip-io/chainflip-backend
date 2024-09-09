@@ -12,7 +12,7 @@
 
 import path from 'path';
 import { simpleRuntimeUpgrade } from '../shared/simple_runtime_upgrade';
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { testAllSwaps } from '../tests/all_swaps';
 
 async function main(): Promise<void> {
@@ -25,4 +25,4 @@ async function main(): Promise<void> {
 
 // 15 minute timeout. We need to wait for user input, compile, and potentially run tests. This is deliberately quite long.
 // This won't be run on CI, so it's not a problem if it takes a while.
-await executeWithTimeout(main(), 15 * 60);
+await runWithTimeoutAndExit(main(), 15 * 60);

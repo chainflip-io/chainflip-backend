@@ -7,7 +7,7 @@
 // For example: ./commands/open_and_delete_orders.ts 5
 // will create 5 limit_order and then delete them all with a single extrinsic
 
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { createAndDeleteMultipleOrders } from '../shared/create_and_delete_multiple_orders';
 
 async function main(): Promise<void> {
@@ -20,4 +20,4 @@ async function main(): Promise<void> {
   await createAndDeleteMultipleOrders(Number(numberOfOrders));
 }
 
-await executeWithTimeout(main(), 240);
+await runWithTimeoutAndExit(main(), 240);
