@@ -257,24 +257,22 @@ register_checks! {
 	assert_unchanged(pre_finalize, post_finalize) {
 		assert_eq!(pre_finalize, post_finalize);
 	},
-	assert_changed(pre_finalize, post_finalize) {
-		assert_ne!(pre_finalize, post_finalize);
-	},
-	unsynchronised_state_is_updated(pre_finalize, post_finalize) {
-		assert_eq!(
-			post_finalize.unsynchronised_state().unwrap(),
-			pre_finalize.unsynchronised_state().unwrap(),
-		);
-	},
-	unsynchronised_state_is_not_updated(pre_finalize, post_finalize) {
-		assert_eq!(
-			post_finalize.unsynchronised_state().unwrap(),
-			pre_finalize.unsynchronised_state().unwrap()
-		);
-	},
 	last_election_deleted(pre_finalize, post_finalize) {
 		let last_election_id = *pre_finalize.election_identifiers().last().expect("Expected an election before finalization.");
-		assert!(post_finalize.election(last_election_id).is_err(), "Expected election to be deleted.");
+		assert!(
+			post_finalize.election(last_election_id).is_err(),
+			"Expected election {:?} to be deleted. Elections before: {:?}. After: {:?}",
+			last_election_id,
+			pre_finalize.election_identifiers(),
+			post_finalize.election_identifiers(),
+		);
+	},
+	election_id_incremented(pre_finalize, post_finalize) {
+		assert_eq!(
+			pre_finalize.next_umi().next_identifier().unwrap(),
+			post_finalize.next_umi(),
+			"Expected the election id to be incremented.",
+		);
 	},
 }
 

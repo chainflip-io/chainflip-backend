@@ -4,12 +4,12 @@ use crate::{
 		ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::VoteStorage,
-	CorruptStorageError, ElectionIdentifier,
+	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
 use cf_primitives::AuthorityCount;
 use codec::Encode;
 use frame_support::{
-	CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound, StorageHasher, Twox64Concat,
+	ensure, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound, StorageHasher, Twox64Concat,
 };
 use std::collections::BTreeMap;
 
@@ -37,18 +37,24 @@ pub struct MockAccess<ES: ElectoralSystem> {
 	unsynchronised_state_map: BTreeMap<Vec<u8>, Option<ES::ElectoralUnsynchronisedStateMapValue>>,
 	elections: BTreeMap<ElectionIdentifierOf<ES>, MockElection<ES>>,
 	unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
+	next_election_id: UniqueMonotonicIdentifier,
 }
 
 impl<ES: ElectoralSystem> MockAccess<ES> {
-	pub fn election_read_access(&self, id: ElectionIdentifierOf<ES>) -> MockReadAccess<'_, ES> {
-		MockReadAccess { election_identifier: id, electoral_system: self }
+	fn election_read_access(
+		&self,
+		id: ElectionIdentifierOf<ES>,
+	) -> Result<MockReadAccess<'_, ES>, CorruptStorageError> {
+		ensure!(self.elections.contains_key(&id), CorruptStorageError::new());
+		Ok(MockReadAccess { election_identifier: id, electoral_system: self })
 	}
 
-	pub fn election_write_access(
+	fn election_write_access(
 		&mut self,
 		id: ElectionIdentifierOf<ES>,
-	) -> MockWriteAccess<'_, ES> {
-		MockWriteAccess { election_identifier: id, electoral_system: self }
+	) -> Result<MockWriteAccess<'_, ES>, CorruptStorageError> {
+		ensure!(self.elections.contains_key(&id), CorruptStorageError::new());
+		Ok(MockWriteAccess { election_identifier: id, electoral_system: self })
 	}
 }
 
@@ -176,14 +182,8 @@ impl<ES: ElectoralSystem> MockAccess<ES> {
 			unsynchronised_settings,
 			unsynchronised_state_map: Default::default(),
 			elections: Default::default(),
+			next_election_id: Default::default(),
 		}
-	}
-
-	pub fn set_unsynchronised_settings(
-		&mut self,
-		unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
-	) {
-		self.unsynchronised_settings = unsynchronised_settings;
 	}
 
 	pub fn finalize_elections(
@@ -196,6 +196,10 @@ impl<ES: ElectoralSystem> MockAccess<ES> {
 	pub fn election_identifiers(&self) -> Vec<ElectionIdentifierOf<ES>> {
 		self.elections.keys().cloned().collect()
 	}
+
+	pub fn next_umi(&self) -> UniqueMonotonicIdentifier {
+		self.next_election_id
+	}
 }
 
 impl<ES: ElectoralSystem> ElectoralReadAccess for MockAccess<ES> {
@@ -206,7 +210,7 @@ impl<ES: ElectoralSystem> ElectoralReadAccess for MockAccess<ES> {
 		&self,
 		id: ElectionIdentifierOf<Self::ElectoralSystem>,
 	) -> Result<Self::ElectionReadAccess<'_>, CorruptStorageError> {
-		Ok(self.election_read_access(id))
+		self.election_read_access(id)
 	}
 	fn unsynchronised_settings(
 		&self,
@@ -247,17 +251,8 @@ impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
 		properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
 		state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
 	) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
-		let election_identifier = ElectionIdentifier::new(
-			self.elections
-				.keys()
-				.map(|id| id.unique_monotonic())
-				.max()
-				.copied()
-				.unwrap_or_default()
-				.next_identifier()
-				.unwrap_or_default(),
-			extra,
-		);
+		let election_identifier = ElectionIdentifier::new(self.next_election_id, extra);
+		self.next_election_id = self.next_election_id.next_identifier().unwrap();
 		self.elections.insert(
 			election_identifier,
 			MockElection {
@@ -267,13 +262,13 @@ impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
 				consensus_status: ConsensusStatus::None,
 			},
 		);
-		Ok(self.election_write_access(election_identifier))
+		self.election_write_access(election_identifier)
 	}
 	fn election_mut(
 		&mut self,
 		id: ElectionIdentifierOf<Self::ElectoralSystem>,
 	) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
-		Ok(self.election_write_access(id))
+		self.election_write_access(id)
 	}
 	fn set_unsynchronised_state(
 		&mut self,

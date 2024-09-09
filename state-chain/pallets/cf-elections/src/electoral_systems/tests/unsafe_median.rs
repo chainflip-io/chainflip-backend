@@ -52,7 +52,8 @@ fn if_consensus_update_unsynchronised_state() {
 			checks! {
 				Check::started_at_initial_state(),
 				Check::ended_at_new_state(),
-				Check::assert_changed(),
+				Check::last_election_deleted(),
+				Check::election_id_incremented(),
 			},
 		);
 }

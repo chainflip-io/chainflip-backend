@@ -211,7 +211,9 @@ pub mod pallet {
 	/// implementation. These extra details are currently used in composite electoral systems to
 	/// identify which type of election an identifier refers to, without having to read additional
 	/// storage.
-	#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode, TypeInfo)]
+	#[derive(
+		PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode, TypeInfo, Default,
+	)]
 	pub struct ElectionIdentifier<Extra>(UniqueMonotonicIdentifier, Extra);
 	impl<Extra> ElectionIdentifier<Extra> {
 		pub(crate) fn new(unique_monotonic: UniqueMonotonicIdentifier, extra: Extra) -> Self {

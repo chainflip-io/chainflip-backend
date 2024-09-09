@@ -105,6 +105,8 @@ fn finalize_election_with_incremented_state() {
 				assert_eq!(pre.unsynchronised_state().unwrap(), initial_state);
 				assert_eq!(post.unsynchronised_state().unwrap(), new_unsynchronised_state);
 			}),
+			Check::last_election_deleted(),
+			Check::election_id_incremented(),
 		},
 	);
 }
@@ -119,6 +121,7 @@ fn finalize_election_state_can_not_decrease() {
 			new_state <= INTITIAL_STATE,
 			"This test is not valid if the new state is higher than the old."
 		);
+		MockHook::reset();
 		with_default_setup()
 			.with_unsynchronised_state(INTITIAL_STATE)
 			.build()
@@ -140,6 +143,8 @@ fn finalize_election_state_can_not_decrease() {
 						assert_eq!(pre.unsynchronised_state().unwrap(), INTITIAL_STATE);
 						assert_eq!(post.unsynchronised_state().unwrap(), INTITIAL_STATE);
 					}),
+					Check::last_election_deleted(),
+					Check::election_id_incremented(),
 				},
 			);
 	}
