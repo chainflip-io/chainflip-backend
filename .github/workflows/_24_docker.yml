@@ -153,8 +153,14 @@ jobs:
         if: inputs.save_tags != ''
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
-          name: chainflip-backend-private-images
+          name: chainflip-backend-private-images-${{ matrix.target }}
           path: private
+
+      - name: Merge artifacts 🧩
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: chainflip-backend-private-images
+          pattern: chainflip-backend-private-images-*
 
   public-images:
     if: inputs.publish_public_images || inputs.save_tags != ''
@@ -236,5 +242,11 @@ jobs:
         if: inputs.save_tags != ''
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
-          name: chainflip-backend-public-images
+          name: chainflip-backend-public-images-${{ matrix.target }}
           path: public
+
+      - name: Merge artifacts 🧩
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: chainflip-backend-public-images
+          pattern: chainflip-backend-public-images-*
