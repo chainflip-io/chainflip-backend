@@ -19,7 +19,7 @@ use futures::FutureExt;
 use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
 use state_chain_runtime::{
 	chainflip::solana_elections::{
-		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystem,
+		EgressState, SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystem,
 		SolanaFeeTracking, SolanaIngressTracking, SolanaNonceTracking, TransactionSuccessDetails,
 	},
 	SolanaInstance,
@@ -129,14 +129,14 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 	async fn vote(
 		&self,
 		_settings: <SolanaEgressWitnessing as ElectoralSystem>::ElectoralSettings,
-		signature: <SolanaEgressWitnessing as ElectoralSystem>::ElectionProperties,
+		(signature, _): <SolanaEgressWitnessing as ElectoralSystem>::ElectionProperties,
 	) -> Result<
 		<<SolanaEgressWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		Ok(TransactionSuccessDetails {
+		Ok(EgressState::Finalized(TransactionSuccessDetails {
 			tx_fee: egress_witnessing::get_finalized_fee(&self.client, signature).await?,
-		})
+		}))
 	}
 }
 

@@ -17,7 +17,6 @@ use pallet_cf_elections::{
 		self,
 		change::OnChangeHook,
 		composite::{tuple_5_impls::Hooks, Composite, Translator},
-		egress_success::OnEgressSuccess,
 		monotonic_median::MedianChangeHook,
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
@@ -87,12 +86,15 @@ pub type SolanaIngressTracking =
 pub type SolanaNonceTracking =
 	electoral_systems::change::Change<SolAddress, SolHash, (), SolanaNonceTrackingHook>;
 
-pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSuccess<
-	SolSignature,
-	TransactionSuccessDetails,
-	(),
-	SolanaEgressWitnessingHook,
->;
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum EgressState {
+	Finalized(TransactionSuccessDetails),
+	#[default]
+	Unknown,
+}
+
+pub type SolanaEgressWitnessing =
+	electoral_systems::change::Change<SolSignature, EgressState, (), SolanaEgressWitnessingHook>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
@@ -101,12 +103,17 @@ pub struct TransactionSuccessDetails {
 
 pub struct SolanaEgressWitnessingHook;
 
-impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
-	fn on_egress_success(
-		signature: SolSignature,
-		TransactionSuccessDetails { tx_fee }: TransactionSuccessDetails,
-	) {
+impl OnChangeHook<SolSignature, EgressState> for SolanaEgressWitnessingHook {
+	fn on_change(signature: SolSignature, egress_state: EgressState) {
 		use cf_traits::KeyProvider;
+
+		let tx_fee = match egress_state {
+			EgressState::Finalized(TransactionSuccessDetails { tx_fee }) => tx_fee,
+			EgressState::Unknown => {
+				log_or_panic!("Egress state is unknown, cannot finalize.");
+				return;
+			},
+		};
 
 		if let Err(err) = SolanaBroadcaster::egress_success(
 			pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
@@ -403,7 +410,11 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 					let mut electoral_access =
 						access_translator.translate_electoral_access(electoral_access);
 
-					SolanaEgressWitnessing::watch_for_egress(&mut electoral_access, signature)
+					SolanaEgressWitnessing::watch_for_change(
+						&mut electoral_access,
+						signature,
+						Default::default(),
+					)
 				})
 			},
 		)
