@@ -184,6 +184,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 	]
 }
 
+#[track_caller]
 fn assert_failed_ccm(
 	from: Asset,
 	amount: AssetAmount,
