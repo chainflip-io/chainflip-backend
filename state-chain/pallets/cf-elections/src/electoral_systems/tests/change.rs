@@ -1,5 +1,5 @@
 use super::{checks, mocks::*, register_checks};
-use crate::{electoral_system::ConsensusStatus, electoral_systems::change::*};
+use crate::electoral_systems::change::*;
 
 use cf_primitives::AuthorityCount;
 
@@ -41,8 +41,6 @@ const AUTHORITY_COUNT: AuthorityCount = 10;
 const THRESHOLD: AuthorityCount = cf_utilities::threshold_from_share_count(AUTHORITY_COUNT);
 const SUCCESS_THRESHOLD: AuthorityCount =
 	cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT);
-const FAILURE_THRESHOLD: AuthorityCount =
-	cf_utilities::failure_threshold_from_share_count(AUTHORITY_COUNT);
 
 fn with_default_state() -> TestContext<SimpleChange> {
 	TestSetup::<SimpleChange>::default().build()

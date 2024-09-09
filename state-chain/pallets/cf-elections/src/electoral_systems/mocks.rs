@@ -58,6 +58,7 @@ where
 		Self { unsynchronised_state, ..self }
 	}
 
+	#[allow(dead_code)]
 	pub fn with_unsynchronised_settings(
 		self,
 		unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
@@ -65,10 +66,12 @@ where
 		Self { unsynchronised_settings, ..self }
 	}
 
+	#[allow(dead_code)]
 	pub fn with_electoral_settings(self, electoral_settings: ES::ElectoralSettings) -> Self {
 		Self { electoral_settings, ..self }
 	}
 
+	#[allow(dead_code)]
 	pub fn with_initial_election_state(
 		self,
 		extra: ES::ElectionIdentifierExtra,
@@ -141,14 +144,11 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 			.expect("Expected exactly one election.")
 	}
 
-	pub fn latest_election_id(&self) -> ElectionIdentifierOf<ES> {
-		*self.all_election_ids().last().expect("Expected at least one election.")
-	}
-
 	pub fn all_election_ids(&self) -> Vec<ElectionIdentifierOf<ES>> {
 		self.electoral_access.election_identifiers()
 	}
 
+	/// Update the current consensus without processing any votes.
 	pub fn force_consensus_update(self, new_consensus: Option<ES::Consensus>) -> Self {
 		let id = self.only_election_id();
 		self.inner_force_consensus_update(id, new_consensus)
@@ -179,6 +179,14 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 		Self { previous_consensus: new_consensus, electoral_access, ..self }
 	}
 
+	/// Test the finalization of the election.
+	///
+	/// `pre_finalize_checks` is a closure that is called with a read-only access to the electoral
+	/// state before finalization.
+	///
+	/// `post_finalize_checks` is a list of checks that are run after finalization. These checks are
+	///
+	/// See [register_checks] and
 	#[track_caller]
 	pub fn test_on_finalize(
 		mut self,
@@ -210,11 +218,45 @@ impl<ES: ElectoralSystem, A: ElectoralSystemCheck<ES>, B: ElectoralSystemCheck<E
 	ElectoralSystemCheck<ES> for (A, B)
 {
 	fn check(&self, pre_finalize: &MockAccess<ES>, post_finalize: &MockAccess<ES>) {
-		self.0.check(&pre_finalize, &post_finalize);
-		self.1.check(&pre_finalize, &post_finalize);
+		self.0.check(pre_finalize, post_finalize);
+		self.1.check(pre_finalize, post_finalize);
 	}
 }
 
+/// Allows registering checks for an electoral system. Once registered, the checks can be used
+/// through the `Check` struct.
+///
+/// Example:
+///
+/// ```ignore
+/// register_checks! {
+///     MonotonicMedianTest {
+///         monotonically_increasing_state(pre_finalize, post_finalize) {
+///             assert!(
+///                 post_finalize.unsynchronised_state().unwrap() >= pre_finalize.unsynchronised_state().unwrap(),
+///                 "Expected state to increase post-finalization."
+///             );
+///         },
+///         // ..
+///     }
+/// }
+/// ```
+///
+///
+/// Alternatively, you can specify extra constraints for the electoral system instead of using a
+/// concrete type:
+///
+/// ```ignore
+/// register_checks! {
+///     #[ extra_constraints: ES: ElectoralSystem, ES::ElectionIdentifierExtra: Default ]#
+///     monotonically_increasing_state(pre_finalize, post_finalize) {
+///         assert!(
+///             post_finalize.unsynchronised_state().unwrap() >= pre_finalize.unsynchronised_state().unwrap(),
+///             "Expected state to increase post-finalization."
+///         );
+///     },
+/// }
+/// ```
 #[macro_export]
 macro_rules! register_checks {
 	(
@@ -283,6 +325,20 @@ macro_rules! boxed_check {
 	};
 }
 
+/// Create a vector of dynamic checks. Useful for passing to the [`TestContext::test_on_finalize`]:
+///
+/// ```ignore
+/// test.test_on_finalize(
+///     &(),
+///     |_| {},
+///     checks! {
+///         Check::assert_unchanged(),
+///         Check::new(|pre, post| {
+///             todo!()
+///         }),
+///     },
+/// );
+/// ```
 #[macro_export]
 macro_rules! checks {
 	( $($check:expr),+ $(,)?) => {
@@ -294,8 +350,11 @@ macro_rules! checks {
 	};
 }
 
+type CheckFn<ES> = Box<dyn Fn(&MockAccess<ES>, &MockAccess<ES>)>;
+
+/// Checks that can be applied post-finalization.
 pub struct Check<ES: ElectoralSystem> {
-	check_fn: Box<dyn Fn(&MockAccess<ES>, &MockAccess<ES>)>,
+	check_fn: CheckFn<ES>,
 }
 
 impl<ES: ElectoralSystem> Check<ES> {

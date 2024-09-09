@@ -1,6 +1,6 @@
 use super::{
 	checks,
-	mocks::{Check, ElectoralSystemCheck, TestContext, TestSetup},
+	mocks::{Check, TestContext, TestSetup},
 	register_checks,
 };
 use crate::{electoral_system::ElectoralReadAccess, electoral_systems::monotonic_median::*};
@@ -138,6 +138,7 @@ fn finalize_election_state_can_not_decrease() {
 				},
 				checks! {
 					Check::monotonically_increasing_state(),
+					// The hook should not be called if the state is not updated.
 					Check::<MonotonicMedianTest>::hook_not_been_called(),
 					Check::new(|pre, post| {
 						assert_eq!(pre.unsynchronised_state().unwrap(), INTITIAL_STATE);
