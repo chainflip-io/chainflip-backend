@@ -942,3 +942,19 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 		})
 	}
 }
+
+pub struct EvmLimit;
+impl FetchesTransfersLimitProvider for EvmLimit {
+	fn maybe_transfers_limit() -> Option<usize> {
+		Some(50)
+	}
+
+	fn maybe_ccm_limit() -> Option<usize> {
+		// For ccm calls we don't batch
+		None
+	}
+
+	fn maybe_fetches_limit() -> Option<usize> {
+		Some(20)
+	}
+}
