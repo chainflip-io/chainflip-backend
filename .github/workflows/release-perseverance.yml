@@ -15,7 +15,7 @@ jobs:
     uses: ./.github/workflows/_05_force_version_bump.yml
     secrets: inherit
     with:
-      network-to-check-against: "mainnet"
+      network-to-check-against: "berghain"
   build:
     needs: [release-checks]
     uses: ./.github/workflows/_20_build.yml
