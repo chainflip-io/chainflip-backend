@@ -156,12 +156,6 @@ jobs:
           name: chainflip-backend-private-images-${{ matrix.target }}
           path: private
 
-      - name: Merge artifacts 🧩
-        uses: actions/upload-artifact/merge@v4
-        with:
-          name: chainflip-backend-private-images
-          pattern: chainflip-backend-private-images-*
-
   public-images:
     if: inputs.publish_public_images || inputs.save_tags != ''
     needs: [get-date-time, set-dockerfile-name, get-version-from-branch-name]
@@ -245,8 +239,16 @@ jobs:
           name: chainflip-backend-public-images-${{ matrix.target }}
           path: public
 
+  merge-artefacts:
+    needs: [private-images, public-images]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        artifact: [private, public]
+    steps:
       - name: Merge artifacts 🧩
         uses: actions/upload-artifact/merge@v4
         with:
-          name: chainflip-backend-public-images
-          pattern: chainflip-backend-public-images-*
+          name: chainflip-backend-${{ matrix.artifact }}-images
+          pattern: chainflip-backend-${{ matrix.artifact }}-images-*
