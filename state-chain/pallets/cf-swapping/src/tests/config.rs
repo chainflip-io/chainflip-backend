@@ -226,7 +226,7 @@ fn swap_broker_fee_cannot_exceed_amount() {
 				bounded_vec![Beneficiary { account: ALICE, bps: 15000 }],
 			);
 		})
-		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
+		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
 		.then_execute_with(|_| {
 			// The broker gets nothing: setting fees >100% isn't actually possible due to
 			// parameter validation, so how this is handled isn't really important as long as we

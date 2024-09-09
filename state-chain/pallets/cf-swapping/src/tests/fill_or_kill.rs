@@ -60,7 +60,7 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 				SWAPS_SCHEDULED_FOR_BLOCK,
 			);
 		})
-		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {})
+		.then_process_blocks_until_block(SWAPS_SCHEDULED_FOR_BLOCK)
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
@@ -120,7 +120,7 @@ fn price_limit_is_respected_in_fok_swap() {
 				SWAPS_SCHEDULED_FOR_BLOCK,
 			);
 		})
-		.then_execute_at_block(3u64, |_| {})
+		.then_process_blocks_until_block(3u64)
 		.then_execute_with(|_| {
 			assert_eq!(System::block_number(), SWAPS_SCHEDULED_FOR_BLOCK);
 			// Swap 2 should fail due to price limit and rescheduled for block
@@ -188,7 +188,7 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 				SWAPS_SCHEDULED_FOR_BLOCK,
 			);
 		})
-		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {})
+		.then_process_blocks_until_block(SWAPS_SCHEDULED_FOR_BLOCK)
 		.then_execute_with(|_| {
 			// Swap 1 should fail here and rescheduled for a later block,
 			// but swap 2 (without FoK parameters) should still be successful:
@@ -208,7 +208,7 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 				}),
 			);
 		})
-		.then_execute_at_block(SWAP_RETRIED_AT_BLOCK, |_| {})
+		.then_process_blocks_until_block(SWAP_RETRIED_AT_BLOCK)
 		.then_execute_with(|_| {
 			// Swap request should be removed in case of refund
 			assert_eq!(SwapRequests::<Test>::get(FOK_SWAP_REQUEST_ID), None);
@@ -274,7 +274,7 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 				})
 			);
 		})
-		.then_execute_at_block(SWAP_RETRIED_AT_BLOCK, |_| {})
+		.then_process_blocks_until_block(SWAP_RETRIED_AT_BLOCK)
 		.then_execute_with(|_| {
 			// Swap request should be removed in case of refund
 			assert_eq!(SwapRequests::<Test>::get(FOK_SWAP_REQUEST_ID), None);
@@ -347,7 +347,7 @@ fn fok_ccm_happy_path() {
 
 			assert_swaps_scheduled_for_block(&[PRINCIPAL_SWAP_ID], PRINCIPAL_BLOCK);
 		})
-		.then_execute_at_block(PRINCIPAL_BLOCK, |_| {})
+		.then_process_blocks_until_block(PRINCIPAL_BLOCK)
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
@@ -359,7 +359,7 @@ fn fok_ccm_happy_path() {
 				}),
 			);
 		})
-		.then_execute_at_block(GAS_BLOCK, |_| {})
+		.then_process_blocks_until_block(GAS_BLOCK)
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
@@ -403,7 +403,7 @@ fn fok_ccm_refunded() {
 
 			assert_swaps_scheduled_for_block(&[PRINCIPAL_SWAP_ID], PRINCIPAL_BLOCK);
 		})
-		.then_execute_at_block(PRINCIPAL_BLOCK, |_| {})
+		.then_process_blocks_until_block(PRINCIPAL_BLOCK)
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
@@ -462,7 +462,7 @@ fn fok_ccm_refunded_no_gas_swap() {
 
 			assert_swaps_scheduled_for_block(&[PRINCIPAL_SWAP_ID], PRINCIPAL_BLOCK);
 		})
-		.then_execute_at_block(PRINCIPAL_BLOCK, |_| {})
+		.then_process_blocks_until_block(PRINCIPAL_BLOCK)
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,

@@ -612,7 +612,7 @@ fn can_punish_failed_witnesser_after_forced_witness() {
 			OffenceReporter::assert_reported(PalletOffence::FailedToWitnessInTime, vec![]);
 			call_hash
 		})
-		.then_execute_at_block(target, |_| {})
+		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
 			// After deadline has passed, all nodes that are late are reported.
 			OffenceReporter::assert_reported(
@@ -668,7 +668,7 @@ fn can_punish_failed_witnesser_in_previous_epochs() {
 			OffenceReporter::assert_reported(PalletOffence::FailedToWitnessInTime, vec![]);
 			call_hash
 		})
-		.then_execute_at_block(target, |_| {})
+		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
 			// Nodes from previous epoch is reported.
 			OffenceReporter::assert_reported(

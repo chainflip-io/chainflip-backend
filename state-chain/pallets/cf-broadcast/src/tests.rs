@@ -484,7 +484,7 @@ fn ensure_safe_mode_is_moving_timeouts() {
 			let _ = start_mock_broadcast();
 			assert!(Timeouts::<Test, Instance1>::get(5u64).len() == 1);
 		})
-		.then_execute_at_block(5u64, |_| {})
+		.then_process_blocks_until_block(5u64)
 		.then_execute_with(|_| {
 			assert!(Timeouts::<Test, Instance1>::get(5u64).is_empty());
 			assert!(Timeouts::<Test, Instance1>::get(15u64).len() == 1);
@@ -1057,7 +1057,7 @@ fn broadcast_retry_delay_works() {
 				},
 			));
 		})
-		.then_execute_at_block(target, |_| {})
+		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
 			let next_block = System::block_number() + 1;
 			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(
@@ -1083,7 +1083,7 @@ fn broadcast_timeout_delay_works() {
 			BroadcastDelay::set(Some(delay));
 			target = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
 		})
-		.then_execute_at_block(target, |_| {})
+		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
 			target = System::block_number() + delay;
 
@@ -1124,7 +1124,7 @@ fn aborted_broadcasts_will_not_retry() {
 				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
 			));
 		})
-		.then_execute_at_block(target, |_| {})
+		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
 			// assert no retry happened
 			assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());

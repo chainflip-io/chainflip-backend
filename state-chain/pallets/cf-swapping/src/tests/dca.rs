@@ -139,11 +139,11 @@ fn dca_happy_path() {
 		.execute_with(|| {
 			setup_dca_swap(NUMBER_OF_CHUNKS, CHUNK_INTERVAL, None);
 		})
-		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
 			assert_chunk_1_executed(NUMBER_OF_CHUNKS);
 		})
-		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_2_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
@@ -182,7 +182,7 @@ fn dca_single_chunk() {
 		.execute_with(|| {
 			setup_dca_swap(1, CHUNK_INTERVAL, None);
 		})
-		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 			assert_event_sequence!(
@@ -230,7 +230,7 @@ fn dca_with_fok_full_refund() {
 				}),
 			);
 		})
-		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
 				Test,
@@ -252,7 +252,7 @@ fn dca_with_fok_full_refund() {
 				}
 			);
 		})
-		.then_execute_at_block(REFUND_BLOCK, |_| {})
+		.then_process_blocks_until_block(REFUND_BLOCK)
 		.then_execute_with(|_| {
 			// Swap should fail after the first retry and result in a
 			// refund of the full input amount (rather than that of a chunk)
@@ -301,7 +301,7 @@ fn dca_with_fok_partial_refund() {
 				}),
 			);
 		})
-		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
 			assert_chunk_1_executed(NUMBER_OF_CHUNKS);
 		})
@@ -330,7 +330,7 @@ fn dca_with_fok_partial_refund() {
 				}
 			);
 		})
-		.then_execute_at_block(CHUNK_2_RESCHEDULED_AT_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_2_RESCHEDULED_AT_BLOCK)
 		.then_execute_with(|_| {
 			// The swap will fail again, but this time it will reach expiry,
 			// resulting in a refund of the remaining amount and egress of the
@@ -445,7 +445,7 @@ fn dca_with_fok_fully_executed() {
 				}
 			);
 		})
-		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_2_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
@@ -542,7 +542,7 @@ fn can_handle_dca_chunk_size_of_zero() {
 				}
 			);
 		})
-		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
 				Test,
@@ -579,8 +579,8 @@ fn can_handle_dca_chunk_size_of_zero() {
 				}
 			);
 		})
-		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
-		.then_execute_at_block(CHUNK_3_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_2_BLOCK)
+		.then_process_blocks_until_block(CHUNK_3_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 			assert_has_matching_event!(
@@ -728,11 +728,11 @@ mod ccm_tests {
 			.execute_with(|| {
 				setup_ccm_dca_swap(2, CHUNK_INTERVAL, None);
 			})
-			.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
 				assert_first_ccm_chunk_successful();
 			})
-			.then_execute_at_block(GAS_BLOCK, |_| {})
+			.then_process_blocks_until_block(GAS_BLOCK)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -762,7 +762,7 @@ mod ccm_tests {
 					GasSwapState::OutputReady { gas_budget: GAS_BUDGET * DEFAULT_SWAP_RATE }
 				);
 			})
-			.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
+			.then_process_blocks_until_block(CHUNK_2_BLOCK)
 			.then_execute_with(|_| {
 				assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
@@ -805,7 +805,7 @@ mod ccm_tests {
 					}),
 				);
 			})
-			.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
 				assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
@@ -844,11 +844,11 @@ mod ccm_tests {
 					}),
 				);
 			})
-			.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
 				assert_first_ccm_chunk_successful();
 			})
-			.then_execute_at_block(GAS_BLOCK, |_| {})
+			.then_process_blocks_until_block(GAS_BLOCK)
 			.then_execute_with(|_| {
 				assert_event_sequence!(
 					Test,
@@ -920,7 +920,7 @@ mod ccm_tests {
 					}
 				);
 			})
-			.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
 				assert_event_sequence!(
 					Test,

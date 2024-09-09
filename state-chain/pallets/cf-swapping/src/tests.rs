@@ -404,8 +404,7 @@ fn expect_swap_id_to_be_emitted() {
 
 			// 2. Schedule the swap -> SwapScheduled
 			swap_with_custom_broker_fee(Asset::Eth, Asset::Usdc, AMOUNT, bounded_vec![]);
-		})
-		.execute_with(|| {
+
 			// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
 			assert_event_sequence!(
 				Test,
@@ -426,7 +425,7 @@ fn expect_swap_id_to_be_emitted() {
 				})
 			);
 		})
-		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
+		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
@@ -675,7 +674,7 @@ fn swap_by_deposit_happy_path() {
 				execute_at: SWAP_BLOCK,
 			}));
 		})
-		.then_execute_at_block(SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(SWAP_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 			// Confiscated fund is unchanged
@@ -704,10 +703,8 @@ fn process_all_into_stable_swaps_first() {
 					));
 				});
 
-			let execute_at = System::block_number() + u64::from(SWAP_DELAY_BLOCKS);
-
 			assert_eq!(
-				SwapQueue::<Test>::get(execute_at),
+				SwapQueue::<Test>::get(SWAP_EXECUTION_BLOCK),
 				vec![
 					Swap::new(1, 1, Asset::Flip, Asset::Eth, AMOUNT, None, [FeeType::NetworkFee]),
 					Swap::new(2, 2, Asset::Btc, Asset::Eth, AMOUNT, None, [FeeType::NetworkFee]),
@@ -716,7 +713,7 @@ fn process_all_into_stable_swaps_first() {
 				]
 			);
 		})
-		.then_execute_at_block(SWAP_EXECUTION_BLOCK, |_| {})
+		.then_process_blocks_until_block(SWAP_EXECUTION_BLOCK)
 		.then_execute_with(|_| {
 			assert_swaps_queue_is_empty();
 
@@ -812,7 +809,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 			SwapRate::set(0.0001f64);
 			System::reset_events();
 		})
-		.then_execute_at_block(PRINCIPAL_SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
 		.then_execute_with(|_| {
 			// Swap outputs are zero
 			assert_event_sequence!(
@@ -830,7 +827,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				}),
 			);
 		})
-		.then_execute_at_block(GAS_SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(GAS_SWAP_BLOCK)
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
@@ -865,7 +862,7 @@ fn can_handle_swaps_with_zero_outputs() {
 			// Change the swap rate so swap output will be 0
 			SwapRate::set(0.01f64);
 		})
-		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
+		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
 		.then_execute_with(|_| {
 			// Swap outputs are zero
 			assert_event_sequence!(
@@ -1221,7 +1218,7 @@ fn swaps_get_retried_after_failure() {
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 4 }),
 			);
 		})
-		.then_execute_at_block(RETRY_AT_BLOCK, |_| {})
+		.then_process_blocks_until_block(RETRY_AT_BLOCK)
 		.then_execute_with(|_| {
 			// Re-trying failed swaps originally scheduled for block 3 (which should
 			// now be successful):

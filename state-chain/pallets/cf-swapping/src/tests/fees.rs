@@ -216,7 +216,7 @@ fn network_fee_swap_gets_burnt() {
 			}));
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapScheduled { .. }),);
 		})
-		.then_execute_at_block(SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(SWAP_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(FlipToBurn::<Test>::get(), AMOUNT * DEFAULT_SWAP_RATE);
 			assert_swaps_queue_is_empty();
@@ -268,7 +268,7 @@ fn transaction_fees_are_collected() {
 				0
 			);
 		})
-		.then_execute_at_block(SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(SWAP_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(
 				MockIngressEgressFeeHandler::<Ethereum>::withheld_assets(
@@ -314,7 +314,7 @@ fn swap_broker_fee_calculated_correctly() {
 				}
 			});
 		})
-		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
+		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
 		.then_execute_with(|_| {
 			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), total_fees);
 		});
@@ -432,7 +432,7 @@ fn expect_earned_fees_to_be_recorded() {
 				bounded_vec![Beneficiary { account: ALICE, bps: ALICE_FEE_BPS }],
 			);
 		})
-		.then_execute_at_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64, |_| {})
+		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
 		.then_execute_with(|_| {
 			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 				swap_request_id: 1,
@@ -456,7 +456,7 @@ fn expect_earned_fees_to_be_recorded() {
 				bounded_vec![Beneficiary { account: ALICE, bps: ALICE_FEE_BPS }],
 			);
 		})
-		.then_execute_at_block(5u32, |_| {})
+		.then_process_blocks_until_block(5u32)
 		.then_execute_with(|_| {
 			const AMOUNT_AFTER_FEES: AssetAmount = INPUT_AMOUNT - NETWORK_FEE_2 - ALICE_FEE_2;
 			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
@@ -484,7 +484,7 @@ fn expect_earned_fees_to_be_recorded() {
 				],
 			);
 		})
-		.then_execute_at_block(7u32, |_| {})
+		.then_process_blocks_until_block(7u32)
 		.then_execute_with(|_| {
 			const TOTAL_BROKER_FEES: AssetAmount = ALICE_FEE_3 + BOB_FEE_1;
 			const INTERMEDIATE_AMOUNT_AFTER_FEES: AssetAmount =

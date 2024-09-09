@@ -121,7 +121,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 				),]
 			);
 		})
-		.then_execute_at_block(PRINCIPAL_SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
 		.then_execute_with(|_| {
 			// Gas swap should only be scheduled after principal is executed
 			assert_eq!(
@@ -142,7 +142,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			);
 		})
-		.then_execute_at_block(GAS_SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(GAS_SWAP_BLOCK)
 		.then_execute_with(|_| {
 			// CCM is scheduled for egress
 			assert_ccm_egressed(
@@ -217,7 +217,7 @@ fn ccm_principal_swap_only() {
 				),]
 			);
 		})
-		.then_execute_at_block(PRINCIPAL_SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
 				Test,
@@ -272,7 +272,7 @@ fn ccm_gas_swap_only() {
 				),]
 			);
 		})
-		.then_execute_at_block(GAS_SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(GAS_SWAP_BLOCK)
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
 				Test,
@@ -339,7 +339,7 @@ fn can_process_ccms_via_extrinsic() {
 				),]
 			);
 		})
-		.then_execute_at_block(PRINCIPAL_SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(
 				SwapQueue::<Test>::get(GAS_SWAP_BLOCK),
@@ -354,7 +354,7 @@ fn can_process_ccms_via_extrinsic() {
 				),]
 			);
 		})
-		.then_execute_at_block(GAS_SWAP_BLOCK, |_| {})
+		.then_process_blocks_until_block(GAS_SWAP_BLOCK)
 		.then_execute_with(|_| {
 			assert_ccm_egressed(
 				OUTPUT_ASSET,
