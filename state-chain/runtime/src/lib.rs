@@ -51,7 +51,6 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
-use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
@@ -1199,7 +1198,7 @@ type AllMigrations = (
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
-	MigrationsForV1_6,
+	MigrationsForV1_7,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1241,16 +1240,8 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-type MigrationsForV1_6 = (
-	VersionedMigration<
-		pallet_cf_environment::Pallet<Runtime>,
-		migrations::solana_integration::SolanaIntegration,
-		11,
-		12,
-	>,
-	migrations::housekeeping::Migration,
-	migrations::reap_old_accounts::Migration,
-);
+type MigrationsForV1_7 =
+	(migrations::housekeeping::Migration, migrations::reap_old_accounts::Migration);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
