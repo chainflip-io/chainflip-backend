@@ -1,21 +1,15 @@
 import assert from 'assert';
-import { ApiPromise } from '@polkadot/api';
-import { Keyring } from '../polkadot/keyring';
-import { handleSubstrateError, lpMutex } from '../shared/utils';
+import { createLpKeypair, handleSubstrateError, lpMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { limitOrder } from './limit_order';
 import { rangeOrder } from './range_order';
 import { depositLiquidity } from './deposit_liquidity';
 import { deposits } from './setup_swaps';
 
-const LP: string = '//LP_3';
+const DEFAULT_LP: string = '//LP_3';
 
-async function countOpenOrders(
-  baseAsset: string,
-  quoteAsset: string,
-  lp: string,
-  chainflip: ApiPromise,
-) {
+async function countOpenOrders(baseAsset: string, quoteAsset: string, lp: string) {
+  await using chainflip = await getChainflipApi();
   const orders = await chainflip.rpc('cf_pool_orders', baseAsset, quoteAsset, lp);
   if (!orders) {
     throw Error('Rpc cf_pool_orders returned undefined');
@@ -26,7 +20,7 @@ async function countOpenOrders(
   openOrders += orders?.limit_orders.asks.length || 0;
   // @ts-expect-error limit_orders does not exist on type AnyJson
   openOrders += orders?.limit_orders.bids.length || 0;
-  // @ts-expect-error limit_orders does not exist on type AnyJson
+  // @ts-expect-error range_orders does not exist on type AnyJson
   openOrders += orders?.range_orders.length || 0;
 
   return openOrders;
@@ -36,23 +30,21 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number)
   console.log(`=== cancel_orders_batch test ===`);
   await using chainflip = await getChainflipApi();
 
-  const keyring = new Keyring({ type: 'sr25519' });
-  keyring.setSS58Format(2112);
-  const lpUri = process.env.LP_URI || LP;
-  const lp = keyring.createFromUri(lpUri);
+  const lpUri = process.env.LP_URI || DEFAULT_LP;
+  const lp = createLpKeypair(lpUri);
 
   await Promise.all([
     // provide liquidity to LP_3
-    depositLiquidity('Usdc', 10000, false, LP),
-    depositLiquidity('Eth', deposits.get('Eth')!, false, LP),
-    depositLiquidity('Dot', deposits.get('Dot')!, false, LP),
-    depositLiquidity('Btc', deposits.get('Btc')!, false, LP),
-    depositLiquidity('Flip', deposits.get('Flip')!, false, LP),
-    depositLiquidity('Usdt', deposits.get('Usdt')!, false, LP),
-    depositLiquidity('ArbEth', deposits.get('ArbEth')!, false, LP),
-    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, LP),
-    depositLiquidity('Sol', deposits.get('Sol')!, false, LP),
-    depositLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, LP),
+    depositLiquidity('Usdc', 10000, false, lpUri),
+    depositLiquidity('Eth', deposits.get('Eth')!, false, lpUri),
+    depositLiquidity('Dot', deposits.get('Dot')!, false, lpUri),
+    depositLiquidity('Btc', deposits.get('Btc')!, false, lpUri),
+    depositLiquidity('Flip', deposits.get('Flip')!, false, lpUri),
+    depositLiquidity('Usdt', deposits.get('Usdt')!, false, lpUri),
+    depositLiquidity('ArbEth', deposits.get('ArbEth')!, false, lpUri),
+    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, lpUri),
+    depositLiquidity('Sol', deposits.get('Sol')!, false, lpUri),
+    depositLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
   ]);
 
   // create a series of limit_order and save their info to delete them later on
@@ -61,24 +53,21 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number)
     Limit?: { base_asset: string; quote_asset: string; side: string; id: number };
     Range?: { base_asset: string; quote_asset: string; id: number };
   }[] = [];
-  let i = 0;
-  while (i < numberOfLimitOrders) {
-    promises.push(limitOrder('Btc', 0.00000001, i, i, LP));
+
+  for (let i = 0; i < numberOfLimitOrders; i++) {
+    promises.push(limitOrder('Btc', 0.00000001, i, i, lpUri));
     orderToDelete.push({ Limit: { base_asset: 'BTC', quote_asset: 'USDC', side: 'sell', id: i } });
-    i++;
   }
-  i = 0;
-  while (i < numberOfLimitOrders) {
-    promises.push(limitOrder('Eth', 0.000000000000000001, i, i, LP));
+  for (let i = 0; i < numberOfLimitOrders; i++) {
+    promises.push(limitOrder('Eth', 0.000000000000000001, i, i, lpUri));
     orderToDelete.push({ Limit: { base_asset: 'ETH', quote_asset: 'USDC', side: 'sell', id: i } });
-    i++;
   }
 
-  promises.push(rangeOrder('Btc', 0.1, LP));
+  promises.push(rangeOrder('Btc', 0.1, lpUri));
   orderToDelete.push({
     Range: { base_asset: 'BTC', quote_asset: 'USDC', id: 0 },
   });
-  promises.push(rangeOrder('Eth', 0.01, LP));
+  promises.push(rangeOrder('Eth', 0.01, lpUri));
   orderToDelete.push({
     Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
   });
