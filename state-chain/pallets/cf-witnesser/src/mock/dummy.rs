@@ -62,7 +62,7 @@ pub mod pallet {
 			<Something<T>>::put(new_val);
 			// Emit an event.
 			Self::deposit_event(Event::ValueIncrementedTo(new_val));
-			// Return a successful DispatchResult
+
 			Ok(())
 		}
 
@@ -73,7 +73,6 @@ pub mod pallet {
 
 			<Something<T>>::put(value);
 
-			// Return a successful DispatchResult
 			Ok(())
 		}
 	}
