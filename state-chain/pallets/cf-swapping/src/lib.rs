@@ -615,11 +615,11 @@ pub mod pallet {
 			amount: AssetAmount,
 		},
 		CcmFailed {
+			swap_request_id: SwapRequestId,
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
-			swap_request_id: SwapRequestId,
 		},
 		MaximumSwapAmountSet {
 			asset: Asset,

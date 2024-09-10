@@ -2670,11 +2670,11 @@ fn failed_ccm_deposit_can_deposit_event() {
 		));
 
 		System::assert_has_event(RuntimeEvent::Swapping(crate::Event::<Test>::CcmFailed {
+			swap_request_id: 1,
 			reason: CcmFailReason::UnsupportedForTargetChain,
 			destination_address,
 			deposit_metadata: ccm.to_encoded::<MockAddressConverter>(),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
-			swap_request_id: 1,
 		}));
 	});
 }
