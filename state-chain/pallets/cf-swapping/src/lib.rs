@@ -619,6 +619,7 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
+			swap_request_id: SwapRequestId,
 		},
 		MaximumSwapAmountSet {
 			asset: Asset,
@@ -2216,6 +2217,7 @@ pub mod pallet {
 										.clone()
 										.to_encoded::<T::AddressConverter>(),
 									origin: origin.clone(),
+									swap_request_id: request_id,
 								});
 
 								Self::deposit_event(Event::<T>::SwapRequestCompleted {

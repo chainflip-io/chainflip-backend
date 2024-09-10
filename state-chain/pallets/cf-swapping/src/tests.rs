@@ -2674,6 +2674,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 			destination_address,
 			deposit_metadata: ccm.to_encoded::<MockAddressConverter>(),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
+			swap_request_id: 1,
 		}));
 	});
 }
