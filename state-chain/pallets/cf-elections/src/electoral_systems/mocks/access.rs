@@ -89,6 +89,12 @@ macro_rules! impl_read_access {
 			> {
 				self.with_election(|e| e.state.clone())
 			}
+
+			fn election_identifier(
+				&self,
+			) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError> {
+				Ok(self.identifier())
+			}
 		}
 
 		impl<ES: ElectoralSystem> $t {
