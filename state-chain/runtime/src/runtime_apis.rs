@@ -168,8 +168,23 @@ pub struct FailingWitnessValidators {
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
+// READ THIS BEFORE UPDATING THIS TRAIT:
+//
+// ## When changing an existing method:
+// 	- Bump the api_version of the trait, for example from #[api_version(2)] to #[api_version(3)].
+// 	- Annotate the old method with #[changed_in($VERSION)] where $VERSION is the *new* api_version,
+//    for example #[changed_in(3)].
+// 	- Handle the old method in the custom rpc implementation using runtime_api().api_version().
+//
+// ## When adding a new method:
+// 	- Bump the api_version of the trait, for example from #[api_version(2)] to #[api_version(3)].
+// 	- Create a dummy method with the same name, but no args and no return value.
+// 	- Annotate the dummy method with #[changed_in($VERSION)] where $VERSION is the *new*
+//    api_version.
+// 	- Handle the dummy method gracefully in the custom rpc implementation using
+//    runtime_api().api_version().
 decl_runtime_apis!(
-	/// Definition for all runtime API interfaces.
+	#[api_version(1)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -288,6 +303,7 @@ decl_runtime_apis!(
 );
 
 decl_runtime_apis!(
+	#[api_version(1)]
 	pub trait ElectoralRuntimeApi<Instance: 'static> {
 		/// Returns SCALE encoded `Option<ElectoralDataFor<state_chain_runtime::Runtime,
 		/// Instance>>`
