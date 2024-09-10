@@ -132,17 +132,14 @@ pub mod pallet {
 		/// - [InvalidCharactersInName](Error::InvalidCharactersInName)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_vanity_name())]
-		pub fn set_vanity_name(
-			origin: OriginFor<T>,
-			name: VanityName,
-		) -> DispatchResultWithPostInfo {
+		pub fn set_vanity_name(origin: OriginFor<T>, name: VanityName) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			ensure!(sp_std::str::from_utf8(&name).is_ok(), Error::<T>::InvalidCharactersInName);
 			VanityNames::<T>::mutate(|vanity_names| {
 				vanity_names.insert(account_id.clone(), name.clone());
 			});
 			Self::deposit_event(Event::VanityNameSet { account_id, name });
-			Ok(().into())
+			Ok(())
 		}
 	}
 }

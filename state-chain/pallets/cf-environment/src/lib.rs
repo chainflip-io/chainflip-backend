@@ -301,7 +301,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: PolkadotAccountId,
 			tx_id: TxId,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			use cf_traits::VaultKeyWitnessedHandler;
@@ -313,10 +313,7 @@ pub mod pallet {
 			});
 
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
-			let dispatch_result =
-				T::PolkadotVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)?;
-
-			Ok(dispatch_result)
+			T::PolkadotVaultKeyWitnessedHandler::on_first_key_activated(tx_id.block_number)
 		}
 
 		/// Manually witnesses the current Bitcoin block number to complete the pending vault
@@ -338,18 +335,17 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			block_number: cf_chains::btc::BlockNumber,
 			new_public_key: cf_chains::btc::AggKey,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			use cf_traits::VaultKeyWitnessedHandler;
 
 			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
-			let dispatch_result =
-				T::BitcoinVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+			T::BitcoinVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::BitcoinBlockNumberSetForVault { block_number });
 
-			Ok(dispatch_result)
+			Ok(())
 		}
 
 		/// Update the current safe mode status.
@@ -407,18 +403,17 @@ pub mod pallet {
 		pub fn witness_initialize_arbitrum_vault(
 			origin: OriginFor<T>,
 			block_number: u64,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			use cf_traits::VaultKeyWitnessedHandler;
 
 			// Witness the agg_key rotation manually in the vaults pallet for Arbitrum
-			let dispatch_result =
-				T::ArbitrumVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+			T::ArbitrumVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::ArbitrumInitialized);
 
-			Ok(dispatch_result)
+			Ok(())
 		}
 
 		#[pallet::call_index(6)]
@@ -428,18 +423,17 @@ pub mod pallet {
 		pub fn witness_initialize_solana_vault(
 			origin: OriginFor<T>,
 			block_number: u64,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			use cf_traits::VaultKeyWitnessedHandler;
 
 			// Witness the agg_key rotation manually in the vaults pallet for Solana
-			let dispatch_result =
-				T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+			T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::SolanaInitialized);
 
-			Ok(dispatch_result)
+			Ok(())
 		}
 
 		/// Allows Governance to recover a used Nonce.
@@ -461,7 +455,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			nonce_account: SolAddress,
 			durable_nonce: Option<SolHash>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			let new_hash =
@@ -492,7 +486,7 @@ pub mod pallet {
 				durable_nonce: new_hash,
 			});
 
-			Ok(().into())
+			Ok(())
 		}
 	}
 

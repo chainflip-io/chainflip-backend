@@ -7,7 +7,7 @@ pub use pallet::*;
 #[allow(dead_code)]
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
+	use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -48,7 +48,7 @@ pub mod pallet {
 		/// increments value, starting from 0
 		#[pallet::call_index(0)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().writes(1))]
-		pub fn increment_value(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn increment_value(origin: OriginFor<T>) -> DispatchResult {
 			let _who = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// Update storage.
@@ -62,19 +62,19 @@ pub mod pallet {
 			<Something<T>>::put(new_val);
 			// Emit an event.
 			Self::deposit_event(Event::ValueIncrementedTo(new_val));
-			// Return a successful DispatchResultWithPostInfo
-			Ok(().into())
+			// Return a successful DispatchResult
+			Ok(())
 		}
 
 		#[pallet::call_index(1)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().writes(1))]
-		pub fn put_value(origin: OriginFor<T>, value: u32) -> DispatchResultWithPostInfo {
+		pub fn put_value(origin: OriginFor<T>, value: u32) -> DispatchResult {
 			let _who = T::EnsureWitnessed::ensure_origin(origin)?;
 
 			<Something<T>>::put(value);
 
-			// Return a successful DispatchResultWithPostInfo
-			Ok(().into())
+			// Return a successful DispatchResult
+			Ok(())
 		}
 	}
 }

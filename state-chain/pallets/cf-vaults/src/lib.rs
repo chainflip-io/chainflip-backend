@@ -160,14 +160,14 @@ pub mod pallet {
 			new_public_key: AggKeyFor<T, I>,
 			block_number: ChainBlockNumberFor<T, I>,
 			_tx_id: TransactionInIdFor<T, I>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
 			Self::activate_new_key_for_chain(block_number);
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Sets the ChainInitialized flag to true for this chain so that the chain can be
@@ -184,14 +184,14 @@ pub mod pallet {
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
 		#[pallet::weight(Weight::zero())]
-		pub fn initialize_chain(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn initialize_chain(origin: OriginFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			ChainInitialized::<T, I>::put(true);
 
 			Self::deposit_event(Event::<T, I>::ChainInitialized);
 
-			Ok(().into())
+			Ok(())
 		}
 	}
 
@@ -235,9 +235,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, I> {
-	fn on_first_key_activated(
-		block_number: ChainBlockNumberFor<T, I>,
-	) -> DispatchResultWithPostInfo {
+	fn on_first_key_activated(block_number: ChainBlockNumberFor<T, I>) -> DispatchResult {
 		let rotation =
 			PendingVaultActivation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
@@ -249,7 +247,7 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 
 		Self::activate_new_key_for_chain(block_number);
 
-		Ok(().into())
+		Ok(())
 	}
 }
 
