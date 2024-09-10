@@ -251,6 +251,24 @@ macro_rules! generate_vote_storage_tuple_impls {
                     CompositeSharedData::A(A::benchmark_value())
                 }
             }
+            #[cfg(feature = "runtime-benchmarks")]
+            impl<$($t),*> BenchmarkValue for CompositeIndividualComponent<$($t),*>
+            where
+                A: BenchmarkValue,
+            {
+                fn benchmark_value() -> Self {
+                    CompositeIndividualComponent::A(A::benchmark_value())
+                }
+            }
+            #[cfg(feature = "runtime-benchmarks")]
+            impl<$($t),*> BenchmarkValue for CompositeVoteProperties<$($t),*>
+            where
+                A: BenchmarkValue,
+            {
+                fn benchmark_value() -> Self {
+                    CompositeVoteProperties::A(A::benchmark_value())
+                }
+            }
         }
     }
 }

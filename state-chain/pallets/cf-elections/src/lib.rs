@@ -132,6 +132,8 @@ pub use pallet::UniqueMonotonicIdentifier;
 pub mod pallet {
 	use super::*;
 
+	#[cfg(feature = "runtime-benchmarks")]
+	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_primitives::{AuthorityCount, EpochIndex};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
 
@@ -247,6 +249,13 @@ pub mod pallet {
 		}
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
+	impl BenchmarkValue for SharedDataHash {
+		fn benchmark_value() -> Self {
+			Self(Default::default())
+		}
+	}
+
 	// Private mod forces creation of error via the new function
 	mod corrupt_storage_error {
 		/// This error is used indicate that the pallet's Storage is corrupt. If it is returned by
@@ -289,6 +298,19 @@ pub mod pallet {
 		pub unsynchronised_state: ElectoralUnsynchronisedState,
 		pub unsynchronised_settings: ElectoralUnsynchronisedSettings,
 		pub settings: ElectoralSettings,
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	impl<A: BenchmarkValue, B: BenchmarkValue, C: BenchmarkValue> BenchmarkValue
+		for InitialState<A, B, C>
+	{
+		fn benchmark_value() -> Self {
+			InitialState::<A, B, C> {
+				unsynchronised_state: A::benchmark_value(),
+				unsynchronised_settings: B::benchmark_value(),
+				settings: C::benchmark_value(),
+			}
+		}
 	}
 
 	#[allow(type_alias_bounds)]
@@ -376,7 +398,7 @@ pub mod pallet {
 	/// invalidated. This should be set as low as possible, I'd suggest using 8 blocks, which
 	/// equates to 48 seconds.
 	#[pallet::storage]
-	type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
+	pub(crate) type SharedDataReferenceLifetime<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Stores the number of references to a shared vote. We also store the block number at which
@@ -386,7 +408,7 @@ pub mod pallet {
 	/// added the reference will be removed which will invalidate any votes that reference it,
 	/// forcing validators who referenced it to revote.
 	#[pallet::storage]
-	type SharedDataReferenceCount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub(crate) type SharedDataReferenceCount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Identity,
 		SharedDataHash,
@@ -423,7 +445,7 @@ pub mod pallet {
 	/// A mapping from election id and validator id to shared vote hash that uses bitmaps to
 	/// decrease space requirements assuming most validators submit the same hashes.
 	#[pallet::storage]
-	type BitmapComponents<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub(crate) type BitmapComponents<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -433,7 +455,7 @@ pub mod pallet {
 
 	/// A mapping from election id and validator id to individual vote components.
 	#[pallet::storage]
-	type IndividualComponents<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+	pub(crate) type IndividualComponents<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -445,13 +467,13 @@ pub mod pallet {
 
 	/// Stores the next valid election identifier.
 	#[pallet::storage]
-	type NextElectionIdentifier<T: Config<I>, I: 'static = ()> =
+	pub(crate) type NextElectionIdentifier<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, UniqueMonotonicIdentifier, ValueQuery>;
 
 	/// Stores governance-controlled settings regarding the electoral system. These settings can be
 	/// changed by governance at anytime.
 	#[pallet::storage]
-	type ElectoralUnsynchronisedSettings<T: Config<I>, I: 'static = ()> = StorageValue<
+	pub(crate) type ElectoralUnsynchronisedSettings<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
 		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
 		OptionQuery,
@@ -459,7 +481,7 @@ pub mod pallet {
 
 	/// Stores persistent state the electoral system needs.
 	#[pallet::storage]
-	type ElectoralUnsynchronisedState<T: Config<I>, I: 'static = ()> = StorageValue<
+	pub(crate) type ElectoralUnsynchronisedState<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
 		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 		OptionQuery,
@@ -478,7 +500,7 @@ pub mod pallet {
 	/// Stores governance-controlled settings regarding the elections. These settings can be changed
 	/// at anytime, but that change will only affect newly created elections.
 	#[pallet::storage]
-	type ElectoralSettings<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub(crate) type ElectoralSettings<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -556,7 +578,7 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	mod access_impls {
+	pub(crate) mod access_impls {
 		use super::*;
 
 		/// Implements traits to allow electoral systems to read/write an Election's details.
@@ -565,13 +587,13 @@ pub mod pallet {
 			_phantom: core::marker::PhantomData<(T, I)>,
 		}
 		impl<T: Config<I>, I: 'static> ElectionAccess<T, I> {
-			pub(super) fn new(
+			pub(crate) fn new(
 				election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
 			) -> Self {
 				Self { election_identifier, _phantom: Default::default() }
 			}
 
-			fn unique_monotonic_identifier(&self) -> UniqueMonotonicIdentifier {
+			pub(crate) fn unique_monotonic_identifier(&self) -> UniqueMonotonicIdentifier {
 				*self.election_identifier.unique_monotonic()
 			}
 		}
@@ -908,7 +930,7 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	mod bitmap_components {
+	pub(crate) mod bitmap_components {
 		use super::{
 			BitmapComponents, Config, CorruptStorageError, Pallet, UniqueMonotonicIdentifier,
 		};
@@ -926,7 +948,7 @@ pub mod pallet {
 
 		#[derive(Encode, Decode, TypeInfo)]
 		#[scale_info(skip_type_params(T, I))]
-		pub(super) struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
+		pub(crate) struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
 			epoch: EpochIndex,
 			#[allow(clippy::type_complexity)]
 			bitmaps: Vec<(BitmapComponentOf<T::ElectoralSystem>, BitVec<u8, bitvec::order::Lsb0>)>,
@@ -1058,7 +1080,7 @@ pub mod pallet {
 				Ok(r)
 			}
 
-			pub(super) fn with<R, F: for<'a> FnOnce(&'a Self) -> Result<R, CorruptStorageError>>(
+			pub(crate) fn with<R, F: for<'a> FnOnce(&'a Self) -> Result<R, CorruptStorageError>>(
 				current_epoch: EpochIndex,
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,
 				f: F,
@@ -1379,7 +1401,7 @@ pub mod pallet {
 		// ------------------------------------------------------------------------------------ //
 
 		#[pallet::call_index(16)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::initialize())]
 		pub fn initialize(
 			origin: OriginFor<T>,
 			initial_state: InitialStateOf<T, I>,
@@ -1390,7 +1412,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(17)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::update_settings())]
 		pub fn update_settings(
 			origin: OriginFor<T>,
 			unsynchronised_settings: Option<
@@ -1412,7 +1434,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(18)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::set_shared_data_reference_lifetime())]
 		pub fn set_shared_data_reference_lifetime(
 			origin: OriginFor<T>,
 			blocks: BlockNumberFor<T>,
@@ -1429,7 +1451,7 @@ pub mod pallet {
 		// but they should not be needed unless there is a bug.
 
 		#[pallet::call_index(32)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::clear_election_votes())]
 		pub fn clear_election_votes(
 			origin: OriginFor<T>,
 			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
@@ -1447,7 +1469,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(33)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::invalidate_election_consensus_cache())]
 		pub fn invalidate_election_consensus_cache(
 			origin: OriginFor<T>,
 			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
@@ -1467,7 +1489,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(34)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::pause_elections())]
 		pub fn pause_elections(origin: OriginFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			match Status::<T, I>::get() {
@@ -1483,7 +1505,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(35)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::unpause_elections())]
 		pub fn unpause_elections(
 			origin: OriginFor<T>,
 			require_votes_cleared: bool,
@@ -1513,7 +1535,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(36)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::clear_all_votes(*limit, *limit, *limit, *limit, *limit,))]
 		pub fn clear_all_votes(
 			origin: OriginFor<T>,
 			limit: u32,
@@ -1550,7 +1572,7 @@ pub mod pallet {
 
 		// TODO Write list of things to check before calling
 		#[pallet::call_index(37)]
-		#[pallet::weight(Weight::zero())] // TODO: Benchmarks
+		#[pallet::weight(T::WeightInfo::validate_storage())]
 		pub fn validate_storage(origin: OriginFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			match Status::<T, I>::get() {
