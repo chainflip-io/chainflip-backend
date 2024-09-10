@@ -122,17 +122,11 @@ pub use weights::WeightInfo;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
-use frame_support::dispatch::{DispatchResultWithPostInfo, PostDispatchInfo};
 pub use pallet::*;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
 pub use pallet::UniqueMonotonicIdentifier;
-
-/// This is used to calculate a static worst-case weight for the `clear_all_votes` extrinsic.
-/// Dynamic weights calculated with actual storage lengths will reduce this amount, but never
-/// increase it.
-const WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN: u32 = 100u32;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -1541,27 +1535,13 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(36)]
-		#[pallet::weight(T::WeightInfo::clear_all_votes(
-			WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN,
-			WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN,
-			WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN,
-			WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN,
-			WORST_CASE_CLEAR_ALL_VOTE_STORAGE_LEN
-		))]
+		#[pallet::weight(T::WeightInfo::clear_all_votes(*limit, *limit, *limit, *limit, *limit,))]
 		pub fn clear_all_votes(
 			origin: OriginFor<T>,
 			limit: u32,
 			ignore_corrupt_storage: CorruptStorageAdherance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			Self::ensure_governance(origin, ignore_corrupt_storage)?;
-
-			let weight = T::WeightInfo::clear_all_votes(
-				SharedDataReferenceCount::<T, I>::iter_keys().count() as u32,
-				SharedData::<T, I>::iter_keys().count() as u32,
-				BitmapComponents::<T, I>::iter_keys().count() as u32,
-				IndividualComponents::<T, I>::iter_keys().count() as u32,
-				ElectionConsensusHistoryUpToDate::<T, I>::iter_keys().count() as u32,
-			);
 
 			Self::deposit_event(
 				// Note: non-short circuiting `&` is to ensure as much data as possible is deleted
@@ -1587,7 +1567,7 @@ pub mod pallet {
 				},
 			);
 
-			Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No })
+			Ok(())
 		}
 
 		// TODO Write list of things to check before calling
