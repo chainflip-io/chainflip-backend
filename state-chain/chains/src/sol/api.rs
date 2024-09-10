@@ -5,7 +5,7 @@ use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use sol_prim::consts::SOL_USDC_DECIMAL;
 use sp_core::RuntimeDebug;
-use sp_std::{boxed::Box, vec, vec::Vec};
+use sp_std::{vec, vec::Vec};
 
 use crate::{
 	ccm_checker::{

@@ -12,6 +12,7 @@ mod authorities;
 mod funding;
 mod genesis;
 mod governance;
+mod migrations;
 mod new_epoch;
 mod solana;
 mod swapping;
