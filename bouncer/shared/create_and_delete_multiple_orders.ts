@@ -76,8 +76,8 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number)
   await Promise.all(promises);
   console.log('Orders successfully submitted');
 
-  let openOrders = await countOpenOrders('BTC', 'USDC', lp.address, chainflip);
-  openOrders += await countOpenOrders('ETH', 'USDC', lp.address, chainflip);
+  let openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
+  openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
   console.log(`Number of open orders: ${openOrders}`);
 
   console.log('Deleting opened orders...');
@@ -92,8 +92,8 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number)
   await orderDeleteEvent;
   console.log('All orders successfully deleted');
 
-  openOrders = await countOpenOrders('BTC', 'USDC', lp.address, chainflip);
-  openOrders += await countOpenOrders('ETH', 'USDC', lp.address, chainflip);
+  openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
+  openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
   console.log(`Number of open orders: ${openOrders}`);
 
   assert.strictEqual(openOrders, 0, 'Number of open orders should be 0');
