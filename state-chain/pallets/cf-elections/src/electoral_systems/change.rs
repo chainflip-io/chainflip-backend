@@ -132,24 +132,21 @@ impl<
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let votes_count = votes.len();
-		Ok(
-			if votes_count != 0 &&
-				votes_count >= success_threshold_from_share_count(authorities) as usize
-			{
-				let mut counts = BTreeMap::new();
-				for (_, vote) in votes {
-					counts.entry(vote).and_modify(|count| *count += 1).or_insert(1);
+		let success_threshold = success_threshold_from_share_count(authorities) as usize;
+		Ok(if votes_count != 0 && votes_count >= success_threshold {
+			let mut counts = BTreeMap::new();
+			for (_, vote) in votes {
+				counts.entry(vote).and_modify(|count| *count += 1).or_insert(1);
+			}
+			counts.iter().find_map(|(vote, count)| {
+				if *count >= success_threshold {
+					Some(vote.clone())
+				} else {
+					None
 				}
-				counts.iter().find_map(|(vote, count)| {
-					if *count >= success_threshold_from_share_count(authorities) {
-						Some(vote.clone())
-					} else {
-						None
-					}
-				})
-			} else {
-				None
-			},
-		)
+			})
+		} else {
+			None
+		})
 	}
 }

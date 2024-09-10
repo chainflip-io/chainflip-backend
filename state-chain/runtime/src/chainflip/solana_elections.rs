@@ -94,7 +94,7 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	SolanaEgressWitnessingHook,
 >;
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
 	pub tx_fee: u64,
 }
