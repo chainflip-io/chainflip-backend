@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.5] - 2024-09-10
+
+### Fixes
+
+- Correct consensus for egress witnessing (no unanimity required)
+
 ## [1.6.4] - 2024-09-06
 
 ### Fixes
