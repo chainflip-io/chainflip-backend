@@ -1205,6 +1205,8 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	MigrationsForV1_7,
+	migrations::housekeeping::Migration,
+	migrations::reap_old_accounts::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1247,8 +1249,6 @@ type PalletMigrations = (
 );
 
 type MigrationsForV1_7 = (
-	migrations::housekeeping::Migration,
-	migrations::reap_old_accounts::Migration,
 	// Only the Solana Transaction type has changed
 	VersionedMigration<
 		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
