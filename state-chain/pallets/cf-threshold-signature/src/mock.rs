@@ -16,6 +16,7 @@ use cf_traits::{
 	ThresholdSigner, VaultActivator,
 };
 use codec::{Decode, Encode};
+use frame_support::dispatch::DispatchResultWithPostInfo;
 pub use frame_support::{
 	derive_impl,
 	instances::Instance1,
@@ -124,10 +125,7 @@ impl MockCallback<MockEthereumChainCrypto> {
 impl UnfilteredDispatchable for MockCallback<MockEthereumChainCrypto> {
 	type RuntimeOrigin = RuntimeOrigin;
 
-	fn dispatch_bypass_filter(
-		self,
-		origin: Self::RuntimeOrigin,
-	) -> frame_support::dispatch::DispatchResultWithPostInfo {
+	fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> DispatchResultWithPostInfo {
 		EnsureThresholdSigned::<Test, Instance1>::ensure_origin(origin)?;
 		self.call();
 		Ok(().into())

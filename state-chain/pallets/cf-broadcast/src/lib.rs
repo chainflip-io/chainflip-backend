@@ -25,7 +25,6 @@ use cf_traits::{
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
 	sp_runtime::{
 		traits::{One, Saturating},
@@ -444,7 +443,7 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 			initiated_at: ChainBlockNumberFor<T, I>,
 			should_broadcast: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
 			let (signer, signature_result) =
@@ -501,7 +500,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
 			}
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Nodes have witnessed that a signature was accepted on the target chain.
@@ -562,11 +561,11 @@ pub mod pallet {
 		pub fn transaction_failed(
 			origin: OriginFor<T>,
 			broadcast_id: BroadcastId,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let reporter = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
 
 			Self::handle_broadcast_failure(broadcast_id, reporter.into())?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Re-sign and optionally re-send some broadcast requests.

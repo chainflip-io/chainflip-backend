@@ -26,7 +26,7 @@ use cfe_events::{KeyHandoverRequest, KeygenRequest, ThresholdSignatureRequest};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	instances::Instance1,
-	pallet_prelude::DispatchResultWithPostInfo,
+	pallet_prelude::DispatchResult,
 	traits::{Hooks, OnInitialize},
 };
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -1473,11 +1473,7 @@ fn keygen_report_failure() {
 fn test_key_ceremony_timeout_period<PendingSince, ReportFn>(report_fn: ReportFn)
 where
 	PendingSince: frame_support::StorageValue<BlockNumberFor<Test>, Query = BlockNumberFor<Test>>,
-	ReportFn: Fn(
-		RuntimeOrigin,
-		CeremonyId,
-		Result<MockAggKey, BTreeSet<u64>>,
-	) -> DispatchResultWithPostInfo,
+	ReportFn: Fn(RuntimeOrigin, CeremonyId, Result<MockAggKey, BTreeSet<u64>>) -> DispatchResult,
 {
 	let ceremony_id = current_ceremony_id();
 

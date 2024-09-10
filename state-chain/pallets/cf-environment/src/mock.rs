@@ -106,7 +106,7 @@ pub struct MockPolkadotVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
 	fn on_first_key_activated(
 		_block_number: <Polkadot as Chain>::ChainBlockNumber,
-	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+	) -> frame_support::pallet_prelude::DispatchResult {
 		unimplemented!()
 	}
 }
@@ -115,7 +115,7 @@ pub struct MockBitcoinVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 	fn on_first_key_activated(
 		_block_number: <Bitcoin as Chain>::ChainBlockNumber,
-	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+	) -> frame_support::pallet_prelude::DispatchResult {
 		unimplemented!()
 	}
 }
@@ -124,7 +124,7 @@ pub struct MockArbitrumVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Arbitrum> for MockArbitrumVaultKeyWitnessedHandler {
 	fn on_first_key_activated(
 		_block_number: <Arbitrum as Chain>::ChainBlockNumber,
-	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+	) -> frame_support::pallet_prelude::DispatchResult {
 		unimplemented!()
 	}
 }
@@ -133,7 +133,7 @@ pub struct MockSolanaVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Solana> for MockSolanaVaultKeyWitnessedHandler {
 	fn on_first_key_activated(
 		_block_number: <Solana as Chain>::ChainBlockNumber,
-	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+	) -> frame_support::pallet_prelude::DispatchResult {
 		unimplemented!()
 	}
 }
