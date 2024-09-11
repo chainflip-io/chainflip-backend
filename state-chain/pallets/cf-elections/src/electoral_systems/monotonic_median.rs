@@ -30,15 +30,18 @@ pub trait MedianChangeHook<Value> {
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-pub struct MonotonicMedian<Value, Settings, Hook> {
-	_phantom: core::marker::PhantomData<(Value, Settings, Hook)>,
+pub struct MonotonicMedian<Value, Settings, Hook, ValidatorId> {
+	_phantom: core::marker::PhantomData<(Value, Settings, Hook, ValidatorId)>,
 }
 impl<
 		Value: MaybeSerializeDeserialize + Member + Parameter + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: MedianChangeHook<Value> + 'static,
-	> ElectoralSystem for MonotonicMedian<Value, Settings, Hook>
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for MonotonicMedian<Value, Settings, Hook, ValidatorId>
 {
+
+	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = Value;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -98,7 +101,7 @@ impl<
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		mut votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
+		mut votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let votes_count = votes.len();
@@ -106,7 +109,7 @@ impl<
 		Ok(if votes_count != 0 && votes_count >= threshold {
 			// Calculating the median this way means atleast 2/3 of validators would be needed to
 			// increase the calculated median.
-			let (_, (_properties, median_vote), _) =
+			let (_, (_properties, median_vote, _validator_id), _) =
 				votes.select_nth_unstable(authorities as usize - threshold);
 			Some(median_vote.clone())
 		} else {

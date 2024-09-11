@@ -44,13 +44,14 @@ pub struct OpenChannelDetails<TargetChain: Chain> {
 	pub close_block: <TargetChain as Chain>::ChainBlockNumber,
 }
 
-pub struct DeltaBasedIngress<Sink: IngressSink, Settings> {
-	_phantom: core::marker::PhantomData<(Sink, Settings)>,
+pub struct DeltaBasedIngress<Sink: IngressSink, Settings, ValidatorId> {
+	_phantom: core::marker::PhantomData<(Sink, Settings, ValidatorId)>,
 }
 impl<
 		Sink: IngressSink + 'static,
 		Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
-	> DeltaBasedIngress<Sink, Settings>
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> DeltaBasedIngress<Sink, Settings, ValidatorId>
 where
 	<Sink::Chain as Chain>::DepositDetails: Default,
 {
@@ -101,10 +102,14 @@ where
 impl<
 		Sink: IngressSink + 'static,
 		Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
-	> ElectoralSystem for DeltaBasedIngress<Sink, Settings>
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for DeltaBasedIngress<Sink, Settings, ValidatorId>
 where
 	<Sink::Chain as Chain>::DepositDetails: Default,
 {
+
+	type ValidatorId = ValidatorId;
+
 	type ElectoralUnsynchronisedState = ();
 
 	// Stores the total ingressed amounts for all channels that have already been dispatched i.e. we
@@ -299,7 +304,7 @@ where
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
+		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let threshold = success_threshold_from_share_count(authorities) as usize;
@@ -308,7 +313,7 @@ where
 			let election_channels = election_access.properties()?;
 
 			let mut votes_grouped_by_channel = BTreeMap::<_, Vec<_>>::new();
-			for (account, channel_vote) in votes.into_iter().flat_map(|(_properties, vote)| vote) {
+			for (account, channel_vote) in votes.into_iter().flat_map(|(_properties, vote, _validator_id)| vote) {
 				votes_grouped_by_channel.entry(account).or_default().push(channel_vote);
 			}
 

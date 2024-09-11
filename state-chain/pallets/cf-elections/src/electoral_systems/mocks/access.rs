@@ -114,7 +114,7 @@ macro_rules! impl_read_access {
 			pub fn check_consensus(
 				&self,
 				previous_consensus: Option<&ES::Consensus>,
-				votes: Vec<(VotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote)>,
+				votes: Vec<(VotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote, ES::ValidatorId)>,
 				authorities: AuthorityCount,
 			) -> Result<Option<ES::Consensus>, CorruptStorageError> {
 				ES::check_consensus(self.identifier(), self, previous_consensus, votes, authorities)
