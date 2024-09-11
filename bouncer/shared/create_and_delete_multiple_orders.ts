@@ -26,11 +26,11 @@ async function countOpenOrders(baseAsset: string, quoteAsset: string, lp: string
   return openOrders;
 }
 
-export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number) {
+export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number, lpKey?: string) {
   console.log(`=== cancel_orders_batch test ===`);
   await using chainflip = await getChainflipApi();
 
-  const lpUri = process.env.LP_URI || DEFAULT_LP;
+  const lpUri = lpKey || DEFAULT_LP;
   const lp = createLpKeypair(lpUri);
 
   await Promise.all([
@@ -63,11 +63,11 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number)
     orderToDelete.push({ Limit: { base_asset: 'ETH', quote_asset: 'USDC', side: 'sell', id: i } });
   }
 
-  promises.push(rangeOrder('Btc', 0.1, lpUri));
+  promises.push(rangeOrder('Btc', 0.1, lpUri, 0));
   orderToDelete.push({
     Range: { base_asset: 'BTC', quote_asset: 'USDC', id: 0 },
   });
-  promises.push(rangeOrder('Eth', 0.01, lpUri));
+  promises.push(rangeOrder('Eth', 0.01, lpUri, 0));
   orderToDelete.push({
     Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
   });
