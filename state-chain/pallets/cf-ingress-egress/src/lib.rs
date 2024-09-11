@@ -640,6 +640,10 @@ pub mod pallet {
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
 		},
+		BoostedDepositLost {
+			prewitnessed_deposit_id: PrewitnessedDepositId,
+			amount: TargetChainAmount<T, I>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -1128,7 +1132,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 			}
 
-			if let BoostStatus::Boosted { prewitnessed_deposit_id, pools, .. } = boost_status {
+			if let BoostStatus::Boosted { prewitnessed_deposit_id, pools, amount } = boost_status {
 				for pool_tier in pools {
 					BoostPools::<T, I>::mutate(deposit_channel.asset, pool_tier, |pool| {
 						if let Some(pool) = pool {
@@ -1145,6 +1149,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						}
 					});
 				}
+				Self::deposit_event(Event::<T, I>::BoostedDepositLost {
+					prewitnessed_deposit_id,
+					amount,
+				})
 			}
 		}
 	}
