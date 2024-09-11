@@ -33,6 +33,7 @@ jobs:
         with:
           name: chainflip-backend-bin
           path: ${{ env.RELEASE_DIR }}.tar.gz
+          overwrite: true
 
   release:
     runs-on: namespace-profile-default

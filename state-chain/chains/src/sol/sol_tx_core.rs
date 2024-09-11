@@ -961,7 +961,6 @@ pub mod sol_test_values {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
 	use crate::{
 		sol::{
 			signing_key::SolSigningKey,
@@ -1632,5 +1631,254 @@ mod tests {
 				3, 1, 2, 3
 			]
 		);
+	}
+
+	// These tests can be used to manually serialize a transaction from a Solana Transaction in
+	// storage, for instance if a transaction has failed to be broadcasted. While this won't be
+	// necessary after PR#5229 it might be needed before that if we need to debug and/or manually
+	// broadcast a transaction. The serialized output (hex string) can be broadcasted via the Solana
+	// RPC call `sendTransaction` or the web3js `sendRawTransaction.
+	// The Transaction values to serialize are obtained from querying storage element
+	// solanaBroadcaster < pendingApiCalls. The signature of the transaction is what in storage is
+	// named `transactionOutId`, since in Solana the signature is the transaction identifier.
+	// The test parameters are from a localnet run where we get both the Transaction and the
+	// resulting serialized transaction so we can compare that this serialization matches the
+	// successful one.
+	#[ignore]
+	#[test]
+	fn test_encode_tx() {
+		let tx: Transaction = Transaction {
+			signatures: vec![
+				SolSignature(hex_literal::hex!(
+					"d1144b223b6b600de4b2d96bdceb03573a3e9781953e4c668c57e505f017859d96543243b4d904dc2f02f2f5ab5db7ba4551c7e015e64078add4674ac2e7460c"
+				)),
+			],
+			message: Message {
+				header: MessageHeader {
+					num_required_signatures: 1,
+					num_readonly_signed_accounts: 0,
+					num_readonly_unsigned_accounts: 8,
+				},
+				account_keys: vec![
+					Pubkey(hex_literal::hex!(
+						"2e8944a76efbece296221e736627f4528a947578263a1172a9786410702d2ef2"
+					)),
+					Pubkey(hex_literal::hex!(
+						"22020a74fd97df45db96d2bbf4e485ccbec56945155ff8f668856be26c9de4a9"
+					)),
+					Pubkey(hex_literal::hex!(
+						"79c03bceb9ddea819e956b2b332e87fbbf49fc8968df78488e88cfaa366f3036"
+					)),
+					Pubkey(hex_literal::hex!(
+						"8cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adb"
+					)),
+					Pubkey(hex_literal::hex!(
+						"8d9871ed5fb2ee05765af23b7cabcc0d6b08ed370bb9f616a0d4dea40a25f870"
+					)),
+					Pubkey(hex_literal::hex!(
+						"b5b9d633289c8fd72fb05f33349bf4cc44e82add5d865311ae346d7c9a67b7dd"
+					)),
+					Pubkey(hex_literal::hex!(
+						"f53a2f4350451db5595a75e231519bc2758798f72550e57487722e7cbe954dbc"
+					)),
+					Pubkey(hex_literal::hex!(
+						"0000000000000000000000000000000000000000000000000000000000000000"
+					)),
+					Pubkey(hex_literal::hex!(
+						"0306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a40000000"
+					)),
+					Pubkey(hex_literal::hex!(
+						"06a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000"
+					)),
+					Pubkey(hex_literal::hex!(
+						"06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9"
+					)),
+					Pubkey(hex_literal::hex!(
+						"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
+					)),
+					Pubkey(hex_literal::hex!(
+						"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
+					)),
+					Pubkey(hex_literal::hex!(
+						"a140fd3d05766f0087d57bf99df05731e894392ffcc8e8d7e960ba73c09824aa"
+					)),
+					Pubkey(hex_literal::hex!(
+						"a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00b"
+					)),
+				],
+				recent_blockhash: SolHash(hex_literal::hex!(
+					"f7f02ac4729abaa97c01aa6526ba909c3bcb16c7f47c7e13dfdc5a1b15f647b4"
+				))
+				.into(),
+				instructions: vec![
+					CompiledInstruction {
+						program_id_index: 7,
+						accounts: hex_literal::hex!("030900").to_vec(),
+						data: hex_literal::hex!("04000000").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 8,
+						accounts: vec![],
+						data: hex_literal::hex!("030a00000000000000").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 8,
+						accounts: vec![],
+						data: hex_literal::hex!("0233620100").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 12,
+						accounts: hex_literal::hex!("0e00040507").to_vec(),
+						data: hex_literal::hex!("8e24658f6c59298c080000000100000000000000ff").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 12,
+						accounts: hex_literal::hex!("0e000d01020b0a0607").to_vec(),
+						data: hex_literal::hex!("494710642cb0c646080000000200000000000000ff06").to_vec(),
+					},
+				],
+			},
+		};
+
+		let serialized_tx = tx.finalize_and_serialize().unwrap();
+		let expected_serialized_tx = hex_literal::hex!("01d1144b223b6b600de4b2d96bdceb03573a3e9781953e4c668c57e505f017859d96543243b4d904dc2f02f2f5ab5db7ba4551c7e015e64078add4674ac2e7460c0100080f2e8944a76efbece296221e736627f4528a947578263a1172a9786410702d2ef222020a74fd97df45db96d2bbf4e485ccbec56945155ff8f668856be26c9de4a979c03bceb9ddea819e956b2b332e87fbbf49fc8968df78488e88cfaa366f30368cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adb8d9871ed5fb2ee05765af23b7cabcc0d6b08ed370bb9f616a0d4dea40a25f870b5b9d633289c8fd72fb05f33349bf4cc44e82add5d865311ae346d7c9a67b7ddf53a2f4350451db5595a75e231519bc2758798f72550e57487722e7cbe954dbc00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8772b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca140fd3d05766f0087d57bf99df05731e894392ffcc8e8d7e960ba73c09824aaa1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bf7f02ac4729abaa97c01aa6526ba909c3bcb16c7f47c7e13dfdc5a1b15f647b40507030309000404000000080009030a0000000000000008000502336201000c050e00040507158e24658f6c59298c080000000100000000000000ff0c090e000d01020b0a060716494710642cb0c646080000000200000000000000ff06").to_vec();
+		assert_eq!(serialized_tx, expected_serialized_tx);
+	}
+
+	#[ignore]
+	#[test]
+	fn test_encode_tx_fetch() {
+		let tx: Transaction = Transaction {
+			signatures: vec![
+				SolSignature(hex_literal::hex!(
+					"94b38e57e31dc130acdec802f60b2095b72916a44834f8b0a40b7e4949661c9e4e05aa3fa5a3dc3e285c8d16c8eaab079d4477daa76e9e4a1915603eda58bc0c"
+				)),
+			],
+			message: Message {
+				header: MessageHeader {
+					num_required_signatures: 1,
+					num_readonly_signed_accounts: 0,
+					num_readonly_unsigned_accounts: 9,
+				},
+				account_keys: vec![
+					Pubkey(hex_literal::hex!(
+						"2e8944a76efbece296221e736627f4528a947578263a1172a9786410702d2ef2"
+					)),
+					Pubkey(hex_literal::hex!(
+						"114f68f4ee9add615457c9a7791269b4d4ab3168d43d5da0e018e2d547d8be92"
+					)),
+					Pubkey(hex_literal::hex!(
+						"287f3b39b93c6699d704cb3d3edcf633cb8068010c5e5f6e64583078f5cd370e"
+					)),
+					Pubkey(hex_literal::hex!(
+						"3e1cb8c1bfc20346cebcaa28a53b234acf92771f72151b2d6aaa1d765be4b93c"
+					)),
+					Pubkey(hex_literal::hex!(
+						"45f3121cddc0bab152917a22710c9fab5be66d121bf2474d4d484f0f2eed9780"
+					)),
+					Pubkey(hex_literal::hex!(
+						"4813c8373d2bfc1592855e2d93b70ecd407fe9338b11ff0bb10650716709f6a7"
+					)),
+					Pubkey(hex_literal::hex!(
+						"491102d3be1d348108b41a801904392e50cd5b443a0991f3c1db0427634627da"
+					)),
+					Pubkey(hex_literal::hex!(
+						"5d89a80ca1700def3a784b845b59f9c2a61bb07941ddcb4fd2d709c3243c1350"
+					)),
+					Pubkey(hex_literal::hex!(
+						"79c03bceb9ddea819e956b2b332e87fbbf49fc8968df78488e88cfaa366f3036"
+					)),
+					Pubkey(hex_literal::hex!(
+						"c9b5b17535d2dcb7a1a505fbadc9ea27cddada4b7c144e549cf880e8db046d77"
+					)),
+					Pubkey(hex_literal::hex!(
+						"ca586493b85289057a8661f9f2a81e546fcf8cc6f5c9df1f5441c822f6fabfc9"
+					)),
+					Pubkey(hex_literal::hex!(
+						"e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864"
+					)),
+					Pubkey(hex_literal::hex!(
+						"efe57cc00ff8edda422ba876d38f5905694bfbef1c35deaea90295968dc13339"
+					)),
+					Pubkey(hex_literal::hex!(
+						"0000000000000000000000000000000000000000000000000000000000000000"
+					)),
+					Pubkey(hex_literal::hex!(
+						"0306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a40000000"
+					)),
+					Pubkey(hex_literal::hex!(
+						"06a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea9400000"
+					)),
+					Pubkey(hex_literal::hex!(
+						"06ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a9"
+					)),
+					Pubkey(hex_literal::hex!(
+						"0fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee87"
+					)),
+					Pubkey(hex_literal::hex!(
+						"2b635a1da73cd5bf15a26f1170f49366f0f48d28b0a8b1cebc5f98c75e475e68"
+					)),
+					Pubkey(hex_literal::hex!(
+						"42be1bb8dfd763b0e83541c9767712ad0d89cecea13b46504370096a20c762fb"
+					)),
+					Pubkey(hex_literal::hex!(
+						"72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c"
+					)),
+					Pubkey(hex_literal::hex!(
+						"a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00b"
+					)),
+				],
+				recent_blockhash: SolHash(hex_literal::hex!(
+					"9a5e41fc2cbe01a629ce980d5c6aa9c0a8b7be9d83ac835586feba35181d4246"
+				))
+				.into(),
+				instructions: vec![
+					CompiledInstruction {
+						program_id_index: 13,
+						accounts: hex_literal::hex!("0b0f00").to_vec(),
+						data: hex_literal::hex!("04000000").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 14,
+						accounts: vec![],
+						data: hex_literal::hex!("030a00000000000000").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 14,
+						accounts: vec![],
+						data: hex_literal::hex!("02a7190300").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 20,
+						accounts: hex_literal::hex!("150012090811100a0d").to_vec(),
+						data: hex_literal::hex!("494710642cb0c646080000001e00000000000000fd06").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 20,
+						accounts: hex_literal::hex!("150003010d").to_vec(),
+						data: hex_literal::hex!("8e24658f6c59298c080000001400000000000000fd").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 20,
+						accounts: hex_literal::hex!("1500130c081110020d").to_vec(),
+						data: hex_literal::hex!("494710642cb0c646080000000e00000000000000ff06").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 20,
+						accounts: hex_literal::hex!("150004060d").to_vec(),
+						data: hex_literal::hex!("8e24658f6c59298c080000000f00000000000000fb").to_vec(),
+					},
+					CompiledInstruction {
+						program_id_index: 20,
+						accounts: hex_literal::hex!("150007050d").to_vec(),
+						data: hex_literal::hex!("8e24658f6c59298c080000000500000000000000fe").to_vec(),
+					},
+				],
+			},
+		};
+
+		let serialized_tx = tx.finalize_and_serialize().unwrap();
+		let expected_serialized_tx = hex_literal::hex!("0194b38e57e31dc130acdec802f60b2095b72916a44834f8b0a40b7e4949661c9e4e05aa3fa5a3dc3e285c8d16c8eaab079d4477daa76e9e4a1915603eda58bc0c010009162e8944a76efbece296221e736627f4528a947578263a1172a9786410702d2ef2114f68f4ee9add615457c9a7791269b4d4ab3168d43d5da0e018e2d547d8be92287f3b39b93c6699d704cb3d3edcf633cb8068010c5e5f6e64583078f5cd370e3e1cb8c1bfc20346cebcaa28a53b234acf92771f72151b2d6aaa1d765be4b93c45f3121cddc0bab152917a22710c9fab5be66d121bf2474d4d484f0f2eed97804813c8373d2bfc1592855e2d93b70ecd407fe9338b11ff0bb10650716709f6a7491102d3be1d348108b41a801904392e50cd5b443a0991f3c1db0427634627da5d89a80ca1700def3a784b845b59f9c2a61bb07941ddcb4fd2d709c3243c135079c03bceb9ddea819e956b2b332e87fbbf49fc8968df78488e88cfaa366f3036c9b5b17535d2dcb7a1a505fbadc9ea27cddada4b7c144e549cf880e8db046d77ca586493b85289057a8661f9f2a81e546fcf8cc6f5c9df1f5441c822f6fabfc9e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864efe57cc00ff8edda422ba876d38f5905694bfbef1c35deaea90295968dc1333900000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee872b635a1da73cd5bf15a26f1170f49366f0f48d28b0a8b1cebc5f98c75e475e6842be1bb8dfd763b0e83541c9767712ad0d89cecea13b46504370096a20c762fb72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00b9a5e41fc2cbe01a629ce980d5c6aa9c0a8b7be9d83ac835586feba35181d4246080d030b0f0004040000000e0009030a000000000000000e000502a71903001409150012090811100a0d16494710642cb0c646080000001e00000000000000fd061405150003010d158e24658f6c59298c080000001400000000000000fd14091500130c081110020d16494710642cb0c646080000000e00000000000000ff061405150004060d158e24658f6c59298c080000000f00000000000000fb1405150007050d158e24658f6c59298c080000000500000000000000fe").to_vec();
+		assert_eq!(serialized_tx, expected_serialized_tx);
 	}
 }

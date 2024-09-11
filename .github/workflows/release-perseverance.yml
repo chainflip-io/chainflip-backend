@@ -15,7 +15,7 @@ jobs:
     uses: ./.github/workflows/_05_force_version_bump.yml
     secrets: inherit
     with:
-      network-to-check-against: "mainnet"
+      network-to-check-against: "berghain"
   build:
     needs: [release-checks]
     uses: ./.github/workflows/_20_build.yml
@@ -61,7 +61,7 @@ jobs:
     uses: ./.github/workflows/_70_post_release.yml
     with:
       network: "perseverance"
-  upload-engine-shared-libs:
-    needs: [build, build-m2]
+  upload-versioned-build-artifacts:
+    needs: [build, build-m2, release]
     uses: ./.github/workflows/_61_upload_versioned_build_artifacts.yml
     secrets: inherit

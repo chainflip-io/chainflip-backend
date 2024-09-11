@@ -25,7 +25,6 @@ use cf_traits::{
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
 	sp_runtime::{
 		traits::{One, Saturating},
@@ -56,7 +55,7 @@ pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -421,16 +420,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// DEPRECATED. This call is no longer used.
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::transaction_failed())]
-		pub fn transaction_signing_failure(
-			_origin: OriginFor<T>,
-			_broadcast_attempt_id: (BroadcastId, AttemptCount),
-		) -> DispatchResultWithPostInfo {
-			Err(DispatchError::Other("Deprecated").into())
-		}
-
 		/// A callback to be used when a threshold signature request completes. Retrieves the
 		/// requested signature, uses the configured [TransactionBuilder] to build the transaction.
 		/// Initiates the broadcast sequence if `should_broadcast` is set to true, otherwise insert
@@ -454,7 +443,7 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 			initiated_at: ChainBlockNumberFor<T, I>,
 			should_broadcast: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
 			let (signer, signature_result) =
@@ -511,7 +500,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
 			}
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Nodes have witnessed that a signature was accepted on the target chain.
@@ -572,11 +561,11 @@ pub mod pallet {
 		pub fn transaction_failed(
 			origin: OriginFor<T>,
 			broadcast_id: BroadcastId,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let reporter = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
 
 			Self::handle_broadcast_failure(broadcast_id, reporter.into())?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Re-sign and optionally re-send some broadcast requests.

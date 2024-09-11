@@ -615,6 +615,7 @@ pub mod pallet {
 			amount: AssetAmount,
 		},
 		CcmFailed {
+			swap_request_id: SwapRequestId,
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadataEncoded,
@@ -2216,6 +2217,7 @@ pub mod pallet {
 										.clone()
 										.to_encoded::<T::AddressConverter>(),
 									origin: origin.clone(),
+									swap_request_id: request_id,
 								});
 
 								Self::deposit_event(Event::<T>::SwapRequestCompleted {

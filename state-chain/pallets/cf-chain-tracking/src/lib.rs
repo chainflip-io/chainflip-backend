@@ -12,7 +12,7 @@ pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState, FeeEstimationApi};
 use cf_traits::{AdjustedFeeEstimationApi, Chainflip, GetBlockHeight};
-use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
+use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::{FixedPointNumber, FixedU128};
@@ -130,7 +130,7 @@ pub mod pallet {
 		pub fn update_chain_state(
 			origin: OriginFor<T>,
 			new_chain_state: ChainState<T::TargetChain>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure!(
 				<T::TargetChain as Chain>::is_block_witness_root(new_chain_state.block_height),
@@ -160,9 +160,7 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn inner_update_chain_state(
-		new_chain_state: ChainState<T::TargetChain>,
-	) -> DispatchResultWithPostInfo {
+	pub fn inner_update_chain_state(new_chain_state: ChainState<T::TargetChain>) -> DispatchResult {
 		CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
 			ensure!(
 				new_chain_state.block_height >
@@ -176,7 +174,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::deposit_event(Event::<T, I>::ChainStateUpdated { new_chain_state });
 
-		Ok(().into())
+		Ok(())
 	}
 }
 

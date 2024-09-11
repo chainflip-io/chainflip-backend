@@ -8,7 +8,7 @@ use sol_prim::{AccountBump, SlotNumber};
 
 use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
-use frame_support::Parameter;
+use frame_support::{sp_runtime::RuntimeDebug, Parameter};
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::Member;
 
@@ -45,6 +45,12 @@ pub const CCM_BYTES_PER_ACCOUNT: usize = 33usize;
 pub const MAX_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 527usize; // 705 bytes left
 pub const MAX_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 740usize; // 492 bytes left
 
+// Use serialized transaction
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+pub struct SolanaTransactionData {
+	pub serialized_transaction: Vec<u8>,
+}
+
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
@@ -63,7 +69,7 @@ impl Chain for Solana {
 	type DepositFetchId = SolanaDepositFetchId;
 	type DepositChannelState = AccountBump;
 	type DepositDetails = ();
-	type Transaction = SolTransaction;
+	type Transaction = SolanaTransactionData;
 	type TransactionMetadata = ();
 	// There is no need for replay protection on Solana since it uses blockhashes.
 	type ReplayProtectionParams = ();
@@ -216,7 +222,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 	}
 }
 
-impl FeeRefundCalculator<Solana> for SolTransaction {
+impl FeeRefundCalculator<Solana> for SolanaTransactionData {
 	fn return_fee_refund(
 		&self,
 		fee_paid: <Solana as Chain>::TransactionFee,

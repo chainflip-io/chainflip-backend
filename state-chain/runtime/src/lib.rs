@@ -19,6 +19,7 @@ use crate::{
 		},
 		Offence,
 	},
+	migrations::serialize_solana_broadcast::{NoopUpgrade, SerializeSolanaBroadcastMigration},
 	monitoring_apis::{
 		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance, FlipSupply,
 		LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels, PendingBroadcasts,
@@ -68,6 +69,8 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
+
+use crate::chainflip::EvmLimit;
 
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
@@ -372,7 +375,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
 	type AssetWithholding = AssetBalances;
-	type FetchesTransfersLimitProvider = NoLimit;
+	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 }
@@ -447,7 +450,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type FeePayment = Flip;
 	type SwapRequestHandler = Swapping;
 	type AssetWithholding = AssetBalances;
-	type FetchesTransfersLimitProvider = NoLimit;
+	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 }
@@ -853,7 +856,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
+	type BroadcastTimeout = ConstU32<{ 5 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -879,7 +882,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
+	type BroadcastTimeout = ConstU32<{ 4 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -931,7 +934,7 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
+	type BroadcastTimeout = ConstU32<{ 2 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -964,7 +967,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, SolanaInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
+	type BroadcastTimeout = ConstU32<{ 4 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -1188,16 +1191,22 @@ pub type PalletExecutionOrder = (
 );
 
 /// Contains:
+/// - ClearEvents in CfeInterface migration. Don't remove this.
 /// - The VersionUpdate migration. Don't remove this.
 /// - Individual pallet migrations. Don't remove these unless there's a good reason. Prefer to
 ///   disable these at the pallet level (ie. set it to () or PhantomData).
 /// - Release-specific migrations: remove these if they are no longer needed.
 type AllMigrations = (
+	// This ClearEvents should only be run at the start of all migrations. This is in case another
+	// migration needs to trigger an event like a Broadcast for example.
+	pallet_cf_cfe_interface::migrations::ClearEvents<Runtime>,
 	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFES EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
-	MigrationsForV1_6,
+	MigrationsForV1_7,
+	migrations::housekeeping::Migration,
+	migrations::reap_old_accounts::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1239,15 +1248,18 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-type MigrationsForV1_6 = (
+type MigrationsForV1_7 = (
+	// Only the Solana Transaction type has changed
 	VersionedMigration<
-		pallet_cf_environment::Pallet<Runtime>,
-		migrations::solana_integration::SolanaIntegration,
-		11,
-		12,
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		SerializeSolanaBroadcastMigration,
+		6,
+		7,
 	>,
-	migrations::housekeeping::Migration,
-	migrations::reap_old_accounts::Migration,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 6, 7>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 6, 7>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 6, 7>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 6, 7>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]

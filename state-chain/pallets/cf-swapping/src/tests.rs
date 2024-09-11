@@ -1454,3 +1454,209 @@ fn register_and_deregister_account() {
 		.expect_err("ALICE should be deregistered.");
 	});
 }
+
+#[test]
+fn swap_output_amounts_correctly_account_for_fees() {
+	for (from, to) in
+		// non-stable to non-stable, non-stable to stable, stable to non-stable
+		[(Asset::Btc, Asset::Eth), (Asset::Btc, Asset::Usdc), (Asset::Usdc, Asset::Eth)]
+	{
+		new_test_ext().execute_with(|| {
+			const INPUT_AMOUNT: AssetAmount = 1000;
+
+			let network_fee = Permill::from_percent(1);
+			NetworkFee::set(network_fee);
+
+			let expected_output: AssetAmount = {
+				let usdc_amount = if from == Asset::Usdc {
+					INPUT_AMOUNT
+				} else {
+					INPUT_AMOUNT * DEFAULT_SWAP_RATE
+				};
+
+				let usdc_after_network_fees = usdc_amount - network_fee * usdc_amount;
+
+				if to == Asset::Usdc {
+					usdc_after_network_fees
+				} else {
+					usdc_after_network_fees * DEFAULT_SWAP_RATE
+				}
+			};
+
+			{
+				assert_ok!(Swapping::init_swap_request(
+					from,
+					INPUT_AMOUNT,
+					to,
+					SwapRequestType::Regular {
+						output_address: ForeignChainAddress::Eth(H160::zero())
+					},
+					Default::default(),
+					None,
+					None,
+					SwapOrigin::Vault { tx_hash: Default::default() }
+				));
+
+				Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
+
+				assert_eq!(
+					MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
+					vec![MockEgressParameter::Swap {
+						asset: to,
+						amount: expected_output,
+						fee: 0,
+						destination_address: ForeignChainAddress::Eth(H160::zero()),
+					},]
+				);
+			}
+		});
+	}
+}
+
+#[test]
+fn test_buy_back_flip() {
+	new_test_ext().execute_with(|| {
+		const INTERVAL: BlockNumberFor<Test> = 5;
+		const SWAP_AMOUNT: AssetAmount = 1000;
+		const NETWORK_FEE: Permill = Permill::from_percent(2);
+
+		NetworkFee::set(NETWORK_FEE);
+
+		// Get some network fees, just like we did a swap.
+		let FeeTaken { remaining_amount, fee: network_fee } =
+			Swapping::take_network_fee(SWAP_AMOUNT);
+
+		// Sanity check the network fee.
+		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
+		assert_eq!(network_fee, 20);
+		assert_eq!(remaining_amount + network_fee, SWAP_AMOUNT);
+
+		// The default buy interval is zero. Check that buy back is disabled & on_initialize does
+		// not panic.
+		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
+		Swapping::on_initialize(1);
+		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
+
+		// Set a non-zero buy interval
+		FlipBuyInterval::<Test>::set(INTERVAL);
+
+		// Nothing is bought if we're not at the interval.
+		Swapping::on_initialize(INTERVAL * 3 - 1);
+		assert_eq!(network_fee, CollectedNetworkFee::<Test>::get());
+
+		// If we're at an interval, we should buy flip.
+		Swapping::on_initialize(INTERVAL * 3);
+		assert_eq!(0, CollectedNetworkFee::<Test>::get());
+
+		// Note that the network fee will not be charged in this case:
+		assert_eq!(
+			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS))
+				.first()
+				.expect("Should have scheduled a swap usdc -> flip"),
+			&Swap::new(1, 1, STABLE_ASSET, Asset::Flip, network_fee, None, [],)
+		);
+	});
+}
+
+#[test]
+fn test_network_fee_calculation() {
+	new_test_ext().execute_with(|| {
+		// Show we can never overflow and panic
+		utilities::calculate_network_fee(Permill::from_percent(100), AssetAmount::MAX);
+		// 200 bps (2%) of 100 = 2
+		assert_eq!(utilities::calculate_network_fee(Permill::from_percent(2u32), 100), (98, 2));
+		// 2220 bps = 22 % of 199 = 43,78
+		assert_eq!(
+			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 199),
+			(155, 44)
+		);
+		// 2220 bps = 22 % of 234 = 51,26
+		assert_eq!(
+			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 233),
+			(181, 52)
+		);
+		// 10 bps = 0,1% of 3000 = 3
+		assert_eq!(
+			utilities::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
+			(2997, 3)
+		);
+	});
+}
+
+#[test]
+fn test_calculate_input_for_gas_output() {
+	use cf_chains::assets::eth::Asset as EthereumAsset;
+	const FLIP: EthereumAsset = EthereumAsset::Flip;
+
+	new_test_ext().execute_with(|| {
+		// If swap simulation fails -> no conversion.
+		MockSwappingApi::set_swaps_should_fail(true);
+		assert!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 1000).is_none());
+
+		// Set swap rate to 2 and turn swaps back on.
+		SwapRate::set(2_f64);
+		MockSwappingApi::set_swaps_should_fail(false);
+
+		// Desired output is zero -> trivially ok.
+		assert_eq!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 0), Some(0));
+
+		// Desired output requires 2 swap legs, each with a swap rate of 2. So output should be
+		// 1/4th of input.
+		assert_eq!(Swapping::calculate_input_for_gas_output::<Ethereum>(FLIP, 1000), Some(250));
+
+		// Desired output is gas asset, requires 1 swap leg. So output should be 1/2 of input.
+		assert_eq!(
+			Swapping::calculate_input_for_gas_output::<Ethereum>(EthereumAsset::Usdc, 1000),
+			Some(500)
+		);
+
+		// Input is gas asset -> trivially ok.
+		assert_eq!(
+			Swapping::calculate_input_for_gas_output::<Ethereum>(
+				cf_chains::assets::eth::GAS_ASSET,
+				1000
+			),
+			Some(1000)
+		);
+	});
+}
+
+#[test]
+fn test_fee_estimation_basis() {
+	for asset in Asset::all() {
+		if !asset.is_gas_asset() {
+			assert!(
+				utilities::fee_estimation_basis(asset).is_some(),
+	             "No fee estimation cap defined for {:?}. Add one to the fee_estimation_basis function definition.",
+	             asset,
+	         );
+		}
+	}
+}
+
+#[test]
+fn failed_ccm_deposit_can_deposit_event() {
+	new_test_ext().execute_with(|| {
+		let ccm = generate_ccm_deposit();
+
+		let destination_address = EncodedAddress::Dot(Default::default());
+
+		assert_ok!(Swapping::ccm_deposit(
+			RuntimeOrigin::root(),
+			Asset::Btc,
+			1_000_000,
+			Asset::Dot,
+			destination_address.clone(),
+			ccm.clone(),
+			Default::default(),
+		));
+
+		System::assert_has_event(RuntimeEvent::Swapping(crate::Event::<Test>::CcmFailed {
+			swap_request_id: 1,
+			reason: CcmFailReason::UnsupportedForTargetChain,
+			destination_address,
+			deposit_metadata: ccm.to_encoded::<MockAddressConverter>(),
+			origin: SwapOrigin::Vault { tx_hash: Default::default() },
+		}));
+	});
+}

@@ -138,8 +138,10 @@ impl<E> TransferFallback<Polkadot> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(_transfer_param: TransferAssetParams<Polkadot>) -> Result<Self, DispatchError> {
-		Err(DispatchError::Other("TransferFallback is not supported for the Polkadot chain."))
+	fn new_unsigned(
+		_transfer_param: TransferAssetParams<Polkadot>,
+	) -> Result<Self, TransferFallbackError> {
+		Err(TransferFallbackError::Unsupported)
 	}
 }
 

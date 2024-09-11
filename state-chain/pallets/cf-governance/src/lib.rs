@@ -7,9 +7,9 @@ pub mod migrations;
 use cf_traits::{AuthoritiesCfeVersions, CompatibleCfeVersions};
 use codec::{Codec, Decode, Encode};
 use frame_support::{
-	dispatch::GetDispatchInfo,
+	dispatch::{DispatchResult, DispatchResultWithPostInfo, GetDispatchInfo},
 	ensure,
-	pallet_prelude::{DispatchResultWithPostInfo, Weight},
+	pallet_prelude::Weight,
 	sp_runtime::{DispatchError, Percent, TransactionOutcome},
 	storage::with_transaction,
 	traits::{EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable, UnixTime},
@@ -272,7 +272,7 @@ pub mod pallet {
 		pub fn new_membership_set(
 			origin: OriginFor<T>,
 			new_members: BTreeSet<T::AccountId>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			Members::<T>::mutate(|old_members| {
 				for member in old_members.difference(&new_members) {
@@ -283,7 +283,7 @@ pub mod pallet {
 				}
 				*old_members = new_members;
 			});
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Performs a runtime upgrade of the Chainflip runtime

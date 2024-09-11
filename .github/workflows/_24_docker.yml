@@ -153,7 +153,7 @@ jobs:
         if: inputs.save_tags != ''
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
-          name: chainflip-backend-private-images
+          name: chainflip-backend-private-images-${{ matrix.target }}
           path: private
 
   public-images:
@@ -236,5 +236,21 @@ jobs:
         if: inputs.save_tags != ''
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
-          name: chainflip-backend-public-images
+          name: chainflip-backend-public-images-${{ matrix.target }}
           path: public
+
+  merge-artefacts:
+    needs: [private-images, public-images]
+    runs-on: ubuntu-latest
+    if: inputs.save_tags != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        artifact: [private, public]
+    steps:
+      - name: Merge artifacts 🧩
+        uses: actions/upload-artifact/merge@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        with:
+          name: chainflip-backend-${{ matrix.artifact }}-images
+          pattern: chainflip-backend-${{ matrix.artifact }}-images-*
+          delete-merged: true

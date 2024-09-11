@@ -863,7 +863,7 @@ impl<C: Chain + Get<ForeignChain>> EgressApi<C> for () {
 }
 
 pub trait VaultKeyWitnessedHandler<C: Chain> {
-	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
+	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResult;
 }
 
 pub trait BroadcastAnyChainGovKey {
