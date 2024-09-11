@@ -16,7 +16,7 @@ use utilities::make_periodic_tick;
 
 use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, settings::HttpBasicAuthEndpoint};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 
 // https://github.com/bitcoin/bitcoin/blob/fb7b5293844ea6adc5dcf5ad0a0c5890b4495939/src/rpc/protocol.h#L58
 const RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -27;
@@ -345,10 +345,6 @@ pub trait BtcRpcApi {
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash>;
 
 	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader>;
-
-	async fn get_raw_mempool(&self) -> anyhow::Result<Vec<Txid>>;
-
-	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> anyhow::Result<Vec<Transaction>>;
 }
 
 #[async_trait::async_trait]
@@ -462,36 +458,6 @@ impl BtcRpcApi for BtcRpcClient {
 			.next()
 			.ok_or_else(|| anyhow!("Response missing block header"))?)
 	}
-
-	async fn get_raw_mempool(&self) -> anyhow::Result<Vec<Txid>> {
-		Ok(self
-			.call_rpc("getrawmempool", ReqParams::Empty)
-			.await?
-			.into_iter()
-			.next()
-			.ok_or_else(|| anyhow!("Response missing raw mempool"))?)
-	}
-
-	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> anyhow::Result<Vec<Transaction>> {
-		let params = tx_hashes
-			.iter()
-			.map(|tx_hash| json!([json!(tx_hash), json!(false)]))
-			.collect::<Vec<serde_json::Value>>();
-
-		let hex_txs: Vec<String> =
-			self.call_rpc("getrawtransaction", ReqParams::Batch(params)).await?;
-
-		hex_txs
-			.into_iter()
-			.map(|hex| hex::decode(hex).context("Response not valid hex"))
-			.collect::<Result<Vec<Vec<u8>>>>()?
-			.into_iter()
-			.map(|bytes| {
-				bitcoin::consensus::encode::deserialize(&bytes)
-					.map_err(|_| anyhow!("Failed to deserialize transaction"))
-			})
-			.collect::<Result<_>>()
-	}
 }
 
 #[cfg(test)]
@@ -566,11 +532,6 @@ mod tests {
 		println!("verbose block: {v_block:?}");
 
 		println!("number of txs: {}", v_block.txdata.len());
-
-		let tx = &v_block.txdata[0];
-
-		let raw_transaction = client.get_raw_transactions(vec![tx.txid]).await.unwrap()[0].txid();
-		assert_eq!(raw_transaction, tx.txid);
 
 		// let average_block_fee_rate =
 		// client.average_block_fee_rate(best_block_hash).await.unwrap();
