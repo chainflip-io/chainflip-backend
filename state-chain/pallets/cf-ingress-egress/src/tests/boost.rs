@@ -721,6 +721,11 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 				.unwrap()
 				.get_pending_boost_ids()
 				.is_empty());
+
+			System::assert_last_event(RuntimeEvent::IngressEgress(Event::BoostedDepositLost {
+				prewitnessed_deposit_id: deposit_id,
+				amount: DEPOSIT_AMOUNT,
+			}));
 		}
 	});
 }
