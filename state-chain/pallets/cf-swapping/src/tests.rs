@@ -385,9 +385,7 @@ fn expect_swap_id_to_be_emitted() {
 	const AMOUNT: AssetAmount = 500;
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			// 1. Request a deposit address -> SwapDepositAddressReady
 			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 				RuntimeOrigin::signed(ALICE),
@@ -853,9 +851,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 #[test]
 fn can_handle_swaps_with_zero_outputs() {
 	new_test_ext()
-		.then_execute_with(|_| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			swap_with_custom_broker_fee(Asset::Usdc, Asset::Eth, 100, bounded_vec![]);
 			swap_with_custom_broker_fee(Asset::Usdc, Asset::Eth, 1, bounded_vec![]);
 
@@ -1069,9 +1065,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 	let later_swaps = swaps.split_off(2);
 
 	new_test_ext()
-		.execute_with(|| {
+		.then_execute_at_block(1_u64, |_| {
 			// Block 1, swaps should be scheduled at block 3
-			assert_eq!(System::block_number(), 1);
 			insert_swaps(&swaps);
 
 			assert_has_matching_event!(
@@ -1140,10 +1135,9 @@ fn swaps_get_retried_after_failure() {
 	const RETRY_AT_BLOCK: u64 = EXECUTE_AT_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 
 	new_test_ext()
-		.execute_with(|| {
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			assert_eq!(SwapRetryDelay::<Test>::get(), DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 			// Block 1, swaps should be scheduled at block 3
-			assert_eq!(System::block_number(), INIT_BLOCK);
 			insert_swaps(&swaps);
 
 			assert_has_matching_event!(

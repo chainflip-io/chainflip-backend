@@ -631,6 +631,9 @@ mod ccm_tests {
 		chunk_interval: u32,
 		refund_params: Option<TestRefundParams>,
 	) {
+		// Sanity check that the test started at the correct block
+		assert_eq!(System::block_number(), INIT_BLOCK);
+
 		insert_swaps(&[TestSwapParams::new(
 			Some(DcaParameters { number_of_chunks, chunk_interval }),
 			refund_params,

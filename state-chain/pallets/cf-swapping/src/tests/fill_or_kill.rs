@@ -31,9 +31,7 @@ fn both_fok_and_regular_swaps_succeed_first_try() {
 	const FOK_REQUEST_ID: u64 = 2;
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			const REFUND_PARAMS: TestRefundParams = TestRefundParams {
 				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 				min_output: (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE,
@@ -100,9 +98,7 @@ fn price_limit_is_respected_in_fok_swap() {
 	const FOK_SWAP_2_ID: u64 = 3;
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			insert_swaps(&vec![
 				fok_swap(None),
 				fok_swap(Some(TestRefundParams {
@@ -171,9 +167,7 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 		SWAPS_SCHEDULED_FOR_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			// Min output for swap 1 is too high to be executed:
 			const MIN_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE + 1;
 			insert_swaps(&[fok_swap(Some(TestRefundParams {
@@ -238,9 +232,7 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 	const REGULAR_SWAP_ID: u64 = 2;
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			// FoK swap 1 should fail and will eventually be refunded
 			insert_swaps(&[fok_swap(Some(TestRefundParams {
 				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
@@ -301,7 +293,7 @@ fn fok_test_zero_refund_duration() {
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	new_test_ext()
-		.execute_with(|| {
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			// A swap with 0 retry duration should be tried exactly 1 time
 			insert_swaps(&[fok_swap(Some(TestRefundParams {
 				retry_duration: 0,
@@ -337,9 +329,7 @@ fn fok_ccm_happy_path() {
 	const EXPECTED_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE;
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			insert_swaps(&[fok_swap_ccm(Some(TestRefundParams {
 				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 				min_output: EXPECTED_OUTPUT,
@@ -383,9 +373,7 @@ fn fok_ccm_refunded() {
 	const PRINCIPAL_AMOUNT: AssetAmount = INPUT_AMOUNT - GAS_BUDGET;
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			insert_swaps(&[fok_swap_ccm(Some(TestRefundParams {
 				retry_duration: 0,
 				min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
@@ -431,9 +419,7 @@ fn fok_ccm_refunded_no_gas_swap() {
 	const OUTPUT_ASSET: Asset = Asset::Usdc;
 
 	new_test_ext()
-		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
+		.then_execute_at_block(INIT_BLOCK, |_| {
 			let refund_params = TestRefundParams {
 				retry_duration: 0,
 				min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
