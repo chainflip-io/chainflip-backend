@@ -1,5 +1,6 @@
 use crate::{Environment, Runtime, SolanaBroadcaster, SolanaChainTracking, SolanaThresholdSigner};
 use cf_chains::{
+	benchmarking_value::BenchmarkValue,
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto},
 	Chain, FeeEstimationApi, Solana,
@@ -248,10 +249,27 @@ pub struct SolanaFeeUnsynchronisedSettings {
 	pub fee_multiplier: FixedU128,
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for SolanaFeeUnsynchronisedSettings {
+	fn benchmark_value() -> Self {
+		Self { fee_multiplier: 1u128.into() }
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct SolanaIngressSettings {
 	pub vault_program: SolAddress,
 	pub usdc_token_mint_pubkey: SolAddress,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for SolanaIngressSettings {
+	fn benchmark_value() -> Self {
+		Self {
+			vault_program: SolAddress([0xf0; 32]),
+			usdc_token_mint_pubkey: SolAddress([0xf1; 32]),
+		}
+	}
 }
 
 pub struct SolanaChainTrackingProvider;
