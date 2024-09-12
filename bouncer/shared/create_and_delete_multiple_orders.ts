@@ -81,7 +81,7 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number,
   console.log(`Number of open orders: ${openOrders}`);
 
   console.log('Deleting opened orders...');
-  const orderDeleteEvent = observeEvent('liquidityPools:LimitOrderUpdated', {
+  const orderDeleteEvent = observeEvent('liquidityPools:RangeOrderUpdated', {
     test: (event) => event.data.lp === lp.address && event.data.baseAsset === 'Btc',
   }).event;
   await lpMutex.runExclusive(async () => {
