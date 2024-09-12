@@ -233,7 +233,7 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 ///
 /// ```ignore
 /// register_checks! {
-///     #[ extra_constraints: ES: ElectoralSystem, ES::ElectionIdentifierExtra: Default ]#
+///     #[extra_constraints: ES: ElectoralSystem, ES::ElectionIdentifierExtra: Default]#
 ///     monotonically_increasing_state(pre_finalize, post_finalize) {
 ///         assert!(
 ///             post_finalize.unsynchronised_state().unwrap() >= pre_finalize.unsynchronised_state().unwrap(),
@@ -261,7 +261,7 @@ macro_rules! register_checks {
 	};
 	(
 		$(
-			#[ extra_constraints: $( $t:ty : $tc:path ),+ ]#
+			#[extra_constraints: $( $t:ty : $tc:path ),+]#
 		)?
 		$(
 			$check_name:ident($arg_1:ident, $arg_2:ident) $check_body:block
@@ -299,6 +299,16 @@ register_checks! {
 			pre_finalize.next_umi().next_identifier().unwrap(),
 			post_finalize.next_umi(),
 			"Expected the election id to be incremented.",
+		);
+	},
+	all_elections_deleted(pre_finalize, post_finalize) {
+		assert!(
+			!pre_finalize.election_identifiers().is_empty(),
+			"Expected elections before finalization. This check makes no sense otherwise.",
+		);
+		assert!(
+			post_finalize.election_identifiers().is_empty(),
+			"Expected no elections after finalization.",
 		);
 	},
 }

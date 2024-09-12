@@ -46,10 +46,10 @@ register_checks! {
 			assert!(post_finalize.unsynchronised_state().unwrap() >= pre_finalize.unsynchronised_state().unwrap(),
 				"Unsynchronised state can not decrease!");
 		},
-		hook_has_been_called(_pre, _post) {
+		hook_called(_pre, _post) {
 			assert!(MockHook::has_been_called(), "Hook should have been called!");
 		},
-		hook_not_been_called(_pre, _post) {
+		hook_not_called(_pre, _post) {
 			assert!(
 				!MockHook::has_been_called(),
 				"Hook should not have been called!"
@@ -78,7 +78,7 @@ fn check_consensus_correctly_calculates_median_when_exactly_super_majority_autho
 }
 
 #[test]
-fn to_few_votes_consensus_not_possible() {
+fn too_few_votes_consensus_not_possible() {
 	const AUTHORITY_COUNT: AuthorityCount = 10;
 	let vote_count = cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT) - 1;
 	let votes = (0..vote_count).map(|v| ((), v as u64)).collect::<Vec<_>>();
@@ -106,7 +106,7 @@ fn finalize_election_with_incremented_state() {
 		},
 		vec![
 			Check::monotonically_increasing_state(),
-			Check::<MonotonicMedianTest>::hook_has_been_called(),
+			Check::<MonotonicMedianTest>::hook_called(),
 			Check::new(move |pre, post| {
 				assert_eq!(pre.unsynchronised_state().unwrap(), initial_state);
 				assert_eq!(post.unsynchronised_state().unwrap(), new_unsynchronised_state);
@@ -145,7 +145,7 @@ fn finalize_election_state_can_not_decrease() {
 				vec![
 					Check::monotonically_increasing_state(),
 					// The hook should not be called if the state is not updated.
-					Check::<MonotonicMedianTest>::hook_not_been_called(),
+					Check::<MonotonicMedianTest>::hook_not_called(),
 					Check::new(|pre, post| {
 						assert_eq!(pre.unsynchronised_state().unwrap(), INTITIAL_STATE);
 						assert_eq!(post.unsynchronised_state().unwrap(), INTITIAL_STATE);

@@ -4,19 +4,19 @@ use crate::electoral_systems::change::*;
 use cf_primitives::AuthorityCount;
 
 thread_local! {
-	pub static HOOK_HAS_BEEN_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	pub static HOOK_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 pub struct MockHook;
 impl OnChangeHook<(), u64> for MockHook {
 	fn on_change(_id: (), _value: u64) {
-		HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.set(true));
+		HOOK_CALLED.with(|hook_called| hook_called.set(true));
 	}
 }
 
 impl MockHook {
 	pub fn called() -> bool {
-		HOOK_HAS_BEEN_CALLED.with(|hook_called| hook_called.get())
+		HOOK_CALLED.with(|hook_called| hook_called.get())
 	}
 }
 
@@ -25,10 +25,10 @@ type SimpleChange = Change<(), Vote, (), MockHook>;
 
 register_checks! {
 	SimpleChange {
-		hook_has_been_called(_pre, _post) {
+		hook_called(_pre, _post) {
 			assert!(MockHook::called(), "Hook should have been called!");
 		},
-		hook_not_been_called(_pre, _post) {
+		hook_not_called(_pre, _post) {
 			assert!(
 				!MockHook::called(),
 				"Hook should not have been called!"
@@ -100,7 +100,7 @@ fn finalization_only_on_consensus_change() {
 			|_| {
 				assert!(!MockHook::called());
 			},
-			vec![Check::<SimpleChange>::hook_not_been_called(), Check::assert_unchanged()],
+			vec![Check::<SimpleChange>::hook_not_called(), Check::assert_unchanged()],
 		)
 		.expect_consensus(
 			AUTHORITY_COUNT,
@@ -112,6 +112,6 @@ fn finalization_only_on_consensus_change() {
 			|_| {
 				assert!(!MockHook::called());
 			},
-			vec![Check::<SimpleChange>::hook_has_been_called()],
+			vec![Check::<SimpleChange>::hook_called(), Check::all_elections_deleted()],
 		);
 }
