@@ -1,4 +1,4 @@
-use super::{checks, mocks::*, register_checks};
+use super::{mocks::*, register_checks};
 use crate::electoral_systems::change::*;
 
 use cf_primitives::AuthorityCount;
@@ -100,10 +100,7 @@ fn finalization_only_on_consensus_change() {
 			|_| {
 				assert!(!MockHook::called());
 			},
-			checks! {
-				Check::<SimpleChange>::hook_not_been_called(),
-				Check::assert_unchanged(),
-			},
+			vec![Check::<SimpleChange>::hook_not_been_called(), Check::assert_unchanged()],
 		)
 		.expect_consensus(
 			AUTHORITY_COUNT,
@@ -115,8 +112,6 @@ fn finalization_only_on_consensus_change() {
 			|_| {
 				assert!(!MockHook::called());
 			},
-			checks! {
-				Check::<SimpleChange>::hook_has_been_called(),
-			},
+			vec![Check::<SimpleChange>::hook_has_been_called()],
 		);
 }

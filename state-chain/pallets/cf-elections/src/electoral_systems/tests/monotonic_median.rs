@@ -1,5 +1,4 @@
 use super::{
-	checks,
 	mocks::{Check, TestContext, TestSetup},
 	register_checks,
 };
@@ -105,7 +104,7 @@ fn finalize_election_with_incremented_state() {
 				"Hook should not have been called before finalization!"
 			);
 		},
-		checks! {
+		vec![
 			Check::monotonically_increasing_state(),
 			Check::<MonotonicMedianTest>::hook_has_been_called(),
 			Check::new(move |pre, post| {
@@ -114,7 +113,7 @@ fn finalize_election_with_incremented_state() {
 			}),
 			Check::last_election_deleted(),
 			Check::election_id_incremented(),
-		},
+		],
 	);
 }
 
@@ -143,7 +142,7 @@ fn finalize_election_state_can_not_decrease() {
 						"Hook should not have been called before finalization!"
 					);
 				},
-				checks! {
+				vec![
 					Check::monotonically_increasing_state(),
 					// The hook should not be called if the state is not updated.
 					Check::<MonotonicMedianTest>::hook_not_been_called(),
@@ -153,7 +152,7 @@ fn finalize_election_state_can_not_decrease() {
 					}),
 					Check::last_election_deleted(),
 					Check::election_id_incremented(),
-				},
+				],
 			);
 	}
 

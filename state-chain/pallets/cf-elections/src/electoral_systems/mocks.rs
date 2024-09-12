@@ -192,11 +192,14 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 		mut self,
 		on_finalize_context: &ES::OnFinalizeContext,
 		pre_finalize_checks: impl FnOnce(&MockAccess<ES>),
-		post_finalize_checks: impl IntoIterator<Item = Box<dyn ElectoralSystemCheck<ES>>>,
+		post_finalize_checks: impl IntoIterator<Item = Check<ES>>,
 	) -> Self {
 		let pre_finalize = self.electoral_access.clone();
+		// TODO: Move 'hook' static local checks into MockAccess so we can remove this.
 		pre_finalize_checks(&pre_finalize);
+
 		self.electoral_access.finalize_elections(on_finalize_context).unwrap();
+
 		let post_finalize = self.electoral_access.clone();
 		for check in post_finalize_checks {
 			check.check(&pre_finalize, &post_finalize);
@@ -316,38 +319,6 @@ register_checks! {
 			"Expected the election id to be incremented.",
 		);
 	},
-}
-
-#[macro_export]
-macro_rules! boxed_check {
-	($check:expr) => {
-		Box::new($check) as Box<dyn $crate::electoral_systems::mocks::ElectoralSystemCheck<_>>
-	};
-}
-
-/// Create a vector of dynamic checks. Useful for passing to the [`TestContext::test_on_finalize`]:
-///
-/// ```ignore
-/// test.test_on_finalize(
-///     &(),
-///     |_| {},
-///     checks! {
-///         Check::assert_unchanged(),
-///         Check::new(|pre, post| {
-///             todo!()
-///         }),
-///     },
-/// );
-/// ```
-#[macro_export]
-macro_rules! checks {
-	( $($check:expr),+ $(,)?) => {
-		vec! [
-			$(
-				$crate::boxed_check!($check),
-			)+
-		]
-	};
 }
 
 type CheckFn<ES> = Box<dyn Fn(&MockAccess<ES>, &MockAccess<ES>)>;

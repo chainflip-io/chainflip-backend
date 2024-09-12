@@ -1,6 +1,6 @@
 pub(crate) use super::mocks;
 
-pub(crate) use crate::{checks, register_checks};
+pub(crate) use crate::register_checks;
 
 pub mod change;
 pub mod monotonic_median;
