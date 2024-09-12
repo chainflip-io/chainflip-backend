@@ -3,7 +3,7 @@ import { depositLiquidity } from './deposit_liquidity';
 import { rangeOrder } from '../shared/range_order';
 import { Asset } from './utils';
 
-const deposits = new Map<Asset, number>([
+export const deposits = new Map<Asset, number>([
   ['Dot', 100000],
   ['Eth', 1000],
   ['ArbEth', 1000],
@@ -47,6 +47,7 @@ export async function setupSwaps(): Promise<void> {
   console.log('LP Pools created');
 
   await Promise.all([
+    // provide liquidity to LP_1
     depositLiquidity('Usdc', deposits.get('Usdc')!),
     depositLiquidity('Eth', deposits.get('Eth')!),
     depositLiquidity('Dot', deposits.get('Dot')!),

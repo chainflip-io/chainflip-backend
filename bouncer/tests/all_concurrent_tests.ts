@@ -12,6 +12,7 @@ import { testBoostingSwap } from '../shared/boost';
 import { observeBadEvent } from '../shared/utils/substrate';
 import { testFillOrKill } from '../shared/fill_or_kill';
 import { testDCASwaps } from '../shared/DCA_test';
+import { createAndDeleteMultipleOrders } from '../shared/create_and_delete_multiple_orders';
 
 const swapContext = new SwapContext();
 
@@ -41,6 +42,7 @@ async function runAllConcurrentTests() {
     testBoostingSwap(),
     testFillOrKill(),
     testDCASwaps(),
+    createAndDeleteMultipleOrders(30),
   ];
 
   // Tests that only work if there is more than one node
