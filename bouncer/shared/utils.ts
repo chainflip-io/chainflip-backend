@@ -1080,3 +1080,9 @@ export async function checkAvailabilityAllSolanaNonces() {
     }
   }
 }
+
+export function createLpKeypair(lpUri: string) {
+  const keyring = new Keyring({ type: 'sr25519' });
+  keyring.setSS58Format(2112);
+  return keyring.createFromUri(lpUri);
+}
