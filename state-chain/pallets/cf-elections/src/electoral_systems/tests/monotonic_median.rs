@@ -3,7 +3,10 @@ use super::{
 	mocks::{Check, TestContext, TestSetup},
 	register_checks,
 };
-use crate::{electoral_system::ElectoralReadAccess, electoral_systems::monotonic_median::*};
+use crate::{
+	electoral_system::{ConsensusStatus, ElectoralReadAccess},
+	electoral_systems::monotonic_median::*,
+};
 use cf_primitives::AuthorityCount;
 
 type MonotonicMedianTest = MonotonicMedian<u64, (), MockHook>;
@@ -90,7 +93,11 @@ fn finalize_election_with_incremented_state() {
 	let initial_state = test.access().unsynchronised_state().unwrap();
 	let new_unsynchronised_state = initial_state + 1;
 
-	test.force_consensus_update(Some(new_unsynchronised_state)).test_on_finalize(
+	test.force_consensus_update(ConsensusStatus::Gained {
+		most_recent: None,
+		new: new_unsynchronised_state,
+	})
+	.test_on_finalize(
 		&(),
 		|_| {
 			assert!(
@@ -127,7 +134,7 @@ fn finalize_election_state_can_not_decrease() {
 			.build()
 			// It's possible for authorities to come to consensus on a lower state,
 			// but this should not change the unsynchronised state.
-			.force_consensus_update(Some(new_state))
+			.force_consensus_update(ConsensusStatus::Gained { most_recent: None, new: new_state })
 			.test_on_finalize(
 				&(),
 				|_| {

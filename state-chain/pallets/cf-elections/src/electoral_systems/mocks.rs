@@ -42,7 +42,6 @@ where
 pub struct TestContext<ES: ElectoralSystem> {
 	setup: TestSetup<ES>,
 	electoral_access: MockAccess<ES>,
-	previous_consensus: Option<ES::Consensus>,
 }
 
 impl<ES: ElectoralSystem> TestSetup<ES>
@@ -100,7 +99,7 @@ where
 		assert_eq!(election.check_consensus(None, vec![], 0).unwrap(), None);
 		assert_eq!(election.check_consensus(None, vec![], 150).unwrap(), None);
 
-		TestContext { setup, electoral_access, previous_consensus: None }
+		TestContext { setup, electoral_access }
 	}
 }
 
@@ -125,16 +124,23 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 		// Expect only one election.
 		let current_election_id = self.only_election_id();
 
-		let consensus = self
+		let new_consensus = self
 			.electoral_access
 			.election(current_election_id)
 			.unwrap()
-			.check_consensus(self.previous_consensus.as_ref(), votes, authority_count)
+			.check_consensus(None, votes, authority_count)
 			.unwrap();
 
-		assert_eq!(consensus, expected_consensus);
+		assert_eq!(new_consensus, expected_consensus);
 
-		self.inner_force_consensus_update(current_election_id, consensus)
+		self.inner_force_consensus_update(
+			current_election_id,
+			if let Some(consensus) = new_consensus {
+				ConsensusStatus::Gained { most_recent: None, new: consensus }
+			} else {
+				ConsensusStatus::None
+			},
+		)
 	}
 
 	pub fn only_election_id(&self) -> ElectionIdentifierOf<ES> {
@@ -149,7 +155,7 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 	}
 
 	/// Update the current consensus without processing any votes.
-	pub fn force_consensus_update(self, new_consensus: Option<ES::Consensus>) -> Self {
+	pub fn force_consensus_update(self, new_consensus: ConsensusStatus<ES::Consensus>) -> Self {
 		let id = self.only_election_id();
 		self.inner_force_consensus_update(id, new_consensus)
 	}
@@ -162,21 +168,15 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 	fn inner_force_consensus_update(
 		self,
 		election_id: ElectionIdentifierOf<ES>,
-		new_consensus: Option<ES::Consensus>,
+		new_consensus: ConsensusStatus<ES::Consensus>,
 	) -> Self {
 		let mut electoral_access = self.electoral_access.clone();
-		electoral_access.election_mut(election_id).unwrap().set_consensus_status(
-			match (self.previous_consensus, new_consensus.clone()) {
-				(Some(previous), Some(new)) if previous != new =>
-					ConsensusStatus::Changed { previous, new },
-				(Some(_), Some(current)) => ConsensusStatus::Unchanged { current },
-				(None, Some(new)) => ConsensusStatus::Gained { most_recent: None, new },
-				(Some(previous), None) => ConsensusStatus::Lost { previous },
-				(None, None) => ConsensusStatus::None,
-			},
-		);
+		electoral_access
+			.election_mut(election_id)
+			.unwrap()
+			.set_consensus_status(new_consensus);
 
-		Self { previous_consensus: new_consensus, electoral_access, ..self }
+		Self { electoral_access, ..self }
 	}
 
 	/// Test the finalization of the election.

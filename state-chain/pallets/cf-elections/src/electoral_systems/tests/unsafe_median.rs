@@ -1,7 +1,10 @@
 use cf_primitives::AuthorityCount;
 
 use super::{checks, mocks::*, register_checks};
-use crate::{electoral_system::ElectoralReadAccess, electoral_systems::unsafe_median::*};
+use crate::{
+	electoral_system::{ConsensusStatus, ElectoralReadAccess},
+	electoral_systems::unsafe_median::*,
+};
 
 type SimpleUnsafeMedian = UnsafeMedian<u64, (), ()>;
 
@@ -45,7 +48,10 @@ register_checks! {
 #[test]
 fn if_consensus_update_unsynchronised_state() {
 	with_default_context()
-		.force_consensus_update(Some(NEW_UNSYNCHRONISED_STATE))
+		.force_consensus_update(ConsensusStatus::Gained {
+			most_recent: None,
+			new: NEW_UNSYNCHRONISED_STATE,
+		})
 		.test_on_finalize(
 			&(),
 			|_| {},
@@ -60,15 +66,8 @@ fn if_consensus_update_unsynchronised_state() {
 
 #[test]
 fn if_no_consensus_do_not_update_unsynchronised_state() {
-	with_default_context().force_consensus_update(None).test_on_finalize(
-		&(),
-		|_| {},
-		checks! {
-			Check::started_at_initial_state(),
-			Check::ended_at_initial_state(),
-			Check::assert_unchanged(),
-		},
-	);
+	with_default_context()
+		.force_consensus_update(ConsensusStatus::None)
 }
 
 #[test]
