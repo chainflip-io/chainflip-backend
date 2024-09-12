@@ -7,10 +7,9 @@ use cf_chains::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	AdjustedFeeEstimationApi, ElectionEgressWitnesser, GetBlockHeight, IngressSource,
+	AdjustedFeeEstimationApi, Chainflip, ElectionEgressWitnesser, GetBlockHeight, IngressSource,
 	SolanaNonceWatch,
 };
-use cf_traits::Chainflip;
 
 use codec::{Decode, Encode};
 use pallet_cf_elections::{
@@ -90,8 +89,13 @@ pub type SolanaIngressTracking =
 		<Runtime as Chainflip>::ValidatorId,
 	>;
 
-pub type SolanaNonceTracking =
-	electoral_systems::change::Change<SolAddress, SolHash, (), SolanaNonceTrackingHook, <Runtime as Chainflip>::ValidatorId,>;
+pub type SolanaNonceTracking = electoral_systems::change::Change<
+	SolAddress,
+	SolHash,
+	(),
+	SolanaNonceTrackingHook,
+	<Runtime as Chainflip>::ValidatorId,
+>;
 
 pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSuccess<
 	SolSignature,

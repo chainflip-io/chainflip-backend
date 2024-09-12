@@ -354,7 +354,10 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		type ElectoralSystem: ElectoralSystem<OnFinalizeContext = (), ValidatorId = <Self as Chainflip>::ValidatorId>;
+		type ElectoralSystem: ElectoralSystem<
+			OnFinalizeContext = (),
+			ValidatorId = <Self as Chainflip>::ValidatorId,
+		>;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;

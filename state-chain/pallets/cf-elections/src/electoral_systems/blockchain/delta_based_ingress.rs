@@ -107,7 +107,6 @@ impl<
 where
 	<Sink::Chain as Chain>::DepositDetails: Default,
 {
-
 	type ValidatorId = ValidatorId;
 
 	type ElectoralUnsynchronisedState = ();
@@ -313,7 +312,9 @@ where
 			let election_channels = election_access.properties()?;
 
 			let mut votes_grouped_by_channel = BTreeMap::<_, Vec<_>>::new();
-			for (account, channel_vote) in votes.into_iter().flat_map(|(_properties, vote, _validator_id)| vote) {
+			for (account, channel_vote) in
+				votes.into_iter().flat_map(|(_properties, vote, _validator_id)| vote)
+			{
 				votes_grouped_by_channel.entry(account).or_default().push(channel_vote);
 			}
 

@@ -1,10 +1,12 @@
+use frame_support::{
+	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	Parameter,
+};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::composite::{self, Composite},
 	vote_storage::{self, VoteStorage},
 };
-use frame_support::{pallet_prelude::Member, Parameter};
-use frame_support::pallet_prelude::MaybeSerializeDeserialize;
 
 #[async_trait::async_trait]
 pub trait VoterApi<E: ElectoralSystem> {

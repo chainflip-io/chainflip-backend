@@ -40,7 +40,6 @@ impl<
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> ElectoralSystem for MonotonicMedian<Value, Settings, Hook, ValidatorId>
 {
-
 	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = Value;
 	type ElectoralUnsynchronisedStateMapKey = ();
@@ -101,7 +100,11 @@ impl<
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		mut votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
+		mut votes: Vec<(
+			VotePropertiesOf<Self>,
+			<Self::Vote as VoteStorage>::Vote,
+			Self::ValidatorId,
+		)>,
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let votes_count = votes.len();

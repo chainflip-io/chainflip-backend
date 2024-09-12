@@ -3,14 +3,14 @@ use crate::{
 		AuthorityVoteOf, ConsensusStatus, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
 		ElectoralWriteAccess, VotePropertiesOf,
 	},
+	mock::Test,
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
 use cf_primitives::AuthorityCount;
+use cf_traits::Chainflip;
 use sp_std::vec::Vec;
 use std::{cell::RefCell, collections::BTreeMap};
-use crate::mock::Test;
-use cf_traits::Chainflip;
 
 thread_local! {
 	static VOTE_DESIRED: RefCell<bool> = RefCell::new(true);
