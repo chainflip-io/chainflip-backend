@@ -18,6 +18,7 @@ pub struct MockSwapRequest {
 	pub output_asset: Asset,
 	pub input_amount: AssetAmount,
 	pub swap_type: SwapRequestType,
+	pub origin: SwapOrigin,
 }
 
 impl<T> MockPallet for MockSwapRequestHandler<T> {
@@ -46,7 +47,7 @@ where
 		_broker_fees: Beneficiaries<Self::AccountId>,
 		_refund_params: Option<ChannelRefundParameters>,
 		_dca_params: Option<DcaParameters>,
-		_origin: SwapOrigin,
+		origin: SwapOrigin,
 	) -> Result<SwapRequestId, DispatchError> {
 		Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<Vec<MockSwapRequest>>| {
 			swaps.get_or_insert(vec![]).push(MockSwapRequest {
@@ -54,6 +55,7 @@ where
 				output_asset,
 				input_amount,
 				swap_type: swap_type.clone(),
+				origin,
 			});
 		});
 

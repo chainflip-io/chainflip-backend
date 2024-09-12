@@ -378,6 +378,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -403,6 +404,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -428,6 +430,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -453,6 +456,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -478,6 +482,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -1851,7 +1856,12 @@ impl_runtime_apis! {
 				match *event {
 					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
 						match call {
-							RuntimeCall::Swapping(pallet_cf_swapping::Call::schedule_swap_from_contract {
+							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
+								from: swap_from, to: swap_to, deposit_amount, ..
+							}) if from == swap_from && to == swap_to => {
+								all_prewitnessed_swaps.push(deposit_amount);
+							}
+							RuntimeCall::ArbitrumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
 								from: swap_from, to: swap_to, deposit_amount, ..
 							}) if from == swap_from && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
@@ -1876,7 +1886,13 @@ impl_runtime_apis! {
 							}) => {
 								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Polkadot, PolkadotInstance>(from, to, deposit_witnesses));
 							},
-							RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
+							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
+								source_asset, deposit_amount, destination_asset, deposit_metadata, ..
+							}) => {
+								// There are two swaps for CCM, the principal swap, and the gas amount swap.
+								all_prewitnessed_swaps.extend(ccm_swaps(from, to, source_asset, destination_asset, deposit_amount, deposit_metadata.channel_metadata));
+							},
+							RuntimeCall::ArbitrumIngressEgress(pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
 								source_asset, deposit_amount, destination_asset, deposit_metadata, ..
 							}) => {
 								// There are two swaps for CCM, the principal swap, and the gas amount swap.

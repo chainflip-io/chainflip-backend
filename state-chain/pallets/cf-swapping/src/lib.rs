@@ -5,14 +5,14 @@
 
 use cf_amm::common::Side;
 use cf_chains::{
-	address::{AddressConverter, ForeignChainAddress},
+	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
 	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataEncoded, ChannelRefundParameters,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
-	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber, ChannelId,
-	DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash,
+	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber, CcmFailReason,
+	ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
 	BASIS_POINTS_PER_MILLION, MAX_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -373,12 +373,6 @@ struct SwapRequest<T: Config> {
 	state: SwapRequestState<T>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum CcmFailReason {
-	UnsupportedForTargetChain,
-	InsufficientDepositAmount,
-}
-
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T, I))]
 pub enum PalletConfigUpdate<T: Config> {
@@ -397,6 +391,16 @@ pub enum PalletConfigUpdate<T: Config> {
 
 impl_pallet_safe_mode! {
 	PalletSafeMode; swaps_enabled, withdrawals_enabled, broker_registration_enabled,
+}
+
+fn address_error_to_pallet_error<T>(error: AddressError) -> Error<T>
+where
+	T: Config,
+{
+	match error {
+		AddressError::InvalidAddress => Error::<T>::InvalidDestinationAddress,
+		AddressError::InvalidAddressForChain => Error::<T>::IncompatibleAssetAndAddress,
+	}
 }
 
 #[frame_support::pallet]
@@ -880,7 +884,11 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
-				Self::validate_destination_address(&destination_address, asset)?;
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					asset,
+				)
+				.map_err(address_error_to_pallet_error::<T>)?;
 
 			let earned_fees = T::BalanceApi::get_balance(&account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
@@ -902,102 +910,6 @@ pub mod pallet {
 				destination_address,
 				egress_id,
 			});
-
-			Ok(())
-		}
-
-		/// Allow Witnessers to submit a Swap request on the behalf of someone else.
-		/// Requires Witnesser origin.
-		///
-		/// ## Events
-		///
-		/// - [SwapScheduled](Event::SwapScheduled)
-		/// - [SwapAmountTooLow](Event::SwapAmountTooLow)
-		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::schedule_swap_from_contract())]
-		pub fn schedule_swap_from_contract(
-			origin: OriginFor<T>,
-			from: Asset,
-			to: Asset,
-			deposit_amount: AssetAmount,
-			destination_address: EncodedAddress,
-			tx_hash: TransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			let destination_address_internal =
-				Self::validate_destination_address(&destination_address, to)?;
-
-			if Self::init_swap_request(
-				from,
-				deposit_amount,
-				to,
-				SwapRequestType::Regular { output_address: destination_address_internal.clone() },
-				Default::default(),
-				// NOTE: FoK not yet supported for swaps from the contract
-				None,
-				// NOTE: DCA not yet supported for swaps from the contract
-				None,
-				SwapOrigin::Vault { tx_hash },
-			)
-			.is_err()
-			{
-				log_or_panic!("Regular swap request should never fail");
-			}
-
-			Ok(())
-		}
-
-		/// Process the deposit of a CCM swap.
-		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::ccm_deposit())]
-		pub fn ccm_deposit(
-			origin: OriginFor<T>,
-			source_asset: Asset,
-			deposit_amount: AssetAmount,
-			destination_asset: Asset,
-			destination_address: EncodedAddress,
-			deposit_metadata: CcmDepositMetadata,
-			tx_hash: TransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			// Check for the CCM's validity.
-			let _ = T::CcmValidityChecker::check_and_decode(
-				&deposit_metadata.channel_metadata,
-				destination_asset,
-			)
-			.map_err(|e| {
-				log::warn!(
-					"Failed to process CCM due to invalid data. Tx hash: {:?}, Error: {:?}",
-					tx_hash,
-					e
-				);
-				Error::<T>::InvalidCcm
-			})?;
-
-			let destination_address_internal =
-				Self::validate_destination_address(&destination_address, destination_asset)?;
-
-			if Self::init_swap_request(
-				source_asset,
-				deposit_amount,
-				destination_asset,
-				SwapRequestType::Ccm {
-					ccm_deposit_metadata: deposit_metadata,
-					output_address: destination_address_internal.clone(),
-				},
-				Default::default(),
-				// NOTE: FoK not yet supported for swaps from the contract
-				None,
-				// NOTE: DCA not yet supported for swaps from the contract
-				None,
-				SwapOrigin::Vault { tx_hash },
-			)
-			.is_err()
-			{
-				log::error!("Ccm failed. Check `CcmFailed` event.");
-			}
 
 			Ok(())
 		}
@@ -1134,7 +1046,11 @@ pub mod pallet {
 			ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
 
 			let destination_address_internal =
-				Self::validate_destination_address(&destination_address, destination_asset)?;
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					destination_asset,
+				)
+				.map_err(address_error_to_pallet_error::<T>)?;
 
 			if let Some(ccm) = channel_metadata.as_ref() {
 				let destination_chain: ForeignChain = destination_asset.into();
@@ -1758,21 +1674,6 @@ pub mod pallet {
 			} else {
 				SwapRequests::<T>::insert(swap_request_id, request);
 			}
-		}
-
-		// The address and the asset being sent or withdrawn must be compatible.
-		fn validate_destination_address(
-			destination_address: &EncodedAddress,
-			destination_asset: Asset,
-		) -> Result<ForeignChainAddress, DispatchError> {
-			let destination_address_internal =
-				T::AddressConverter::try_from_encoded_address(destination_address.clone())
-					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
-			ensure!(
-				destination_address_internal.chain() == ForeignChain::from(destination_asset),
-				Error::<T>::IncompatibleAssetAndAddress
-			);
-			Ok(destination_address_internal)
 		}
 
 		// Helper function that splits swaps of a given direction, group them by asset

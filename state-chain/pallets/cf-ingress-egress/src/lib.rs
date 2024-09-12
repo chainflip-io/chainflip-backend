@@ -25,14 +25,16 @@ use cf_chains::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
 	},
 	assets::any::GetChainAssetMap,
+	ccm_checker::CcmValidityCheck,
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
 	Chain, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall, DepositChannel,
 	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
-	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, SWAP_DELAY_BLOCKS,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, CcmFailReason,
+	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -218,7 +220,9 @@ where
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{ExecutexSwapAndCall, TransferFallback};
+	use cf_chains::{
+		address::EncodedAddress, CcmDepositMetadataEncoded, ExecutexSwapAndCall, TransferFallback,
+	};
 	use cf_primitives::{BroadcastId, EpochIndex};
 	use cf_traits::{OnDeposit, SwapLimitsProvider};
 	use core::marker::PhantomData;
@@ -413,6 +417,9 @@ pub mod pallet {
 		type SafeMode: Get<PalletSafeMode<I>>;
 
 		type SwapLimitsProvider: SwapLimitsProvider;
+
+		/// For checking if the CCM message passed in is valid.
+		type CcmValidityChecker: CcmValidityCheck;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -644,6 +651,12 @@ pub mod pallet {
 			prewitnessed_deposit_id: PrewitnessedDepositId,
 			amount: TargetChainAmount<T, I>,
 		},
+		CcmFailed {
+			reason: CcmFailReason,
+			destination_address: EncodedAddress,
+			deposit_metadata: CcmDepositMetadataEncoded,
+			origin: SwapOrigin,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -686,6 +699,8 @@ pub mod pallet {
 		/// The number of chunks must be greater than 0, the interval must be greater than 2 and
 		/// the total duration of the swap request must be less then the max allowed.
 		InvalidDcaParameters,
+		/// CCM parameters from a contract swap failed validity check.
+		InvalidCcm,
 	}
 
 	#[pallet::hooks]
@@ -1076,6 +1091,120 @@ pub mod pallet {
 					Ok::<(), Error<T, I>>(())
 				})
 			})?;
+			Ok(())
+		}
+
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::contract_swap_request())]
+		pub fn contract_swap_request(
+			origin: OriginFor<T>,
+			from: Asset,
+			to: Asset,
+			deposit_amount: AssetAmount,
+			destination_address: EncodedAddress,
+			tx_hash: TransactionHash,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			let destination_address_internal =
+				match T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					to,
+				) {
+					Ok(address) => address,
+					Err(err) => {
+						log::warn!("Failed to process contract swap due to invalid destination address. Tx hash: {tx_hash:?}. Error: {err:?}");
+						return Ok(());
+					},
+				};
+
+			if T::SwapRequestHandler::init_swap_request(
+				from,
+				deposit_amount,
+				to,
+				SwapRequestType::Regular { output_address: destination_address_internal.clone() },
+				Default::default(),
+				// NOTE: FoK not yet supported for swaps from the contract
+				None,
+				// NOTE: DCA not yet supported for swaps from the contract
+				None,
+				SwapOrigin::Vault { tx_hash },
+			)
+			.is_err()
+			{
+				log_or_panic!("Regular swap request should never fail");
+			}
+
+			Ok(())
+		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight(T::WeightInfo::contract_ccm_swap_request())]
+		pub fn contract_ccm_swap_request(
+			origin: OriginFor<T>,
+			source_asset: Asset,
+			deposit_amount: AssetAmount,
+			destination_asset: Asset,
+			destination_address: EncodedAddress,
+			deposit_metadata: CcmDepositMetadata,
+			tx_hash: TransactionHash,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			let swap_origin = SwapOrigin::Vault { tx_hash };
+
+			if let Err(err) = T::CcmValidityChecker::check_and_decode(
+				&deposit_metadata.channel_metadata,
+				destination_asset,
+			) {
+				log::warn!(
+					"Failed to process CCM due to invalid data. Tx hash: {:?}, Error: {:?}",
+					tx_hash,
+					err
+				);
+
+				Self::deposit_event(Event::<T, I>::CcmFailed {
+					reason: CcmFailReason::InvalidMetadata,
+					destination_address,
+					deposit_metadata: deposit_metadata.to_encoded::<T::AddressConverter>(),
+					origin: swap_origin,
+				});
+
+				return Ok(());
+			};
+
+			let destination_address_internal =
+				match T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					destination_asset,
+				) {
+					Ok(address) => address,
+					Err(err) => {
+						log::warn!("Failed to process contract CCM swap due to invalid destination address. Tx hash: {tx_hash:?}. Error: {err:?}");
+						return Ok(());
+					},
+				};
+
+			if T::SwapRequestHandler::init_swap_request(
+				source_asset,
+				deposit_amount,
+				destination_asset,
+				SwapRequestType::Ccm {
+					ccm_deposit_metadata: deposit_metadata,
+					output_address: destination_address_internal.clone(),
+				},
+				Default::default(),
+				// NOTE: FoK not yet supported for swaps from the contract
+				None,
+				// NOTE: DCA not yet supported for swaps from the contract
+				None,
+				swap_origin,
+			)
+			.is_err()
+			{
+				log::error!("Ccm failed. Check `CcmFailed` event.");
+			}
+
 			Ok(())
 		}
 	}

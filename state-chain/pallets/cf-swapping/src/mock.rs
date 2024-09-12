@@ -125,14 +125,6 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_parts(100, 0)
 	}
 
-	fn schedule_swap_from_contract() -> Weight {
-		Weight::from_parts(100, 0)
-	}
-
-	fn ccm_deposit() -> Weight {
-		Weight::from_parts(100, 0)
-	}
-
 	fn register_as_broker() -> Weight {
 		Weight::from_parts(100, 0)
 	}

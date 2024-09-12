@@ -24,8 +24,8 @@ use crate::{
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
 	address::{
-		to_encoded_address, try_from_encoded_address, AddressConverter, EncodedAddress,
-		ForeignChainAddress,
+		decode_and_validate_address_for_asset, to_encoded_address, try_from_encoded_address,
+		AddressConverter, AddressError, EncodedAddress, ForeignChainAddress,
 	},
 	arb::api::ArbitrumApi,
 	assets::any::ForeignChainAndAsset,
@@ -787,6 +787,17 @@ impl AddressConverter for ChainAddressConverter {
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
 		try_from_encoded_address(encoded_address, Environment::network_environment)
+	}
+
+	fn decode_and_validate_address_for_asset(
+		encoded_address: EncodedAddress,
+		asset: Asset,
+	) -> Result<ForeignChainAddress, AddressError> {
+		decode_and_validate_address_for_asset(
+			encoded_address,
+			asset,
+			Environment::network_environment,
+		)
 	}
 }
 

@@ -356,3 +356,11 @@ pub struct DcaParameters {
 	/// The interval in blocks between each swap.
 	pub chunk_interval: u32,
 }
+
+// TODO: do we need a crate for sharing code between pallets that isn't called "primitives"?
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum CcmFailReason {
+	UnsupportedForTargetChain,
+	InsufficientDepositAmount,
+	InvalidMetadata,
+}

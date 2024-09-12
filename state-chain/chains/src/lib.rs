@@ -191,6 +191,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ Default
 		+ AtLeast32BitUnsigned
 		+ Into<AssetAmount>
+		+ TryFrom<AssetAmount>
 		+ FullCodec
 		+ MaxEncodedLen
 		+ BenchmarkValue;
@@ -215,6 +216,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ FullCodec
 		+ Into<cf_primitives::Asset>
 		+ Into<cf_primitives::ForeignChain>
+		+ TryFrom<cf_primitives::Asset>
 		+ IntoEnumIterator
 		+ Unpin;
 

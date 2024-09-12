@@ -111,6 +111,11 @@ pub trait AddressConverter: Sized {
 	#[allow(clippy::result_unit_err)]
 	fn try_from_encoded_address(encoded_address: EncodedAddress)
 		-> Result<ForeignChainAddress, ()>;
+
+	fn decode_and_validate_address_for_asset(
+		encoded_address: EncodedAddress,
+		asset: cf_primitives::Asset,
+	) -> Result<ForeignChainAddress, AddressError>;
 }
 
 #[cfg(feature = "std")]
@@ -134,6 +139,7 @@ impl core::fmt::Display for EncodedAddress {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AddressError {
 	InvalidAddress,
+	InvalidAddressForChain,
 }
 
 impl TryFrom<ForeignChainAddress> for H160 {
@@ -272,6 +278,22 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		)),
 		EncodedAddress::Sol(address_bytes) => Ok(ForeignChainAddress::Sol(address_bytes.into())),
 	}
+}
+
+pub fn decode_and_validate_address_for_asset<GetNetwork: FnOnce() -> NetworkEnvironment>(
+	encoded_address: EncodedAddress,
+	asset: cf_primitives::Asset,
+	network_environment: GetNetwork,
+) -> Result<ForeignChainAddress, AddressError> {
+	let address = try_from_encoded_address(encoded_address, network_environment)
+		.map_err(|_| AddressError::InvalidAddress)?;
+
+	frame_support::ensure!(
+		address.chain() == ForeignChain::from(asset),
+		AddressError::InvalidAddressForChain
+	);
+
+	Ok(address)
 }
 
 pub trait ToHumanreadableAddress {
