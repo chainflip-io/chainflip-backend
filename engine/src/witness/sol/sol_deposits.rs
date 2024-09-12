@@ -1,19 +1,17 @@
 use anyhow::ensure;
 use base64::Engine;
-use cf_chains::{
-	sol::{
-		sol_tx_core::address_derivation::{derive_associated_token_account, derive_fetch_account},
-		SolAddress, SolAmount,
-	},
-	Solana,
+use cf_chains::sol::{
+	sol_tx_core::address_derivation::{derive_associated_token_account, derive_fetch_account},
+	SolAddress, SolAmount,
 };
 use cf_primitives::chains::assets::sol::Asset;
 use futures::{stream, StreamExt, TryStreamExt};
 use pallet_cf_elections::electoral_systems::blockchain::delta_based_ingress::{
-	ChannelTotalIngressed, OpenChannelDetails,
+	ChannelTotalIngressed, ChannelTotalIngressedFor, OpenChannelDetailsFor,
 };
 use serde_json::Value;
 use sp_runtime::SaturatedConversion;
+use state_chain_runtime::SolanaIngressEgress;
 use std::{collections::BTreeMap, str::FromStr};
 
 use crate::sol::{
@@ -49,9 +47,9 @@ pub async fn get_channel_ingress_amounts<SolRetryRpcClient>(
 	token_pubkey: SolAddress,
 	deposit_channels: BTreeMap<
 		SolAddress,
-		(OpenChannelDetails<Solana>, ChannelTotalIngressed<Solana>),
+		(OpenChannelDetailsFor<SolanaIngressEgress>, ChannelTotalIngressedFor<SolanaIngressEgress>),
 	>,
-) -> Result<BTreeMap<SolAddress, ChannelTotalIngressed<Solana>>, anyhow::Error>
+) -> Result<BTreeMap<SolAddress, ChannelTotalIngressedFor<SolanaIngressEgress>>, anyhow::Error>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
