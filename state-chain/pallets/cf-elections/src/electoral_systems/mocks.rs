@@ -208,24 +208,6 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 	}
 }
 
-pub trait ElectoralSystemCheck<ES: ElectoralSystem> {
-	#[track_caller]
-	fn check(&self, pre_finalize: &MockAccess<ES>, post_finalize: &MockAccess<ES>);
-}
-
-impl<ES: ElectoralSystem> ElectoralSystemCheck<ES> for () {
-	fn check(&self, _pre_finalize: &MockAccess<ES>, _post_finalize: &MockAccess<ES>) {}
-}
-
-impl<ES: ElectoralSystem, A: ElectoralSystemCheck<ES>, B: ElectoralSystemCheck<ES>>
-	ElectoralSystemCheck<ES> for (A, B)
-{
-	fn check(&self, pre_finalize: &MockAccess<ES>, post_finalize: &MockAccess<ES>) {
-		self.0.check(pre_finalize, post_finalize);
-		self.1.check(pre_finalize, post_finalize);
-	}
-}
-
 /// Allows registering checks for an electoral system. Once registered, the checks can be used
 /// through the `Check` struct.
 ///
@@ -332,10 +314,8 @@ impl<ES: ElectoralSystem> Check<ES> {
 	pub fn new(check_fn: impl Fn(&MockAccess<ES>, &MockAccess<ES>) + 'static) -> Self {
 		Self { check_fn: Box::new(check_fn) }
 	}
-}
 
-impl<ES: ElectoralSystem> ElectoralSystemCheck<ES> for Check<ES> {
-	fn check(&self, pre_finalize: &MockAccess<ES>, post_finalize: &MockAccess<ES>) {
+	pub fn check(&self, pre_finalize: &MockAccess<ES>, post_finalize: &MockAccess<ES>) {
 		(self.check_fn)(pre_finalize, post_finalize)
 	}
 }
