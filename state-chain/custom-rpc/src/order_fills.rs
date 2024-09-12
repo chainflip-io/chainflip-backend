@@ -6,7 +6,7 @@ use cf_primitives::AccountId;
 use pallet_cf_pools::{AssetPair, OrderId, Pool};
 use state_chain_runtime::Runtime;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, PartialEq, Eq)]
 pub struct OrderFills {
 	pub(super) fills: Vec<OrderFilled>,
 }
@@ -133,8 +133,8 @@ fn order_fills_for_pool<'a>(
 }
 
 pub fn order_fills_from_block_updates(
-	previous_pools: BTreeMap<AssetPair, Pool<Runtime>>,
-	pools: BTreeMap<AssetPair, Pool<Runtime>>,
+	previous_pools: &BTreeMap<AssetPair, Pool<Runtime>>,
+	pools: &BTreeMap<AssetPair, Pool<Runtime>>,
 	events: Vec<pallet_cf_pools::Event<Runtime>>,
 ) -> OrderFills {
 	let updated_range_orders = events

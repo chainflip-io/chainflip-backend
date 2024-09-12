@@ -66,8 +66,8 @@ use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
 };
 use pallet_cf_pools::{
-	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, Pool, PoolLiquidity, PoolOrderbook,
-	PoolPriceV1, PoolPriceV2, UnidirectionalPoolDepth,
+	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
+	PoolPriceV2, UnidirectionalPoolDepth,
 };
 
 use crate::chainflip::EvmLimit;
@@ -2036,14 +2036,8 @@ impl_runtime_apis! {
 			pallet_cf_environment::RuntimeSafeMode::<Runtime>::get()
 		}
 
-		fn cf_pool_pairs() -> Vec<PoolPairsMap<Asset>> {
+		fn cf_pools() -> Vec<PoolPairsMap<Asset>> {
 			LiquidityPools::pools()
-		}
-
-		fn cf_pools() -> BTreeMap<AssetPair, Pool<Runtime>> {
-
-			pallet_cf_pools::Pools::<Runtime>::iter().collect()
-
 		}
 	}
 

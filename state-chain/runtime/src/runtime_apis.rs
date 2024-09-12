@@ -17,8 +17,8 @@ use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::OwedAmount;
 use pallet_cf_pools::{
-	AskBidMap, AssetPair, Pool, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
-	PoolPriceV2, UnidirectionalPoolDepth,
+	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
+	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::SwapLegInfo;
 use pallet_cf_witnesser::CallHash;
@@ -281,8 +281,7 @@ decl_runtime_apis!(
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
-		fn cf_pool_pairs() -> Vec<PoolPairsMap<Asset>>;
-		fn cf_pools() -> BTreeMap<AssetPair, Pool<Runtime>>;
+		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
 		fn cf_swap_limits() -> SwapLimits;
 		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>>;

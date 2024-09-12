@@ -594,7 +594,7 @@ where
 	Ok(BlockUpdate::<OrderFills> {
 		block_hash: block.hash,
 		block_number: block.number,
-		data: order_fills_from_block_updates(previous_pools, pools, lp_events),
+		data: order_fills_from_block_updates(&previous_pools, &pools, lp_events),
 	})
 }
 
