@@ -325,6 +325,26 @@ impl ExtBuilder {
 					),
 				}),
 			},
+			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
+				broadcast_timeout: 5 * MINUTES,
+				..Default::default()
+			},
+			polkadot_broadcaster: state_chain_runtime::PolkadotBroadcasterConfig {
+				broadcast_timeout: 4 * MINUTES,
+				..Default::default()
+			},
+			bitcoin_broadcaster: state_chain_runtime::BitcoinBroadcasterConfig {
+				broadcast_timeout: 90 * MINUTES,
+				..Default::default()
+			},
+			arbitrum_broadcaster: state_chain_runtime::ArbitrumBroadcasterConfig {
+				broadcast_timeout: 2 * MINUTES,
+				..Default::default()
+			},
+			solana_broadcaster: state_chain_runtime::SolanaBroadcasterConfig {
+				broadcast_timeout: 4 * MINUTES,
+				..Default::default()
+			},
 		})
 	}
 }

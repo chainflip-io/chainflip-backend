@@ -55,7 +55,12 @@ pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum PalletConfigUpdate {
+	BroadcastTimeout { blocks: u32 },
+}
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -175,10 +180,6 @@ pub mod pallet {
 		/// Get the latest block height of the target chain via Chain Tracking.
 		type ChainTracking: GetBlockHeight<Self::TargetChain>;
 
-		/// The timeout duration for the broadcast, measured in number of blocks.
-		#[pallet::constant]
-		type BroadcastTimeout: Get<BlockNumberFor<Self>>;
-
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
 
@@ -201,6 +202,25 @@ pub mod pallet {
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
+	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub broadcast_timeout: BlockNumberFor<T>,
+		pub _phantom: PhantomData<I>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
+		fn build(&self) {
+			BroadcastTimeout::<T, I>::put(self.broadcast_timeout);
+		}
+	}
+
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self { broadcast_timeout: Default::default(), _phantom: Default::default() }
+		}
 	}
 
 	#[pallet::origin]
@@ -308,6 +328,21 @@ pub mod pallet {
 	#[pallet::getter(fn current_on_chain_key)]
 	pub type CurrentOnChainKey<T, I = ()> = StorageValue<_, AggKey<T, I>, OptionQuery>;
 
+	/// The current timeout duration for the broadcast, measured in number of blocks.
+	#[pallet::storage]
+	pub type BroadcastTimeout<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery, DefaultBroadcastTimeout<T, I>>;
+
+	const DEFAULT_BROADCAST_TIMEOUT: u32 = 100;
+
+	pub struct DefaultBroadcastTimeout<T, I>(PhantomData<(T, I)>);
+
+	impl<T: Config<I>, I: 'static> Get<BlockNumberFor<T>> for DefaultBroadcastTimeout<T, I> {
+		fn get() -> BlockNumberFor<T> {
+			DEFAULT_BROADCAST_TIMEOUT.into()
+		}
+	}
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -344,6 +379,8 @@ pub mod pallet {
 		TransactionFeeDeficitRefused { beneficiary: SignerIdFor<T, I> },
 		/// A Call has been re-threshold-signed, and its signature data is inserted into storage.
 		CallResigned { broadcast_id: BroadcastId },
+		/// Some pallet configuration has been updated.
+		PalletConfigUpdated { update: PalletConfigUpdate },
 	}
 
 	#[pallet::error]
@@ -589,6 +626,31 @@ pub mod pallet {
 			}
 			Ok(())
 		}
+
+		/// [GOVERNANCE] Update a pallet config item.
+		///
+		/// The dispatch origin of this function must be governance.
+		///
+		/// ## Events
+		///
+		/// - [PalletConfigUpdate](Event::PalletConfigUpdate)
+		#[pallet::call_index(6)]
+		#[pallet::weight(T::WeightInfo::update_pallet_config())]
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			update: PalletConfigUpdate,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			match update {
+				PalletConfigUpdate::BroadcastTimeout { blocks } =>
+					BroadcastTimeout::<T, I>::set(blocks.into()),
+			}
+
+			Self::deposit_event(Event::PalletConfigUpdated { update });
+
+			Ok(())
+		}
 	}
 }
 
@@ -828,7 +890,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			AwaitingBroadcast::<T, I>::insert(broadcast_id, broadcast_data.clone());
 
 			Timeouts::<T, I>::append(
-				frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get(),
+				frame_system::Pallet::<T>::block_number() + BroadcastTimeout::<T, I>::get(),
 				(broadcast_id, nominated_signer.clone()),
 			);
 
