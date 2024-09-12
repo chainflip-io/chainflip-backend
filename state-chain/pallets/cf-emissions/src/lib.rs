@@ -272,7 +272,7 @@ pub mod pallet {
 		pub current_authority_emission_inflation: u32,
 		pub backup_node_emission_inflation: u32,
 		pub supply_update_interval: u32,
-		pub _config: PhantomData<T>,
+		pub _phantom: PhantomData<T>,
 	}
 
 	/// At genesis we need to set the inflation rates for active and backup validators.

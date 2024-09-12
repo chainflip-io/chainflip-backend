@@ -856,7 +856,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 5 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -882,7 +881,6 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 4 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -908,7 +906,6 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, BitcoinInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -934,7 +931,6 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 2 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -967,7 +963,6 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, SolanaInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 4 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
