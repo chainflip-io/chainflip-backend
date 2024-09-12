@@ -19,11 +19,9 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
 
   const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals('Flip'));
 
-  const flipContractAddress =
-    process.env.ETH_FLIP_ADDRESS ?? getContractAddress('Ethereum', 'Flip');
+  const flipContractAddress = getContractAddress('Ethereum', 'Flip');
 
-  const gatewayContractAddress =
-    process.env.ETH_GATEWAY_ADDRESS ?? getContractAddress('Ethereum', 'GATEWAY');
+  const gatewayContractAddress = getContractAddress('Ethereum', 'GATEWAY');
 
   const whaleKey = getWhaleKey('Ethereum');
   console.log('Approving ' + flipAmount + ' Flip to State Chain Gateway');
@@ -41,12 +39,8 @@ export async function fundFlip(scAddress: string, flipAmount: string) {
   } as const;
 
   console.log('Funding ' + flipAmount + ' Flip to ' + scAddress);
-  let pubkey = scAddress;
-  try {
-    pubkey = decodeFlipAddressForContract(scAddress);
-  } catch {
-    // ignore error
-  }
+  let pubkey = decodeFlipAddressForContract(scAddress);
+
   if (pubkey.substr(0, 2) !== '0x') {
     pubkey = '0x' + pubkey;
   }
