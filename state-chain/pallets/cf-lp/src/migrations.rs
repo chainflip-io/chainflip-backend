@@ -1,9 +1,4 @@
 use crate::Pallet;
-use cf_runtime_upgrade_utilities::{PlaceholderMigration, VersionedMigration};
+use cf_runtime_upgrade_utilities::PlaceholderMigration;
 
-pub mod move_asset_balances;
-
-pub type PalletMigration<T> = (
-	VersionedMigration<Pallet<T>, move_asset_balances::Migration<T>, 2, 3>,
-	PlaceholderMigration<Pallet<T>, 3>,
-);
+pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 3>;

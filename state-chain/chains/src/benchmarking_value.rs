@@ -52,13 +52,6 @@ macro_rules! impl_default_benchmark_value {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<A: BenchmarkValue, B: BenchmarkValue> BenchmarkValue for (A, B) {
-	fn benchmark_value() -> Self {
-		(A::benchmark_value(), B::benchmark_value())
-	}
-}
-
-#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for Asset {
 	fn benchmark_value() -> Self {
 		Self::Eth
@@ -233,3 +226,23 @@ impl BenchmarkValue for DepositDetails {
 impl_default_benchmark_value!(());
 impl_default_benchmark_value!(u32);
 impl_default_benchmark_value!(u64);
+
+#[macro_export]
+macro_rules! impl_tuple_benchmark_value {
+	($($t:ident),* $(,)?) => {
+		#[cfg(feature = "runtime-benchmarks")]
+		impl<$($t: BenchmarkValue, )*> BenchmarkValue for ($($t,)*) {
+			fn benchmark_value() -> Self {
+				(
+					$($t::benchmark_value(),)*
+				)
+			}
+		}
+	};
+}
+
+impl_tuple_benchmark_value!(A, B);
+impl_tuple_benchmark_value!(A, B, C);
+impl_tuple_benchmark_value!(A, B, C, D);
+impl_tuple_benchmark_value!(A, B, C, D, EE);
+impl_tuple_benchmark_value!(A, B, C, D, EE, F);

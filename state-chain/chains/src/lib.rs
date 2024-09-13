@@ -500,6 +500,9 @@ pub enum AllBatchError {
 	/// Unable to select Utxos.
 	UtxoSelectionFailed,
 
+	/// Failed to build Solana transaction.
+	FailedToBuildSolanaTransaction(SolanaTransactionBuildingError),
+
 	/// Some other DispatchError occurred.
 	DispatchError(DispatchError),
 }
@@ -548,8 +551,15 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
+pub enum TransferFallbackError {
+	/// The chain does not support this functionality.
+	Unsupported,
+	/// Failed to lookup the given token address, so the asset is invalid.
+	CannotLookupTokenAddress,
+}
 pub trait TransferFallback<C: Chain>: ApiCall<C::ChainCrypto> {
-	fn new_unsigned(transfer_param: TransferAssetParams<C>) -> Result<Self, DispatchError>;
+	fn new_unsigned(transfer_param: TransferAssetParams<C>) -> Result<Self, TransferFallbackError>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {

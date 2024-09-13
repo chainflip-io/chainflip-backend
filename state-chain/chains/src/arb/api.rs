@@ -96,9 +96,12 @@ impl<E> TransferFallback<Arbitrum> for ArbitrumApi<E>
 where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
-	fn new_unsigned(transfer_param: TransferAssetParams<Arbitrum>) -> Result<Self, DispatchError> {
+	fn new_unsigned(
+		transfer_param: TransferAssetParams<Arbitrum>,
+	) -> Result<Self, TransferFallbackError> {
 		let transfer_param = EncodableTransferAssetParams {
-			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			asset: E::token_address(transfer_param.asset)
+				.ok_or(TransferFallbackError::CannotLookupTokenAddress)?,
 			to: transfer_param.to,
 			amount: transfer_param.amount,
 		};

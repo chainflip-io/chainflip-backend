@@ -82,8 +82,6 @@ pub struct WithdrawFeesParams {
 }
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum BrokerSubcommands {
-	/// Request a swap deposit address.
-	RequestSwapDepositAddress(SwapRequestParams),
 	WithdrawFees(WithdrawFeesParams),
 	/// Register this account as a broker account.
 	RegisterAccount,

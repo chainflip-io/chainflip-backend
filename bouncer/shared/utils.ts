@@ -1130,6 +1130,12 @@ export async function checkAvailabilityAllSolanaNonces() {
   }
 }
 
+export function createLpKeypair(lpUri: string) {
+  const keyring = new Keyring({ type: 'sr25519' });
+  keyring.setSS58Format(2112);
+  return keyring.createFromUri(lpUri);
+}
+
 // Get the current time in the format HH:MM:SS
 export function getTimeStamp(): string {
   const now = new Date();

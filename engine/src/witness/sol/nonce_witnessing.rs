@@ -72,7 +72,7 @@ where
 #[cfg(test)]
 mod tests {
 	use crate::{
-		settings::{NodeContainer, WsHttpEndpoints},
+		settings::{HttpEndpoint, NodeContainer},
 		sol::retry_rpc::SolRetryRpcClient,
 	};
 	use cf_chains::{Chain, Solana};
@@ -89,8 +89,7 @@ mod tests {
 				let retry_client = SolRetryRpcClient::new(
 					scope,
 					NodeContainer {
-						primary: WsHttpEndpoints {
-							ws_endpoint: "wss://api.devnet.solana.com".into(),
+						primary: HttpEndpoint {
 							http_endpoint: "https://api.devnet.solana.com".into(),
 						},
 						backup: None,

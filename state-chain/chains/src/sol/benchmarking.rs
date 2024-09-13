@@ -2,6 +2,7 @@
 
 use super::{
 	api::SolanaApi, SolAddress, SolHash, SolMessage, SolSignature, SolTrackedData, SolTransaction,
+	SolanaTransactionData,
 };
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
@@ -34,6 +35,16 @@ impl BenchmarkValue for SolMessage {
 impl BenchmarkValue for SolTransaction {
 	fn benchmark_value() -> Self {
 		SolTransaction::new_unsigned(SolMessage::benchmark_value())
+	}
+}
+
+impl BenchmarkValue for SolanaTransactionData {
+	fn benchmark_value() -> Self {
+		SolanaTransactionData {
+			serialized_transaction: SolTransaction::benchmark_value()
+				.finalize_and_serialize()
+				.expect("Failed to serialize payload"),
+		}
 	}
 }
 

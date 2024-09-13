@@ -794,14 +794,29 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn whitelisted_caller_with_role(role: AccountRole) -> Result<T::AccountId, DispatchError> {
+		Self::generate_whitelisted_callers_with_role(role, 1u32).map(|r|
+			// Guaranteed to return a vec with length of 1
+			r[0].clone())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn generate_whitelisted_callers_with_role(
+		role: AccountRole,
+		num: u32,
+	) -> Result<Vec<T::AccountId>, DispatchError> {
 		use frame_support::traits::OnNewAccount;
-		let caller = frame_benchmarking::whitelisted_caller::<T::AccountId>();
-		if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
-			frame_system::Pallet::<T>::inc_providers(&caller);
-		}
-		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		Self::register_account_role(&caller, role)?;
-		Ok(caller.clone())
+		(0..num)
+			.map(|n| {
+				let caller =
+					frame_benchmarking::account::<T::AccountId>("whitelisted_caller", n, 0);
+				if frame_system::Pallet::<T>::providers(&caller) == 0u32 {
+					frame_system::Pallet::<T>::inc_providers(&caller);
+				}
+				<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+				Self::register_account_role(&caller, role)?;
+				Ok(caller)
+			})
+			.collect::<Result<Vec<_>, DispatchError>>()
 	}
 }
 
@@ -863,7 +878,7 @@ impl<C: Chain + Get<ForeignChain>> EgressApi<C> for () {
 }
 
 pub trait VaultKeyWitnessedHandler<C: Chain> {
-	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
+	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResult;
 }
 
 pub trait BroadcastAnyChainGovKey {

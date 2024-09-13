@@ -731,7 +731,7 @@ fn test_expect_validator_register_fails() {
 		// Trying to register again passes the funding check but fails for other reasons.
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)),
-			DispatchError::Other("Account already registered")
+			cf_traits::mocks::account_role_registry::ALREADY_REGISTERED_ERROR,
 		);
 	});
 }

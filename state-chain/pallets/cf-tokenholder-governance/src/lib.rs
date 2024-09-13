@@ -183,10 +183,7 @@ pub mod pallet {
 		/// - [InsufficientLiquidity](pallet_cf_flip::Error::InsufficientLiquidity)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::submit_proposal())]
-		pub fn submit_proposal(
-			origin: OriginFor<T>,
-			proposal: Proposal,
-		) -> DispatchResultWithPostInfo {
+		pub fn submit_proposal(origin: OriginFor<T>, proposal: Proposal) -> DispatchResult {
 			let proposer = ensure_signed(origin)?;
 			if let Proposal::SetGovernanceKey(chain, ref key) = proposal {
 				ensure!(
@@ -201,7 +198,7 @@ pub mod pallet {
 			);
 			Backers::<T>::insert(proposal.clone(), BTreeSet::from([proposer]));
 			Self::deposit_event(Event::<T>::ProposalSubmitted { proposal });
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Backs a proposal. The caller signals their support for a proposal.
@@ -213,10 +210,7 @@ pub mod pallet {
 		/// - [AlreadyBacked](Error::AlreadyBacked)
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::back_proposal(Backers::<T>::decode_non_dedup_len(proposal).unwrap_or_default() as u32))]
-		pub fn back_proposal(
-			origin: OriginFor<T>,
-			proposal: Proposal,
-		) -> DispatchResultWithPostInfo {
+		pub fn back_proposal(origin: OriginFor<T>, proposal: Proposal) -> DispatchResult {
 			let backer = ensure_signed(origin)?;
 			Backers::<T>::try_mutate_exists(proposal, |maybe_backers| match maybe_backers {
 				Some(backers) => {
@@ -227,7 +221,7 @@ pub mod pallet {
 				},
 				None => Err(Error::<T>::ProposalDoesntExist),
 			})?;
-			Ok(().into())
+			Ok(())
 		}
 	}
 

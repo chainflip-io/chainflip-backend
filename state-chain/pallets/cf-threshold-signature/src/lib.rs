@@ -32,7 +32,7 @@ use cf_traits::{
 };
 use cfe_events::ThresholdSignatureRequest;
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
+	dispatch::DispatchResult,
 	ensure,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating},
@@ -943,7 +943,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
 			signature: SignatureFor<T, I>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_none(origin)?;
 
 			let CeremonyContext {
@@ -981,7 +981,7 @@ pub mod pallet {
 			});
 			Self::maybe_dispatch_callback(request_id, ceremony_id);
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Report that a threshold signature ceremony has failed and incriminate the guilty
@@ -1003,7 +1003,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
 			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let reporter_id = T::AccountRoleRegistry::ensure_validator(origin)?.into();
 
 			PendingCeremonies::<T, I>::try_mutate(ceremony_id, |maybe_context| {
@@ -1046,7 +1046,7 @@ pub mod pallet {
 					})
 			})?;
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::call_index(2)]
@@ -1054,7 +1054,7 @@ pub mod pallet {
 		pub fn set_threshold_signature_timeout(
 			origin: OriginFor<T>,
 			new_timeout: BlockNumberFor<T>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			if new_timeout != ThresholdSignatureResponseTimeout::<T, I>::get() {
@@ -1064,7 +1064,7 @@ pub mod pallet {
 				});
 			}
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Report the outcome of a keygen ceremony.
@@ -1091,7 +1091,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
 			reported_outcome: KeygenOutcomeFor<T, I>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			handle_key_ceremony_report!(
 				origin,
 				ceremony_id,
@@ -1101,7 +1101,7 @@ pub mod pallet {
 				Event::KeygenFailureReported
 			);
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::call_index(4)]
@@ -1110,7 +1110,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			ceremony_id: CeremonyId,
 			reported_outcome: KeygenOutcomeFor<T, I>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			handle_key_ceremony_report!(
 				origin,
 				ceremony_id,
@@ -1120,7 +1120,7 @@ pub mod pallet {
 				Event::KeyHandoverFailureReported
 			);
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// A callback to be used when the threshold signing ceremony used for keygen verification
@@ -1141,7 +1141,7 @@ pub mod pallet {
 			keygen_ceremony_id: CeremonyId,
 			threshold_request_id: RequestId,
 			new_public_key: AggKeyFor<T, I>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			Self::on_key_verification_result(
 				origin,
 				threshold_request_id,
@@ -1158,7 +1158,7 @@ pub mod pallet {
 			handover_ceremony_id: CeremonyId,
 			threshold_request_id: RequestId,
 			new_public_key: AggKeyFor<T, I>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			Self::on_key_verification_result(
 				origin,
 				threshold_request_id,
@@ -1173,7 +1173,7 @@ pub mod pallet {
 		pub fn set_keygen_response_timeout(
 			origin: OriginFor<T>,
 			new_timeout: BlockNumberFor<T>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			if new_timeout != KeygenResponseTimeout::<T, I>::get() {
@@ -1181,7 +1181,7 @@ pub mod pallet {
 				Pallet::<T, I>::deposit_event(Event::KeygenResponseTimeoutUpdated { new_timeout });
 			}
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::call_index(8)]
@@ -1189,12 +1189,12 @@ pub mod pallet {
 		pub fn set_keygen_slash_amount(
 			origin: OriginFor<T>,
 			amount_to_slash: FlipBalance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			KeygenSlashAmount::<T, I>::put(amount_to_slash);
 
-			Ok(().into())
+			Ok(())
 		}
 	}
 }
@@ -1464,7 +1464,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		status_on_success: KeyRotationStatus<T, I>,
 		event_on_success: Event<T, I>,
 		event_on_error: Event<T, I>,
-	) -> DispatchResultWithPostInfo {
+	) -> DispatchResult {
 		EnsureThresholdSigned::<T, I>::ensure_origin(Into::<
 			<T as pallet::Config<I>>::RuntimeOrigin,
 		>::into(origin))?;
@@ -1488,7 +1488,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 			Err(offenders) => Self::terminate_rotation(offenders, event_on_error),
 		};
-		Ok(().into())
+		Ok(())
 	}
 
 	// We've kicked off a ceremony, now we start a timeout, where it'll retry after that point.

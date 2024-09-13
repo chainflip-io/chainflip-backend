@@ -24,6 +24,7 @@ use cf_traits::{
 		broadcaster::MockBroadcaster,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
+		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		swap_limits_provider::MockSwapLimitsProvider,
 		swap_request_api::MockSwapRequestHandler,
 	},
@@ -131,7 +132,7 @@ impl crate::Config for Test {
 	type SwapRequestHandler =
 		MockSwapRequestHandler<(Ethereum, pallet_cf_ingress_egress::Pallet<Self>)>;
 	type AssetWithholding = MockAssetWithholding;
-	type FetchesTransfersLimitProvider = cf_traits::NoLimit;
+	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 }

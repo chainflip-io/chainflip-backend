@@ -8,7 +8,7 @@ use cf_chains::{
 	evm::{self, Address, ParityBit, H256},
 	sol::{
 		sol_tx_core::{CompiledInstruction, MessageHeader},
-		RawSolHash, SolMessage, SolPubkey, SolTransaction,
+		RawSolHash, SolMessage, SolPubkey, SolTransaction, SolanaTransactionData,
 	},
 };
 use cf_primitives::AccountId;
@@ -179,7 +179,7 @@ fn event_decoding() {
 		check_encoding(CfeEvent::SolTxBroadcastRequest(TxBroadcastRequest {
 				broadcast_id: 1,
 				nominee: AccountId::from([1; 32]),
-				payload: SolTransaction {
+				payload: SolanaTransactionData{ serialized_transaction: (SolTransaction {
 					signatures: vec![[9u8; 64].into()],
 					message: SolMessage {
 						header: MessageHeader {
@@ -195,8 +195,9 @@ fn event_decoding() {
 							data: vec![31,41,51,61]
 						}],
 					},
-				},
-			}), "0f0100000001010101010101010101010101010101010101010101010101010101010101010409090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909020202040a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b04020401101f29333d");
+				}).finalize_and_serialize().unwrap()
+			}
+			}), "0f01000000010101010101010101010101010101010101010101010101010101010101010139020109090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909020202010a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b01020101041f29333d");
 	}
 
 	// P2P registration/deregistration

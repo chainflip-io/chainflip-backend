@@ -27,11 +27,12 @@ use cf_traits::{
 		balance_api::MockBalance,
 		block_height_provider::BlockHeightProvider,
 		chain_tracking::ChainTracker,
+		fetches_transfers_limit_provider::MockFetchesTransfersLimitProvider,
 		funding_info::MockFundingInfo,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	BalanceApi, DepositApi, EgressApi, EpochInfo, FundingInfo, GetBlockHeight, SafeMode,
-	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
+	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
+	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_ok,
@@ -1669,5 +1670,136 @@ fn safe_mode_prevents_deposit_channel_creation() {
 			),
 			crate::Error::<Test, _>::DepositChannelCreationDisabled
 		);
+	});
+}
+
+#[test]
+fn do_not_batch_more_transfers_than_the_limit_allows() {
+	new_test_ext().execute_with(|| {
+		MockFetchesTransfersLimitProvider::enable_limits();
+
+		const EXCESS_TRANSFERS: usize = 1;
+		let transfer_limits = MockFetchesTransfersLimitProvider::maybe_transfers_limit().unwrap();
+
+		for _ in 1..=transfer_limits + EXCESS_TRANSFERS {
+			assert_ok!(IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS, None));
+		}
+
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(
+			scheduled_egresses.len(),
+			transfer_limits + 1,
+			"Wrong amount of scheduled egresses!"
+		);
+
+		IngressEgress::on_finalize(1);
+
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(scheduled_egresses.len(), EXCESS_TRANSFERS, "Wrong amount of left egresses!");
+
+		IngressEgress::on_finalize(2);
+
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(scheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
+	});
+}
+
+#[test]
+fn do_not_batch_more_fetches_than_the_limit_allows() {
+	new_test_ext().execute_with(|| {
+		MockFetchesTransfersLimitProvider::enable_limits();
+
+		const EXCESS_FETCHES: usize = 1;
+		const ASSET: eth::Asset = eth::Asset::Eth;
+
+		let fetch_limits = MockFetchesTransfersLimitProvider::maybe_fetches_limit().unwrap();
+
+		for i in 1..=fetch_limits + EXCESS_FETCHES {
+			let (_, address, ..) =
+				IngressEgress::request_liquidity_deposit_address(i.try_into().unwrap(), ASSET, 0)
+					.unwrap();
+			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+
+			assert_ok!(IngressEgress::process_single_deposit(
+				address,
+				ASSET,
+				DEFAULT_DEPOSIT_AMOUNT,
+				Default::default(),
+				Default::default()
+			));
+		}
+
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(
+			scheduled_egresses.len(),
+			fetch_limits + EXCESS_FETCHES,
+			"Wrong amount of scheduled egresses!"
+		);
+
+		IngressEgress::on_finalize(1);
+
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(scheduled_egresses.len(), EXCESS_FETCHES, "Wrong amount of left egresses!");
+
+		IngressEgress::on_finalize(2);
+
+		let scheduled_egresses = ScheduledEgressFetchOrTransfer::<Test, ()>::get();
+
+		assert_eq!(scheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
+	});
+}
+
+#[test]
+fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
+	new_test_ext().execute_with(|| {
+		MockFetchesTransfersLimitProvider::enable_limits();
+
+		const EXCESS_CCMS: usize = 1;
+		let ccm_limits = MockFetchesTransfersLimitProvider::maybe_ccm_limit().unwrap();
+
+		let gas_budget = 1000u128;
+		let ccm = CcmDepositMetadata {
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+			channel_metadata: CcmChannelMetadata {
+				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
+				gas_budget: 1_000,
+				cf_parameters: vec![].try_into().unwrap(),
+			},
+		};
+
+		for _ in 1..=ccm_limits + EXCESS_CCMS {
+			assert_ok!(IngressEgress::schedule_egress(
+				ETH_ETH,
+				1_000,
+				ALICE_ETH_ADDRESS,
+				Some((ccm.clone(), gas_budget))
+			));
+		}
+
+		let scheduled_egresses = ScheduledEgressCcm::<Test, ()>::get();
+
+		assert_eq!(
+			scheduled_egresses.len(),
+			ccm_limits + EXCESS_CCMS,
+			"Wrong amount of scheduled egresses!"
+		);
+
+		IngressEgress::on_finalize(1);
+
+		let scheduled_egresses = ScheduledEgressCcm::<Test, ()>::get();
+
+		assert_eq!(scheduled_egresses.len(), EXCESS_CCMS, "Wrong amount of left egresses!");
+
+		IngressEgress::on_finalize(2);
+
+		let scheduled_egresses = ScheduledEgressCcm::<Test, ()>::get();
+
+		assert_eq!(scheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
 	});
 }

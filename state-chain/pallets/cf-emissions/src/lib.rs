@@ -216,11 +216,11 @@ pub mod pallet {
 		pub fn update_current_authority_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: u32,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			CurrentAuthorityEmissionInflation::<T>::set(inflation);
 			Self::deposit_event(Event::<T>::CurrentAuthorityInflationEmissionsUpdated(inflation));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Updates the emission rate to Backup nodes.
@@ -237,11 +237,11 @@ pub mod pallet {
 		pub fn update_backup_node_emission_inflation(
 			origin: OriginFor<T>,
 			inflation: u32,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			BackupNodeEmissionInflation::<T>::set(inflation);
 			Self::deposit_event(Event::<T>::BackupNodeInflationEmissionsUpdated(inflation));
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Updates the Supply Update interval.
@@ -258,11 +258,11 @@ pub mod pallet {
 		pub fn update_supply_update_interval(
 			origin: OriginFor<T>,
 			value: BlockNumberFor<T>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			SupplyUpdateInterval::<T>::put(value);
 			Self::deposit_event(Event::<T>::SupplyUpdateIntervalUpdated(value));
-			Ok(().into())
+			Ok(())
 		}
 	}
 
@@ -272,7 +272,7 @@ pub mod pallet {
 		pub current_authority_emission_inflation: u32,
 		pub backup_node_emission_inflation: u32,
 		pub supply_update_interval: u32,
-		pub _config: PhantomData<T>,
+		pub _phantom: PhantomData<T>,
 	}
 
 	/// At genesis we need to set the inflation rates for active and backup validators.

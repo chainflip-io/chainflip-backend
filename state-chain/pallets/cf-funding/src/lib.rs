@@ -22,7 +22,7 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
+	dispatch::DispatchResult,
 	ensure,
 	sp_runtime::{
 		traits::{CheckedSub, UniqueSaturatedInto, Zero},
@@ -299,7 +299,7 @@ pub mod pallet {
 			funder: EthereumAddress,
 			// Required to ensure this call is unique per funding event.
 			tx_hash: EthTransactionHash,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let total_balance = Self::add_funds_to_account(&account_id, amount);
@@ -316,7 +316,7 @@ pub mod pallet {
 				funds_added: amount,
 				total_balance,
 			});
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Get FLIP that is held for me by the system, signed by my authority key.
@@ -336,7 +336,7 @@ pub mod pallet {
 			address: EthereumAddress,
 			// Only this address can execute the redemption.
 			executor: Option<EthereumAddress>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 
 			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
@@ -473,7 +473,7 @@ pub mod pallet {
 				Self::deposit_event(Event::RedemptionAmountZero { account_id })
 			}
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// **This call can only be dispatched from the configured witness origin.**
@@ -501,7 +501,7 @@ pub mod pallet {
 			redeemed_amount: FlipBalance<T>,
 			// Required to ensure this call is unique per redemption event.
 			_tx_hash: EthTransactionHash,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let _ = PendingRedemptions::<T>::take(&account_id)
@@ -524,7 +524,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::RedemptionSettled(account_id, redeemed_amount));
 
-			Ok(().into())
+			Ok(())
 		}
 
 		#[pallet::call_index(3)]
@@ -535,7 +535,7 @@ pub mod pallet {
 			// The block number uniquely identifies the redemption expiry for a particular account
 			// when witnessing.
 			_block_number: u64,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let pending_redemption = PendingRedemptions::<T>::take(&account_id)
@@ -557,23 +557,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::RedemptionExpired { account_id });
 
-			Ok(().into())
-		}
-
-		/// This call is now deprecated.
-		/// The functionality has been moved to the Validator pallet
-		#[pallet::call_index(4)]
-		#[pallet::weight(Weight::from_parts(0, 0))]
-		pub fn stop_bidding(_origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			Err(DispatchError::Other("Deprecated").into())
-		}
-
-		/// This call is now deprecated.
-		/// The functionality has been moved to the Validator pallet
-		#[pallet::call_index(5)]
-		#[pallet::weight(Weight::from_parts(0, 0))]
-		pub fn start_bidding(_origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			Err(DispatchError::Other("Deprecated").into())
+			Ok(())
 		}
 
 		/// Updates the minimum funding required for an account, the extrinsic is gated with
@@ -591,7 +575,7 @@ pub mod pallet {
 		pub fn update_minimum_funding(
 			origin: OriginFor<T>,
 			minimum_funding: T::Amount,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
 				minimum_funding > RedemptionTax::<T>::get(),
@@ -599,7 +583,7 @@ pub mod pallet {
 			);
 			MinimumFunding::<T>::put(minimum_funding);
 			Self::deposit_event(Event::MinimumFundingUpdated { new_minimum: minimum_funding });
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Adds/Removes restricted addresses to the list of restricted addresses.
@@ -618,7 +602,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			addresses_to_add: Vec<EthereumAddress>,
 			addresses_to_remove: Vec<EthereumAddress>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			for address in addresses_to_add {
 				RestrictedAddresses::<T>::insert(address, ());
@@ -635,7 +619,7 @@ pub mod pallet {
 				}
 				Self::deposit_event(Event::RemovedRestrictedAddress { address });
 			}
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Binds an account to a redeem address. This is used to allow an account to redeem
@@ -650,7 +634,7 @@ pub mod pallet {
 		pub fn bind_redeem_address(
 			origin: OriginFor<T>,
 			address: EthereumAddress,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			ensure!(
 				!BoundRedeemAddress::<T>::contains_key(&account_id),
@@ -658,7 +642,7 @@ pub mod pallet {
 			);
 			BoundRedeemAddress::<T>::insert(&account_id, address);
 			Self::deposit_event(Event::BoundRedeemAddress { account_id, address });
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Updates the Withdrawal Tax, which is the amount levied on each withdrawal request.
@@ -693,7 +677,7 @@ pub mod pallet {
 		pub fn bind_executor_address(
 			origin: OriginFor<T>,
 			executor_address: EthereumAddress,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			ensure!(
 				!BoundExecutorAddress::<T>::contains_key(&account_id),
@@ -704,7 +688,7 @@ pub mod pallet {
 				account_id,
 				address: executor_address,
 			});
-			Ok(().into())
+			Ok(())
 		}
 	}
 
