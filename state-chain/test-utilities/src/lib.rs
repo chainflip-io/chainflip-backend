@@ -1,3 +1,4 @@
+#![feature(closure_track_caller)]
 use frame_system::Config;
 
 mod rich_test_externalities;
@@ -142,10 +143,10 @@ macro_rules! impl_test_helpers {
 			TestRunner::<()>::new($genesis).execute_with($init)
 		}
 	};
-	( $runtime:ty, $genesis:expr ) => {
+	( $runtime:ty, $genesis:expr $(,)? ) => {
 		$crate::impl_test_helpers!($runtime, $genesis, || {});
 	};
-	( $runtime:ty ) => {
+	( $runtime:ty $(,)? ) => {
 		$crate::impl_test_helpers!($runtime, RuntimeGenesisConfig::default());
 	};
 }
