@@ -1,11 +1,16 @@
+use core::fmt::Debug;
 use frame_support::{
 	assert_noop, assert_ok,
 	pallet_prelude::DispatchResult,
-	traits::{IntegrityTest, OnFinalize, OnIdle, OnInitialize, UnfilteredDispatchable},
+	traits::{IntegrityTest, OnFinalize, OnIdle, OnInitialize, OriginTrait},
 	weights::Weight,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_runtime::BuildStorage;
+use sp_core::H256;
+use sp_runtime::{
+	traits::{CheckedSub, Dispatchable, UniqueSaturatedInto},
+	BuildStorage, DispatchError,
+};
 
 /// Convenience trait to link a runtime with its corresponding AllPalletsWithSystem struct.
 pub trait HasAllPallets: frame_system::Config {
@@ -52,8 +57,10 @@ impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
 		mut self,
 		f: impl FnOnce() -> Ctx,
 	) -> TestExternalities<Runtime, Ctx> {
-		let block_number =
-			self.0.execute_with(|| frame_system::Pallet::<Runtime>::block_number()) + 1u32.into();
+		let block_number = self.0.execute_with(
+			#[track_caller]
+			|| frame_system::Pallet::<Runtime>::block_number(),
+		) + 1u32.into();
 		self.execute_at_block::<Ctx>(block_number, f)
 	}
 
@@ -65,17 +72,20 @@ impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
 		block_number: impl Into<BlockNumberFor<Runtime>>,
 		f: impl FnOnce() -> Ctx,
 	) -> TestExternalities<Runtime, Ctx> {
-		let context = self.0.execute_with(|| {
-			let block_number = block_number.into();
-			frame_system::Pallet::<Runtime>::reset_events();
-			frame_system::Pallet::<Runtime>::set_block_number(block_number);
-			Runtime::on_initialize(block_number);
-			let context = f();
-			Runtime::on_idle(block_number, Weight::MAX);
-			Runtime::on_finalize(block_number);
-			Runtime::integrity_test();
-			context
-		});
+		let context = self.0.execute_with(
+			#[track_caller]
+			|| {
+				let block_number = block_number.into();
+				frame_system::Pallet::<Runtime>::reset_events();
+				frame_system::Pallet::<Runtime>::set_block_number(block_number);
+				Runtime::on_initialize(block_number);
+				let context = f();
+				Runtime::on_idle(block_number, Weight::MAX);
+				Runtime::on_finalize(block_number);
+				Runtime::integrity_test();
+				context
+			},
+		);
 		TestExternalities { ext: self, context }
 	}
 }
@@ -107,17 +117,20 @@ where
 	#[track_caller]
 	pub fn new<GenesisConfig: BuildStorage>(config: GenesisConfig) -> TestExternalities<Runtime> {
 		let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-		ext.execute_with(|| {
-			frame_system::Pallet::<Runtime>::set_block_number(1u32.into());
-			Runtime::integrity_test();
-		});
+		ext.execute_with(
+			#[track_caller]
+			|| {
+				frame_system::Pallet::<Runtime>::set_block_number(1u32.into());
+				Runtime::integrity_test();
+			},
+		);
 		TestExternalities { ext: RichExternalities::new(ext), context: () }
 	}
 
 	/// Transforms the test context. Analogous to [std::iter::Iterator::map].
 	///
 	/// Storage is not accessible in this closure. This means that assert_noop! won't work. If
-	/// storage access is required, use `inspect_storage`.
+	/// storage access is required, use `then_execute_with` or `then_execute_with_keep_context`.
 	#[track_caller]
 	pub fn map_context<R>(self, f: impl FnOnce(Ctx) -> R) -> TestExternalities<Runtime, R> {
 		TestExternalities { ext: self.ext, context: f(self.context) }
@@ -127,18 +140,29 @@ where
 	#[track_caller]
 	pub fn then_execute_with<R>(self, f: impl FnOnce(Ctx) -> R) -> TestExternalities<Runtime, R> {
 		let context = self.context;
-		self.ext.execute_with(move || f(context))
+		self.ext.execute_with(
+			#[track_caller]
+			move || f(context),
+		)
 	}
 
 	/// Access the storage without changing the test context.
 	///
-	/// Use this for assertions, for example testing invariants.
+	/// Use this when you want to read or mutate the storage without
+	/// changing the test context. Also useful for assertions,
+	/// for example for testing invariants.
 	#[track_caller]
-	pub fn inspect_storage(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Ctx> {
-		self.then_execute_with(|context| {
-			f(&context);
-			context
-		})
+	pub fn then_execute_with_keep_context(
+		self,
+		f: impl FnOnce(&Ctx),
+	) -> TestExternalities<Runtime, Ctx> {
+		self.then_execute_with(
+			#[track_caller]
+			|context| {
+				f(&context);
+				context
+			},
+		)
 	}
 
 	/// Inspect the test context without accessing storage.
@@ -153,6 +177,10 @@ where
 		self.context
 	}
 
+	pub fn context(&self) -> &Ctx {
+		&self.context
+	}
+
 	/// Execute the given closure as if it was an extrinsic in the next block.
 	///
 	/// The closure's return value is next context.
@@ -164,7 +192,41 @@ where
 		f: impl FnOnce(Ctx) -> R,
 	) -> TestExternalities<Runtime, R> {
 		let context = self.context;
-		self.ext.execute_at_next_block(move || f(context))
+		self.ext.execute_at_next_block(
+			#[track_caller]
+			move || f(context),
+		)
+	}
+
+	/// Process the next `n` blocks, including hooks.
+	#[track_caller]
+	pub fn then_process_blocks(mut self, n: u32) -> TestExternalities<Runtime, Ctx> {
+		for _ in 0..n {
+			self = self.then_process_next_block();
+		}
+		self
+	}
+
+	/// Keep processing blocks up to and including the given block number.
+	pub fn then_process_blocks_until_block(
+		mut self,
+		block_number: impl Into<BlockNumberFor<Runtime>>,
+	) -> Self {
+		let current_block =
+			self.ext.0.execute_with(|| frame_system::Pallet::<Runtime>::block_number());
+		let target_block: BlockNumberFor<Runtime> = block_number.into();
+		self.then_process_blocks(
+			target_block
+				.checked_sub(&current_block)
+				.expect("cannot rewind blocks")
+				.unique_saturated_into(),
+		)
+	}
+
+	/// Process the next block, including hooks.
+	#[track_caller]
+	pub fn then_process_next_block(self) -> TestExternalities<Runtime, Ctx> {
+		self.then_execute_at_next_block(|context| context)
 	}
 
 	/// Execute the given closure as if it was an extrinsic at a specific block number.
@@ -177,7 +239,11 @@ where
 		f: impl FnOnce(Ctx) -> R,
 	) -> TestExternalities<Runtime, R> {
 		let context = self.context;
-		self.ext.execute_at_block(block_number, move || f(context))
+		self.ext.execute_at_block(
+			block_number,
+			#[track_caller]
+			move || f(context),
+		)
 	}
 
 	/// Execute the given closure against all the runtime events.
@@ -189,38 +255,16 @@ where
 		mut f: impl FnMut(Ctx, Runtime::RuntimeEvent) -> Option<R>,
 	) -> TestExternalities<Runtime, (Ctx, Vec<R>)> {
 		let context = self.context.clone();
-		self.ext.execute_with(move || {
-			let r = frame_system::Pallet::<Runtime>::events()
-				.into_iter()
-				.filter_map(|e| f(context.clone(), e.event))
-				.collect();
-			(context, r)
-		})
-	}
-
-	/// Applies the provided extrinsics in the next block, asserting the expected result.
-	#[allow(clippy::type_complexity)]
-	#[track_caller]
-	pub fn then_apply_extrinsics<
-		C: UnfilteredDispatchable<RuntimeOrigin = Runtime::RuntimeOrigin> + Clone,
-		I: IntoIterator<Item = (Runtime::RuntimeOrigin, C, DispatchResult)>,
-	>(
-		self,
-		f: impl FnOnce(&Ctx) -> I,
-	) -> TestExternalities<Runtime, Ctx> {
-		let r = self.ext.execute_at_next_block(|| {
-			for (origin, call, expected_result) in f(&self.context) {
-				match expected_result {
-					Ok(_) => {
-						assert_ok!(call.dispatch_bypass_filter(origin));
-					},
-					Err(e) => {
-						assert_noop!(call.dispatch_bypass_filter(origin), e);
-					},
-				}
-			}
-		});
-		TestExternalities { ext: r.ext, context: self.context }
+		self.ext.execute_with(
+			#[track_caller]
+			move || {
+				let r = frame_system::Pallet::<Runtime>::events()
+					.into_iter()
+					.filter_map(|e| f(context.clone(), e.event))
+					.collect();
+				(context, r)
+			},
+		)
 	}
 
 	/// Keeps executing pallet hooks until the given predicate returns true.
@@ -236,7 +280,7 @@ where
 			if should_break {
 				break next
 			} else {
-				self = next.then_execute_at_next_block(|context| context);
+				self = next.then_process_next_block();
 			}
 		}
 	}
@@ -246,6 +290,95 @@ where
 	pub fn commit_all(mut self) -> Self {
 		assert_ok!(self.ext.0.commit_all());
 		self
+	}
+
+	pub fn snapshot(mut self) -> Snapshot<Ctx> {
+		self.ext.0.commit_all().expect("Failed to commit storage changes");
+		Snapshot { raw_snapshot: self.ext.0.into_raw_snapshot(), context: self.context.clone() }
+	}
+
+	pub fn from_snapshot(snapshot: Snapshot<Ctx>) -> Self {
+		let ext = sp_io::TestExternalities::from_raw_snapshot(
+			snapshot.raw_snapshot.0,
+			snapshot.raw_snapshot.1,
+			Default::default(),
+		);
+		TestExternalities { ext: RichExternalities::new(ext), context: snapshot.context }
+	}
+}
+
+pub type RawSnapshot = (Vec<(Vec<u8>, (Vec<u8>, i32))>, H256);
+
+#[derive(Clone)]
+pub struct Snapshot<Ctx> {
+	raw_snapshot: RawSnapshot,
+	context: Ctx,
+}
+
+impl<Runtime, Ctx> TestExternalities<Runtime, Ctx>
+where
+	Runtime: HasAllPallets,
+	Ctx: Clone,
+	<Runtime::RuntimeCall as Dispatchable>::PostInfo: Debug + Default,
+{
+	/// Applies the provided extrinsics in the next block, asserting the expected result.
+	#[track_caller]
+	pub fn then_apply_extrinsics<
+		C: Into<Runtime::RuntimeCall>,
+		I: IntoIterator<Item = (Runtime::RuntimeOrigin, C, DispatchResult)>,
+	>(
+		self,
+		f: impl FnOnce(&Ctx) -> I,
+	) -> TestExternalities<Runtime, Ctx> {
+		let r = self.ext.execute_at_next_block(
+			#[track_caller]
+			|| {
+				for (origin, call, expected_result) in f(&self.context) {
+					match expected_result {
+						Ok(_) => {
+							assert_ok!(call.into().dispatch(origin));
+						},
+						Err(e) => {
+							assert_noop!(call.into().dispatch(origin), e);
+						},
+					}
+				}
+			},
+		);
+		TestExternalities { ext: r.ext, context: self.context }
+	}
+
+	#[track_caller]
+	pub fn assert_calls_ok<C: Into<Runtime::RuntimeCall>>(
+		self,
+		validator_ids: &[Runtime::AccountId],
+		call_generator: impl Fn(&Runtime::AccountId) -> C,
+	) -> Self {
+		self.then_apply_extrinsics(
+			#[track_caller]
+			|_ctx| {
+				validator_ids
+					.iter()
+					.map(|id| (OriginTrait::signed(id.clone()), call_generator(id), Ok(())))
+			},
+		)
+	}
+
+	#[track_caller]
+	pub fn assert_calls_noop<C: Into<Runtime::RuntimeCall>, E: Clone + Into<DispatchError>>(
+		self,
+		validator_ids: &[Runtime::AccountId],
+		call_generator: impl Fn(&Runtime::AccountId) -> C,
+		err: E,
+	) -> Self {
+		self.then_apply_extrinsics(
+			#[track_caller]
+			|_ctx| {
+				validator_ids.iter().map(|id| {
+					(OriginTrait::signed(id.clone()), call_generator(id), Err(err.clone().into()))
+				})
+			},
+		)
 	}
 }
 
@@ -370,7 +503,7 @@ mod test_examples {
 				]
 			})
 			// Use inspect when you don't want to write to storage.
-			.inspect_storage(|_| {
+			.then_execute_with_keep_context(|_| {
 				assert!(matches!(
 					System::events().into_iter().map(|e| e.event).collect::<Vec<_>>().as_slice(),
 					[
