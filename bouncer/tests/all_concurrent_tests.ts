@@ -11,7 +11,7 @@ import { testBoostingSwap } from './boost';
 import { observeBadEvent } from '../shared/utils/substrate';
 import { testFillOrKill } from './fill_or_kill';
 import { testDCASwaps } from './DCA_test';
-import { testCancelOrdersBatch } from '../shared/create_and_delete_multiple_orders';
+import { testCancelOrdersBatch } from './create_and_delete_multiple_orders';
 import { testAllSwaps } from './all_swaps';
 
 async function runAllConcurrentTests() {
