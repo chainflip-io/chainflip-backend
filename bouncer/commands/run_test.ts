@@ -1,16 +1,16 @@
 #!/usr/bin/env -S pnpm tsx
 //
 // Usage:
-// execute_test.ts <test_name> <optional_arg1> <optional_arg2>
+// run_test.ts <test_name> <optional_arg1> <optional_arg2>
 //
 // To get a list of available tests:
-// ./commands/execute_test.ts -h
+// ./commands/run_test.ts -h
 //
 //  Examples:
-// ./commands/execute_test.ts ./tests/fill_or_kill.ts
-// ./commands/execute_test.ts "Fund/Redeem" "my_seed"
-// ./commands/execute_test.ts DCA-Swaps
-// ./commands/execute_test.ts "dca swaps"
+// ./commands/run_test.ts ./tests/fill_or_kill.ts
+// ./commands/run_test.ts "Fund/Redeem" "my_seed"
+// ./commands/run_test.ts DCA-Swaps
+// ./commands/run_test.ts "dca swaps"
 //
 // Notes:
 // You can provide the test name as the test file name or file path.
@@ -69,7 +69,7 @@ async function main() {
 
   // Help message
   if (testName === undefined || testName === '-h' || testName === '--help') {
-    console.log('Usage: execute_test.ts <test_name> <optional_arg1> <optional_arg2> ...');
+    console.log('Usage: run_test.ts <test_name_or_file_path> <optional_arg1> <optional_arg2> ...');
     console.log('Available tests:');
     for (const test of allTests) {
       console.log(
