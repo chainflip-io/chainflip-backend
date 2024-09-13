@@ -950,6 +950,9 @@ pub mod sol_test_values {
 					.try_into()
 					.expect("Test data cannot be too long"), // Extra addresses
 			},
+			deposit_amount: 100_000_000_000_000_000,
+			source_asset: crate::Asset::Eth,
+			destination_asset: crate::Asset::Sol,
 		}
 	}
 

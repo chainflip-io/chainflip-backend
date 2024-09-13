@@ -316,6 +316,9 @@ mod benchmarks {
 				gas_budget: 1,
 				cf_parameters: Default::default(),
 			},
+			deposit_amount: 1_000_000_000_000_000_000u128,
+			source_asset: Asset::Eth,
+			destination_asset: Asset::Usdc,
 		};
 		let call = Call::<T, I>::contract_ccm_swap_request {
 			source_asset: Asset::Usdc,

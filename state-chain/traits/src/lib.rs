@@ -22,7 +22,7 @@ use cf_chains::{
 	address::ForeignChainAddress,
 	assets::any::AssetMap,
 	sol::{SolAddress, SolHash},
-	ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters,
+	ApiCall, CcmChannelMetadata, CcmSwapMetadata, Chain, ChainCrypto, ChannelRefundParameters,
 	DepositChannel, Ethereum,
 };
 use cf_primitives::{
@@ -845,21 +845,8 @@ pub trait EgressApi<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, C::ChainAmount)>,
+		maybe_ccm_with_gas_budget: Option<CcmSwapMetadata>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
-}
-
-impl<C: Chain + Get<ForeignChain>> EgressApi<C> for () {
-	type EgressError = DispatchError;
-
-	fn schedule_egress(
-		_asset: C::ChainAsset,
-		_amount: <C as Chain>::ChainAmount,
-		_destination_address: <C as Chain>::ChainAccount,
-		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
-	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
-		Ok(Default::default())
-	}
 }
 
 pub trait VaultKeyWitnessedHandler<C: Chain> {
