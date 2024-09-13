@@ -813,7 +813,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				// Here we call the submission code multiple times before giving up with an error.
 				const MAX_UPDATE_VERSION_RETRIES: usize = 10;
 				let mut update_successful = false;
-				for retry in 0..MAX_UPDATE_VERSION_RETRIES {
+				for retry in 1..=MAX_UPDATE_VERSION_RETRIES {
 					let block_hash = finalized_block_stream.cache().hash;
 					let block_number = finalized_block_stream.cache().number;
 
@@ -866,17 +866,17 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 						Ok(_) => {
 							// Submitting did not return an error, but this does not mean it was
 							// successful. Thus we check whether the version was actually updated:
-							let new_version =
-								get_recorded_cfe_version(&subxt_client, &subxt_signer).await?;
-							if new_version == *CFE_VERSION {
+							if get_recorded_cfe_version(&subxt_client, &subxt_signer).await? ==
+								*CFE_VERSION
+							{
 								update_successful = true;
 								break;
 							} else {
-								tracing::warn!("Submitting CFE version returned no error, but was not successful. Tried submitting {} of max {MAX_UPDATE_VERSION_RETRIES} times.", retry+1);
+								tracing::warn!("Submitting CFE version returned no error, but was not successful. Tried submitting {retry} of max {MAX_UPDATE_VERSION_RETRIES} times.");
 							}
 						},
 						Err(e) => {
-							tracing::error!("Submitting CFE version returned an error: {e}.\nTried submitting {} of max {MAX_UPDATE_VERSION_RETRIES} times.", retry+1);
+							tracing::error!("Submitting CFE version returned an error: {e}.\nTried submitting {retry} of max {MAX_UPDATE_VERSION_RETRIES} times.");
 						},
 					}
 				}
