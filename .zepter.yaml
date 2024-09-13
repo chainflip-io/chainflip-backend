@@ -1,5 +1,9 @@
 # Configuration for the Zepter CLI to ensure correct feature configuration in the Rust workspace.
 # <https://crates.io/crates/zepter>
+#
+# `cargo install zepter -f --locked` to install the CLI.
+#
+# Then `zepter check` to check the workspace and `zepter` to fix the issues.
 
 version:
   # File format for parsing it:
