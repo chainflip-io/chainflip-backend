@@ -16,6 +16,8 @@ use crate::{
 /// Implementations of this trait should *NEVER* directly access the storage of the elections
 /// pallet, and only access it through the passed-in accessors.
 pub trait ElectoralSystem: 'static {
+	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
+
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
 	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
 	/// by the engine.
@@ -162,6 +164,7 @@ pub trait ElectoralSystem: 'static {
 	/// You should *NEVER* update the epoch during this call. And in general updating any other
 	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
 	/// function.
+	#[allow(clippy::type_complexity)]
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		election_identifier: ElectionIdentifierOf<Self>,
 		electoral_access: &ElectionAccess,
@@ -169,7 +172,7 @@ pub trait ElectoralSystem: 'static {
 		// the "last" consensus, i.e. this can be `None` even if on some previous check we had
 		// consensus, but it was subsequently lost.
 		previous_consensus: Option<&Self::Consensus>,
-		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
+		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError>;
 }

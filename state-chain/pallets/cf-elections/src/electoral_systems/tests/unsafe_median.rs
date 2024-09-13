@@ -6,7 +6,7 @@ use crate::{
 	electoral_systems::unsafe_median::*,
 };
 
-type SimpleUnsafeMedian = UnsafeMedian<u64, (), ()>;
+type SimpleUnsafeMedian = UnsafeMedian<u64, (), (), ()>;
 
 const INIT_UNSYNCHRONISED_STATE: u64 = 22;
 const NEW_UNSYNCHRONISED_STATE: u64 = 33;
@@ -85,7 +85,7 @@ fn check_consensus_correctly_calculates_median_when_all_authorities_vote() {
 
 	with_default_context().expect_consensus(
 		AUTHORITY_COUNT,
-		(0..10).map(|v| ((), (v + 1) as u64)).collect(),
+		(0..10).map(|v| ((), (v + 1) as u64, ())).collect(),
 		Some((AUTHORITY_COUNT / 2) as u64),
 	);
 }
@@ -104,13 +104,13 @@ fn check_consensus_correctly_calculates_median_when_exactly_super_majority_autho
 	// Threshold number of votes is not enough:
 	with_default_context().expect_consensus(
 		AUTHORITY_COUNT,
-		(0..THRESHOLD).map(|v| ((), v as u64)).collect(),
+		(0..THRESHOLD).map(|v| ((), v as u64, ())).collect(),
 		None,
 	);
 	// Success threshold number of votes is enough:
 	with_default_context().expect_consensus(
 		AUTHORITY_COUNT,
-		(0..SUCCESS_THRESHOLD).map(|v| ((), v as u64)).collect(),
+		(0..SUCCESS_THRESHOLD).map(|v| ((), v as u64, ())).collect(),
 		Some((SUCCESS_THRESHOLD / 2) as u64),
 	);
 }

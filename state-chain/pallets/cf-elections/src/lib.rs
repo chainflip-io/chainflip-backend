@@ -354,7 +354,10 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		type ElectoralSystem: ElectoralSystem<OnFinalizeContext = ()>;
+		type ElectoralSystem: ElectoralSystem<
+			OnFinalizeContext = (),
+			ValidatorId = <Self as Chainflip>::ValidatorId,
+		>;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -738,13 +741,13 @@ pub mod pallet {
 							)
 						).filter(|(_, validator_id)| {
 							ContributingAuthorities::<T, I>::contains_key(validator_id)
-						}).filter_map(|(vote_components, _)| {
+						}).filter_map(|(vote_components, validator_id)| {
 							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash| {
 								// We don't bother to check if the reference has expired, as if we have the data we may as well use it, even if it was provided after the shared data reference expired (But before the reference was cleaned up `on_finalize`).
 								Ok(SharedData::<T, I>::get(shared_data_hash))
-							}).transpose()
-						}).filter_map_ok(|(properties, authority_vote)| match authority_vote {
-							AuthorityVote::Vote(vote) => Some((properties, vote)),
+							}).map(|vote| vote.map(|vote| (vote.0, vote.1, validator_id))).transpose()
+						}).filter_map_ok(|(properties, authority_vote, validator_id)| match authority_vote {
+							AuthorityVote::Vote(vote) => Some((properties, vote, validator_id)),
 							_ => None,
 						})
 						.collect::<Result<Vec<_>, _>>()?;
