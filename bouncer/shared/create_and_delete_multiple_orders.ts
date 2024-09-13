@@ -5,6 +5,14 @@ import { limitOrder } from './limit_order';
 import { rangeOrder } from './range_order';
 import { depositLiquidity } from './deposit_liquidity';
 import { deposits } from './setup_swaps';
+import { ExecutableTest } from './executable_test';
+
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testCancelOrdersBatch = new ExecutableTest(
+  'Cancel-Orders-Batch',
+  createAndDeleteMultipleOrders,
+  240,
+);
 
 const DEFAULT_LP: string = '//LP_3';
 
@@ -26,8 +34,7 @@ async function countOpenOrders(baseAsset: string, quoteAsset: string, lp: string
   return openOrders;
 }
 
-export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number, lpKey?: string) {
-  console.log(`=== cancel_orders_batch test ===`);
+export async function createAndDeleteMultipleOrders(numberOfLimitOrders = 30, lpKey?: string) {
   await using chainflip = await getChainflipApi();
 
   const lpUri = lpKey || DEFAULT_LP;
@@ -72,15 +79,15 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number,
     Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
   });
 
-  console.log('Submitting orders');
+  testCancelOrdersBatch.log('Submitting orders');
   await Promise.all(promises);
-  console.log('Orders successfully submitted');
+  testCancelOrdersBatch.log('Orders successfully submitted');
 
   let openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
-  console.log(`Number of open orders: ${openOrders}`);
+  testCancelOrdersBatch.log(`Number of open orders: ${openOrders}`);
 
-  console.log('Deleting opened orders...');
+  testCancelOrdersBatch.log('Deleting opened orders...');
   const orderDeleteEvent = observeEvent('liquidityPools:RangeOrderUpdated', {
     test: (event) => event.data.lp === lp.address && event.data.baseAsset === 'Btc',
   }).event;
@@ -90,12 +97,11 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number,
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
   await orderDeleteEvent;
-  console.log('All orders successfully deleted');
+  testCancelOrdersBatch.log('All orders successfully deleted');
 
   openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
-  console.log(`Number of open orders: ${openOrders}`);
+  testCancelOrdersBatch.log(`Number of open orders: ${openOrders}`);
 
   assert.strictEqual(openOrders, 0, 'Number of open orders should be 0');
-  console.log(`=== cancel_orders_batch test complete ===`);
 }

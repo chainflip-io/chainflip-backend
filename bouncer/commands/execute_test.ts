@@ -38,6 +38,7 @@ import { testAllSwaps } from '../tests/all_swaps';
 import { testBoostingSwap } from '../tests/boost';
 import { ConsoleColors, ConsoleLogColors } from '../shared/utils';
 import { testDeltaBasedIngress } from '../tests/delta_based_ingress';
+import { testCancelOrdersBatch } from '../shared/create_and_delete_multiple_orders';
 
 async function main() {
   const testName = process.argv[2];
@@ -63,6 +64,7 @@ async function main() {
     testGasLimitCcmSwaps,
     testSwapAfterDisconnection,
     testDeltaBasedIngress,
+    testCancelOrdersBatch,
   ];
 
   // Help message
