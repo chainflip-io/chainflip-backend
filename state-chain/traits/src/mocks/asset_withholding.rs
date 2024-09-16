@@ -29,9 +29,4 @@ impl AssetWithholding for MockAssetWithholding {
 			},
 		);
 	}
-
-	#[cfg(feature = "try-runtime")]
-	fn withheld_assets(asset: Asset) -> AssetAmount {
-		Self::withheld_assets(asset)
-	}
 }
