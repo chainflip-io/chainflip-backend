@@ -12,7 +12,7 @@ version:
   # message when someone tries to use an older version.
   binary: 0.13.2
 
-# The examples in this file assume crate `A` to have a dependency on crate `B`.
+# The explanatory comments in this file assume crate `A` to have a dependency on crate `B`.
 workflows:
   # Check that everything is good without modifying anything:
   check:
