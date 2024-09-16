@@ -48,8 +48,7 @@ macro_rules! impl_mock_chainflip {
 			impl_mock_epoch_info,
 			mocks::{
 				account_role_registry::MockAccountRoleRegistry,
-				ensure_origin_mock::{FailOnNoneOrigin, OnlyAllowRootOrigin},
-				funding_info::MockFundingInfo,
+				ensure_origin_mock::FailOnNoneOrigin, funding_info::MockFundingInfo,
 			},
 			Chainflip,
 		};
@@ -63,12 +62,13 @@ macro_rules! impl_mock_chainflip {
 
 		impl Chainflip for $runtime {
 			type Amount = u128;
-			type ValidatorId = <$runtime as frame_system::Config>::AccountId;
+			type ValidatorId = <Self as frame_system::Config>::AccountId;
 			type RuntimeCall = RuntimeCall;
 			type EnsureWitnessed = FailOnNoneOrigin<Self>;
 			type EnsurePrewitnessed = FailOnNoneOrigin<Self>;
 			type EnsureWitnessedAtCurrentEpoch = FailOnNoneOrigin<Self>;
-			type EnsureGovernance = OnlyAllowRootOrigin<Self>;
+			type EnsureGovernance =
+				frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
 			type EpochInfo = MockEpochInfo;
 			type AccountRoleRegistry = MockAccountRoleRegistry;
 			type FundingInfo = MockFundingInfo<Self>;

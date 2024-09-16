@@ -1,7 +1,6 @@
 #![cfg(test)]
 
 use crate::{self as pallet_cf_account_roles, Config};
-use cf_traits::mocks::ensure_origin_mock::OnlyAllowRootOrigin;
 
 use frame_support::{
 	derive_impl,
@@ -50,7 +49,7 @@ impl frame_system::Config for Test {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type EnsureGovernance = OnlyAllowRootOrigin<Self>;
+	type EnsureGovernance = frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
 	type WeightInfo = ();
 }
 
