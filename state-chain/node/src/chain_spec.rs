@@ -840,28 +840,23 @@ fn testnet_genesis(
 
 		// instance1
 		ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
-			broadcast_timeout: 5 * BLOCKS_PER_MINUTE_ETHEREUM,
-			..Default::default()
+			broadcast_timeout: 5 * BLOCKS_PER_MINUTE_ETHEREUM
 		},
 		// instance2
 		polkadot_broadcaster: state_chain_runtime::PolkadotBroadcasterConfig {
-			broadcast_timeout: 4 * BLOCKS_PER_MINUTE_POLKADOT,
-			..Default::default()
+			broadcast_timeout: 4 * BLOCKS_PER_MINUTE_POLKADOT
 		},
 		// instance3
 		bitcoin_broadcaster: state_chain_runtime::BitcoinBroadcasterConfig {
-			broadcast_timeout: 9, // = 90 minutes
-			..Default::default()
+			broadcast_timeout: 9 // = 90 minutes
 		},
 		// instance 4
 		arbitrum_broadcaster: state_chain_runtime::ArbitrumBroadcasterConfig {
-			broadcast_timeout: 2 * BLOCKS_PER_MINUTE_ARBITRUM,
-			..Default::default()
+			broadcast_timeout: 2 * BLOCKS_PER_MINUTE_ARBITRUM
 		},
 		// instance 5
 		solana_broadcaster: state_chain_runtime::SolanaBroadcasterConfig {
-			broadcast_timeout: 4 * BLOCKS_PER_MINUTE_SOLANA,
-			..Default::default()
+			broadcast_timeout: 4 * BLOCKS_PER_MINUTE_SOLANA
 		},
 	})
 	.expect("Genesis config is JSON-compatible.")

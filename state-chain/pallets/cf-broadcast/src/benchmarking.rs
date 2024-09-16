@@ -79,8 +79,9 @@ mod benchmarks {
 	fn on_initialize(t: Linear<1, 50>, r: Linear<1, 50>) {
 		let caller: T::AccountId = whitelisted_caller();
 		// We add one because one is added at genesis
+		let timeout_target_block = T::ChainTracking::get_block_height() + crate::BroadcastTimeout::<T, I>::get() + 1u32.into();
 		let timeout_block = frame_system::Pallet::<T>::block_number() +
-			crate::BroadcastTimeout::<T, I>::get() +
+			// crate::BroadcastTimeout::<T, I>::get() +
 			1_u32.into();
 		// Complexity parameter for expiry queue.
 
@@ -89,7 +90,7 @@ mod benchmarks {
 		for _ in 1..t {
 			broadcast_id += 1;
 			insert_transaction_broadcast_attempt::<T, I>(Some(caller.clone().into()), broadcast_id);
-			Timeouts::<T, I>::mutate(timeout_block, |timeouts| {
+			Timeouts::<T, I>::mutate(timeout_target_block, |timeouts| {
 				timeouts.insert((broadcast_id, caller.clone().into()))
 			});
 		}
@@ -127,8 +128,7 @@ mod benchmarks {
 	fn on_signature_ready() {
 		let broadcast_id = 0;
 		frame_system::Pallet::<T>::set_block_number(100u32.into());
-		let timeout_block =
-			frame_system::Pallet::<T>::block_number() + crate::BroadcastTimeout::<T, I>::get();
+		let timeout_block = T::ChainTracking::get_block_height() + crate::BroadcastTimeout::<T, I>::get();
 		insert_transaction_broadcast_attempt::<T, I>(Some(whitelisted_caller()), broadcast_id);
 		let call = generate_on_signature_ready_call::<T, I>();
 

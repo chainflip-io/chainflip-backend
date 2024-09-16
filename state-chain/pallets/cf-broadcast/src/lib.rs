@@ -284,7 +284,6 @@ pub mod pallet {
 	pub type Timeouts<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
-		// BlockNumberFor<T>,
 		ChainBlockNumberFor<T, I>,
 		BTreeSet<(BroadcastId, T::ValidatorId)>,
 		ValueQuery,
@@ -913,7 +912,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			Timeouts::<T, I>::append(
 				T::ChainTracking::get_block_height() + BroadcastTimeout::<T, I>::get(),
-				// frame_system::Pallet::<T>::block_number() + BroadcastTimeout::<T, I>::get(),
 				(broadcast_id, nominated_signer.clone()),
 			);
 

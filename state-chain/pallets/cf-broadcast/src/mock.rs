@@ -143,6 +143,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
+	type SafeModeBlockMarginForTargetChain = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<MockEthereumChainCrypto>;
 	type RetryPolicy = MockRetryPolicy;
@@ -156,7 +157,6 @@ cf_test_utilities::impl_test_helpers! {
 	RuntimeGenesisConfig {
 		broadcaster: pallet_cf_broadcast::GenesisConfig {
 			broadcast_timeout: 4,
-			..Default::default()
 		},
 		..Default::default()
 	},
