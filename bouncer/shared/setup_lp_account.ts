@@ -1,9 +1,9 @@
-import { lpMutex, handleSubstrateError, createLpKeypair } from './utils';
+import { lpMutex, handleSubstrateError, createStateChainKeypair } from './utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { fundFlip } from './fund_flip';
 
 export async function setupLpAccount(lpKey: string) {
-  const lp = createLpKeypair(lpKey);
+  const lp = createStateChainKeypair(lpKey);
 
   await fundFlip(lp.address, '1000');
   console.log(`Registering ${lp.address} as an LP...`);

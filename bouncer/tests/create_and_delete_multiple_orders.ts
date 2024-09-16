@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { createLpKeypair, handleSubstrateError, lpMutex } from '../shared/utils';
+import { createStateChainKeypair, handleSubstrateError, lpMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { limitOrder } from '../shared/limit_order';
 import { rangeOrder } from '../shared/range_order';
@@ -38,7 +38,7 @@ export async function createAndDeleteMultipleOrders(numberOfLimitOrders = 30, lp
   await using chainflip = await getChainflipApi();
 
   const lpUri = lpKey || DEFAULT_LP;
-  const lp = createLpKeypair(lpUri);
+  const lp = createStateChainKeypair(lpUri);
 
   await Promise.all([
     // provide liquidity to LP_3

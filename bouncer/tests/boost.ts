@@ -1,5 +1,3 @@
-// eslint-disable-next-line no-restricted-imports
-import Keyring from '@polkadot/keyring';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
@@ -13,6 +11,7 @@ import {
   calculateFeeWithBps,
   amountToFineAmountBigInt,
   newAddress,
+  createStateChainKeypair,
 } from '../shared/utils';
 import { send } from '../shared/send';
 import { depositLiquidity } from '../shared/deposit_liquidity';
@@ -25,9 +24,6 @@ import { ExecutableTest } from '../shared/executable_test';
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testBoostingSwap = new ExecutableTest('Boosting-For-Asset', main, 120);
 
-const keyring = new Keyring({ type: 'sr25519' });
-keyring.setSS58Format(2112);
-
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function stopBoosting<T = any>(
@@ -37,7 +33,7 @@ export async function stopBoosting<T = any>(
   errorOnFail: boolean = true,
 ): Promise<Event<T> | undefined> {
   await using chainflip = await getChainflipApi();
-  const lp = keyring.createFromUri(lpUri);
+  const lp = createStateChainKeypair(lpUri);
   const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex);
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
@@ -75,7 +71,7 @@ export async function addBoostFunds(
   lpUri = '//LP_BOOST',
 ): Promise<Event> {
   await using chainflip = await getChainflipApi();
-  const lp = keyring.createFromUri(lpUri);
+  const lp = createStateChainKeypair(lpUri);
   const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex);
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');

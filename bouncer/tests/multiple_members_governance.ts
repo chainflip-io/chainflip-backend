@@ -1,6 +1,5 @@
 import assert from 'assert';
-import Keyring from '../polkadot/keyring';
-import { tryUntilSuccess } from '../shared/utils';
+import { createStateChainKeypair, tryUntilSuccess } from '../shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { ExecutableTest } from '../shared/executable_test';
@@ -23,10 +22,7 @@ async function setGovernanceMembers(members: string[]) {
   await submitGovernanceExtrinsic((chainflip) => chainflip.tx.governance.newMembershipSet(members));
 }
 
-const keyring = new Keyring({ type: 'sr25519' });
-keyring.setSS58Format(2112);
-
-const alice = keyring.createFromUri('//Alice');
+const alice = createStateChainKeypair('//Alice');
 
 async function addAliceToGovernance() {
   const initMembers = await getGovernanceMembers();
