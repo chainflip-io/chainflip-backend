@@ -23,11 +23,11 @@ use state_chain_runtime::{
 	constants::common::*,
 	opaque::SessionKeys,
 	test_runner::*,
-	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumVaultConfig,
-	BitcoinChainTrackingConfig, EmissionsConfig, EthereumChainTrackingConfig, EthereumVaultConfig,
+	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, BitcoinChainTrackingConfig,
+	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumVaultConfig,
 	EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
 	PolkadotChainTrackingConfig, ReputationConfig, SessionConfig, SolanaChainTrackingConfig,
-	SolanaElectionsConfig, SolanaVaultConfig, ValidatorConfig,
+	SolanaElectionsConfig, ValidatorConfig,
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
@@ -207,11 +207,7 @@ impl ExtBuilder {
 				deployment_block: Some(0),
 				chain_initialized: true,
 			},
-			arbitrum_vault: ArbitrumVaultConfig {
-				deployment_block: None,
-				chain_initialized: false,
-			},
-			solana_vault: SolanaVaultConfig { deployment_block: None, chain_initialized: false },
+
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -230,8 +226,8 @@ impl ExtBuilder {
 				init_chain_state: ChainState::<Ethereum> {
 					block_height: 0,
 					tracked_data: EthereumTrackedData {
-						base_fee: 0u32.into(),
-						priority_fee: 0u32.into(),
+						base_fee: 100000u32.into(),
+						priority_fee: 1u32.into(),
 					},
 				},
 			},
@@ -276,11 +272,21 @@ impl ExtBuilder {
 				amount_to_slash: FLIPPERINOS_PER_FLIP,
 				_instance: std::marker::PhantomData,
 			},
+			environment: EnvironmentConfig {
+				sol_durable_nonces_and_accounts: vec![
+					(Default::default(), Default::default()),
+					(Default::default(), Default::default()),
+					(Default::default(), Default::default()),
+					(Default::default(), Default::default()),
+				],
+				..Default::default()
+			},
 			polkadot_threshold_signer: Default::default(),
 			solana_threshold_signer: Default::default(),
 			bitcoin_vault: Default::default(),
 			polkadot_vault: Default::default(),
-			environment: Default::default(),
+			arbitrum_vault: Default::default(),
+			solana_vault: Default::default(),
 			swapping: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),
@@ -318,6 +324,26 @@ impl ExtBuilder {
 						(),
 					),
 				}),
+			},
+			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
+				broadcast_timeout: 5 * MINUTES,
+				..Default::default()
+			},
+			polkadot_broadcaster: state_chain_runtime::PolkadotBroadcasterConfig {
+				broadcast_timeout: 4 * MINUTES,
+				..Default::default()
+			},
+			bitcoin_broadcaster: state_chain_runtime::BitcoinBroadcasterConfig {
+				broadcast_timeout: 90 * MINUTES,
+				..Default::default()
+			},
+			arbitrum_broadcaster: state_chain_runtime::ArbitrumBroadcasterConfig {
+				broadcast_timeout: 2 * MINUTES,
+				..Default::default()
+			},
+			solana_broadcaster: state_chain_runtime::SolanaBroadcasterConfig {
+				broadcast_timeout: 4 * MINUTES,
+				..Default::default()
 			},
 		})
 	}

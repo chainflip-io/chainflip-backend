@@ -30,113 +30,10 @@ jobs:
           fetch-depth: 0
 
       - name: Download binaries from same run 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: chainflip-backend-bin
           path: ./target/release
-
-      # Pull requests to release should use the same rules as the release branch itself
-      # For simplicity we use the same rules for branches to main, since it doesn't matter if we use "main" as the branch name.
-      - name: Set branch name
-        id: set-branch-name
-        run: |
-          echo "Working branch name: ${{ env.BRANCH_NAME }}"
-          echo "Github event name: ${{ github.event_name }}"
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "push"
-            echo "TARGET_BRANCH=${{ github.ref_name }}" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "pull or merge_group"
-            echo ${{ github.base_ref}}
-            echo "TARGET_BRANCH=${{ github.base_ref }}" >> $GITHUB_ENV
-          fi
-
-      - name: Is the branch a release/x.y branch?
-        shell: bash
-        run: |
-          echo "TARGET_BRANCH: ${{ env.TARGET_BRANCH }}"
-          TARGET_BRANCH=${{ env.TARGET_BRANCH }}
-          echo "Checking if branch name $TARGET_BRANCH is a release branch"
-          if [[ "${TARGET_BRANCH}" =~ ^release/[0-9]+\.[0-9]+$ || "${TARGET_BRANCH}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Branch name ${TARGET_BRANCH} does match the required format 'release/x.y'"
-            echo "IS_RELEASE_BRANCH=true" >> $GITHUB_ENV
-          else
-            echo "Branch name ${TARGET_BRANCH} does NOT match the required format 'release/x.y."
-            echo "IS_RELEASE_BRANCH=false" >> $GITHUB_ENV
-          fi
-
-      - name: Extract version and compute previous version
-        id: extract_version
-        if: env.IS_RELEASE_BRANCH == 'true'
-        shell: bash
-        run: |
-          git config --global --add safe.directory '*'
-          TARGET_BRANCH=${{ env.TARGET_BRANCH }}
-          echo "The target branch is $TARGET_BRANCH"
-          VERSION=$(echo "$TARGET_BRANCH" | grep -oE '[0-9]+\.[0-9]+')
-          MAJOR=$(echo $VERSION | cut -d. -f1)
-          MINOR=$(echo $VERSION | cut -d. -f2)
-
-          # Compute the previous version
-          if [ $MINOR -eq 0 ]; then
-            PREV_MAJOR=$((MAJOR - 1))
-            if [ $PREV_MAJOR -ge 0 ]; then
-              PREV_VERSION="${PREV_MAJOR}"
-            else
-              echo "No previous version available"
-              exit 1
-            fi
-          else
-            PREV_MINOR=$((MINOR - 1))
-            PREV_VERSION="${MAJOR}.${PREV_MINOR}"
-          fi
-
-          echo "Previous version: $PREV_VERSION"
-
-          if [[ "$PREV_VERSION" == *.* ]]; then
-            # Find the highest tag matching the previous minor version prefix
-            HIGHEST_TAG=$(git tag -l "${PREV_VERSION}.*" | sort -V | tail -n 1)
-          else
-            # Find the highest tag for the previous major version
-            HIGHEST_TAG=$(git tag -l "${PREV_VERSION}.*.*" | sort -V | tail -n 1)
-          fi
-
-          if [ -z "$HIGHEST_TAG" ]; then
-            echo "No tags found for previous version $PREV_VERSION"
-            exit 1
-          fi
-
-          echo "HIGHEST_TAG=$HIGHEST_TAG"
-          PREVIOUS_RELEASE_COMMIT=$(git rev-list -n 1 $HIGHEST_TAG)
-          echo "PREVIOUS_RELEASE_COMMIT=$PREVIOUS_RELEASE_COMMIT"
-          echo "PREVIOUS_RELEASE_COMMIT=$PREVIOUS_RELEASE_COMMIT" >> $GITHUB_ENV
-
-      # If we're on a release branch we need to download the previous release binaries
-      - name: Download latest release binaries for release branch.
-        if: env.IS_RELEASE_BRANCH == 'true'
-        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
-        with:
-          workflow: release-berghain.yml
-          name: chainflip-backend-bin
-          commit: ${{ env.PREVIOUS_RELEASE_COMMIT }}
-          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
-          path: latest-release
-
-      # If we're on main then the latest run of the release-sisyphos.yml workflow will have the latest release binaries
-      # Therefore we don't need to provide a commit.
-      - name: Download latest release binaries for main/PR branches.
-        if: env.IS_RELEASE_BRANCH == 'false'
-        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
-        with:
-          workflow: release-sisyphos.yml
-          name: chainflip-backend-bin
-          github_token: ${{ secrets.CF_BACKEND_GITHUB_TOKEN }}
-          path: latest-release
-
-      # See: engine-runner-bin/Cargo.toml for more information
-      - name: Move latest release dylib into the target/release ready to be packaged by cargo-deb.
-        run: |
-          mv latest-release/*.so target/release/
 
       - name: Get date
         id: get-date
@@ -152,7 +49,7 @@ jobs:
           cargo deb -v --no-build --no-strip -p chainflip-lp-api --deb-revision "${{ steps.get-date.outputs.date }}"
 
       - name: Upload packages 📤
-        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
           name: chainflip-backend-packages
           path: |

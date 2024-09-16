@@ -5,8 +5,8 @@ This README describes how the Chainflip Engine (CFE) actually runs and how the c
 The Chainflip Engine as it is run by a validator, consists of 3 build artefacts:
 
 1. The `engine-runner` binary.
-2. A shared library of the old [engine-dylib](./../engine-dylib/). This is fetched from the previous release build when a release is built. Or directly from the repo ([`old-engine-dylib](./../old-engine-dylib/)) for localnets
-3. A shared library of the new [engine-dylib](./../engine-dylib/). This is built during the `cargo build` of the current version.
+2. A shared library of the old engine dylib. This is downloaded from a previous build as part of the [runner build script](./build.rs).
+3. A shared library of the new/current [engine-dylib](./../engine-dylib/). This is built during `cargo build`.
 
 > The new version is always at least a minor version greater than the old. We use semver minor (or major) version to imply a breaking API change. In this case, we would require the new version to take the *last* release as the old version.
 e.g. If we're at version 1.3.0 and we require a breaking change. This would be called 1.4.0 and the 3 artefacts included in the release would be: `engine-runner`, `libchainflip_engine_v1_3_0` and `libchainflip_engine_v1_4_0`.

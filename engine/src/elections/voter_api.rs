@@ -1,3 +1,7 @@
+use frame_support::{
+	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	Parameter,
+};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::composite::{self, Composite},
@@ -33,13 +37,13 @@ macro_rules! generate_voter_api_tuple_impls {
     ($module:ident: ($(($electoral_system:ident, $voter:ident)),*$(,)?)) => {
         #[allow(non_snake_case)]
         #[async_trait::async_trait]
-        impl<$($voter: VoterApi<$electoral_system> + Send + Sync),*, $($electoral_system : ElectoralSystem + Send + Sync + 'static),*, Hooks: Send + Sync + 'static + composite::$module::Hooks<$($electoral_system,)*>> VoterApi<Composite<($($electoral_system,)*), Hooks>> for CompositeVoter<Composite<($($electoral_system,)*), Hooks>, ($($voter,)*)> {
+        impl<$($voter: VoterApi<$electoral_system> + Send + Sync),*, $($electoral_system : ElectoralSystem<ValidatorId = ValidatorId> + Send + Sync + 'static),*, ValidatorId: MaybeSerializeDeserialize + Member + Parameter, Hooks: Send + Sync + 'static + composite::$module::Hooks<$($electoral_system,)*>> VoterApi<Composite<($($electoral_system,)*), ValidatorId, Hooks>> for CompositeVoter<Composite<($($electoral_system,)*), ValidatorId, Hooks>, ($($voter,)*)> {
             async fn vote(
                 &self,
-                settings: <Composite<($($electoral_system,)*), Hooks> as ElectoralSystem>::ElectoralSettings,
-                properties: <Composite<($($electoral_system,)*), Hooks> as ElectoralSystem>::ElectionProperties,
+                settings: <Composite<($($electoral_system,)*), ValidatorId, Hooks> as ElectoralSystem>::ElectoralSettings,
+                properties: <Composite<($($electoral_system,)*), ValidatorId, Hooks> as ElectoralSystem>::ElectionProperties,
             ) -> Result<
-                <<Composite<($($electoral_system,)*), Hooks> as ElectoralSystem>::Vote as VoteStorage>::Vote,
+                <<Composite<($($electoral_system,)*), ValidatorId, Hooks> as ElectoralSystem>::Vote as VoteStorage>::Vote,
                 anyhow::Error,
             > {
                 use vote_storage::composite::$module::CompositeVote;

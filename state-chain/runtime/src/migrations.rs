@@ -2,4 +2,4 @@
 
 pub mod housekeeping;
 pub mod reap_old_accounts;
-pub mod solana_integration;
+pub mod serialize_solana_broadcast;

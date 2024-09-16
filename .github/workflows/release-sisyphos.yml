@@ -88,8 +88,6 @@ jobs:
     secrets: inherit
     with:
       run-job: true
-      upgrade-from-release: "perseverance"
-      upgrade-to-workflow-name: "ci-main.yml"
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
@@ -102,7 +100,7 @@ jobs:
     uses: ./.github/workflows/_70_post_release.yml
     with:
       network: "sisyphos"
-  upload-engine-shared-libs:
-    needs: [build, build-m2]
+  upload-versioned-build-artifacts:
+    needs: [upgrade-check, build, build-m2]
     uses: ./.github/workflows/_61_upload_versioned_build_artifacts.yml
     secrets: inherit

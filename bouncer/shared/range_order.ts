@@ -3,13 +3,13 @@ import { Keyring } from '../polkadot/keyring';
 import { handleSubstrateError, amountToFineAmount, lpMutex, assetDecimals } from '../shared/utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 
-export async function rangeOrder(ccy: Asset, amount: number) {
+export async function rangeOrder(ccy: Asset, amount: number, lpKey?: string, orderId?: number) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
   await using chainflip = await getChainflipApi();
 
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
-  const lpUri = process.env.LP_URI || '//LP_1';
+  const lpUri = lpKey ?? (process.env.LP_URI || '//LP_1');
   const lp = keyring.createFromUri(lpUri);
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -23,11 +23,13 @@ export async function rangeOrder(ccy: Asset, amount: number) {
   console.log('Setting up ' + ccy + ' range order');
   const orderCreatedEvent = observeEvent('liquidityPools:RangeOrderUpdated', {
     test: (event) =>
-      event.data.lp === lp.address && event.data.baseAsset === ccy && event.data.id === String(0),
+      event.data.lp === lp.address &&
+      event.data.baseAsset === ccy &&
+      event.data.id === String(orderId || 0),
   }).event;
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
-      .setRangeOrder(ccy.toLowerCase(), 'usdc', 0, [-887272, 887272], {
+      .setRangeOrder(ccy.toLowerCase(), 'usdc', orderId || 0, [-887272, 887272], {
         Liquidity: { Liquidity: liquidity },
       })
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));

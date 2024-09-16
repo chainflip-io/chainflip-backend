@@ -640,6 +640,10 @@ pub mod pallet {
 		BoostPoolCreated {
 			boost_pool: BoostPoolId<T::TargetChain>,
 		},
+		BoostedDepositLost {
+			prewitnessed_deposit_id: PrewitnessedDepositId,
+			amount: TargetChainAmount<T, I>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -918,10 +922,10 @@ pub mod pallet {
 				},
 				// The only way this can fail is if the target chain is unsupported, which should
 				// never happen.
-				Err(_) => {
+				Err(err) => {
 					log_or_panic!(
-						"Failed to construct TransferFallback call. Asset: {:?}, amount: {:?}, Destination: {:?}",
-						asset, amount, destination_address
+						"Failed to construct TransferFallback call. Asset: {:?}, amount: {:?}, Destination: {:?}, Error: {:?}",
+						asset, amount, destination_address, err
 					);
 				},
 			};
@@ -1078,14 +1082,18 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
-	type Chain = T::TargetChain;
+	type Account = <T::TargetChain as Chain>::ChainAccount;
+	type Asset = <T::TargetChain as Chain>::ChainAsset;
+	type Amount = <T::TargetChain as Chain>::ChainAmount;
+	type BlockNumber = <T::TargetChain as Chain>::ChainBlockNumber;
+	type DepositDetails = <T::TargetChain as Chain>::DepositDetails;
 
 	fn on_ingress(
-		channel: <Self::Chain as Chain>::ChainAccount,
-		asset: <Self::Chain as Chain>::ChainAsset,
-		amount: <Self::Chain as Chain>::ChainAmount,
-		block_number: <Self::Chain as Chain>::ChainBlockNumber,
-		details: <Self::Chain as Chain>::DepositDetails,
+		channel: Self::Account,
+		asset: Self::Asset,
+		amount: Self::Amount,
+		block_number: Self::BlockNumber,
+		details: Self::DepositDetails,
 	) {
 		Self::process_single_deposit(channel.clone(), asset, amount, details.clone(), block_number)
 			.unwrap_or_else(|e| {
@@ -1101,14 +1109,9 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 			});
 	}
 
-	fn on_ingress_reverted(
-		_channel: <Self::Chain as Chain>::ChainAccount,
-		_asset: <Self::Chain as Chain>::ChainAsset,
-		_amount: <Self::Chain as Chain>::ChainAmount,
-	) {
-	}
+	fn on_ingress_reverted(_channel: Self::Account, _asset: Self::Asset, _amount: Self::Amount) {}
 
-	fn on_channel_closed(channel: <Self::Chain as Chain>::ChainAccount) {
+	fn on_channel_closed(channel: Self::Account) {
 		Self::recycle_channel(&mut Weight::zero(), channel);
 	}
 }
@@ -1128,7 +1131,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 			}
 
-			if let BoostStatus::Boosted { prewitnessed_deposit_id, pools, .. } = boost_status {
+			if let BoostStatus::Boosted { prewitnessed_deposit_id, pools, amount } = boost_status {
 				for pool_tier in pools {
 					BoostPools::<T, I>::mutate(deposit_channel.asset, pool_tier, |pool| {
 						if let Some(pool) = pool {
@@ -1145,6 +1148,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						}
 					});
 				}
+				Self::deposit_event(Event::<T, I>::BoostedDepositLost {
+					prewitnessed_deposit_id,
+					amount,
+				})
 			}
 		}
 	}

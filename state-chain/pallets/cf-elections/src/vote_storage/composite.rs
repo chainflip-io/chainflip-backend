@@ -13,6 +13,7 @@ macro_rules! generate_vote_storage_tuple_impls {
 
             use codec::{Encode, Decode};
             use scale_info::TypeInfo;
+
             #[cfg(feature = "runtime-benchmarks")]
             use cf_chains::benchmarking_value::BenchmarkValue;
 
@@ -249,6 +250,24 @@ macro_rules! generate_vote_storage_tuple_impls {
             {
                 fn benchmark_value() -> Self {
                     CompositeSharedData::A(A::benchmark_value())
+                }
+            }
+            #[cfg(feature = "runtime-benchmarks")]
+            impl<$($t),*> BenchmarkValue for CompositeIndividualComponent<$($t),*>
+            where
+                A: BenchmarkValue,
+            {
+                fn benchmark_value() -> Self {
+                    CompositeIndividualComponent::A(A::benchmark_value())
+                }
+            }
+            #[cfg(feature = "runtime-benchmarks")]
+            impl<$($t),*> BenchmarkValue for CompositeVoteProperties<$($t),*>
+            where
+                A: BenchmarkValue,
+            {
+                fn benchmark_value() -> Self {
+                    CompositeVoteProperties::A(A::benchmark_value())
                 }
             }
         }

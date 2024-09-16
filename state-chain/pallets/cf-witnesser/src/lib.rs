@@ -24,7 +24,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	ensure,
-	pallet_prelude::{DispatchResultWithPostInfo, Member, RuntimeDebug},
+	pallet_prelude::{DispatchResult, Member, RuntimeDebug},
 	storage::with_storage_layer,
 	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
 	Hashable,
@@ -412,7 +412,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			mut call: Box<<T as Config>::RuntimeCall>,
 			epoch_index: EpochIndex,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 
 			let last_expired_epoch = T::EpochInfo::last_expired_epoch();
@@ -493,7 +493,7 @@ pub mod pallet {
 					));
 				}
 			}
-			Ok(().into())
+			Ok(())
 		}
 
 		/// This allows the root user to force through a witness call.

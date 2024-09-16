@@ -51,13 +51,13 @@ pub const fn threshold_from_share_count(share_count: u32) -> u32 {
 
 /// Returns the number of parties required for a threshold signature
 /// ceremony to *succeed*.
-pub fn success_threshold_from_share_count(share_count: u32) -> u32 {
+pub const fn success_threshold_from_share_count(share_count: u32) -> u32 {
 	threshold_from_share_count(share_count).checked_add(1).unwrap()
 }
 
 /// Returns the number of bad parties required for a threshold signature
 /// ceremony to *fail*.
-pub fn failure_threshold_from_share_count(share_count: u32) -> u32 {
+pub const fn failure_threshold_from_share_count(share_count: u32) -> u32 {
 	share_count - threshold_from_share_count(share_count)
 }
 

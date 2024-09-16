@@ -23,17 +23,19 @@ use jsonrpsee::{
 	types::error::{CallError, SubscriptionEmptyError},
 	SubscriptionSink,
 };
+use order_fills::OrderFills;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
 use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
-use sp_api::ApiError;
+use sp_api::{ApiError, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
 	Permill,
 };
+use sp_state_machine::InspectState;
 use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
@@ -57,6 +59,7 @@ use std::{
 };
 
 pub mod monitoring;
+pub mod order_fills;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcEpochState {
@@ -264,23 +267,21 @@ impl RpcAccountInfo {
 	fn broker(balance: u128, broker_info: BrokerInfo) -> Self {
 		Self::Broker {
 			flip_balance: balance.into(),
-			earned_fees: cf_chains::assets::any::AssetMap::try_from_iter(
+			earned_fees: cf_chains::assets::any::AssetMap::from_iter_or_default(
 				broker_info
 					.earned_fees
 					.iter()
 					.map(|(asset, balance)| (*asset, (*balance).into())),
-			)
-			.unwrap(),
+			),
 		}
 	}
 
 	fn lp(info: LiquidityProviderInfo, network: NetworkEnvironment, balance: u128) -> Self {
 		Self::LiquidityProvider {
 			flip_balance: balance.into(),
-			balances: cf_chains::assets::any::AssetMap::try_from_iter(
+			balances: cf_chains::assets::any::AssetMap::from_iter_or_default(
 				info.balances.iter().map(|(asset, balance)| (*asset, (*balance).into())),
-			)
-			.unwrap(),
+			),
 			refund_addresses: info
 				.refund_addresses
 				.into_iter()
@@ -818,6 +819,9 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_scheduled_swaps", item = BlockUpdate<SwapResponse>)]
 	fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
 
+	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
+	fn cf_subscribe_lp_order_fills(&self);
+
 	#[method(name = "scheduled_swaps")]
 	fn cf_scheduled_swaps(
 		&self,
@@ -903,22 +907,83 @@ pub trait CustomApi {
 /// An RPC extension for the state chain node.
 pub struct CustomRpc<C, B> {
 	pub client: Arc<C>,
-	pub _phantom: PhantomData<B>,
 	pub executor: Arc<dyn sp_core::traits::SpawnNamed>,
+	pub _phantom: PhantomData<B>,
 }
 
 impl<C, B> CustomRpc<C, B>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: sp_api::ProvideRuntimeApi<B>
-		+ Send
-		+ Sync
-		+ 'static
-		+ HeaderBackend<B>
-		+ BlockchainEvents<B>,
+	C: Send + Sync + 'static + HeaderBackend<B>,
 {
 	fn unwrap_or_best(&self, from_rpc: Option<<B as BlockT>::Hash>) -> B::Hash {
 		from_rpc.unwrap_or_else(|| self.client.info().best_hash)
+	}
+}
+
+pub struct StorageQueryApi<'a, C, B>(&'a C, PhantomData<B>);
+
+impl<'a, C, B> StorageQueryApi<'a, C, B>
+where
+	B: BlockT<Hash = state_chain_runtime::Hash>,
+	C: Send + Sync + 'static + CallApiAt<B>,
+{
+	pub fn new(client: &'a C) -> Self {
+		Self(client, Default::default())
+	}
+
+	pub fn get_storage_value<
+		V: frame_support::storage::StorageValue<T> + 'static,
+		T: codec::FullCodec,
+	>(
+		&self,
+		hash: <B as BlockT>::Hash,
+	) -> RpcResult<<V as frame_support::storage::StorageValue<T>>::Query> {
+		self.with_state_backend(hash, || V::get())
+	}
+
+	pub fn collect_from_storage_map<
+		M: frame_support::storage::IterableStorageMap<K, V> + 'static,
+		K: codec::FullEncode + codec::Decode,
+		V: codec::FullCodec,
+		I: FromIterator<(K, V)>,
+	>(
+		&self,
+		hash: <B as BlockT>::Hash,
+	) -> RpcResult<I> {
+		self.with_state_backend(hash, || M::iter().collect::<I>())
+	}
+
+	/// Execute a function that requires access to the state backend externalities environment.
+	///
+	/// Note that anything that requires access to the state backend should be executed within this
+	/// closure. Notably, for example, it's not possible to return an iterator from this function.
+	///
+	/// Example:
+	///
+	/// ```ignore
+	/// // This works because the storage value is resolved before the closure returns.
+	/// let vanity_names = StorageQueryApi::new(client).with_state_backend(hash, || {
+	///     pallet_cf_account_roles::VanityNames::get()
+	/// });
+	///
+	/// // This doesn't work because the iterator is a lazy value that is resolved after the closure returns.
+	/// let roles = StorageQueryApi::new(client).with_state_backend(hash, || {
+	///     pallet_cf_account_roles::AccountRoles::iter()
+	/// })
+	/// .collect::<Vec<_>>();
+	///
+	/// // Instead, collect the iterator before returning.
+	/// let roles = StorageQueryApi::new(client).with_state_backend(hash, || {
+	///     pallet_cf_account_roles::AccountRoles::iter().collect::<Vec<_>>()
+	/// });
+	/// ```
+	pub fn with_state_backend<R>(
+		&self,
+		hash: <B as BlockT>::Hash,
+		f: impl Fn() -> R,
+	) -> RpcResult<R> {
+		Ok(self.0.state_at(hash).map_err(to_rpc_error)?.inspect_state(f))
 	}
 }
 
@@ -946,7 +1011,8 @@ where
 		+ Sync
 		+ 'static
 		+ HeaderBackend<B>
-		+ BlockchainEvents<B>,
+		+ BlockchainEvents<B>
+		+ CallApiAt<B>,
 	C::Api: CustomRuntimeApi<B> + ElectoralRuntimeApi<B, SolanaInstance>,
 {
 	fn cf_is_auction_phase(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<bool> {
@@ -1603,7 +1669,7 @@ where
 			true,  /* only_on_changes */
 			false, /* end_on_error */
 			sink,
-			move |api, hash| api.cf_pool_price(hash, from_asset, to_asset),
+			move |client, hash| client.runtime_api().cf_pool_price(hash, from_asset, to_asset),
 		)
 	}
 
@@ -1617,8 +1683,10 @@ where
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
-			move |api, hash| {
-				api.cf_pool_price_v2(hash, base_asset, quote_asset)
+			move |client, hash| {
+				client
+					.runtime_api()
+					.cf_pool_price_v2(hash, base_asset, quote_asset)
 					.map_err(to_rpc_error)
 					.and_then(|result| result.map_err(map_dispatch_error))
 					.map(|price| PoolPriceV2 { base_asset, quote_asset, price })
@@ -1645,9 +1713,10 @@ where
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
-			move |api, hash| {
+			move |client, hash| {
 				Ok::<_, ApiError>(SwapResponse {
-					swaps: api
+					swaps: client
+						.runtime_api()
 						.cf_scheduled_swaps(hash, base_asset, quote_asset)?
 						.into_iter()
 						.map(|(swap, execute_at)| ScheduledSwap::new(swap, execute_at))
@@ -1691,12 +1760,13 @@ where
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
-			move |api, hash| {
-				Ok::<RpcPrewitnessedSwap, jsonrpsee::core::Error>(RpcPrewitnessedSwap {
+			move |client, hash| {
+				Ok::<_, jsonrpsee::core::Error>(RpcPrewitnessedSwap {
 					base_asset,
 					quote_asset,
 					side,
-					amounts: api
+					amounts: client
+						.runtime_api()
 						.cf_prewitness_swaps(hash, base_asset, quote_asset, side)
 						.map_err(to_rpc_error)?
 						.into_iter()
@@ -1727,6 +1797,39 @@ where
 				.map(|s| s.into())
 				.collect(),
 		})
+	}
+
+	fn cf_subscribe_lp_order_fills(
+		&self,
+		sink: SubscriptionSink,
+	) -> Result<(), SubscriptionEmptyError> {
+		self.new_subscription_with_state(
+			false, /* only_on_changes */
+			true,  /* end_on_error */
+			sink,
+			|client, hash, prev_pools| {
+				let pools = StorageQueryApi::new(client)
+					.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(hash)?;
+
+				let fills = prev_pools
+					.map(|prev_pools| {
+						let pools_events =
+							client.runtime_api().cf_lp_events(hash).map_err(to_rpc_error)?;
+
+						Ok::<_, jsonrpsee::core::Error>(
+							order_fills::order_fills_from_block_updates(
+								prev_pools,
+								&pools,
+								pools_events,
+							),
+						)
+					})
+					.transpose()?
+					.unwrap_or_default();
+
+				Ok::<_, jsonrpsee::core::Error>((fills, pools))
+			},
+		)
 	}
 
 	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
@@ -1866,14 +1969,35 @@ where
 		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
+	fn new_subscription<
+		T: Serialize + Send + Clone + Eq + 'static,
+		E: std::error::Error + Send + Sync + 'static,
+		F: Fn(&C, state_chain_runtime::Hash) -> Result<T, E> + Send + Clone + 'static,
+	>(
+		&self,
+		only_on_changes: bool,
+		end_on_error: bool,
+		sink: SubscriptionSink,
+		f: F,
+	) -> Result<(), SubscriptionEmptyError> {
+		self.new_subscription_with_state(
+			only_on_changes,
+			end_on_error,
+			sink,
+			move |client, hash, _state| f(client, hash).map(|res| (res, ())),
+		)
+	}
+
 	/// The subscription will return the first value immediately and then either return new values
 	/// only when it changes, or every new block. Note in both cases this can skip blocks. Also this
 	/// subscription can either filter out, or end the stream if the provided async closure returns
 	/// an error.
-	fn new_subscription<
+	fn new_subscription_with_state<
 		T: Serialize + Send + Clone + Eq + 'static,
 		E: std::error::Error + Send + Sync + 'static,
-		F: Fn(&C::Api, state_chain_runtime::Hash) -> Result<T, E> + Send + Clone + 'static,
+		// State to carry forward between calls to the closure.
+		S: 'static + Clone + Send,
+		F: Fn(&C, state_chain_runtime::Hash, Option<&S>) -> Result<(T, S), E> + Send + Clone + 'static,
 	>(
 		&self,
 		only_on_changes: bool,
@@ -1885,7 +2009,7 @@ where
 
 		let info = self.client.info();
 
-		let initial = match f(&self.client.runtime_api(), info.best_hash) {
+		let (initial_item, initial_state) = match f(&self.client, info.best_hash, None) {
 			Ok(initial) => initial,
 			Err(e) => {
 				let _ = sink.reject(jsonrpsee::core::Error::from(
@@ -1894,10 +2018,11 @@ where
 				return Ok(())
 			},
 		};
+
 		let stream = futures::stream::iter(std::iter::once(Ok(BlockUpdate {
 			block_hash: info.best_hash,
 			block_number: info.best_number,
-			data: initial.clone(),
+			data: initial_item.clone(),
 		})))
 		.chain(
 			self.client
@@ -1905,15 +2030,21 @@ where
 				.filter(|n| futures::future::ready(n.is_new_best))
 				.filter_map({
 					let client = self.client.clone();
-					let mut previous = initial;
+
+					let mut previous_item = initial_item;
+					let mut previous_state = initial_state;
+
 					move |n| {
-						futures::future::ready(match f(&client.runtime_api(), n.hash) {
-							Ok(new) if !only_on_changes || new != previous => {
-								previous = new.clone();
+						futures::future::ready(match f(&client, n.hash, Some(&previous_state)) {
+							Ok((new_item, new_state))
+								if !only_on_changes || new_item != previous_item =>
+							{
+								previous_item = new_item.clone();
+								previous_state = new_state;
 								Some(Ok(BlockUpdate {
 									block_hash: n.hash,
 									block_number: *n.header.number(),
-									data: new,
+									data: new_item,
 								}))
 							},
 							Err(error) if end_on_error => Some(Err(error)),

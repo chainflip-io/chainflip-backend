@@ -5,7 +5,10 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_runtime::BuildStorage;
+use sp_runtime::{
+	traits::{CheckedSub, UniqueSaturatedInto},
+	BuildStorage,
+};
 
 /// Convenience trait to link a runtime with its corresponding AllPalletsWithSystem struct.
 pub trait HasAllPallets: frame_system::Config {
@@ -52,8 +55,10 @@ impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
 		mut self,
 		f: impl FnOnce() -> Ctx,
 	) -> TestExternalities<Runtime, Ctx> {
-		let block_number =
-			self.0.execute_with(|| frame_system::Pallet::<Runtime>::block_number()) + 1u32.into();
+		let block_number = self.0.execute_with(
+			#[track_caller]
+			|| frame_system::Pallet::<Runtime>::block_number(),
+		) + 1u32.into();
 		self.execute_at_block::<Ctx>(block_number, f)
 	}
 
@@ -65,17 +70,20 @@ impl<Runtime: HasAllPallets> RichExternalities<Runtime> {
 		block_number: impl Into<BlockNumberFor<Runtime>>,
 		f: impl FnOnce() -> Ctx,
 	) -> TestExternalities<Runtime, Ctx> {
-		let context = self.0.execute_with(|| {
-			let block_number = block_number.into();
-			frame_system::Pallet::<Runtime>::reset_events();
-			frame_system::Pallet::<Runtime>::set_block_number(block_number);
-			Runtime::on_initialize(block_number);
-			let context = f();
-			Runtime::on_idle(block_number, Weight::MAX);
-			Runtime::on_finalize(block_number);
-			Runtime::integrity_test();
-			context
-		});
+		let context = self.0.execute_with(
+			#[track_caller]
+			|| {
+				let block_number = block_number.into();
+				frame_system::Pallet::<Runtime>::reset_events();
+				frame_system::Pallet::<Runtime>::set_block_number(block_number);
+				Runtime::on_initialize(block_number);
+				let context = f();
+				Runtime::on_idle(block_number, Weight::MAX);
+				Runtime::on_finalize(block_number);
+				Runtime::integrity_test();
+				context
+			},
+		);
 		TestExternalities { ext: self, context }
 	}
 }
@@ -107,10 +115,13 @@ where
 	#[track_caller]
 	pub fn new<GenesisConfig: BuildStorage>(config: GenesisConfig) -> TestExternalities<Runtime> {
 		let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-		ext.execute_with(|| {
-			frame_system::Pallet::<Runtime>::set_block_number(1u32.into());
-			Runtime::integrity_test();
-		});
+		ext.execute_with(
+			#[track_caller]
+			|| {
+				frame_system::Pallet::<Runtime>::set_block_number(1u32.into());
+				Runtime::integrity_test();
+			},
+		);
 		TestExternalities { ext: RichExternalities::new(ext), context: () }
 	}
 
@@ -127,7 +138,10 @@ where
 	#[track_caller]
 	pub fn then_execute_with<R>(self, f: impl FnOnce(Ctx) -> R) -> TestExternalities<Runtime, R> {
 		let context = self.context;
-		self.ext.execute_with(move || f(context))
+		self.ext.execute_with(
+			#[track_caller]
+			move || f(context),
+		)
 	}
 
 	/// Access the storage without changing the test context.
@@ -135,10 +149,13 @@ where
 	/// Use this for assertions, for example testing invariants.
 	#[track_caller]
 	pub fn inspect_storage(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Ctx> {
-		self.then_execute_with(|context| {
-			f(&context);
-			context
-		})
+		self.then_execute_with(
+			#[track_caller]
+			|context| {
+				f(&context);
+				context
+			},
+		)
 	}
 
 	/// Inspect the test context without accessing storage.
@@ -164,7 +181,41 @@ where
 		f: impl FnOnce(Ctx) -> R,
 	) -> TestExternalities<Runtime, R> {
 		let context = self.context;
-		self.ext.execute_at_next_block(move || f(context))
+		self.ext.execute_at_next_block(
+			#[track_caller]
+			move || f(context),
+		)
+	}
+
+	/// Process the next `n` blocks, including hooks.
+	#[track_caller]
+	pub fn then_process_blocks(mut self, n: u32) -> TestExternalities<Runtime, Ctx> {
+		for _ in 0..n {
+			self = self.then_process_next_block();
+		}
+		self
+	}
+
+	/// Keep processing blocks up to and including the given block number.
+	pub fn then_process_blocks_until_block(
+		mut self,
+		block_number: impl Into<BlockNumberFor<Runtime>>,
+	) -> Self {
+		let current_block =
+			self.ext.0.execute_with(|| frame_system::Pallet::<Runtime>::block_number());
+		let target_block: BlockNumberFor<Runtime> = block_number.into();
+		self.then_process_blocks(
+			target_block
+				.checked_sub(&current_block)
+				.expect("cannot rewind blocks")
+				.unique_saturated_into(),
+		)
+	}
+
+	/// Process the next block, including hooks.
+	#[track_caller]
+	pub fn then_process_next_block(self) -> TestExternalities<Runtime, Ctx> {
+		self.then_execute_at_next_block(|context| context)
 	}
 
 	/// Execute the given closure as if it was an extrinsic at a specific block number.
@@ -177,7 +228,11 @@ where
 		f: impl FnOnce(Ctx) -> R,
 	) -> TestExternalities<Runtime, R> {
 		let context = self.context;
-		self.ext.execute_at_block(block_number, move || f(context))
+		self.ext.execute_at_block(
+			block_number,
+			#[track_caller]
+			move || f(context),
+		)
 	}
 
 	/// Execute the given closure against all the runtime events.
@@ -189,13 +244,16 @@ where
 		mut f: impl FnMut(Ctx, Runtime::RuntimeEvent) -> Option<R>,
 	) -> TestExternalities<Runtime, (Ctx, Vec<R>)> {
 		let context = self.context.clone();
-		self.ext.execute_with(move || {
-			let r = frame_system::Pallet::<Runtime>::events()
-				.into_iter()
-				.filter_map(|e| f(context.clone(), e.event))
-				.collect();
-			(context, r)
-		})
+		self.ext.execute_with(
+			#[track_caller]
+			move || {
+				let r = frame_system::Pallet::<Runtime>::events()
+					.into_iter()
+					.filter_map(|e| f(context.clone(), e.event))
+					.collect();
+				(context, r)
+			},
+		)
 	}
 
 	/// Applies the provided extrinsics in the next block, asserting the expected result.
@@ -208,18 +266,21 @@ where
 		self,
 		f: impl FnOnce(&Ctx) -> I,
 	) -> TestExternalities<Runtime, Ctx> {
-		let r = self.ext.execute_at_next_block(|| {
-			for (origin, call, expected_result) in f(&self.context) {
-				match expected_result {
-					Ok(_) => {
-						assert_ok!(call.dispatch_bypass_filter(origin));
-					},
-					Err(e) => {
-						assert_noop!(call.dispatch_bypass_filter(origin), e);
-					},
+		let r = self.ext.execute_at_next_block(
+			#[track_caller]
+			|| {
+				for (origin, call, expected_result) in f(&self.context) {
+					match expected_result {
+						Ok(_) => {
+							assert_ok!(call.dispatch_bypass_filter(origin));
+						},
+						Err(e) => {
+							assert_noop!(call.dispatch_bypass_filter(origin), e);
+						},
+					}
 				}
-			}
-		});
+			},
+		);
 		TestExternalities { ext: r.ext, context: self.context }
 	}
 
@@ -236,7 +297,7 @@ where
 			if should_break {
 				break next
 			} else {
-				self = next.then_execute_at_next_block(|context| context);
+				self = next.then_process_next_block();
 			}
 		}
 	}

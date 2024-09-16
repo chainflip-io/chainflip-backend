@@ -1,34 +1,16 @@
-import { Keyring } from '../polkadot/keyring';
-import { handleSubstrateError, lpMutex } from '../shared/utils';
+import assert from 'assert';
+import { createLpKeypair, handleSubstrateError, lpMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 import { limitOrder } from './limit_order';
+import { rangeOrder } from './range_order';
+import { depositLiquidity } from './deposit_liquidity';
+import { deposits } from './setup_swaps';
 
-export async function createAndDeleteMultipleOrders(numberOfOrders: number) {
-  console.log(`=== cancel_orders_batch test ===`);
+const DEFAULT_LP: string = '//LP_3';
+
+async function countOpenOrders(baseAsset: string, quoteAsset: string, lp: string) {
   await using chainflip = await getChainflipApi();
-
-  const keyring = new Keyring({ type: 'sr25519' });
-  keyring.setSS58Format(2112);
-  const lpUri = process.env.LP_URI || '//LP_1';
-  const lp = keyring.createFromUri(lpUri);
-
-  // create a series of limit_order and save their info to delete them later on
-  const promises = [];
-  const orderToDelete: {
-    Limit?: { base_asset: string; quote_asset: string; side: string; id: number };
-    Range?: { base_asset: string; quote_asset: string; id: number };
-  }[] = [];
-  let i = 0;
-  while (i < numberOfOrders) {
-    promises.push(limitOrder('Btc', 0.00000001, i, i));
-    orderToDelete.push({ Limit: { base_asset: 'BTC', quote_asset: 'USDC', side: 'sell', id: i } });
-    i++;
-  }
-  console.log('Submitting orders');
-  await Promise.all(promises);
-  console.log('Orders successfully submitted');
-
-  let orders = await chainflip.rpc('cf_pool_orders', 'BTC', 'USDC', lp.address);
+  const orders = await chainflip.rpc('cf_pool_orders', baseAsset, quoteAsset, lp);
   if (!orders) {
     throw Error('Rpc cf_pool_orders returned undefined');
   }
@@ -38,18 +20,68 @@ export async function createAndDeleteMultipleOrders(numberOfOrders: number) {
   openOrders += orders?.limit_orders.asks.length || 0;
   // @ts-expect-error limit_orders does not exist on type AnyJson
   openOrders += orders?.limit_orders.bids.length || 0;
-  // @ts-expect-error limit_orders does not exist on type AnyJson
+  // @ts-expect-error range_orders does not exist on type AnyJson
   openOrders += orders?.range_orders.length || 0;
+
+  return openOrders;
+}
+
+export async function createAndDeleteMultipleOrders(numberOfLimitOrders: number, lpKey?: string) {
+  console.log(`=== cancel_orders_batch test ===`);
+  await using chainflip = await getChainflipApi();
+
+  const lpUri = lpKey || DEFAULT_LP;
+  const lp = createLpKeypair(lpUri);
+
+  await Promise.all([
+    // provide liquidity to LP_3
+    depositLiquidity('Usdc', 10000, false, lpUri),
+    depositLiquidity('Eth', deposits.get('Eth')!, false, lpUri),
+    depositLiquidity('Dot', deposits.get('Dot')!, false, lpUri),
+    depositLiquidity('Btc', deposits.get('Btc')!, false, lpUri),
+    depositLiquidity('Flip', deposits.get('Flip')!, false, lpUri),
+    depositLiquidity('Usdt', deposits.get('Usdt')!, false, lpUri),
+    depositLiquidity('ArbEth', deposits.get('ArbEth')!, false, lpUri),
+    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, lpUri),
+    depositLiquidity('Sol', deposits.get('Sol')!, false, lpUri),
+    depositLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
+  ]);
+
+  // create a series of limit_order and save their info to delete them later on
+  const promises = [];
+  const orderToDelete: {
+    Limit?: { base_asset: string; quote_asset: string; side: string; id: number };
+    Range?: { base_asset: string; quote_asset: string; id: number };
+  }[] = [];
+
+  for (let i = 0; i < numberOfLimitOrders; i++) {
+    promises.push(limitOrder('Btc', 0.00000001, i, i, lpUri));
+    orderToDelete.push({ Limit: { base_asset: 'BTC', quote_asset: 'USDC', side: 'sell', id: i } });
+  }
+  for (let i = 0; i < numberOfLimitOrders; i++) {
+    promises.push(limitOrder('Eth', 0.000000000000000001, i, i, lpUri));
+    orderToDelete.push({ Limit: { base_asset: 'ETH', quote_asset: 'USDC', side: 'sell', id: i } });
+  }
+
+  promises.push(rangeOrder('Btc', 0.1, lpUri, 0));
+  orderToDelete.push({
+    Range: { base_asset: 'BTC', quote_asset: 'USDC', id: 0 },
+  });
+  promises.push(rangeOrder('Eth', 0.01, lpUri, 0));
+  orderToDelete.push({
+    Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
+  });
+
+  console.log('Submitting orders');
+  await Promise.all(promises);
+  console.log('Orders successfully submitted');
+
+  let openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
+  openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
   console.log(`Number of open orders: ${openOrders}`);
 
-  // @ts-expect-error limit_orders does not exist on type AnyJson
-  for (const order of orders?.range_orders || []) {
-    orderToDelete.push({
-      Range: { base_asset: 'BTC', quote_asset: 'USDC', id: parseInt(order.id) },
-    });
-  }
-  console.log('Deleting all orders...');
-  const orderDeleteEvent = observeEvent('liquidityPools:LimitOrderUpdated', {
+  console.log('Deleting opened orders...');
+  const orderDeleteEvent = observeEvent('liquidityPools:RangeOrderUpdated', {
     test: (event) => event.data.lp === lp.address && event.data.baseAsset === 'Btc',
   }).event;
   await lpMutex.runExclusive(async () => {
@@ -59,18 +91,11 @@ export async function createAndDeleteMultipleOrders(numberOfOrders: number) {
   });
   await orderDeleteEvent;
   console.log('All orders successfully deleted');
-  orders = await chainflip.rpc('cf_pool_orders', 'BTC', 'USDC', lp.address);
-  if (!orders) {
-    throw Error('Rpc cf_pool_orders returned undefined');
-  }
-  console.log(orders);
-  openOrders = 0;
-  // @ts-expect-error limit_orders does not exist on type AnyJson
-  openOrders += orders?.limit_orders.asks.length || 0;
-  // @ts-expect-error limit_orders does not exist on type AnyJson
-  openOrders += orders?.limit_orders.bids.length || 0;
-  // @ts-expect-error limit_orders does not exist on type AnyJson
-  openOrders += orders?.range_orders.length || 0;
+
+  openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
+  openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
   console.log(`Number of open orders: ${openOrders}`);
+
+  assert.strictEqual(openOrders, 0, 'Number of open orders should be 0');
   console.log(`=== cancel_orders_batch test complete ===`);
 }

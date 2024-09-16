@@ -16,8 +16,8 @@ use sp_std::vec::Vec;
 
 /// This electoral system detects if something occurred or not. Voters simply vote if something
 /// happened, and if they haven't seen it happen, they don't vote.
-pub struct EgressSuccess<Identifier, Value, Settings, Hook> {
-	_phantom: core::marker::PhantomData<(Identifier, Value, Settings, Hook)>,
+pub struct EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId> {
+	_phantom: core::marker::PhantomData<(Identifier, Value, Settings, Hook, ValidatorId)>,
 }
 
 pub trait OnEgressSuccess<Identifier, Value> {
@@ -29,7 +29,8 @@ impl<
 		Value: Member + Parameter + Eq,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
-	> EgressSuccess<Identifier, Value, Settings, Hook>
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
 {
 	pub fn watch_for_egress<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
 		electoral_access: &mut ElectoralAccess,
@@ -45,8 +46,10 @@ impl<
 		Value: Member + Parameter + Eq,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
-	> ElectoralSystem for EgressSuccess<Identifier, Value, Settings, Hook>
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for EgressSuccess<Identifier, Value, Settings, Hook, ValidatorId>
 {
+	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -98,7 +101,7 @@ impl<
 		_election_identifier: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
+		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let votes_count = votes.len();
@@ -106,7 +109,7 @@ impl<
 			if votes_count != 0 &&
 				votes_count >= success_threshold_from_share_count(authorities) as usize
 			{
-				all_same(votes.into_iter().map(|(_, vote)| vote))
+				all_same(votes.into_iter().map(|(_, vote, _validator_id)| vote))
 			} else {
 				None
 			},

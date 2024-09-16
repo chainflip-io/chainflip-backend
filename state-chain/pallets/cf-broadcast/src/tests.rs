@@ -3,9 +3,9 @@
 use crate::{
 	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData,
 	BroadcastId, Config, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent,
-	FailedBroadcasters, Instance1, PalletOffence, PendingApiCalls, PendingBroadcasts,
-	RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts, TransactionMetadata,
-	TransactionOutIdToBroadcastId,
+	FailedBroadcasters, Instance1, PalletConfigUpdate, PalletOffence, PendingApiCalls,
+	PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts,
+	TransactionMetadata, TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
@@ -16,6 +16,7 @@ use cf_chains::{
 	},
 	ChainCrypto, FeeRefundCalculator, ForeignChain,
 };
+use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
@@ -484,7 +485,7 @@ fn ensure_safe_mode_is_moving_timeouts() {
 			let _ = start_mock_broadcast();
 			assert!(Timeouts::<Test, Instance1>::get(5u64).len() == 1);
 		})
-		.then_execute_at_block(5u64, |_| {})
+		.then_process_blocks_until_block(5u64)
 		.then_execute_with(|_| {
 			assert!(Timeouts::<Test, Instance1>::get(5u64).is_empty());
 			assert!(Timeouts::<Test, Instance1>::get(15u64).len() == 1);
@@ -921,7 +922,7 @@ fn timed_out_broadcaster_are_reported() {
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
 			expiry = System::block_number()
-				.saturating_add(<Test as crate::Config<Instance1>>::BroadcastTimeout::get());
+				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
 			let nominee = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id)
 				.unwrap()
 				.nominee
@@ -946,7 +947,7 @@ fn broadcast_can_be_aborted_due_to_time_out() {
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
 			expiry = System::block_number()
-				.saturating_add(<Test as crate::Config<Instance1>>::BroadcastTimeout::get());
+				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
 			ready_to_abort_broadcast(broadcast_id);
 
 			broadcast_id
@@ -971,7 +972,7 @@ fn aborted_broadcasts_can_still_succeed() {
 		.execute_with(|| {
 			let (broadcast_id, transaction_out_id) = start_mock_broadcast();
 			expiry = System::block_number()
-				.saturating_add(<Test as crate::Config<Instance1>>::BroadcastTimeout::get());
+				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
 			ready_to_abort_broadcast(broadcast_id);
 
 			(broadcast_id, transaction_out_id)
@@ -1057,7 +1058,7 @@ fn broadcast_retry_delay_works() {
 				},
 			));
 		})
-		.then_execute_at_block(target, |_| {})
+		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
 			let next_block = System::block_number() + 1;
 			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::decode_non_dedup_len(
@@ -1083,7 +1084,7 @@ fn broadcast_timeout_delay_works() {
 			BroadcastDelay::set(Some(delay));
 			target = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
 		})
-		.then_execute_at_block(target, |_| {})
+		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
 			target = System::block_number() + delay;
 
@@ -1124,7 +1125,7 @@ fn aborted_broadcasts_will_not_retry() {
 				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
 			));
 		})
-		.then_execute_at_block(target, |_| {})
+		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
 			// assert no retry happened
 			assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());
@@ -1385,5 +1386,31 @@ fn should_release_barriers_correctly_in_case_of_rotation_tx_succeeding_first() {
 		));
 
 		assert_eq!(BroadcastBarriers::<Test, Instance1>::get(), BTreeSet::new());
+	});
+}
+
+#[test]
+fn changing_broadcast_timeout() {
+	new_test_ext().execute_with(|| {
+		// ensure that timeout is the default value
+		assert_eq!(crate::BroadcastTimeout::<Test, _>::get(), crate::mock::BROADCAST_EXPIRY_BLOCKS);
+
+		// new timeout value, ensure that it's different from default
+		const NEW_TIMEOUT: u32 = 250;
+		assert_ne!(crate::mock::BROADCAST_EXPIRY_BLOCKS, NEW_TIMEOUT as u64);
+
+		// update the timeout
+		const UPDATE: PalletConfigUpdate =
+			PalletConfigUpdate::BroadcastTimeout { blocks: NEW_TIMEOUT };
+		assert_ok!(Broadcaster::update_pallet_config(RuntimeOrigin::root(), UPDATE));
+
+		// check that value was set
+		assert_eq!(crate::BroadcastTimeout::<Test, _>::get(), u64::from(NEW_TIMEOUT));
+
+		// check that update event was emitted
+		assert_eq!(
+			last_event::<Test>(),
+			RuntimeEvent::Broadcaster(crate::Event::PalletConfigUpdated { update: UPDATE }),
+		);
 	});
 }

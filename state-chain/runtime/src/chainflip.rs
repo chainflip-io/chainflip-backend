@@ -8,6 +8,7 @@ pub mod epoch_transition;
 pub mod evm_vault_activator;
 mod missed_authorship_slots;
 mod offences;
+pub mod pending_rotation_broadcasts;
 mod signer_nomination;
 pub mod solana_elections;
 
@@ -51,7 +52,7 @@ use cf_chains::{
 			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
 			DurableNonceAndAccount, RecoverDurableNonce, SolanaApi, SolanaEnvironment,
 		},
-		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto,
+		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
@@ -337,7 +338,7 @@ impl TransactionBuilder<Solana, SolanaApi<SolEnvironment>> for SolanaTransaction
 	fn build_transaction(
 		signed_call: &SolanaApi<SolEnvironment>,
 	) -> <Solana as Chain>::Transaction {
-		signed_call.transaction.clone()
+		SolanaTransactionData { serialized_transaction: signed_call.chain_encoded() }
 	}
 
 	fn refresh_unsigned_data(_tx: &mut <Solana as Chain>::Transaction) {
@@ -939,5 +940,21 @@ impl FetchesTransfersLimitProvider for SolanaLimit {
 		} else {
 			0
 		})
+	}
+}
+
+pub struct EvmLimit;
+impl FetchesTransfersLimitProvider for EvmLimit {
+	fn maybe_transfers_limit() -> Option<usize> {
+		Some(50)
+	}
+
+	fn maybe_ccm_limit() -> Option<usize> {
+		// For ccm calls we don't batch
+		None
+	}
+
+	fn maybe_fetches_limit() -> Option<usize> {
+		Some(20)
 	}
 }

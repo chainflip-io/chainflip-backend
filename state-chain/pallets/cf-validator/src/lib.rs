@@ -111,7 +111,7 @@ impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter};
+	use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, RotationBroadcastsPending};
 	use frame_support::sp_runtime::app_crypto::RuntimePublic;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
@@ -134,6 +134,9 @@ pub mod pallet {
 		type EpochTransitionHandler: EpochTransitionHandler;
 
 		type KeyRotator: KeyRotator<ValidatorId = ValidatorIdOf<Self>>;
+
+		/// checks if there are any rotation txs pending from the last rotation
+		type RotationBroadcastsPending: RotationBroadcastsPending;
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
@@ -324,6 +327,9 @@ pub mod pallet {
 		StoppedBidding { account_id: T::AccountId },
 		/// A previously non-bidding account has started bidding.
 		StartedBidding { account_id: T::AccountId },
+		/// The rotation transaction(s) for the previous rotation are still pending to be
+		/// succesfully broadcast, therefore, cannot start a new epoch rotation.
+		PreviousRotationStillPending,
 	}
 
 	#[pallet::error]
@@ -384,9 +390,14 @@ pub mod pallet {
 			weight.saturating_accrue(match CurrentRotationPhase::<T>::get() {
 				RotationPhase::Idle => {
 					if block_number.saturating_sub(CurrentEpochStartedAt::<T>::get()) >=
-						BlocksPerEpoch::<T>::get()
-					{
-						Self::start_authority_rotation()
+						BlocksPerEpoch::<T>::get() {
+						if T::RotationBroadcastsPending::rotation_broadcasts_pending() {
+							Self::deposit_event(Event::PreviousRotationStillPending);
+							T::ValidatorWeightInfo::rotation_phase_idle()
+						}
+						else {
+							Self::start_authority_rotation()
+						}
 					} else {
 						T::ValidatorWeightInfo::rotation_phase_idle()
 					}
@@ -566,7 +577,7 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::start_authority_rotation(
 			<Pallet<T> as EpochInfo>::current_authority_count().saturating_mul(2)
 		))]
-		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn force_rotation(origin: OriginFor<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
 				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
@@ -575,7 +586,7 @@ pub mod pallet {
 			ensure!(T::SafeMode::get().authority_rotation_enabled, Error::<T>::RotationsDisabled,);
 			Self::start_authority_rotation();
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Allow a node to set their keys for upcoming sessions
@@ -595,14 +606,10 @@ pub mod pallet {
 		/// - [Session Pallet](pallet_session::Config)
 		#[pallet::call_index(2)]
 		#[pallet::weight((< T as pallet_session::Config >::WeightInfo::set_keys(), DispatchClass::Operational))]
-		pub fn set_keys(
-			origin: OriginFor<T>,
-			keys: T::Keys,
-			proof: Vec<u8>,
-		) -> DispatchResultWithPostInfo {
+		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResult {
 			T::AccountRoleRegistry::ensure_validator(origin.clone())?;
 			<pallet_session::Pallet<T>>::set_keys(origin, keys, proof)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Allow a node to link their validator id to a peer id
@@ -626,7 +633,7 @@ pub mod pallet {
 			port: Port,
 			ip_address: Ipv6Addr,
 			signature: Ed25519Signature,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			// TODO Consider ensuring is non-private IP / valid IP
 
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
@@ -650,7 +657,7 @@ pub mod pallet {
 					(peer_id, port, ip_address)
 				{
 					// Mapping hasn't changed
-					return Ok(().into())
+					return Ok(())
 				}
 
 				if existing_peer_id != peer_id {
@@ -682,7 +689,7 @@ pub mod pallet {
 				ip_address,
 			);
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Allow a validator to report their current cfe version. Update storage and emit event if
@@ -703,10 +710,7 @@ pub mod pallet {
 		/// - None
 		#[pallet::call_index(4)]
 		#[pallet::weight((T::ValidatorWeightInfo::cfe_version(), DispatchClass::Operational))]
-		pub fn cfe_version(
-			origin: OriginFor<T>,
-			new_version: Version,
-		) -> DispatchResultWithPostInfo {
+		pub fn cfe_version(origin: OriginFor<T>, new_version: Version) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			let validator_id = <ValidatorIdOf<T> as IsType<
 				<T as frame_system::Config>::AccountId,
@@ -720,7 +724,7 @@ pub mod pallet {
 					});
 					*current_version = new_version;
 				}
-				Ok(().into())
+				Ok(())
 			})
 		}
 
@@ -780,12 +784,12 @@ pub mod pallet {
 		/// - [AlreadyBidding](Error::AlreadyBidding)
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::ValidatorWeightInfo::start_bidding())]
-		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResult {
 			ensure!(T::SafeMode::get().start_bidding_enabled, Error::<T>::StartBiddingDisabled);
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 			Self::activate_bidding(&account_id)?;
 			Self::deposit_event(Event::StartedBidding { account_id });
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Signals a node's intent to withdraw their funds after the next auction and desist
@@ -802,7 +806,7 @@ pub mod pallet {
 		/// - [DuringAuctionPhase](Error::AuctionPhase)
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::ValidatorWeightInfo::stop_bidding())]
-		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResult {
 			ensure!(T::SafeMode::get().stop_bidding_enabled, Error::<T>::StopBiddingDisabled);
 
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
@@ -813,7 +817,7 @@ pub mod pallet {
 				bidders.remove(&account_id).then_some(()).ok_or(Error::<T>::AlreadyNotBidding)
 			})?;
 			Self::deposit_event(Event::StoppedBidding { account_id });
-			Ok(().into())
+			Ok(())
 		}
 	}
 

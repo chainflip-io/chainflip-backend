@@ -7,12 +7,12 @@ use crate::{
 	CorruptStorageError,
 };
 use cf_primitives::AuthorityCount;
-use cf_utilities::{all_same, success_threshold_from_share_count};
+use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// This electoral system detects if a value changes. The SC can request that it detects if a
 /// particular value, the instance of which is specified by an identifier, has changed from some
@@ -24,8 +24,8 @@ use sp_std::vec::Vec;
 ///
 /// Authorities only need to vote if their observed value is different than the one specified in the
 /// `ElectionProperties`.
-pub struct Change<Identifier, Value, Settings, Hook> {
-	_phantom: core::marker::PhantomData<(Identifier, Value, Settings, Hook)>,
+pub struct Change<Identifier, Value, Settings, Hook, ValidatorId> {
+	_phantom: core::marker::PhantomData<(Identifier, Value, Settings, Hook, ValidatorId)>,
 }
 
 pub trait OnChangeHook<Identifier, Value> {
@@ -34,10 +34,11 @@ pub trait OnChangeHook<Identifier, Value> {
 
 impl<
 		Identifier: Member + Parameter + Ord,
-		Value: Member + Parameter + Eq,
+		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
-	> Change<Identifier, Value, Settings, Hook>
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> Change<Identifier, Value, Settings, Hook, ValidatorId>
 {
 	pub fn watch_for_change<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
 		electoral_access: &mut ElectoralAccess,
@@ -50,11 +51,13 @@ impl<
 }
 impl<
 		Identifier: Member + Parameter + Ord,
-		Value: Member + Parameter + Eq,
+		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
-	> ElectoralSystem for Change<Identifier, Value, Settings, Hook>
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for Change<Identifier, Value, Settings, Hook, ValidatorId>
 {
+	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -128,7 +131,7 @@ impl<
 		_election_identifier: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
+		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let votes_count = votes.len();
@@ -136,7 +139,17 @@ impl<
 			if votes_count != 0 &&
 				votes_count >= success_threshold_from_share_count(authorities) as usize
 			{
-				all_same(votes.into_iter().map(|(_, vote)| vote))
+				let mut counts = BTreeMap::new();
+				for (_, vote, _validator_id) in votes {
+					counts.entry(vote).and_modify(|count| *count += 1).or_insert(1);
+				}
+				counts.iter().find_map(|(vote, count)| {
+					if *count >= success_threshold_from_share_count(authorities) {
+						Some(vote.clone())
+					} else {
+						None
+					}
+				})
 			} else {
 				None
 			},

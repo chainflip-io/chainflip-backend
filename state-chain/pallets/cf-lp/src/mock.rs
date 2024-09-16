@@ -114,12 +114,11 @@ impl BalanceApi for MockBalanceApi {
 
 	fn free_balances(who: &Self::AccountId) -> assets::any::AssetMap<cf_primitives::AssetAmount> {
 		BALANCE_MAP.with(|balance_map| {
-			assets::any::AssetMap::try_from_iter(
+			assets::any::AssetMap::from_iter_or_default(
 				Asset::all().map(|asset| {
 					(asset, balance_map.borrow().get(who).cloned().unwrap_or_default())
 				}),
 			)
-			.unwrap()
 		})
 	}
 
