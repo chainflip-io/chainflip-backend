@@ -119,8 +119,6 @@ impl RuntimeUpgradeMock {
 	}
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
-
 parameter_types! {
 	pub static PercentCfeAtTargetVersion: Percent = Percent::from_percent(100);
 }

@@ -17,7 +17,6 @@ pub mod chain_tracking;
 pub mod deposit_handler;
 pub mod egress_handler;
 pub mod ensure_origin_mock;
-pub mod ensure_witnessed;
 pub mod epoch_info;
 pub mod eth_environment_provider;
 pub mod fee_payment;
