@@ -13,6 +13,7 @@ macro_rules! generate_vote_storage_tuple_impls {
 
             use codec::{Encode, Decode};
             use scale_info::TypeInfo;
+
             #[cfg(feature = "runtime-benchmarks")]
             use cf_chains::benchmarking_value::BenchmarkValue;
 

@@ -284,6 +284,7 @@ decl_runtime_apis!(
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
 		fn cf_swap_limits() -> SwapLimits;
+		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>>;
 	}
 );
 
