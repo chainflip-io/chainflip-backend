@@ -45,7 +45,7 @@ workflows:
 # Will be displayed when any workflow fails:
 help:
   text: |
-    It looks like one more more Zetper feature checks failed; please check the console output.
+    It looks like one more more Zepter feature checks failed; please check the console output.
     You can try to automatically address them by running `zepter`.
   links:
     - "https://github.com/paritytech/polkadot-sdk/issues/1831"
