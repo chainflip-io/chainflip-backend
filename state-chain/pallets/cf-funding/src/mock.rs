@@ -166,7 +166,7 @@ impl pallet_cf_funding::Config for Test {
 	type FunderId = AccountId;
 	type Broadcaster = MockFundingBroadcaster;
 	type ThresholdCallable = RuntimeCall;
-	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type EnsureThresholdSigned = FailOnNoneOrigin<Self>;
 	type RedemptionChecker = MockRedemptionChecker;
 	type SafeMode = MockRuntimeSafeMode;
 	type RegisterRedemption = MockRegisterRedemption;

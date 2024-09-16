@@ -11,7 +11,7 @@ fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> Reputat
 	ReputationPallet::reputation(who).reputation_points
 }
 
-pub fn advance_by_hearbeat_intervals(n: u64) {
+pub fn advance_by_heartbeat_intervals(n: u64) {
 	for _ in 0..n * HeartbeatBlockInterval::get() {
 		advance_by_block();
 	}
@@ -24,10 +24,10 @@ fn advance_by_block() {
 }
 
 // Move forward one heartbeat interval sending the heartbeat extrinsic for nodes
-fn move_forward_hearbeat_interval_and_submit_heartbeat(
+fn move_forward_heartbeat_interval_and_submit_heartbeat(
 	node: <Test as frame_system::Config>::AccountId,
 ) {
-	advance_by_hearbeat_intervals(1);
+	advance_by_heartbeat_intervals(1);
 	assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(node)));
 }
 
@@ -140,7 +140,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 
 		assert_eq!(ReputationPallet::accrual_ratio(), ACCRUAL_RATIO);
 
-		move_forward_hearbeat_interval_and_submit_heartbeat(ALICE);
+		move_forward_heartbeat_interval_and_submit_heartbeat(ALICE);
 		assert_reputation!(ALICE, REPUTATION_PER_HEARTBEAT);
 
 		// Double the accrual rate.
@@ -150,7 +150,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 			ACCRUAL_RATIO.1,
 		));
 
-		move_forward_hearbeat_interval_and_submit_heartbeat(ALICE);
+		move_forward_heartbeat_interval_and_submit_heartbeat(ALICE);
 		assert_reputation!(ALICE, REPUTATION_PER_HEARTBEAT * 3);
 
 		// Halve the divisor, equivalent to double the initial rate.
@@ -160,7 +160,7 @@ fn updating_accrual_rate_should_affect_reputation_points() {
 			ACCRUAL_RATIO.1 / 2,
 		));
 
-		move_forward_hearbeat_interval_and_submit_heartbeat(ALICE);
+		move_forward_heartbeat_interval_and_submit_heartbeat(ALICE);
 		assert_reputation!(ALICE, REPUTATION_PER_HEARTBEAT * 5);
 	});
 }
@@ -318,7 +318,7 @@ fn heartbeats_emitted_in_safe_mode() {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			reputation: crate::PalletSafeMode::CODE_RED,
 		});
-		advance_by_hearbeat_intervals(1);
+		advance_by_heartbeat_intervals(1);
 
 		assert_eq!(MockHeartbeat::heartbeats(), 1);
 	});
@@ -418,7 +418,7 @@ fn submitting_heartbeat_more_than_once_in_an_interval() {
 		assert!(HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be online");
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
 		assert!(HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be online");
-		advance_by_hearbeat_intervals(1);
+		advance_by_heartbeat_intervals(1);
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
 		assert!(HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be online");
 	});
@@ -429,7 +429,7 @@ fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));
 		assert!(HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be online");
-		advance_by_hearbeat_intervals(1);
+		advance_by_heartbeat_intervals(1);
 		assert_eq!(
 			ReputationPallet::current_network_state().offline,
 			vec![ALICE],
@@ -471,7 +471,7 @@ fn only_authorities_should_appear_in_network_state() {
 
 		assert!(HeartbeatQualification::<Test>::is_qualified(&ALICE), "Alice should be online");
 
-		advance_by_hearbeat_intervals(3);
+		advance_by_heartbeat_intervals(3);
 
 		assert!(!HeartbeatQualification::<Test>::is_qualified(&BOB), "Bob should be offline");
 
@@ -499,7 +499,7 @@ fn in_safe_mode_you_dont_lose_reputation_for_being_offline() {
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			reputation: PalletSafeMode { reporting_enabled: false },
 		});
-		advance_by_hearbeat_intervals(3);
+		advance_by_heartbeat_intervals(3);
 		assert!(!HeartbeatQualification::<Test>::is_qualified(&BOB));
 		assert_eq!(reputation, reputation_points(&BOB));
 	});
@@ -554,8 +554,8 @@ fn should_properly_check_if_validator_is_qualified() {
 		);
 
 		// Check that updating reputations properly calculates qualifications
-		move_forward_hearbeat_interval_and_submit_heartbeat(ALICE);
-		move_forward_hearbeat_interval_and_submit_heartbeat(BOB);
+		move_forward_heartbeat_interval_and_submit_heartbeat(ALICE);
+		move_forward_heartbeat_interval_and_submit_heartbeat(BOB);
 
 		assert!(!ReputationPointsQualification::<Test>::is_qualified(&EVE));
 		assert_eq!(
@@ -665,4 +665,26 @@ fn reputation_cutoff_threshold() {
 		]),
 		0
 	);
+}
+
+#[test]
+fn ensure_governance_origin_checks() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			ReputationPallet::update_accrual_ratio(RuntimeOrigin::signed(ALICE), 1, 1),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			ReputationPallet::set_penalty(
+				RuntimeOrigin::signed(ALICE),
+				AllOffences::MissedHeartbeat,
+				Penalty::<Test> { reputation: 1, suspension: 1 }
+			),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			ReputationPallet::update_missed_heartbeat_penalty(RuntimeOrigin::signed(ALICE), 1),
+			sp_runtime::traits::BadOrigin,
+		);
+	});
 }

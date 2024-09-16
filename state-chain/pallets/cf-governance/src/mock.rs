@@ -3,8 +3,11 @@ use std::cell::RefCell;
 use crate::{self as pallet_cf_governance};
 use cf_primitives::SemVer;
 use cf_traits::{
-	impl_mock_chainflip, mocks::time_source, AuthoritiesCfeVersions, CompatibleCfeVersions,
-	ExecutionCondition, RuntimeUpgrade,
+	mocks::{
+		account_role_registry::MockAccountRoleRegistry, ensure_origin_mock::FailOnNoneOrigin,
+		funding_info::MockFundingInfo, time_source,
+	},
+	AuthoritiesCfeVersions, CompatibleCfeVersions, ExecutionCondition, RuntimeUpgrade,
 };
 use frame_support::{derive_impl, dispatch::DispatchResultWithPostInfo, ensure, parameter_types};
 use frame_system as system;
@@ -63,7 +66,26 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl_mock_chainflip!(Test);
+cf_traits::impl_mock_epoch_info!(
+	<Test as frame_system::Config>::AccountId,
+	u128,
+	cf_primitives::EpochIndex,
+	cf_primitives::AuthorityCount,
+);
+
+impl cf_traits::Chainflip for Test {
+	type Amount = u128;
+	type ValidatorId = <Test as frame_system::Config>::AccountId;
+	type RuntimeCall = RuntimeCall;
+	type EnsureWitnessed = FailOnNoneOrigin<Self>;
+	type EnsurePrewitnessed = FailOnNoneOrigin<Self>;
+	type EnsureWitnessedAtCurrentEpoch = FailOnNoneOrigin<Self>;
+	// Using actual EnsureGovernance instead of mock
+	type EnsureGovernance = crate::EnsureGovernance;
+	type EpochInfo = MockEpochInfo;
+	type AccountRoleRegistry = MockAccountRoleRegistry;
+	type FundingInfo = MockFundingInfo<Self>;
+}
 
 pub struct UpgradeConditionMock;
 
@@ -135,6 +157,9 @@ pub const CHARLES: <Test as frame_system::Config>::AccountId = 789u64;
 pub const EVE: <Test as frame_system::Config>::AccountId = 987u64;
 pub const PETER: <Test as frame_system::Config>::AccountId = 988u64;
 pub const MAX: <Test as frame_system::Config>::AccountId = 989u64;
+
+/// Not a member of the governance, used for testing ensure governance check
+pub const NOT_GOV_MEMBER: <Test as frame_system::Config>::AccountId = 6969u64;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,

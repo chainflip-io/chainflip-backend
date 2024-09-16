@@ -136,7 +136,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type ThresholdSigner = MockThresholdSigner<MockEthereumChainCrypto, RuntimeCall>;
 	type BroadcastSignerNomination = MockNominator;
 	type OffenceReporter = MockOffenceReporter;
-	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type EnsureThresholdSigned = FailOnNoneOrigin<Self>;
 	type WeightInfo = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = MockCallback;

@@ -6,6 +6,7 @@ use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::block_height_provider::BlockHeightProvider, AsyncResult, EpochInfo, VaultActivator,
 };
+use frame_support::assert_noop;
 
 pub const NEW_AGG_PUBKEY: MockAggKey = MockAggKey(*b"newk");
 
@@ -82,5 +83,15 @@ fn vault_start_block_number_not_set_when_chain_not_initialized() {
 			PendingVaultActivation::<Test, _>::get().unwrap(),
 			VaultActivationStatus::Complete
 		));
+	});
+}
+
+#[test]
+fn only_governance_can_initialize_chain() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			VaultsPallet::initialize_chain(RuntimeOrigin::signed(100)),
+			sp_runtime::traits::BadOrigin,
+		);
 	});
 }
