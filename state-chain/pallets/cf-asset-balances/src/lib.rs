@@ -28,8 +28,6 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
 
-pub const MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH: usize = 50;
-pub const MAX_REFUNDED_VALIDATORS_ARB_ETH_PER_EPOCH: usize = 50;
 pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -196,15 +194,6 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn stop_refunding(chain: ForeignChain, number_of_refunds: usize) -> bool {
-		match chain {
-			ForeignChain::Ethereum => number_of_refunds >= MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH,
-			ForeignChain::Arbitrum =>
-				number_of_refunds >= MAX_REFUNDED_VALIDATORS_ARB_ETH_PER_EPOCH,
-			_ => false,
-		}
-	}
-
 	// Reconciles the amount owed with the amount available for distribution.
 	//
 	// The owed and available amount are mutated in place.
@@ -304,11 +293,8 @@ impl<T: Config> Pallet<T> {
 					Liabilities::<T>::take(chain.gas_asset()).into_iter().collect::<Vec<_>>();
 				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(*amount));
 
-				for (refund_counter, (destination, amount)) in owed_assets.iter_mut().enumerate() {
+				for (destination, amount) in owed_assets.iter_mut() {
 					debug_assert!(*amount > 0);
-					if Self::stop_refunding(chain, refund_counter) {
-						break;
-					}
 					let _ = Self::reconcile(chain, destination, amount, total_withheld);
 					if *total_withheld == 0 {
 						break;
