@@ -3,7 +3,7 @@ use cf_primitives::AuthorityCount;
 use super::{mocks::*, register_checks};
 use crate::{
 	electoral_system::{ConsensusStatus, ElectoralReadAccess},
-	electoral_systems::unsafe_median::*,
+	electoral_systems::{tests::utils::generate_votes, unsafe_median::*},
 };
 
 type SimpleUnsafeMedian = UnsafeMedian<u64, (), (), ()>;
@@ -84,9 +84,8 @@ fn check_consensus_correctly_calculates_median_when_all_authorities_vote() {
 	const AUTHORITY_COUNT: AuthorityCount = 10;
 
 	with_default_context().expect_consensus(
-		AUTHORITY_COUNT,
-		(0..10).map(|v| ((), (v + 1) as u64, ())).collect(),
-		Some((AUTHORITY_COUNT / 2) as u64),
+		generate_votes(AUTHORITY_COUNT, AUTHORITY_COUNT),
+		Some((AUTHORITY_COUNT / 2) as u64 - 1u64),
 	);
 }
 
@@ -100,17 +99,12 @@ fn check_consensus_correctly_calculates_median_when_exactly_super_majority_autho
 		cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT);
 
 	// Default is no consensus:
-	with_default_context().expect_consensus(AUTHORITY_COUNT, Default::default(), None);
+	with_default_context().expect_consensus(generate_votes(0, AUTHORITY_COUNT), None);
 	// Threshold number of votes is not enough:
+	with_default_context().expect_consensus(generate_votes(THRESHOLD, AUTHORITY_COUNT), None);
+	// // Success threshold number of votes is enough:
 	with_default_context().expect_consensus(
-		AUTHORITY_COUNT,
-		(0..THRESHOLD).map(|v| ((), v as u64, ())).collect(),
-		None,
-	);
-	// Success threshold number of votes is enough:
-	with_default_context().expect_consensus(
-		AUTHORITY_COUNT,
-		(0..SUCCESS_THRESHOLD).map(|v| ((), v as u64, ())).collect(),
+		generate_votes(SUCCESS_THRESHOLD, AUTHORITY_COUNT),
 		Some((SUCCESS_THRESHOLD / 2) as u64),
 	);
 }

@@ -1,7 +1,7 @@
 use crate::{
 	electoral_system::{
-		AuthorityVoteOf, ConsensusStatus, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
+		AuthorityVoteOf, ConsensusStatus, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess,
+		ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
 	},
 	mock::Test,
 	vote_storage::{self, VoteStorage},
@@ -150,10 +150,13 @@ impl ElectoralSystem for MockElectoralSystem {
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
-		_authorities: AuthorityCount,
+		consensus_votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-		Ok(if Self::should_assume_consensus() { Some(votes.len() as AuthorityCount) } else { None })
+		Ok(if Self::should_assume_consensus() {
+			Some(consensus_votes.active_votes().len() as AuthorityCount)
+		} else {
+			None
+		})
 	}
 
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(

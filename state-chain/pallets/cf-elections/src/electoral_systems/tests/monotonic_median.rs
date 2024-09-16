@@ -3,8 +3,8 @@ use super::{
 	register_checks,
 };
 use crate::{
-	electoral_system::{ConsensusStatus, ElectoralReadAccess},
-	electoral_systems::monotonic_median::*,
+	electoral_system::{ConsensusStatus, ConsensusVote, ConsensusVotes, ElectoralReadAccess},
+	electoral_systems::{monotonic_median::*, tests::utils::generate_votes},
 };
 use cf_primitives::AuthorityCount;
 
@@ -60,10 +60,9 @@ register_checks! {
 
 #[test]
 fn check_consensus_correctly_calculates_median_when_all_authorities_vote() {
-	const AUTHORITIES: AuthorityCount = 10;
+	const AUTHORITY_COUNT: AuthorityCount = 10;
 	with_default_context().expect_consensus(
-		AUTHORITIES,
-		(0..AUTHORITIES).map(|v| ((), v as u64, ())).collect::<Vec<_>>(),
+		generate_votes(AUTHORITY_COUNT, AUTHORITY_COUNT),
 		Some(3), // lower tercile
 	);
 }
@@ -71,19 +70,21 @@ fn check_consensus_correctly_calculates_median_when_all_authorities_vote() {
 #[test]
 fn check_consensus_correctly_calculates_median_when_exactly_super_majority_authorities_vote() {
 	const AUTHORITY_COUNT: AuthorityCount = 10;
-	let vote_count = cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT);
-	let votes = (0..vote_count).map(|v| ((), v as u64, ())).collect::<Vec<_>>();
+	const SUCCESS_THRESHOLD: AuthorityCount =
+		cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT);
 
-	with_default_context().expect_consensus(AUTHORITY_COUNT, votes, Some(3));
+	with_default_context()
+		.expect_consensus(generate_votes(SUCCESS_THRESHOLD, AUTHORITY_COUNT), Some(3));
 }
 
 #[test]
 fn too_few_votes_consensus_not_possible() {
 	const AUTHORITY_COUNT: AuthorityCount = 10;
-	let vote_count = cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT) - 1;
-	let votes = (0..vote_count).map(|v| ((), v as u64, ())).collect::<Vec<_>>();
+	const LESS_THAN_SUCCESS_THRESHOLD: AuthorityCount =
+		cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT) - 1;
 
-	with_default_context().expect_consensus(AUTHORITY_COUNT, votes, None);
+	with_default_context()
+		.expect_consensus(generate_votes(LESS_THAN_SUCCESS_THRESHOLD, AUTHORITY_COUNT), None);
 }
 
 #[test]
@@ -181,6 +182,30 @@ fn minority_can_not_influence_consensus() {
 	const SUCCESS_THRESHOLD: AuthorityCount =
 		cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT);
 
+	pub fn generate_votes(
+		honest_votes: AuthorityCount,
+		dishonest_votes: AuthorityCount,
+		authority_count: AuthorityCount,
+	) -> ConsensusVotes<MonotonicMedianTest> {
+		ConsensusVotes {
+			votes: (0..honest_votes)
+				.map(|_| ConsensusVote { vote: Some(((), HONEST_VALUE)), validator_id: () })
+				.chain(
+					// didn't vote at all
+					(0..dishonest_votes).map(|_| ConsensusVote {
+						vote: Some(((), DISHONEST_VALUE)),
+						validator_id: (),
+					}),
+				)
+				.chain(
+					// didn't vote at all
+					(0..(authority_count - honest_votes - dishonest_votes))
+						.map(|_| ConsensusVote { vote: None, validator_id: () }),
+				)
+				.collect(),
+		}
+	}
+
 	// We reach consensus after SUCCESS_THRESHOLD votes.
 	// Assumption: everyone votes (not voting is equivalent to dishonest voting).
 	//  - The above is a key assumption. If dishonest nodes are capable of preventing honest nodes
@@ -188,20 +213,19 @@ fn minority_can_not_influence_consensus() {
 	//    property is not guaranteed.
 
 	// A superminority can prevent consensus value from advancing.
-	let dishonest_votes = (0..THRESHOLD).map(|_| ((), DISHONEST_VALUE, ()));
-	let consent_votes = (0..(AUTHORITY_COUNT - THRESHOLD)).map(|_| ((), HONEST_VALUE, ()));
-	let all_votes = dishonest_votes.chain(consent_votes).collect::<Vec<_>>();
-	with_default_context().expect_consensus(AUTHORITY_COUNT, all_votes, Some(HONEST_VALUE));
+	with_default_context().expect_consensus(
+		generate_votes(AUTHORITY_COUNT - THRESHOLD, THRESHOLD, AUTHORITY_COUNT),
+		Some(HONEST_VALUE),
+	);
 
 	// A supermajority is required to advance the consensus value.
-	let dishonest_votes = (0..SUCCESS_THRESHOLD).map(|_| ((), DISHONEST_VALUE, ()));
-	let consent_votes = (0..(AUTHORITY_COUNT - SUCCESS_THRESHOLD)).map(|_| ((), HONEST_VALUE, ()));
-	let all_votes = dishonest_votes.chain(consent_votes).collect::<Vec<_>>();
-	with_default_context().expect_consensus(AUTHORITY_COUNT, all_votes, Some(DISHONEST_VALUE));
+	with_default_context().expect_consensus(
+		generate_votes(AUTHORITY_COUNT - SUCCESS_THRESHOLD, SUCCESS_THRESHOLD, AUTHORITY_COUNT),
+		Some(DISHONEST_VALUE),
+	);
 
 	// Demonstration that incomplete votes break the assumption.
 	// Here, we advance the state despite *not* having a dishonest supermajority.
-	let dishonest_votes = (0..THRESHOLD).map(|_| ((), DISHONEST_VALUE, ()));
-	let all_votes = dishonest_votes.chain(core::iter::once(((), HONEST_VALUE, ()))).collect();
-	with_default_context().expect_consensus(AUTHORITY_COUNT, all_votes, Some(DISHONEST_VALUE));
+	with_default_context()
+		.expect_consensus(generate_votes(1, THRESHOLD, AUTHORITY_COUNT), Some(DISHONEST_VALUE));
 }
