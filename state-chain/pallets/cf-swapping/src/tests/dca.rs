@@ -3,6 +3,100 @@ use super::*;
 const CHUNK_INTERVAL: u32 = 3;
 
 #[track_caller]
+fn setup_dca_swap(
+	number_of_chunks: u32,
+	chunk_interval: u32,
+	refund_params: Option<TestRefundParams>,
+) {
+	// Sanity check that the test started at the correct block
+	assert_eq!(System::block_number(), INIT_BLOCK);
+
+	// Start the dca swap
+	insert_swaps(&[TestSwapParams::new(
+		Some(DcaParameters { number_of_chunks, chunk_interval }),
+		refund_params,
+		false,
+	)]);
+
+	// Check that the swap request was received;
+	assert_has_matching_event!(
+		Test,
+		RuntimeEvent::Swapping(Event::SwapRequested {
+			swap_request_id: SWAP_REQUEST_ID,
+			input_amount: INPUT_AMOUNT,
+			dca_parameters,
+			..
+		}) if dca_parameters == &Some(DcaParameters { number_of_chunks, chunk_interval })
+	);
+
+	// Check that the first chunk was scheduled
+	let chunk_amount = INPUT_AMOUNT / number_of_chunks as u128;
+	assert_has_matching_event!(
+		Test,
+		RuntimeEvent::Swapping(Event::SwapScheduled {
+			swap_request_id: SWAP_REQUEST_ID,
+			swap_id: 1,
+			input_amount,
+			execute_at,
+			..
+		}) if *input_amount == chunk_amount
+			&& *execute_at == INIT_BLOCK + SWAP_DELAY_BLOCKS as u64
+	);
+
+	// Check the DCA state is correct
+	assert_eq!(
+		get_dca_state(SWAP_REQUEST_ID),
+		DcaState {
+			status: DcaStatus::ChunkScheduled(1),
+			remaining_input_amount: INPUT_AMOUNT - chunk_amount,
+			remaining_chunks: number_of_chunks - 1,
+			chunk_interval,
+			accumulated_output_amount: 0,
+		}
+	);
+}
+
+#[track_caller]
+fn assert_chunk_1_executed(number_of_chunks: u32) {
+	let chunk_amount = INPUT_AMOUNT / number_of_chunks as u128;
+	let chunk_amount_after_fee = chunk_amount - (chunk_amount * BROKER_FEE_BPS as u128 / 10_000);
+
+	assert_has_matching_event!(
+		Test,
+		RuntimeEvent::Swapping(Event::SwapExecuted {
+			swap_request_id: SWAP_REQUEST_ID,
+			swap_id: 1,
+			input_amount,
+			output_amount,
+			..
+		}) if *input_amount == chunk_amount_after_fee && *output_amount == chunk_amount_after_fee * DEFAULT_SWAP_RATE
+	);
+
+	// Second chunk should be scheduled 2 blocks after the first is executed:
+	assert_has_matching_event!(
+		Test,
+		RuntimeEvent::Swapping(Event::SwapScheduled {
+			swap_request_id: SWAP_REQUEST_ID,
+			swap_id: 2,
+			input_amount,
+			execute_at,
+			..
+		}) if *execute_at == System::block_number() + CHUNK_INTERVAL as u64 && *input_amount == chunk_amount
+	);
+
+	assert_eq!(
+		get_dca_state(SWAP_REQUEST_ID),
+		DcaState {
+			status: DcaStatus::ChunkScheduled(2),
+			remaining_input_amount: INPUT_AMOUNT - (chunk_amount * 2),
+			remaining_chunks: number_of_chunks - 2,
+			chunk_interval: CHUNK_INTERVAL,
+			accumulated_output_amount: chunk_amount_after_fee * DEFAULT_SWAP_RATE
+		}
+	);
+}
+
+#[track_caller]
 fn get_dca_state(request_id: SwapRequestId) -> DcaState {
 	match SwapRequests::<Test>::get(request_id)
 		.expect("request state does not exist")
@@ -32,6 +126,7 @@ fn dca_happy_path() {
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
 
+	const NUMBER_OF_CHUNKS: u32 = 2;
 	const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
 	const CHUNK_BROKER_FEE: AssetAmount = CHUNK_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
@@ -42,82 +137,13 @@ fn dca_happy_path() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
-			const DCA_PARAMS: DcaParameters =
-				DcaParameters { number_of_chunks: 2, chunk_interval: CHUNK_INTERVAL };
-
-			insert_swaps(&[params(Some(DCA_PARAMS), None, false)]);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					swap_request_id: SWAP_REQUEST_ID,
-					input_amount: INPUT_AMOUNT,
-					dca_parameters: Some(DCA_PARAMS),
-					..
-				})
-			);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
-					execute_at: CHUNK_1_BLOCK,
-					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					status: DcaStatus::ChunkScheduled(1),
-					remaining_input_amount: CHUNK_AMOUNT,
-					remaining_chunks: 1,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: 0
-				}
-			);
+			setup_dca_swap(NUMBER_OF_CHUNKS, CHUNK_INTERVAL, None);
 		})
-		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: CHUNK_AMOUNT_AFTER_FEE,
-					output_amount: CHUNK_OUTPUT,
-					..
-				})
-			);
-
-			// Second chunk should be scheduled 2 blocks after the first is executed:
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 2,
-					input_amount: CHUNK_AMOUNT,
-					execute_at: CHUNK_2_BLOCK,
-					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					status: DcaStatus::ChunkScheduled(2),
-					remaining_input_amount: 0,
-					remaining_chunks: 0,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: CHUNK_OUTPUT
-				}
-			);
+			assert_chunk_1_executed(NUMBER_OF_CHUNKS);
 		})
-		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_2_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
@@ -154,46 +180,9 @@ fn dca_single_chunk() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
-			insert_swaps(&[params(
-				Some(DcaParameters { number_of_chunks: 1, chunk_interval: CHUNK_INTERVAL }),
-				None,
-				false,
-			)]);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					swap_request_id: SWAP_REQUEST_ID,
-					input_amount: INPUT_AMOUNT,
-					..
-				})
-			);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: INPUT_AMOUNT,
-					execute_at: CHUNK_1_BLOCK,
-					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					status: DcaStatus::ChunkScheduled(1),
-					remaining_input_amount: 0,
-					remaining_chunks: 0,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: 0
-				}
-			);
+			setup_dca_swap(1, CHUNK_INTERVAL, None);
 		})
-		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 			assert_event_sequence!(
@@ -230,54 +219,18 @@ fn dca_with_fok_full_refund() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
-			insert_swaps(&[params(
-				Some(DcaParameters {
-					number_of_chunks: NUMBER_OF_CHUNKS,
-					chunk_interval: CHUNK_INTERVAL,
-				}),
+			setup_dca_swap(
+				NUMBER_OF_CHUNKS,
+				CHUNK_INTERVAL,
 				Some(TestRefundParams {
 					// Allow for exactly 1 retry
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					// This ensures the swap is refunded:
 					min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
 				}),
-				false,
-			)]);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					swap_request_id: SWAP_REQUEST_ID,
-					input_amount: INPUT_AMOUNT,
-					..
-				})
-			);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
-					execute_at: CHUNK_1_BLOCK,
-					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					status: DcaStatus::ChunkScheduled(1),
-					remaining_input_amount: CHUNK_AMOUNT,
-					remaining_chunks: 1,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: 0
-				}
 			);
 		})
-		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
 				Test,
@@ -299,7 +252,7 @@ fn dca_with_fok_full_refund() {
 				}
 			);
 		})
-		.then_execute_at_block(REFUND_BLOCK, |_| {})
+		.then_process_blocks_until_block(REFUND_BLOCK)
 		.then_execute_with(|_| {
 			// Swap should fail after the first retry and result in a
 			// refund of the full input amount (rather than that of a chunk)
@@ -338,87 +291,19 @@ fn dca_with_fok_partial_refund() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
-			insert_swaps(&[params(
-				Some(DcaParameters {
-					number_of_chunks: NUMBER_OF_CHUNKS,
-					chunk_interval: CHUNK_INTERVAL,
-				}),
+			setup_dca_swap(
+				NUMBER_OF_CHUNKS,
+				CHUNK_INTERVAL,
 				Some(TestRefundParams {
 					// Allow for one retry for good measure:
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					min_output: INPUT_AMOUNT,
 				}),
-				false,
-			)]);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					swap_request_id: SWAP_REQUEST_ID,
-					input_amount: INPUT_AMOUNT,
-					..
-				})
-			);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
-					execute_at: CHUNK_1_BLOCK,
-					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					status: DcaStatus::ChunkScheduled(1),
-					remaining_input_amount: REFUNDED_AMOUNT,
-					remaining_chunks: 3,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: 0
-				}
 			);
 		})
-		.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: CHUNK_AMOUNT_AFTER_FEE,
-					output_amount: CHUNK_OUTPUT,
-					..
-				})
-			);
-
-			// Second chunk should be scheduled 2 blocks after the first is executed:
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 2,
-					input_amount: CHUNK_AMOUNT,
-					execute_at: CHUNK_2_BLOCK,
-					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					status: DcaStatus::ChunkScheduled(2),
-					remaining_input_amount: REFUNDED_AMOUNT - CHUNK_AMOUNT,
-					remaining_chunks: 2,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: CHUNK_OUTPUT
-				}
-			);
+			assert_chunk_1_executed(NUMBER_OF_CHUNKS);
 		})
 		.then_execute_at_block(CHUNK_2_BLOCK, |_| {
 			// Adjusting the swap rate, so that the second chunk fails due to FoK:
@@ -445,7 +330,7 @@ fn dca_with_fok_partial_refund() {
 				}
 			);
 		})
-		.then_execute_at_block(CHUNK_2_RESCHEDULED_AT_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_2_RESCHEDULED_AT_BLOCK)
 		.then_execute_with(|_| {
 			// The swap will fail again, but this time it will reach expiry,
 			// resulting in a refund of the remaining amount and egress of the
@@ -489,49 +374,13 @@ fn dca_with_fok_fully_executed() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_eq!(System::block_number(), INIT_BLOCK);
-
-			insert_swaps(&[params(
-				Some(DcaParameters {
-					number_of_chunks: NUMBER_OF_CHUNKS,
-					chunk_interval: CHUNK_INTERVAL,
-				}),
+			setup_dca_swap(
+				NUMBER_OF_CHUNKS,
+				CHUNK_INTERVAL,
 				Some(TestRefundParams {
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					min_output: CHUNK_OUTPUT,
 				}),
-				false,
-			)]);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					swap_request_id: SWAP_REQUEST_ID,
-					input_amount: INPUT_AMOUNT,
-					..
-				})
-			);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SWAP_REQUEST_ID,
-					swap_id: 1,
-					input_amount: CHUNK_AMOUNT,
-					execute_at: CHUNK_1_BLOCK,
-					..
-				})
-			);
-
-			assert_eq!(
-				get_dca_state(SWAP_REQUEST_ID),
-				DcaState {
-					status: DcaStatus::ChunkScheduled(1),
-					remaining_input_amount: CHUNK_AMOUNT,
-					remaining_chunks: 1,
-					chunk_interval: CHUNK_INTERVAL,
-					accumulated_output_amount: 0
-				}
 			);
 		})
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {
@@ -596,7 +445,7 @@ fn dca_with_fok_fully_executed() {
 				}
 			);
 		})
-		.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
+		.then_process_blocks_until_block(CHUNK_2_BLOCK)
 		.then_execute_with(|_| {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
@@ -616,6 +465,138 @@ fn dca_with_fok_fully_executed() {
 					amount: TOTAL_OUTPUT,
 					..
 				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SWAP_REQUEST_ID
+				}),
+			);
+		});
+}
+
+#[test]
+fn can_handle_dca_chunk_size_of_zero() {
+	// The input amount is smaller than the number of chunks, so the chunk size will round down to 0
+	const INPUT_AMOUNT: AssetAmount = 1;
+	const NUMBER_OF_CHUNKS: u32 = 3;
+	const ZERO_CHUNK_AMOUNT: AssetAmount = 0;
+	// Even though the chunk size is 0, the end output should still the full amount * swap rate.
+	// Note that the broker fee is 0 in this case because the input is too small.
+	const OUTPUT_AMOUNT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE;
+
+	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
+	const CHUNK_3_BLOCK: u64 = CHUNK_2_BLOCK + CHUNK_INTERVAL as u64;
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_eq!(System::block_number(), INIT_BLOCK);
+
+			// Start the dca swap
+			let dca_params = DcaParameters {
+				number_of_chunks: NUMBER_OF_CHUNKS,
+				chunk_interval: CHUNK_INTERVAL,
+			};
+			let swap_params = TestSwapParams {
+				input_asset: INPUT_ASSET,
+				output_asset: OUTPUT_ASSET,
+				input_amount: INPUT_AMOUNT,
+				refund_params: None,
+				dca_params: Some(dca_params.clone()),
+				output_address: (*EVM_OUTPUT_ADDRESS).clone(),
+				is_ccm: false,
+			};
+			insert_swaps(&[swap_params]);
+
+			// Check that the swap request was received;
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					swap_request_id: SWAP_REQUEST_ID,
+					input_amount: INPUT_AMOUNT,
+					dca_parameters,
+					..
+				}) if dca_parameters == &Some(dca_params.clone())
+			);
+
+			// Check that the first chunk was scheduled
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: 1,
+					input_amount,
+					..
+					// All chunks should be 0 amount except the last one
+				}) if *input_amount == ZERO_CHUNK_AMOUNT
+			);
+
+			// Check the DCA state is correct
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					status: DcaStatus::ChunkScheduled(1),
+					// Still the full amount remaining because the first chunk is 0
+					remaining_input_amount: INPUT_AMOUNT,
+					remaining_chunks: NUMBER_OF_CHUNKS - 1,
+					chunk_interval: CHUNK_INTERVAL,
+					accumulated_output_amount: 0,
+				}
+			);
+		})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: 1,
+					input_amount,
+					output_amount,
+					..
+					// The first chunk should 0 in and out
+				}) if *input_amount == ZERO_CHUNK_AMOUNT && *output_amount == ZERO_CHUNK_AMOUNT
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: 2,
+					input_amount,
+					..
+					// All chunks should be 0 amount except the last one
+				}) if *input_amount == ZERO_CHUNK_AMOUNT
+			);
+
+			assert_eq!(
+				get_dca_state(SWAP_REQUEST_ID),
+				DcaState {
+					status: DcaStatus::ChunkScheduled(2),
+					remaining_input_amount: INPUT_AMOUNT,
+					remaining_chunks: NUMBER_OF_CHUNKS - 2,
+					chunk_interval: CHUNK_INTERVAL,
+					// Should still be 0
+					accumulated_output_amount: 0,
+				}
+			);
+		})
+		.then_process_blocks_until_block(CHUNK_2_BLOCK)
+		.then_process_blocks_until_block(CHUNK_3_BLOCK)
+		.then_execute_with(|_| {
+			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: 3,
+					input_amount,
+					output_amount,
+					..
+					// The last chunk should be the full amount
+				}) if *input_amount == INPUT_AMOUNT && *output_amount == OUTPUT_AMOUNT
+			);
+
+			assert_has_matching_event!(
+				Test,
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: SWAP_REQUEST_ID
 				}),
@@ -645,7 +626,20 @@ mod ccm_tests {
 	const GAS_SWAP_ID: SwapId = 3;
 
 	#[track_caller]
-	fn check_ccm_dca_request_received() {
+	fn setup_ccm_dca_swap(
+		number_of_chunks: u32,
+		chunk_interval: u32,
+		refund_params: Option<TestRefundParams>,
+	) {
+		// Sanity check that the test started at the correct block
+		assert_eq!(System::block_number(), INIT_BLOCK);
+
+		insert_swaps(&[TestSwapParams::new(
+			Some(DcaParameters { number_of_chunks, chunk_interval }),
+			refund_params,
+			true,
+		)]);
+
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapRequested {
@@ -672,7 +666,7 @@ mod ccm_tests {
 				status: DcaStatus::ChunkScheduled(1),
 				remaining_input_amount: CHUNK_AMOUNT,
 				remaining_chunks: 1,
-				chunk_interval: CHUNK_INTERVAL,
+				chunk_interval,
 				accumulated_output_amount: 0
 			}
 		);
@@ -735,19 +729,13 @@ mod ccm_tests {
 	fn dca_with_ccm_happy_path() {
 		new_test_ext()
 			.execute_with(|| {
-				insert_swaps(&[params(
-					Some(DcaParameters { number_of_chunks: 2, chunk_interval: CHUNK_INTERVAL }),
-					None,
-					true,
-				)]);
-
-				check_ccm_dca_request_received();
+				setup_ccm_dca_swap(2, CHUNK_INTERVAL, None);
 			})
-			.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
 				assert_first_ccm_chunk_successful();
 			})
-			.then_execute_at_block(GAS_BLOCK, |_| {})
+			.then_process_blocks_until_block(GAS_BLOCK)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -777,7 +765,7 @@ mod ccm_tests {
 					GasSwapState::OutputReady { gas_budget: GAS_BUDGET * DEFAULT_SWAP_RATE }
 				);
 			})
-			.then_execute_at_block(CHUNK_2_BLOCK, |_| {})
+			.then_process_blocks_until_block(CHUNK_2_BLOCK)
 			.then_execute_with(|_| {
 				assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
@@ -811,18 +799,16 @@ mod ccm_tests {
 	fn dca_with_ccm_full_refund() {
 		new_test_ext()
 			.execute_with(|| {
-				insert_swaps(&[params(
-					Some(DcaParameters { number_of_chunks: 2, chunk_interval: CHUNK_INTERVAL }),
+				setup_ccm_dca_swap(
+					2,
+					CHUNK_INTERVAL,
 					Some(TestRefundParams {
 						retry_duration: 0,
 						min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE,
 					}),
-					true,
-				)]);
-
-				check_ccm_dca_request_received();
+				);
 			})
-			.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
 				assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
@@ -851,25 +837,21 @@ mod ccm_tests {
 
 		new_test_ext()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), INIT_BLOCK);
-
-				insert_swaps(&[params(
-					Some(DcaParameters { number_of_chunks: 2, chunk_interval: CHUNK_INTERVAL }),
+				setup_ccm_dca_swap(
+					2,
+					CHUNK_INTERVAL,
 					Some(TestRefundParams {
 						retry_duration: 0,
 						// NOTE: divide by 2 to ensure swap succeeds even in presence of broker fees
 						min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE / 2,
 					}),
-					true,
-				)]);
-
-				check_ccm_dca_request_received();
+				);
 			})
-			.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
 				assert_first_ccm_chunk_successful();
 			})
-			.then_execute_at_block(GAS_BLOCK, |_| {})
+			.then_process_blocks_until_block(GAS_BLOCK)
 			.then_execute_with(|_| {
 				assert_event_sequence!(
 					Test,
@@ -923,47 +905,14 @@ mod ccm_tests {
 
 		new_test_ext()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), INIT_BLOCK);
-
-				insert_swaps(&[params(
-					Some(DcaParameters { number_of_chunks: 2, chunk_interval: CHUNK_INTERVAL }),
+				setup_ccm_dca_swap(
+					2,
+					CHUNK_INTERVAL,
 					Some(TestRefundParams {
 						retry_duration: 0,
 						// NOTE: divide by 2 to ensure swap succeeds even in presence of broker fees
 						min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE / 2,
 					}),
-					true,
-				)]);
-
-				assert_has_matching_event!(
-					Test,
-					RuntimeEvent::Swapping(Event::SwapRequested {
-						swap_request_id: SWAP_REQUEST_ID,
-						input_amount: INPUT_AMOUNT,
-						..
-					})
-				);
-
-				assert_has_matching_event!(
-					Test,
-					RuntimeEvent::Swapping(Event::SwapScheduled {
-						swap_request_id: SWAP_REQUEST_ID,
-						swap_id: 1,
-						input_amount: CHUNK_AMOUNT,
-						execute_at: CHUNK_1_BLOCK,
-						..
-					})
-				);
-
-				assert_eq!(
-					get_dca_state(SWAP_REQUEST_ID),
-					DcaState {
-						status: DcaStatus::ChunkScheduled(1),
-						remaining_input_amount: CHUNK_AMOUNT,
-						remaining_chunks: 1,
-						chunk_interval: CHUNK_INTERVAL,
-						accumulated_output_amount: 0
-					}
 				);
 
 				assert_eq!(
@@ -974,7 +923,7 @@ mod ccm_tests {
 					}
 				);
 			})
-			.then_execute_at_block(CHUNK_1_BLOCK, |_| {})
+			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
 				assert_event_sequence!(
 					Test,

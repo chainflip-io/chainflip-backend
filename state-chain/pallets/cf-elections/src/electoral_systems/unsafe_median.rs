@@ -24,15 +24,18 @@ use sp_std::vec::Vec;
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings> {
-	_phantom: core::marker::PhantomData<(Value, UnsynchronisedSettings, Settings)>,
+pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId> {
+	_phantom: core::marker::PhantomData<(Value, UnsynchronisedSettings, Settings, ValidatorId)>,
 }
 impl<
 		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-	> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings>
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId>
 {
+	type ValidatorId = ValidatorId;
+
 	type ElectoralUnsynchronisedState = Value;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -83,7 +86,11 @@ impl<
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		mut votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
+		mut votes: Vec<(
+			VotePropertiesOf<Self>,
+			<Self::Vote as VoteStorage>::Vote,
+			Self::ValidatorId,
+		)>,
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let votes_count = votes.len();
@@ -91,7 +98,8 @@ impl<
 			if votes_count != 0 &&
 				votes_count >= success_threshold_from_share_count(authorities) as usize
 			{
-				let (_, (_properties, median_vote), _) =
+				// TODO: We should just select on the vote
+				let (_, (_properties, median_vote, _validator), _) =
 					votes.select_nth_unstable((votes_count - 1) / 2);
 				Some(median_vote.clone())
 			} else {

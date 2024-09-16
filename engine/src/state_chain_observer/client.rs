@@ -20,7 +20,8 @@ use jsonrpsee::core::RpcResult;
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{pin::Pin, sync::Arc, time::Duration};
-use subxt::{backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder};
+use subxt::{backend::rpc::RpcClient, config::DefaultExtrinsicParamsBuilder, OnlineClient};
+use subxt_state_chain_config::StateChainConfig;
 use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{info, warn};
@@ -656,6 +657,29 @@ impl SignedExtrinsicClientBuilderTrait for () {
 	}
 }
 
+async fn get_recorded_cfe_version<Signer>(
+	subxt_client: &OnlineClient<StateChainConfig>,
+	subxt_signer: &Signer,
+) -> Result<SemVer>
+where
+	Signer: subxt::tx::Signer<StateChainConfig>,
+{
+	<SemVer as codec::Decode>::decode(
+		&mut subxt_client
+			.storage()
+			.at_latest()
+			.await?
+			.fetch_or_default(&subxt::storage::dynamic(
+				"Validator",
+				"NodeCFEVersion",
+				vec![subxt_signer.account_id()],
+			))
+			.await?
+			.encoded(),
+	)
+	.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))
+}
+
 struct SignedExtrinsicClientBuilder {
 	nonce_and_signer:
 		Option<(state_chain_runtime::Nonce, signer::PairSigner<sp_core::sr25519::Pair>)>,
@@ -771,20 +795,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 				SubxtSignerInterface(subxt::utils::AccountId32(*signer.account_id.as_ref()), pair)
 			};
 
-			let recorded_version = <SemVer as codec::Decode>::decode(
-				&mut subxt_client
-					.storage()
-					.at_latest()
-					.await?
-					.fetch_or_default(&subxt::storage::dynamic(
-						"Validator",
-						"NodeCFEVersion",
-						vec![subxt_signer.account_id()],
-					))
-					.await?
-					.encoded(),
-			)
-			.map_err(|e| anyhow::anyhow!("Failed to decode recorded_version: {e:?}"))?;
+			let recorded_version = get_recorded_cfe_version(&subxt_client, &subxt_signer).await?;
 
 			// Note that around CFE upgrade period, the less recent version might still be running
 			// (and can even be *the* "active" instance), so it is important that it doesn't
@@ -795,52 +806,84 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					recorded_version, *CFE_VERSION
 				);
 
-				let block_hash = finalized_block_stream.cache().hash;
-				let block_number = finalized_block_stream.cache().number;
+				// Submitting the CFE version has three possible results:
+				//   - Successful
+				//   - Returns no error, but not successful
+				//   - Returns error
+				// Here we call the submission code multiple times before giving up with an error.
+				const MAX_UPDATE_VERSION_RETRIES: usize = 10;
+				let mut update_successful = false;
+				for retry in 1..=MAX_UPDATE_VERSION_RETRIES {
+					let block_hash = finalized_block_stream.cache().hash;
+					let block_number = finalized_block_stream.cache().number;
 
-				// Submitting transaction with subxt sometimes gets stuck without returning any
-				// error (see https://linear.app/chainflip/issue/PRO-1064/new-cfe-version-gets-stuck-on-startup),
-				// so we use a timeout to ensure we can recover:
-				tokio::time::timeout(CFE_VERSION_SUBMIT_TIMEOUT, async {
-					let current_nonce = rpc_client
-						.request::<u32>(
-							"system_accountNextIndex",
-							subxt::rpc_params![&subxt_signer.account_id()],
-						)
-						.await?;
+					// Submitting transaction with subxt sometimes gets stuck without returning any
+					// error (see https://linear.app/chainflip/issue/PRO-1064/new-cfe-version-gets-stuck-on-startup),
+					// so we use a timeout to ensure we can recover:
+					let result = tokio::time::timeout(CFE_VERSION_SUBMIT_TIMEOUT, async {
+						let current_nonce = rpc_client
+							.request::<u32>(
+								"system_accountNextIndex",
+								subxt::rpc_params![&subxt_signer.account_id()],
+							)
+							.await?;
 
-					subxt_client
-						.tx()
-						.create_signed_with_nonce(
-							&subxt::dynamic::tx(
-								"Validator",
-								"cfe_version",
-								vec![(
-									"new_version",
-									vec![
-										("major", CFE_VERSION.major),
-										("minor", CFE_VERSION.minor),
-										("patch", CFE_VERSION.patch),
-									],
-								)],
-							),
-							&subxt_signer,
-							current_nonce.into(),
-							DefaultExtrinsicParamsBuilder::new()
-								.mortal_unchecked(
-									block_number.into(),
-									block_hash,
-									SIGNED_EXTRINSIC_LIFETIME.into(),
-								)
-								.build(),
-						)?
-						.submit_and_watch()
-						.await?
-						.wait_for_finalized()
-						.await
-				})
-				.await
-				.map_err(|_| anyhow::anyhow!("Timed out trying to submit CFE version"))??;
+						subxt_client
+							.tx()
+							.create_signed_with_nonce(
+								&subxt::dynamic::tx(
+									"Validator",
+									"cfe_version",
+									vec![(
+										"new_version",
+										vec![
+											("major", CFE_VERSION.major),
+											("minor", CFE_VERSION.minor),
+											("patch", CFE_VERSION.patch),
+										],
+									)],
+								),
+								&subxt_signer,
+								current_nonce.into(),
+								DefaultExtrinsicParamsBuilder::new()
+									.mortal_unchecked(
+										block_number.into(),
+										block_hash,
+										SIGNED_EXTRINSIC_LIFETIME.into(),
+									)
+									.build(),
+							)?
+							.submit_and_watch()
+							.await?
+							.wait_for_finalized()
+							.await
+					})
+					.await
+					.map_err(|_| anyhow::anyhow!("Timed out trying to submit CFE version"))
+					.map(|x| x.map_err(|e| e.into())); // map inner subxt::Error to anyhow::Error
+
+					match result.flatten() {
+						Ok(_) => {
+							// Submitting did not return an error, but this does not mean it was
+							// successful. Thus we check whether the version was actually updated:
+							if get_recorded_cfe_version(&subxt_client, &subxt_signer).await? ==
+								*CFE_VERSION
+							{
+								update_successful = true;
+								break;
+							} else {
+								tracing::warn!("Submitting CFE version returned no error, but was not successful. Tried submitting {retry} of max {MAX_UPDATE_VERSION_RETRIES} times.");
+							}
+						},
+						Err(e) => {
+							tracing::error!("Submitting CFE version returned an error: {e}.\nTried submitting {retry} of max {MAX_UPDATE_VERSION_RETRIES} times.");
+						},
+					}
+				}
+
+				if !update_successful {
+					return Err(anyhow!("Could not successfully submit new CFE version after {MAX_UPDATE_VERSION_RETRIES}."));
+				}
 			}
 		}
 

@@ -21,7 +21,7 @@ impl MockHook {
 }
 
 type Vote = u64;
-type SimpleChange = Change<(), Vote, (), MockHook>;
+type SimpleChange = Change<(), Vote, (), MockHook, ()>;
 
 register_checks! {
 	SimpleChange {
@@ -50,7 +50,7 @@ fn with_default_state() -> TestContext<SimpleChange> {
 fn consensus_not_possible_because_of_different_votes() {
 	with_default_state().expect_consensus(
 		AUTHORITY_COUNT,
-		(0..AUTHORITY_COUNT).map(|i| ((), i as Vote)).collect(),
+		(0..AUTHORITY_COUNT).map(|i| ((), i as Vote, ())).collect(),
 		None,
 	);
 }
@@ -59,7 +59,7 @@ fn consensus_not_possible_because_of_different_votes() {
 fn consensus_when_all_votes_the_same() {
 	with_default_state().expect_consensus(
 		AUTHORITY_COUNT,
-		vec![((), 1); SUCCESS_THRESHOLD as usize],
+		vec![((), 1, ()); SUCCESS_THRESHOLD as usize],
 		Some(1),
 	);
 }
@@ -68,7 +68,7 @@ fn consensus_when_all_votes_the_same() {
 fn not_enough_votes_for_consensus() {
 	with_default_state().expect_consensus(
 		AUTHORITY_COUNT,
-		(0..THRESHOLD).map(|i| ((), i as Vote)).collect(),
+		(0..THRESHOLD).map(|i| ((), i as Vote, ())).collect(),
 		None,
 	);
 }
@@ -80,8 +80,8 @@ fn minority_cannot_prevent_consensus() {
 	with_default_state().expect_consensus(
 		AUTHORITY_COUNT,
 		(0..SUCCESS_THRESHOLD)
-			.map(|_| ((), CORRECT_VALUE))
-			.chain((SUCCESS_THRESHOLD..AUTHORITY_COUNT).map(|_| ((), INCORRECT_VALUE)))
+			.map(|_| ((), CORRECT_VALUE, ()))
+			.chain((SUCCESS_THRESHOLD..AUTHORITY_COUNT).map(|_| ((), INCORRECT_VALUE, ())))
 			.collect(),
 		Some(CORRECT_VALUE),
 	);
@@ -92,7 +92,7 @@ fn finalization_only_on_consensus_change() {
 	with_default_state()
 		.expect_consensus(
 			AUTHORITY_COUNT,
-			vec![((), Vote::default()); AUTHORITY_COUNT as usize],
+			vec![((), Vote::default(), ()); AUTHORITY_COUNT as usize],
 			Some(Vote::default()),
 		)
 		.test_on_finalize(
@@ -104,7 +104,7 @@ fn finalization_only_on_consensus_change() {
 		)
 		.expect_consensus(
 			AUTHORITY_COUNT,
-			vec![((), Vote::default() + 1); AUTHORITY_COUNT as usize],
+			vec![((), Vote::default() + 1, ()); AUTHORITY_COUNT as usize],
 			Some(Vote::default() + 1),
 		)
 		.test_on_finalize(

@@ -3,10 +3,12 @@ use crate::{
 		AuthorityVoteOf, ConsensusStatus, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
 		ElectoralWriteAccess, VotePropertiesOf,
 	},
+	mock::Test,
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
 use cf_primitives::AuthorityCount;
+use cf_traits::Chainflip;
 use sp_std::vec::Vec;
 use std::{cell::RefCell, collections::BTreeMap};
 
@@ -103,6 +105,7 @@ impl MockElectoralSystem {
 }
 
 impl ElectoralSystem for MockElectoralSystem {
+	type ValidatorId = <Test as Chainflip>::ValidatorId;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -147,7 +150,7 @@ impl ElectoralSystem for MockElectoralSystem {
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
+		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
 		_authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		Ok(if Self::should_assume_consensus() { Some(votes.len() as AuthorityCount) } else { None })

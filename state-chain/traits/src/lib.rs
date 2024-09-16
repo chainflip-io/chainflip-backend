@@ -1035,21 +1035,21 @@ pub trait BalanceApi {
 }
 
 pub trait IngressSink {
-	type Chain: Chain;
+	type Account: Member + Parameter;
+	type Asset: Member + Parameter + Copy;
+	type Amount: Member + Parameter + Copy + AtLeast32BitUnsigned;
+	type BlockNumber: Member + Parameter + Copy + AtLeast32BitUnsigned;
+	type DepositDetails;
 
 	fn on_ingress(
-		channel: <Self::Chain as Chain>::ChainAccount,
-		asset: <Self::Chain as Chain>::ChainAsset,
-		amount: <Self::Chain as Chain>::ChainAmount,
-		block_number: <Self::Chain as Chain>::ChainBlockNumber,
-		details: <Self::Chain as Chain>::DepositDetails,
+		channel: Self::Account,
+		asset: Self::Asset,
+		amount: Self::Amount,
+		block_number: Self::BlockNumber,
+		details: Self::DepositDetails,
 	);
-	fn on_ingress_reverted(
-		channel: <Self::Chain as Chain>::ChainAccount,
-		asset: <Self::Chain as Chain>::ChainAsset,
-		amount: <Self::Chain as Chain>::ChainAmount,
-	);
-	fn on_channel_closed(channel: <Self::Chain as Chain>::ChainAccount);
+	fn on_ingress_reverted(channel: Self::Account, asset: Self::Asset, amount: Self::Amount);
+	fn on_channel_closed(channel: Self::Account);
 }
 
 pub trait IngressSource {

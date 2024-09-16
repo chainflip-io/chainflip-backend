@@ -105,11 +105,12 @@ where
 
 impl<ES: ElectoralSystem> TestContext<ES> {
 	/// Based on some authority count and votes, evaluate the consensus and the final state.
+	#[allow(clippy::type_complexity)]
 	#[track_caller]
 	pub fn expect_consensus(
 		self,
 		authority_count: AuthorityCount,
-		mut votes: Vec<(VotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote)>,
+		mut votes: Vec<(VotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote, ES::ValidatorId)>,
 		expected_consensus: Option<ES::Consensus>,
 	) -> Self {
 		assert!(

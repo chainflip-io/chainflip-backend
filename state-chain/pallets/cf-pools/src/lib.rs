@@ -64,7 +64,20 @@ pub enum CloseOrder {
 }
 // TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
 // nature.
-#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq, Hash)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialEq,
+	Eq,
+	Hash,
+	PartialOrd,
+	Ord,
+)]
 pub struct AssetPair {
 	assets: PoolPairsMap<Asset>,
 }
