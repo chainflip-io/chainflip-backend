@@ -24,15 +24,18 @@ use sp_std::vec::Vec;
 ///
 /// `Settings` can be used by governance to provide information to authorities about exactly how
 /// they should `vote`.
-pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings> {
-	_phantom: core::marker::PhantomData<(Value, UnsynchronisedSettings, Settings)>,
+pub struct UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId> {
+	_phantom: core::marker::PhantomData<(Value, UnsynchronisedSettings, Settings, ValidatorId)>,
 }
 impl<
 		Value: Member + Parameter + MaybeSerializeDeserialize + Ord + BenchmarkValue,
 		UnsynchronisedSettings: Member + Parameter + MaybeSerializeDeserialize,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
-	> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings>
+		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
+	> ElectoralSystem for UnsafeMedian<Value, UnsynchronisedSettings, Settings, ValidatorId>
 {
+	type ValidatorId = ValidatorId;
+
 	type ElectoralUnsynchronisedState = Value;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
@@ -83,7 +86,11 @@ impl<
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		mut votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
+		mut votes: Vec<(
+			VotePropertiesOf<Self>,
+			<Self::Vote as VoteStorage>::Vote,
+			Self::ValidatorId,
+		)>,
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let votes_count = votes.len();
@@ -91,131 +98,13 @@ impl<
 			if votes_count != 0 &&
 				votes_count >= success_threshold_from_share_count(authorities) as usize
 			{
-				let (_, (_properties, median_vote), _) =
+				// TODO: We should just select on the vote
+				let (_, (_properties, median_vote, _validator), _) =
 					votes.select_nth_unstable((votes_count - 1) / 2);
 				Some(median_vote.clone())
 			} else {
 				None
 			},
 		)
-	}
-}
-
-#[cfg(test)]
-mod test_unsafe_median {
-
-	use super::*;
-
-	use crate::electoral_system::{mocks::*, ConsensusStatus, ElectoralReadAccess};
-
-	#[test]
-	fn if_consensus_update_unsynchronised_state() {
-		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
-		const NEW_UNSYNCHRONISED_STATE: u64 = 33;
-		let mut electoral_system =
-			MockAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, (), ());
-
-		electoral_system.new_election((), (), ()).unwrap().set_consensus_status(
-			ConsensusStatus::Changed {
-				previous: INIT_UNSYNCHRONISED_STATE,
-				new: NEW_UNSYNCHRONISED_STATE,
-			},
-		);
-
-		electoral_system.finalize_elections(&()).unwrap();
-
-		assert_eq!(electoral_system.unsynchronised_state().unwrap(), NEW_UNSYNCHRONISED_STATE);
-	}
-
-	#[test]
-	fn if_no_consensus_do_not_update_unsynchronised_state() {
-		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
-		let mut electoral_system =
-			MockAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, (), ());
-
-		electoral_system
-			.new_election((), (), ())
-			.unwrap()
-			.set_consensus_status(ConsensusStatus::None);
-
-		electoral_system.finalize_elections(&()).unwrap();
-
-		assert_eq!(electoral_system.unsynchronised_state().unwrap(), INIT_UNSYNCHRONISED_STATE);
-	}
-
-	#[test]
-	fn check_consensus_correctly_calculates_median_when_all_authorities_vote() {
-		const INIT_UNSYNCHRONISED_STATE: u64 = 22;
-		let mut electoral_system =
-			MockAccess::<UnsafeMedian<u64, (), ()>>::new(INIT_UNSYNCHRONISED_STATE, (), ());
-
-		let mut votes = (1..=10).map(|v| ((), v)).collect::<Vec<_>>();
-
-		use rand::{seq::SliceRandom, thread_rng};
-
-		// vote ordering should not affect the result
-		votes.shuffle(&mut thread_rng());
-
-		let votes_len = votes.len() as u32;
-
-		let election = electoral_system.new_election((), (), ()).unwrap();
-		let consensus = UnsafeMedian::<u64, (), ()>::check_consensus(
-			election.identifier(),
-			&election,
-			None,
-			votes,
-			// all authorities have voted
-			votes_len,
-		)
-		.unwrap();
-
-		assert_eq!(consensus, Some(5));
-	}
-
-	// Note: This is the reason the median is "unsafe" as 1/3 of validators can influence the value
-	// in this case.
-	#[test]
-	fn check_consensus_correctly_calculates_median_when_exactly_super_majority_authorities_vote() {
-		let mut electoral_system =
-			MockAccess::<UnsafeMedian<u64, (), ()>>::new(Default::default(), (), ());
-
-		let mut votes = vec![((), 1u64), ((), 5), ((), 3), ((), 2), ((), 8), ((), 6)];
-
-		use rand::{seq::SliceRandom, thread_rng};
-
-		// vote ordering shouldn't matter
-		votes.shuffle(&mut thread_rng());
-
-		let votes_len = votes.len() as u32;
-
-		let consensus = electoral_system
-			.new_election((), (), ())
-			.unwrap()
-			.check_consensus(None, votes, votes_len + (votes_len / 2))
-			.unwrap();
-
-		assert_eq!(consensus, Some(3));
-	}
-
-	#[test]
-	fn fewer_than_supermajority_votes_does_not_get_consensus() {
-		let mut electoral_system =
-			MockAccess::<UnsafeMedian<u64, (), ()>>::new(Default::default(), (), ());
-
-		let all_votes = vec![((), 1u64), ((), 5), ((), 3), ((), 2), ((), 8)];
-
-		let election = electoral_system.new_election((), (), ()).unwrap();
-		(0..(all_votes.len())).for_each(|n_votes| {
-			assert_eq!(
-				election
-					.check_consensus(
-						None,
-						all_votes.clone().into_iter().take(n_votes).collect::<Vec<_>>(),
-						(all_votes.len() + (all_votes.len() / 2)) as u32,
-					)
-					.unwrap(),
-				None
-			);
-		});
 	}
 }

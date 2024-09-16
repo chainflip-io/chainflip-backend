@@ -6,7 +6,7 @@ use cf_chains::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	AdjustedFeeEstimationApi, ElectionEgressWitnesser, GetBlockHeight, IngressSource,
+	AdjustedFeeEstimationApi, Chainflip, ElectionEgressWitnesser, GetBlockHeight, IngressSource,
 	SolanaNonceWatch,
 };
 
@@ -28,6 +28,9 @@ use serde::{Deserialize, Serialize};
 use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
 use sp_std::vec::Vec;
 
+#[cfg(feature = "runtime-benchmarks")]
+use cf_chains::benchmarking_value::BenchmarkValue;
+
 type Instance = <Solana as ChainInstanceAlias>::Instance;
 
 pub type SolanaElectoralSystem = Composite<
@@ -38,6 +41,7 @@ pub type SolanaElectoralSystem = Composite<
 		SolanaNonceTracking,
 		SolanaEgressWitnessing,
 	),
+	<Runtime as Chainflip>::ValidatorId,
 	SolanaElectionHooks,
 >;
 
@@ -72,26 +76,35 @@ pub type SolanaBlockHeightTracking = electoral_systems::monotonic_median::Monoto
 	<Solana as Chain>::ChainBlockNumber,
 	(),
 	SolanaBlockHeightTrackingHook,
+	<Runtime as Chainflip>::ValidatorId,
 >;
 pub type SolanaFeeTracking = electoral_systems::unsafe_median::UnsafeMedian<
 	<Solana as Chain>::ChainAmount,
 	SolanaFeeUnsynchronisedSettings,
 	(),
+	<Runtime as Chainflip>::ValidatorId,
 >;
 pub type SolanaIngressTracking =
 	electoral_systems::blockchain::delta_based_ingress::DeltaBasedIngress<
 		pallet_cf_ingress_egress::Pallet<Runtime, Instance>,
 		SolanaIngressSettings,
+		<Runtime as Chainflip>::ValidatorId,
 	>;
 
-pub type SolanaNonceTracking =
-	electoral_systems::change::Change<SolAddress, SolHash, (), SolanaNonceTrackingHook>;
+pub type SolanaNonceTracking = electoral_systems::change::Change<
+	SolAddress,
+	SolHash,
+	(),
+	SolanaNonceTrackingHook,
+	<Runtime as Chainflip>::ValidatorId,
+>;
 
 pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSuccess<
 	SolSignature,
 	TransactionSuccessDetails,
 	(),
 	SolanaEgressWitnessingHook,
+	<Runtime as Chainflip>::ValidatorId,
 >;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -248,10 +261,27 @@ pub struct SolanaFeeUnsynchronisedSettings {
 	pub fee_multiplier: FixedU128,
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for SolanaFeeUnsynchronisedSettings {
+	fn benchmark_value() -> Self {
+		Self { fee_multiplier: 1u128.into() }
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
 pub struct SolanaIngressSettings {
 	pub vault_program: SolAddress,
 	pub usdc_token_mint_pubkey: SolAddress,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for SolanaIngressSettings {
+	fn benchmark_value() -> Self {
+		Self {
+			vault_program: SolAddress([0xf0; 32]),
+			usdc_token_mint_pubkey: SolAddress([0xf1; 32]),
+		}
+	}
 }
 
 pub struct SolanaChainTrackingProvider;

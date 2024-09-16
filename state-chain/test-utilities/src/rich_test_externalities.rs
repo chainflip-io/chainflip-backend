@@ -5,7 +5,10 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_runtime::BuildStorage;
+use sp_runtime::{
+	traits::{CheckedSub, UniqueSaturatedInto},
+	BuildStorage,
+};
 
 /// Convenience trait to link a runtime with its corresponding AllPalletsWithSystem struct.
 pub trait HasAllPallets: frame_system::Config {
@@ -191,6 +194,22 @@ where
 			self = self.then_process_next_block();
 		}
 		self
+	}
+
+	/// Keep processing blocks up to and including the given block number.
+	pub fn then_process_blocks_until_block(
+		mut self,
+		block_number: impl Into<BlockNumberFor<Runtime>>,
+	) -> Self {
+		let current_block =
+			self.ext.0.execute_with(|| frame_system::Pallet::<Runtime>::block_number());
+		let target_block: BlockNumberFor<Runtime> = block_number.into();
+		self.then_process_blocks(
+			target_block
+				.checked_sub(&current_block)
+				.expect("cannot rewind blocks")
+				.unique_saturated_into(),
+		)
 	}
 
 	/// Process the next block, including hooks.

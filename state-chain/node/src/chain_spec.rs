@@ -22,6 +22,7 @@ use sp_core::{
 };
 use state_chain_runtime::{
 	chainflip::{solana_elections, Offence},
+	constants::common::MINUTES,
 	opaque::SessionKeys,
 	AccountId, BlockNumber, FlipBalance, RuntimeGenesisConfig, SetSizeParameters, Signature,
 	SolanaElectionsConfig, WASM_BINARY,
@@ -833,6 +834,32 @@ fn testnet_genesis(
 		polkadot_vault: Default::default(),
 		system: Default::default(),
 		transaction_payment: Default::default(),
+
+		// instance1
+		ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
+			broadcast_timeout: 5 * MINUTES,
+			..Default::default()
+		},
+		// instance2
+		polkadot_broadcaster: state_chain_runtime::PolkadotBroadcasterConfig {
+			broadcast_timeout: 4 * MINUTES,
+			..Default::default()
+		},
+		// instance3
+		bitcoin_broadcaster: state_chain_runtime::BitcoinBroadcasterConfig {
+			broadcast_timeout: 90 * MINUTES,
+			..Default::default()
+		},
+		// instance 4
+		arbitrum_broadcaster: state_chain_runtime::ArbitrumBroadcasterConfig {
+			broadcast_timeout: 2 * MINUTES,
+			..Default::default()
+		},
+		// instance 5
+		solana_broadcaster: state_chain_runtime::SolanaBroadcasterConfig {
+			broadcast_timeout: 4 * MINUTES,
+			..Default::default()
+		},
 	})
 	.expect("Genesis config is JSON-compatible.")
 }

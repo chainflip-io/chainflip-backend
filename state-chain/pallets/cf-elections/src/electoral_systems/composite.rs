@@ -2,8 +2,8 @@ use crate::electoral_system::{ElectoralSystem, ElectoralWriteAccess};
 
 /// Allows the composition of multiple ElectoralSystems while allowing the ability to configure the
 /// `on_finalize` behaviour without exposing the internal composite types.
-pub struct Composite<T, H = DefaultHooks<()>> {
-	_phantom: core::marker::PhantomData<(T, H)>,
+pub struct Composite<T, ValidatorId, H = DefaultHooks<()>> {
+	_phantom: core::marker::PhantomData<(T, ValidatorId, H)>,
 }
 
 pub struct DefaultHooks<OnFinalizeContext> {
@@ -71,6 +71,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             };
             use crate::vote_storage::composite::$module::{CompositeVoteProperties, CompositeVote, CompositePartialVote};
 
+            use frame_support::{Parameter, pallet_prelude::{Member, MaybeSerializeDeserialize}};
             use cf_primitives::AuthorityCount;
 
             use codec::{Encode, Decode};
@@ -140,7 +141,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 $($electoral_system($electoral_system),)*
             }
 
-            impl<$($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static> Composite<($($electoral_system,)*), H> {
+            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static> Composite<($($electoral_system,)*), ValidatorId, H> {
                 pub fn with_identifiers<R, F: for<'a> FnOnce(
                     ($(
                         Vec<ElectionIdentifierOf<$electoral_system>>,
@@ -177,7 +178,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
             }
 
-            impl<$($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static> ElectoralSystem for Composite<($($electoral_system,)*), H> {
+            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static> ElectoralSystem for Composite<($($electoral_system,)*), ValidatorId, H> {
+                type ValidatorId = ValidatorId;
                 type ElectoralUnsynchronisedState = ($(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedState,)*);
                 type ElectoralUnsynchronisedStateMapKey = CompositeElectoralUnsynchronisedStateMapKey<$(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,)*>;
                 type ElectoralUnsynchronisedStateMapValue = CompositeElectoralUnsynchronisedStateMapValue<$(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,)*>;
@@ -328,7 +330,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
                     election_access: &ElectionAccess,
                     previous_consensus: Option<&Self::Consensus>,
-                    votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote)>,
+                    votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
                     authorities: AuthorityCount,
                 ) -> Result<Option<Self::Consensus>, CorruptStorageError> {
                     Ok(match *election_identifier.extra() {
@@ -342,12 +344,12 @@ macro_rules! generate_electoral_system_tuple_impls {
                                         _ => Err(CorruptStorageError::new()),
                                     }
                                 }).transpose()?,
-                                votes.into_iter().map(|(properties, vote)| {
+                                votes.into_iter().map(|(properties, vote, validator_id)| {
                                     match (properties, vote) {
                                         (
                                             CompositeVoteProperties::$electoral_system(properties),
-                                            CompositeVote::$electoral_system(vote)
-                                        ) => Ok((properties, vote)),
+                                            CompositeVote::$electoral_system(vote),
+                                        ) => Ok((properties, vote, validator_id)),
                                         _ => Err(CorruptStorageError::new()),
                                     }
                                 }).collect::<Result<Vec<_>, _>>()?,
@@ -362,7 +364,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 ea: BorrowEA,
                 _phantom: core::marker::PhantomData<(Tag, EA)>,
             }
-            impl<Tag, $($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*>, BorrowEA: Borrow<EA>, EA: ElectionReadAccess<ElectoralSystem = Composite<($($electoral_system,)*), H>>> CompositeElectionAccess<Tag, BorrowEA, EA> {
+            impl<Tag, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*>, BorrowEA: Borrow<EA>, EA: ElectionReadAccess<ElectoralSystem = Composite<($($electoral_system,)*), ValidatorId, H>>> CompositeElectionAccess<Tag, BorrowEA, EA> {
                 fn new(ea: BorrowEA) -> Self {
                     Self {
                         ea,
@@ -402,7 +404,7 @@ macro_rules! generate_electoral_system_tuple_impls {
     };
     (@ $($previous:ident,)*;: $($electoral_system:ident,)*) => {};
     (@ $($previous:ident,)*; $current:ident, $($remaining:ident,)*: $($electoral_system:ident,)*) => {
-        impl<$($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static, BorrowEA: Borrow<EA>, EA: ElectionReadAccess<ElectoralSystem = Composite<($($electoral_system,)*), H>>> ElectionReadAccess for CompositeElectionAccess<tags::$current, BorrowEA, EA> {
+        impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static, BorrowEA: Borrow<EA>, EA: ElectionReadAccess<ElectoralSystem = Composite<($($electoral_system,)*), ValidatorId, H>>> ElectionReadAccess for CompositeElectionAccess<tags::$current, BorrowEA, EA> {
             type ElectoralSystem = $current;
 
             fn settings(&self) -> Result<$current::ElectoralSettings, CorruptStorageError> {
@@ -435,7 +437,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 Ok(composite_identifier.with_extra(*extra))
             }
         }
-        impl<$($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static,  EA: ElectionWriteAccess<ElectoralSystem = Composite<($($electoral_system,)*), H>>> ElectionWriteAccess for CompositeElectionAccess<tags::$current, EA, EA> {
+        impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static,  EA: ElectionWriteAccess<ElectoralSystem = Composite<($($electoral_system,)*), ValidatorId, H>>> ElectionWriteAccess for CompositeElectionAccess<tags::$current, EA, EA> {
             fn set_state(&mut self, state: $current::ElectionState) -> Result<(), CorruptStorageError> {
                 self.ea.set_state(CompositeElectionState::$current(state))
             }
@@ -469,7 +471,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 })
             }
         }
-        impl<'a, $($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static, EA: ElectoralReadAccess<ElectoralSystem = Composite<($($electoral_system,)*), H>>> ElectoralReadAccess for CompositeElectoralAccess<'a, tags::$current, EA> {
+        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static, EA: ElectoralReadAccess<ElectoralSystem = Composite<($($electoral_system,)*), ValidatorId, H>>> ElectoralReadAccess for CompositeElectoralAccess<'a, tags::$current, EA> {
             type ElectoralSystem = $current;
             type ElectionReadAccess<'b> = CompositeElectionAccess<tags::$current, <EA as ElectoralReadAccess>::ElectionReadAccess<'b>, <EA as ElectoralReadAccess>::ElectionReadAccess<'b>>
             where
@@ -507,7 +509,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
         }
 
-        impl<'a, $($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static, EA: ElectoralWriteAccess<ElectoralSystem = Composite<($($electoral_system,)*), H>>> ElectoralWriteAccess for CompositeElectoralAccess<'a, tags::$current, EA> {
+        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static, EA: ElectoralWriteAccess<ElectoralSystem = Composite<($($electoral_system,)*), ValidatorId, H>>> ElectoralWriteAccess for CompositeElectoralAccess<'a, tags::$current, EA> {
             type ElectionWriteAccess<'b> = CompositeElectionAccess<tags::$current, <EA as ElectoralWriteAccess>::ElectionWriteAccess<'b>, <EA as ElectoralWriteAccess>::ElectionWriteAccess<'b>>
             where
                 Self: 'b;
@@ -566,7 +568,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
         }
 
-        impl<$($electoral_system: ElectoralSystem,)* H: Hooks<$($electoral_system),*> + 'static, EA: ElectoralWriteAccess<ElectoralSystem = Composite<($($electoral_system,)*), H>>> Translator<EA> for ElectoralAccessTranslator<tags::$current, Composite<($($electoral_system,)*), H>> {
+        impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static, EA: ElectoralWriteAccess<ElectoralSystem = Composite<($($electoral_system,)*), ValidatorId, H>>> Translator<EA> for ElectoralAccessTranslator<tags::$current, Composite<($($electoral_system,)*), ValidatorId, H>> {
             type ElectoralSystem = $current;
             type ElectionAccess<'a> = CompositeElectoralAccess<'a, tags::$current, EA>
             where
@@ -581,8 +583,4 @@ macro_rules! generate_electoral_system_tuple_impls {
     };
 }
 
-generate_electoral_system_tuple_impls!(tuple_1_impls: ((A, A0)));
-generate_electoral_system_tuple_impls!(tuple_2_impls: ((A, A0), (B, B0)));
-generate_electoral_system_tuple_impls!(tuple_3_impls: ((A, A0), (B, B0), (C, C0)));
-generate_electoral_system_tuple_impls!(tuple_4_impls: ((A, A0), (B, B0), (C, C0), (D, D0)));
 generate_electoral_system_tuple_impls!(tuple_5_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0)));

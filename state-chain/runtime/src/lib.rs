@@ -861,7 +861,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 5 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -887,7 +886,6 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 4 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -913,7 +911,6 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, BitcoinInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -939,7 +936,6 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 2 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -972,7 +968,6 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, SolanaInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 4 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -1258,13 +1253,13 @@ type MigrationsForV1_7 = (
 	VersionedMigration<
 		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
 		SerializeSolanaBroadcastMigration,
-		6,
 		7,
+		8,
 	>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 6, 7>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 6, 7>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 6, 7>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 6, 7>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 7, 8>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 7, 8>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 7, 8>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 7, 8>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -1579,6 +1574,19 @@ impl_runtime_apis! {
 
 		fn cf_pool_info(base_asset: Asset, quote_asset: Asset) -> Result<PoolInfo, DispatchErrorWithMessage> {
 			LiquidityPools::pool_info(base_asset, quote_asset).map_err(Into::into)
+		}
+
+		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>> {
+
+			System::read_events_no_consensus().filter_map(|event_record| {
+
+				if let RuntimeEvent::LiquidityPools(pools_event) = event_record.event {
+					Some(pools_event)
+				} else {
+					None
+				}
+			}).collect()
+
 		}
 
 		fn cf_pool_depth(base_asset: Asset, quote_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchErrorWithMessage> {
