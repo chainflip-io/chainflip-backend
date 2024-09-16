@@ -13,3 +13,8 @@ cf-utilities = { package = "utilities", path = ".." }
 hex = "0.4"
 hex-literal = "0.4"
 anyhow = "1.0"
+
+[features]
+std = [
+	"log/std"
+]

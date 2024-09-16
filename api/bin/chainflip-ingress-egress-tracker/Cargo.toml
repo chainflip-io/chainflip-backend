@@ -48,3 +48,28 @@ frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag 
 insta = { version = "1.36.1", features = ["json"] }
 jsonrpsee = { version = "0.16.2", features = ["full"] }
 mockall = "0.11.0"
+
+[features]
+std = [
+	"chainflip-engine/std"
+]
+runtime-benchmarks = [
+	"cf-chains/runtime-benchmarks",
+	"cf-primitives/runtime-benchmarks",
+	"chainflip-engine/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"pallet-cf-broadcast/runtime-benchmarks",
+	"pallet-cf-environment/runtime-benchmarks",
+	"pallet-cf-ingress-egress/runtime-benchmarks",
+	"state-chain-runtime/runtime-benchmarks"
+]
+try-runtime = [
+	"cf-chains/try-runtime",
+	"cf-primitives/try-runtime",
+	"chainflip-engine/try-runtime",
+	"frame-support/try-runtime",
+	"pallet-cf-broadcast/try-runtime",
+	"pallet-cf-environment/try-runtime",
+	"pallet-cf-ingress-egress/try-runtime",
+	"state-chain-runtime/try-runtime"
+]

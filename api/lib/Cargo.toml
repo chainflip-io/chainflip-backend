@@ -54,3 +54,53 @@ sp-consensus-aura = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', 
 sp-core = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
 sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
 codec = { package = "parity-scale-codec", version = "3.6.1" }
+
+[features]
+std = [
+	"chainflip-engine/std",
+	"chainflip-node/std",
+	"custom-rpc/std",
+	"zeroize/std"
+]
+runtime-benchmarks = [
+	"cf-amm/runtime-benchmarks",
+	"cf-chains/runtime-benchmarks",
+	"cf-primitives/runtime-benchmarks",
+	"chainflip-engine/runtime-benchmarks",
+	"chainflip-node/runtime-benchmarks",
+	"custom-rpc/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"pallet-cf-account-roles/runtime-benchmarks",
+	"pallet-cf-asset-balances/runtime-benchmarks",
+	"pallet-cf-environment/runtime-benchmarks",
+	"pallet-cf-funding/runtime-benchmarks",
+	"pallet-cf-governance/runtime-benchmarks",
+	"pallet-cf-ingress-egress/runtime-benchmarks",
+	"pallet-cf-lp/runtime-benchmarks",
+	"pallet-cf-pools/runtime-benchmarks",
+	"pallet-cf-swapping/runtime-benchmarks",
+	"pallet-cf-threshold-signature/runtime-benchmarks",
+	"pallet-cf-validator/runtime-benchmarks",
+	"state-chain-runtime/runtime-benchmarks"
+]
+try-runtime = [
+	"cf-chains/try-runtime",
+	"cf-primitives/try-runtime",
+	"chainflip-engine/try-runtime",
+	"chainflip-node/try-runtime",
+	"custom-rpc/try-runtime",
+	"frame-support/try-runtime",
+	"pallet-cf-account-roles/try-runtime",
+	"pallet-cf-asset-balances/try-runtime",
+	"pallet-cf-environment/try-runtime",
+	"pallet-cf-funding/try-runtime",
+	"pallet-cf-governance/try-runtime",
+	"pallet-cf-ingress-egress/try-runtime",
+	"pallet-cf-lp/try-runtime",
+	"pallet-cf-pools/try-runtime",
+	"pallet-cf-swapping/try-runtime",
+	"pallet-cf-threshold-signature/try-runtime",
+	"pallet-cf-validator/try-runtime",
+	"state-chain-runtime/try-runtime",
+	"cf-amm/try-runtime"
+]

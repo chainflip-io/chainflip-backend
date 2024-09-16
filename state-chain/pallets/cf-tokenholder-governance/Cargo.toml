@@ -44,27 +44,38 @@ sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chain
 [features]
 default = ['std']
 std = [
-    'cf-chains/std',
-    'cf-primitives/std',
-    'cf-runtime-upgrade-utilities/std',
-    'cf-traits/std',
-    'codec/std',
-    'frame-benchmarking?/std',
-    'frame-support/std',
-    'frame-system/std',
-    'scale-info/std',
-    'sp-std/std',
+	'cf-chains/std',
+	'cf-primitives/std',
+	'cf-runtime-upgrade-utilities/std',
+	'cf-traits/std',
+	'codec/std',
+	'frame-benchmarking?/std',
+	'frame-support/std',
+	'frame-system/std',
+	'scale-info/std',
+	'sp-std/std',
+	"cf-test-utilities/std"
 ]
 runtime-benchmarks = [
-    'cf-chains/runtime-benchmarks',
-    'cf-primitives/runtime-benchmarks',
-    'cf-traits/runtime-benchmarks',
-    'frame-benchmarking/runtime-benchmarks',
-    'frame-support/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
+	'cf-chains/runtime-benchmarks',
+	'cf-primitives/runtime-benchmarks',
+	'cf-traits/runtime-benchmarks',
+	'frame-benchmarking/runtime-benchmarks',
+	'frame-support/runtime-benchmarks',
+	'frame-system/runtime-benchmarks',
+	"cf-runtime-upgrade-utilities/runtime-benchmarks",
+	"pallet-cf-flip/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+	"cf-test-utilities/runtime-benchmarks"
 ]
 try-runtime = [
-    'cf-runtime-upgrade-utilities/try-runtime',
-    'frame-support/try-runtime',
-    'frame-system/try-runtime',
+	'cf-runtime-upgrade-utilities/try-runtime',
+	'frame-support/try-runtime',
+	'frame-system/try-runtime',
+	"cf-traits/try-runtime",
+	"pallet-cf-flip/try-runtime",
+	"sp-runtime/try-runtime",
+	"cf-chains/try-runtime",
+	"cf-primitives/try-runtime",
+	"cf-test-utilities/try-runtime"
 ]

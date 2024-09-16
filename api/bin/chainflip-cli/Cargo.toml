@@ -27,3 +27,22 @@ custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
+
+[features]
+std = [
+	"chainflip-api/std",
+	"chainflip-engine/std",
+	"custom-rpc/std"
+]
+runtime-benchmarks = [
+	"cf-chains/runtime-benchmarks",
+	"chainflip-api/runtime-benchmarks",
+	"chainflip-engine/runtime-benchmarks",
+	"custom-rpc/runtime-benchmarks"
+]
+try-runtime = [
+	"cf-chains/try-runtime",
+	"chainflip-api/try-runtime",
+	"chainflip-engine/try-runtime",
+	"custom-rpc/try-runtime"
+]

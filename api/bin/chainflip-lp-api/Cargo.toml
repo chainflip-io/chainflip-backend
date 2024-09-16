@@ -45,3 +45,23 @@ cf-utilities = { package = "utilities", path = "../../../utilities" }
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
+
+[features]
+std = [
+	"chainflip-api/std",
+	"custom-rpc/std"
+]
+runtime-benchmarks = [
+	"cf-primitives/runtime-benchmarks",
+	"chainflip-api/runtime-benchmarks",
+	"custom-rpc/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-cf-pools/runtime-benchmarks"
+]
+try-runtime = [
+	"cf-primitives/try-runtime",
+	"chainflip-api/try-runtime",
+	"custom-rpc/try-runtime",
+	"frame-system/try-runtime",
+	"pallet-cf-pools/try-runtime"
+]

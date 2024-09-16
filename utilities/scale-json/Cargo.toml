@@ -26,3 +26,9 @@ codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = 
 scale-info = { version = '2.10.0', default-features = false, features = [
     'derive',
 ] }
+
+[features]
+std = [
+	"codec/std",
+	"scale-info/std"
+]

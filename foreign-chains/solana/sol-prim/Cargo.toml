@@ -13,6 +13,16 @@ str = ["dep:bs58"]
 scale = ["dep:codec", "dep:scale-info"]
 std-error = ["dep:thiserror", "bs58/std"]
 runtime-benchmarks = []
+std = [
+	"bs58?/std",
+	"curve25519-dalek?/std",
+	"digest?/std",
+	"codec?/std",
+	"scale-info?/std",
+	"serde?/std",
+	"sha2?/std",
+	"cf-utilities/std"
+]
 
 
 [dependencies]

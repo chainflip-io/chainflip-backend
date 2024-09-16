@@ -18,3 +18,8 @@ engine-upgrade-utils = { path = "../engine-upgrade-utils" }
 
 [build-dependencies]
 engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+
+[features]
+std = [
+	"engine-upgrade-utils/std"
+]

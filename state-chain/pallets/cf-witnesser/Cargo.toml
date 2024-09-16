@@ -54,24 +54,34 @@ sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "
 [features]
 default = ['std']
 std = [
-  'bitvec/std',
-  'cf-primitives/std',
-  'cf-traits/std',
-  'cf-utilities/std',
-  'codec/std',
-  'frame-benchmarking?/std',
-  'frame-support/std',
-  'frame-system/std',
-  'hex/std',
-  'scale-info/std',
-  'sp-std/std',
-  'serde/std',
+	'bitvec/std',
+	'cf-primitives/std',
+	'cf-traits/std',
+	'cf-utilities/std',
+	'codec/std',
+	'frame-benchmarking?/std',
+	'frame-support/std',
+	'frame-system/std',
+	'hex/std',
+	'scale-info/std',
+	'sp-std/std',
+	'serde/std',
+	"cf-test-utilities/std"
 ]
 runtime-benchmarks = [
-  'cf-primitives/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
+	'cf-primitives/runtime-benchmarks',
+	'cf-traits/runtime-benchmarks',
+	'frame-benchmarking/runtime-benchmarks',
+	'frame-support/runtime-benchmarks',
+	'frame-system/runtime-benchmarks',
+	"sp-runtime/runtime-benchmarks",
+	"cf-test-utilities/runtime-benchmarks"
 ]
-try-runtime = ['frame-support/try-runtime', 'frame-system/try-runtime']
+try-runtime = [
+	'frame-support/try-runtime',
+	'frame-system/try-runtime',
+	"cf-traits/try-runtime",
+	"sp-runtime/try-runtime",
+	"cf-primitives/try-runtime",
+	"cf-test-utilities/try-runtime"
+]

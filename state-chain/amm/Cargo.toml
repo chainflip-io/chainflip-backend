@@ -42,3 +42,9 @@ std = [
 	'sp-std/std',
 	'serde/std',
 ]
+runtime-benchmarks = [
+	"cf-primitives/runtime-benchmarks"
+]
+try-runtime = [
+	"cf-primitives/try-runtime"
+]

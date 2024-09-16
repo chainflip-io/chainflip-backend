@@ -33,3 +33,11 @@ std = [
   'log/std',
 ]
 derive = ['cf-runtime-macros']
+runtime-benchmarks = [
+	"frame-support/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks"
+]
+try-runtime = [
+	"frame-support/try-runtime",
+	"sp-runtime/try-runtime"
+]

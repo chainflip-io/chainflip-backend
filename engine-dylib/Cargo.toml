@@ -17,3 +17,16 @@ engine-upgrade-utils = { path = "../engine-upgrade-utils" }
 
 [build-dependencies]
 engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+
+[features]
+std = [
+	"chainflip-engine/std",
+	"engine-proc-macros/std",
+	"engine-upgrade-utils/std"
+]
+runtime-benchmarks = [
+	"chainflip-engine/runtime-benchmarks"
+]
+try-runtime = [
+	"chainflip-engine/try-runtime"
+]

@@ -40,3 +40,17 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
+
+[features]
+std = [
+	"chainflip-api/std",
+	"custom-rpc/std"
+]
+runtime-benchmarks = [
+	"chainflip-api/runtime-benchmarks",
+	"custom-rpc/runtime-benchmarks"
+]
+try-runtime = [
+	"chainflip-api/try-runtime",
+	"custom-rpc/try-runtime"
+]
