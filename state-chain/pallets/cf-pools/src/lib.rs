@@ -678,7 +678,7 @@ pub mod pallet {
 						Ok(option_new_tick_range.unwrap_or(previous_tick_range))
 					},
 				}?;
-				let (_, liquidity_change) = Self::inner_update_range_order(
+				let (_, new_order_liquidity) = Self::inner_update_range_order(
 					pool,
 					&lp,
 					asset_pair,
@@ -697,9 +697,11 @@ pub mod pallet {
 				)?;
 
 				// Asset input and resultant liquidity changes should be consistent.
+				// This condition can be breached in cases where eg. the assets amounts are rounded
+				// to zero liquidity.
 				ensure!(
-					(size.max_is_zero() && liquidity_change.is_zero()) ||
-						(!size.max_is_zero() && !liquidity_change.is_zero()),
+					(size.max_is_zero() && new_order_liquidity.is_zero()) ||
+						(!size.max_is_zero() && !new_order_liquidity.is_zero()),
 					Error::<T>::InvalidSize
 				);
 
