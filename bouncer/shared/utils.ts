@@ -1086,3 +1086,11 @@ export function createLpKeypair(lpUri: string) {
   keyring.setSS58Format(2112);
   return keyring.createFromUri(lpUri);
 }
+
+/// Takes the user friendly USDC price of an asset and converts it to the internal price format.
+/// eg. $/BTC -> BTC/USDC find amounts
+export function usdcToInternalPrice(asset: Asset, usdc: number): string {
+  return BigInt(
+    Math.round((usdc / 10 ** (assetDecimals(asset) - assetDecimals('Usdc'))) * 2 ** 128),
+  ).toString();
+}

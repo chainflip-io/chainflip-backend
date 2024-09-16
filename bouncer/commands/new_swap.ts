@@ -5,12 +5,12 @@
 // <sourceAsset> <destAsset> <destAddress> [maxBoostFeeBps] [refundAddress] [minPrice] [refundDuration]
 // Use `-h` for help.
 // If the refundAddress is provided, the minPrice must also be provided. The refundDuration will default to 0 if not provided.
-// Example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX --refundAddress "0xa0b52be60216f8e0f2eb5bd17fa3c66908cc1652f3080a90d3ab20b2d352b610" --minPrice 100000000000000000
+// Example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX --refundAddress "0xa0b52be60216f8e0f2eb5bd17fa3c66908cc1652f3080a90d3ab20b2d352b610" --minPrice 100
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { InternalAsset } from '@chainflip/cli';
-import { parseAssetString, executeWithTimeout } from '../shared/utils';
+import { parseAssetString, executeWithTimeout, usdcToInternalPrice } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { RefundParameters } from '../shared/new_swap';
 
@@ -20,7 +20,7 @@ interface Args {
   destAddress: string;
   maxBoostFeeBps: number;
   refundAddress?: string;
-  minPrice?: string;
+  minPrice?: number;
   refundDuration: number;
 }
 
@@ -56,8 +56,8 @@ async function newSwapCommand() {
             demandOption: false,
           })
           .option('minPrice', {
-            describe: 'Fill or Kill minimum price',
-            type: 'string',
+            describe: 'Fill or Kill minimum price (USDC per source asset)',
+            type: 'number',
             demandOption: false,
           })
           .option('refundDuration', {
@@ -78,7 +78,7 @@ async function newSwapCommand() {
       ? {
           retryDurationBlocks: args.refundDuration,
           refundAddress: args.refundAddress,
-          minPrice: args.minPrice,
+          minPrice: usdcToInternalPrice(args.sourceAsset as InternalAsset, args.minPrice),
         }
       : undefined;
 
