@@ -740,20 +740,14 @@ pub mod pallet {
 								},
 								validator_id,
 							)
-						).map(|(vote, validator_id)| {
-							(if ContributingAuthorities::<T, I>::contains_key(&validator_id) {
-								Some(vote)
-							} else {
-								None
-							}, validator_id)
-						}).map(|(vote_components, validator_id)| {
-							if let Some(vote_components) = vote_components {
+						).map(|(vote_components, validator_id)| {
+							if ContributingAuthorities::<T, I>::contains_key(&validator_id) {
 								match <<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash| {
 									// We don't bother to check if the reference has expired, as if we have the data we may as well use it, even if it was provided after the shared data reference expired (But before the reference was cleaned up `on_finalize`).
 									Ok(SharedData::<T, I>::get(shared_data_hash))
 								}) {
-									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties, vote))),
 									// Only a full vote can count towards consensus.
+									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties, vote))), 
 									Ok(Some((_properties, AuthorityVote::PartialVote(_)))) => Ok(None),
 									Ok(None) => Ok(None),
 									Err(e) => Err(e),
@@ -766,8 +760,7 @@ pub mod pallet {
 									validator_id
 								}
 							)
-						})
-						.collect::<Result<Vec<_>, _>>()?;
+						}).collect::<Result<Vec<_>, _>>()?;
 
 						debug_assert!(votes.len() == current_authorities_count as usize);
 
