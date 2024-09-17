@@ -1,12 +1,10 @@
 use crate::{
 	electoral_system::{
-		ConsensusStatus, ElectionIdentifierOf, ElectionReadAccess, ElectionWriteAccess,
-		ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
+		ConsensusStatus, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
+		ElectionWriteAccess, ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess,
 	},
-	vote_storage::VoteStorage,
 	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
-use cf_primitives::AuthorityCount;
 use codec::Encode;
 use frame_support::{
 	ensure, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound, StorageHasher, Twox64Concat,
@@ -114,14 +112,9 @@ macro_rules! impl_read_access {
 			pub fn check_consensus(
 				&self,
 				previous_consensus: Option<&ES::Consensus>,
-				votes: Vec<(
-					VotePropertiesOf<ES>,
-					<ES::Vote as VoteStorage>::Vote,
-					ES::ValidatorId,
-				)>,
-				authorities: AuthorityCount,
+				votes: ConsensusVotes<ES>,
 			) -> Result<Option<ES::Consensus>, CorruptStorageError> {
-				ES::check_consensus(self.identifier(), self, previous_consensus, votes, authorities)
+				ES::check_consensus(self.identifier(), self, previous_consensus, votes)
 			}
 		}
 	};

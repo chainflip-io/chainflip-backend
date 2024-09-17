@@ -1,12 +1,11 @@
 use crate::{
 	electoral_system::{
-		AuthorityVoteOf, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
+		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
 		ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
-use cf_primitives::AuthorityCount;
 use cf_traits::IngressSink;
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -295,18 +294,17 @@ where
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
-		authorities: AuthorityCount,
+		consensus_votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-		let threshold = success_threshold_from_share_count(authorities) as usize;
-		let votes_count = votes.len();
-		if votes_count >= threshold {
+		let num_authorities = consensus_votes.num_authorities();
+		let threshold = success_threshold_from_share_count(num_authorities);
+		let active_votes = consensus_votes.active_votes();
+		let num_active_votes = active_votes.len() as u32;
+		if num_active_votes >= threshold {
 			let election_channels = election_access.properties()?;
 
 			let mut votes_grouped_by_channel = BTreeMap::<_, Vec<_>>::new();
-			for (account, channel_vote) in
-				votes.into_iter().flat_map(|(_properties, vote, _validator_id)| vote)
-			{
+			for (account, channel_vote) in active_votes.into_iter().flatten() {
 				votes_grouped_by_channel.entry(account).or_default().push(channel_vote);
 			}
 
@@ -351,22 +349,23 @@ where
 						// ingress total if they haven't provided a vote for that channel) or if the
 						// channel has expired (To ensure we get consensus at a block number after
 						// the expiry, so we can safely close the channel).
-						channel_votes.resize(votes_count, *recent_ingress_total);
+						channel_votes.resize(num_active_votes as usize, *recent_ingress_total);
 						channel_votes.sort_by_key(|channel_vote| channel_vote.block_number);
 						let contributing_channel_votes = longest_increasing_subsequence_by_key(
 							&channel_votes[..],
 							|channel_vote| channel_vote.amount,
 						);
-						if contributing_channel_votes.len() >= threshold {
+						if contributing_channel_votes.len() as u32 >= threshold {
 							Some((
 								account,
 								ChannelTotalIngressed {
 									// Requires 2/3 to decrease the block_number,
-									block_number: contributing_channel_votes[threshold - 1]
+									block_number: contributing_channel_votes
+										[threshold as usize - 1]
 										.block_number,
 									// Requires 2/3 to increase the amount
 									amount: contributing_channel_votes
-										[contributing_channel_votes.len() - threshold]
+										[contributing_channel_votes.len() - threshold as usize]
 										.amount,
 								},
 							))
