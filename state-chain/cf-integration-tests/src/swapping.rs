@@ -22,8 +22,8 @@ use cf_chains::{
 	TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
-	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, CcmFailReason,
-	FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, FLIPPERINOS_PER_FLIP,
+	GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, SwapType};
@@ -593,33 +593,6 @@ fn can_process_ccm_via_direct_deposit() {
 				..
 			}) if swap_request_id == SwapRequestIdCounter::<Runtime>::get() &&
 				amount == deposit_amount => ()
-		);
-	});
-}
-
-#[test]
-fn failed_ccm_deposit_can_deposit_event() {
-	super::genesis::with_test_defaults().build().execute_with(|| {
-		let deposit_amount = 100_000_000_000;
-
-		// Dot is not supported, so this should fail:
-		witness_call(RuntimeCall::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-				source_asset: Asset::Flip,
-				deposit_amount,
-				destination_asset: Asset::Dot,
-				destination_address: EncodedAddress::Dot(Default::default()),
-				deposit_metadata: ccm_deposit_metadata_mock(),
-				tx_hash: Default::default(),
-			},
-		));
-
-		assert_has_matching_event!(
-			Runtime,
-			RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmFailed {
-				reason: CcmFailReason::UnsupportedForTargetChain,
-				..
-			})
 		);
 	});
 }

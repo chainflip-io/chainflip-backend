@@ -1,9 +1,6 @@
-use cf_chains::{
-	CcmDepositMetadataGeneric, ChannelRefundParameters, ForeignChainAddress, SwapOrigin,
-};
+use cf_chains::{CcmSwapMetadataGeneric, ChannelRefundParameters, ForeignChainAddress, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -20,7 +17,7 @@ pub enum SwapRequestTypeGeneric<Address> {
 	NetworkFee,
 	IngressEgressFee,
 	Regular { output_address: Address },
-	Ccm { output_address: Address, ccm_deposit_metadata: CcmDepositMetadataGeneric<Address> },
+	Ccm { output_address: Address, ccm_swap_metadata: CcmSwapMetadataGeneric<Address> },
 }
 
 pub type SwapRequestType = SwapRequestTypeGeneric<ForeignChainAddress>;
@@ -38,5 +35,5 @@ pub trait SwapRequestHandler {
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		origin: SwapOrigin,
-	) -> Result<SwapRequestId, DispatchError>;
+	) -> SwapRequestId;
 }

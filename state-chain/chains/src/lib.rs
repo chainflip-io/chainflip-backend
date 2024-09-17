@@ -16,7 +16,7 @@ use address::{
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
 use cf_primitives::{
-	AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TransactionHash,
+	Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TransactionHash,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -639,12 +639,73 @@ pub struct CcmChannelMetadata {
 	pub cf_parameters: CcmCfParameters,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct CcmSwapAmounts {
+	pub principal_swap_amount: AssetAmount,
+	pub gas_budget: AssetAmount,
+	// if the gas asset is different to the input asset, it will require a swap
+	pub other_gas_asset: Option<Asset>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum CcmFailReason {
+	UnsupportedForTargetChain,
+	InsufficientDepositAmount,
+	InvalidMetadata,
+	InvalidDestinationAddress,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
 pub struct CcmDepositMetadataGeneric<Address> {
+	pub channel_metadata: CcmChannelMetadata,
 	pub source_chain: ForeignChain,
 	pub source_address: Option<Address>,
-	pub channel_metadata: CcmChannelMetadata,
 }
+
+impl<Address> CcmDepositMetadataGeneric<Address> {
+	pub fn into_swap_metadata(
+		self,
+		deposit_amount: AssetAmount,
+		source_asset: Asset,
+		destination_asset: Asset,
+	) -> Result<CcmSwapMetadataGeneric<Address>, CcmFailReason> {
+		let gas_budget = self.channel_metadata.gas_budget;
+
+		let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
+
+		let destination_chain: ForeignChain = destination_asset.into();
+		if !destination_chain.ccm_support() {
+			return Err(CcmFailReason::UnsupportedForTargetChain)
+		} else if deposit_amount < gas_budget {
+			return Err(CcmFailReason::InsufficientDepositAmount)
+		}
+
+		// Return gas asset only if it is different from the input asset (and thus requires a swap)
+		let output_gas_asset = destination_chain.gas_asset();
+
+		Ok(CcmSwapMetadataGeneric {
+			deposit_metadata: self,
+			swap_amounts: CcmSwapAmounts {
+				principal_swap_amount,
+				gas_budget,
+				other_gas_asset: if source_asset == output_gas_asset || gas_budget == 0 {
+					None
+				} else {
+					Some(output_gas_asset)
+				},
+			},
+		})
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct CcmSwapMetadataGeneric<Address> {
+	pub deposit_metadata: CcmDepositMetadataGeneric<Address>,
+	pub swap_amounts: CcmSwapAmounts,
+}
+
+pub type CcmSwapMetadata = CcmSwapMetadataGeneric<ForeignChainAddress>;
+pub type CcmSwapMetadataEncoded = CcmSwapMetadataGeneric<EncodedAddress>;
 
 pub type CcmDepositMetadata = CcmDepositMetadataGeneric<ForeignChainAddress>;
 pub type CcmDepositMetadataEncoded = CcmDepositMetadataGeneric<EncodedAddress>;
@@ -652,9 +713,18 @@ pub type CcmDepositMetadataEncoded = CcmDepositMetadataGeneric<EncodedAddress>;
 impl CcmDepositMetadata {
 	pub fn to_encoded<Converter: AddressConverter>(self) -> CcmDepositMetadataEncoded {
 		CcmDepositMetadataEncoded {
-			source_chain: self.source_chain,
 			source_address: self.source_address.map(Converter::to_encoded_address),
 			channel_metadata: self.channel_metadata,
+			source_chain: self.source_chain,
+		}
+	}
+}
+
+impl CcmSwapMetadata {
+	pub fn to_encoded<Converter: AddressConverter>(self) -> CcmSwapMetadataEncoded {
+		CcmSwapMetadataEncoded {
+			deposit_metadata: self.deposit_metadata.to_encoded::<Converter>(),
+			swap_amounts: self.swap_amounts,
 		}
 	}
 }

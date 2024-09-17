@@ -13,13 +13,13 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId},
 	mocks::MockEthereum,
-	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
-	TransferAssetParams,
+	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel,
+	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	chains::assets::eth, AssetAmount, ChannelId, DcaParameters, ForeignChain, SWAP_DELAY_BLOCKS,
 };
-use cf_test_utilities::{assert_events_eq, assert_has_event};
+use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
 	mocks::{
 		self,
@@ -1880,7 +1880,12 @@ fn can_request_ccm_swap_via_extrinsic() {
 				input_asset: INPUT_ASSET,
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Ccm { output_address, ccm_deposit_metadata },
+				swap_type: SwapRequestType::Ccm {
+					output_address,
+					ccm_swap_metadata: ccm_deposit_metadata
+						.into_swap_metadata(INPUT_AMOUNT, INPUT_ASSET, OUTPUT_ASSET)
+						.unwrap()
+				},
 				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
 			},]
 		);
@@ -1922,5 +1927,62 @@ fn rejects_invalid_swap_by_witnesser() {
 		),);
 
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+	});
+}
+
+#[test]
+fn failed_ccm_deposit_can_deposit_event() {
+	const GAS_BUDGET: AssetAmount = 1_000;
+
+	let ccm_deposit_metadata = CcmDepositMetadata {
+		source_chain: ForeignChain::Ethereum,
+		source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+		channel_metadata: CcmChannelMetadata {
+			message: vec![0x01].try_into().unwrap(),
+			gas_budget: GAS_BUDGET,
+			cf_parameters: Default::default(),
+		},
+	};
+
+	new_test_ext().execute_with(|| {
+		// CCM is not supported for Dot:
+		assert_ok!(IngressEgress::contract_ccm_swap_request(
+			RuntimeOrigin::root(),
+			Asset::Flip,
+			10_000,
+			Asset::Dot,
+			EncodedAddress::Dot(Default::default()),
+			ccm_deposit_metadata.clone(),
+			Default::default(),
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::CcmFailed {
+				reason: CcmFailReason::UnsupportedForTargetChain,
+				..
+			})
+		);
+
+		System::reset_events();
+
+		// Insufficient deposit amount:
+		assert_ok!(IngressEgress::contract_ccm_swap_request(
+			RuntimeOrigin::root(),
+			Asset::Flip,
+			GAS_BUDGET - 1,
+			Asset::Eth,
+			EncodedAddress::Eth(Default::default()),
+			ccm_deposit_metadata,
+			Default::default(),
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::CcmFailed {
+				reason: CcmFailReason::InsufficientDepositAmount,
+				..
+			})
+		);
 	});
 }

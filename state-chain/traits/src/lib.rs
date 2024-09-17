@@ -864,19 +864,6 @@ pub trait EgressApi<C: Chain> {
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
-impl<C: Chain + Get<ForeignChain>> EgressApi<C> for () {
-	type EgressError = DispatchError;
-
-	fn schedule_egress(
-		_asset: C::ChainAsset,
-		_amount: <C as Chain>::ChainAmount,
-		_destination_address: <C as Chain>::ChainAccount,
-		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
-	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
-		Ok(Default::default())
-	}
-}
-
 pub trait VaultKeyWitnessedHandler<C: Chain> {
 	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResult;
 }

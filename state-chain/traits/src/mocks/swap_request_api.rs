@@ -2,7 +2,6 @@ use crate::{swapping::SwapRequestType, EgressApi, SwapRequestHandler};
 use cf_chains::{Chain, ChannelRefundParameters, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
 use codec::{Decode, Encode};
-use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
 
 use crate::mocks::MockPalletStorage;
@@ -48,15 +47,18 @@ where
 		_refund_params: Option<ChannelRefundParameters>,
 		_dca_params: Option<DcaParameters>,
 		origin: SwapOrigin,
-	) -> Result<SwapRequestId, DispatchError> {
-		Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<Vec<MockSwapRequest>>| {
-			swaps.get_or_insert(vec![]).push(MockSwapRequest {
+	) -> SwapRequestId {
+		let id = Self::mutate_value(SWAP_REQUESTS, |swaps: &mut Option<Vec<MockSwapRequest>>| {
+			let swaps = swaps.get_or_insert(vec![]);
+			let id = swaps.len();
+			swaps.push(MockSwapRequest {
 				input_asset,
 				output_asset,
 				input_amount,
 				swap_type: swap_type.clone(),
 				origin,
 			});
+			id
 		});
 
 		match swap_type {
@@ -72,6 +74,6 @@ where
 			_ => { /* do nothing */ },
 		};
 
-		Ok(1)
+		id as SwapRequestId
 	}
 }

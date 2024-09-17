@@ -14,11 +14,11 @@ use cf_chains::{
 		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
 		SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ExecutexSwapAndCallError, ForeignChainAddress,
-	RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin,
-	TransactionBuilder,
+	CcmChannelMetadata, CcmDepositMetadata, CcmFailReason, Chain, ExecutexSwapAndCallError,
+	ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError,
+	Solana, SwapOrigin, TransactionBuilder,
 };
-use cf_primitives::{AccountRole, AuthorityCount, CcmFailReason, ForeignChain, SwapId};
+use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
 use cf_utilities::bs58_array;
 use codec::Encode;

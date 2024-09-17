@@ -26,15 +26,15 @@ use cf_chains::{
 	},
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
-	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, CcmMessage,
-	Chain, ChannelLifecycleHooks, ChannelRefundParameters, ConsolidateCall, DepositChannel,
-	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, SwapOrigin, TransferAssetParams,
+	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata,
+	CcmFailReason, CcmMessage, Chain, ChannelLifecycleHooks, ChannelRefundParameters,
+	ConsolidateCall, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
+	SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, CcmFailReason,
-	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
-	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
-	SWAP_DELAY_BLOCKS,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
+	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
+	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -1118,7 +1118,7 @@ pub mod pallet {
 					},
 				};
 
-			if T::SwapRequestHandler::init_swap_request(
+			T::SwapRequestHandler::init_swap_request(
 				from,
 				deposit_amount,
 				to,
@@ -1129,11 +1129,7 @@ pub mod pallet {
 				// NOTE: DCA not yet supported for swaps from the contract
 				None,
 				SwapOrigin::Vault { tx_hash },
-			)
-			.is_err()
-			{
-				log_or_panic!("Regular swap request should never fail");
-			}
+			);
 
 			Ok(())
 		}
@@ -1153,23 +1149,24 @@ pub mod pallet {
 
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
-			if let Err(err) = T::CcmValidityChecker::check_and_decode(
-				&deposit_metadata.channel_metadata,
-				destination_asset,
-			) {
-				log::warn!(
-					"Failed to process CCM due to invalid data. Tx hash: {:?}, Error: {:?}",
-					tx_hash,
-					err
-				);
+			let ccm_failed = |reason| {
+				log::warn!("Failed to process CCM. Tx hash: {:?}, Reason: {:?}", tx_hash, reason);
 
 				Self::deposit_event(Event::<T, I>::CcmFailed {
-					reason: CcmFailReason::InvalidMetadata,
-					destination_address,
-					deposit_metadata: deposit_metadata.to_encoded::<T::AddressConverter>(),
-					origin: swap_origin,
+					reason,
+					destination_address: destination_address.clone(),
+					deposit_metadata: deposit_metadata.clone().to_encoded::<T::AddressConverter>(),
+					origin: swap_origin.clone(),
 				});
+			};
 
+			if T::CcmValidityChecker::check_and_decode(
+				&deposit_metadata.channel_metadata,
+				destination_asset,
+			)
+			.is_err()
+			{
+				ccm_failed(CcmFailReason::InvalidMetadata);
 				return Ok(());
 			};
 
@@ -1179,18 +1176,30 @@ pub mod pallet {
 					destination_asset,
 				) {
 					Ok(address) => address,
-					Err(err) => {
-						log::warn!("Failed to process contract CCM swap due to invalid destination address. Tx hash: {tx_hash:?}. Error: {err:?}");
+					Err(_) => {
+						ccm_failed(CcmFailReason::InvalidDestinationAddress);
 						return Ok(());
 					},
 				};
 
-			if T::SwapRequestHandler::init_swap_request(
+			let ccm_swap_metadata = match deposit_metadata.clone().into_swap_metadata(
+				deposit_amount,
+				source_asset,
+				destination_asset,
+			) {
+				Ok(metadata) => metadata,
+				Err(reason) => {
+					ccm_failed(reason);
+					return Ok(())
+				},
+			};
+
+			T::SwapRequestHandler::init_swap_request(
 				source_asset,
 				deposit_amount,
 				destination_asset,
 				SwapRequestType::Ccm {
-					ccm_deposit_metadata: deposit_metadata,
+					ccm_swap_metadata,
 					output_address: destination_address_internal.clone(),
 				},
 				Default::default(),
@@ -1199,11 +1208,7 @@ pub mod pallet {
 				// NOTE: DCA not yet supported for swaps from the contract
 				None,
 				swap_origin,
-			)
-			.is_err()
-			{
-				log::error!("Ccm failed. Check `CcmFailed` event.");
-			}
+			);
 
 			Ok(())
 		}
@@ -1693,7 +1698,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				refund_params,
 				dca_params,
 			} => {
-				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
+				let swap_request_id = T::SwapRequestHandler::init_swap_request(
 					asset.into(),
 					amount_after_fees.into(),
 					destination_asset,
@@ -1702,11 +1707,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					refund_params,
 					dca_params,
 					swap_origin,
-				) {
-					DepositAction::Swap { swap_request_id }
-				} else {
-					DepositAction::NoAction
-				}
+				);
+				DepositAction::Swap { swap_request_id }
 			},
 			ChannelAction::CcmTransfer {
 				destination_asset,
@@ -1716,26 +1718,45 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				refund_params,
 				dca_params,
 			} => {
-				if let Ok(swap_request_id) = T::SwapRequestHandler::init_swap_request(
-					asset.into(),
+				let deposit_metadata = CcmDepositMetadata {
+					channel_metadata,
+					source_chain: asset.into(),
+					source_address: None,
+				};
+				match deposit_metadata.clone().into_swap_metadata(
 					amount_after_fees.into(),
+					asset.into(),
 					destination_asset,
-					SwapRequestType::Ccm {
-						ccm_deposit_metadata: CcmDepositMetadata {
-							source_chain: asset.into(),
-							source_address: None,
-							channel_metadata,
-						},
-						output_address: destination_address,
-					},
-					broker_fees,
-					refund_params,
-					dca_params,
-					swap_origin,
 				) {
-					DepositAction::CcmTransfer { swap_request_id }
-				} else {
-					DepositAction::NoAction
+					Ok(ccm_swap_metadata) => {
+						let swap_request_id = T::SwapRequestHandler::init_swap_request(
+							asset.into(),
+							amount_after_fees.into(),
+							destination_asset,
+							SwapRequestType::Ccm {
+								ccm_swap_metadata,
+								output_address: destination_address,
+							},
+							broker_fees,
+							refund_params,
+							dca_params,
+							swap_origin,
+						);
+						DepositAction::CcmTransfer { swap_request_id }
+					},
+					Err(reason) => {
+						Self::deposit_event(Event::<T, I>::CcmFailed {
+							reason,
+							destination_address: T::AddressConverter::to_encoded_address(
+								destination_address,
+							),
+							deposit_metadata: deposit_metadata
+								.clone()
+								.to_encoded::<T::AddressConverter>(),
+							origin: swap_origin.clone(),
+						});
+						DepositAction::NoAction
+					},
 				}
 			},
 		};
@@ -2051,7 +2072,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}), available_amount);
 
 			if !transaction_fee.is_zero() {
-				if let Err(_) = T::SwapRequestHandler::init_swap_request(
+				T::SwapRequestHandler::init_swap_request(
 					asset.into(),
 					transaction_fee.into(),
 					<T::TargetChain as Chain>::GAS_ASSET.into(),
@@ -2060,9 +2081,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					None, /* no refund params */
 					None, /* no DCA */
 					SwapOrigin::Internal,
-				) {
-					log_or_panic!("Ingress-egress fee swap should never fail");
-				}
+				);
 			}
 
 			transaction_fee
@@ -2090,7 +2109,12 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 
 			match maybe_ccm_with_gas_budget {
 				Some((
-					CcmDepositMetadata { source_chain, source_address, channel_metadata },
+					CcmDepositMetadata {
+						channel_metadata: CcmChannelMetadata { message, cf_parameters, .. },
+						source_chain,
+						source_address,
+						..
+					},
 					gas_budget,
 				)) => {
 					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
@@ -2098,8 +2122,8 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						asset,
 						amount,
 						destination_address: destination_address.clone(),
-						message: channel_metadata.message,
-						cf_parameters: channel_metadata.cf_parameters,
+						message,
+						cf_parameters,
 						source_chain,
 						source_address,
 						gas_budget,

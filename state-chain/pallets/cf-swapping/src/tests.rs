@@ -9,8 +9,8 @@ use std::sync::LazyLock;
 use super::*;
 use crate::{
 	mock::{RuntimeEvent, *},
-	CcmFailReason, CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap,
-	SwapOrigin, SwapQueue, SwapType,
+	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapQueue,
+	SwapType,
 };
 use cf_amm::common::{price_to_sqrt_price, PRICE_FRACTIONAL_BITS};
 use cf_chains::{
@@ -182,59 +182,24 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 	]
 }
 
-#[track_caller]
-fn assert_failed_ccm(
-	from: Asset,
-	amount: AssetAmount,
-	output: Asset,
-	destination_address: ForeignChainAddress,
-	ccm: CcmDepositMetadata,
-	reason: CcmFailReason,
-) {
-	assert!(Swapping::init_swap_request(
-		from,
-		amount,
-		output,
-		SwapRequestType::Ccm {
-			ccm_deposit_metadata: ccm.clone(),
-			output_address: destination_address.clone()
-		},
-		Default::default(),
-		None,
-		None,
-		SwapOrigin::Vault { tx_hash: Default::default() },
-	)
-	.is_err());
-
-	assert_event_sequence!(
-		Test,
-		RuntimeEvent::Swapping(Event::SwapRequested { .. }),
-		RuntimeEvent::Swapping(Event::CcmFailed {
-			reason: ref reason_in_event,
-			destination_address: ref address_in_event,
-			deposit_metadata: ref metadata_in_event,
-			..
-		}) if reason_in_event == &reason && address_in_event == &MockAddressConverter::to_encoded_address(destination_address) && metadata_in_event == &ccm.to_encoded::<<Test as pallet::Config>::AddressConverter>(),
-		RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
-	);
-}
-
 fn insert_swaps(swaps: &[TestSwapParams]) {
 	for (broker_id, swap) in swaps.iter().enumerate() {
 		let request_type = if swap.is_ccm {
 			SwapRequestType::Ccm {
 				output_address: swap.output_address.clone(),
-				ccm_deposit_metadata: CcmDepositMetadata {
+				ccm_swap_metadata: CcmDepositMetadata {
 					source_chain: ForeignChain::Ethereum,
 					source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 					channel_metadata: generate_ccm_channel(),
-				},
+				}
+				.into_swap_metadata(swap.input_amount, swap.input_asset, swap.output_asset)
+				.unwrap(),
 			}
 		} else {
 			SwapRequestType::Regular { output_address: swap.output_address.clone() }
 		};
 
-		assert_ok!(Swapping::init_swap_request(
+		Swapping::init_swap_request(
 			swap.input_asset,
 			swap.input_amount,
 			swap.output_asset,
@@ -243,7 +208,7 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 			swap.refund_params.clone(),
 			swap.dca_params.clone(),
 			SwapOrigin::Vault { tx_hash: Default::default() },
-		));
+		);
 	}
 }
 
@@ -282,7 +247,7 @@ fn swap_with_custom_broker_fee(
 	amount: AssetAmount,
 	broker_fees: Beneficiaries<u64>,
 ) {
-	assert_ok!(Swapping::init_swap_request(
+	Swapping::init_swap_request(
 		from,
 		amount,
 		to,
@@ -297,7 +262,7 @@ fn swap_with_custom_broker_fee(
 			channel_id: 1,
 			deposit_block_height: 0,
 		},
-	));
+	);
 }
 
 #[test]
@@ -363,7 +328,7 @@ fn process_all_swaps() {
 #[should_panic]
 fn cannot_swap_with_incorrect_destination_address_type() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Swapping::init_swap_request(
+		Swapping::init_swap_request(
 			Asset::Eth,
 			10,
 			Asset::Dot,
@@ -372,7 +337,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			None,
 			None,
 			SwapOrigin::Vault { tx_hash: Default::default() },
-		));
+		);
 
 		assert_swaps_queue_is_empty();
 	});
@@ -434,45 +399,6 @@ fn expect_swap_id_to_be_emitted() {
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
 			);
 		});
-}
-
-#[test]
-fn reject_invalid_ccm_deposit() {
-	new_test_ext().execute_with(|| {
-		let gas_budget = GAS_BUDGET;
-		let ccm = generate_ccm_deposit();
-
-		assert_failed_ccm(
-			Asset::Eth,
-			1_000_000,
-			Asset::Dot,
-			ForeignChainAddress::Dot(Default::default()),
-			ccm.clone(),
-			CcmFailReason::UnsupportedForTargetChain,
-		);
-
-		System::reset_events();
-
-		assert_failed_ccm(
-			Asset::Eth,
-			1_000_000,
-			Asset::Btc,
-			ForeignChainAddress::Btc(cf_chains::btc::ScriptPubkey::P2PKH(Default::default())),
-			ccm.clone(),
-			CcmFailReason::UnsupportedForTargetChain,
-		);
-
-		System::reset_events();
-
-		assert_failed_ccm(
-			Asset::Eth,
-			gas_budget - 1,
-			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
-			ccm,
-			CcmFailReason::InsufficientDepositAmount,
-		);
-	});
 }
 
 #[test]
@@ -568,18 +494,18 @@ fn process_all_into_stable_swaps_first() {
 		[Asset::Flip, Asset::Btc, Asset::Dot, Asset::Usdc]
 			.into_iter()
 			.for_each(|input_asset| {
-				assert_ok!(Swapping::init_swap_request(
+				Swapping::init_swap_request(
 					input_asset,
 					AMOUNT,
 					Asset::Eth,
 					SwapRequestType::Regular {
-						output_address: ForeignChainAddress::Eth([1; 20].into())
+						output_address: ForeignChainAddress::Eth([1; 20].into()),
 					},
 					Default::default(),
 					None,
 					None,
 					SwapOrigin::Vault { tx_hash: Default::default() },
-				));
+				);
 			});
 
 		assert_eq!(
@@ -670,19 +596,26 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 			let eth_address = ForeignChainAddress::Eth(Default::default());
 			let ccm = generate_ccm_deposit();
 
-			assert_ok!(Swapping::init_swap_request(
-				Asset::Usdc,
+			Swapping::init_swap_request(
+				INPUT_ASSET,
 				PRINCIPAL_AMOUNT + GAS_BUDGET,
-				Asset::Eth,
+				OUTPUT_ASSET,
 				SwapRequestType::Ccm {
-					ccm_deposit_metadata: ccm.clone(),
-					output_address: eth_address
+					ccm_swap_metadata: ccm
+						.clone()
+						.into_swap_metadata(
+							PRINCIPAL_AMOUNT + GAS_BUDGET,
+							INPUT_ASSET,
+							OUTPUT_ASSET,
+						)
+						.unwrap(),
+					output_address: eth_address,
 				},
 				Default::default(),
 				None,
 				None,
 				SwapOrigin::Vault { tx_hash: Default::default() },
-			));
+			);
 
 			// Change the swap rate so swap output will be 0
 			SwapRate::set(0.0001f64);
@@ -699,8 +632,8 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					network_fee: 0,
 					broker_fee: 0,
 					input_amount: PRINCIPAL_AMOUNT,
-					input_asset: Asset::Usdc,
-					output_asset: Asset::Eth,
+					input_asset: INPUT_ASSET,
+					output_asset: OUTPUT_ASSET,
 					output_amount: ZERO_AMOUNT,
 					intermediate_amount: None,
 				}),
@@ -1226,18 +1159,18 @@ fn swap_output_amounts_correctly_account_for_fees() {
 			};
 
 			{
-				assert_ok!(Swapping::init_swap_request(
+				Swapping::init_swap_request(
 					from,
 					INPUT_AMOUNT,
 					to,
 					SwapRequestType::Regular {
-						output_address: ForeignChainAddress::Eth(H160::zero())
+						output_address: ForeignChainAddress::Eth(H160::zero()),
 					},
 					Default::default(),
 					None,
 					None,
-					SwapOrigin::Vault { tx_hash: Default::default() }
-				));
+					SwapOrigin::Vault { tx_hash: Default::default() },
+				);
 
 				Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
 

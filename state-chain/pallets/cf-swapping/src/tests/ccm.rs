@@ -8,16 +8,21 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 	let output_address = (*EVM_OUTPUT_ADDRESS).clone();
 	let encoded_output_address = MockAddressConverter::to_encoded_address(output_address.clone());
 	let origin = SwapOrigin::Vault { tx_hash: Default::default() };
-	assert_ok!(Swapping::init_swap_request(
+
+	let ccm_swap_metadata = ccm_deposit_metadata
+		.into_swap_metadata(input_amount, input_asset, output_asset)
+		.unwrap();
+
+	Swapping::init_swap_request(
 		input_asset,
 		input_amount,
 		output_asset,
-		SwapRequestType::Ccm { ccm_deposit_metadata: ccm_deposit_metadata.clone(), output_address },
+		SwapRequestType::Ccm { ccm_swap_metadata: ccm_swap_metadata.clone(), output_address },
 		Default::default(),
 		None,
 		None,
 		origin.clone(),
-	));
+	);
 
 	System::assert_has_event(RuntimeEvent::Swapping(Event::SwapRequested {
 		swap_request_id: SWAP_REQUEST_ID,
@@ -25,7 +30,7 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 		output_asset,
 		input_amount,
 		request_type: SwapRequestTypeEncoded::Ccm {
-			ccm_deposit_metadata: ccm_deposit_metadata
+			ccm_swap_metadata: ccm_swap_metadata
 				.to_encoded::<<Test as pallet::Config>::AddressConverter>(),
 			output_address: encoded_output_address,
 		},
@@ -77,7 +82,10 @@ fn can_process_ccms_via_swap_deposit_address() {
 	new_test_ext()
 		.execute_with(|| {
 			let request_ccm = generate_ccm_channel();
-			let ccm = generate_ccm_deposit();
+
+			let ccm_swap_metadata = generate_ccm_deposit()
+				.into_swap_metadata(DEPOSIT_AMOUNT, Asset::Dot, Asset::Eth)
+				.unwrap();
 
 			// Can process CCM via Swap deposit
 			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
@@ -93,19 +101,19 @@ fn can_process_ccms_via_swap_deposit_address() {
 				None,
 			));
 
-			assert_ok!(Swapping::init_swap_request(
+			Swapping::init_swap_request(
 				Asset::Dot,
 				DEPOSIT_AMOUNT,
 				Asset::Eth,
 				SwapRequestType::Ccm {
-					ccm_deposit_metadata: ccm.clone(),
-					output_address: (*EVM_OUTPUT_ADDRESS).clone()
+					ccm_swap_metadata: ccm_swap_metadata.clone(),
+					output_address: (*EVM_OUTPUT_ADDRESS).clone(),
 				},
 				Default::default(),
 				None,
 				None,
 				SwapOrigin::Vault { tx_hash: Default::default() },
-			));
+			);
 
 			// Principal swap is scheduled first
 			assert_eq!(

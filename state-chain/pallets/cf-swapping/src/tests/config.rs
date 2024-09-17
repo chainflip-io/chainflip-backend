@@ -86,18 +86,18 @@ fn max_swap_amount_can_be_removed() {
 		set_maximum_swap_amount(from, Some(max_swap));
 
 		let initiate_swap = || {
-			assert_ok!(Swapping::init_swap_request(
+			Swapping::init_swap_request(
 				from,
 				amount,
 				to,
 				SwapRequestType::Regular {
-					output_address: ForeignChainAddress::Eth([1; 20].into())
+					output_address: ForeignChainAddress::Eth([1; 20].into()),
 				},
 				Default::default(),
 				None,
 				None,
 				SwapOrigin::Vault { tx_hash: Default::default() },
-			));
+			);
 		};
 
 		initiate_swap();
@@ -167,7 +167,7 @@ fn can_swap_below_max_amount() {
 		// Initial max swap amount is set.
 		set_maximum_swap_amount(from, Some(max_swap));
 
-		assert_ok!(Swapping::init_swap_request(
+		Swapping::init_swap_request(
 			from,
 			amount,
 			to,
@@ -176,7 +176,7 @@ fn can_swap_below_max_amount() {
 			None,
 			None,
 			SwapOrigin::Vault { tx_hash: Default::default() },
-		));
+		);
 
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0u128);
 
