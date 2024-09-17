@@ -130,6 +130,9 @@ pub use pallet::UniqueMonotonicIdentifier;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use core::iter::Map;
+	use sp_std::vec::IntoIter;
+
 	use super::*;
 
 	use cf_primitives::{AuthorityCount, EpochIndex};
@@ -1825,6 +1828,114 @@ pub mod pallet {
 				<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote,
 			>,
 		) -> BTreeSet<ElectionIdentifierOf<T::ElectoralSystem>> {
+			Self::for_each_election::<(ElectionIdentifierOf<T::ElectoralSystem>, bool), _, _, _, _>(
+				validator_id,
+				|electoral_access,
+				 election_identifier,
+				 option_current_authority_vote,
+				 contains_timed_out_shared_data_references| {
+					Ok((
+						election_identifier,
+						if let Some(proposed_vote) = proposed_votes.get(&election_identifier) {
+							if let Some((existing_vote_properties, existing_authority_vote)) =
+								option_current_authority_vote
+									.filter(|_| !contains_timed_out_shared_data_references)
+							{
+								<T::ElectoralSystem as ElectoralSystem>::is_vote_needed(
+							(
+								existing_vote_properties,
+								match &existing_authority_vote {
+									AuthorityVote::Vote(existing_vote) => {
+										<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
+											existing_vote,
+											|shared_data| SharedDataHash::of(&shared_data)
+										)
+									},
+									AuthorityVote::PartialVote(existing_partial_vote) => existing_partial_vote.clone(),
+								},
+								existing_authority_vote,
+							),
+							(
+								<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
+									proposed_vote,
+									|shared_data| SharedDataHash::of(&shared_data)
+								),
+								proposed_vote.clone(),
+							),
+						)
+							} else {
+								true
+							}
+						} else {
+							false
+						},
+					))
+				},
+				|electoral_access, all| {
+					all.filter_ok(|(_election_identifier, needed)| *needed)
+						.map_ok(|(election_identifier, _needed)| (election_identifier))
+						.collect::<Result<BTreeSet<_>, _>>()
+				},
+			)
+			.map(|r| r.unwrap_or_default())
+			.unwrap_or_default()
+		}
+
+		fn get_vote_with_timed_out_data_references(
+			epoch_index: EpochIndex,
+			unique_monotonic_identifier: UniqueMonotonicIdentifier,
+			authority: &T::ValidatorId,
+			authority_index: AuthorityCount,
+			block_number: BlockNumberFor<T>,
+		) -> Result<
+			(
+				Option<(VotePropertiesOf<T::ElectoralSystem>, AuthorityVoteOf<T::ElectoralSystem>)>,
+				bool,
+			),
+			CorruptStorageError,
+		> {
+			let mut contains_timed_out_shared_data_references = false;
+			Pallet::<T, I>::get_vote(
+				epoch_index,
+				unique_monotonic_identifier,
+				authority,
+				authority_index,
+				|unprovided_shared_data_hash| {
+					let option_reference_details = SharedDataReferenceCount::<T, I>::get(
+						unprovided_shared_data_hash,
+						unique_monotonic_identifier,
+					);
+					if option_reference_details.is_none() ||
+						option_reference_details.unwrap().expires < block_number
+					{
+						contains_timed_out_shared_data_references = true;
+					}
+				},
+			)
+			.map(|option_current_authority_vote| {
+				(option_current_authority_vote, contains_timed_out_shared_data_references)
+			})
+		}
+
+		fn for_each_election<
+			R,
+			S,
+			Q: FnMut(ElectionIdentifierOf<T::ElectoralSystem>) -> Result<R, CorruptStorageError>,
+			OnEachElection: FnOnce(
+				&mut ElectoralAccess<T, I>,
+				ElectionIdentifierOf<T::ElectoralSystem>,
+				Option<(VotePropertiesOf<T::ElectoralSystem>, AuthorityVoteOf<T::ElectoralSystem>)>,
+				bool,
+			) -> Result<R, CorruptStorageError>,
+			OnAllElectionsIterable: FnOnce(
+				&mut ElectoralAccess<T, I>,
+				Map<IntoIter<ElectionIdentifierOf<T::ElectoralSystem>>, Q>,
+			) -> Result<S, CorruptStorageError>,
+		>(
+			validator_id: &T::ValidatorId,
+			on_each_election: OnEachElection,
+			on_all_elections_iterable: OnAllElectionsIterable,
+		) -> Option<Result<S, DispatchError>> {
 			use frame_support::traits::OriginTrait;
 
 			if let Ok((epoch_index, authority, authority_index)) =
@@ -1832,86 +1943,37 @@ pub mod pallet {
 			{
 				let block_number = frame_system::Pallet::<T>::current_block_number();
 
-				Self::with_electoral_access_and_identifiers(
-					|_electoral_access, election_identifiers| {
-						election_identifiers
-							.into_iter()
-							.map(|election_identifier| {
-								Ok((
-									election_identifier,
-									if let Some(proposed_vote) =
-										proposed_votes.get(&election_identifier)
-									{
-										let unique_monotonic_identifier =
-											*election_identifier.unique_monotonic();
-
-										let mut contains_timed_out_shared_data_references = false;
-										let option_current_authority_vote =
-											Pallet::<T, I>::get_vote(
-												epoch_index,
-												unique_monotonic_identifier,
-												&authority,
-												authority_index,
-												|unprovided_shared_data_hash| {
-													let option_reference_details =
-														SharedDataReferenceCount::<T, I>::get(
-															unprovided_shared_data_hash,
-															unique_monotonic_identifier,
-														);
-													if option_reference_details.is_none() ||
-														option_reference_details.unwrap().expires <
-															block_number
-													{
-														contains_timed_out_shared_data_references =
-															true;
-													}
-												},
-											)?;
-
-										if let Some((
-											existing_vote_properties,
-											existing_authority_vote,
-										)) = option_current_authority_vote
-											.filter(|_| !contains_timed_out_shared_data_references)
-										{
-											<T::ElectoralSystem as ElectoralSystem>::is_vote_needed(
-												(
-													existing_vote_properties,
-													match &existing_authority_vote {
-														AuthorityVote::Vote(existing_vote) => {
-															<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
-																existing_vote,
-																|shared_data| SharedDataHash::of(&shared_data)
-															)
-														},
-														AuthorityVote::PartialVote(existing_partial_vote) => existing_partial_vote.clone(),
-													},
-													existing_authority_vote,
-												),
-												(
-													<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
-														proposed_vote,
-														|shared_data| SharedDataHash::of(&shared_data)
-													),
-													proposed_vote.clone(),
-												),
-											)
-										} else {
-											true
-										}
-									} else {
-										false
-									},
-								))
-							})
-							.filter_ok(|(_election_identifier, needed)| *needed)
-							.map_ok(|(election_identifier, _needed)| (election_identifier))
-							.collect::<Result<BTreeSet<_>, _>>()
+				Some(Self::with_electoral_access_and_identifiers(
+					|electoral_access, election_identifiers| {
+						on_all_elections_iterable(
+							electoral_access,
+							election_identifiers.into_iter().map(
+								|election_identifier: ElectionIdentifierOf<T::ElectoralSystem>| {
+									let unique_monotonic_identifier =
+										*election_identifier.unique_monotonic();
+									let (
+										option_current_authority_vote,
+										contains_timed_out_shared_data_references,
+									) = Self::get_vote_with_timed_out_data_references(
+										epoch_index,
+										unique_monotonic_identifier,
+										&authority,
+										authority_index,
+										block_number,
+									)?;
+									on_each_election(
+										electoral_access,
+										election_identifier,
+										option_current_authority_vote,
+										contains_timed_out_shared_data_references,
+									)
+								},
+							),
+						)
 					},
-				)
-				.unwrap_or_default()
+				))
 			} else {
-				Default::default()
+				None
 			}
 		}
 
