@@ -1,7 +1,11 @@
 #![cfg(test)]
 
 use crate::{
-	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData, BroadcastId, Config, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1, PalletConfigUpdate, PalletOffence, PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId
+	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData,
+	BroadcastId, Config, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent,
+	FailedBroadcasters, Instance1, PalletConfigUpdate, PalletOffence, PendingApiCalls,
+	PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts,
+	TransactionMetadata, TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	evm::SchnorrVerificationComponents,
@@ -15,8 +19,14 @@ use cf_chains::{
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
-		block_height_provider::BlockHeightProvider, cfe_interface_mock::{MockCfeEvent, MockCfeInterface}, liability_tracker::MockLiabilityTracker, signer_nomination::MockNominator, threshold_signer::MockThresholdSigner
-	}, AsyncResult, Broadcaster as BroadcasterTrait, Chainflip, EpochInfo, GetBlockHeight, SetSafeMode, ThresholdSigner
+		block_height_provider::BlockHeightProvider,
+		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
+		liability_tracker::MockLiabilityTracker,
+		signer_nomination::MockNominator,
+		threshold_signer::MockThresholdSigner,
+	},
+	AsyncResult, Broadcaster as BroadcasterTrait, Chainflip, EpochInfo, GetBlockHeight,
+	SetSafeMode, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use frame_support::{
@@ -332,7 +342,8 @@ fn test_signature_request_expiry() {
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
 			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
-			expiry = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
+			expiry =
+				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
 			broadcast_id
 		})
 		.then_execute_at_next_block(|broadcast_id| {
@@ -340,7 +351,11 @@ fn test_signature_request_expiry() {
 			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
 			broadcast_id
 		})
-		.then_execute_at_block(expiry, |broadcast_id| {
+		.then_execute_with(|ctx| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(expiry);
+			ctx
+		})
+		.then_execute_at_next_block(|broadcast_id| {
 			MockCfe::respond(Scenario::Timeout);
 			check_end_state(broadcast_id);
 			broadcast_id
@@ -364,15 +379,26 @@ fn test_transmission_request_expiry() {
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
 			MockCfe::respond(Scenario::HappyPath);
-			expiry = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
+			expiry =
+				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
 			broadcast_id
 		})
-		.then_execute_at_block(expiry, |broadcast_id| {
+		.then_execute_with(|ctx| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(expiry);
+			ctx
+		})
+		.then_execute_at_next_block(|broadcast_id| {
 			MockCfe::respond(Scenario::Timeout);
 			check_end_state(broadcast_id);
 			broadcast_id
 		})
-		.then_execute_at_block(expiry + 1, |broadcast_id| {
+		.then_execute_with(|ctx| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(
+				BlockHeightProvider::<MockEthereum>::get_block_height() + 1,
+			);
+			ctx
+		})
+		.then_execute_at_next_block(|broadcast_id| {
 			// Subsequent calls to the hook have no further effect.
 			MockCfe::respond(Scenario::Timeout);
 			check_end_state(broadcast_id);
@@ -400,7 +426,8 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 
 			MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_requires_refresh();
 			expiry = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
-			external_expiry = BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
+			external_expiry =
+				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
 			broadcast_id
 		})
 		.then_execute_with(|ctx| {
@@ -632,9 +659,9 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
 			let nominee = MockNominator::get_last_nominee().unwrap();
 
-			let current_block = frame_system::Pallet::<Test>::block_number();
+			let current_external_block = BlockHeightProvider::<MockEthereum>::get_block_height();
 
-			expected_expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
+			expected_expiry_block = current_external_block + BROADCAST_EXPIRY_BLOCKS;
 
 			assert_eq!(
 				Timeouts::<Test, Instance1>::get(expected_expiry_block)
@@ -658,7 +685,11 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 			(nominee, broadcast_data)
 		})
 		// The broadcast times out
-		.then_execute_at_block(expected_expiry_block, |p| p)
+		.then_execute_with(|ctx| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(expected_expiry_block);
+			ctx
+		})
+		.then_process_next_block()
 		.then_execute_at_next_block(|(nominee, broadcast_data)| {
 			// Taking the invalid signature code path results in the metadata being removed, so the
 			// check for the fee is ignored, however, the transaction_succeeded should still pass.
@@ -923,7 +954,7 @@ fn timed_out_broadcaster_are_reported() {
 	new_test_ext()
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
-			expiry = System::block_number()
+			expiry = BlockHeightProvider::<MockEthereum>::get_block_height()
 				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
 			let nominee = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id)
 				.unwrap()
@@ -933,7 +964,11 @@ fn timed_out_broadcaster_are_reported() {
 			assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());
 			(broadcast_id, nominee)
 		})
-		.then_execute_at_block(expiry, |(broadcast_id, nominee)| {
+		.then_execute_with(|ctx| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(expiry);
+			ctx
+		})
+		.then_execute_at_next_block(|(broadcast_id, nominee)| {
 			// The nominated broadcaster is added to `FailedBroadcasters` to be reported later.
 			assert_eq!(
 				FailedBroadcasters::<Test, Instance1>::get(broadcast_id),
@@ -1094,7 +1129,8 @@ fn broadcast_timeout_delay_works() {
 
 			BroadcastDelay::set(Some(delay));
 			target = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
-			external_target = BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
+			external_target =
+				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
 		})
 		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
@@ -1212,7 +1248,10 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 			statechain_target = statechain_next_block +
 				<<Test as crate::Config<Instance1>>::SafeModeBlockMargin as Get<u64>>::get();
 			let external_current = BlockHeightProvider::<MockEthereum>::get_block_height();
-			external_target = external_current + <<Test as crate::Config<Instance1>>::SafeModeBlockMarginForTargetChain as Get<u64>>::get();
+			external_target = external_current +
+				<<Test as crate::Config<Instance1>>::SafeModeBlockMarginForTargetChain as Get<
+					u64,
+				>>::get();
 
 			// Ensure next block's data is ready to be re-scheduled during safe mode.
 			Timeouts::<Test, Instance1>::insert(
