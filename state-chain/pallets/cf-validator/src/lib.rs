@@ -547,7 +547,7 @@ pub mod pallet {
 		/// Force a new epoch. From the next block we will try to move to a new
 		/// epoch and rotate our validators.
 		///
-		/// The dispatch origin of this function must be root.
+		/// The dispatch origin of this function must be governance.
 		///
 		/// ## Events
 		///
