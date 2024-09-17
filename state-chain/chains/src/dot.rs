@@ -31,11 +31,11 @@ use sp_core::{sr25519, ConstBool, H256};
 pub struct PolkadotSignature(sr25519::Signature);
 impl PolkadotSignature {
 	fn verify(&self, payload: &EncodedPolkadotPayload, signer: &PolkadotPublicKey) -> bool {
-		self.0.verify(&payload.0[..], &sr25519::Public(*signer.aliased_ref()))
+		self.0.verify(&payload.0[..], &sr25519::Public::from(*signer.aliased_ref()))
 	}
 
-	pub const fn from_aliased(signature: [u8; 64]) -> Self {
-		Self(sr25519::Signature(signature))
+	pub fn from_aliased(signature: [u8; 64]) -> Self {
+		Self(sr25519::Signature::from(signature))
 	}
 
 	pub fn aliased_ref(&self) -> &[u8; 64] {

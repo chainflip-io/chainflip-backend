@@ -18,18 +18,18 @@ async-trait = "0.1.49"
 async-channel = "1.7.1"
 async-broadcast = "0.4.1"
 bincode = "1.3.3"
-futures = "0.3.14"
+futures = "0.3.30"
 futures-core = "0.3.14"
 futures-util = "0.3.14"
 hex = "0.4.3"
-itertools = "0.11"
+itertools = "0.13"
 lazy_static = "1.4"
 secp256k1 = { version = "0.27", features = [
-  "serde",
-  "rand-std",
-  "global-context",
+	"serde",
+	"rand-std",
+	"global-context",
 ] }
-serde = { version = "1.0", features = ["derive", "rc"] }
+serde = { version = "1.0.197", features = ["derive", "rc"] }
 sha2 = "0.9.5"
 thiserror = "1.0.26"
 tokio = { version = "1.22", features = ["full", "test-util"] }
@@ -40,7 +40,7 @@ num-derive = "0.3"
 zeroize = "1.5.4"
 generic-array = "1.0"
 public-ip = "0.2.2"
-curve25519-dalek = { version = "4.1", features = ["serde"] }
+curve25519-dalek = { version = "4.1.3", features = ["serde"] }
 typenum = "1.15"
 schnorrkel = "0.11.4"
 rayon = "1.7.0"
@@ -57,8 +57,8 @@ state-chain-runtime = { path = "../../state-chain/runtime" }
 utilities = { package = "utilities", path = "../../utilities" }
 
 # substrate deps
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
 ed25519-dalek = "2.1.1"
 
 [dev-dependencies]
@@ -66,7 +66,7 @@ mockall = "0.11.0"
 # Turn on the "test" feature flag for tests
 multisig = { path = ".", features = ["test"] }
 utilities = { package = "utilities", path = "../../utilities", features = [
-  "test-utils",
+	"test-utils",
 ] }
 
 [features]

@@ -9,32 +9,32 @@ description = 'Common primitive types used across Chainflip'
 workspace = true
 
 [dependencies]
-serde = { default_features = false, version = '1.0.195', features = [
+serde = { default-features = false, version = '1.0.197', features = [
   'alloc',
   'derive',
 ] }
-hex = { optional = true, version = '0.4' }
+hex = { optional = true, version = '0.4.3' }
 ethabi = { default-features = false, version = '18.0' }
 strum = { default-features = false, version = '0.24' }
 strum_macros = { default-features = false, version = '0.24' }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default_features = false }
-sp-arithmetic = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default_features = false }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
+sp-arithmetic = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
 lazy_format = "2.0"
 
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
 
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
   'derive',
 ] }
-scale-info = { version = "2.10.0", default-features = false, features = [
+scale-info = { version = "2.11.1", default-features = false, features = [
   "derive",
 ] }
 
 [dev-dependencies]
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
 serde_json = "1.0"
 
 [features]
@@ -52,4 +52,3 @@ std = [
   'sp-std/std',
   'strum/std',
 ]
-runtime-benchmarks = ['frame-support/runtime-benchmarks']

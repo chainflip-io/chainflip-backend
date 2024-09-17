@@ -37,7 +37,7 @@ pub struct SerializeSolanaBroadcastMigration;
 impl OnRuntimeUpgrade for SerializeSolanaBroadcastMigration {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok((old::AwaitingBroadcast::iter().count() as u64).encode())
+		pre_upgrade_check()
 	}
 
 	fn on_runtime_upgrade() -> Weight {
@@ -64,7 +64,18 @@ impl OnRuntimeUpgrade for SerializeSolanaBroadcastMigration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let pre_awaiting_broadcast_count = <u64>::decode(&mut state.as_slice())
+		post_upgrade_check(state)
+	}
+}
+
+#[cfg(any(test, feature = "try-runtime"))]
+pub fn pre_upgrade_check()  -> Result<Vec<u8>, DispatchError> {
+	Ok((old::AwaitingBroadcast::iter().count() as u64).encode())
+}
+
+#[cfg(any(test, feature = "try-runtime"))]
+pub fn post_upgrade_check(state: Vec<u8>) -> Result<(), DispatchError> {
+	let pre_awaiting_broadcast_count = <u64>::decode(&mut state.as_slice())
 			.map_err(|_| DispatchError::from("Failed to decode state"))?;
 
 		let post_awaiting_broadcast_count =
@@ -73,7 +84,6 @@ impl OnRuntimeUpgrade for SerializeSolanaBroadcastMigration {
 
 		assert_eq!(pre_awaiting_broadcast_count, post_awaiting_broadcast_count);
 		Ok(())
-	}
 }
 
 pub struct NoopUpgrade;

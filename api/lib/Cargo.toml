@@ -11,12 +11,12 @@ anyhow = "1.0"
 async-trait = "0.1.49"
 bs58 = "0.5.1"
 ed25519-dalek = "2.1.1"
-futures = "0.3.14"
+futures = "0.3.30"
 hex = "0.4.3"
 hmac-sha512 = "1.1.4"
 libsecp256k1 = { version = '0.7' }
 rand = "0.8.5"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.197", features = ["derive"] }
 tiny-bip39 = "1.0.0"
 tokio = "1.28"
 tracing = "0.1"
@@ -49,8 +49,8 @@ state-chain-runtime = { path = "../../state-chain/runtime" }
 
 
 # Substrate
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-consensus-aura = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
-sp-core = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
-sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
-codec = { package = "parity-scale-codec", version = "3.6.1" }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
+sp-consensus-aura = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+1' }
+sp-core = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+1' }
+sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+1' }
+codec = { package = "parity-scale-codec", version = "3.6.12" }

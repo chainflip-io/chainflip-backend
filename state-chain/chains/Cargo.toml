@@ -21,7 +21,7 @@ libsecp256k1 = { default-features = false, version = '0.7', features = [
 sha2 = { version = "0.10", default-features = false }
 
 # Solana
-sol-prim = { path = "../../foreign-chains/solana/sol-prim", features = [
+sol-prim = { path = "../../foreign-chains/solana/sol-prim", default-features = false, features = [
   "pda",
   "str",
   "serde",
@@ -38,7 +38,7 @@ rlp = { default-features = false, version = '0.5' }
 bech32 = { default-features = false, version = '0.9.1' }
 
 # Solana
-borsh = { version = "1.2.1", default_features = false, features = [
+borsh = { version = "1.2.1", default-features = false, features = [
   "derive",
   "unstable__schema",
   "hashbrown",
@@ -55,39 +55,39 @@ bincode = { version = "2.0.0-rc.3", default-features = false, features = [
   "alloc",
   "serde",
 ] }
-curve25519-dalek = { git = "https://github.com/solana-labs/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464", optional = true }
+curve25519-dalek = { version = "4.1.3", optional = true, git = "https://github.com/solana-labs/curve25519-dalek.git" }
 sha2-const = { version = "0.1.2", default-features = false }
 ed25519-dalek = { version = "2.1.1", optional = true }
 
 # Other
-anyhow = { version = '1.0', default-features = false, optional = true }
-hex = { default-features = false, version = '0.4', features = ['serde'] }
-hex-literal = { version = '0.4.1', default-features = false }
-serde = { version = '1.0.195', default-features = false, features = [
-  'alloc',
-  'derive',
+anyhow = { version = "1.0", default-features = false, optional = true }
+hex = { default-features = false, version = "0.4", features = ["serde"] }
+hex-literal = { version = "0.4.1", default-features = false }
+serde = { version = "1.0.197", default-features = false, features = [
+  "alloc",
+  "derive",
 ] }
 serde_bytes = { version = "0.11.14", default-features = false }
-log = { version = '0.4.16', default-features = false }
-itertools = { version = '0.11.0', default-features = false }
-arrayref = '0.3.6'
-strum = { default-features = false, version = '0.24' }
+log = { version = "0.4.16", default-features = false }
+itertools = { version = "0.13", default-features = false }
+arrayref = "0.3.6"
+strum = { default-features = false, version = "0.24" }
 thiserror = { version = "1.0.50", optional = true }
 rand = { version = "0.8.4", optional = true }
 
 # Substrate packages
-ss58-registry = { version = '1.41', optional = true }
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
-  'derive',
+ss58-registry = { version = "1.41", optional = true }
+codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+  "derive",
 ] }
-scale-info = { version = '2.10.0', default-features = false, features = [
-  'derive',
+scale-info = { version = "2.11.1", default-features = false, features = [
+  "derive",
 ] }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
 
 [dev-dependencies]
 cf-test-utilities = { path = '../test-utilities' }
@@ -99,35 +99,47 @@ ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 [features]
 default = ['std']
 std = [
-  'bech32/std',
-  'cf-primitives/std',
-  'cf-utilities/std',
-  'scale-info/std',
-  'codec/std',
-  'ethabi/full-serde',
-  'ethereum/std',
-  'ethereum-types/std',
-  'frame-support/std',
-  'hex/std',
-  'hex/serde',
-  'libsecp256k1/std',
-  'log/std',
-  'rlp/std',
-  'serde/std',
-  'sp-std/std',
-  'sp-core/std',
-  'sp-core/full_crypto',
-  'sp-io/std',
-  'dep:ss58-registry',
-  'dep:thiserror',
-  'dep:anyhow',
-  'strum/std',
-  'curve25519-dalek/std',
-  'sp-runtime/std',
+  "bech32/std",
+  "cf-primitives/std",
+  "cf-utilities/std",
+  "scale-info/std",
+  "codec/std",
+  "ethabi/full-serde",
+  "ethereum/std",
+  "ethereum-types/std",
+  "frame-support/std",
+  "hex/std",
+  "hex/serde",
+  "libsecp256k1/std",
+  "log/std",
+  "rlp/std",
+  "serde/std",
+  "sp-std/std",
+  "sp-core/std",
+  "sp-core/full_crypto",
+  "sp-io/std",
+  "dep:ss58-registry",
+  "dep:thiserror",
+  "dep:anyhow",
+  "strum/std",
+  "sp-runtime/std",
+  "anyhow?/std",
+  "bincode/std",
+  "bs58/std",
+  "cf-runtime-utilities/std",
+  "digest/std",
+  "ethabi/std",
+  "serde_bytes/std",
+  "serde_with/std",
+  "sha2/std",
+  "sol-prim/std",
+  "itertools/use_std",
+  # "borsh/std" not needed, it conflicts with borsh/hashbrown.
 ]
 runtime-benchmarks = [
-  'cf-primitives/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
+  'sp-runtime/runtime-benchmarks',
 ]
+try-runtime = ["frame-support/try-runtime", "sp-runtime/try-runtime"]
 
 runtime-integration-tests = ['std', 'dep:rand', 'ed25519-dalek/rand_core']

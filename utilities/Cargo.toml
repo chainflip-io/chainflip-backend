@@ -19,11 +19,11 @@ anyhow = { version = '1.0', optional = true }
 async-broadcast = { version = "0.5", optional = true }
 async-channel = { version = "1.7.1", optional = true }
 bs58 = { version = "0.5.1", default-features = false }
-clap = { version = "3.2.23", features = ["derive"], optional = true }
-futures = { version = "0.3.14", optional = true }
+clap = { version = "4.5.3", features = ["derive"], optional = true }
+futures = { version = "0.3.30", optional = true }
 futures-util = { version = "0.3.14", optional = true }
 hex = { version = "0.4.3", default-features = false }
-itertools = { version = "0.11", default_features = false }
+itertools = { version = "0.13", default-features = false }
 lazy_format = "2.0"
 lazy_static = "1.4"
 log = "0.4"
@@ -31,16 +31,16 @@ mockall = { version = "0.11.0", optional = true }
 num-traits = { version = "0.2", optional = true }
 pin-project = { version = "1.0.12", optional = true }
 predicates = { version = "3.0", optional = true }
-prometheus = { version = "0.13.0", default-features = false }
+prometheus = { version = "0.13.0", optional = true }
 regex = { version = "1", optional = true }
-scale-info = { version = "2.10", optional = true }
+scale-info = { version = "2.11.1", optional = true }
 scopeguard = { version = "1.2.0" }
-serde = { version = "1.0", optional = true, default_features = false, features = [
+serde = { optional = true, version = "1.0.197", default-features = false, features = [
   "alloc",
   "derive",
 ] }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", optional = true }
+sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", optional = true }
 tempfile = { version = "3.7.0", optional = true }
 thiserror = { version = "1.0.26", optional = true }
 tokio = { version = "1.13.1", features = ["full"], optional = true }
@@ -62,8 +62,6 @@ tempfile = "3.7.0"
 reqwest = { version = "0.11.4", features = ["rustls-tls"] }
 
 [features]
-default = ['std']
-test-utils = ['dep:tempfile', 'dep:tracing', 'dep:tracing-subscriber']
 std = [
   'dep:anyhow',
   'dep:async-broadcast',
@@ -76,6 +74,7 @@ std = [
   'dep:async-channel',
   'itertools/use_std',
   'dep:pin-project',
+  'dep:prometheus',
   'dep:serde',
   'serde?/std',
   'dep:scale-info',
@@ -92,3 +91,5 @@ std = [
   'dep:url',
   'dep:clap',
 ]
+default = ['std']
+test-utils = ['dep:tempfile', 'dep:tracing', 'dep:tracing-subscriber']
