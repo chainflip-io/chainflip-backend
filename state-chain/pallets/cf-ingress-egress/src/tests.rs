@@ -354,7 +354,7 @@ fn addresses_are_getting_reused() {
 			),
 			(DepositRequest::Liquidity { lp_account: ALICE, asset: eth::Asset::Eth }, 0u32.into()),
 		])
-		.inspect_storage(|deposit_details| {
+		.then_execute_with_keep_context(|deposit_details| {
 			assert_eq!(ChannelIdCounter::<Test, _>::get(), deposit_details.len() as u64);
 		})
 		// Simulate broadcast success.
@@ -379,7 +379,7 @@ fn addresses_are_getting_reused() {
 			channels[0].clone()
 		})
 		// Check that the used address is now deployed and in the pool of available addresses.
-		.inspect_storage(|(_request, channel_id, address)| {
+		.then_execute_with_keep_context(|(_request, channel_id, address)| {
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
 			assert_eq!(DepositChannelPool::<Test, _>::get(channel_id).unwrap().address, *address);
@@ -390,7 +390,7 @@ fn addresses_are_getting_reused() {
 			destination_address: ForeignChainAddress::Eth(Default::default()),
 		}])
 		// The address should have been taken from the pool and the id counter unchanged.
-		.inspect_storage(|_| {
+		.then_execute_with_keep_context(|_| {
 			expect_size_of_address_pool(0);
 			assert_eq!(ChannelIdCounter::<Test, _>::get(), 2);
 		});
@@ -768,7 +768,7 @@ fn multi_use_deposit_same_block() {
 			assert!(ctx.len() == 1);
 			ctx.pop().unwrap()
 		})
-		.inspect_storage(|(_, _, deposit_address)| {
+		.then_execute_with_keep_context(|(_, _, deposit_address)| {
 			assert!(
 				DepositChannelLookup::<Test, _>::get(deposit_address)
 					.unwrap()
@@ -798,7 +798,7 @@ fn multi_use_deposit_same_block() {
 			.unwrap();
 			(request, channel_id, deposit_address)
 		})
-		.inspect_storage(|(_, channel_id, deposit_address)| {
+		.then_execute_with_keep_context(|(_, channel_id, deposit_address)| {
 			assert_eq!(
 				DepositChannelLookup::<Test, _>::get(deposit_address)
 					.unwrap()
@@ -846,7 +846,7 @@ fn multi_use_deposit_same_block() {
 			MockEgressBroadcaster::dispatch_all_success_callbacks();
 			ctx
 		})
-		.inspect_storage(|(_, _, deposit_address)| {
+		.then_execute_with_keep_context(|(_, _, deposit_address)| {
 			assert_eq!(
 				DepositChannelLookup::<Test, _>::get(deposit_address)
 					.unwrap()
@@ -1088,7 +1088,7 @@ fn channel_reuse_with_different_assets() {
 			MockEgressBroadcaster::dispatch_all_success_callbacks();
 			ctx
 		})
-		.inspect_storage(|(request, _, address)| {
+		.then_execute_with_keep_context(|(request, _, address)| {
 			let asset = request.source_asset();
 			assert_eq!(asset, ASSET_1);
 			assert!(
@@ -1101,7 +1101,7 @@ fn channel_reuse_with_different_assets() {
 			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
 			channel_id
 		})
-		.inspect_storage(|channel_id| {
+		.then_execute_with_keep_context(|channel_id| {
 			assert!(DepositChannelLookup::<Test, _>::get(ALICE_ETH_ADDRESS).is_none());
 			assert!(
 				DepositChannelPool::<Test, _>::iter_values().next().unwrap().channel_id ==
@@ -1115,7 +1115,7 @@ fn channel_reuse_with_different_assets() {
 		}])
 		.map_context(|mut result| result.pop().unwrap())
 		// Ensure that the deposit channel's asset is updated.
-		.inspect_storage(|(request, _, address)| {
+		.then_execute_with_keep_context(|(request, _, address)| {
 			let asset = request.source_asset();
 			assert_eq!(asset, ASSET_2);
 			assert!(
