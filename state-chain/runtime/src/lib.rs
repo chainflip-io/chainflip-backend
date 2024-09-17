@@ -48,8 +48,7 @@ use cf_chains::{
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	sol::SolanaCrypto,
-	Arbitrum, Bitcoin, CcmChannelMetadata, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
-	TransactionBuilder,
+	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
 use cf_runtime_upgrade_utilities::VersionedMigration;
@@ -73,7 +72,7 @@ use pallet_cf_pools::{
 use crate::chainflip::EvmLimit;
 
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
-use pallet_cf_swapping::{CcmSwapAmounts, SwapLegInfo};
+use pallet_cf_swapping::SwapLegInfo;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
@@ -378,6 +377,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -403,6 +403,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -428,6 +429,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type FetchesTransfersLimitProvider = NoLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -453,6 +455,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type FetchesTransfersLimitProvider = EvmLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -478,6 +481,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type FetchesTransfersLimitProvider = SolanaLimit;
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -1814,8 +1818,8 @@ impl_runtime_apis! {
 						{
 							filtered_swaps.push(deposit.amount.into());
 						},
-						ChannelAction::CcmTransfer { destination_asset, channel_metadata, .. } => {
-							filtered_swaps.extend(ccm_swaps(from, to, channel_asset, destination_asset, deposit.amount.into(), channel_metadata));
+						ChannelAction::CcmTransfer { .. } => {
+							// Ingoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
 						}
 						_ => {
 							// ignore other deposit actions
@@ -1825,33 +1829,6 @@ impl_runtime_apis! {
 				filtered_swaps
 			}
 
-			fn ccm_swaps(from: Asset, to: Asset, source_asset: Asset, destination_asset: Asset, deposit_amount: AssetAmount, channel_metadata: CcmChannelMetadata) -> Vec<AssetAmount> {
-				if source_asset != from {
-					return Vec::new();
-				}
-
-				// There are two swaps for CCM, the principal swap, and the gas amount swap.
-				let Ok(CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset }) = pallet_cf_swapping::ccm::principal_and_gas_amounts(deposit_amount, &channel_metadata, source_asset, destination_asset) else {
-					// not a valid CCM
-					return Vec::new();
-				};
-
-				let mut ccm_swaps = Vec::new();
-				if destination_asset == to {
-					// the principal swap is in the requested direction.
-					ccm_swaps.push(principal_swap_amount);
-				}
-
-				if let Some(gas_asset) = other_gas_asset {
-					if gas_asset == to {
-						// the gas swap is in the requested direction
-						ccm_swaps.push(gas_budget);
-					}
-				}
-
-				ccm_swaps
-			}
-
 			let mut all_prewitnessed_swaps = Vec::new();
 			let current_block_events = System::read_events_no_consensus();
 
@@ -1859,7 +1836,12 @@ impl_runtime_apis! {
 				match *event {
 					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
 						match call {
-							RuntimeCall::Swapping(pallet_cf_swapping::Call::schedule_swap_from_contract {
+							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
+								from: swap_from, to: swap_to, deposit_amount, ..
+							}) if from == swap_from && to == swap_to => {
+								all_prewitnessed_swaps.push(deposit_amount);
+							}
+							RuntimeCall::ArbitrumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
 								from: swap_from, to: swap_to, deposit_amount, ..
 							}) if from == swap_from && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
@@ -1883,12 +1865,6 @@ impl_runtime_apis! {
 								deposit_witnesses, ..
 							}) => {
 								all_prewitnessed_swaps.extend(filter_deposit_swaps::<Polkadot, PolkadotInstance>(from, to, deposit_witnesses));
-							},
-							RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
-								source_asset, deposit_amount, destination_asset, deposit_metadata, ..
-							}) => {
-								// There are two swaps for CCM, the principal swap, and the gas amount swap.
-								all_prewitnessed_swaps.extend(ccm_swaps(from, to, source_asset, destination_asset, deposit_amount, deposit_metadata.channel_metadata));
 							},
 							_ => {
 								// ignore, we only care about calls that trigger swaps.

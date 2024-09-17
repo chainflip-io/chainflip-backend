@@ -11,7 +11,7 @@ use super::{
 	},
 	contract_common::{events_at_block, Event},
 };
-use cf_primitives::EpochIndex;
+use cf_primitives::{AssetAmount, EpochIndex};
 use futures_core::Future;
 
 use anyhow::{anyhow, Result};
@@ -21,13 +21,16 @@ use cf_chains::{
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain,
 };
-use cf_primitives::{chains::assets::eth::Asset as EthereumAsset, Asset, ForeignChain};
+use cf_primitives::{Asset, ForeignChain};
 use ethers::prelude::*;
 use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
-pub fn call_from_event<C: cf_chains::Chain<ChainAccount = EthereumAddress>>(
+pub fn call_from_event<
+	C: cf_chains::Chain<ChainAccount = EthereumAddress>,
+	CallBuilder: IngressCallBuilder<Chain = C>,
+>(
 	event: Event<VaultEvents>,
 	// can be different for different EVM chains
 	native_asset: Asset,
@@ -61,16 +64,14 @@ where
 			amount,
 			sender: _,
 			cf_parameters: _,
-		}) => Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::schedule_swap_from_contract {
-			from: native_asset,
-			to: try_into_primitive(dst_token)?,
-			deposit_amount: try_into_primitive(amount)?,
-			destination_address: try_into_encoded_address(
-				try_into_primitive(dst_chain)?,
-				dst_address.to_vec(),
-			)?,
-			tx_hash: event.tx_hash.into(),
-		})),
+		}) => Some(CallBuilder::contract_swap_request(
+			native_asset,
+			try_into_primitive(amount)?,
+			try_into_primitive(dst_token)?,
+			try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+			None,
+			event.tx_hash.into(),
+		)),
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
 			dst_chain,
 			dst_address,
@@ -79,18 +80,16 @@ where
 			amount,
 			sender: _,
 			cf_parameters: _,
-		}) => Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::schedule_swap_from_contract {
-			from: *(supported_assets
+		}) => Some(CallBuilder::contract_swap_request(
+			*(supported_assets
 				.get(&src_token)
 				.ok_or(anyhow!("Source token {src_token:?} not found"))?),
-			to: try_into_primitive(dst_token)?,
-			deposit_amount: try_into_primitive(amount)?,
-			destination_address: try_into_encoded_address(
-				try_into_primitive(dst_chain)?,
-				dst_address.to_vec(),
-			)?,
-			tx_hash: event.tx_hash.into(),
-		})),
+			try_into_primitive(amount)?,
+			try_into_primitive(dst_token)?,
+			try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+			None,
+			event.tx_hash.into(),
+		)),
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
 			dst_chain,
 			dst_address,
@@ -101,15 +100,12 @@ where
 			gas_amount,
 			cf_parameters,
 		}) =>
-			Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
-				source_asset: native_asset,
-				destination_asset: try_into_primitive(dst_token)?,
-				deposit_amount: try_into_primitive(amount)?,
-				destination_address: try_into_encoded_address(
-					try_into_primitive(dst_chain)?,
-					dst_address.to_vec(),
-				)?,
-				deposit_metadata: CcmDepositMetadata {
+			Some(CallBuilder::contract_swap_request(
+				native_asset,
+				try_into_primitive(amount)?,
+				try_into_primitive(dst_token)?,
+				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				Some(CcmDepositMetadata {
 					source_chain,
 					source_address: Some(
 						<EthereumAddress as IntoForeignChainAddress<C>>::into_foreign_chain_address(
@@ -126,9 +122,9 @@ where
 							anyhow!("Failed to deposit CCM: `cf_parameters` too long.")
 						})?,
 					},
-				},
-				tx_hash: event.tx_hash.into(),
-			})),
+				}),
+				event.tx_hash.into(),
+			)),
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
 			dst_chain,
 			dst_address,
@@ -140,17 +136,14 @@ where
 			gas_amount,
 			cf_parameters,
 		}) =>
-			Some(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
-				source_asset: *(supported_assets
+			Some(CallBuilder::contract_swap_request(
+				*(supported_assets
 					.get(&src_token)
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
-				destination_asset: try_into_primitive(dst_token)?,
-				deposit_amount: try_into_primitive(amount)?,
-				destination_address: try_into_encoded_address(
-					try_into_primitive(dst_chain)?,
-					dst_address.to_vec(),
-				)?,
-				deposit_metadata: CcmDepositMetadata {
+				try_into_primitive(amount)?,
+				try_into_primitive(dst_token)?,
+				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				Some(CcmDepositMetadata {
 					source_chain,
 					source_address: Some(
 						<EthereumAddress as IntoForeignChainAddress<C>>::into_foreign_chain_address(
@@ -167,18 +160,20 @@ where
 							anyhow!("Failed to deposit CCM. cf_parameters too long.")
 						})?,
 					},
-				},
-				tx_hash: event.tx_hash.into(),
-			})),
+				}),
+				event.tx_hash.into(),
+			)),
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
 			recipient,
 			amount,
-		}) => Some(RuntimeCall::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Call::vault_transfer_failed {
-				asset: EthereumAsset::Eth,
-				amount: try_into_primitive(amount)?,
-				destination_address: recipient,
-			},
+		}) => Some(CallBuilder::vault_transfer_failed(
+			native_asset
+				.try_into()
+				.unwrap_or_else(|_| panic!("Native asset must be supported by the chain.")),
+			try_into_primitive::<_, AssetAmount>(amount)?
+				.try_into()
+				.unwrap_or_else(|_| panic!("Amount must be supported by the chain.")),
+			recipient,
 		)),
 		VaultEvents::TransferTokenFailedFilter(TransferTokenFailedFilter {
 			recipient,
@@ -199,8 +194,28 @@ where
 	})
 }
 
+pub trait IngressCallBuilder {
+	type Chain: cf_chains::Chain<ChainAccount = EthereumAddress>;
+
+	fn contract_swap_request(
+		source_asset: Asset,
+		deposit_amount: cf_primitives::AssetAmount,
+		destination_asset: Asset,
+		destination_address: EncodedAddress,
+		deposit_metadata: Option<CcmDepositMetadata>,
+		tx_hash: cf_primitives::TransactionHash,
+	) -> state_chain_runtime::RuntimeCall;
+
+	fn vault_transfer_failed(
+		asset: <Self::Chain as cf_chains::Chain>::ChainAsset,
+		amount: <Self::Chain as cf_chains::Chain>::ChainAmount,
+		destination_address: <Self::Chain as cf_chains::Chain>::ChainAccount,
+	) -> state_chain_runtime::RuntimeCall;
+}
+
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn vault_witnessing<
+		CallBuilder: IngressCallBuilder<Chain = Inner::Chain>,
 		EvmRpcClient: EvmRetryRpcApi + ChainClient + Clone,
 		ProcessCall,
 		ProcessingFut,
@@ -242,7 +257,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				)
 				.await?
 				{
-					match call_from_event::<Inner::Chain>(
+					match call_from_event::<Inner::Chain, CallBuilder>(
 						event,
 						native_asset,
 						source_chain,

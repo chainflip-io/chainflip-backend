@@ -5,15 +5,15 @@
 
 use cf_amm::common::Side;
 use cf_chains::{
-	address::{AddressConverter, ForeignChainAddress},
+	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
-	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataEncoded, ChannelRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, CcmSwapAmounts, ChannelRefundParameters,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber, ChannelId,
-	DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId, TransactionHash,
-	BASIS_POINTS_PER_MILLION, MAX_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION,
+	MAX_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -202,41 +202,6 @@ impl<T: Config> Swap<T> {
 	}
 }
 
-pub mod ccm {
-
-	use super::*;
-
-	pub fn principal_and_gas_amounts(
-		deposit_amount: AssetAmount,
-		channel_metadata: &CcmChannelMetadata,
-		source_asset: Asset,
-		destination_asset: Asset,
-	) -> Result<CcmSwapAmounts, CcmFailReason> {
-		let gas_budget = channel_metadata.gas_budget;
-		let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
-
-		let destination_chain: ForeignChain = destination_asset.into();
-		if !destination_chain.ccm_support() {
-			return Err(CcmFailReason::UnsupportedForTargetChain)
-		} else if deposit_amount < gas_budget {
-			return Err(CcmFailReason::InsufficientDepositAmount)
-		}
-
-		// Return gas asset only if it is different from the input asset (and thus requires a swap)
-		let output_gas_asset = destination_chain.gas_asset();
-
-		Ok(CcmSwapAmounts {
-			principal_swap_amount,
-			gas_budget,
-			other_gas_asset: if source_asset == output_gas_asset || gas_budget.is_zero() {
-				None
-			} else {
-				Some(output_gas_asset)
-			},
-		})
-	}
-}
-
 enum BatchExecutionError<T: Config> {
 	SwapLegFailed { asset: Asset, direction: SwapLeg, amount: AssetAmount },
 	PriceLimitHit { successful_swaps: Vec<Swap<T>>, failed_swaps: Vec<Swap<T>> },
@@ -248,13 +213,6 @@ impl<T: Config> From<DispatchError> for BatchExecutionError<T> {
 	fn from(error: DispatchError) -> Self {
 		Self::DispatchError { error }
 	}
-}
-
-pub struct CcmSwapAmounts {
-	pub principal_swap_amount: AssetAmount,
-	pub gas_budget: AssetAmount,
-	// if the gas asset is different to the input asset, it will require a swap
-	pub other_gas_asset: Option<Asset>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -373,12 +331,6 @@ struct SwapRequest<T: Config> {
 	state: SwapRequestState<T>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum CcmFailReason {
-	UnsupportedForTargetChain,
-	InsufficientDepositAmount,
-}
-
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T, I))]
 pub enum PalletConfigUpdate<T: Config> {
@@ -397,6 +349,16 @@ pub enum PalletConfigUpdate<T: Config> {
 
 impl_pallet_safe_mode! {
 	PalletSafeMode; swaps_enabled, withdrawals_enabled, broker_registration_enabled,
+}
+
+fn address_error_to_pallet_error<T>(error: AddressError) -> Error<T>
+where
+	T: Config,
+{
+	match error {
+		AddressError::InvalidAddress => Error::<T>::InvalidDestinationAddress,
+		AddressError::InvalidAddressForChain => Error::<T>::IncompatibleAssetAndAddress,
+	}
 }
 
 #[frame_support::pallet]
@@ -614,13 +576,6 @@ pub mod pallet {
 			direction: SwapLeg,
 			amount: AssetAmount,
 		},
-		CcmFailed {
-			swap_request_id: SwapRequestId,
-			reason: CcmFailReason,
-			destination_address: EncodedAddress,
-			deposit_metadata: CcmDepositMetadataEncoded,
-			origin: SwapOrigin,
-		},
 		MaximumSwapAmountSet {
 			asset: Asset,
 			amount: Option<AssetAmount>,
@@ -721,7 +676,7 @@ pub mod pallet {
 				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					CollectedNetworkFee::<T>::mutate(|collected_fee| {
-						if Self::init_swap_request(
+						Self::init_swap_request(
 							Asset::Usdc,
 							*collected_fee,
 							Asset::Flip,
@@ -730,11 +685,7 @@ pub mod pallet {
 							None, /* no refund */
 							None, /* no DCA */
 							SwapOrigin::Internal,
-						)
-						.is_err()
-						{
-							log_or_panic!("Network fee swap should never fail");
-						}
+						);
 
 						collected_fee.set_zero();
 					});
@@ -880,7 +831,11 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
-				Self::validate_destination_address(&destination_address, asset)?;
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					asset,
+				)
+				.map_err(address_error_to_pallet_error::<T>)?;
 
 			let earned_fees = T::BalanceApi::get_balance(&account_id, asset);
 			ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
@@ -902,102 +857,6 @@ pub mod pallet {
 				destination_address,
 				egress_id,
 			});
-
-			Ok(())
-		}
-
-		/// Allow Witnessers to submit a Swap request on the behalf of someone else.
-		/// Requires Witnesser origin.
-		///
-		/// ## Events
-		///
-		/// - [SwapScheduled](Event::SwapScheduled)
-		/// - [SwapAmountTooLow](Event::SwapAmountTooLow)
-		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::schedule_swap_from_contract())]
-		pub fn schedule_swap_from_contract(
-			origin: OriginFor<T>,
-			from: Asset,
-			to: Asset,
-			deposit_amount: AssetAmount,
-			destination_address: EncodedAddress,
-			tx_hash: TransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			let destination_address_internal =
-				Self::validate_destination_address(&destination_address, to)?;
-
-			if Self::init_swap_request(
-				from,
-				deposit_amount,
-				to,
-				SwapRequestType::Regular { output_address: destination_address_internal.clone() },
-				Default::default(),
-				// NOTE: FoK not yet supported for swaps from the contract
-				None,
-				// NOTE: DCA not yet supported for swaps from the contract
-				None,
-				SwapOrigin::Vault { tx_hash },
-			)
-			.is_err()
-			{
-				log_or_panic!("Regular swap request should never fail");
-			}
-
-			Ok(())
-		}
-
-		/// Process the deposit of a CCM swap.
-		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::ccm_deposit())]
-		pub fn ccm_deposit(
-			origin: OriginFor<T>,
-			source_asset: Asset,
-			deposit_amount: AssetAmount,
-			destination_asset: Asset,
-			destination_address: EncodedAddress,
-			deposit_metadata: CcmDepositMetadata,
-			tx_hash: TransactionHash,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			// Check for the CCM's validity.
-			let _ = T::CcmValidityChecker::check_and_decode(
-				&deposit_metadata.channel_metadata,
-				destination_asset,
-			)
-			.map_err(|e| {
-				log::warn!(
-					"Failed to process CCM due to invalid data. Tx hash: {:?}, Error: {:?}",
-					tx_hash,
-					e
-				);
-				Error::<T>::InvalidCcm
-			})?;
-
-			let destination_address_internal =
-				Self::validate_destination_address(&destination_address, destination_asset)?;
-
-			if Self::init_swap_request(
-				source_asset,
-				deposit_amount,
-				destination_asset,
-				SwapRequestType::Ccm {
-					ccm_deposit_metadata: deposit_metadata,
-					output_address: destination_address_internal.clone(),
-				},
-				Default::default(),
-				// NOTE: FoK not yet supported for swaps from the contract
-				None,
-				// NOTE: DCA not yet supported for swaps from the contract
-				None,
-				SwapOrigin::Vault { tx_hash },
-			)
-			.is_err()
-			{
-				log::error!("Ccm failed. Check `CcmFailed` event.");
-			}
 
 			Ok(())
 		}
@@ -1134,7 +993,11 @@ pub mod pallet {
 			ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
 
 			let destination_address_internal =
-				Self::validate_destination_address(&destination_address, destination_asset)?;
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					destination_asset,
+				)
+				.map_err(address_error_to_pallet_error::<T>)?;
 
 			if let Some(ccm) = channel_metadata.as_ref() {
 				let destination_chain: ForeignChain = destination_asset.into();
@@ -1760,21 +1623,6 @@ pub mod pallet {
 			}
 		}
 
-		// The address and the asset being sent or withdrawn must be compatible.
-		fn validate_destination_address(
-			destination_address: &EncodedAddress,
-			destination_asset: Asset,
-		) -> Result<ForeignChainAddress, DispatchError> {
-			let destination_address_internal =
-				T::AddressConverter::try_from_encoded_address(destination_address.clone())
-					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
-			ensure!(
-				destination_address_internal.chain() == ForeignChain::from(destination_asset),
-				Error::<T>::IncompatibleAssetAndAddress
-			);
-			Ok(destination_address_internal)
-		}
-
 		// Helper function that splits swaps of a given direction, group them by asset
 		// and do the swaps of a given direction. Processed and unprocessed swaps are
 		// returned.
@@ -2046,7 +1894,7 @@ pub mod pallet {
 			refund_params: Option<ChannelRefundParameters>,
 			dca_params: Option<DcaParameters>,
 			origin: SwapOrigin,
-		) -> Result<SwapRequestId, DispatchError> {
+		) -> SwapRequestId {
 			let request_id = SwapRequestIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
 				*id
@@ -2093,12 +1941,12 @@ pub mod pallet {
 								output_address.clone(),
 							),
 						},
-					SwapRequestType::Ccm { output_address, ccm_deposit_metadata } =>
+					SwapRequestType::Ccm { output_address, ccm_swap_metadata } =>
 						SwapRequestTypeEncoded::Ccm {
 							output_address: T::AddressConverter::to_encoded_address(
 								output_address.clone(),
 							),
-							ccm_deposit_metadata: ccm_deposit_metadata
+							ccm_swap_metadata: ccm_swap_metadata
 								.clone()
 								.to_encoded::<T::AddressConverter>(),
 						},
@@ -2190,43 +2038,12 @@ pub mod pallet {
 						},
 					);
 				},
-				SwapRequestType::Ccm { ccm_deposit_metadata, output_address } => {
-					let encoded_destination_address =
-						T::AddressConverter::to_encoded_address(output_address.clone());
+				SwapRequestType::Ccm { ccm_swap_metadata, output_address } => {
 					// Caller should ensure that assets and addresses are compatible.
 					debug_assert!(output_address.chain() == ForeignChain::from(output_asset));
 
 					let CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset } =
-						match ccm::principal_and_gas_amounts(
-							net_amount,
-							&ccm_deposit_metadata.channel_metadata,
-							input_asset,
-							output_asset,
-						) {
-							Ok(amounts) => amounts,
-							Err(reason) => {
-								// Confiscate the deposit and emit an event.
-								CollectedRejectedFunds::<T>::mutate(input_asset, |fund| {
-									*fund = fund.saturating_add(net_amount)
-								});
-
-								Self::deposit_event(Event::<T>::CcmFailed {
-									reason,
-									destination_address: encoded_destination_address,
-									deposit_metadata: ccm_deposit_metadata
-										.clone()
-										.to_encoded::<T::AddressConverter>(),
-									origin: origin.clone(),
-									swap_request_id: request_id,
-								});
-
-								Self::deposit_event(Event::<T>::SwapRequestCompleted {
-									swap_request_id: request_id,
-								});
-
-								return Err(Error::<T>::InvalidCcm.into());
-							},
-						};
+						ccm_swap_metadata.swap_amounts;
 
 					// See if principal swap is needed, schedule it first if so:
 					if input_asset != output_asset && !principal_swap_amount.is_zero() {
@@ -2265,7 +2082,9 @@ pub mod pallet {
 										} else {
 											GasSwapState::OutputReady { gas_budget }
 										},
-										ccm_deposit_metadata: ccm_deposit_metadata.clone(),
+										ccm_deposit_metadata: ccm_swap_metadata
+											.deposit_metadata
+											.clone(),
 									}),
 									output_address: output_address.clone(),
 									dca_state,
@@ -2293,7 +2112,9 @@ pub mod pallet {
 								state: SwapRequestState::UserSwap {
 									ccm: Some(CcmState {
 										gas_swap_state,
-										ccm_deposit_metadata: ccm_deposit_metadata.clone(),
+										ccm_deposit_metadata: ccm_swap_metadata
+											.deposit_metadata
+											.clone(),
 									}),
 									output_address,
 									dca_state: DcaState {
@@ -2318,14 +2139,14 @@ pub mod pallet {
 							principal_swap_amount,
 							output_asset,
 							output_address,
-							Some((ccm_deposit_metadata, gas_budget)),
+							Some((ccm_swap_metadata.deposit_metadata, gas_budget)),
 							false, /* refund */
 						);
 					}
 				},
 			};
 
-			Ok(request_id)
+			request_id
 		}
 	}
 

@@ -9,18 +9,21 @@ use crate::{
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
+	address::{AddressConverter, EncodedAddress},
+	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId},
 	mocks::MockEthereum,
-	CcmChannelMetadata, ChannelRefundParameters, DepositChannel, ExecutexSwapAndCall,
-	TransferAssetParams,
+	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel,
+	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	chains::assets::eth, ChannelId, DcaParameters, ForeignChain, SWAP_DELAY_BLOCKS,
+	chains::assets::eth, AssetAmount, ChannelId, DcaParameters, ForeignChain, SWAP_DELAY_BLOCKS,
 };
-use cf_test_utilities::{assert_events_eq, assert_has_event};
+use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
 	mocks::{
 		self,
+		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
@@ -1612,19 +1615,22 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(
 					input_asset: cf_primitives::Asset::Flip,
 					output_asset: cf_primitives::Asset::Eth,
 					input_amount: GAS_FEE,
-					swap_type: SwapRequestType::IngressEgressFee
+					swap_type: SwapRequestType::IngressEgressFee,
+					origin: SwapOrigin::Internal,
 				},
 				MockSwapRequest {
 					input_asset: cf_primitives::Asset::Usdc,
 					output_asset: cf_primitives::Asset::Eth,
 					input_amount: GAS_FEE,
-					swap_type: SwapRequestType::IngressEgressFee
+					swap_type: SwapRequestType::IngressEgressFee,
+					origin: SwapOrigin::Internal,
 				},
 				MockSwapRequest {
 					input_asset: cf_primitives::Asset::Usdt,
 					output_asset: cf_primitives::Asset::Eth,
 					input_amount: GAS_FEE,
-					swap_type: SwapRequestType::IngressEgressFee
+					swap_type: SwapRequestType::IngressEgressFee,
+					origin: SwapOrigin::Internal,
 				}
 			]
 		);
@@ -1824,5 +1830,182 @@ fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 		let scheduled_egresses = ScheduledEgressCcm::<Test, ()>::get();
 
 		assert_eq!(scheduled_egresses.len(), 0, "Left egresses have not been fully processed!");
+	});
+}
+
+#[test]
+fn can_request_swap_via_extrinsic() {
+	const INPUT_ASSET: Asset = Asset::Eth;
+	const OUTPUT_ASSET: Asset = Asset::Flip;
+	const INPUT_AMOUNT: AssetAmount = 1_000u128;
+
+	const TX_HASH: [u8; 32] = [0xa; 32];
+
+	let output_address = ForeignChainAddress::Eth([1; 20].into());
+
+	new_test_ext().execute_with(|| {
+		assert_ok!(IngressEgress::contract_swap_request(
+			RuntimeOrigin::root(),
+			INPUT_ASSET,
+			OUTPUT_ASSET,
+			INPUT_AMOUNT,
+			MockAddressConverter::to_encoded_address(output_address.clone()),
+			TX_HASH,
+		));
+
+		assert_eq!(
+			MockSwapRequestHandler::<Test>::get_swap_requests(),
+			vec![MockSwapRequest {
+				input_asset: INPUT_ASSET,
+				output_asset: OUTPUT_ASSET,
+				input_amount: INPUT_AMOUNT,
+				swap_type: SwapRequestType::Regular { output_address },
+				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+			},]
+		);
+	});
+}
+
+#[test]
+fn can_request_ccm_swap_via_extrinsic() {
+	const INPUT_ASSET: Asset = Asset::Btc;
+	const OUTPUT_ASSET: Asset = Asset::Usdc;
+
+	const INPUT_AMOUNT: AssetAmount = 10_000;
+	const TX_HASH: [u8; 32] = [0xa; 32];
+
+	let ccm_deposit_metadata = CcmDepositMetadata {
+		source_chain: ForeignChain::Ethereum,
+		source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+		channel_metadata: CcmChannelMetadata {
+			message: vec![0x01].try_into().unwrap(),
+			gas_budget: 1_000,
+			cf_parameters: Default::default(),
+		},
+	};
+
+	let output_address = ForeignChainAddress::Eth([1; 20].into());
+
+	new_test_ext().execute_with(|| {
+		assert_ok!(IngressEgress::contract_ccm_swap_request(
+			RuntimeOrigin::root(),
+			INPUT_ASSET,
+			10_000,
+			OUTPUT_ASSET,
+			MockAddressConverter::to_encoded_address(output_address.clone()),
+			ccm_deposit_metadata.clone(),
+			TX_HASH,
+		));
+
+		assert_eq!(
+			MockSwapRequestHandler::<Test>::get_swap_requests(),
+			vec![MockSwapRequest {
+				input_asset: INPUT_ASSET,
+				output_asset: OUTPUT_ASSET,
+				input_amount: INPUT_AMOUNT,
+				swap_type: SwapRequestType::Ccm {
+					output_address,
+					ccm_swap_metadata: ccm_deposit_metadata
+						.into_swap_metadata(INPUT_AMOUNT, INPUT_ASSET, OUTPUT_ASSET)
+						.unwrap()
+				},
+				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+			},]
+		);
+	});
+}
+
+#[test]
+fn rejects_invalid_swap_by_witnesser() {
+	new_test_ext().execute_with(|| {
+		let script_pubkey = ScriptPubkey::try_from_address(
+			"BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
+			&BitcoinNetwork::Mainnet,
+		)
+		.unwrap();
+
+		let btc_encoded_address =
+			MockAddressConverter::to_encoded_address(ForeignChainAddress::Btc(script_pubkey));
+
+		// Is valid Bitcoin address, but asset is Dot, so not compatible
+		assert_ok!(IngressEgress::contract_swap_request(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			Asset::Dot,
+			10000,
+			btc_encoded_address,
+			Default::default(),
+		),);
+
+		// No swap request created -> the call was ignored
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+
+		assert_ok!(IngressEgress::contract_swap_request(
+			RuntimeOrigin::root(),
+			Asset::Eth,
+			Asset::Btc,
+			10000,
+			EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
+			Default::default()
+		),);
+
+		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
+	});
+}
+
+#[test]
+fn failed_ccm_deposit_can_deposit_event() {
+	const GAS_BUDGET: AssetAmount = 1_000;
+
+	let ccm_deposit_metadata = CcmDepositMetadata {
+		source_chain: ForeignChain::Ethereum,
+		source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+		channel_metadata: CcmChannelMetadata {
+			message: vec![0x01].try_into().unwrap(),
+			gas_budget: GAS_BUDGET,
+			cf_parameters: Default::default(),
+		},
+	};
+
+	new_test_ext().execute_with(|| {
+		// CCM is not supported for Dot:
+		assert_ok!(IngressEgress::contract_ccm_swap_request(
+			RuntimeOrigin::root(),
+			Asset::Flip,
+			10_000,
+			Asset::Dot,
+			EncodedAddress::Dot(Default::default()),
+			ccm_deposit_metadata.clone(),
+			Default::default(),
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::CcmFailed {
+				reason: CcmFailReason::UnsupportedForTargetChain,
+				..
+			})
+		);
+
+		System::reset_events();
+
+		// Insufficient deposit amount:
+		assert_ok!(IngressEgress::contract_ccm_swap_request(
+			RuntimeOrigin::root(),
+			Asset::Flip,
+			GAS_BUDGET - 1,
+			Asset::Eth,
+			EncodedAddress::Eth(Default::default()),
+			ccm_deposit_metadata,
+			Default::default(),
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::CcmFailed {
+				reason: CcmFailReason::InsufficientDepositAmount,
+				..
+			})
+		);
 	});
 }
