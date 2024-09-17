@@ -421,7 +421,6 @@ pub mod pallet {
 				if ix <= current_chain_block {
 					expiries.append(&mut val.clone());
 					expired_keys.push(ix);
-					break;
 				}
 			}
 			for key in expired_keys {

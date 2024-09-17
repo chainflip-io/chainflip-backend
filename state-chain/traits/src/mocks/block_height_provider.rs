@@ -21,7 +21,8 @@ impl<C: Chain> BlockHeightProvider<C> {
 	}
 
 	pub fn mutate_block_height<F>(f: F)
-		where F : FnOnce(C::ChainBlockNumber) -> C::ChainBlockNumber
+	where
+		F: FnOnce(C::ChainBlockNumber) -> C::ChainBlockNumber,
 	{
 		Self::set_block_height(f(Self::get_block_height()));
 	}
