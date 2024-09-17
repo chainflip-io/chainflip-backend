@@ -128,7 +128,7 @@ where
 	/// Transforms the test context. Analogous to [std::iter::Iterator::map].
 	///
 	/// Storage is not accessible in this closure. This means that assert_noop! won't work. If
-	/// storage access is required, use `inspect_storage`.
+	/// storage access is required, use `then_execute_with` or `then_execute_with_keep_context`.
 	#[track_caller]
 	pub fn map_context<R>(self, f: impl FnOnce(Ctx) -> R) -> TestExternalities<Runtime, R> {
 		TestExternalities { ext: self.ext, context: f(self.context) }
@@ -146,9 +146,14 @@ where
 
 	/// Access the storage without changing the test context.
 	///
-	/// Use this for assertions, for example testing invariants.
+	/// Use this when you want to read or mutate the storage without
+	/// changing the test context. Also useful for assertions,
+	/// for example for testing invariants.
 	#[track_caller]
-	pub fn inspect_storage(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Ctx> {
+	pub fn then_execute_with_keep_context(
+		self,
+		f: impl FnOnce(&Ctx),
+	) -> TestExternalities<Runtime, Ctx> {
 		self.then_execute_with(
 			#[track_caller]
 			|context| {
@@ -431,7 +436,7 @@ mod test_examples {
 				]
 			})
 			// Use inspect when you don't want to write to storage.
-			.inspect_storage(|_| {
+			.then_execute_with_keep_context(|_| {
 				assert!(matches!(
 					System::events().into_iter().map(|e| e.event).collect::<Vec<_>>().as_slice(),
 					[
