@@ -3,7 +3,7 @@
 pub use crate::{self as pallet_cf_elections};
 use crate::{InitialStateOf, Pallet, UniqueMonotonicIdentifier};
 
-use cf_traits::{impl_mock_chainflip, AccountRoleRegistry};
+use cf_traits::{impl_mock_chainflip, mocks::time_source::Mock, AccountRoleRegistry};
 use frame_support::{assert_ok, derive_impl, instances::Instance1, traits::OriginTrait};
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -71,6 +71,14 @@ impl TestSetup {
 pub struct TestContext {
 	pub setup: TestSetup,
 	pub umis: Vec<UniqueMonotonicIdentifier>,
+}
+
+pub fn setup_authorities_and_kick_off_epoch(authorities: Vec<u64>) {
+	for auth in authorities.iter() {
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&auth)
+			.unwrap();
+	}
+	MockEpochInfo::next_epoch(authorities);
 }
 
 /// Set up a test for the election pallet.

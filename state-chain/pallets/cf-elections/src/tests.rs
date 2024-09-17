@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 
 use crate::{mock::*, *};
 use cf_primitives::AuthorityCount;
+use cf_traits::{mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry};
 use electoral_system::{
 	AuthorityVoteOf, ConsensusStatus, ElectionReadAccess, ElectoralReadAccess, ElectoralWriteAccess,
 };
