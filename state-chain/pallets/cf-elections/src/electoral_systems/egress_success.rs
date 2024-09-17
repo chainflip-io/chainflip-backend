@@ -7,12 +7,12 @@ use crate::{
 	CorruptStorageError,
 };
 use cf_primitives::AuthorityCount;
-use cf_utilities::{all_same, success_threshold_from_share_count};
+use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// This electoral system detects if something occurred or not. Voters simply vote if something
 /// happened, and if they haven't seen it happen, they don't vote.
@@ -26,7 +26,7 @@ pub trait OnEgressSuccess<Identifier, Value> {
 
 impl<
 		Identifier: Member + Parameter + Ord,
-		Value: Member + Parameter + Eq,
+		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
@@ -43,7 +43,7 @@ impl<
 
 impl<
 		Identifier: Member + Parameter + Ord,
-		Value: Member + Parameter + Eq,
+		Value: Member + Parameter + Eq + Ord,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnEgressSuccess<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
@@ -105,14 +105,21 @@ impl<
 		authorities: AuthorityCount,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
 		let votes_count = votes.len();
-		Ok(
-			if votes_count != 0 &&
-				votes_count >= success_threshold_from_share_count(authorities) as usize
-			{
-				all_same(votes.into_iter().map(|(_, vote, _validator_id)| vote))
-			} else {
-				None
-			},
-		)
+		let success_threshold = success_threshold_from_share_count(authorities) as usize;
+		Ok(if votes_count != 0 && votes_count >= success_threshold {
+			let mut counts = BTreeMap::new();
+			for (_, vote, _validator_id) in votes {
+				counts.entry(vote).and_modify(|count| *count += 1).or_insert(1);
+			}
+			counts.iter().find_map(|(vote, count)| {
+				if *count >= success_threshold {
+					Some(vote.clone())
+				} else {
+					None
+				}
+			})
+		} else {
+			None
+		})
 	}
 }
