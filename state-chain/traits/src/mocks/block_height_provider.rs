@@ -19,6 +19,12 @@ impl<C: Chain> BlockHeightProvider<C> {
 	pub fn set_block_height(height: C::ChainBlockNumber) {
 		Self::put_value(BLOCK_HEIGHT_KEY, height);
 	}
+
+	pub fn mutate_block_height<F>(f: F)
+		where F : FnOnce(C::ChainBlockNumber) -> C::ChainBlockNumber
+	{
+		Self::set_block_height(f(Self::get_block_height()));
+	}
 }
 
 const DEFAULT_BLOCK_HEIGHT: u32 = 1337;
