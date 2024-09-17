@@ -1,7 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-// lazy_cell has been stabilized in a newer version of rust
-// (feature directive can be removed once we upgrade)
-#![feature(lazy_cell)]
 
 use cf_amm::common::Side;
 use cf_chains::{

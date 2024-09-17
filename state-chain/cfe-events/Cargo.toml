@@ -15,18 +15,18 @@ cf-primitives = { path = '../primitives', default-features = false }
 cf-chains = { path = "../chains", default-features = false }
 
 # Parity dependencies
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
   'derive',
 ] }
-scale-info = { version = '2.10.0', default-features = false, features = [
+scale-info = { version = "2.11.1", default-features = false, features = [
   'derive',
 ] }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
+frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
 
 [dev-dependencies]
-hex = "0.4"
+hex = "0.4.3"
 
 
 [features]

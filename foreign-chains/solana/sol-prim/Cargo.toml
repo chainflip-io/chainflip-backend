@@ -5,26 +5,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = ["str", "serde", "pda"]
-pda = ["dep:digest", "dep:sha2", "dep:curve25519-dalek"]
-serde = ["dep:serde", "str"]
-str = ["dep:bs58"]
-scale = ["dep:codec", "dep:scale-info"]
-std-error = ["dep:thiserror", "bs58/std"]
-runtime-benchmarks = []
-std = [
-	"bs58?/std",
-	"curve25519-dalek?/std",
-	"digest?/std",
-	"codec?/std",
-	"scale-info?/std",
-	"serde?/std",
-	"sha2?/std",
-	"cf-utilities/std"
-]
-
-
 [dependencies]
 cf-utilities = { package = "utilities", path = "../../../utilities", default-features = false }
 
@@ -33,17 +13,39 @@ curve25519-dalek = { version = "^2.1", optional = true, default-features = false
     "u64_backend",
 ] }
 digest = { version = "^0.10", optional = true, default-features = false }
-serde = { version = "^1", optional = true, features = [
+serde = { version = "1.0.197", optional = true, features = [
     "derive",
 ], default-features = false }
 sha2 = { version = "^0.10", optional = true, default-features = false }
 thiserror = { version = "^1", optional = true, default-features = false }
-codec = { package = 'parity-scale-codec', version = '3.6.1', optional = true, default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.6.12", optional = true, default-features = false, features = [
     'derive',
 ] }
-scale-info = { version = '2.5.0', optional = true, default-features = false, features = [
+scale-info = { version = '2.11.1', optional = true, default-features = false, features = [
     'derive',
 ] }
 
 [dev-dependencies]
 serde_json = { version = "^1" }
+
+[features]
+default = ["str", "serde", "pda", "scale", "std"]
+pda = ["dep:digest", "dep:sha2", "dep:curve25519-dalek"]
+serde = ["dep:serde", "str"]
+str = ["dep:bs58"]
+scale = ["dep:codec", "dep:scale-info"]
+runtime-benchmarks = []
+std = [
+	"bs58?/std",
+	"curve25519-dalek?/std",
+	"digest?/std",
+	"codec?/std",
+	"codec?/derive",
+	"scale-info?/std",
+	"scale-info?/derive",
+	"serde?/std",
+	"serde?/derive",
+	"sha2?/std",
+	"cf-utilities/std",
+	"dep:thiserror",
+]

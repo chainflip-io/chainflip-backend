@@ -264,6 +264,7 @@ pub(super) trait SwapDirection {
 
 	/// Returns the equivalent saturated amount in the output asset to a given amount of the input
 	/// asset at a specific tick, will return None iff the tick is invalid
+	#[allow(dead_code)]
 	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount>;
 }
 impl SwapDirection for BaseToQuote {
