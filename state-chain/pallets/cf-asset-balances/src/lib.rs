@@ -353,11 +353,6 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 			.or_insert(amount);
 		});
 	}
-
-	#[cfg(feature = "try-runtime")]
-	fn total_liabilities(asset: Asset) -> u128 {
-		Liabilities::<T>::get(asset).values().sum()
-	}
 }
 
 impl<T: Config> AssetWithholding for Pallet<T> {
@@ -365,11 +360,6 @@ impl<T: Config> AssetWithholding for Pallet<T> {
 		WithheldAssets::<T>::mutate(asset, |fees| {
 			fees.saturating_accrue(amount);
 		});
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn withheld_assets(asset: Asset) -> AssetAmount {
-		WithheldAssets::<T>::get(asset)
 	}
 }
 
