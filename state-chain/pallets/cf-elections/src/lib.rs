@@ -747,7 +747,7 @@ pub mod pallet {
 									Ok(SharedData::<T, I>::get(shared_data_hash))
 								}) {
 									// Only a full vote can count towards consensus.
-									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties, vote))), 
+									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties, vote))),
 									Ok(Some((_properties, AuthorityVote::PartialVote(_)))) => Ok(None),
 									Ok(None) => Ok(None),
 									Err(e) => Err(e),
