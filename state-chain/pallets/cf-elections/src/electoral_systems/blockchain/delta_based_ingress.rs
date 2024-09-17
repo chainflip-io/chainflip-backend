@@ -357,17 +357,20 @@ where
 							&channel_votes[..],
 							|channel_vote| channel_vote.amount,
 						);
-						if contributing_channel_votes.len() >= threshold {
+						let contributing_channel_votes_len = contributing_channel_votes.len();
+						if contributing_channel_votes_len >= threshold {
+							let block_number_index = threshold - 1;
+							let amount_index = contributing_channel_votes_len - threshold;
+							let new_block_number =
+								contributing_channel_votes[block_number_index].block_number;
+							let new_amount = contributing_channel_votes[amount_index].amount;
 							Some((
 								account,
 								ChannelTotalIngressed {
 									// Requires 2/3 to decrease the block_number,
-									block_number: contributing_channel_votes[threshold - 1]
-										.block_number,
+									block_number: new_block_number,
 									// Requires 2/3 to increase the amount
-									amount: contributing_channel_votes
-										[contributing_channel_votes.len() - threshold]
-										.amount,
+									amount: new_amount,
 								},
 							))
 						} else {
@@ -468,4 +471,194 @@ fn test_longest_increasing_subsequence_by_key() {
 		longest_increasing_subsequence_by_key(&[34, 23, 23, 45, 64, 64], |x| *x),
 		vec![23, 23, 45, 64, 64]
 	);
+}
+
+#[cfg(test)]
+mod test_delta_based_ingress {
+	use super::*;
+	use crate::electoral_system::{mocks::MockElectoralSystem, ConsensusStatus};
+	use cf_chains::mocks::MockEthereum;
+
+	const INITIAL_ASSET_AMOUNT: u128 = 3;
+
+	const EXPECTED_BLOCK_NUMBER: u64 = 1;
+	const INITIAL_BLOCK_NUMBER: u64 = 2;
+
+	pub struct MockResink;
+
+	impl IngressSink for MockResink {
+		type Chain = MockEthereum;
+
+		fn on_ingress(
+			_channel: <Self::Chain as Chain>::ChainAccount,
+			_asset: <Self::Chain as Chain>::ChainAsset,
+			_amount: <Self::Chain as Chain>::ChainAmount,
+			_block_number: <Self::Chain as Chain>::ChainBlockNumber,
+			_details: <Self::Chain as Chain>::DepositDetails,
+		) {
+			unimplemented!()
+		}
+		fn on_ingress_reverted(
+			_channel: <Self::Chain as Chain>::ChainAccount,
+			_asset: <Self::Chain as Chain>::ChainAsset,
+			_amount: <Self::Chain as Chain>::ChainAmount,
+		) {
+			unimplemented!()
+		}
+		fn on_channel_closed(_channel: <Self::Chain as Chain>::ChainAccount) {
+			unimplemented!()
+		}
+	}
+
+	mod helpers {
+
+		use super::*;
+
+		pub fn generate_election_channels(
+			amount_of_channels_to_create: u64,
+		) -> BTreeMap<u64, (OpenChannelDetails<MockEthereum>, ChannelTotalIngressed<MockEthereum>)>
+		{
+			(1..=amount_of_channels_to_create)
+				.map(|i| {
+					(
+						i,
+						(
+							OpenChannelDetails {
+								asset: MockEthereum::GAS_ASSET,
+								close_block: INITIAL_BLOCK_NUMBER,
+							},
+							ChannelTotalIngressed {
+								block_number: INITIAL_BLOCK_NUMBER,
+								amount: INITIAL_ASSET_AMOUNT,
+							},
+						),
+					)
+				})
+				.collect()
+		}
+
+		pub fn generate_vote(
+			channel_id: u64,
+			channel_to_ingressed: ChannelTotalIngressed<MockEthereum>,
+		) -> BoundedBTreeMap<u64, ChannelTotalIngressed<MockEthereum>, ConstU32<50>> {
+			BoundedBTreeMap::try_from(
+				[(channel_id, channel_to_ingressed)].into_iter().collect::<BTreeMap<_, _>>(),
+			)
+			.unwrap()
+		}
+
+		pub fn consensus_from(
+			channel_id: u64,
+			block_number: u64,
+			amount: u128,
+		) -> BTreeMap<u64, ChannelTotalIngressed<MockEthereum>> {
+			BTreeMap::<u64, ChannelTotalIngressed<MockEthereum>>::from_iter(vec![(
+				channel_id,
+				ChannelTotalIngressed { block_number, amount },
+			)])
+		}
+	}
+
+	#[test]
+	fn consensus_on_single_channel() {
+		const NUMBER_OF_AUTHORITIES: u32 = 10;
+		const NUMBER_OF_CHANNELS: u64 = 1;
+
+		let mut electoral_system =
+			MockElectoralSystem::<DeltaBasedIngress<MockResink, ()>>::new((), (), ());
+
+		// Setup the channels for an election
+		let election_channels = helpers::generate_election_channels(NUMBER_OF_CHANNELS);
+
+		let voted_amounts: Vec<u128> = vec![4, 5, 8, 7, 9, 12, 10, 13, 15, 20];
+
+		// Verify the underlying expectations around the math is correct.
+		assert_eq!(
+			longest_increasing_subsequence_by_key(&voted_amounts, |x| *x),
+			vec![4, 5, 7, 9, 10, 13, 15, 20]
+		);
+
+		let mut votes = vec![];
+
+		for channel_id in 1..=NUMBER_OF_CHANNELS {
+			for amount in voted_amounts.iter() {
+				votes.push((
+					(),
+					helpers::generate_vote(
+						channel_id,
+						ChannelTotalIngressed {
+							block_number: EXPECTED_BLOCK_NUMBER,
+							amount: *amount,
+						},
+					),
+				));
+			}
+		}
+
+		// Not relevant for this test.
+		let empty_state: BTreeMap<u64, ChannelTotalIngressed<MockEthereum>> = BTreeMap::new();
+
+		let consensus = electoral_system
+			.new_election(1, election_channels.clone(), empty_state.clone())
+			.unwrap()
+			.check_consensus(None, votes, NUMBER_OF_AUTHORITIES)
+			.expect("No storage error!");
+
+		let consensus = consensus.expect("To have consensus!");
+
+		for election_channel in consensus.iter() {
+			// Ensure the block number has been decreased.
+			assert!(
+				election_channel.1.block_number < INITIAL_BLOCK_NUMBER,
+				"Expected block number to decrease! Expected: {} Initial: {}",
+				INITIAL_BLOCK_NUMBER,
+				election_channel.1.block_number
+			);
+			// Ensure the amount has been increased.
+			assert!(
+				election_channel.1.amount > INITIAL_ASSET_AMOUNT,
+				"Expected amount to increase! Expected: {} Initial: {}",
+				INITIAL_ASSET_AMOUNT,
+				election_channel.1.amount
+			);
+		}
+	}
+
+	#[test]
+	// You did not have consensus when previously checked, and still do not.
+	fn on_finalize_none_consensus() {
+		let mut electoral_system =
+			MockElectoralSystem::<DeltaBasedIngress<MockResink, ()>>::new((), (), ());
+		let empty_state: BTreeMap<u64, ChannelTotalIngressed<MockEthereum>> = BTreeMap::new();
+		// Setup the channels for an election
+		let election_channels = helpers::generate_election_channels(1);
+		electoral_system
+			.new_election(1, election_channels, empty_state.clone())
+			.unwrap()
+			.set_consensus_status(ConsensusStatus::None);
+		electoral_system.finalize_elections(&1).expect("No storage error!");
+		// TODO: Verify that the hooks have not been called!
+	}
+
+	#[test]
+	// You had consensus when previously checked, but the consensus has now changed.
+	fn on_finalize_changed_consensus() {
+		let mut electoral_system =
+			MockElectoralSystem::<DeltaBasedIngress<MockResink, ()>>::new((), (), ());
+		// Setup the channels for an election
+		let election_channels = helpers::generate_election_channels(2);
+
+		// Pending ingress total
+		let previous = helpers::consensus_from(1, 1, 5);
+		// Consensus ingress total
+		let new = helpers::consensus_from(1, 3, 8);
+
+		electoral_system
+			.new_election(1, election_channels, previous.clone())
+			.unwrap()
+			.set_consensus_status(ConsensusStatus::Changed { previous, new });
+
+		let result = electoral_system.finalize_elections(&2);
+		assert_eq!(result, Ok(()));
+	}
 }
