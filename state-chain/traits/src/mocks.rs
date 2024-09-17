@@ -17,7 +17,6 @@ pub mod chain_tracking;
 pub mod deposit_handler;
 pub mod egress_handler;
 pub mod ensure_origin_mock;
-pub mod ensure_witnessed;
 pub mod epoch_info;
 pub mod eth_environment_provider;
 pub mod fee_payment;
@@ -47,7 +46,7 @@ macro_rules! impl_mock_chainflip {
 			impl_mock_epoch_info,
 			mocks::{
 				account_role_registry::MockAccountRoleRegistry,
-				ensure_origin_mock::NeverFailingOriginCheck, funding_info::MockFundingInfo,
+				ensure_origin_mock::FailOnNoneOrigin, funding_info::MockFundingInfo,
 			},
 			Chainflip,
 		};
@@ -61,12 +60,13 @@ macro_rules! impl_mock_chainflip {
 
 		impl Chainflip for $runtime {
 			type Amount = u128;
-			type ValidatorId = <$runtime as frame_system::Config>::AccountId;
+			type ValidatorId = <Self as frame_system::Config>::AccountId;
 			type RuntimeCall = RuntimeCall;
-			type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-			type EnsurePrewitnessed = NeverFailingOriginCheck<Self>;
-			type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-			type EnsureGovernance = NeverFailingOriginCheck<Self>;
+			type EnsureWitnessed = FailOnNoneOrigin<Self>;
+			type EnsurePrewitnessed = FailOnNoneOrigin<Self>;
+			type EnsureWitnessedAtCurrentEpoch = FailOnNoneOrigin<Self>;
+			type EnsureGovernance =
+				frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
 			type EpochInfo = MockEpochInfo;
 			type AccountRoleRegistry = MockAccountRoleRegistry;
 			type FundingInfo = MockFundingInfo<Self>;

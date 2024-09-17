@@ -34,7 +34,7 @@ use cf_traits::{
 	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
 };
 use frame_support::{
-	assert_err, assert_ok,
+	assert_err, assert_noop, assert_ok,
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
@@ -1285,6 +1285,10 @@ fn failed_ccm_is_stored() {
 		let broadcast_id = 1;
 		assert_eq!(FailedForeignChainCalls::<Test, ()>::get(epoch), vec![]);
 
+		assert_noop!(
+			IngressEgress::ccm_broadcast_failed(RuntimeOrigin::signed(ALICE), broadcast_id,),
+			sp_runtime::DispatchError::BadOrigin
+		);
 		assert_ok!(IngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), broadcast_id,));
 
 		assert_eq!(
@@ -1559,6 +1563,15 @@ fn can_update_all_config_items() {
 				minimum_deposit: NEW_MIN_DEPOSIT_ETH
 			}),
 		);
+
+		// Make sure that only governance can update the config
+		assert_noop!(
+			IngressEgress::update_pallet_config(
+				OriginTrait::signed(ALICE),
+				vec![].try_into().unwrap()
+			),
+			sp_runtime::traits::BadOrigin
+		);
 	});
 }
 
@@ -1668,6 +1681,16 @@ fn safe_mode_prevents_deposit_channel_creation() {
 				0,
 			),
 			crate::Error::<Test, _>::DepositChannelCreationDisabled
+		);
+	});
+}
+
+#[test]
+fn only_governance_can_enable_or_disable_egress() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			IngressEgress::enable_or_disable_egress(OriginTrait::none(), ETH_ETH, true),
+			DispatchError::BadOrigin
 		);
 	});
 }

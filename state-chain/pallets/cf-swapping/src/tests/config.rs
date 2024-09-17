@@ -71,6 +71,12 @@ fn can_update_all_config_items() {
 				blocks: MAX_SWAP_REQUEST_DURATION
 			})
 		);
+
+		// Make sure that only governance can update the config
+		assert_noop!(
+			Swapping::update_pallet_config(OriginTrait::signed(ALICE), vec![].try_into().unwrap()),
+			sp_runtime::traits::BadOrigin
+		);
 	});
 }
 

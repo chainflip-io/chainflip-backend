@@ -1966,3 +1966,21 @@ fn can_recover_from_abort_key_rotation_after_key_handover_failed() {
 		do_full_key_rotation();
 	});
 }
+
+#[test]
+fn ensure_governance_origin_checks() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			EvmThresholdSigner::set_keygen_response_timeout(RuntimeOrigin::signed(ALICE), 1),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			EvmThresholdSigner::set_keygen_slash_amount(RuntimeOrigin::signed(ALICE), 1),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			EvmThresholdSigner::set_threshold_signature_timeout(RuntimeOrigin::signed(ALICE), 1),
+			sp_runtime::traits::BadOrigin,
+		);
+	});
+}

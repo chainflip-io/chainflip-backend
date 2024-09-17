@@ -147,7 +147,7 @@ fn test_setting_vanity_names_() {
 
 		assert_noop!(
 			AccountRolesPallet::set_vanity_name(
-				RuntimeOrigin::signed(1),
+				RuntimeOrigin::signed(100),
 				BoundedVec::try_from(vec![0xfe, 0xff]).unwrap()
 			),
 			Error::<Test>::InvalidCharactersInName
