@@ -1286,9 +1286,6 @@ fn broadcast_re_signing() {
 	new_test_ext()
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
-			// BroadcastDelay::set(Some(1u32.into()));
-			// assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64),
-			// broadcast_id));
 
 			// Abort the broadcast
 			let nominee = ready_to_abort_broadcast(broadcast_id);
@@ -1305,6 +1302,17 @@ fn broadcast_re_signing() {
 			// Check that the broadcast is aborted
 			assert!(!PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
 			assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+
+			// Make sure that only governance can request a re-sign
+			assert_noop!(
+				crate::Pallet::<Test, Instance1>::re_sign_aborted_broadcasts(
+					RuntimeOrigin::signed(100),
+					vec![broadcast_id],
+					true,
+					false,
+				),
+				sp_runtime::traits::BadOrigin
+			);
 
 			// Request a re-sign
 			assert_ok!(crate::Pallet::<Test, Instance1>::re_sign_aborted_broadcasts(
@@ -1386,6 +1394,16 @@ fn should_release_barriers_correctly_in_case_of_rotation_tx_succeeding_first() {
 		));
 
 		assert_eq!(BroadcastBarriers::<Test, Instance1>::get(), BTreeSet::new());
+	});
+}
+
+#[test]
+fn only_governance_can_stress_test() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Broadcaster::stress_test(RuntimeOrigin::signed(100), 1),
+			sp_runtime::traits::BadOrigin
+		);
 	});
 }
 

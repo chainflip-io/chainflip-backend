@@ -32,6 +32,18 @@ fn can_create_new_trading_pool() {
 			Error::<Test>::InvalidFeeAmount,
 		);
 
+		// Make sure only governance can create a new pool.
+		assert_noop!(
+			LiquidityPools::new_pool(
+				RuntimeOrigin::signed(ALICE),
+				unstable_asset,
+				STABLE_ASSET,
+				500_000u32,
+				default_price,
+			),
+			sp_runtime::traits::BadOrigin
+		);
+
 		// Create a new pool.
 		assert_ok!(LiquidityPools::new_pool(
 			RuntimeOrigin::root(),
@@ -1236,6 +1248,34 @@ fn test_cancel_orders_batch() {
 			.unwrap(),
 			0
 		)
+	});
+}
+
+#[test]
+fn only_governance_can_set_pool_fee() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			LiquidityPools::set_pool_fees(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Eth,
+				STABLE_ASSET,
+				0
+			),
+			sp_runtime::traits::BadOrigin
+		);
+	});
+}
+
+#[test]
+fn only_governance_can_set_maximum_price_impact() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			LiquidityPools::set_maximum_price_impact(
+				RuntimeOrigin::signed(ALICE),
+				BoundedVec::try_from(vec![(Asset::Eth, None)]).unwrap()
+			),
+			sp_runtime::traits::BadOrigin
+		);
 	});
 }
 

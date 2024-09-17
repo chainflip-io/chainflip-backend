@@ -71,7 +71,6 @@ pub mod pallet {
 		pallet_prelude::{OptionQuery, *},
 		traits::EnsureOrigin,
 	};
-	use frame_system::pallet_prelude::*;
 
 	/// Type alias for the instance's configured Transaction.
 	pub type TransactionFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::Transaction;
@@ -572,7 +571,7 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())]
 		#[pallet::call_index(3)]
 		pub fn stress_test(origin: OriginFor<T>, how_many: u32) -> DispatchResult {
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 
 			let payload = PayloadFor::<T, I>::decode(&mut &[0xcf; 32][..])
 				.map_err(|_| Error::<T, I>::InvalidPayload)?;
