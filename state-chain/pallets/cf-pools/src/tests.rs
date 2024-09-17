@@ -1278,3 +1278,35 @@ fn only_governance_can_set_maximum_price_impact() {
 		);
 	});
 }
+
+#[test]
+fn handle_zero_liquidity_changes_set_range_order() {
+	new_test_ext().execute_with(|| {
+		const POSITION: core::ops::Range<Tick> = -887272..887272;
+		const FLIP: Asset = Asset::Flip;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			FLIP,
+			STABLE_ASSET,
+			Default::default(),
+			price_at_tick(0).unwrap(),
+		));
+
+		assert_noop!(
+			LiquidityPools::set_range_order(
+				RuntimeOrigin::signed(ALICE),
+				FLIP,
+				STABLE_ASSET,
+				0,
+				Some(POSITION),
+				RangeOrderSize::AssetAmounts {
+					maximum: AssetAmounts { base: 1, quote: 0 },
+					minimum: AssetAmounts { base: 0, quote: 0 },
+				}
+			),
+			crate::Error::<Test>::InvalidSize
+		);
+	});
+}
