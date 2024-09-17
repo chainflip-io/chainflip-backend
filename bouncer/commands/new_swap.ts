@@ -10,7 +10,12 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { InternalAsset } from '@chainflip/cli';
-import { parseAssetString, executeWithTimeout, usdcToInternalPrice } from '../shared/utils';
+import {
+  parseAssetString,
+  executeWithTimeout,
+  usdcToInternalPrice,
+  decodeDotAddressForContract,
+} from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { RefundParameters } from '../shared/new_swap';
 
@@ -77,7 +82,10 @@ async function newSwapCommand() {
     args.refundAddress !== undefined && args.minPrice !== undefined
       ? {
           retryDurationBlocks: args.refundDuration,
-          refundAddress: args.refundAddress,
+          refundAddress:
+            args.sourceAsset === 'Dot'
+              ? decodeDotAddressForContract(args.refundAddress)
+              : args.refundAddress,
           minPrice: usdcToInternalPrice(args.sourceAsset as InternalAsset, args.minPrice),
         }
       : undefined;
