@@ -105,7 +105,7 @@ impl<
 		let success_threshold = success_threshold_from_share_count(num_authorities);
 		let mut active_votes = consensus_votes.active_votes();
 		let num_active_votes = active_votes.len() as u32;
-		Ok(if num_active_votes != 0 && num_active_votes >= success_threshold {
+		Ok(if num_active_votes >= success_threshold {
 			// Calculating the median this way means atleast 2/3 of validators would be needed to
 			// increase the calculated median.
 			let (_, median_vote, _) =

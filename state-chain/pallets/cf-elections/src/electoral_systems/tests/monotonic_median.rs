@@ -191,7 +191,6 @@ fn minority_can_not_influence_consensus() {
 			votes: (0..honest_votes)
 				.map(|_| ConsensusVote { vote: Some(((), HONEST_VALUE)), validator_id: () })
 				.chain(
-					// didn't vote at all
 					(0..dishonest_votes).map(|_| ConsensusVote {
 						vote: Some(((), DISHONEST_VALUE)),
 						validator_id: (),
