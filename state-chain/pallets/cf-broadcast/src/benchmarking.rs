@@ -82,9 +82,7 @@ mod benchmarks {
 		let timeout_target_block = T::ChainTracking::get_block_height() +
 			crate::BroadcastTimeout::<T, I>::get() +
 			1u32.into();
-		let timeout_block = frame_system::Pallet::<T>::block_number() +
-			// crate::BroadcastTimeout::<T, I>::get() +
-			1_u32.into();
+		let timeout_block = frame_system::Pallet::<T>::block_number() + 1_u32.into();
 		// Complexity parameter for expiry queue.
 
 		let mut broadcast_id = 0;
