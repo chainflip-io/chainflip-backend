@@ -59,6 +59,7 @@ pallet-cf-validator = { path = '../pallets/cf-validator', default-features = fal
 pallet-cf-vaults = { path = '../pallets/cf-vaults', default-features = false }
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false }
 pallet-cf-cfe-interface = { path = '../pallets/cf-cfe-interface', default-features = false }
+sol-prim = { path = '../../foreign-chains/solana/sol-prim', default-features = false }
 
 # SCALE
 codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
@@ -117,9 +118,6 @@ pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainfl
 
 cf-test-utilities = { path = '../test-utilities', optional = true }
 
-# [dev-dependencies]
-# sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-
 [features]
 default = ['std']
 runtime-benchmarks = [
@@ -152,6 +150,7 @@ runtime-benchmarks = [
 	'pallet-cf-vaults/runtime-benchmarks',
 	'pallet-cf-witnesser/runtime-benchmarks',
 	'pallet-cf-cfe-interface/runtime-benchmarks',
+	'sol-prim/runtime-benchmarks',
 	'pallet-grandpa/runtime-benchmarks',
 	'pallet-timestamp/runtime-benchmarks',
 	'sp-runtime/runtime-benchmarks',
@@ -209,6 +208,7 @@ std = [
 	'pallet-transaction-payment-rpc-runtime-api/std',
 	'pallet-transaction-payment/std',
 	'pallet-cf-cfe-interface/std',
+	'sol-prim/std',
 	'scale-info/std',
 	'serde/std',
 	'sp-api/std',

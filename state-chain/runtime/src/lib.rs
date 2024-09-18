@@ -111,7 +111,7 @@ use sp_runtime::{
 	BoundedVec,
 };
 
-use frame_support::genesis_builder_helper::{build_config, create_default_config};
+use frame_support::genesis_builder_helper::{build_state, get_preset};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -608,6 +608,11 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 	type RuntimeTask = ();
+	type SingleBlockMigrations = ();
+	type MultiBlockMigrator = ();
+	type PreInherents = ();
+	type PostInherents = ();
+	type PostTransactions = ();
 }
 
 impl frame_system::offchain::SigningTypes for Runtime {
@@ -620,6 +625,7 @@ impl pallet_aura::Config for Runtime {
 	type DisabledValidators = ();
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 	type AllowMultipleBlocksPerSlot = ConstBool<false>;
+	type SlotDuration = ConstU64<SLOT_DURATION>;
 }
 
 parameter_types! {
@@ -2198,7 +2204,7 @@ impl_runtime_apis! {
 			Executive::execute_block(block);
 		}
 
-		fn initialize_block(header: &<Block as BlockT>::Header) {
+		fn initialize_block(header: &<Block as BlockT>::Header) -> sp_runtime::ExtrinsicInclusionMode {
 			Executive::initialize_block(header)
 		}
 	}
@@ -2260,7 +2266,7 @@ impl_runtime_apis! {
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			Aura::authorities().into_inner()
+			pallet_aura::Authorities::<Runtime>::get().into_inner()
 		}
 	}
 
@@ -2385,12 +2391,17 @@ impl_runtime_apis! {
 	}
 
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
-		fn create_default_config() -> Vec<u8> {
-			create_default_config::<RuntimeGenesisConfig>()
+		fn get_preset(id: &Option<sp_genesis_builder::PresetId>) -> Option<Vec<u8>> {
+			get_preset::<RuntimeGenesisConfig>(id, |_|None)
 		}
 
-		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
-			build_config::<RuntimeGenesisConfig>(config)
+		fn build_state(config: Vec<u8>) -> sp_genesis_builder::Result {
+			build_state::<RuntimeGenesisConfig>(config)
+		}
+
+		fn preset_names() -> Vec<sp_genesis_builder::PresetId> {
+			// TODO
+			Default::default()
 		}
 	}
 

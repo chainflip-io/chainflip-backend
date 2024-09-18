@@ -38,9 +38,10 @@ rlp = { default-features = false, version = "0.5" }
 bech32 = { default-features = false, version = "0.9.1" }
 
 # Solana
-borsh = { version = "1.2.1", default-features = false, optional = true, features = [
+borsh = { version = "1.2.1", default-features = false, features = [
   "derive",
   "unstable__schema",
+  "hashbrown",
 ] }
 serde_with = { version = "2.3.3", default-features = false, features = [
   "macros",
@@ -132,10 +133,6 @@ std = [
 	"serde_with/std",
 	"sha2/std",
 	"sol-prim/std",
-	"dep:borsh",
-	"borsh?/derive",
-	"borsh?/unstable__schema",
-	"borsh?/std",
 	"itertools/use_std",
 ]
 runtime-benchmarks = [

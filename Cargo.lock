@@ -1073,6 +1073,7 @@ checksum = "a6362ed55def622cddc70a4746a68554d7b687713770de539e59a739b249f8ed"
 dependencies = [
  "borsh-derive",
  "cfg_aliases 0.2.1",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -13174,6 +13175,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sol-prim",
  "sp-api",
  "sp-block-builder",
  "sp-consensus-aura",
