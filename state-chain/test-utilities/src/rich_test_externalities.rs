@@ -307,9 +307,11 @@ where
 	}
 }
 
+pub type RawSnapshot = (Vec<(Vec<u8>, (Vec<u8>, i32))>, H256);
+
 #[derive(Clone)]
 pub struct Snapshot<Ctx> {
-	raw_snapshot: (Vec<(Vec<u8>, (Vec<u8>, i32))>, H256),
+	raw_snapshot: RawSnapshot,
 	context: Ctx,
 }
 

@@ -100,7 +100,7 @@ impl MockElectoralSystem {
 	}
 
 	pub fn update(updates: &[BehaviourUpdate]) {
-		updates.into_iter().for_each(BehaviourUpdate::apply);
+		updates.iter().for_each(BehaviourUpdate::apply);
 	}
 
 	pub fn reset() {
