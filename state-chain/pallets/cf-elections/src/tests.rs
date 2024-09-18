@@ -12,6 +12,7 @@ use frame_support::traits::OriginTrait;
 use vote_storage::AuthorityVote;
 
 pub trait ElectoralSystemTestExt: Sized {
+	fn expect_consensus_after_next_block(self, expected: ConsensusStatus<AuthorityCount>) -> Self;
 	fn assume_consensus(self) -> Self;
 	fn assume_no_consensus(self) -> Self;
 	fn expect_consensus(self, expected: ConsensusStatus<AuthorityCount>) -> Self;
@@ -148,6 +149,12 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 			},
 		)
 	}
+
+	/// Processes a single block, then checks the consensus status.
+	#[track_caller]
+	fn expect_consensus_after_next_block(self, expected: ConsensusStatus<AuthorityCount>) -> Self {
+		self.then_process_next_block().expect_consensus(expected)
+	}
 }
 
 #[test]
@@ -161,54 +168,43 @@ fn consensus_state_transitions() {
 		.assume_consensus()
 		// Consensus is updated when we process a block's on_finalize hook.
 		.expect_consensus(ConsensusStatus::None)
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::Gained { most_recent: None, new: 0 })
+		.expect_consensus_after_next_block(ConsensusStatus::Gained { most_recent: None, new: 0 })
 		// After one vote we have consensus on the number of votes.
 		.submit_votes(&[0], VOTE, Default::default())
 		.expect_consensus(ConsensusStatus::Changed { previous: 0, new: 1 })
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::Unchanged { current: 1 })
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::Unchanged { current: 1 })
+		.expect_consensus_after_next_block(ConsensusStatus::Unchanged { current: 1 })
+		.expect_consensus_after_next_block(ConsensusStatus::Unchanged { current: 1 })
 		// Another vote, consensus has changed.
 		.submit_votes(&[1], VOTE, Default::default())
 		.expect_consensus(ConsensusStatus::Changed { previous: 1, new: 2 })
 		// Consensus is lost.
 		.assume_no_consensus()
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::Unchanged { current: 2 })
+		.expect_consensus_after_next_block(ConsensusStatus::Unchanged { current: 2 })
 		.submit_votes(&[1], VOTE, Default::default()) // Consensus is only updated if there is a vote.
 		.expect_consensus(ConsensusStatus::Lost { previous: 2 })
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::None)
+		.expect_consensus_after_next_block(ConsensusStatus::None)
 		// Consensus is regained with the old value.
 		.assume_consensus()
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::None)
+		.expect_consensus_after_next_block(ConsensusStatus::None)
 		.submit_votes(&[1], VOTE, Default::default()) // Consensus is only updated if there is a vote.
 		.expect_consensus(ConsensusStatus::Gained { most_recent: Some(2), new: 2 })
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::Unchanged { current: 2 })
+		.expect_consensus_after_next_block(ConsensusStatus::Unchanged { current: 2 })
 		// Consensus is lost.
 		.assume_no_consensus()
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::Unchanged { current: 2 })
+		.expect_consensus_after_next_block(ConsensusStatus::Unchanged { current: 2 })
 		.submit_votes(&[1], VOTE, Default::default()) // Consensus is only updated if there is a vote.
 		.expect_consensus(ConsensusStatus::Lost { previous: 2 })
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::None)
+		.expect_consensus_after_next_block(ConsensusStatus::None)
 		// Consensus is regained with a new value.
 		.assume_consensus()
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::None)
+		.expect_consensus_after_next_block(ConsensusStatus::None)
 		.submit_votes(&[2], VOTE, Default::default()) // Consensus is only updated if there is a vote.
 		.expect_consensus(ConsensusStatus::Gained { most_recent: Some(2), new: 3 })
-		.then_process_next_block()
-		.expect_consensus(ConsensusStatus::Unchanged { current: 3 })
+		.expect_consensus_after_next_block(ConsensusStatus::Unchanged { current: 3 })
 		// Non-contributing authorities do not affect consensus.
 		.submit_votes(&[3, 4], VOTE, Some(Error::<Test, _>::NotContributing))
 		.expect_consensus(ConsensusStatus::Unchanged { current: 3 })
-		.submit_simple(&[3, 4], |_| Call::<Test, _>::stop_ignoring_my_votes {})
+		.assert_calls_ok(&[3, 4], |_| Call::<Test, _>::stop_ignoring_my_votes {})
 		.submit_votes(&[3, 4], VOTE, None)
 		.expect_consensus(ConsensusStatus::Changed { previous: 3, new: 5 });
 }
