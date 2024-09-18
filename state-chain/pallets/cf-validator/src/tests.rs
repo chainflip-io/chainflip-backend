@@ -1515,3 +1515,24 @@ fn can_update_all_config_items() {
 		);
 	});
 }
+
+#[test]
+fn should_expire_all_previous_epochs() {
+	new_test_ext().execute_with(|| {
+		ValidatorPallet::transition_to_next_epoch(vec![1], 100);
+		let first_epoch = ValidatorPallet::current_epoch();
+		ValidatorPallet::transition_to_next_epoch(vec![1], 100);
+		let second_epoch = ValidatorPallet::current_epoch();
+		ValidatorPallet::transition_to_next_epoch(vec![1], 100);
+		let third_epoch = ValidatorPallet::current_epoch();
+
+		assert_eq!(
+			HistoricalActiveEpochs::<Test>::get(1),
+			vec![first_epoch, second_epoch, third_epoch]
+		);
+
+		ValidatorPallet::expire_epoch(third_epoch);
+
+		assert_eq!(HistoricalActiveEpochs::<Test>::get(1).len(), 0);
+	});
+}

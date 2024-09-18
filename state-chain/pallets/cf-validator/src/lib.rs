@@ -1013,7 +1013,14 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn expire_epoch(epoch: EpochIndex) -> Weight {
-		LastExpiredEpoch::<T>::set(epoch);
+		// Recursively expire all previous epochs that have not been expired yet. This is possible
+		// due to epoch duration being configurable.
+		let previous_epoch = epoch.saturating_sub(1);
+		if epoch > 0 && LastExpiredEpoch::<T>::get() != previous_epoch {
+			Self::expire_epoch(previous_epoch);
+		}
+
+		// Expire given epoch
 		let mut num_expired_authorities = 0;
 		for authority in EpochHistory::<T>::epoch_authorities(epoch).iter() {
 			num_expired_authorities += 1;
@@ -1023,6 +1030,7 @@ impl<T: Config> Pallet<T> {
 			}
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		}
+		LastExpiredEpoch::<T>::set(epoch);
 		T::EpochTransitionHandler::on_expired_epoch(epoch);
 
 		let validators = HistoricalAuthorities::<T>::take(epoch);
