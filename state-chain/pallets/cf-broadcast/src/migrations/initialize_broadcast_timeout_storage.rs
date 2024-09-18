@@ -22,7 +22,7 @@ mod old {
 
 	// Same timeout values as previously defined in `#[pallet::constant]`s
 	// and same as currently used in `node/src/chain_spec.rs`
-	pub const ETHEREUM_BROADCAST_TIMEOUT: BlockNumber = 5 * BLOCKS_PER_MINUTE_ETHEREUM;
+	pub const ETHEREUM_BROADCAST_TIMEOUT: BlockNumber = 5 * BLOCKS_PER_MINUTE_ETHEREUM; // note, due to rounding, this is effectively ~4.7 min
 	pub const POLKADOT_BROADCAST_TIMEOUT: BlockNumber = 4 * BLOCKS_PER_MINUTE_POLKADOT;
 	pub const BITCOIN_BROADCAST_TIMEOUT: BlockNumber = 9;
 	pub const ARBITRUM_BROADCAST_TIMEOUT: BlockNumber = 2 * BLOCKS_PER_MINUTE_ARBITRUM;

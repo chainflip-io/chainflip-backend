@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use core::cmp::max;
+
 use crate::{
 	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData,
 	BroadcastId, ChainBlockNumberFor, Config, DelayedBroadcastRetryQueue, Error,
@@ -420,7 +422,7 @@ fn test_transmission_request_expiry() {
 			broadcast_id
 		})
 		.then_execute_with_keep_context(|_| {
-			BlockHeightProvider::<MockEthereum>::mutate_block_height(|height| height + 1)
+			BlockHeightProvider::<MockEthereum>::increment_block_height()
 		})
 		.then_execute_at_next_block(|broadcast_id| {
 			// Subsequent calls to the hook have no further effect.
@@ -963,7 +965,7 @@ fn witness_broadcast(tx_out_id: [u8; 4]) {
 }
 
 #[test]
-fn timed_out_broadcaster_are_reported() {
+fn timed_out_broadcasters_are_reported() {
 	new_test_ext()
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
@@ -1021,31 +1023,31 @@ fn broadcast_can_be_aborted_due_to_time_out() {
 fn broadcast_timeout_works_when_external_chain_advances_multiple_blocks() {
 	new_test_ext()
 		.execute_with(|| {
-			let mut broadcast_ids = Vec::new();
 			let (broadcast_id, _) = start_mock_broadcast();
-			broadcast_ids.push(broadcast_id);
 			ready_to_abort_broadcast(broadcast_id);
 
-			let expiry = BlockHeightProvider::<MockEthereum>::get_block_height()
+			let expiry1 = BlockHeightProvider::<MockEthereum>::get_block_height()
 				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
 
-			(broadcast_ids, expiry)
+			(vec![broadcast_id], expiry1)
 		})
 		// add start a second broadcast during the next external block
 		.then_execute_with_keep_context(|_| {
-			BlockHeightProvider::<MockEthereum>::mutate_block_height(|height| height + 1)
+			BlockHeightProvider::<MockEthereum>::increment_block_height()
 		})
-		.then_execute_with(|(mut broadcast_ids, expiry)| {
+		.then_execute_with(|(mut broadcast_ids, expiry1)| {
 			let (broadcast_id, _) = start_mock_broadcast();
 			broadcast_ids.push(broadcast_id);
 			ready_to_abort_broadcast(broadcast_id);
-			(broadcast_ids, expiry)
+			let expiry2 = BlockHeightProvider::<MockEthereum>::get_block_height()
+				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
+			(broadcast_ids, max(expiry1, expiry2))
 		})
 		.then_process_next_block()
 		.then_process_next_block()
 		// move external block height into the future past both timeouts
 		.then_execute_with_keep_context(|(_, expiry)| {
-			BlockHeightProvider::<MockEthereum>::set_block_height(expiry + 5)
+			BlockHeightProvider::<MockEthereum>::set_block_height(expiry + 1)
 		})
 		.then_process_next_block()
 		.then_execute_with(|(broadcast_ids, _)| {
@@ -1288,8 +1290,8 @@ fn succeeded_broadcasts_will_not_retry() {
 
 #[test]
 fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
-	let mut external_target: u64 = 0u64;
-	let mut statechain_target: u64 = 0u64;
+	let mut target_chainblock: u64 = 0u64;
+	let mut target_block: u64 = 0u64;
 	let mut broadcast_id = 0;
 	new_test_ext()
 		.then_execute_at_block(1_000u64, |_| {
@@ -1298,34 +1300,34 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
 
 			// On safe mode next block, storage will be re-added to this target block.
-			let statechain_next_block = System::block_number() + 1u64;
-			statechain_target = statechain_next_block +
+			let next_block = System::block_number() + 1u64;
+			target_block = next_block +
 				<<Test as crate::Config<Instance1>>::SafeModeBlockMargin as Get<u64>>::get();
-			let external_current = BlockHeightProvider::<MockEthereum>::get_block_height();
-			external_target = external_current +
+			let current_chainblock = BlockHeightProvider::<MockEthereum>::get_block_height();
+			target_chainblock = current_chainblock +
 				<<Test as crate::Config<Instance1>>::SafeModeBlockMarginForTargetChain as Get<
 					u64,
 				>>::get();
 
 			// Ensure next block's data is ready to be re-scheduled during safe mode.
 			Timeouts::<Test, Instance1>::append((
-				external_current,
+				current_chainblock,
 				BTreeSet::from([(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)]),
 			));
 			Timeouts::<Test, Instance1>::append((
-				external_current,
+				current_chainblock,
 				BTreeSet::from([(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)]),
 			));
-			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::get(statechain_next_block)
+			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::get(next_block)
 				.contains(&broadcast_id,));
 
 			// add mock data to the target block storage.
 			Timeouts::<Test, Instance1>::append((
-				external_target,
+				target_chainblock,
 				BTreeSet::from([(100, 0), (101, 0), (102, 0), (103, 0), (104, 0)]),
 			));
-			DelayedBroadcastRetryQueue::<Test, Instance1>::append(statechain_target, 100);
-			DelayedBroadcastRetryQueue::<Test, Instance1>::append(statechain_target, 101);
+			DelayedBroadcastRetryQueue::<Test, Instance1>::append(target_block, 100);
+			DelayedBroadcastRetryQueue::<Test, Instance1>::append(target_block, 101);
 
 			// Activate safe mode code red.
 			<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -1335,7 +1337,7 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 			// Hook should re-schedule the `Timeouts` and Broadcast retries.
 			// Entries should be appended to the target block's storage, not replace it.
 			assert_eq!(
-				get_timeouts_for(external_target),
+				get_timeouts_for(target_chainblock),
 				// 105 and 106 are added from the next_block's storage.
 				BTreeSet::from_iter(vec![
 					(100, 0),
@@ -1348,7 +1350,7 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 				])
 			);
 			assert_eq!(
-				DelayedBroadcastRetryQueue::<Test, Instance1>::get(statechain_target),
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target_block),
 				BTreeSet::from_iter([100, 101, broadcast_id])
 			);
 		});

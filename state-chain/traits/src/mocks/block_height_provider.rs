@@ -20,11 +20,8 @@ impl<C: Chain> BlockHeightProvider<C> {
 		Self::put_value(BLOCK_HEIGHT_KEY, height);
 	}
 
-	pub fn mutate_block_height<F>(f: F)
-	where
-		F: FnOnce(C::ChainBlockNumber) -> C::ChainBlockNumber,
-	{
-		Self::set_block_height(f(Self::get_block_height()));
+	pub fn increment_block_height() {
+		Self::set_block_height(Self::get_block_height() + 1u32.into());
 	}
 }
 
