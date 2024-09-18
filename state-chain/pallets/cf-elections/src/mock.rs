@@ -73,14 +73,6 @@ pub struct TestContext {
 	pub umis: Vec<UniqueMonotonicIdentifier>,
 }
 
-pub fn setup_authorities_and_kick_off_epoch(authorities: Vec<u64>) {
-	for auth in authorities.iter() {
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&auth)
-			.unwrap();
-	}
-	MockEpochInfo::next_epoch(authorities);
-}
-
 /// Set up a test for the election pallet.
 ///
 /// Intializes the pallet with the given initial state and contributing authorities. The authorities

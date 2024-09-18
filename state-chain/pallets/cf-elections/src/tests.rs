@@ -1,15 +1,161 @@
 #![cfg(test)]
-use std::collections::BTreeMap;
-
 use crate::{mock::*, *};
 use cf_primitives::AuthorityCount;
-use cf_traits::{mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry};
 use electoral_system::{
 	AuthorityVoteOf, ConsensusStatus, ElectionReadAccess, ElectoralReadAccess, ElectoralWriteAccess,
 };
-use electoral_systems::mock::MockElectoralSystem;
+use electoral_systems::mock::{BehaviourUpdate, MockElectoralSystem};
 use frame_support::traits::OriginTrait;
+use mock::Test;
+use std::collections::BTreeMap;
 use vote_storage::AuthorityVote;
+
+#[test]
+fn votes_not_provided_until_shared_data_is_provided() {
+	let setup = TestSetup::default();
+	let authorities = setup.all_authorities();
+	let initial_test_state = election_test_ext(setup)
+		.then_apply_extrinsics(|_| {
+			[(
+				OriginTrait::root(),
+				Call::<Test, _>::set_shared_data_reference_lifetime {
+					blocks: 10,
+					ignore_corrupt_storage: CorruptStorageAdherance::Heed,
+				},
+				Ok(()),
+			)]
+		})
+		.new_election()
+		.assert_calls_noop(
+			&authorities[..],
+			|_| Call::<_, _>::provide_shared_data { shared_data: () },
+			Error::<Test, _>::UnreferencedSharedData,
+		)
+		.assume_consensus()
+		.expect_consensus(ConsensusStatus::None)
+		// Partial Vote does not contain shared data, only the reference.
+		.submit_votes(&authorities[..], AuthorityVote::PartialVote(SharedDataHash::of(&())), None)
+		// No votes are provided to the consensus system because shared component has not been
+		// provided.
+		.expect_consensus(ConsensusStatus::Gained { most_recent: None, new: 0 })
+		.then_execute_with_keep_context(|_| {
+			let electoral_data = Pallet::<Test, Instance1>::electoral_data(&authorities[0])
+				.expect("Expected electoral data.");
+			assert_eq!(electoral_data.current_elections.len(), 1, "Expected one election.");
+			assert_eq!(
+				electoral_data.unprovided_shared_data_hashes.len(),
+				1,
+				"Expected one shared data hash."
+			);
+		})
+		// Delete the election when we finalize: should cause all refs to be deleted too.
+		.update_settings(&[BehaviourUpdate::DeleteOnFinalizeConsensus(true)])
+		.snapshot();
+
+	// Case 1: Provide Shared Data through provide_shared_data extrinsic:
+	let case_1 = TestRunner::from_snapshot(initial_test_state.clone())
+		.assert_calls_ok(&authorities[..1], |_| Call::<Test, Instance1>::provide_shared_data {
+			shared_data: (),
+		});
+
+	// Case 2: Provide Shared Data through vote extrinsic:
+	let case_2 = TestRunner::from_snapshot(initial_test_state.clone()).submit_votes(
+		&authorities[..1],
+		AuthorityVote::Vote(()),
+		None,
+	);
+
+	for (label, test_case) in [(1, case_1), (2, case_2)] {
+		test_case
+			// Shared data provided, all votes should now be counted.
+			.expect_consensus(ConsensusStatus::Changed {
+				previous: 0,
+				new: authorities.len() as AuthorityCount,
+			})
+			.then_execute_with_keep_context(|_| {
+				assert!(
+					SharedDataReferenceCount::<Test, _>::iter().next().is_none(),
+					"Case {label}: Expected shared data refs to be removed but found: {:?}, components are: {:?}",
+					SharedDataReferenceCount::<Test, _>::iter().collect::<Vec<_>>(),
+					IndividualComponents::<Test, _>::iter().collect::<Vec<_>>(),
+				);
+			});
+	}
+}
+
+// #[test]
+// fn ensure_can_vote() {
+// 	new_test_ext().then_execute_at_next_block(|()| {
+// 		let validator = 1;
+// 		let none_validator = 1000;
+
+// 		setup_authorities_and_kick_off_epoch(vec![validator]);
+
+// 		assert!(
+// 			Pallet::<Test, Instance1>::ensure_can_vote(RawOrigin::Signed(none_validator).into())
+// 				.is_err(),
+// 			"Should not be able to vote!"
+// 		);
+// 		Status::<Test, Instance1>::put(ElectoralSystemStatus::Paused {
+// 			detected_corrupt_storage: true,
+// 		});
+// 		assert_noop!(
+// 			Pallet::<Test, Instance1>::ensure_can_vote(RawOrigin::Signed(validator).into()),
+// 			Error::<Test, Instance1>::Paused
+// 		);
+// 		Status::<Test, Instance1>::put(ElectoralSystemStatus::Running);
+// 		Pallet::<Test, Instance1>::ensure_can_vote(RawOrigin::Signed(validator).into())
+// 			.expect("Can vote!");
+// 	});
+// }
+
+// #[test]
+// fn delete_vote() {
+// 	const DATA_TO_DELETE: u64 = 10;
+
+// 	new_test_ext()
+// 		// Run one block, which on_finalise will create the election for the median
+// 		.then_execute_at_next_block(|()| {})
+// 		// Vote so the initial value is the Consensus.
+// 		.then_execute_at_next_block(|()| {
+// 			let current_authorities = MockEpochInfo::current_authorities();
+// 			for validator_id in current_authorities.clone() {
+// 				assert_ok!(Pallet::<Test, Instance1>::stop_ignoring_my_votes(
+// 					RawOrigin::Signed(validator_id).into(),
+// 				));
+// 				submit_vote_for(validator_id, NEW_DATA);
+// 			}
+// 			current_authorities
+// 		})
+// 		.then_execute_at_next_block(|current_authorities| {
+// 			// Consensus is reached and a new election began.
+// 			assert_ok!(Pallet::<Test, Instance1>::with_electoral_access(|electoral_access| {
+// 				assert_eq!(electoral_access.unsynchronised_state().unwrap(), NEW_DATA);
+// 				Ok(())
+// 			}));
+
+// 			// Get the identifier for the next election.
+// 			let electoral_data =
+// 				Pallet::<Test, Instance1>::electoral_data(&current_authorities[0]).unwrap();
+// 			let election_identifier = electoral_data.current_elections.keys().next().unwrap();
+
+// 			// Submit vote for a new value, then delete the vote.
+// 			for validator_id in current_authorities.clone() {
+// 				submit_vote_for(validator_id, DATA_TO_DELETE);
+// 				assert_ok!(Pallet::<Test, Instance1>::delete_vote(
+// 					RawOrigin::Signed(validator_id).into(),
+// 					*election_identifier
+// 				));
+// 			}
+// 		})
+// 		.then_execute_at_next_block(|_| {
+// 			// Since no vote for the new value is submitted, Consensus value is not changed.
+// 			assert_ok!(Pallet::<Test, Instance1>::with_electoral_access(|electoral_access| {
+// 				assert_eq!(electoral_access.unsynchronised_state().unwrap(), NEW_DATA);
+// 				Ok(())
+// 			}));
+// 		});
+// }
 
 pub trait ElectoralSystemTestExt: Sized {
 	fn update_settings(self, updates: &[BehaviourUpdate]) -> Self;
