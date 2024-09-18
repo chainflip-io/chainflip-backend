@@ -2,9 +2,9 @@
 
 use crate::{
 	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData,
-	BroadcastId, Config, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent,
-	FailedBroadcasters, Instance1, PalletConfigUpdate, PalletOffence, PendingApiCalls,
-	PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts,
+	BroadcastId, ChainBlockNumberFor, Config, DelayedBroadcastRetryQueue, Error,
+	Event as BroadcastEvent, FailedBroadcasters, Instance1, PalletConfigUpdate, PalletOffence,
+	PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts,
 	TransactionMetadata, TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
@@ -155,6 +155,21 @@ fn new_mock_broadcast_attempt(
 	}
 }
 
+/// Since there might be multiple entries with the same timeout chainblock number,
+/// we collect all of their "values" into a single `BTreeSet`. This improves the
+/// readability of a few test cases.
+fn get_timeouts_for(
+	chainblock: ChainBlockNumberFor<Test, Instance1>,
+) -> BTreeSet<(BroadcastId, ValidatorId)> {
+	let mut result = BTreeSet::new();
+	for (timeout, val) in Timeouts::<Test, Instance1>::get() {
+		if timeout == chainblock {
+			result.append(&mut val.clone());
+		}
+	}
+	result
+}
+
 #[test]
 fn transaction_succeeded_results_in_refund_for_signer() {
 	new_test_ext().execute_with(|| {
@@ -216,7 +231,7 @@ fn ready_to_abort_broadcast(broadcast_id: BroadcastId) -> u64 {
 	// Extract nominee for current broadcast_id from the Timeouts storage.
 	// If none can be found the default is 0.
 	let mut nominee = 0;
-	for (_, vals) in Timeouts::<Test, Instance1>::iter() {
+	for (_, vals) in Timeouts::<Test, Instance1>::get() {
 		for (id, nom) in vals.iter() {
 			if id == &broadcast_id {
 				nominee = *nom;
@@ -513,7 +528,7 @@ fn ensure_safe_mode_is_moving_timeouts() {
 			<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 			let _ = start_mock_broadcast();
 			let start_block_height = BlockHeightProvider::<MockEthereum>::get_block_height();
-			assert!(Timeouts::<Test, Instance1>::get(start_block_height + 4u64).len() == 1);
+			assert!(get_timeouts_for(start_block_height + 4u64).len() == 1);
 			start_block_height
 		})
 		.then_execute_at_next_block(|start_block_height| {
@@ -522,8 +537,8 @@ fn ensure_safe_mode_is_moving_timeouts() {
 		})
 		.then_process_next_block()
 		.then_execute_with(|start_block_height| {
-			assert!(Timeouts::<Test, Instance1>::get(start_block_height + 4u64).is_empty());
-			assert!(Timeouts::<Test, Instance1>::get(start_block_height + 14u64).len() == 1);
+			assert!(get_timeouts_for(start_block_height + 4u64).is_empty());
+			assert!(get_timeouts_for(start_block_height + 14u64).len() == 1);
 		});
 }
 
@@ -668,11 +683,7 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
 
 			assert_eq!(
-				Timeouts::<Test, Instance1>::get(expected_expiry_block)
-					.into_iter()
-					.next()
-					.unwrap()
-					.0,
+				get_timeouts_for(expected_expiry_block).into_iter().next().unwrap().0,
 				broadcast_id
 			);
 
@@ -1297,18 +1308,22 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 				>>::get();
 
 			// Ensure next block's data is ready to be re-scheduled during safe mode.
-			Timeouts::<Test, Instance1>::insert(
+			Timeouts::<Test, Instance1>::append((
 				external_current,
-				BTreeSet::from_iter(vec![(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)]),
-			);
+				BTreeSet::from([(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)]),
+			));
+			Timeouts::<Test, Instance1>::append((
+				external_current,
+				BTreeSet::from([(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)]),
+			));
 			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::get(statechain_next_block)
 				.contains(&broadcast_id,));
 
 			// add mock data to the target block storage.
-			Timeouts::<Test, Instance1>::insert(
+			Timeouts::<Test, Instance1>::append((
 				external_target,
-				BTreeSet::from_iter(vec![(100, 0), (101, 0), (102, 0), (103, 0), (104, 0)]),
-			);
+				BTreeSet::from([(100, 0), (101, 0), (102, 0), (103, 0), (104, 0)]),
+			));
 			DelayedBroadcastRetryQueue::<Test, Instance1>::append(statechain_target, 100);
 			DelayedBroadcastRetryQueue::<Test, Instance1>::append(statechain_target, 101);
 
@@ -1320,7 +1335,7 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 			// Hook should re-schedule the `Timeouts` and Broadcast retries.
 			// Entries should be appended to the target block's storage, not replace it.
 			assert_eq!(
-				Timeouts::<Test, Instance1>::get(external_target),
+				get_timeouts_for(external_target),
 				// 105 and 106 are added from the next_block's storage.
 				BTreeSet::from_iter(vec![
 					(100, 0),

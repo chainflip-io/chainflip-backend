@@ -281,11 +281,9 @@ pub mod pallet {
 	/// A mapping from block number to a list of broadcasts that expire at that
 	/// block number.
 	#[pallet::storage]
-	pub type Timeouts<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type Timeouts<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
-		Twox64Concat,
-		ChainBlockNumberFor<T, I>,
-		BTreeSet<(BroadcastId, T::ValidatorId)>,
+		Vec<(ChainBlockNumberFor<T, I>, BTreeSet<(BroadcastId, T::ValidatorId)>)>,
 		ValueQuery,
 	>;
 
@@ -410,22 +408,24 @@ pub mod pallet {
 			// nominated. If there are no more broadcaster available, then the broadcast is aborted.
 
 			let current_chain_block = T::ChainTracking::get_block_height();
+			let mut expiries = BTreeSet::new();
 
 			// take all broadcasts which have timed out. Since iterators break if we update
 			// the map during iteration, we do this in two steps: first collect all expired_keys
 			// and separately the expired values, after that iterate again to delete all collected
 			// keys from storage.
-			let mut expired_keys = Vec::new();
-			let mut expiries = BTreeSet::new();
-			for (ix, val) in Timeouts::<T, I>::iter() {
-				if ix <= current_chain_block {
-					expiries.append(&mut val.clone());
-					expired_keys.push(ix);
-				}
-			}
-			for key in expired_keys {
-				Timeouts::<T, I>::remove(key);
-			}
+			Timeouts::<T, I>::mutate(|timeouts| {
+				// NB: As per documentation, retain visits every element exactly once,
+				// and can thus be used for iterations with state change.
+				timeouts.retain(|(ix, val)| {
+					if *ix <= current_chain_block {
+						expiries.append(&mut val.clone());
+						false
+					} else {
+						true
+					}
+				});
+			});
 
 			let pending_broadcasts = PendingBroadcasts::<T, I>::get();
 			let mut delayed_retries = DelayedBroadcastRetryQueue::<T, I>::take(block_number);
@@ -462,10 +462,10 @@ pub mod pallet {
 					});
 				}
 			} else {
-				Timeouts::<T, I>::mutate(
+				Timeouts::<T, I>::append((
 					current_chain_block.saturating_add(T::SafeModeBlockMarginForTargetChain::get()),
-					|current| current.append(&mut expiries),
-				);
+					expiries,
+				));
 				DelayedBroadcastRetryQueue::<T, I>::mutate(
 					block_number.saturating_add(T::SafeModeBlockMargin::get()),
 					|current| current.append(&mut delayed_retries),
@@ -909,10 +909,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			broadcast_data.nominee = Some(nominated_signer.clone());
 			AwaitingBroadcast::<T, I>::insert(broadcast_id, broadcast_data.clone());
 
-			Timeouts::<T, I>::append(
+			Timeouts::<T, I>::append((
 				T::ChainTracking::get_block_height() + BroadcastTimeout::<T, I>::get(),
-				(broadcast_id, nominated_signer.clone()),
-			);
+				BTreeSet::from([(broadcast_id, nominated_signer.clone())]),
+			));
 
 			T::CfeBroadcastRequest::tx_broadcast_request(TxBroadcastRequest {
 				broadcast_id,
