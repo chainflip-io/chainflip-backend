@@ -12,18 +12,12 @@ use frame_support::traits::OriginTrait;
 use vote_storage::AuthorityVote;
 
 pub trait ElectoralSystemTestExt: Sized {
+	fn update_settings(self, updates: &[BehaviourUpdate]) -> Self;
 	fn expect_consensus_after_next_block(self, expected: ConsensusStatus<AuthorityCount>) -> Self;
 	fn assume_consensus(self) -> Self;
 	fn assume_no_consensus(self) -> Self;
 	fn expect_consensus(self, expected: ConsensusStatus<AuthorityCount>) -> Self;
 	fn new_election(self) -> Self;
-	fn submit_simple<I: 'static>(
-		self,
-		validator_ids: &[u64],
-		call: impl Fn(&u64) -> Call<Test, I>,
-	) -> Self
-	where
-		Test: Config<I>;
 	fn submit_votes<I: 'static>(
 		self,
 		validator_ids: &[u64],
@@ -31,7 +25,8 @@ pub trait ElectoralSystemTestExt: Sized {
 		expected_error: Option<Error<Test, I>>,
 	) -> Self
 	where
-		Test: Config<I, ElectoralSystem = MockElectoralSystem>;
+		Test: Config<I, ElectoralSystem = MockElectoralSystem>,
+		<Test as frame_system::Config>::RuntimeCall: From<Call<Test, I>>;
 }
 
 impl ElectoralSystemTestExt for TestRunner<TestContext> {
@@ -65,16 +60,19 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 		)
 	}
 
-	#[track_caller]
-	fn assume_consensus(self) -> Self {
-		MockElectoralSystem::set_assume_consensus(true);
+	fn update_settings(self, updates: &[BehaviourUpdate]) -> Self {
+		MockElectoralSystem::update(updates);
 		self
 	}
 
 	#[track_caller]
+	fn assume_consensus(self) -> Self {
+		self.update_settings(&[BehaviourUpdate::AssumeConsensus(true)])
+	}
+
+	#[track_caller]
 	fn assume_no_consensus(self) -> Self {
-		MockElectoralSystem::set_assume_consensus(false);
-		self
+		self.update_settings(&[BehaviourUpdate::AssumeConsensus(false)])
 	}
 
 	#[track_caller]
@@ -86,6 +84,7 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 	) -> Self
 	where
 		Test: Config<I, ElectoralSystem = MockElectoralSystem>,
+		<Test as frame_system::Config>::RuntimeCall: From<Call<Test, I>>,
 	{
 		self.then_apply_extrinsics(
 			#[track_caller]
@@ -106,27 +105,15 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 									)
 									.unwrap(),
 								},
-								expected_error.clone().map(|e| Err(e.into())).unwrap_or(Ok(())),
+								expected_error
+									.clone()
+									.map(|e| Err(DispatchError::from(e)))
+									.unwrap_or(Ok(())),
 							)
 						})
 					})
 					.collect::<Vec<_>>()
 			},
-		)
-	}
-
-	#[track_caller]
-	fn submit_simple<I: 'static>(
-		self,
-		validator_ids: &[u64],
-		call: impl Fn(&u64) -> Call<Test, I>,
-	) -> Self
-	where
-		Test: Config<I>,
-	{
-		self.then_apply_extrinsics(
-			#[track_caller]
-			|_ctx| validator_ids.iter().map(|id| (OriginTrait::signed(*id), call(id), Ok(()))),
 		)
 	}
 
@@ -218,9 +205,9 @@ fn authority_removes_and_re_adds_itself_from_contributing_set() {
 		.assume_consensus()
 		.submit_votes(&[0, 1, 2], VOTE, None)
 		.expect_consensus(ConsensusStatus::Gained { most_recent: None, new: 3 })
-		.submit_simple(&[1], |_| Call::<Test, _>::ignore_my_votes {})
+		.assert_calls_ok(&[1], |_| Call::<Test, _>::ignore_my_votes {})
 		.expect_consensus(ConsensusStatus::Changed { previous: 3, new: 2 })
-		.submit_simple(&[1], |_| Call::<Test, _>::stop_ignoring_my_votes {})
+		.assert_calls_ok(&[1], |_| Call::<Test, _>::stop_ignoring_my_votes {})
 		.expect_consensus(ConsensusStatus::Changed { previous: 2, new: 3 })
 		// Validator 1 deletes its vote.
 		.then_apply_extrinsics(
@@ -240,10 +227,10 @@ fn authority_removes_and_re_adds_itself_from_contributing_set() {
 			},
 		)
 		.expect_consensus(ConsensusStatus::Changed { previous: 3, new: 2 })
-		.submit_simple(&[1], |_| Call::<Test, _>::ignore_my_votes {})
+		.assert_calls_ok(&[1], |_| Call::<Test, _>::ignore_my_votes {})
 		.submit_votes(&[1], VOTE, Some(Error::<Test, _>::NotContributing))
 		.expect_consensus(ConsensusStatus::Unchanged { current: 2 })
-		.submit_simple(&[1], |_| Call::<Test, _>::stop_ignoring_my_votes {})
+		.assert_calls_ok(&[1], |_| Call::<Test, _>::stop_ignoring_my_votes {})
 		.submit_votes(&[1], VOTE, None)
 		.expect_consensus(ConsensusStatus::Changed { previous: 2, new: 3 });
 }
