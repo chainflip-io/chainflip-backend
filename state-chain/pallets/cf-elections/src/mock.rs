@@ -3,7 +3,7 @@
 pub use crate::{self as pallet_cf_elections};
 use crate::{InitialStateOf, Pallet, UniqueMonotonicIdentifier};
 
-use cf_traits::{impl_mock_chainflip, mocks::time_source::Mock, AccountRoleRegistry};
+use cf_traits::{impl_mock_chainflip, AccountRoleRegistry};
 use frame_support::{assert_ok, derive_impl, instances::Instance1, traits::OriginTrait};
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -30,7 +30,6 @@ impl pallet_cf_elections::Config<Instance1> for Test {
 }
 
 impl_mock_chainflip!(Test);
-pub const NEW_DATA: u64 = 42;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
