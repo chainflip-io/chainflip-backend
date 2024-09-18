@@ -83,31 +83,39 @@ fn votes_not_provided_until_shared_data_is_provided() {
 	}
 }
 
-// #[test]
-// fn ensure_can_vote() {
-// 	new_test_ext().then_execute_at_next_block(|()| {
-// 		let validator = 1;
-// 		let none_validator = 1000;
+#[test]
+fn ensure_can_vote() {
+	new_test_ext().then_execute_at_next_block(|()| {
+		let setup = TestSetup { num_non_contributing_authorities: 1, ..Default::default() };
 
-// 		setup_authorities_and_kick_off_epoch(vec![validator]);
+		let initial_state = election_test_ext(setup.clone())
+			.new_election()
+			.submit_votes(
+				&setup.non_contributing_authorities()[..],
+				AuthorityVote::Vote(()),
+				Some(Error::NotContributing),
+			)
+			.snapshot();
 
-// 		assert!(
-// 			Pallet::<Test, Instance1>::ensure_can_vote(RawOrigin::Signed(none_validator).into())
-// 				.is_err(),
-// 			"Should not be able to vote!"
-// 		);
-// 		Status::<Test, Instance1>::put(ElectoralSystemStatus::Paused {
-// 			detected_corrupt_storage: true,
-// 		});
-// 		assert_noop!(
-// 			Pallet::<Test, Instance1>::ensure_can_vote(RawOrigin::Signed(validator).into()),
-// 			Error::<Test, Instance1>::Paused
-// 		);
-// 		Status::<Test, Instance1>::put(ElectoralSystemStatus::Running);
-// 		Pallet::<Test, Instance1>::ensure_can_vote(RawOrigin::Signed(validator).into())
-// 			.expect("Can vote!");
-// 	});
-// }
+		// Contributing authorities can vote.
+		TestRunner::from_snapshot(initial_state.clone()).submit_votes(
+			&setup.contributing_authorities()[..],
+			AuthorityVote::Vote(()),
+			None,
+		);
+
+		// If governance pauses elections, no votes can be submitted.
+		TestRunner::from_snapshot(initial_state.clone())
+			.then_apply_extrinsics(|_| {
+				[(OriginTrait::root(), Call::<Test, _>::pause_elections {}, Ok(()))]
+			})
+			.submit_votes(
+				&setup.all_authorities()[..],
+				AuthorityVote::Vote(()),
+				Some(Error::Paused),
+			);
+	});
+}
 
 pub trait ElectoralSystemTestExt: Sized {
 	fn update_settings(self, updates: &[BehaviourUpdate]) -> Self;
