@@ -859,7 +859,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type SafeModeBlockMarginForTargetChain = ConstU64<BLOCKS_PER_MINUTE_ETHEREUM>;
+	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_ETHEREUM>;
 	type ChainTracking = EthereumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
@@ -885,7 +885,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type SafeModeBlockMarginForTargetChain = ConstU32<BLOCKS_PER_MINUTE_POLKADOT>;
+	type SafeModeChainBlockMargin = ConstU32<BLOCKS_PER_MINUTE_POLKADOT>;
 	type ChainTracking = PolkadotChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
@@ -911,7 +911,7 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type SafeModeBlockMarginForTargetChain = ConstU64<1>; // 10 minutes
+	type SafeModeChainBlockMargin = ConstU64<1>; // 10 minutes
 	type ChainTracking = BitcoinChainTracking;
 	type RetryPolicy = BitcoinRetryPolicy;
 	type LiabilityTracker = AssetBalances;
@@ -937,7 +937,7 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type SafeModeBlockMarginForTargetChain = ConstU64<BLOCKS_PER_MINUTE_ARBITRUM>;
+	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_ARBITRUM>;
 	type ChainTracking = ArbitrumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
@@ -970,7 +970,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
-	type SafeModeBlockMarginForTargetChain = ConstU64<BLOCKS_PER_MINUTE_SOLANA>;
+	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_SOLANA>;
 	type ChainTracking = SolanaChainTrackingProvider;
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;

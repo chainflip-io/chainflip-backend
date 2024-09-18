@@ -530,17 +530,24 @@ fn ensure_safe_mode_is_moving_timeouts() {
 			<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 			let _ = start_mock_broadcast();
 			let start_block_height = BlockHeightProvider::<MockEthereum>::get_block_height();
-			assert!(get_timeouts_for(start_block_height + 4u64).len() == 1);
+			assert!(get_timeouts_for(start_block_height + BROADCAST_EXPIRY_BLOCKS).len() == 1);
 			start_block_height
 		})
 		.then_execute_at_next_block(|start_block_height| {
-			BlockHeightProvider::<MockEthereum>::set_block_height(start_block_height + 4u64);
+			BlockHeightProvider::<MockEthereum>::set_block_height(
+				start_block_height + BROADCAST_EXPIRY_BLOCKS,
+			);
 			start_block_height
 		})
 		.then_process_next_block()
 		.then_execute_with(|start_block_height| {
-			assert!(get_timeouts_for(start_block_height + 4u64).is_empty());
-			assert!(get_timeouts_for(start_block_height + 14u64).len() == 1);
+			assert!(get_timeouts_for(start_block_height + BROADCAST_EXPIRY_BLOCKS).is_empty());
+			assert!(
+				get_timeouts_for(
+					start_block_height + BROADCAST_EXPIRY_BLOCKS + SAFEMODE_CHAINBLOCK_MARGIN
+				)
+				.len() == 1
+			);
 		});
 }
 
@@ -1305,9 +1312,7 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 				<<Test as crate::Config<Instance1>>::SafeModeBlockMargin as Get<u64>>::get();
 			let current_chainblock = BlockHeightProvider::<MockEthereum>::get_block_height();
 			target_chainblock = current_chainblock +
-				<<Test as crate::Config<Instance1>>::SafeModeBlockMarginForTargetChain as Get<
-					u64,
-				>>::get();
+				<<Test as crate::Config<Instance1>>::SafeModeChainBlockMargin as Get<u64>>::get();
 
 			// Ensure next block's data is ready to be re-scheduled during safe mode.
 			Timeouts::<Test, Instance1>::append((

@@ -187,7 +187,7 @@ pub mod pallet {
 
 		/// The safe mode block margin. During safe mode, the timeout is pushed back
 		/// by this number of blocks every time it runs out.
-		type SafeModeBlockMarginForTargetChain: Get<ChainBlockNumberFor<Self, I>>;
+		type SafeModeChainBlockMargin: Get<ChainBlockNumberFor<Self, I>>;
 
 		/// The policy on which decide when we slow down the retry of a broadcast.
 		type RetryPolicy: RetryPolicy<
@@ -278,8 +278,11 @@ pub mod pallet {
 	pub type DelayedBroadcastRetryQueue<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, BTreeSet<BroadcastId>, ValueQuery>;
 
-	/// A mapping from block number to a list of broadcasts that expire at that
-	/// block number.
+	/// A vector containing external chainblock numbers, together with the set of broadcasts
+	/// that expire at this block number.
+	///
+	/// Note that there might be multiple entries for the same timeout block, we allow this
+	/// because it is more efficient to append something to a vector than mutating its contents.
 	#[pallet::storage]
 	pub type Timeouts<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
@@ -463,7 +466,7 @@ pub mod pallet {
 				}
 			} else {
 				Timeouts::<T, I>::append((
-					current_chain_block.saturating_add(T::SafeModeBlockMarginForTargetChain::get()),
+					current_chain_block.saturating_add(T::SafeModeChainBlockMargin::get()),
 					expiries,
 				));
 				DelayedBroadcastRetryQueue::<T, I>::mutate(
