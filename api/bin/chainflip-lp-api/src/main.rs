@@ -1,9 +1,7 @@
 use anyhow::anyhow;
-use cf_primitives::{BasisPoints, BlockNumber, EgressId};
+use cf_primitives::{BasisPoints, BlockNumber, EgressId, Port};
 use cf_utilities::{
-	rpc::NumberOrHex,
-	task_scope::{task_scope, Scope},
-	try_parse_number_or_hex,
+	health::{self, HealthCheck}, rpc::NumberOrHex, task_scope::{task_scope, Scope}, try_parse_number_or_hex
 };
 use chainflip_api::{
 	self,
@@ -36,7 +34,7 @@ use jsonrpsee::{
 use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
-use std::{collections::BTreeMap, ops::Range, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, ops::Range, path::PathBuf, sync::{atomic::AtomicBool, Arc}};
 use tracing::log;
 
 /// Contains RPC interface types that differ from internal types.
@@ -638,11 +636,20 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
+			let has_completed_initialising = Arc::new(AtomicBool::new(false));
+			let h = HealthCheck {
+				hostname: "".to_string(),
+				port: 1000
+
+			};
+			health::start(scope, &h, has_completed_initialising.clone()).await?;
+
 			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
 			let server_addr = server.local_addr()?;
 			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
 
 			log::info!("🎙 Server is listening on {server_addr}.");
+			has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
 
 			server.stopped().await;
 			Ok(())

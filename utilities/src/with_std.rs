@@ -8,6 +8,7 @@ use rpc::NumberOrHex;
 pub use scale_json;
 
 pub mod dynamic_events;
+pub mod health;
 pub mod future_map;
 pub mod loop_select;
 pub mod metrics;
