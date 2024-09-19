@@ -13,7 +13,7 @@
 
 import BigNumber from 'bignumber.js';
 import { sendSol } from '../shared/send_sol';
-import { assetDecimals, executeWithTimeout } from '../shared/utils';
+import { assetDecimals, runWithTimeoutAndExit } from '../shared/utils';
 import { sendSolUsdc } from '../shared/send_solusdc';
 
 async function main() {
@@ -57,4 +57,4 @@ async function main() {
   txs.forEach((tx) => console.log('tx: ', tx?.transaction?.signatures[0]));
 }
 
-await executeWithTimeout(main(), 10);
+await runWithTimeoutAndExit(main(), 10);

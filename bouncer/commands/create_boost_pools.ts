@@ -8,8 +8,8 @@
 // All assets must be be from the same chain.
 // For example: ./commands/create_boost_pools.ts '[{"asset": "Eth","tier": 5}, {"asset": "Eth","tier": 10}, {"asset": "Eth","tier": 30}]'
 
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { BoostPoolId, createBoostPools } from '../shared/setup_boost_pools';
 
 const newPools: BoostPoolId[] = JSON.parse(process.argv[2]);
-await executeWithTimeout(createBoostPools(newPools), 30);
+await runWithTimeoutAndExit(createBoostPools(newPools), 30);

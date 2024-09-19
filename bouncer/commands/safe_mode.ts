@@ -16,7 +16,7 @@
 //
 // For example: ./commands/safe_mode.ts amber swapping_swapsEnabled,swapping_withdrawalsEnabled
 
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { setSafeModeToGreen, setSafeModeToAmber, setSafeModeToRed } from '../shared/safe_mode';
 
 async function main() {
@@ -41,4 +41,4 @@ async function main() {
   }
 }
 
-await executeWithTimeout(main(), 120);
+await runWithTimeoutAndExit(main(), 120);

@@ -7,7 +7,7 @@
 
 import { InternalAsset } from '@chainflip/cli';
 import { rangeOrder } from '../shared/range_order';
-import { parseAssetString, executeWithTimeout } from '../shared/utils';
+import { parseAssetString, runWithTimeoutAndExit } from '../shared/utils';
 
 async function main() {
   const ccy = parseAssetString(process.argv[2]);
@@ -15,4 +15,4 @@ async function main() {
   await rangeOrder(ccy as InternalAsset, amount);
 }
 
-await executeWithTimeout(main(), 120);
+await runWithTimeoutAndExit(main(), 120);

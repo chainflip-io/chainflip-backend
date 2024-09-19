@@ -196,6 +196,50 @@ export function chainGasAsset(chain: Chain): Asset {
   }
 }
 
+/// Simplified color logging with reset, so only a single line will be colored.
+/// Example: console.log(ConsoleLogColors.Red, 'message');
+export enum ConsoleLogColors {
+  WhiteBold = '\x1b[1m%s\x1b[0m',
+  DarkGrey = '\x1b[2m%s\x1b[0m',
+  Underline = '\x1b[4m%s\x1b[0m',
+  Grey = '\x1b[30m%s\x1b[0m',
+  Green = '\x1b[32m%s\x1b[0m',
+  Red = '\x1b[31m%s\x1b[0m',
+  Yellow = '\x1b[33m%s\x1b[0m',
+  Blue = '\x1b[34m%s\x1b[0m',
+  Purple = '\x1b[35m%s\x1b[0m',
+  LightBlue = '\x1b[36m%s\x1b[0m',
+  RedSolid = '\x1b[41m%s\x1b[0m',
+}
+
+export const ConsoleColors = {
+  Reset: '\x1b[0m',
+  Bright: '\x1b[1m',
+  Dim: '\x1b[2m',
+  Underscore: '\x1b[4m',
+  Blink: '\x1b[5m',
+  Reverse: '\x1b[7m',
+  Hidden: '\x1b[8m',
+
+  FgBlack: '\x1b[30m',
+  FgRed: '\x1b[31m',
+  FgGreen: '\x1b[32m',
+  FgYellow: '\x1b[33m',
+  FgBlue: '\x1b[34m',
+  FgMagenta: '\x1b[35m',
+  FgCyan: '\x1b[36m',
+  FgWhite: '\x1b[37m',
+
+  BgBlack: '\x1b[40m',
+  BgRed: '\x1b[41m',
+  BgGreen: '\x1b[42m',
+  BgYellow: '\x1b[43m',
+  BgBlue: '\x1b[44m',
+  BgMagenta: '\x1b[45m',
+  BgCyan: '\x1b[46m',
+  BgWhite: '\x1b[47m',
+};
+
 export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
   const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
   return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
@@ -209,18 +253,23 @@ export function stateChainAssetFromAsset(asset: Asset): string {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> =>
+export const runWithTimeout = async <T>(promise: Promise<T>, seconds: number): Promise<T> =>
   Promise.race([
     promise,
-    sleep(millis, new Error(`Timed out after ${millis} ms.`), { ref: false }).then((error) => {
-      throw error;
-    }),
+    sleep(seconds * 1000, new Error(`Timed out after ${seconds}s.`), { ref: false }).then(
+      (error) => {
+        throw error;
+      },
+    ),
   ]);
 
-/// Runs the given promise with a timeout and handles exiting the process. Used for running commands & tests.
-export async function executeWithTimeout<T>(promise: Promise<T>, seconds: number): Promise<void> {
+/// Runs the given promise with a timeout and handles exiting the process. Used for running commands.
+export async function runWithTimeoutAndExit<T>(
+  promise: Promise<T>,
+  seconds: number,
+): Promise<void> {
   const start = Date.now();
-  await runWithTimeout(promise, seconds * 1000).catch((error) => {
+  await runWithTimeout(promise, seconds).catch((error) => {
     console.error(error);
     process.exit(-1);
   });
@@ -228,7 +277,7 @@ export async function executeWithTimeout<T>(promise: Promise<T>, seconds: number
 
   if (executionTime > seconds * 0.9) {
     console.warn(
-      `\x1b[33m%s\x1b[0m`,
+      ConsoleLogColors.Yellow,
       `Warning: Execution time was close to the timeout: ${executionTime}/${seconds}s`,
     );
   } else {
@@ -862,7 +911,7 @@ export function handleSubstrateError(api: any) {
         error = dispatchError.toString();
       }
       console.log('Dispatch error:' + error);
-      process.exit(1);
+      process.exit(-1);
     }
   };
 }
@@ -1081,8 +1130,17 @@ export async function checkAvailabilityAllSolanaNonces() {
   }
 }
 
-export function createLpKeypair(lpUri: string) {
+export function createStateChainKeypair(lpUri: string) {
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
   return keyring.createFromUri(lpUri);
+}
+
+// Get the current time in the format HH:MM:SS
+export function getTimeStamp(): string {
+  const now = new Date();
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const seconds = now.getSeconds().toString().padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
 }

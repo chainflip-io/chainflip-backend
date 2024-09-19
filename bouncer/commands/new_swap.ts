@@ -10,7 +10,7 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { InternalAsset } from '@chainflip/cli';
-import { parseAssetString, executeWithTimeout } from '../shared/utils';
+import { parseAssetString, runWithTimeoutAndExit } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { RefundParameters } from '../shared/new_swap';
 
@@ -95,4 +95,4 @@ async function newSwapCommand() {
   );
 }
 
-await executeWithTimeout(newSwapCommand(), 60);
+await runWithTimeoutAndExit(newSwapCommand(), 60);
