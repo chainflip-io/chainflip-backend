@@ -1087,10 +1087,13 @@ export function createLpKeypair(lpUri: string) {
   return keyring.createFromUri(lpUri);
 }
 
-/// Takes the user friendly USDC price of an asset and converts it to the internal price format.
-/// eg. $/BTC -> BTC/USDC find amounts
-export function usdcToInternalPrice(asset: Asset, usdc: number): string {
+/// Takes the user friendly price of an "asset per asset" and converts it to the internal price format.
+export function assetPriceToInternalAssetPrice(
+  baseAsset: Asset,
+  quoteAsset: Asset,
+  price: number,
+): string {
   return BigInt(
-    Math.round((usdc / 10 ** (assetDecimals(asset) - assetDecimals('Usdc'))) * 2 ** 128),
+    Math.round((price / 10 ** (assetDecimals(baseAsset) - assetDecimals(quoteAsset))) * 2 ** 128),
   ).toString();
 }

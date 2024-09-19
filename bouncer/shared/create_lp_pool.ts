@@ -1,4 +1,4 @@
-import { Asset, usdcToInternalPrice } from '../shared/utils';
+import { Asset, assetPriceToInternalAssetPrice } from '../shared/utils';
 import { submitGovernanceExtrinsic } from './cf_governance';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 
@@ -12,7 +12,7 @@ export async function createLpPool(ccy: Asset, initialPrice: number) {
       })
     ).toJSON()! === null
   ) {
-    const price = usdcToInternalPrice(ccy, initialPrice);
+    const price = assetPriceToInternalAssetPrice(ccy, 'Usdc', initialPrice);
     console.log(
       'Setting up ' + ccy + ' pool with an initial price of ' + initialPrice + ' USDC per ' + ccy,
     );

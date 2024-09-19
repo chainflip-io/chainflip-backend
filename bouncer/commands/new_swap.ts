@@ -4,9 +4,9 @@
 // Request a new swap with the provided parameters:
 // <sourceAsset> <destAsset> <destAddress> [maxBoostFeeBps] [refundAddress] [minPrice] [refundDuration]
 // Use `-h` for help.
-// If the refundAddress is provided, the minPrice must also be provided. The minPrice is in USDC per source asset. eg. $4 per DOT.
+// If the refundAddress is provided, the minPrice must also be provided. The minPrice is in source asset per dest asset. eg. 100 (= 100 Dot per Btc in the following example).
 // The refundDuration is in blocks and will default to 0 if not provided.
-// Example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX --refundAddress "0xa0b52be60216f8e0f2eb5bd17fa3c66908cc1652f3080a90d3ab20b2d352b610" --minPrice 4
+// Example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX --refundAddress "0xa0b52be60216f8e0f2eb5bd17fa3c66908cc1652f3080a90d3ab20b2d352b610" --minPrice 100
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -14,7 +14,7 @@ import { InternalAsset } from '@chainflip/cli';
 import {
   parseAssetString,
   executeWithTimeout,
-  usdcToInternalPrice,
+  assetPriceToInternalAssetPrice,
   decodeDotAddressForContract,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
@@ -62,7 +62,7 @@ async function newSwapCommand() {
             demandOption: false,
           })
           .option('minPrice', {
-            describe: 'Fill or Kill minimum price (USDC per source asset)',
+            describe: 'Fill or Kill minimum price in source asset per dest asset',
             type: 'number',
             demandOption: false,
           })
@@ -87,7 +87,11 @@ async function newSwapCommand() {
             args.sourceAsset === 'Dot'
               ? decodeDotAddressForContract(args.refundAddress)
               : args.refundAddress,
-          minPrice: usdcToInternalPrice(args.sourceAsset as InternalAsset, args.minPrice),
+          minPrice: assetPriceToInternalAssetPrice(
+            args.sourceAsset as InternalAsset,
+            args.destAsset as InternalAsset,
+            args.minPrice,
+          ),
         }
       : undefined;
 
