@@ -24,18 +24,11 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		// we simply reset the remaining timeout duration to the new `BroadcastTimeout` value.
 		let new_timeout = BlockHeightProvider::<T::TargetChain>::get_block_height() +
 			BroadcastTimeout::<T, I>::get();
-		let mut old_keys = Vec::new();
-		for (key, timeouts) in old::Timeouts::<T, I>::iter() {
-			old_keys.push(key);
+		for (_, timeouts) in old::Timeouts::<T, I>::drain() {
 			for (broadcast_id, nominee) in timeouts {
 				Timeouts::<T, I>::append((new_timeout, broadcast_id, nominee))
 			}
 		}
-
-		for key in old_keys {
-			old::Timeouts::<T, I>::remove(key);
-		}
-
 		Weight::zero()
 	}
 
@@ -83,13 +76,13 @@ pub struct MigrationData<T: Config<I>, I: 'static> {
 
 #[cfg(test)]
 mod migration_tests {
-
 	#[test]
 	fn test_migration() {
 		use super::*;
 		use crate::mock::*;
 
 		new_test_ext().execute_with(|| {
+			#[cfg(feature = "try-runtime")]
 			let state = super::Migration::<Test, _>::pre_upgrade().unwrap();
 			// Perform runtime migration.
 			super::Migration::<Test, _>::on_runtime_upgrade();
