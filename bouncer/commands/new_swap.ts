@@ -4,13 +4,19 @@
 // Request a new swap with the provided parameters:
 // <sourceAsset> <destAsset> <destAddress> [maxBoostFeeBps] [refundAddress] [minPrice] [refundDuration]
 // Use `-h` for help.
-// If the refundAddress is provided, the minPrice must also be provided. The refundDuration will default to 0 if not provided.
-// Example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX --refundAddress "0xa0b52be60216f8e0f2eb5bd17fa3c66908cc1652f3080a90d3ab20b2d352b610" --minPrice 100000000000000000
+// If the refundAddress is provided, the minPrice must also be provided. The minPrice is in source asset per dest asset. eg. 100 (= 100 Dot per Btc in the following example).
+// The refundDuration is in blocks and will default to 0 if not provided.
+// Example: ./commands/new_swap.ts Dot Btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX --refundAddress "0xa0b52be60216f8e0f2eb5bd17fa3c66908cc1652f3080a90d3ab20b2d352b610" --minPrice 100
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { InternalAsset } from '@chainflip/cli';
-import { parseAssetString, runWithTimeoutAndExit } from '../shared/utils';
+import {
+  parseAssetString,
+  runWithTimeoutAndExit,
+  assetPriceToInternalAssetPrice,
+  decodeDotAddressForContract,
+} from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { RefundParameters } from '../shared/new_swap';
 
@@ -20,7 +26,7 @@ interface Args {
   destAddress: string;
   maxBoostFeeBps: number;
   refundAddress?: string;
-  minPrice?: string;
+  minPrice?: number;
   refundDuration: number;
 }
 
@@ -56,8 +62,8 @@ async function newSwapCommand() {
             demandOption: false,
           })
           .option('minPrice', {
-            describe: 'Fill or Kill minimum price',
-            type: 'string',
+            describe: 'Fill or Kill minimum price in source asset per dest asset',
+            type: 'number',
             demandOption: false,
           })
           .option('refundDuration', {
@@ -77,8 +83,15 @@ async function newSwapCommand() {
     args.refundAddress !== undefined && args.minPrice !== undefined
       ? {
           retryDurationBlocks: args.refundDuration,
-          refundAddress: args.refundAddress,
-          minPrice: args.minPrice,
+          refundAddress:
+            args.sourceAsset === 'Dot'
+              ? decodeDotAddressForContract(args.refundAddress)
+              : args.refundAddress,
+          minPrice: assetPriceToInternalAssetPrice(
+            args.sourceAsset as InternalAsset,
+            args.destAsset as InternalAsset,
+            args.minPrice,
+          ),
         }
       : undefined;
 

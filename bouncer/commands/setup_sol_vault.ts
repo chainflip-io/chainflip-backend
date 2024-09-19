@@ -4,7 +4,7 @@
 // This command takes no arguments.
 // It will setup only the Solana Vault.
 // For example: ./commands/setup_sol_vault.ts
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { setupSolVault } from '../shared/setup_sol_vault';
 
 async function main(): Promise<void> {
@@ -13,4 +13,4 @@ async function main(): Promise<void> {
   console.log('=== Setup Sol Vault and Swaps complete ===');
 }
 
-await executeWithTimeout(main(), 240);
+await runWithTimeoutAndExit(main(), 240);

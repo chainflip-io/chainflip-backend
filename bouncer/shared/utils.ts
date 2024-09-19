@@ -1136,6 +1136,17 @@ export function createStateChainKeypair(lpUri: string) {
   return keyring.createFromUri(lpUri);
 }
 
+/// Takes the user friendly price of an "asset per asset" and converts it to the internal price format.
+export function assetPriceToInternalAssetPrice(
+  baseAsset: Asset,
+  quoteAsset: Asset,
+  price: number,
+): string {
+  return BigInt(
+    Math.round((price / 10 ** (assetDecimals(baseAsset) - assetDecimals(quoteAsset))) * 2 ** 128),
+  ).toString();
+}
+
 // Get the current time in the format HH:MM:SS
 export function getTimeStamp(): string {
   const now = new Date();
