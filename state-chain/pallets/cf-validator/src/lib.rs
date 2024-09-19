@@ -379,8 +379,8 @@ pub mod pallet {
 			let mut weight = Weight::zero();
 
 			// Check expiry of epoch and store last expired.
-			if let Some(epoch_index) = EpochExpiries::<T>::take(block_number) {
-				weight.saturating_accrue(Self::expire_epoch(epoch_index));
+			if let Some(epoch_to_expire) = EpochExpiries::<T>::take(block_number) {
+				Self::expire_epochs_up_to(epoch_to_expire);
 			}
 
 			weight.saturating_accrue(Self::punish_missed_authorship_slots());
@@ -1013,14 +1013,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn expire_epoch(epoch: EpochIndex) -> Weight {
-		// Recursively expire all previous epochs that have not been expired yet. This is possible
-		// due to epoch duration being configurable.
-		let previous_epoch = epoch.saturating_sub(1);
-		if epoch > 0 && LastExpiredEpoch::<T>::get() != previous_epoch {
-			Self::expire_epoch(previous_epoch);
-		}
-
-		// Expire given epoch
 		let mut num_expired_authorities = 0;
 		for authority in EpochHistory::<T>::epoch_authorities(epoch).iter() {
 			num_expired_authorities += 1;
@@ -1030,7 +1022,6 @@ impl<T: Config> Pallet<T> {
 			}
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		}
-		LastExpiredEpoch::<T>::set(epoch);
 		T::EpochTransitionHandler::on_expired_epoch(epoch);
 
 		let validators = HistoricalAuthorities::<T>::take(epoch);
@@ -1040,6 +1031,18 @@ impl<T: Config> Pallet<T> {
 		HistoricalBonds::<T>::remove(epoch);
 
 		T::ValidatorWeightInfo::expire_epoch(num_expired_authorities)
+	}
+
+	fn expire_epochs_up_to(latest_epoch_to_expire: EpochIndex) -> Weight {
+		let mut weight = Weight::zero();
+		LastExpiredEpoch::<T>::mutate(|last_expired_epoch| {
+			let first_unexpired_epoch = *last_expired_epoch + 1;
+			for epoch in first_unexpired_epoch..=latest_epoch_to_expire {
+				weight.saturating_accrue(Self::expire_epoch(epoch));
+			}
+			*last_expired_epoch = latest_epoch_to_expire;
+		});
+		weight
 	}
 
 	/// Does all state updates related to the *new* epoch. Is also called at genesis to initialise

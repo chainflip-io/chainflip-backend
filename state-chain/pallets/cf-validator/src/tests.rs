@@ -1263,25 +1263,33 @@ fn validator_registration_and_deregistration() {
 #[test]
 fn validator_deregistration_after_expired_epoch() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE),));
-		ValidatorPallet::transition_to_next_epoch(vec![1, ALICE], 100);
-		let first_epoch_to_expire = ValidatorPallet::current_epoch();
+		const RETIRING_VALIDATOR: u64 = GENESIS_AUTHORITIES[0];
+		const REMAINING_AUTHORITIES: [u64; 2] = [GENESIS_AUTHORITIES[1], GENESIS_AUTHORITIES[2]];
+		const BOND: u128 = 100;
 
-		// Can't deregister
+		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
+
 		assert_noop!(
-			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),),
+			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(RETIRING_VALIDATOR),),
+			Error::<Test>::StillBidding
+		);
+
+		assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(RETIRING_VALIDATOR)));
+
+		assert_noop!(
+			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(RETIRING_VALIDATOR),),
 			Error::<Test>::StillKeyHolder
 		);
 
-		ValidatorPallet::transition_to_next_epoch(vec![1, ALICE], 100);
-		let second_epoch_to_expire = ValidatorPallet::current_epoch();
-		ValidatorPallet::transition_to_next_epoch(vec![1, 2], 100);
+		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
+		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
 
-		ValidatorPallet::expire_epoch(second_epoch_to_expire);
-		ValidatorPallet::expire_epoch(first_epoch_to_expire);
+		ValidatorPallet::expire_epochs_up_to(ValidatorPallet::current_epoch() - 1);
 
 		// Now you can deregister
-		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),));
+		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(
+			RETIRING_VALIDATOR
+		),));
 	});
 }
 
@@ -1519,20 +1527,22 @@ fn can_update_all_config_items() {
 #[test]
 fn should_expire_all_previous_epochs() {
 	new_test_ext().execute_with(|| {
-		ValidatorPallet::transition_to_next_epoch(vec![1], 100);
+		const ID: u64 = 1;
+		const BOND: u128 = 100;
+		ValidatorPallet::transition_to_next_epoch(vec![ID], BOND);
 		let first_epoch = ValidatorPallet::current_epoch();
-		ValidatorPallet::transition_to_next_epoch(vec![1], 100);
+		ValidatorPallet::transition_to_next_epoch(vec![ID], BOND);
 		let second_epoch = ValidatorPallet::current_epoch();
-		ValidatorPallet::transition_to_next_epoch(vec![1], 100);
+		ValidatorPallet::transition_to_next_epoch(vec![ID], BOND);
 		let third_epoch = ValidatorPallet::current_epoch();
 
 		assert_eq!(
-			HistoricalActiveEpochs::<Test>::get(1),
+			HistoricalActiveEpochs::<Test>::get(ID),
 			vec![first_epoch, second_epoch, third_epoch]
 		);
 
-		ValidatorPallet::expire_epoch(third_epoch);
+		ValidatorPallet::expire_epochs_up_to(second_epoch);
 
-		assert_eq!(HistoricalActiveEpochs::<Test>::get(1).len(), 0);
+		assert_eq!(HistoricalActiveEpochs::<Test>::get(ID), vec![third_epoch]);
 	});
 }
