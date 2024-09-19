@@ -123,23 +123,7 @@ pub struct Dot {
 
 impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		self.nodes.validate()?;
-
-		// Check that all endpoints have a port number
-		let validate_dot_endpoints = |endpoints: &WsHttpEndpoints| -> Result<(), ConfigError> {
-			validate_port_exists(&endpoints.ws_endpoint)
-				.and_then(|_| validate_port_exists(&endpoints.http_endpoint))
-				.map_err(|e| {
-					ConfigError::Message(format!(
-						"Polkadot node endpoints must include a port number: {e}"
-					))
-				})
-		};
-		validate_dot_endpoints(&self.nodes.primary)?;
-		if let Some(backup) = &self.nodes.backup {
-			validate_dot_endpoints(backup)?;
-		}
-		Ok(())
+		self.nodes.validate()
 	}
 }
 
