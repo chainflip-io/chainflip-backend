@@ -1,6 +1,7 @@
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
 use futures_core::Future;
+use http::uri::Uri;
 use jsonrpsee::{
 	core::{client::ClientT, traits::ToRpcParams, Error as JsonRpseeError},
 	http_client::{HttpClient, HttpClientBuilder},
@@ -19,8 +20,9 @@ use subxt::{
 	events::{Events, EventsClient},
 	OnlineClient, PolkadotConfig,
 };
+use url::Url;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use tracing::{error, warn};
 use utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
 
@@ -70,6 +72,46 @@ impl RpcClientT for PolkadotHttpClient {
 	}
 }
 
+/// Adds a default port to the url based on the scheme (http, https, ws, wss),
+/// if none exists. Otherwise preservers existing port.
+///
+/// This function assumes that `url` is already validated, i.e.:
+///  - It's accepted by `Url::parse()`
+///  - It includes a host part
+///  - It does not have a fragment part
+fn ensure_port(url: SecretUrl) -> Result<SecretUrl> {
+	// we use url::Url to get the default port for our scheme
+	let targetport = Url::parse(url.as_ref())
+		.unwrap() // We know that `url` is valid
+		.port_or_known_default()
+		.ok_or(anyhow::anyhow!("Unknown scheme and no port given."))?;
+
+	// We use http::uri::Uri to ensure that the default port is added if none exists
+	// We split the uri into components, insert the port, and reconstruct.
+	let mut parts = url
+		.as_ref()
+		.parse::<Uri>()
+		.unwrap() // We know that `url` is valid
+		.into_parts();
+
+	// Update the authority part of the uri by mapping over it.
+	let authority = parts.authority.unwrap();
+	parts.authority =
+		if authority.port().is_none() {
+			Some(format!("{}:{}", authority.as_str(), targetport).parse().map_err(|err| {
+				anyhow!("Unexpected error when trying to append port to url: {err}")
+			})?)
+		} else {
+			Some(authority)
+		};
+
+	// Reconstruct uri.
+	let uri = Uri::from_parts(parts)
+		.map_err(|err| anyhow!("Unexpected error when trying to append port to url: {err}"))?;
+
+	Ok(format!("{uri}").into())
+}
+
 #[derive(Clone)]
 pub struct DotHttpRpcClient {
 	online_client: OnlineClient<PolkadotConfig>,
@@ -78,9 +120,14 @@ pub struct DotHttpRpcClient {
 
 impl DotHttpRpcClient {
 	pub fn new(
-		url: SecretUrl,
+		raw_url: SecretUrl,
 		expected_genesis_hash: Option<PolkadotHash>,
 	) -> Result<impl Future<Output = Self>> {
+		// Currently, the jsonrpsee library used by the PolkadotHttpClient expects
+		// a port number to be always present in the url. Here we ensure this,
+		// adding the default port if none is present.
+		let url = ensure_port(raw_url)?;
+
 		let rpc_client = RpcClient::new(PolkadotHttpClient::new(&url)?);
 
 		Ok(async move {
@@ -264,6 +311,34 @@ mod tests {
 
 			// Check that mapping the events does not panic
 			events.iter().filter_map(crate::witness::dot::filter_map_events).for_each(drop);
+		}
+	}
+
+	#[test]
+	fn test_ensure_port() {
+		fn call_ensure(url: String) -> String {
+			ensure_port(url.into()).unwrap().into()
+		}
+		let examples = vec![
+			// default ports are added
+			("https://www.google.com/mypath?query", "https://www.google.com:443/mypath?query"),
+			("http://1.1.1.1?query", "http://1.1.1.1:80/?query"),
+			("ws://[2001:db8:85a3:8d3:1319::]/path", "ws://[2001:db8:85a3:8d3:1319::]:80/path"),
+			("wss://[::1]/path", "wss://[::1]:443/path"),
+			// existing default ports are preserved
+			("https://1.1.1.1:443/path_and?query", "https://1.1.1.1:443/path_and?query"),
+			("http://1.1.1.1:80/path_and?query", "http://1.1.1.1:80/path_and?query"),
+			("wss://1.1.1.1:443/path_and?query", "wss://1.1.1.1:443/path_and?query"),
+			("ws://1.1.1.1:80/path_and?query", "ws://1.1.1.1:80/path_and?query"),
+			// existing non-default ports are preserved
+			("https://1.1.1.1:1234/path_and?query", "https://1.1.1.1:1234/path_and?query"),
+			("http://1.1.1.1:443/path_and?query", "http://1.1.1.1:443/path_and?query"),
+			("wss://1.1.1.1:5000/path_and?query", "wss://1.1.1.1:5000/path_and?query"),
+			("ws://1.1.1.1:222/path_and?query", "ws://1.1.1.1:222/path_and?query"),
+		];
+
+		for (input, output) in examples {
+			assert_eq!(call_ensure(input.to_string()), output.to_string());
 		}
 	}
 }

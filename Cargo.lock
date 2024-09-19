@@ -1838,6 +1838,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "hex",
+ "http 1.1.0",
  "httparse",
  "itertools 0.11.0",
  "jsonrpsee 0.16.3",
@@ -3795,7 +3796,7 @@ dependencies = [
  "futures-timer",
  "futures-util",
  "hashers",
- "http",
+ "http 0.2.11",
  "instant",
  "jsonwebtoken",
  "once_cell",
@@ -4789,7 +4790,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "futures-util",
- "http",
+ "http 0.2.11",
  "indexmap 2.2.2",
  "slab",
  "tokio",
@@ -4888,7 +4889,7 @@ dependencies = [
  "base64 0.21.7",
  "bytes",
  "headers-core",
- "http",
+ "http 0.2.11",
  "httpdate",
  "mime",
  "sha1",
@@ -4900,7 +4901,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
- "http",
+ "http 0.2.11",
 ]
 
 [[package]]
@@ -5038,13 +5039,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "http"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21b9ddb458710bc376481b842f5da65cdf31522de232c1ca8146abce2a358258"
+dependencies = [
+ "bytes",
+ "fnv",
+ "itoa",
+]
+
+[[package]]
 name = "http-body"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ceab25649e9960c0311ea418d17bee82c0dcec1bd053b5f9a66e265a693bed2"
 dependencies = [
  "bytes",
- "http",
+ "http 0.2.11",
  "pin-project-lite 0.2.13",
 ]
 
@@ -5083,7 +5095,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.11",
  "http-body",
  "httparse",
  "httpdate",
@@ -5103,7 +5115,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec3efd23720e2049821a693cbc7e65ea87c72f1c58ff2f9522ff332b1491e590"
 dependencies = [
  "futures-util",
- "http",
+ "http 0.2.11",
  "hyper",
  "log",
  "rustls 0.21.12",
@@ -5535,7 +5547,7 @@ dependencies = [
  "futures-timer",
  "futures-util",
  "gloo-net",
- "http",
+ "http 0.2.11",
  "jsonrpsee-core 0.16.3",
  "jsonrpsee-types 0.16.3",
  "pin-project",
@@ -5556,7 +5568,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5b005c793122d03217da09af68ba9383363caa950b90d3436106df8cabce935"
 dependencies = [
  "futures-util",
- "http",
+ "http 0.2.11",
  "jsonrpsee-core 0.20.3",
  "pin-project",
  "rustls-native-certs",
@@ -5680,7 +5692,7 @@ checksum = "cf4d945a6008c9b03db3354fb3c83ee02d2faa9f2e755ec1dfb69c3551b8f4ba"
 dependencies = [
  "futures-channel",
  "futures-util",
- "http",
+ "http 0.2.11",
  "hyper",
  "jsonrpsee-core 0.16.3",
  "jsonrpsee-types 0.16.3",
@@ -5739,7 +5751,7 @@ version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e1b3975ed5d73f456478681a417128597acd6a2487855fdb7b4a3d4d195bf5e"
 dependencies = [
- "http",
+ "http 0.2.11",
  "jsonrpsee-client-transport 0.16.3",
  "jsonrpsee-core 0.16.3",
  "jsonrpsee-types 0.16.3",
@@ -6804,7 +6816,7 @@ dependencies = [
  "bytes",
  "encoding_rs",
  "futures-util",
- "http",
+ "http 0.2.11",
  "httparse",
  "log",
  "memchr",
@@ -8826,7 +8838,7 @@ dependencies = [
  "dns-lookup",
  "futures-core",
  "futures-util",
- "http",
+ "http 0.2.11",
  "hyper",
  "hyper-system-resolver",
  "pin-project-lite 0.2.13",
@@ -9223,7 +9235,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2",
- "http",
+ "http 0.2.11",
  "http-body",
  "hyper",
  "hyper-rustls",
@@ -10315,7 +10327,7 @@ name = "sc-rpc-server"
 version = "4.0.0-dev"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.6+1#ffae0468e92414b4f7a8af2db53c87e9916f1d80"
 dependencies = [
- "http",
+ "http 0.2.11",
  "jsonrpsee 0.16.3",
  "log",
  "serde_json",
@@ -11429,7 +11441,7 @@ dependencies = [
  "bytes",
  "flate2",
  "futures",
- "http",
+ "http 0.2.11",
  "httparse",
  "log",
  "rand 0.8.5",
@@ -13517,7 +13529,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
- "http",
+ "http 0.2.11",
  "http-body",
  "http-range-header",
  "pin-project-lite 0.2.13",
@@ -13838,7 +13850,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "data-encoding",
- "http",
+ "http 0.2.11",
  "httparse",
  "log",
  "rand 0.8.5",
@@ -14130,7 +14142,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "headers",
- "http",
+ "http 0.2.11",
  "hyper",
  "log",
  "mime",
