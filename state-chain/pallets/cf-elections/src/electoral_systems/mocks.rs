@@ -76,7 +76,8 @@ where
 		Self { initial_election_state: Some((extra, properties, state)), ..self }
 	}
 
-	pub fn build(self) -> TestContext<ES> {
+	// Useful for testing check_consensus since we already have an election.
+	pub fn build_with_initial_election(self) -> TestContext<ES> {
 		let setup = self.clone();
 		let mut electoral_access = MockAccess::<ES>::new(
 			self.unsynchronised_state,
@@ -96,6 +97,19 @@ where
 
 		TestContext { setup, electoral_access }
 	}
+
+	// We may want to test initialisation of elections within on finalise, so *don't* want to
+	// initialise an election in the utilities.
+	pub fn build(self) -> TestContext<ES> {
+		TestContext {
+			setup: self.clone(),
+			electoral_access: MockAccess::<ES>::new(
+				self.unsynchronised_state,
+				self.unsynchronised_settings,
+				self.electoral_settings,
+			),
+		}
+	}
 }
 
 impl<ES: ElectoralSystem> TestContext<ES> {
@@ -104,8 +118,24 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 	#[track_caller]
 	pub fn expect_consensus(
 		self,
+		consensus_votes: ConsensusVotes<ES>,
+		expected_consensus: Option<ES::Consensus>,
+	) -> Self {
+		Self::expect_consensus_by(
+			self,
+			consensus_votes,
+			expected_consensus,
+			|new_consensus, expected_consensus| {
+				assert_eq!(new_consensus, expected_consensus);
+			},
+		)
+	}
+
+	pub fn expect_consensus_by<C: FnOnce(Option<ES::Consensus>, Option<ES::Consensus>)>(
+		self,
 		mut consensus_votes: ConsensusVotes<ES>,
 		expected_consensus: Option<ES::Consensus>,
+		check: C,
 	) -> Self {
 		assert!(consensus_votes.num_authorities() > 0, "Cannot have zero authorities.");
 
@@ -122,7 +152,8 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 			.check_consensus(None, consensus_votes)
 			.unwrap();
 
-		assert_eq!(new_consensus, expected_consensus);
+		// Should assert on some condition about the consensus.
+		check(new_consensus.clone(), expected_consensus);
 
 		self.inner_force_consensus_update(
 			current_election_id,

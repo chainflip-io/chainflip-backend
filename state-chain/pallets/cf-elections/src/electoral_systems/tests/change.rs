@@ -46,7 +46,7 @@ const SUCCESS_THRESHOLD: AuthorityCount =
 	cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT);
 
 fn with_default_state() -> TestContext<SimpleChange> {
-	TestSetup::<SimpleChange>::default().build()
+	TestSetup::<SimpleChange>::default().build_with_initial_election()
 }
 
 fn generate_votes(

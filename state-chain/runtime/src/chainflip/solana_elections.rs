@@ -1,23 +1,28 @@
-use crate::{Environment, Runtime, SolanaBroadcaster, SolanaChainTracking, SolanaThresholdSigner};
+use crate::{
+	Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
+	SolanaThresholdSigner,
+};
 use cf_chains::{
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto},
-	Chain, FeeEstimationApi, Solana,
+	Chain, FeeEstimationApi, ForeignChain, Solana,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	AdjustedFeeEstimationApi, Chainflip, ElectionEgressWitnesser, GetBlockHeight, IngressSource,
-	SolanaNonceWatch,
+	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Chainflip,
+	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
 };
 
 use codec::{Decode, Encode};
+use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
 	electoral_systems::{
 		self,
 		change::OnChangeHook,
-		composite::{tuple_5_impls::Hooks, Composite, Translator},
+		composite::{tuple_6_impls::Hooks, Composite, Translator},
 		egress_success::OnEgressSuccess,
+		liveness::OnCheckComplete,
 		monotonic_median::MedianChangeHook,
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
@@ -40,10 +45,13 @@ pub type SolanaElectoralSystem = Composite<
 		SolanaIngressTracking,
 		SolanaNonceTracking,
 		SolanaEgressWitnessing,
+		SolanaLiveness,
 	),
 	<Runtime as Chainflip>::ValidatorId,
 	SolanaElectionHooks,
 >;
+
+const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;
 
 /// Creates an initial state to initialize the pallet with.
 pub fn initial_state(
@@ -60,6 +68,7 @@ pub fn initial_state(
 			(),
 			(),
 			(),
+			(),
 		),
 		unsynchronised_settings: (
 			(),
@@ -67,8 +76,16 @@ pub fn initial_state(
 			(),
 			(),
 			(),
+			(),
 		),
-		settings: ((), (), SolanaIngressSettings { vault_program, usdc_token_mint_pubkey }, (), ()),
+		settings: (
+			(),
+			(),
+			SolanaIngressSettings { vault_program, usdc_token_mint_pubkey },
+			(),
+			(),
+			LIVENESS_CHECK_DURATION,
+		),
 	}
 }
 
@@ -106,6 +123,22 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	SolanaEgressWitnessingHook,
 	<Runtime as Chainflip>::ValidatorId,
 >;
+
+pub type SolanaLiveness = electoral_systems::liveness::Liveness<
+	<Solana as Chain>::ChainBlockNumber,
+	SolHash,
+	cf_primitives::BlockNumber,
+	OnCheckCompleteHook,
+	<Runtime as Chainflip>::ValidatorId,
+>;
+
+pub struct OnCheckCompleteHook;
+
+impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHook {
+	fn on_check_complete(validator_ids: Vec<<Runtime as Chainflip>::ValidatorId>) {
+		Reputation::report_many(Offence::FailedLivenessCheck(ForeignChain::Solana), validator_ids);
+	}
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
@@ -167,6 +200,7 @@ impl
 		SolanaIngressTracking,
 		SolanaNonceTracking,
 		SolanaEgressWitnessing,
+		SolanaLiveness,
 	> for SolanaElectionHooks
 {
 	type OnFinalizeContext = ();
@@ -179,6 +213,7 @@ impl
 		IngressTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaIngressTracking>,
 		NonceTrackingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaNonceTracking>,
 		EgressWitnessingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaEgressWitnessing>,
+		LivenessTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaLiveness>,
 	>(
 		generic_electoral_access: &mut GenericElectoralAccess,
 		(
@@ -187,12 +222,14 @@ impl
 			ingress_translator,
 			nonce_tracking_translator,
 			egress_witnessing_translator,
+			liveness_translator,
 		): (
 			BlockHeightTranslator,
 			FeeTranslator,
 			IngressTranslator,
 			NonceTrackingTranslator,
 			EgressWitnessingTranslator,
+			LivenessTranslator,
 		),
 		(
 			block_height_identifiers,
@@ -200,6 +237,7 @@ impl
 			ingress_identifiers,
 			nonce_tracking_identifiers,
 			egress_witnessing_identifiers,
+			liveness_identifiers,
 		): (
 			Vec<
 				ElectionIdentifier<
@@ -224,6 +262,7 @@ impl
 					<SolanaEgressWitnessing as ElectoralSystem>::ElectionIdentifierExtra,
 				>,
 			>,
+			Vec<ElectionIdentifier<<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra>>,
 		),
 		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
@@ -231,6 +270,11 @@ impl
 			&mut block_height_translator.translate_electoral_access(generic_electoral_access),
 			block_height_identifiers,
 			&(),
+		)?;
+		SolanaLiveness::on_finalize(
+			&mut liveness_translator.translate_electoral_access(generic_electoral_access),
+			liveness_identifiers,
+			&(crate::System::block_number(), block_height),
 		)?;
 		SolanaFeeTracking::on_finalize(
 			&mut fee_translator.translate_electoral_access(generic_electoral_access),
@@ -429,7 +473,7 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
 			|electoral_access| {
 				SolanaElectoralSystem::with_access_translators(|access_translators| {
-					let (_, _, _, _, access_translator) = &access_translators;
+					let (_, _, _, _, access_translator, ..) = &access_translators;
 					let mut electoral_access =
 						access_translator.translate_electoral_access(electoral_access);
 

@@ -1,4 +1,5 @@
 use crate::Runtime;
+use cf_chains::ForeignChain;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::RuntimeDebug;
 use pallet_cf_reputation::OffenceList;
@@ -36,6 +37,8 @@ pub enum Offence {
 	ParticipateKeyHandoverFailed,
 	/// A authority failed to Witness a call in time.
 	FailedToWitnessInTime,
+	/// Failed to Complete Liveness Check for chain.
+	FailedLivenessCheck(ForeignChain),
 }
 
 /// Nodes should be excluded from keygen if they have been reported for any of the offences in this

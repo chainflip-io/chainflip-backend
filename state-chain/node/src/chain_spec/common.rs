@@ -52,6 +52,10 @@ const REPUTATION_PENALTY_SMALL: i32 = REPUTATION_PER_HEARTBEAT; // 15 minutes to
 const REPUTATION_PENALTY_MEDIUM: i32 = REPUTATION_PER_HEARTBEAT * 4; // One hour to recover reputation
 const REPUTATION_PENALTY_LARGE: i32 = REPUTATION_PER_HEARTBEAT * 8; // Two hours to recover reputation
 
+// A penalty of 1 is missing an Ethereum witnessing every 15 seconds. We do liveness every minute.
+// which is equivalent to ~4 missed Ethereum witnessings.
+const LIVENESS_REPUTATION_PENALTY: i32 = 4;
+
 /// The offences committable within the protocol and their respective reputation penalty and
 /// suspension durations.
 pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
@@ -61,6 +65,10 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	(Offence::MissedAuthorshipSlot, (REPUTATION_PENALTY_LARGE, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::FailedToBroadcastTransaction, (REPUTATION_PENALTY_MEDIUM, HEARTBEAT_BLOCK_INTERVAL)),
 	(Offence::GrandpaEquivocation, (REPUTATION_PENALTY_LARGE, HEARTBEAT_BLOCK_INTERVAL * 5)),
+	(
+		Offence::FailedLivenessCheck(cf_chains::ForeignChain::Solana),
+		(LIVENESS_REPUTATION_PENALTY, 0),
+	),
 ];
 
 /// Daily slashing rate 0.1% (of the bond) for offline authority
