@@ -61,6 +61,10 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 				.unwrap();
 			assert!(*new_timeout >= data.target_chainblock);
 		}
+
+		// Make sure that the old map is empty
+		assert!(old::Timeouts::<T, I>::iter().next().is_none());
+
 		Ok(())
 	}
 }
@@ -79,12 +83,25 @@ mod migration_tests {
 		use crate::mock::*;
 
 		new_test_ext().execute_with(|| {
+			let target = frame_system::Pallet::<Test>::block_number() +
+				BroadcastTimeout::<Test, Instance1>::get();
+
+			// Create a few timeouts to migrate
+			old::Timeouts::<Test, _>::set(target, BTreeSet::from([(0, 100), (1, 101), (3, 102)]));
+			old::Timeouts::<Test, _>::set(target + 1, BTreeSet::from([(4, 103), (5, 104)]));
+
 			#[cfg(feature = "try-runtime")]
-			let state = super::Migration::<Test, _>::pre_upgrade().unwrap();
+			let state = super::Migration::<Test, Instance1>::pre_upgrade().unwrap();
+
+			// increment block height
+			let new_height = <Test as Config<Instance1>>::ChainTracking::get_block_height() + 20;
+			<Test as Config<Instance1>>::ChainTracking::set_block_height(new_height);
+
 			// Perform runtime migration.
-			super::Migration::<Test, _>::on_runtime_upgrade();
+			super::Migration::<Test, Instance1>::on_runtime_upgrade();
+
 			#[cfg(feature = "try-runtime")]
-			super::Migration::<Test, _>::post_upgrade(state).unwrap();
+			super::Migration::<Test, Instance1>::post_upgrade(state).unwrap();
 		});
 	}
 }
