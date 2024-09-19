@@ -124,7 +124,9 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
+pub fn new_full<
+	Network: sc_network::NetworkBackend<Block, <Block as sp_runtime::traits::Block>::Hash>
+>(config: Configuration) -> Result<TaskManager, ServiceError> {
 	use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
 
 	let sc_service::PartialComponents {
@@ -137,6 +139,10 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 		transaction_pool,
 		other: (block_import, grandpa_link, mut telemetry),
 	} = new_partial(&config)?;
+
+	let metrics = Network::register_notification_metrics(
+		config.prometheus_config.as_ref().map(|cfg| &cfg.registry),
+	);
 
 	let (shared_voter_state, shared_authority_set, justification_stream, finality_provider) = {
 		let (_grandpa_block_import, grandpa_link) = sc_consensus_grandpa::block_import(
@@ -159,12 +165,18 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	};
 
 	let mut net_config = sc_network::config::FullNetworkConfiguration::new(&config.network);
-
+	let peer_store_handle = net_config.peer_store_handle();
+	
 	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
 	let grandpa_protocol_name =
 		sc_consensus_grandpa::protocol_standard_name(&genesis_hash, &config.chain_spec);
 	let (grandpa_protocol_config, grandpa_notification_service) =
-		sc_consensus_grandpa::grandpa_peers_set_config(grandpa_protocol_name.clone());
+		sc_consensus_grandpa::grandpa_peers_set_config::<_, Network>(
+			grandpa_protocol_name.clone(),
+			metrics.clone(),
+			Arc::clone(&peer_store_handle),
+		);
+
 	net_config.add_notification_protocol(grandpa_protocol_config);
 
 	let warp_sync = Arc::new(sc_consensus_grandpa::warp_proof::NetworkProvider::new(
@@ -184,6 +196,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 			block_announce_validator_builder: None,
 			warp_sync_params: Some(WarpSyncParams::WithProvider(warp_sync)),
 			block_relay: None,
+			metrics,
 		})?;
 
 	if config.offchain_worker.enabled {
@@ -198,7 +211,7 @@ pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 				transaction_pool: Some(OffchainTransactionPoolFactory::new(
 					transaction_pool.clone(),
 				)),
-				network_provider: network.clone(),
+				network_provider: Arc::new(network.clone()),
 				enable_http_requests: true,
 				custom_extensions: |_| vec![],
 			})

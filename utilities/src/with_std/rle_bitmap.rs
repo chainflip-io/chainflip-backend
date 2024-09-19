@@ -114,7 +114,7 @@ impl<T: Ord + Copy + Step + Bounded> RleBitmap<T> {
 
 	pub fn iter(&self, value: bool) -> impl Iterator<Item = T> + '_ {
 		self.iter_ranges(value).flat_map(|(start, option_end)| {
-			std::iter::from_fn(Some(start), |option_t| {
+			itertools::unfold(Some(start), |option_t| {
 				if let Some(t) = option_t {
 					let next = *t;
 					*option_t = <T as Step>::forward_checked(*t, 1);

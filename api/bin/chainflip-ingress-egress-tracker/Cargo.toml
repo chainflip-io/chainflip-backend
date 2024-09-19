@@ -46,5 +46,5 @@ substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot
 [dev-dependencies]
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
 insta = { version = "1.36.1", features = ["json"] }
-jsonrpsee = { version = "0.16.2", features = ["full"] }
+jsonrpsee = { version = "0.23.2", features = ["full"] }
 mockall = "0.11.0"

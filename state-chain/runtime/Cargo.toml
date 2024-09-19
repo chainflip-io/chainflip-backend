@@ -38,6 +38,8 @@ cf-runtime-upgrade-utilities = { path = '../runtime-upgrade-utilities', default-
 cf-traits = { path = '../traits', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
+sol-prim = { path = '../../foreign-chains/solana/sol-prim', default-features = false }
+
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles', default-features = false }
 pallet-cf-asset-balances = { path = "../pallets/cf-asset-balances", default-features = false }
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
@@ -116,9 +118,6 @@ frame-system-rpc-runtime-api = { git = "https://github.com/chainflip-io/polkadot
 pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", default-features = false }
 
 cf-test-utilities = { path = '../test-utilities', optional = true }
-
-# [dev-dependencies]
-# sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
 
 [features]
 default = ['std']
@@ -206,6 +205,7 @@ std = [
   'pallet-cf-cfe-interface/std',
   'scale-info/std',
   'serde/std',
+  'sol-prim/std',
   'sp-api/std',
   'sp-block-builder/std',
   'sp-consensus-aura/std',

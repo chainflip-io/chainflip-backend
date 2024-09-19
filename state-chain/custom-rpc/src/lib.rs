@@ -2021,7 +2021,7 @@ where
 		let (initial_item, initial_state) = match f(&self.client, info.best_hash, None) {
 			Ok(initial) => initial,
 			Err(e) => {
-				let _ = sink.reject(jsonrpsee::core::Error::from(
+				let _ = sink.reject(sc_rpc_api_error_to_jsonrpsee_error(
 					sc_rpc_api::state::error::Error::Client(Box::new(e)),
 				));
 				return Ok(())
@@ -2432,5 +2432,24 @@ mod test {
 			egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
 		})
 		.unwrap());
+	}
+}
+
+/// Function used to convert sc_rpc_api error into 0.16.x version of jsonrpsee error.
+/// TODO: Remove after we update our codebase to jsonrpsee 0.23.2
+fn sc_rpc_api_error_to_jsonrpsee_error(e: sc_rpc_api::state::Error) -> jsonrpsee::core::Error {
+	use jsonrpsee::types::error::{CallError, ErrorObject};
+	
+	/// Base code for all state errors.
+	const BASE_ERROR: i32 = 4000;
+
+	match e {
+		sc_rpc_api::state::Error::InvalidBlockRange { .. } =>
+			CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, e.to_string(), None::<()>))
+				.into(),
+		sc_rpc_api::state::Error::InvalidCount { .. } =>
+			CallError::Custom(ErrorObject::owned(BASE_ERROR + 2, e.to_string(), None::<()>))
+				.into(),
+		e => jsonrpsee::core::Error::to_call_error(e),
 	}
 }

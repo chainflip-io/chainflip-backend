@@ -284,7 +284,7 @@ pub fn inner_cf_development_config(
 		sol_usdc_token_vault_ata,
 		sol_durable_nonces_and_accounts,
 	} = get_environment_or_defaults(testnet::ENV);
-	Ok(ChainSpec::builder(wasm_binary, None)
+	Ok(ChainSpec::builder(wasm_binary, Default::default())
 		.with_name("CF Develop")
 		.with_id("cf-dev")
 		.with_protocol_id("flip-dev")
@@ -421,7 +421,7 @@ macro_rules! network_spec {
 							.to_be_bytes()[4..],
 					)
 				);
-				Ok(ChainSpec::builder(wasm_binary, None)
+				Ok(ChainSpec::builder(wasm_binary, Default::default())
 					.with_name(NETWORK_NAME)
 					.with_id(NETWORK_NAME)
 					.with_protocol_id(&protocol_id)

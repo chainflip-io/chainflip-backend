@@ -15,7 +15,7 @@ state-chain-runtime = { path = '../runtime' }
 
 anyhow = "1.0"
 futures = "0.3.30"
-jsonrpsee = { version = "0.16.2", features = ["full"] }
+jsonrpsee = { version = "0.23.2", features = ["full"] }
 hex = '0.4.3'
 serde = { version = "1.0.197", features = ['derive'] }
 thiserror = "1.0"
