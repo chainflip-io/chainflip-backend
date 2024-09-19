@@ -23,7 +23,7 @@ impl<T: Config> OnRuntimeUpgrade for BlocksPerEpochMigration<T> {
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		EpochDuration::<T>::put(old::BlocksPerEpoch::<T>::get());
+		EpochDuration::<T>::put(old::BlocksPerEpoch::<T>::take());
 		Weight::zero()
 	}
 
@@ -33,6 +33,7 @@ impl<T: Config> OnRuntimeUpgrade for BlocksPerEpochMigration<T> {
 			EpochDuration::<T>::get(),
 			BlockNumberFor::<T>::decode(&mut &state[..]).unwrap()
 		);
+		assert!(!old::BlocksPerEpoch::<T>::exists());
 		Ok(())
 	}
 }
