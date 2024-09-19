@@ -16,6 +16,7 @@ use cf_traits::{
 	ThresholdSigner, VaultActivator,
 };
 use codec::{Decode, Encode};
+use frame_support::dispatch::DispatchResultWithPostInfo;
 pub use frame_support::{
 	derive_impl,
 	instances::Instance1,
@@ -99,7 +100,7 @@ impl MockCallback<MockEthereumChainCrypto> {
 		match self {
 			Self::Regular(request_id, _) => {
 				assert!(matches!(
-					<EvmThresholdSigner as ThresholdSigner<_>>::signature_result(request_id),
+					<EvmThresholdSigner as ThresholdSigner<_>>::signature_result(request_id).1,
 					AsyncResult::Ready(..)
 				));
 				CALL_DISPATCHED.with(|cell| *(cell.borrow_mut()) = Some(request_id));
@@ -124,10 +125,7 @@ impl MockCallback<MockEthereumChainCrypto> {
 impl UnfilteredDispatchable for MockCallback<MockEthereumChainCrypto> {
 	type RuntimeOrigin = RuntimeOrigin;
 
-	fn dispatch_bypass_filter(
-		self,
-		origin: Self::RuntimeOrigin,
-	) -> frame_support::dispatch::DispatchResultWithPostInfo {
+	fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> DispatchResultWithPostInfo {
 		EnsureThresholdSigned::<Test, Instance1>::ensure_origin(origin)?;
 		self.call();
 		Ok(().into())
@@ -315,7 +313,10 @@ impl TestHelper for TestRunner<()> {
 				assert_eq!(current_ceremony_id(), initial_ceremony_id);
 			}
 
-			assert!(matches!(EvmThresholdSigner::signature(request_id), AsyncResult::Pending));
+			assert!(matches!(
+				EvmThresholdSigner::signer_and_signature(request_id).unwrap().signature_result,
+				AsyncResult::Pending
+			));
 		})
 	}
 
@@ -334,7 +335,10 @@ impl TestHelper for TestRunner<()> {
 				pending.remaining_respondents,
 				BTreeSet::from_iter(MockNominator::get_nominees().unwrap_or_default())
 			);
-			assert!(matches!(EvmThresholdSigner::signature(request_id), AsyncResult::Pending));
+			assert!(matches!(
+				EvmThresholdSigner::signer_and_signature(request_id).unwrap().signature_result,
+				AsyncResult::Pending
+			));
 			assert!(EvmThresholdSigner::request_callback(request_id).is_some());
 		})
 	}

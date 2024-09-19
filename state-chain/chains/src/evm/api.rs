@@ -1,7 +1,15 @@
-use crate::{eth::Address as EvmAddress, evm::SchnorrVerificationComponents, *};
+use crate::{
+	eth::Address as EvmAddress,
+	evm::{EvmCrypto, SchnorrVerificationComponents},
+	*,
+};
 use common::*;
 use ethabi::{Address, ParamType, Token, Uint};
-use frame_support::sp_runtime::traits::{Hash, Keccak256};
+use evm::AggKey;
+use frame_support::{
+	sp_runtime::traits::{Hash, Keccak256},
+	traits::Defensive,
+};
 
 use super::{tokenizable::Tokenizable, EvmFetchId};
 
@@ -147,14 +155,14 @@ pub trait EvmCall {
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct EvmTransactionBuilder<C> {
-	pub sig_data: Option<SigData>,
+	pub signer_and_sig_data: Option<(AggKey, SigData)>,
 	pub replay_protection: EvmReplayProtection,
 	pub call: C,
 }
 
 impl<C: EvmCall> EvmTransactionBuilder<C> {
 	pub fn new_unsigned(replay_protection: EvmReplayProtection, call: C) -> Self {
-		Self { replay_protection, call, sig_data: None }
+		Self { replay_protection, call, signer_and_sig_data: None }
 	}
 
 	pub fn replay_protection(&self) -> EvmReplayProtection {
@@ -167,6 +175,60 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 
 	pub fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
 		self.call.gas_budget()
+	}
+
+	pub fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
+		Keccak256::hash(&ethabi::encode(&[
+			self.call.msg_hash().tokenize(),
+			self.replay_protection.tokenize(),
+		]))
+	}
+
+	fn expect_sig_data_defensive(&self, reason: &'static str) -> SigData {
+		self.signer_and_sig_data
+			.defensive_proof(reason)
+			.map(|(_, sig_data)| sig_data)
+			.unwrap_or(SigData {
+				sig: Default::default(),
+				nonce: Default::default(),
+				k_times_g_address: Default::default(),
+			})
+	}
+
+	pub fn signed(
+		mut self,
+		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
+		signer: AggKey,
+	) -> Self {
+		self.signer_and_sig_data =
+			Some((signer, SigData::new(self.replay_protection.nonce, threshold_signature)));
+
+		self
+	}
+
+	pub fn chain_encoded(&self) -> Vec<u8> {
+		self.call.abi_encoded(
+			&self.expect_sig_data_defensive("`chain_encoded` is only called on signed api calls."),
+		)
+	}
+
+	pub fn is_signed(&self) -> bool {
+		self.signer_and_sig_data.is_some()
+	}
+
+	pub fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
+		let sig_data = self.expect_sig_data_defensive(
+			"`transaction_out_id` is only requested for signed transactions.",
+		);
+		SchnorrVerificationComponents {
+			s: sig_data.sig.into(),
+			k_times_g_address: sig_data.k_times_g_address.into(),
+		}
+	}
+
+	pub fn refresh_replay_protection(&mut self, replay_protection: EvmReplayProtection) {
+		self.signer_and_sig_data = None;
+		self.replay_protection = replay_protection;
 	}
 }
 
@@ -239,4 +301,47 @@ pub trait EvmEnvironmentProvider<C: Chain> {
 	fn vault_address() -> EvmAddress;
 	fn chain_id() -> EvmChainId;
 	fn next_nonce() -> u64;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use evm::AggKey;
+
+	#[test]
+	fn test_evm_transaction_builder() {
+		let replay_protection = EvmReplayProtection {
+			nonce: 1,
+			chain_id: 1,
+			key_manager_address: Address::from_low_u64_be(1),
+			contract_address: Address::from_low_u64_be(2),
+		};
+
+		let call = set_agg_key_with_agg_key::SetAggKeyWithAggKey { new_key: AggKey::default() };
+		let builder = EvmTransactionBuilder::new_unsigned(replay_protection, call);
+
+		assert_eq!(builder.chain_id(), 1);
+		assert_eq!(builder.replay_protection(), replay_protection);
+		assert_eq!(builder.gas_budget(), None);
+		assert!(!builder.is_signed());
+
+		let threshold_signature =
+			SchnorrVerificationComponents { s: [0u8; 32], k_times_g_address: [0u8; 20] };
+
+		let mut builder: EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey> =
+			builder.signed(&threshold_signature, Default::default());
+		assert!(builder.is_signed());
+
+		let new_replay_protection = EvmReplayProtection {
+			nonce: 2,
+			chain_id: 2,
+			key_manager_address: Address::from_low_u64_be(3),
+			contract_address: Address::from_low_u64_be(4),
+		};
+
+		builder.refresh_replay_protection(new_replay_protection);
+
+		assert_eq!(builder.replay_protection(), new_replay_protection);
+		assert!(!builder.is_signed());
+	}
 }

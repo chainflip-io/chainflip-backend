@@ -15,16 +15,22 @@ permissions:
   contents: read
 jobs:
   prerelease:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download binaries 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: chainflip-backend-bin
           path: assets/bin
+
+      - name: Download Mac M2 binaries 📥
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: chainflip-backend-bin-mac-m2
+          path: /tmp/assets/m2
 
       - name: Remove non production binaries 🗑
         run: |
@@ -32,26 +38,31 @@ jobs:
           rm -f assets/bin/chainflip-ingress-egress-tracker
           rm -f assets/bin/generate-genesis-keys
 
+      - name: Move .dylib files 📂
+        run: |
+          mkdir -p assets/m2
+          mv /tmp/assets/m2/libchainflip_engine_v*.dylib assets/m2/
+
       - name: Download packages 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: chainflip-backend-packages
           path: assets/debian
 
       - name: Download runtime 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: chainflip-node-runtime-production
           path: assets/runtime
 
       - name: Download public images 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: chainflip-backend-public-images
           path: assets/docker/public
 
       - name: Download private images 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: chainflip-backend-private-images
           path: assets/docker/private

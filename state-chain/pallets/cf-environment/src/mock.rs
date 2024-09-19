@@ -4,14 +4,14 @@ use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
-	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot,
+	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot, Solana,
 };
-use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
+use cf_primitives::SemVer;
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	mocks::key_provider::MockKeyProvider, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
+	mocks::key_provider::MockKeyProvider, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
-use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{derive_impl, parameter_types};
 use sp_core::{H160, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
@@ -80,6 +80,7 @@ impl ApiCall<PolkadotCrypto> for MockCreatePolkadotVault {
 	fn signed(
 		self,
 		_threshold_signature: &<<Polkadot as Chain>::ChainCrypto as cf_chains::ChainCrypto>::ThresholdSignature,
+		_signer: <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	) -> Self {
 		unimplemented!()
 	}
@@ -92,61 +93,29 @@ impl ApiCall<PolkadotCrypto> for MockCreatePolkadotVault {
 	) -> <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
 		unimplemented!()
 	}
-}
 
-impl_mock_callback!(RuntimeOrigin);
-
-pub struct MockPolkadotBroadcaster;
-impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
-	type ApiCall = MockCreatePolkadotVault;
-	type Callback = MockCallback;
-
-	fn threshold_sign_and_broadcast(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
+	fn refresh_replay_protection(&mut self) {
 		unimplemented!()
 	}
-
-	fn threshold_sign_and_broadcast_with_callback(
-		_api_call: Self::ApiCall,
-		_success_callback: Option<Self::Callback>,
-		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> BroadcastId {
-		unimplemented!()
-	}
-
-	fn threshold_sign_and_broadcast_rotation_tx(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
-
-	fn threshold_resign(_broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
-		unimplemented!()
-	}
-
-	fn threshold_sign(_api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
-
-	/// Clean up storage data related to a broadcast ID.
-	fn clean_up_broadcast_storage(_broadcast_id: BroadcastId) {
+	fn signer(&self) -> Option<<PolkadotCrypto as ChainCrypto>::AggKey> {
 		unimplemented!()
 	}
 }
+
 pub struct MockPolkadotVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
 	fn on_first_key_activated(
 		_block_number: <Polkadot as Chain>::ChainBlockNumber,
-	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+	) -> frame_support::pallet_prelude::DispatchResult {
 		unimplemented!()
 	}
 }
+
 pub struct MockBitcoinVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 	fn on_first_key_activated(
 		_block_number: <Bitcoin as Chain>::ChainBlockNumber,
-	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+	) -> frame_support::pallet_prelude::DispatchResult {
 		unimplemented!()
 	}
 }
@@ -155,7 +124,16 @@ pub struct MockArbitrumVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Arbitrum> for MockArbitrumVaultKeyWitnessedHandler {
 	fn on_first_key_activated(
 		_block_number: <Arbitrum as Chain>::ChainBlockNumber,
-	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+	) -> frame_support::pallet_prelude::DispatchResult {
+		unimplemented!()
+	}
+}
+
+pub struct MockSolanaVaultKeyWitnessedHandler;
+impl VaultKeyWitnessedHandler<Solana> for MockSolanaVaultKeyWitnessedHandler {
+	fn on_first_key_activated(
+		_block_number: <Solana as Chain>::ChainBlockNumber,
+	) -> frame_support::pallet_prelude::DispatchResult {
 		unimplemented!()
 	}
 }
@@ -185,6 +163,8 @@ impl pallet_cf_environment::Config for Test {
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
+	type SolanaVaultKeyWitnessedHandler = MockSolanaVaultKeyWitnessedHandler;
+	type SolanaNonceWatch = ();
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type BitcoinKeyProvider = MockBitcoinKeyProvider;
 	type RuntimeSafeMode = MockRuntimeSafeMode;
@@ -224,7 +204,7 @@ cf_test_utilities::impl_test_helpers! {
 			eth_usdt_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
-			network_environment: Default::default(),
+			sol_genesis_hash: None,
 			..Default::default()
 		},
 	}

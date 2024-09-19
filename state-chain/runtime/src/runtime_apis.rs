@@ -1,4 +1,4 @@
-use crate::{chainflip::Offence, Hash, Runtime, RuntimeEvent};
+use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
@@ -10,10 +10,10 @@ use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
 	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
+use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
-use frame_system::EventRecord;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::OwedAmount;
 use pallet_cf_pools::{
@@ -25,7 +25,6 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_core::U256;
 use sp_runtime::DispatchError;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -89,7 +88,7 @@ fn serialize_as_hex<S>(amount: &AssetAmount, s: S) -> Result<S::Ok, S::Error>
 where
 	S: serde::Serializer,
 {
-	U256::from(*amount).serialize(s)
+	sp_core::U256::from(*amount).serialize(s)
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -117,10 +116,20 @@ pub struct AuctionState {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub struct LiquidityProviderBoostPoolInfo {
+	pub fee_tier: u16,
+	pub total_balance: AssetAmount,
+	pub available_balance: AssetAmount,
+	pub in_use_balance: AssetAmount,
+	pub is_withdrawing: bool,
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
 	pub earned_fees: AssetMap<AssetAmount>,
+	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
@@ -157,13 +166,6 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 pub struct FailingWitnessValidators {
 	pub failing_count: u32,
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
-}
-
-/// Filter that controls what RuntimeEvents gets returned from CustomRuntimeApi::cf_get_events
-#[derive(Serialize, Deserialize, TypeInfo, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum EventFilter {
-	AllEvents,
-	SystemOnly,
 }
 
 decl_runtime_apis!(
@@ -234,6 +236,7 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 			lp: Option<AccountId32>,
+			filled_orders: bool,
 		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
@@ -257,9 +260,8 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
-		fn cf_free_balances(
-			account_id: AccountId32,
-		) -> Result<AssetMap<AssetAmount>, DispatchErrorWithMessage>;
+		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
+		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
 		fn cf_failed_call_ethereum(
@@ -276,8 +278,24 @@ decl_runtime_apis!(
 		) -> Option<FailingWitnessValidators>;
 		fn cf_witness_safety_margin(chain: ForeignChain) -> Option<u64>;
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
-		fn cf_get_events(filter: EventFilter) -> Vec<EventRecord<RuntimeEvent, Hash>>;
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails>;
+		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
+		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
+		fn cf_swap_retry_delay_blocks() -> u32;
+		fn cf_swap_limits() -> SwapLimits;
+		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>>;
+	}
+);
+
+decl_runtime_apis!(
+	pub trait ElectoralRuntimeApi<Instance: 'static> {
+		/// Returns SCALE encoded `Option<ElectoralDataFor<state_chain_runtime::Runtime,
+		/// Instance>>`
+		fn cf_electoral_data(account_id: AccountId32) -> Vec<u8>;
+
+		/// Returns SCALE encoded `BTreeSet<ElectionIdentifierOf<<state_chain_runtime::Runtime as
+		/// pallet_cf_elections::Config<Instance>>::ElectoralSystem>>`
+		fn cf_filter_votes(account_id: AccountId32, proposed_votes: Vec<u8>) -> Vec<u8>;
 	}
 );

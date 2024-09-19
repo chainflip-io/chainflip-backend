@@ -10,15 +10,14 @@ pub mod build_helpers;
 // rest of the places the version needs changing on build using the build scripts in each of the
 // relevant crates.
 // Should also check that the compatibility function below `args_compatible_with_old` is correct.
-pub const OLD_VERSION: &str = "1.4.4";
-pub const NEW_VERSION: &str = "1.5.0";
+pub const OLD_VERSION: &str = "1.6.3";
+pub const NEW_VERSION: &str = "1.7.0";
 
 pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
 pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 
 // Sometimes we need to remove arguments that are valid for the new version but not for the old
 // version.
-// There are no settings currently on main branch that are not already in the old version.
 pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
 	args
 }

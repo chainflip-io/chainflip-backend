@@ -104,13 +104,23 @@ where
 
 	fn signature_result(
 		request_id: ThresholdSignatureRequestId,
-	) -> crate::AsyncResult<Result<<C as ChainCrypto>::ThresholdSignature, Vec<Self::ValidatorId>>>
-	{
-		Self::take_storage::<_, AsyncResult<_>>(SIGNATURE, request_id).unwrap_or(AsyncResult::Void)
+	) -> (
+		C::AggKey,
+		crate::AsyncResult<Result<<C as ChainCrypto>::ThresholdSignature, Vec<Self::ValidatorId>>>,
+	) {
+		(
+			Default::default(),
+			Self::take_storage::<_, AsyncResult<_>>(SIGNATURE, request_id)
+				.unwrap_or(AsyncResult::Void),
+		)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn insert_signature(request_id: ThresholdSignatureRequestId, signature: C::ThresholdSignature) {
+	fn insert_signature(
+		request_id: ThresholdSignatureRequestId,
+		signature: C::ThresholdSignature,
+		_signer: C::AggKey,
+	) {
 		Self::set_signature_ready(request_id, Ok(signature))
 	}
 }

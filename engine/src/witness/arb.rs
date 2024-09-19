@@ -159,7 +159,7 @@ where
 		.spawn(scope);
 
 	arb_safe_vault_source
-		.vault_witnessing(
+		.vault_witnessing::<ArbCallBuilder, _, _, _>(
 			process_call,
 			arb_client.clone(),
 			vault_address,
@@ -172,6 +172,59 @@ where
 		.spawn(scope);
 
 	Ok(())
+}
+
+struct ArbCallBuilder {}
+
+use cf_chains::{address::EncodedAddress, CcmDepositMetadata};
+use cf_primitives::{Asset, AssetAmount, TransactionHash};
+
+impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
+	type Chain = Arbitrum;
+
+	fn contract_swap_request(
+		source_asset: Asset,
+		deposit_amount: AssetAmount,
+		destination_asset: Asset,
+		destination_address: EncodedAddress,
+		deposit_metadata: Option<CcmDepositMetadata>,
+		tx_hash: TransactionHash,
+	) -> state_chain_runtime::RuntimeCall {
+		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
+			if let Some(deposit_metadata) = deposit_metadata {
+				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
+					source_asset,
+					destination_asset,
+					deposit_amount,
+					destination_address,
+					deposit_metadata,
+					tx_hash,
+				}
+			} else {
+				pallet_cf_ingress_egress::Call::contract_swap_request {
+					from: source_asset,
+					to: destination_asset,
+					deposit_amount,
+					destination_address,
+					tx_hash,
+				}
+			},
+		)
+	}
+
+	fn vault_transfer_failed(
+		asset: <Self::Chain as cf_chains::Chain>::ChainAsset,
+		amount: <Self::Chain as cf_chains::Chain>::ChainAmount,
+		destination_address: <Self::Chain as cf_chains::Chain>::ChainAccount,
+	) -> state_chain_runtime::RuntimeCall {
+		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
+			pallet_cf_ingress_egress::Call::vault_transfer_failed {
+				asset,
+				amount,
+				destination_address,
+			},
+		)
+	}
 }
 
 #[cfg(test)]

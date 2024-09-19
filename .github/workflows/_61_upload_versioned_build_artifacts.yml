@@ -1,0 +1,49 @@
+on:
+  workflow_call:
+
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  upload:
+    runs-on: namespace-profile-default
+
+    steps:
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Download Artifacts 📥
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          path: artifacts
+          pattern: chainflip-backend-bin*
+          merge-multiple: false
+
+      - name: Download runtime 📥
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: chainflip-node-runtime-production
+          path: artifacts
+
+      - name: Set Version 🔦
+        id: version
+        run: |
+          chmod +x artifacts/chainflip-backend-bin/chainflip-node
+          VERSION=$(./ci/scripts/extract_version.sh "$(artifacts/chainflip-backend-bin/chainflip-node --version)" full)
+          echo "Version: $VERSION"
+          echo "binary_version=$VERSION" >> $GITHUB_ENV
+
+      - name: Compress Artifacts into Zip Files 📦
+        run: |
+          find ./artifacts -name "*.so" -o -name "*.dylib" | xargs -n1 -I% cp -v % ./artifacts
+          find ./artifacts -mindepth 1 -maxdepth 1 -type d | xargs -I % zip -rm "%.zip" "%"
+
+      - name: Configure AWS credentials using OIDC 🪪
+        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a
+        with:
+          aws-region: eu-central-1
+          role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot
+
+      - name: Upload engine shared libraries S3 🚀
+        run: |
+          aws s3 sync ./artifacts/ s3://artifacts.chainflip.io/${{ env.binary_version }}/

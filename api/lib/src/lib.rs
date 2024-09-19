@@ -3,10 +3,14 @@ use std::{fmt, str::FromStr, sync::Arc};
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
-	address::EncodedAddress, dot::PolkadotAccountId, evm::to_evm_address, sol::SolAddress,
-	AnyChain, CcmChannelMetadata, ChannelRefundParameters, ForeignChain,
+	address::{try_from_encoded_address, EncodedAddress},
+	dot::PolkadotAccountId,
+	evm::to_evm_address,
+	sol::SolAddress,
+	CcmChannelMetadata, ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
+use cf_primitives::{BlockNumber, DcaParameters, NetworkEnvironment, Price};
 use futures::FutureExt;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
@@ -25,7 +29,7 @@ pub mod primitives {
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
-		CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters,
+		CcmChannelMetadata, CcmDepositMetadata,
 	};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
@@ -49,7 +53,7 @@ use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
 };
-use utilities::{clean_hex_address, task_scope::Scope};
+use utilities::{clean_hex_address, rpc::NumberOrHex, task_scope::Scope};
 
 lazy_static::lazy_static! {
 	static ref API_VERSION: SemVer = SemVer {
@@ -155,7 +159,11 @@ impl StateChainApi {
 #[async_trait]
 impl GovernanceApi for StateChainClient {}
 #[async_trait]
-impl BrokerApi for StateChainClient {}
+impl BrokerApi for StateChainClient {
+	fn base_rpc_api(&self) -> Arc<dyn BaseRpcApi + Send + Sync + 'static> {
+		self.base_rpc_client.clone()
+	}
+}
 #[async_trait]
 impl OperatorApi for StateChainClient {}
 #[async_trait]
@@ -289,12 +297,57 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 	}
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddressString(String);
+
+impl FromStr for AddressString {
+	type Err = anyhow::Error;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Ok(Self(s.to_string()))
+	}
+}
+
+impl AddressString {
+	pub fn try_parse_to_encoded_address(self, chain: ForeignChain) -> Result<EncodedAddress> {
+		clean_foreign_chain_address(chain, self.0.as_str())
+	}
+
+	pub fn try_parse_to_foreign_chain_address(
+		self,
+		chain: ForeignChain,
+		network: NetworkEnvironment,
+	) -> Result<ForeignChainAddress> {
+		try_from_encoded_address(self.try_parse_to_encoded_address(chain)?, move || network)
+			.map_err(|_| anyhow!("Failed to parse address"))
+	}
+
+	pub fn from_encoded_address(address: &EncodedAddress) -> Self {
+		Self(address.to_string())
+	}
+}
+
+impl fmt::Display for AddressString {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RefundParameters {
+	pub retry_duration: BlockNumber,
+	pub refund_address: AddressString,
+	pub min_price: Price,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SwapDepositAddress {
-	pub address: String,
+	pub address: AddressString,
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
-	pub source_chain_expiry_block: <AnyChain as cf_chains::Chain>::ChainBlockNumber,
+	pub source_chain_expiry_block: NumberOrHex,
 	pub channel_opening_fee: U256,
+	pub refund_parameters: Option<ChannelRefundParametersGeneric<AddressString>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -303,7 +356,7 @@ pub struct WithdrawFeesDetail {
 	pub egress_id: (ForeignChain, u64),
 	pub egress_amount: U256,
 	pub egress_fee: U256,
-	pub destination_address: String,
+	pub destination_address: AddressString,
 }
 
 impl fmt::Display for WithdrawFeesDetail {
@@ -327,29 +380,30 @@ impl fmt::Display for WithdrawFeesDetail {
 }
 
 #[async_trait]
-pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
+pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static {
+	fn base_rpc_api(&self) -> Arc<dyn BaseRpcApi + Send + Sync + 'static>;
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
-		destination_address: EncodedAddress,
+		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Affiliates<AccountId32>,
-		refund_parameters: Option<ChannelRefundParameters>,
+		refund_parameters: Option<RefundParameters>,
+		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
+		let destination_address =
+			destination_address.try_parse_to_encoded_address(destination_asset.into())?;
+		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;
+		let network: NetworkEnvironment = self
+			.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await?;
 		let (_tx_hash, events, header, ..) = self
-			.submit_signed_extrinsic_with_dry_run(if affiliate_fees.is_empty() {
-				pallet_cf_swapping::Call::request_swap_deposit_address {
-					source_asset,
-					destination_asset,
-					destination_address,
-					broker_commission,
-					channel_metadata,
-					boost_fee: boost_fee.unwrap_or_default(),
-				}
-			} else {
+			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
 					destination_asset,
@@ -358,9 +412,23 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees,
-					refund_parameters,
-				}
-			})
+					refund_parameters: refund_parameters
+						.map(|rpc_params| {
+							Ok::<_, anyhow::Error>(ChannelRefundParametersGeneric {
+								retry_duration: rpc_params.retry_duration,
+								refund_address: rpc_params
+									.refund_address
+									.try_parse_to_foreign_chain_address(
+										source_asset.into(),
+										network,
+									)?,
+								min_price: rpc_params.min_price,
+							})
+						})
+						.transpose()?,
+					dca_parameters,
+				},
+			)
 			.await?
 			.until_in_block()
 			.await?;
@@ -371,6 +439,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				channel_id,
 				source_chain_expiry_block,
 				channel_opening_fee,
+				refund_parameters,
 				..
 			},
 		)) = events.iter().find(|event| {
@@ -382,11 +451,16 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 			)
 		}) {
 			Ok(SwapDepositAddress {
-				address: deposit_address.to_string(),
+				address: AddressString::from_encoded_address(deposit_address),
 				issued_block: header.number,
 				channel_id: *channel_id,
-				source_chain_expiry_block: *source_chain_expiry_block,
+				source_chain_expiry_block: (*source_chain_expiry_block).into(),
 				channel_opening_fee: (*channel_opening_fee).into(),
+				refund_parameters: refund_parameters.as_ref().map(|params| {
+					params.map_address(|refund_address| {
+						AddressString::from_encoded_address(&refund_address)
+					})
+				}),
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");
@@ -395,12 +469,13 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 	async fn withdraw_fees(
 		&self,
 		asset: Asset,
-		destination_address: EncodedAddress,
+		destination_address: AddressString,
 	) -> Result<WithdrawFeesDetail> {
 		let (tx_hash, events, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
 				asset,
-				destination_address,
+				destination_address: destination_address
+					.try_parse_to_encoded_address(asset.into())?,
 			}))
 			.await
 			.until_in_block()
@@ -427,7 +502,7 @@ pub trait BrokerApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				egress_id: *egress_id,
 				egress_amount: (*egress_amount).into(),
 				egress_fee: (*egress_fee).into(),
-				destination_address: destination_address.to_string(),
+				destination_address: AddressString::from_encoded_address(destination_address),
 			})
 		} else {
 			bail!("No WithdrawalRequested event was found");
@@ -467,7 +542,10 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 		ForeignChain::Arbitrum => EncodedAddress::Arb(clean_hex_address(address)?),
-		ForeignChain::Solana => EncodedAddress::Sol(SolAddress::from_str(address)?.into()),
+		ForeignChain::Solana => match SolAddress::from_str(address) {
+			Ok(sol_address) => EncodedAddress::Sol(sol_address.into()),
+			Err(_) => EncodedAddress::Sol(clean_hex_address(address)?),
+		},
 	})
 }
 
@@ -654,6 +732,22 @@ mod tests {
 				.unwrap_err()
 				.to_string(),
 				anyhow!("Address is neither valid ss58: 'Invalid checksum' nor hex: 'Invalid character 'P' at position 3'").to_string(),
+			);
+		}
+
+		#[test]
+		fn test_sol_address_decoding() {
+			assert_eq!(
+				clean_foreign_chain_address(
+					ForeignChain::Solana,
+					"HGgUaHpsmZpB3pcYt8PE89imca6BQBRqYtbVQQqsso3o"
+				)
+				.unwrap(),
+				clean_foreign_chain_address(
+					ForeignChain::Solana,
+					"0xf1bf5683e0bfb6fffacb2d8d3641faa0008b65cc296c26ec80aee5a71ddf294a"
+				)
+				.unwrap(),
 			);
 		}
 	}

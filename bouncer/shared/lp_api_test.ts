@@ -37,7 +37,7 @@ const amountToProvide = testAmount * 50; // Provide plenty of the asset for the 
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function lpApiRpc(method: string, params: any[]): Promise<any> {
+export async function lpApiRpc(method: string, params: any[]): Promise<any> {
   // The port for the lp api is defined in `chainflip-lp-api.service`
   return jsonRpc(method, params, 'http://127.0.0.1:10589');
 }
@@ -114,7 +114,7 @@ async function testLiquidityDeposit() {
   );
 
   // Send funds to the deposit address and watch for deposit event
-  const observeAccountCreditedEvent = observeEvent('liquidityProvider:AccountCredited', {
+  const observeAccountCreditedEvent = observeEvent('assetBalances:AccountCredited', {
     test: (event) =>
       event.data.asset === testAsset &&
       isWithinOnePercent(
@@ -153,9 +153,7 @@ async function testTransferAsset() {
 
   const getLpBalance = async (account: string) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((await chainflip.query.liquidityProvider.freeBalances(account, testAsset)) as any)
-      .unwrapOrDefault()
-      .toBigInt();
+    ((await chainflip.query.assetBalances.freeBalances(account, testAsset)) as any).toBigInt();
 
   const keyring = new Keyring({ type: 'sr25519' });
 

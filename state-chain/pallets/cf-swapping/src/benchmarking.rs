@@ -77,6 +77,7 @@ mod benchmarks {
 			channel_metadata: None,
 			refund_parameters: None,
 			affiliate_fees,
+			dca_parameters: None,
 		};
 
 		#[block]
@@ -91,7 +92,8 @@ mod benchmarks {
 			AccountRole::Broker,
 		)
 		.unwrap();
-		EarnedBrokerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
+
+		T::BalanceApi::try_credit_account(&caller, Asset::Eth, 200).unwrap();
 
 		#[extrinsic_call]
 		withdraw(RawOrigin::Signed(caller.clone()), Asset::Eth, EncodedAddress::benchmark_value());
@@ -122,76 +124,6 @@ mod benchmarks {
 
 		T::AccountRoleRegistry::ensure_broker(RawOrigin::Signed(caller).into())
 			.expect_err("Caller should no longer be registered as broker");
-	}
-
-	#[benchmark]
-	fn schedule_swap_from_contract() {
-		let deposit_amount = 1_000;
-
-		let witness_origin = T::EnsureWitnessed::try_successful_origin().unwrap();
-		let call = Call::<T>::schedule_swap_from_contract {
-			from: Asset::Usdc,
-			to: Asset::Eth,
-			deposit_amount,
-			destination_address: EncodedAddress::benchmark_value(),
-			tx_hash: [0; 32],
-		};
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(witness_origin));
-		}
-
-		assert_eq!(
-			SwapQueue::<T>::get(
-				<frame_system::Pallet<T>>::block_number() + SWAP_DELAY_BLOCKS.into()
-			),
-			vec![Swap::new(
-				1,
-				Asset::Usdc,
-				Asset::Eth,
-				deposit_amount,
-				None,
-				SwapType::Swap(ForeignChainAddress::benchmark_value()),
-			)]
-		);
-	}
-
-	#[benchmark]
-	fn ccm_deposit() {
-		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
-		let deposit_metadata = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::benchmark_value()),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0x00].try_into().unwrap(),
-				gas_budget: 1,
-				cf_parameters: Default::default(),
-			},
-		};
-		let call = Call::<T>::ccm_deposit {
-			source_asset: Asset::Usdc,
-			deposit_amount: 1_000,
-			destination_asset: Asset::Eth,
-			destination_address: EncodedAddress::benchmark_value(),
-			deposit_metadata,
-			tx_hash: Default::default(),
-		};
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(origin));
-		}
-
-		assert_eq!(
-			SwapQueue::<T>::get(
-				<frame_system::Pallet<T>>::block_number() + SWAP_DELAY_BLOCKS.into()
-			),
-			vec![
-				Swap::new(1, Asset::Usdc, Asset::Eth, 1_000 - 1, None, SwapType::CcmPrincipal(1),),
-				Swap::new(2, Asset::Usdc, Asset::Eth, 1, None, SwapType::CcmGas(1),)
-			]
-		);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

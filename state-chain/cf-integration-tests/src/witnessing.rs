@@ -25,6 +25,7 @@ fn can_punish_failed_witnesser() {
 		.execute_with(|| {
 			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
 			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
 
 			// Split current authority into 2 groups. Some to witness and some will be punished for
 			// failing to witness.

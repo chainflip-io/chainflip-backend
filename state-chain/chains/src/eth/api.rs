@@ -4,20 +4,16 @@ use crate::{
 		api::{
 			all_batch, evm_all_batch_builder, execute_x_swap_and_call, set_agg_key_with_agg_key,
 			set_comm_key_with_agg_key, set_gov_key_with_agg_key, transfer_fallback, EvmCall,
-			EvmEnvironmentProvider, EvmReplayProtection, EvmTransactionBuilder, SigData,
+			EvmEnvironmentProvider, EvmReplayProtection, EvmTransactionBuilder,
 		},
-		EvmCrypto, SchnorrVerificationComponents,
+		EvmCrypto,
 	},
 	*,
 };
 use ethabi::{Address, Uint};
 use evm::api::common::*;
 use frame_support::{
-	sp_runtime::{
-		traits::{Hash, Keccak256, UniqueSaturatedInto},
-		DispatchError,
-	},
-	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
+	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
 };
 use sp_std::marker::PhantomData;
 
@@ -79,40 +75,6 @@ pub enum EthereumApi<Environment: 'static> {
 	_Phantom(PhantomData<Environment>, Never),
 }
 
-impl<C: EvmCall + Parameter + 'static> ApiCall<EvmCrypto> for EvmTransactionBuilder<C> {
-	fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
-		Keccak256::hash(&ethabi::encode(&[
-			self.call.msg_hash().tokenize(),
-			self.replay_protection.tokenize(),
-		]))
-	}
-
-	fn signed(
-		mut self,
-		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
-	) -> Self {
-		self.sig_data = Some(SigData::new(self.replay_protection.nonce, threshold_signature));
-		self
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		self.call
-			.abi_encoded(&self.sig_data.expect("Unsigned chain encoding is invalid."))
-	}
-
-	fn is_signed(&self) -> bool {
-		self.sig_data.is_some()
-	}
-
-	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
-		let sig_data = self.sig_data.expect("Unsigned transaction_out_id is invalid.");
-		SchnorrVerificationComponents {
-			s: sig_data.sig.into(),
-			k_times_g_address: sig_data.k_times_g_address.into(),
-		}
-	}
-}
-
 impl<E> SetAggKeyWithAggKey<EvmCrypto> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
@@ -157,7 +119,9 @@ where
 
 impl<E> RegisterRedemption for EthereumApi<E>
 where
-	E: StateChainGatewayAddressProvider + ReplayProtectionProvider<Ethereum>,
+	E: StateChainGatewayAddressProvider
+		+ EvmEnvironmentProvider<Ethereum>
+		+ ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(
 		node_id: &[u8; 32],
@@ -173,19 +137,13 @@ where
 			),
 		))
 	}
-
-	fn amount(&self) -> u128 {
-		match self {
-			EthereumApi::RegisterRedemption(tx_builder) =>
-				tx_builder.call.amount.unique_saturated_into(),
-			_ => unreachable!(),
-		}
-	}
 }
 
 impl<E> UpdateFlipSupply<EvmCrypto> for EthereumApi<E>
 where
-	E: StateChainGatewayAddressProvider + ReplayProtectionProvider<Ethereum>,
+	E: StateChainGatewayAddressProvider
+		+ EvmEnvironmentProvider<Ethereum>
+		+ ReplayProtectionProvider<Ethereum>,
 {
 	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
 		Self::UpdateFlipSupply(EvmTransactionBuilder::new_unsigned(
@@ -210,14 +168,19 @@ where
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
-		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Result<Self, AllBatchError> {
-		Ok(Self::AllBatch(evm_all_batch_builder(
-			fetch_params,
-			transfer_params,
-			E::token_address,
-			E::replay_protection(E::vault_address()),
-		)?))
+		transfer_params: Vec<(TransferAssetParams<Ethereum>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids) = transfer_params.into_iter().unzip();
+
+		Ok(vec![(
+			Self::AllBatch(evm_all_batch_builder(
+				fetch_params,
+				transfer_params,
+				E::token_address,
+				E::replay_protection(E::vault_address()),
+			)?),
+			egress_ids,
+		)])
 	}
 }
 
@@ -231,9 +194,11 @@ where
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
-	) -> Result<Self, DispatchError> {
+		_cf_parameters: Vec<u8>,
+	) -> Result<Self, ExecutexSwapAndCallError> {
 		let transfer_param = EncodableTransferAssetParams {
-			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			asset: E::token_address(transfer_param.asset)
+				.ok_or(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))?,
 			to: transfer_param.to,
 			amount: transfer_param.amount,
 		};
@@ -255,9 +220,12 @@ impl<E> TransferFallback<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(transfer_param: TransferAssetParams<Ethereum>) -> Result<Self, DispatchError> {
+	fn new_unsigned(
+		transfer_param: TransferAssetParams<Ethereum>,
+	) -> Result<Self, TransferFallbackError> {
 		let transfer_param = EncodableTransferAssetParams {
-			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			asset: E::token_address(transfer_param.asset)
+				.ok_or(TransferFallbackError::CannotLookupTokenAddress)?,
 			to: transfer_param.to,
 			amount: transfer_param.amount,
 		};
@@ -347,13 +315,19 @@ impl<E> EthereumApi<E> {
 	}
 }
 
-impl<E> ApiCall<EvmCrypto> for EthereumApi<E> {
+impl<E: ReplayProtectionProvider<Ethereum> + EvmEnvironmentProvider<Ethereum>> ApiCall<EvmCrypto>
+	for EthereumApi<E>
+{
 	fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
 		map_over_api_variants!(self, call, call.threshold_signature_payload())
 	}
 
-	fn signed(self, threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature) -> Self {
-		map_over_api_variants!(self, call, call.signed(threshold_signature).into())
+	fn signed(
+		self,
+		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
+		signer: <EvmCrypto as ChainCrypto>::AggKey,
+	) -> Self {
+		map_over_api_variants!(self, call, call.signed(threshold_signature, signer).into())
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
@@ -366,6 +340,15 @@ impl<E> ApiCall<EvmCrypto> for EthereumApi<E> {
 
 	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.transaction_out_id())
+	}
+
+	fn refresh_replay_protection(&mut self) {
+		let new_replay_protection = E::replay_protection(E::key_manager_address());
+		map_over_api_variants!(self, call, call.refresh_replay_protection(new_replay_protection))
+	}
+
+	fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {
+		map_over_api_variants!(self, call, call.signer_and_sig_data).map(|(signer, _)| signer)
 	}
 }
 

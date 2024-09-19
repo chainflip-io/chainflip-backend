@@ -1,8 +1,10 @@
 use crate::{AccountInfo, Chainflip, FundingInfo};
-use frame_support::Never;
-use sp_runtime::{
-	traits::{CheckedSub, Zero},
-	Saturating,
+use frame_support::{
+	sp_runtime::{
+		traits::{CheckedSub, Zero},
+		Saturating,
+	},
+	Never,
 };
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData};
 

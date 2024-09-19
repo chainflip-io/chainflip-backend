@@ -1,4 +1,4 @@
-use sp_runtime::DispatchError;
+use frame_support::sp_runtime::{DispatchError, DispatchResult};
 
 use crate::{Chainflip, FeePayment};
 
@@ -13,10 +13,7 @@ impl<T: Chainflip<FundingInfo = MockFundingInfo<T>>> FeePayment for MockFeePayme
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
 
-	fn try_burn_fee(
-		account_id: &Self::AccountId,
-		amount: Self::Amount,
-	) -> sp_runtime::DispatchResult {
+	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult {
 		MockFundingInfo::<T>::try_debit_funds(account_id, amount)
 			.map(|_| ())
 			.ok_or(ERROR_INSUFFICIENT_LIQUIDITY)

@@ -45,14 +45,18 @@ where
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Arbitrum>>,
-		transfer_params: Vec<TransferAssetParams<Arbitrum>>,
-	) -> Result<Self, AllBatchError> {
-		Ok(Self::AllBatch(evm_all_batch_builder(
-			fetch_params,
-			transfer_params,
-			E::token_address,
-			E::replay_protection(E::vault_address()),
-		)?))
+		transfer_params: Vec<(TransferAssetParams<Arbitrum>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
+		let (transfer_params, egress_ids) = transfer_params.iter().cloned().unzip();
+		Ok(vec![(
+			Self::AllBatch(evm_all_batch_builder(
+				fetch_params,
+				transfer_params,
+				E::token_address,
+				E::replay_protection(E::vault_address()),
+			)?),
+			egress_ids,
+		)])
 	}
 }
 
@@ -66,9 +70,11 @@ where
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Arbitrum as Chain>::ChainAmount,
 		message: Vec<u8>,
-	) -> Result<Self, DispatchError> {
+		_cf_parameters: Vec<u8>,
+	) -> Result<Self, ExecutexSwapAndCallError> {
 		let transfer_param = EncodableTransferAssetParams {
-			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			asset: E::token_address(transfer_param.asset)
+				.ok_or(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))?,
 			to: transfer_param.to,
 			amount: transfer_param.amount,
 		};
@@ -90,9 +96,12 @@ impl<E> TransferFallback<Arbitrum> for ArbitrumApi<E>
 where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
-	fn new_unsigned(transfer_param: TransferAssetParams<Arbitrum>) -> Result<Self, DispatchError> {
+	fn new_unsigned(
+		transfer_param: TransferAssetParams<Arbitrum>,
+	) -> Result<Self, TransferFallbackError> {
 		let transfer_param = EncodableTransferAssetParams {
-			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			asset: E::token_address(transfer_param.asset)
+				.ok_or(TransferFallbackError::CannotLookupTokenAddress)?,
 			to: transfer_param.to,
 			amount: transfer_param.amount,
 		};
@@ -159,13 +168,19 @@ impl<E> ArbitrumApi<E> {
 	}
 }
 
-impl<E> ApiCall<EvmCrypto> for ArbitrumApi<E> {
+impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> ApiCall<EvmCrypto>
+	for ArbitrumApi<E>
+{
 	fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
 		map_over_api_variants!(self, call, call.threshold_signature_payload())
 	}
 
-	fn signed(self, threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature) -> Self {
-		map_over_api_variants!(self, call, call.signed(threshold_signature).into())
+	fn signed(
+		self,
+		threshold_signature: &<EvmCrypto as ChainCrypto>::ThresholdSignature,
+		signer: <EvmCrypto as ChainCrypto>::AggKey,
+	) -> Self {
+		map_over_api_variants!(self, call, call.signed(threshold_signature, signer).into())
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
@@ -178,6 +193,18 @@ impl<E> ApiCall<EvmCrypto> for ArbitrumApi<E> {
 
 	fn transaction_out_id(&self) -> <EvmCrypto as ChainCrypto>::TransactionOutId {
 		map_over_api_variants!(self, call, call.transaction_out_id())
+	}
+
+	fn refresh_replay_protection(&mut self) {
+		map_over_api_variants!(
+			self,
+			call,
+			call.refresh_replay_protection(E::replay_protection(E::key_manager_address()))
+		)
+	}
+
+	fn signer(&self) -> Option<<EvmCrypto as ChainCrypto>::AggKey> {
+		map_over_api_variants!(self, call, call.signer_and_sig_data).map(|(signer, _)| signer)
 	}
 }
 

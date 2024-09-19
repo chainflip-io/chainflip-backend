@@ -1,4 +1,9 @@
 use crate::Pallet;
-use cf_runtime_upgrade_utilities::PlaceholderMigration;
+use cf_runtime_upgrade_utilities::{PlaceholderMigration, VersionedMigration};
 
-pub type PalletMigration<T, I> = PlaceholderMigration<Pallet<T, I>, 3>;
+mod initialize_broadcast_timeout_storage;
+
+pub type PalletMigration<T, I> = (
+	VersionedMigration<Pallet<T, I>, initialize_broadcast_timeout_storage::Migration<T, I>, 6, 7>,
+	PlaceholderMigration<Pallet<T, I>, 7>,
+);

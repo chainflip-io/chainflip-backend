@@ -17,7 +17,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy the runner binary, renaming to chainflip-engine and the dylib files.
 COPY --chown=1000:1000 engine-runner /usr/local/bin/chainflip-engine
-COPY --chown=1000:1000 old-engine-dylib/libchainflip_engine_v*.so /usr/local/lib/
 # This path is set in the rpath of the runner binary build.rs file.
 COPY --chown=1000:1000 libchainflip_engine_v*.so /usr/local/lib/
 
@@ -28,7 +27,7 @@ RUN chmod +x /usr/local/bin/chainflip-engine \
     && chown -R 1000:1000 /etc/chainflip
 
 RUN apt-get update \
-    && apt-get install -y ca-certificates --no-install-recommends \
+    && apt-get install -y ca-certificates curl jq --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

@@ -119,9 +119,10 @@ mod test_batch_fetch {
 		);
 		assert_eq!(
 			hex::encode(&payload.0),
-			"6fdbf2de25ba016e2c8b4f8238d057066a6ea2a63770073c3b6dcee86b02aeff"
+			"fedd552924ecdbf18c13d7f534b344926b2a771a03a59d095af0676f98f6d19e"
 		);
-		builder.insert_signature(keypair_proxy.sign(&payload));
+		builder
+			.insert_signer_and_signature(keypair_proxy.public_key(), keypair_proxy.sign(&payload));
 		assert!(builder.is_signed());
 	}
 

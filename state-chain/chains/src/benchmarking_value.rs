@@ -1,10 +1,10 @@
 #[cfg(feature = "runtime-benchmarks")]
-use cf_primitives::chains::assets::sol;
-#[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
-	chains::assets::{btc, dot, eth},
+	chains::assets::{any::AssetMap, arb, btc, dot, eth, sol},
 	Asset,
 };
+#[cfg(feature = "runtime-benchmarks")]
+use core::str::FromStr;
 
 #[cfg(feature = "runtime-benchmarks")]
 use ethereum_types::{H160, U256};
@@ -13,15 +13,11 @@ use ethereum_types::{H160, U256};
 use sp_std::vec;
 
 #[cfg(feature = "runtime-benchmarks")]
-use crate::address::EncodedAddress;
-#[cfg(feature = "runtime-benchmarks")]
-use crate::address::ForeignChainAddress;
-#[cfg(feature = "runtime-benchmarks")]
-use crate::dot::PolkadotTransactionId;
-#[cfg(feature = "runtime-benchmarks")]
-use crate::evm;
-#[cfg(feature = "runtime-benchmarks")]
-use crate::evm::{EvmFetchId, EvmTransactionMetadata};
+use crate::{
+	address::{EncodedAddress, ForeignChainAddress},
+	dot::PolkadotTransactionId,
+	evm::{DepositDetails, EvmFetchId, EvmTransactionMetadata},
+};
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
@@ -53,13 +49,6 @@ macro_rules! impl_default_benchmark_value {
 			}
 		}
 	};
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl<A: BenchmarkValue, B: BenchmarkValue> BenchmarkValue for (A, B) {
-	fn benchmark_value() -> Self {
-		(A::benchmark_value(), B::benchmark_value())
-	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -134,6 +123,31 @@ impl BenchmarkValueExtended for EvmFetchId {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for crate::sol::SolanaDepositFetchId {
+	fn benchmark_value() -> Self {
+		crate::sol::SolanaDepositFetchId {
+			channel_id: 923_601_931u64,
+			address: crate::sol::SolAddress::from_str(
+				"4Spd3kst7XsA9pdp5ArfdXxEK4xfW88eRKbyQBmMvwQj",
+			)
+			.unwrap(),
+			bump: 255u8,
+		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValueExtended for crate::sol::SolanaDepositFetchId {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		crate::sol::SolanaDepositFetchId {
+			channel_id: id as u64,
+			address: crate::sol::SolAddress([id; 32]),
+			bump: 255u8,
+		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValueExtended for () {
 	fn benchmark_value_by_id(_id: u8) -> Self {
 		Default::default()
@@ -160,7 +174,49 @@ impl BenchmarkValue for PolkadotTransactionId {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for evm::DepositDetails {
+impl<T: BenchmarkValue> BenchmarkValue for AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for eth::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for btc::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for dot::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for arb::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for sol::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for DepositDetails {
 	fn benchmark_value() -> Self {
 		use sp_core::H256;
 		Self { tx_hashes: Some(vec![H256::default()]) }
@@ -170,3 +226,23 @@ impl BenchmarkValue for evm::DepositDetails {
 impl_default_benchmark_value!(());
 impl_default_benchmark_value!(u32);
 impl_default_benchmark_value!(u64);
+
+#[macro_export]
+macro_rules! impl_tuple_benchmark_value {
+	($($t:ident),* $(,)?) => {
+		#[cfg(feature = "runtime-benchmarks")]
+		impl<$($t: BenchmarkValue, )*> BenchmarkValue for ($($t,)*) {
+			fn benchmark_value() -> Self {
+				(
+					$($t::benchmark_value(),)*
+				)
+			}
+		}
+	};
+}
+
+impl_tuple_benchmark_value!(A, B);
+impl_tuple_benchmark_value!(A, B, C);
+impl_tuple_benchmark_value!(A, B, C, D);
+impl_tuple_benchmark_value!(A, B, C, D, EE);
+impl_tuple_benchmark_value!(A, B, C, D, EE, F);

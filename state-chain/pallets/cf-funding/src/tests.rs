@@ -94,7 +94,7 @@ fn funded_amount_is_added_and_subtracted() {
 		assert!(PendingRedemptions::<Test>::get(BOB).is_some());
 
 		// Two broadcasts should have been initiated by the two redemptions.
-		assert_eq!(MockBroadcaster::received_requests().len(), 2);
+		assert_eq!(MockFundingBroadcaster::get_pending_api_calls().len(), 2);
 
 		const TOTAL_A: u128 = AMOUNT_A1 + AMOUNT_A2;
 		assert_event_sequence!(
@@ -277,7 +277,7 @@ fn redemption_cannot_occur_without_funding_first() {
 		));
 
 		// Redeem should kick off a broadcast request.
-		assert_eq!(MockBroadcaster::received_requests().len(), 1);
+		assert_eq!(MockFundingBroadcaster::get_pending_api_calls().len(), 1);
 
 		// Invalid Redeemed Event from Ethereum: wrong account.
 		assert_noop!(
@@ -303,7 +303,7 @@ fn redemption_cannot_occur_without_funding_first() {
 			RuntimeEvent::Funding(crate::Event::RedemptionRequested {
 				account_id: ALICE,
 				amount: REDEEMED_AMOUNT,
-				broadcast_id: 0,
+				broadcast_id: 1,
 				expiry_time: 10,
 			}),
 			RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
@@ -1752,6 +1752,24 @@ fn account_references_must_be_zero_for_full_redeem() {
 			frame_system::Pallet::<Test>::providers(&ALICE),
 			0,
 			"Funding pallet should decrement the provider count on final redemption."
+		);
+	});
+}
+
+#[test]
+fn only_governance_can_update_settings() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Funding::update_minimum_funding(RuntimeOrigin::signed(ALICE), 0),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Funding::update_restricted_addresses(RuntimeOrigin::signed(ALICE), vec![], vec![]),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Funding::update_redemption_tax(RuntimeOrigin::signed(ALICE), 0),
+			sp_runtime::traits::BadOrigin,
 		);
 	});
 }

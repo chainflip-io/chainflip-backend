@@ -13,9 +13,10 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface,
-		signer_nomination::MockNominator, threshold_signer::MockThresholdSigner,
+		liability_tracker::MockLiabilityTracker, signer_nomination::MockNominator,
+		threshold_signer::MockThresholdSigner,
 	},
-	AccountRoleRegistry, OnBroadcastReady,
+	AccountRoleRegistry, DummyEgressSuccessWitnesser, OnBroadcastReady,
 };
 use codec::{Decode, Encode};
 use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
@@ -70,10 +71,6 @@ impl frame_system::Config for Test {
 }
 
 pub const BROADCAST_EXPIRY_BLOCKS: BlockNumberFor<Test> = 4;
-
-parameter_types! {
-	pub const BroadcastTimeout: BlockNumberFor<Test> = BROADCAST_EXPIRY_BLOCKS;
-}
 
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
@@ -139,8 +136,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type ThresholdSigner = MockThresholdSigner<MockEthereumChainCrypto, RuntimeCall>;
 	type BroadcastSignerNomination = MockNominator;
 	type OffenceReporter = MockOffenceReporter;
-	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type BroadcastTimeout = BroadcastTimeout;
+	type EnsureThresholdSigned = FailOnNoneOrigin<Self>;
 	type WeightInfo = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = MockCallback;
@@ -148,14 +144,22 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
+	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<MockEthereumChainCrypto>;
 	type RetryPolicy = MockRetryPolicy;
+	type LiabilityTracker = MockLiabilityTracker;
 	type CfeBroadcastRequest = MockCfeInterface;
 }
 
 impl_mock_chainflip!(Test);
 cf_test_utilities::impl_test_helpers! {
 	Test,
-	RuntimeGenesisConfig::default(),
+	RuntimeGenesisConfig {
+		broadcaster: pallet_cf_broadcast::GenesisConfig {
+			broadcast_timeout: 4,
+			..Default::default()
+		},
+		..Default::default()
+	},
 	|| {
 		MockEpochInfo::next_epoch((0..151).collect());
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();

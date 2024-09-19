@@ -14,40 +14,37 @@ pub mod weights;
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
 use cf_chains::{
-	ApiCall, Chain, ChainCrypto, FeeRefundCalculator, RetryPolicy, TransactionBuilder,
-	TransactionMetadata as _,
+	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
+	RequiresSignatureRefresh, RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
 use cf_traits::{
-	offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster, CfeBroadcastRequest,
-	Chainflip, EpochInfo, GetBlockHeight, SafeMode, ThresholdSigner,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
+	CfeBroadcastRequest, Chainflip, ElectionEgressWitnesser, EpochInfo, GetBlockHeight,
+	RotationBroadcastsPending, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
-	sp_runtime::traits::{One, Saturating},
+	sp_runtime::{
+		traits::{One, Saturating},
+		DispatchError,
+	},
 	traits::{Defensive, Get, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	Twox64Concat,
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_set::BTreeSet, marker, marker::PhantomData, prelude::*, vec::Vec};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-#[scale_info(skip_type_params(I))]
-pub struct PalletSafeMode<I: 'static> {
-	pub retry_enabled: bool,
-	#[doc(hidden)]
-	#[codec(skip)]
-	_phantom: marker::PhantomData<I>,
-}
+type AggKey<T, I> =
+	<<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
 
-impl<I: 'static> SafeMode for PalletSafeMode<I> {
-	const CODE_RED: Self = PalletSafeMode { retry_enabled: false, _phantom: marker::PhantomData };
-	const CODE_GREEN: Self = PalletSafeMode { retry_enabled: true, _phantom: marker::PhantomData };
+impl_pallet_safe_mode! {
+	PalletSafeMode<I>;
+	retry_enabled,
 }
 
 /// The number of broadcast attempts that were made before this one.
@@ -58,15 +55,22 @@ pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum PalletConfigUpdate {
+	BroadcastTimeout { blocks: u32 },
+}
+
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{AccountRoleRegistry, BroadcastNomination, OnBroadcastReady};
-	use frame_support::{pallet_prelude::*, traits::EnsureOrigin};
-	use frame_system::pallet_prelude::*;
+	use cf_traits::{AccountRoleRegistry, BroadcastNomination, LiabilityTracker, OnBroadcastReady};
+	use frame_support::{
+		pallet_prelude::{OptionQuery, *},
+		traits::EnsureOrigin,
+	};
 
 	/// Type alias for the instance's configured Transaction.
 	pub type TransactionFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::Transaction;
@@ -175,10 +179,6 @@ pub mod pallet {
 		/// Get the latest block height of the target chain via Chain Tracking.
 		type ChainTracking: GetBlockHeight<Self::TargetChain>;
 
-		/// The timeout duration for the broadcast, measured in number of blocks.
-		#[pallet::constant]
-		type BroadcastTimeout: Get<BlockNumberFor<Self>>;
-
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
 
@@ -191,10 +191,35 @@ pub mod pallet {
 			AttemptCount = AttemptCount,
 		>;
 
+		type ElectionEgressWitnesser: ElectionEgressWitnesser<
+			Chain = <Self::TargetChain as Chain>::ChainCrypto,
+		>;
+
 		type CfeBroadcastRequest: CfeBroadcastRequest<Self, Self::TargetChain>;
+
+		type LiabilityTracker: LiabilityTracker;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
+	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub broadcast_timeout: BlockNumberFor<T>,
+		pub _phantom: PhantomData<I>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
+		fn build(&self) {
+			BroadcastTimeout::<T, I>::put(self.broadcast_timeout);
+		}
+	}
+
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			Self { broadcast_timeout: Default::default(), _phantom: Default::default() }
+		}
 	}
 
 	#[pallet::origin]
@@ -261,26 +286,16 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Stores all needed information to be able to re-request the signature
+	/// Stores the signed external API Call for a broadcast.
 	#[pallet::storage]
 	#[pallet::getter(fn threshold_signature_data)]
-	pub type ThresholdSignatureData<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat,
-		BroadcastId,
-		(ApiCallFor<T, I>, ThresholdSignatureFor<T, I>),
-		OptionQuery,
-	>;
+	pub type PendingApiCalls<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, ApiCallFor<T, I>, OptionQuery>;
 
 	/// Stores metadata related to a transaction.
 	#[pallet::storage]
 	pub type TransactionMetadata<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, TransactionMetadataFor<T, I>>;
-
-	/// Tracks how much a signer id is owed for paying transaction fees.
-	#[pallet::storage]
-	pub type TransactionFeeDeficit<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, SignerIdFor<T, I>, ChainAmountFor<T, I>, ValueQuery>;
 
 	/// Whether or not broadcasts are paused for broadcast ids greater than the given broadcast id.
 	#[pallet::storage]
@@ -296,7 +311,36 @@ pub mod pallet {
 	/// after many retries.
 	#[pallet::storage]
 	#[pallet::getter(fn aborted_broadcasts)]
-	pub type AbortedBroadcasts<T, I = ()> = StorageValue<_, Vec<BroadcastId>, ValueQuery>;
+	pub type AbortedBroadcasts<T, I = ()> = StorageValue<_, BTreeSet<BroadcastId>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn incoming_key_broadcast_id)]
+	pub type IncomingKeyAndBroadcastId<T, I = ()> =
+		StorageValue<_, (AggKey<T, I>, BroadcastId), OptionQuery>;
+
+	/// We need to store the current Onchain key to know when to resign txs in edge cases around a
+	/// rotation. Note that the on chain key is different than the current AggKey stored in
+	/// threshold signature pallet. This is because we rotate the AggKey optimistically which means
+	/// that the key in threshold signature pallet is rotated as soon as the rotation tx is created,
+	/// without waiting for it the tx to actually go through onchain.
+	#[pallet::storage]
+	#[pallet::getter(fn current_on_chain_key)]
+	pub type CurrentOnChainKey<T, I = ()> = StorageValue<_, AggKey<T, I>, OptionQuery>;
+
+	/// The current timeout duration for the broadcast, measured in number of blocks.
+	#[pallet::storage]
+	pub type BroadcastTimeout<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery, DefaultBroadcastTimeout<T, I>>;
+
+	const DEFAULT_BROADCAST_TIMEOUT: u32 = 100;
+
+	pub struct DefaultBroadcastTimeout<T, I>(PhantomData<(T, I)>);
+
+	impl<T: Config<I>, I: 'static> Get<BlockNumberFor<T>> for DefaultBroadcastTimeout<T, I> {
+		fn get() -> BlockNumberFor<T> {
+			DEFAULT_BROADCAST_TIMEOUT.into()
+		}
+	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -334,6 +378,8 @@ pub mod pallet {
 		TransactionFeeDeficitRefused { beneficiary: SignerIdFor<T, I> },
 		/// A Call has been re-threshold-signed, and its signature data is inserted into storage.
 		CallResigned { broadcast_id: BroadcastId },
+		/// Some pallet configuration has been updated.
+		PalletConfigUpdated { update: PalletConfigUpdate },
 	}
 
 	#[pallet::error]
@@ -344,6 +390,10 @@ pub mod pallet {
 		InvalidBroadcastId,
 		/// A threshold signature was expected but not available.
 		ThresholdSignatureUnavailable,
+		/// Pending broadcasts cannot be re-signed.
+		BroadcastStillPending,
+		/// The broadcast's api call is no longer available.
+		ApiCallUnavailable,
 	}
 
 	#[pallet::hooks]
@@ -406,20 +456,10 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// DEPRECATED. This call is no longer used.
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::transaction_failed())]
-		pub fn transaction_signing_failure(
-			_origin: OriginFor<T>,
-			_broadcast_attempt_id: (BroadcastId, AttemptCount),
-		) -> DispatchResultWithPostInfo {
-			Err(DispatchError::Other("Deprecated").into())
-		}
-
 		/// A callback to be used when a threshold signature request completes. Retrieves the
 		/// requested signature, uses the configured [TransactionBuilder] to build the transaction.
 		/// Initiates the broadcast sequence if `should_broadcast` is set to true, otherwise insert
-		/// the signature result into the `ThresholdSignatureData` storage.
+		/// the signature result into the `PendingApiCalls` storage.
 		///
 		/// ## Events
 		///
@@ -439,10 +479,12 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 			initiated_at: ChainBlockNumberFor<T, I>,
 			should_broadcast: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let _ = T::EnsureThresholdSigned::ensure_origin(origin)?;
 
-			let signature = T::ThresholdSigner::signature_result(threshold_request_id)
+			let (signer, signature_result) =
+				T::ThresholdSigner::signature_result(threshold_request_id);
+			let signature = signature_result
 				.ready_or_else(|r| {
 					log::error!(
 						"Signature not found for threshold request {:?}. Request status: {:?}",
@@ -453,18 +495,19 @@ pub mod pallet {
 				})?
 				.expect("signature can not be unavailable");
 
-			let signed_api_call = api_call.signed(&signature);
+			let signed_api_call = api_call.signed(&signature, signer);
 
-			ThresholdSignatureData::<T, I>::insert(
-				broadcast_id,
-				(signed_api_call.clone(), signature),
-			);
+			PendingApiCalls::<T, I>::insert(broadcast_id, signed_api_call.clone());
 
 			// If a signed call already exists, update the storage and do not broadcast.
 			if should_broadcast {
 				let transaction_out_id = signed_api_call.transaction_out_id();
 
 				T::BroadcastReadyProvider::on_broadcast_ready(&signed_api_call);
+
+				let _ = T::ElectionEgressWitnesser::watch_for_egress_success(
+					transaction_out_id.clone(),
+				);
 
 				// The Engine uses this.
 				TransactionOutIdToBroadcastId::<T, I>::insert(
@@ -493,7 +536,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
 			}
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Nodes have witnessed that a signature was accepted on the target chain.
@@ -519,89 +562,16 @@ pub mod pallet {
 			tx_fee: TransactionFeeFor<T, I>,
 			tx_metadata: TransactionMetadataFor<T, I>,
 			transaction_ref: TransactionRefFor<T, I>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
-			let (broadcast_id, _initiated_at) =
-				TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
-					.ok_or(Error::<T, I>::InvalidPayload)?;
-
-			Self::remove_pending_broadcast(&broadcast_id);
-
-			if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
-				if tx_metadata.verify_metadata(&expected_tx_metadata) {
-					if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
-						let to_refund =
-							broadcast_data.transaction_payload.return_fee_refund(tx_fee);
-
-						TransactionFeeDeficit::<T, I>::mutate(signer_id.clone(), |fee_deficit| {
-							*fee_deficit = fee_deficit.saturating_add(to_refund);
-						});
-
-						Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
-							beneficiary: signer_id,
-							amount: to_refund,
-						});
-					} else {
-						log::warn!(
-							"Unable to attribute transaction fee refund for broadcast {}.",
-							broadcast_id
-						);
-					}
-				} else {
-					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRefused {
-						beneficiary: signer_id,
-					});
-					log::warn!(
-						"Transaction metadata verification failed for broadcast {}. Deficit will not be recorded.",
-						broadcast_id
-					);
-				}
-			} else {
-				log::error!(
-					"Transaction metadata not found for broadcast {}. Deficit will be ignored.",
-					broadcast_id
-				);
-			}
-
-			if let Some(callback) = RequestSuccessCallbacks::<T, I>::get(broadcast_id) {
-				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
-					broadcast_id,
-					result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(
-						|e| {
-							log::warn!(
-								"Callback execution has failed for broadcast {}.",
-								broadcast_id
-							);
-							e.error
-						},
-					),
-				});
-			}
-
-			// Report the people who failed to broadcast this tx during its whole lifetime.
-			let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
-			if !failed_broadcasters.is_empty() {
-				T::OffenceReporter::report_many(
-					PalletOffence::FailedToBroadcastTransaction,
-					failed_broadcasters,
-				);
-			}
-
-			Self::clean_up_broadcast_storage(broadcast_id);
-
-			Self::deposit_event(Event::<T, I>::BroadcastSuccess {
-				broadcast_id,
-				transaction_out_id: tx_out_id,
-				transaction_ref,
-			});
-			Ok(().into())
+			Self::egress_success(origin, tx_out_id, signer_id, tx_fee, tx_metadata, transaction_ref)
 		}
 
 		#[pallet::weight(Weight::zero())]
 		#[pallet::call_index(3)]
 		pub fn stress_test(origin: OriginFor<T>, how_many: u32) -> DispatchResult {
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 
 			let payload = PayloadFor::<T, I>::decode(&mut &[0xcf; 32][..])
 				.map_err(|_| Error::<T, I>::InvalidPayload)?;
@@ -627,24 +597,164 @@ pub mod pallet {
 		pub fn transaction_failed(
 			origin: OriginFor<T>,
 			broadcast_id: BroadcastId,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let reporter = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
 
 			Self::handle_broadcast_failure(broadcast_id, reporter.into())?;
-			Ok(().into())
+			Ok(())
+		}
+
+		/// Re-sign and optionally re-send some broadcast requests.
+		///
+		/// Requires governance origin.
+		#[pallet::call_index(5)]
+		#[pallet::weight(Weight::zero())]
+		pub fn re_sign_aborted_broadcasts(
+			origin: OriginFor<T>,
+			broadcast_ids: Vec<BroadcastId>,
+			request_broadcast: bool,
+			refresh_replay_protection: bool,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			for broadcast_id in broadcast_ids {
+				Self::re_sign_broadcast(
+					broadcast_id,
+					request_broadcast,
+					refresh_replay_protection,
+				)?;
+			}
+			Ok(())
+		}
+
+		/// [GOVERNANCE] Update a pallet config item.
+		///
+		/// The dispatch origin of this function must be governance.
+		///
+		/// ## Events
+		///
+		/// - [PalletConfigUpdate](Event::PalletConfigUpdate)
+		#[pallet::call_index(6)]
+		#[pallet::weight(T::WeightInfo::update_pallet_config())]
+		pub fn update_pallet_config(
+			origin: OriginFor<T>,
+			update: PalletConfigUpdate,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			match update {
+				PalletConfigUpdate::BroadcastTimeout { blocks } =>
+					BroadcastTimeout::<T, I>::set(blocks.into()),
+			}
+
+			Self::deposit_event(Event::PalletConfigUpdated { update });
+
+			Ok(())
 		}
 	}
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
+	pub fn egress_success(
+		origin: OriginFor<T>,
+		tx_out_id: TransactionOutIdFor<T, I>,
+		signer_id: SignerIdFor<T, I>,
+		tx_fee: TransactionFeeFor<T, I>,
+		tx_metadata: TransactionMetadataFor<T, I>,
+		transaction_ref: TransactionRefFor<T, I>,
+	) -> DispatchResult {
+		let (broadcast_id, _initiated_at) = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
+			.ok_or(Error::<T, I>::InvalidPayload)?;
+
+		Self::remove_pending_broadcast(&broadcast_id);
+
+		if IncomingKeyAndBroadcastId::<T, I>::exists() {
+			let (incoming_key, rotation_broadcast_id) =
+				IncomingKeyAndBroadcastId::<T, I>::get().unwrap();
+			if rotation_broadcast_id == broadcast_id {
+				CurrentOnChainKey::<T, I>::put(incoming_key);
+				IncomingKeyAndBroadcastId::<T, I>::kill();
+			}
+		}
+
+		if let Some(expected_tx_metadata) = TransactionMetadata::<T, I>::take(broadcast_id) {
+			if tx_metadata.verify_metadata(&expected_tx_metadata) {
+				if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
+					let to_refund = broadcast_data.transaction_payload.return_fee_refund(tx_fee);
+
+					let address_to_refund = <SignerIdFor<T, I> as IntoForeignChainAddress<
+						T::TargetChain,
+					>>::into_foreign_chain_address(signer_id.clone());
+
+					use cf_traits::LiabilityTracker;
+					T::LiabilityTracker::record_liability(
+						address_to_refund,
+						<T::TargetChain as Chain>::GAS_ASSET.into(),
+						to_refund.into(),
+					);
+
+					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {
+						beneficiary: signer_id,
+						amount: to_refund,
+					});
+				} else {
+					log::warn!(
+						"Unable to attribute transaction fee refund for broadcast {}.",
+						broadcast_id
+					);
+				}
+			} else {
+				Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRefused {
+					beneficiary: signer_id,
+				});
+				log::warn!(
+				"Transaction metadata verification failed for broadcast {}. Deficit will not be recorded.",
+				broadcast_id
+			);
+			}
+		} else {
+			log::error!(
+				"Transaction metadata not found for broadcast {}. Deficit will be ignored.",
+				broadcast_id
+			);
+		}
+
+		if let Some(callback) = RequestSuccessCallbacks::<T, I>::take(broadcast_id) {
+			RequestFailureCallbacks::<T, I>::remove(broadcast_id);
+			Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
+				broadcast_id,
+				result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(|e| {
+					log::warn!("Callback execution has failed for broadcast {}.", broadcast_id);
+					e.error
+				}),
+			});
+		}
+
+		// Report the people who failed to broadcast this tx during its whole lifetime.
+		let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
+		if !failed_broadcasters.is_empty() {
+			T::OffenceReporter::report_many(
+				PalletOffence::FailedToBroadcastTransaction,
+				failed_broadcasters,
+			);
+		}
+
+		Self::clean_up_broadcast_storage(broadcast_id);
+
+		Self::deposit_event(Event::<T, I>::BroadcastSuccess {
+			broadcast_id,
+			transaction_out_id: tx_out_id,
+			transaction_ref,
+		});
+		Ok(())
+	}
+
+	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {
 		AwaitingBroadcast::<T, I>::remove(broadcast_id);
 		TransactionMetadata::<T, I>::remove(broadcast_id);
-		RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
-		RequestFailureCallbacks::<T, I>::remove(broadcast_id);
-		if let Some((api_call, _)) = ThresholdSignatureData::<T, I>::take(broadcast_id) {
+		PendingApiCalls::<T, I>::take(broadcast_id).map(|api_call| {
 			TransactionOutIdToBroadcastId::<T, I>::remove(api_call.transaction_out_id());
-		}
+			api_call
+		})
 	}
 
 	pub fn remove_pending_broadcast(broadcast_id: &BroadcastId) {
@@ -652,11 +762,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if !pending_broadcasts.remove(broadcast_id) {
 				log::warn!("Expected broadcast with id {} to still be pending.", broadcast_id);
 			}
-			if let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
+			while let Some(broadcast_barrier_id) = BroadcastBarriers::<T, I>::get().first() {
 				if pending_broadcasts.first().map_or(true, |id| *id > *broadcast_barrier_id) {
 					BroadcastBarriers::<T, I>::mutate(|broadcast_barriers| {
 						broadcast_barriers.pop_first();
 					});
+				} else {
+					break
 				}
 			}
 		});
@@ -725,36 +837,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(broadcast_data) = AwaitingBroadcast::<T, I>::get(broadcast_id) {
 			// If the broadcast is not pending, we should not retry.
-			if let Some((api_call, _signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id)
-			{
-				if T::TransactionBuilder::requires_signature_refresh(
-					&api_call,
-					&broadcast_data.threshold_signature_payload,
-				) {
-					// We update the initiated_at here since as the tx is resigned and broadcast, it
-					// is not possible for it to be successfully broadcasted before this point.
-					// This `initiated_at` block will be associated with the new transaction_out_id
-					// so should not interfere with witnessing the previous one.
-					let initiated_at = T::ChainTracking::get_block_height();
-
+			if let Some(mut api_call) = PendingApiCalls::<T, I>::get(broadcast_id) {
+				if let RequiresSignatureRefresh::True(maybe_modified_apicall) =
+					T::TransactionBuilder::requires_signature_refresh(
+						&api_call,
+						&broadcast_data.threshold_signature_payload,
+						CurrentOnChainKey::<T, I>::get(),
+					) {
 					Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
-
-					let threshold_signature_payload = api_call.threshold_signature_payload();
-					T::ThresholdSigner::request_signature_with_callback(
-						threshold_signature_payload.clone(),
-						|threshold_request_id| {
-							Call::on_signature_ready {
-								threshold_request_id,
-								threshold_signature_payload,
-								api_call: Box::new(api_call),
-								broadcast_id,
-								initiated_at,
-								should_broadcast: true,
-							}
-							.into()
-						},
-					);
-
+					if let Some(modified_apicall) = maybe_modified_apicall {
+						PendingApiCalls::<T, I>::insert(broadcast_id, modified_apicall.clone());
+						api_call = modified_apicall;
+					}
+					Self::threshold_sign(api_call, broadcast_id, true);
 					log::info!(
 						"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
 						broadcast_id
@@ -794,7 +889,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			AwaitingBroadcast::<T, I>::insert(broadcast_id, broadcast_data.clone());
 
 			Timeouts::<T, I>::append(
-				frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get(),
+				frame_system::Pallet::<T>::block_number() + BroadcastTimeout::<T, I>::get(),
 				(broadcast_id, nominated_signer.clone()),
 			);
 
@@ -804,7 +899,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				payload: broadcast_data.transaction_payload.clone(),
 			});
 
-			// TODO: consider removing this
 			Self::deposit_event(Event::<T, I>::TransactionBroadcastRequest {
 				broadcast_id,
 				nominee: nominated_signer,
@@ -893,7 +987,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
 
 		// Call the failed callback and clean up the callback storage.
-		if let Some(callback) = RequestFailureCallbacks::<T, I>::take(broadcast_id) {
+		if let Some(callback) = RequestFailureCallbacks::<T, I>::get(broadcast_id) {
 			Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
 				broadcast_id,
 				result: callback.dispatch_bypass_filter(OriginTrait::root()).map(|_| ()).map_err(
@@ -907,7 +1001,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				),
 			});
 		}
-		RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
 
 		Self::deposit_event(Event::<T, I>::BroadcastAborted { broadcast_id });
 		Self::remove_pending_broadcast(&broadcast_id);
@@ -944,18 +1037,44 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, false))
 	}
 
-	fn threshold_resign(broadcast_id: BroadcastId) -> Option<ThresholdSignatureRequestId> {
-		ThresholdSignatureData::<T, I>::get(broadcast_id)
-			.map(|(api_call, _signature)| Self::threshold_sign(api_call, broadcast_id, false))
+	fn re_sign_broadcast(
+		broadcast_id: BroadcastId,
+		request_broadcast: bool,
+		refresh_replay_protection: bool,
+	) -> Result<ThresholdSignatureRequestId, DispatchError> {
+		AbortedBroadcasts::<T, I>::mutate(|aborted| {
+			aborted.remove(&broadcast_id);
+		});
+		let mut api_call = Self::clean_up_broadcast_storage(broadcast_id)
+			.ok_or(Error::<T, I>::ApiCallUnavailable)?;
+
+		PendingBroadcasts::<T, I>::try_mutate(|pending| {
+			if pending.contains(&broadcast_id) {
+				Err(Error::<T, I>::BroadcastStillPending)
+			} else {
+				if request_broadcast {
+					pending.insert(broadcast_id);
+				}
+				Ok(())
+			}
+		})?;
+
+		if refresh_replay_protection {
+			api_call.refresh_replay_protection();
+		}
+		Ok(Self::threshold_sign(api_call, broadcast_id, request_broadcast))
 	}
 
-	/// Clean up storage data related to a broadcast ID.
-	fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
+	fn expire_broadcast(broadcast_id: BroadcastId) {
+		// These would otherwise be cleaned up when the broadacst succeeds or aborts.
+		RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
+		RequestFailureCallbacks::<T, I>::remove(broadcast_id);
 		Self::clean_up_broadcast_storage(broadcast_id);
 	}
 
 	fn threshold_sign_and_broadcast_rotation_tx(
 		api_call: Self::ApiCall,
+		new_key: AggKey<T, I>,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		let (broadcast_id, request_id) =
 			<Self as Broadcaster<_>>::threshold_sign_and_broadcast(api_call);
@@ -971,6 +1090,14 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 				}
 		}
 
+		IncomingKeyAndBroadcastId::<T, I>::put((new_key, broadcast_id));
+
 		(broadcast_id, request_id)
+	}
+}
+
+impl<T: Config<I>, I: 'static> RotationBroadcastsPending for Pallet<T, I> {
+	fn rotation_broadcasts_pending() -> bool {
+		IncomingKeyAndBroadcastId::<T, I>::exists()
 	}
 }

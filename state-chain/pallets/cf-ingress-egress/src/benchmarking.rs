@@ -3,6 +3,7 @@
 use super::*;
 use crate::{BoostStatus, DisabledEgressAssets};
 use cf_chains::{
+	address::EncodedAddress,
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	DepositChannel,
 };
@@ -10,7 +11,7 @@ use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	traits::{OnNewAccount, OriginTrait},
+	traits::{OnNewAccount, OriginTrait, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
 use strum::IntoEnumIterator;
@@ -177,12 +178,12 @@ mod benchmarks {
 		}
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller));
-		assert_ok!(T::LpBalance::try_credit_account(&caller, asset.into(), 1_000_000,));
+		assert_ok!(T::Balance::try_credit_account(&caller, asset.into(), 1_000_000,));
 
 		// A non-zero balance is required to pay for the channel opening fee.
 		T::FeePayment::mint_to_account(&caller, u32::MAX.into());
 
-		assert_ok!(T::LpBalance::try_credit_account(
+		assert_ok!(T::Balance::try_credit_account(
 			&caller,
 			asset.into(),
 			5_000_000_000_000_000_000u128
@@ -282,6 +283,52 @@ mod benchmarks {
 				// This depends on the number of boosters who contributed to it:
 				pool.as_mut().unwrap().process_deposit_as_lost(prewitnessed_deposit_id);
 			});
+		}
+	}
+
+	#[benchmark]
+	fn contract_swap_request() {
+		let deposit_amount = 1_000;
+
+		let witness_origin = T::EnsureWitnessed::try_successful_origin().unwrap();
+		let call = Call::<T, I>::contract_swap_request {
+			from: Asset::Usdc,
+			to: Asset::Eth,
+			deposit_amount,
+			destination_address: EncodedAddress::benchmark_value(),
+			tx_hash: [0; 32],
+		};
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(witness_origin));
+		}
+	}
+
+	#[benchmark]
+	fn contract_ccm_swap_request() {
+		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
+		let deposit_metadata = CcmDepositMetadata {
+			source_chain: ForeignChain::Ethereum,
+			source_address: Some(ForeignChainAddress::benchmark_value()),
+			channel_metadata: CcmChannelMetadata {
+				message: vec![0x00].try_into().unwrap(),
+				gas_budget: 1,
+				cf_parameters: Default::default(),
+			},
+		};
+		let call = Call::<T, I>::contract_ccm_swap_request {
+			source_asset: Asset::Usdc,
+			deposit_amount: 1_000,
+			destination_asset: Asset::Eth,
+			destination_address: EncodedAddress::benchmark_value(),
+			deposit_metadata,
+			tx_hash: Default::default(),
+		};
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
 		}
 	}
 
@@ -492,6 +539,12 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_create_boost_pools::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_contract_swap_request::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_contract_ccm_swap_request::<Test, ()>(true);
 		});
 	}
 }

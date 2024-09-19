@@ -2,6 +2,226 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.3] - 2024-09-04
+
+### Fixes
+
+- Decrease broadcast timeout constants for sol, arb, eth, dot
+- More accurate compute unit limits for Solana
+- Only call monotonic median hook if state is updated. ([#5223](https://github.com/chainflip-io/chainflip-backend/issues/5223))
+- Remove WS endpoint from Solana settings as it's not used.
+
+## [1.6.2] - 2024-08-30
+
+### Fixes
+
+- Change try_from_iter into from_iter_or_default
+
+## [1.6.1] - 2024-08-30
+
+### Fixes
+
+- Downgrade log message severity for voting / retrier
+
+## [1.6.0] - 2024-08-23
+
+### Features
+
+- Solana gas tweaks ([#5140](https://github.com/chainflip-io/chainflip-backend/issues/5140))
+- Core DCA ([#5106](https://github.com/chainflip-io/chainflip-backend/issues/5106))
+- Add DCA details to scheduled swaps subscription ([#5182](https://github.com/chainflip-io/chainflip-backend/issues/5182))
+- Solana deployments ([#5188](https://github.com/chainflip-io/chainflip-backend/issues/5188))
+- Charging broker fee per chunk and in USDC ([#5161](https://github.com/chainflip-io/chainflip-backend/issues/5161))
+- FoK for CCM swaps ([#5187](https://github.com/chainflip-io/chainflip-backend/issues/5187))
+- Return early if no client ready on retry limited requests ([#5057](https://github.com/chainflip-io/chainflip-backend/issues/5057))
+- Expose zero remaining value orders from cf_pool_orders RPC ([#5042](https://github.com/chainflip-io/chainflip-backend/issues/5042))
+- Upload `chainflip-engine` shared libraries to S3 💾 ([#5061](https://github.com/chainflip-io/chainflip-backend/issues/5061))
+- Exclude validators with negative rep from auction ([#5062](https://github.com/chainflip-io/chainflip-backend/issues/5062))
+- RPC to return available pools ([#5065](https://github.com/chainflip-io/chainflip-backend/issues/5065))
+- Add boost balances to account info ([#5028](https://github.com/chainflip-io/chainflip-backend/issues/5028))
+- Apicall stores signer, store current on chain key ([#5063](https://github.com/chainflip-io/chainflip-backend/issues/5063))
+- Allow arbitrary accounts to be used as affiliate broker ([#5097](https://github.com/chainflip-io/chainflip-backend/issues/5097))
+- Add FoK config items to `cf_swapping_environment` ([#5099](https://github.com/chainflip-io/chainflip-backend/issues/5099))
+- Emit swap request first ([#5102](https://github.com/chainflip-io/chainflip-backend/issues/5102))
+- Solana chain integration ([#4849](https://github.com/chainflip-io/chainflip-backend/issues/4849))
+- Governance extrinsic to recover Solana Durable Nonces ([#5130](https://github.com/chainflip-io/chainflip-backend/issues/5130))
+- Add maybe_ccm_limit ([#5151](https://github.com/chainflip-io/chainflip-backend/issues/5151))
+- Solana resigning ([#5124](https://github.com/chainflip-io/chainflip-backend/issues/5124))
+- Sol event encoding tests ([#5156](https://github.com/chainflip-io/chainflip-backend/issues/5156))
+- DCA parameter validation ([#5144](https://github.com/chainflip-io/chainflip-backend/issues/5144))
+- Move asset balances into asset-balances pallet (([PRO-1422](https://linear.app/chainflip/issue/PRO-1422))) ([#5083](https://github.com/chainflip-io/chainflip-backend/issues/5083))
+- Bouncer can observe past events ([#5136](https://github.com/chainflip-io/chainflip-backend/issues/5136))
+- Generic configurable election-based witnessing pallet ([#5060](https://github.com/chainflip-io/chainflip-backend/issues/5060))
+- Added benchmark for delete vote ([#5189](https://github.com/chainflip-io/chainflip-backend/issues/5189))
+- Use encoded address in ccm deposit metadata in events ([#5192](https://github.com/chainflip-io/chainflip-backend/issues/5192))
+- Add the ability to close all open orders ([#5038](https://github.com/chainflip-io/chainflip-backend/issues/5038))
+- Solana chain tracking events ([#5195](https://github.com/chainflip-io/chainflip-backend/issues/5195))
+
+### Fixes
+
+- Add missing Arbitrum block_height ([#5126](https://github.com/chainflip-io/chainflip-backend/issues/5126))
+- Account deletion logic to keep boost funds into consideration ([#5059](https://github.com/chainflip-io/chainflip-backend/issues/5059))
+- Grep correct spec_version ([#5070](https://github.com/chainflip-io/chainflip-backend/issues/5070))
+- 3-node localnet in CI 🥽 ([#5085](https://github.com/chainflip-io/chainflip-backend/issues/5085))
+- Pallet versions should match release + bump old dylib version to 1.5.1 ([#5142](https://github.com/chainflip-io/chainflip-backend/issues/5142))
+- Qualify nodes based on reputation ([#5118](https://github.com/chainflip-io/chainflip-backend/issues/5118))
+- Don't panic in SCC extrinsic detection (([PRO-1250](https://linear.app/chainflip/issue/PRO-1250))) ([#5146](https://github.com/chainflip-io/chainflip-backend/issues/5146))
+- Use encoded addresses in refund params for events ([#5138](https://github.com/chainflip-io/chainflip-backend/issues/5138))
+- Expose solana ws rpc endpoint 🐛☀️ ([#5162](https://github.com/chainflip-io/chainflip-backend/issues/5162))
+- Allow unswept funds to be used in boost ([#5164](https://github.com/chainflip-io/chainflip-backend/issues/5164))
+
+### Refactor
+
+- Impl_pallet_safe_mode for instantiable pallets ([#5058](https://github.com/chainflip-io/chainflip-backend/issues/5058))
+- Bouncer cmd for FoK swap ([#5103](https://github.com/chainflip-io/chainflip-backend/issues/5103))
+- Move info to correct environment ([#5115](https://github.com/chainflip-io/chainflip-backend/issues/5115))
+
+### Testing
+
+- Bouncer Fill or Kill test ([#5056](https://github.com/chainflip-io/chainflip-backend/issues/5056))
+- FoK 0 refund duration ([#5111](https://github.com/chainflip-io/chainflip-backend/issues/5111))
+- Add Solana delta ingress witnessing test to bouncer ([#5155](https://github.com/chainflip-io/chainflip-backend/issues/5155))
+- Bouncer test for DCA Swap ([#5137](https://github.com/chainflip-io/chainflip-backend/issues/5137))
+
+## [1.5.1] - 2024-08-13
+
+### Documentation
+
+- Point out localnet debug file location 🕵🏻‍♂️ ([#4850](https://github.com/chainflip-io/chainflip-backend/issues/4850))
+- Remove the mention of 1Password and Docker login 😅 ([#4988](https://github.com/chainflip-io/chainflip-backend/issues/4988))
+- Comment on the + WitnessPeriod
+
+### Features
+
+- RPC lp total balances ([#4951](https://github.com/chainflip-io/chainflip-backend/issues/4951))
+- Make FoK constants configurable ([#5024](https://github.com/chainflip-io/chainflip-backend/issues/5024))
+- Require upgrade-check pass on merge queue ([#4878](https://github.com/chainflip-io/chainflip-backend/issues/4878))
+- Run upgrade-test on commit of trigger ([#4881](https://github.com/chainflip-io/chainflip-backend/issues/4881))
+- Swap rate with limit orders [([WEB-1059](https://linear.app/chainflip/issue/WEB-1059))][([WEB-1062](https://linear.app/chainflip/issue/WEB-1062))] ([#4778](https://github.com/chainflip-io/chainflip-backend/issues/4778))
+- NetworkFeeTaken includes swap_id ([#4888](https://github.com/chainflip-io/chainflip-backend/issues/4888))
+- Upgrade-check is a blocking check on the merge-queue ([#4899](https://github.com/chainflip-io/chainflip-backend/issues/4899))
+- Swap input excludes network fee ([#4887](https://github.com/chainflip-io/chainflip-backend/issues/4887))
+- Instantiate solana ([#4763](https://github.com/chainflip-io/chainflip-backend/issues/4763))
+- Check binary tomls and spec version accurately on release branches ([#4927](https://github.com/chainflip-io/chainflip-backend/issues/4927))
+- Run upgrade-test on push to release branches ([#4940](https://github.com/chainflip-io/chainflip-backend/issues/4940))
+- Add monitoring RPCs ([#4919](https://github.com/chainflip-io/chainflip-backend/issues/4919))
+- Test benchmarks in CI ([#4944](https://github.com/chainflip-io/chainflip-backend/issues/4944))
+- Chain state on bouncer failure ([#4948](https://github.com/chainflip-io/chainflip-backend/issues/4948))
+- Return deposit tx_hashes where possible ([#4946](https://github.com/chainflip-io/chainflip-backend/issues/4946))
+- Try to submit previous btc broadcasts before our own ([#4978](https://github.com/chainflip-io/chainflip-backend/issues/4978))
+- Core fill-or-kill logic ([#4950](https://github.com/chainflip-io/chainflip-backend/issues/4950))
+- Scheduled swap sub price estimation fallback ([#4987](https://github.com/chainflip-io/chainflip-backend/issues/4987))
+- Polkadot v1.2.5 support ([#5026](https://github.com/chainflip-io/chainflip-backend/issues/5026))
+- Add fok params to SwapDepositAddressReady ([#5013](https://github.com/chainflip-io/chainflip-backend/issues/5013))
+- RPC safe mode statuses ([#4967](https://github.com/chainflip-io/chainflip-backend/issues/4967))
+- Scale to json decoder ([#4889](https://github.com/chainflip-io/chainflip-backend/issues/4889))
+- Consistent broker api address strings ([#5030](https://github.com/chainflip-io/chainflip-backend/issues/5030))
+- Smart retrier endpoint selection ([#4984](https://github.com/chainflip-io/chainflip-backend/issues/4984))
+- Add primary/secondary label to RPC_RETRIER_TOTAL_REQUESTS metric ([#5015](https://github.com/chainflip-io/chainflip-backend/issues/5015))
+- Add `chainflip-node` probe scripts 🩺 ([#5033](https://github.com/chainflip-io/chainflip-backend/issues/5033))
+- Upload `chainflip-engine` shared libraries to S3 💾 ([#5061](https://github.com/chainflip-io/chainflip-backend/issues/5061)) ([#5067](https://github.com/chainflip-io/chainflip-backend/issues/5067))
+- Expose zero remaining value orders from cf_pool_orders RPC ([#5042](https://github.com/chainflip-io/chainflip-backend/issues/5042))
+- Protect against pending swaps during upgrade
+- Also check PendingCcms
+- Add boost balances to account info ([#5028](https://github.com/chainflip-io/chainflip-backend/issues/5028))
+- Add FoK config items to `cf_swapping_environment` ([#5099](https://github.com/chainflip-io/chainflip-backend/issues/5099))
+- Set Solana ChainState
+- Chore: bump openssl ([#5066](https://github.com/chainflip-io/chainflip-backend/issues/5066)) ([#5068](https://github.com/chainflip-io/chainflip-backend/issues/5068))
+- Feat: apicall stores signer, store current on chain key ([#5063](https://github.com/chainflip-io/chainflip-backend/issues/5063))
+
+### Fixes
+
+- Wait for new balance on transfer asset ([#4836](https://github.com/chainflip-io/chainflip-backend/issues/4836))
+- Consistent boost fee math ([#4857](https://github.com/chainflip-io/chainflip-backend/issues/4857))
+- Kill node correctly in upgrade-test ([#4848](https://github.com/chainflip-io/chainflip-backend/issues/4848))
+- Use release-persa for upgrade-test ([#4863](https://github.com/chainflip-io/chainflip-backend/issues/4863))
+- Add `ca-certificates` to docker images 🐛 ([#4864](https://github.com/chainflip-io/chainflip-backend/issues/4864))
+- Engine-runner permissions +x ([#4866](https://github.com/chainflip-io/chainflip-backend/issues/4866))
+- Upgrade test same version ([#4868](https://github.com/chainflip-io/chainflip-backend/issues/4868))
+- Run Arbitrum migrations ([#4876](https://github.com/chainflip-io/chainflip-backend/issues/4876))
+- Remove bad equals ([#4879](https://github.com/chainflip-io/chainflip-backend/issues/4879))
+- Check version correctly ([#4871](https://github.com/chainflip-io/chainflip-backend/issues/4871))
+- Add merge group for downloading ([#4885](https://github.com/chainflip-io/chainflip-backend/issues/4885))
+- Restart node on compatible upgrade ([#4886](https://github.com/chainflip-io/chainflip-backend/issues/4886))
+- Update sisyphos genesis hash ([#4900](https://github.com/chainflip-io/chainflip-backend/issues/4900))
+- Vault activation and initialization ([#4902](https://github.com/chainflip-io/chainflip-backend/issues/4902))
+- Use median for base_fee and gas_fee_multiplier for arbitrum ([#4914](https://github.com/chainflip-io/chainflip-backend/issues/4914))
+- Utxo consolidation works without prev key ([#4903](https://github.com/chainflip-io/chainflip-backend/issues/4903))
+- Add missing debug.log on recreate in localnet/manage.sh ([#4916](https://github.com/chainflip-io/chainflip-backend/issues/4916))
+- More robust governance bouncer test ([#4912](https://github.com/chainflip-io/chainflip-backend/issues/4912))
+- Benchmarks artefact name 🐛 ([#4931](https://github.com/chainflip-io/chainflip-backend/issues/4931))
+- Change the dylib id so it can be found with rpath ([#4923](https://github.com/chainflip-io/chainflip-backend/issues/4923))
+- Correctly refrence `berghain` bin artefact 🐛 ([#4935](https://github.com/chainflip-io/chainflip-backend/issues/4935))
+- Change field name ([#4937](https://github.com/chainflip-io/chainflip-backend/issues/4937))
+- Mac rpath search should use executable's directory ([#4947](https://github.com/chainflip-io/chainflip-backend/issues/4947))
+- Cannot add 0 funds to boost pool ([#4953](https://github.com/chainflip-io/chainflip-backend/issues/4953))
+- Package should use old dylibs based on tags ([#4966](https://github.com/chainflip-io/chainflip-backend/issues/4966))
+- Btc_utxo_consolidation import ([#4968](https://github.com/chainflip-io/chainflip-backend/issues/4968))
+- Print cause of settings error ([#4972](https://github.com/chainflip-io/chainflip-backend/issues/4972))
+- Use correct network for version bump check ([#4977](https://github.com/chainflip-io/chainflip-backend/issues/4977))
+- Don't ignore arb settings ([#4982](https://github.com/chainflip-io/chainflip-backend/issues/4982))
+- Remove prewitnessed deposits migration should migrate boost status ([#4993](https://github.com/chainflip-io/chainflip-backend/issues/4993))
+- Use U256 return value for asset volume ([#4986](https://github.com/chainflip-io/chainflip-backend/issues/4986))
+- Eagerly prune ExtraCallData ([#4994](https://github.com/chainflip-io/chainflip-backend/issues/4994))
+- Only use cache on PRs to main ([#5007](https://github.com/chainflip-io/chainflip-backend/issues/5007))
+- Record_fees ([#5011](https://github.com/chainflip-io/chainflip-backend/issues/5011))
+- Remove rust cache ([#5010](https://github.com/chainflip-io/chainflip-backend/issues/5010))
+- Add latest chainflip-engine `dylib` and `.so` files 🐛 ([#5020](https://github.com/chainflip-io/chainflip-backend/issues/5020))
+- Clean up broadcast state on success only ([#4758](https://github.com/chainflip-io/chainflip-backend/issues/4758))
+- Use rpath in engine dylib ([#5031](https://github.com/chainflip-io/chainflip-backend/issues/5031))
+- Ingress-egress pallet migration co-dependency ([#5032](https://github.com/chainflip-io/chainflip-backend/issues/5032))
+- Rpath name on 1.4.5 dylib ([#5046](https://github.com/chainflip-io/chainflip-backend/issues/5046))
+- Allow validators to deregister once they no longer have relevant key material ([#5045](https://github.com/chainflip-io/chainflip-backend/issues/5045))
+- Cp .so files to /usr/lib ([#5051](https://github.com/chainflip-io/chainflip-backend/issues/5051))
+- Account deletion logic to keep boost funds into consideration ([#5059](https://github.com/chainflip-io/chainflip-backend/issues/5059))
+- Update dylib id
+- Prewitness deposits without delaying for a block
+- Ccm transfers should charge broker fee
+- Make network fee migration idempotent
+- Api call migrations
+- Use encoded address for refund_address in events ([#5135](https://github.com/chainflip-io/chainflip-backend/issues/5135))
+- Fix: Add missing Arbitrum block_height ([#5126](https://github.com/chainflip-io/chainflip-backend/issues/5126))
+- Fix: grep correct spec_version ([#5070](https://github.com/chainflip-io/chainflip-backend/issues/5070)) ([#5071](https://github.com/chainflip-io/chainflip-backend/issues/5071))
+
+### Refactor
+
+- Rename cf_asset_balances to cf_asset_free_balances ([#4837](https://github.com/chainflip-io/chainflip-backend/issues/4837))
+- Ensure crypto ready ([#4858](https://github.com/chainflip-io/chainflip-backend/issues/4858))
+- Remove storage for prewitnessed deposits ([#4833](https://github.com/chainflip-io/chainflip-backend/issues/4833))
+- Migrate file to new observe event ([#4907](https://github.com/chainflip-io/chainflip-backend/issues/4907))
+- Remove old observeEvent and observeBadEvent ([#4958](https://github.com/chainflip-io/chainflip-backend/issues/4958))
+- Multicast subscriptions ([#4980](https://github.com/chainflip-io/chainflip-backend/issues/4980))
+- Bouncer cleanup ([#4901](https://github.com/chainflip-io/chainflip-backend/issues/4901))
+- Move collected network fee to swapping pallet ([#5014](https://github.com/chainflip-io/chainflip-backend/issues/5014))
+- Move info to correct environment ([#5115](https://github.com/chainflip-io/chainflip-backend/issues/5115))
+
+### Testing
+
+- Adjust btc eth ccm ([#4873](https://github.com/chainflip-io/chainflip-backend/issues/4873))
+- Basic runner tests for help and version ([#4983](https://github.com/chainflip-io/chainflip-backend/issues/4983))
+- Engine-runner command line args passing filters correctly ([#5001](https://github.com/chainflip-io/chainflip-backend/issues/5001))
+- Bouncer Fill or Kill test ([#5056](https://github.com/chainflip-io/chainflip-backend/issues/5056))
+- Add retrial mechanism for EVM broadcasts ([#4875](https://github.com/chainflip-io/chainflip-backend/issues/4875))
+
+## [1.4.5] - 2024-07-01
+
+### Fixes
+
+- Fix Polkadot transaction encoding by adding the new CheckMetadataHash field to SignedExtra.
+
+## [1.4.4] - 2024-06-28
+
+### Fixes
+
+- Eager pruning of Chain Tracking witness data. ([#4994](https://github.com/chainflip-io/chainflip-backend/issues/4994))
+- Ensure broker fees are credited correctly. ([#5011](https://github.com/chainflip-io/chainflip-backend/issues/5011))
+
+## [1.4.3] - 2024-06-18
+
+### Fixes
+
+- Print cause of settings error ([#4972](https://github.com/chainflip-io/chainflip-backend/issues/4972))
+
 ## [1.4.2] - 2024-06-03
 
 ### Features

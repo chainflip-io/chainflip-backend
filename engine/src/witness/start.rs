@@ -7,14 +7,16 @@ use crate::{
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
+	sol::retry_rpc::SolRetryRpcClient,
 	state_chain_observer::client::{
+		chain_api::ChainApi,
+		electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi,
 		storage_api::StorageApi,
 		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 	},
 };
-
-use crate::state_chain_observer::client::chain_api::ChainApi;
+use state_chain_runtime::SolanaInstance;
 
 use super::common::epoch_source::EpochSource;
 
@@ -31,13 +33,20 @@ pub async fn start<StateChainClient>(
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	btc_client: BtcRetryRpcClient,
 	dot_client: DotRetryRpcClient,
+	sol_client: SolRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
 	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
-	StateChainClient: StorageApi + ChainApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi
+		+ ChainApi
+		+ SignedExtrinsicApi
+		+ ElectoralApi<SolanaInstance>
+		+ 'static
+		+ Send
+		+ Sync,
 {
 	let epoch_source =
 		EpochSource::builder(scope, state_chain_stream.clone(), state_chain_client.clone())
@@ -115,14 +124,16 @@ where
 	let start_arb = super::arb::start(
 		scope,
 		arb_client,
-		witness_call,
+		witness_call.clone(),
 		state_chain_client.clone(),
-		state_chain_stream.clone(),
-		epoch_source.clone(),
-		db.clone(),
+		state_chain_stream,
+		epoch_source,
+		db,
 	);
 
-	futures::future::try_join4(start_eth, start_btc, start_dot, start_arb).await?;
+	let start_sol = super::sol::start(scope, sol_client, state_chain_client);
+
+	futures::future::try_join5(start_eth, start_btc, start_dot, start_arb, start_sol).await?;
 
 	Ok(())
 }

@@ -40,16 +40,19 @@ impl Chain for Ethereum {
 	type ChainAmount = EthAmount;
 	type TransactionFee = evm::TransactionFee;
 	type TrackedData = EthereumTrackedData;
-	type ChainAccount = evm::Address;
 	type ChainAsset = assets::eth::Asset;
+	type ChainAssetMap<
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
+	> = assets::eth::AssetMap<T>;
+	type ChainAccount = evm::Address;
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = evm::DepositDetails;
 	type Transaction = Transaction;
 	type TransactionMetadata = EvmTransactionMetadata;
+	type TransactionRef = H256;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = EvmReplayProtection;
-	type TransactionRef = H256;
 }
 
 #[derive(

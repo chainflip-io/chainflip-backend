@@ -1,30 +1,30 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use core::ops::Range;
-
 use cf_amm::{
 	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
 	limit_orders::{self, Collected, PositionInfo},
 	range_orders::{self, Liquidity},
 	PoolState,
 };
-use cf_chains::Chain;
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
+use cf_chains::assets::any::AssetMap;
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_traits::{
-	impl_pallet_safe_mode, Chainflip, LpBalanceApi, NetworkFeeTaken, PoolApi, SwapQueueApi,
-	SwapType, SwappingApi,
+	impl_pallet_safe_mode, BalanceApi, Chainflip, PoolApi, SwapRequestHandler, SwappingApi,
 };
+use core::ops::Range;
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
-	sp_runtime::{Permill, Saturating, TransactionOutcome},
-	storage::{with_storage_layer, with_transaction_unchecked},
-	traits::{Defensive, OriginTrait, StorageVersion, UnfilteredDispatchable},
+	storage::with_storage_layer,
+	traits::{OnKilledAccount, OriginTrait, StorageVersion, UnfilteredDispatchable},
 	transactional,
 };
 
+use cf_traits::HistoricalFeeMigration;
+
+use cf_traits::LpRegistration;
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::traits::{UniqueSaturatedInto, Zero};
+use sp_arithmetic::traits::{SaturatedConversion, Zero};
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -42,9 +42,42 @@ mod tests;
 
 impl_pallet_safe_mode!(PalletSafeMode; range_order_update_enabled, limit_order_update_enabled);
 
+pub const MAX_ORDERS_DELETE: u32 = 100;
+#[derive(
+	serde::Serialize,
+	serde::Deserialize,
+	Copy,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialEq,
+	Eq,
+	Hash,
+)]
+#[serde(untagged)]
+pub enum CloseOrder {
+	Limit { base_asset: any::Asset, quote_asset: any::Asset, side: Side, id: OrderId },
+	Range { base_asset: any::Asset, quote_asset: any::Asset, id: OrderId },
+}
 // TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
 // nature.
-#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq, Hash)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialEq,
+	Eq,
+	Hash,
+	PartialOrd,
+	Ord,
+)]
 pub struct AssetPair {
 	assets: PoolPairsMap<Asset>,
 }
@@ -121,7 +154,7 @@ impl<T> AskBidMap<T> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -131,7 +164,7 @@ pub mod pallet {
 		range_orders::{self, Liquidity},
 		NewError,
 	};
-	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
+	use cf_traits::AccountRoleRegistry;
 	use frame_system::pallet_prelude::BlockNumberFor;
 	use sp_std::collections::btree_map::BTreeMap;
 
@@ -180,6 +213,18 @@ pub mod pallet {
 	pub enum RangeOrderSize {
 		AssetAmounts { maximum: AssetAmounts, minimum: AssetAmounts },
 		Liquidity { liquidity: Liquidity },
+	}
+
+	impl RangeOrderSize {
+		/// Returns whether or not the maximum amount of assets contained is 0.
+		pub fn max_is_zero(&self) -> bool {
+			match self {
+				RangeOrderSize::AssetAmounts { maximum: PoolPairsMap { base, quote }, .. } =>
+					*base + *quote,
+				RangeOrderSize::Liquidity { liquidity } => *liquidity,
+			}
+			.is_zero()
+		}
 	}
 
 	/// Indicates the change caused by an operation in the positions size, both in terms of
@@ -254,13 +299,13 @@ pub mod pallet {
 		/// The event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Pallet responsible for managing Liquidity Providers.
-		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
+		/// Access to the account balances.
+		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
 
-		type SwapQueueApi: SwapQueueApi;
+		/// LP address registration and verification.
+		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 
-		#[pallet::constant]
-		type NetworkFee: Get<Permill>;
+		type SwapRequestHandler: SwapRequestHandler;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -278,14 +323,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Pools<T: Config> = StorageMap<_, Twox64Concat, AssetPair, Pool<T>, OptionQuery>;
 
-	/// Interval at which we buy FLIP in order to burn it.
-	#[pallet::storage]
-	pub(super) type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
-
-	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
-	#[pallet::storage]
-	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
-
 	/// Queue of limit orders, indexed by block number waiting to get minted or burned.
 	#[pallet::storage]
 	pub(super) type ScheduledLimitOrderUpdates<T: Config> =
@@ -297,54 +334,15 @@ pub mod pallet {
 	pub(super) type MaximumPriceImpact<T: Config> =
 		StorageMap<_, Twox64Concat, AssetPair, u32, OptionQuery>;
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub flip_buy_interval: BlockNumberFor<T>,
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
-		fn build(&self) {
-			FlipBuyInterval::<T>::set(self.flip_buy_interval);
-		}
-	}
-
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
-		}
-	}
+	#[pallet::storage]
+	/// Historical earned fees for an account.
+	pub type HistoricalEarnedFees<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight_used: Weight = T::DbWeight::get().reads(1);
-			let interval = FlipBuyInterval::<T>::get();
-			if interval.is_zero() {
-				log::debug!("Flip buy interval is zero, skipping.")
-			} else {
-				weight_used.saturating_accrue(T::DbWeight::get().reads(1));
-				if (current_block % interval).is_zero() &&
-					!CollectedNetworkFee::<T>::get().is_zero()
-				{
-					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
-						T::SwapQueueApi::schedule_swap(
-							any::Asset::Usdc,
-							any::Asset::Flip,
-							*collected_fee,
-							None, /* refund parameters */
-							SwapType::NetworkFee,
-						);
-						collected_fee.set_zero();
-						Ok::<_, DispatchError>(())
-					}) {
-						log::warn!("Unable to swap Network Fee to Flip: {e:?}");
-					}
-				}
-			}
-
-			weight_used.saturating_accrue(T::DbWeight::get().reads(1));
 			for LimitOrderUpdate { ref lp, id, call } in
 				ScheduledLimitOrderUpdates::<T>::take(current_block)
 			{
@@ -373,8 +371,6 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Setting the buy interval to zero is not allowed.
-		ZeroBuyIntervalNotAllowed,
 		/// The specified exchange pool already exists.
 		PoolAlreadyExists,
 		/// The specified exchange pool does not exist.
@@ -414,14 +410,13 @@ pub mod pallet {
 		UnsupportedCall,
 		/// The update can't be scheduled because it has expired (dispatch_at is in the past).
 		LimitOrderUpdateExpired,
+		/// The range order size is invalid.
+		InvalidSize,
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		UpdatedBuyInterval {
-			buy_interval: BlockNumberFor<T>,
-		},
 		NewPoolCreated {
 			base_asset: Asset,
 			quote_asset: Asset,
@@ -489,33 +484,14 @@ pub mod pallet {
 			asset_pair: AssetPair,
 			limit: Option<u32>,
 		},
+		/// An order wasn't deleted (order not found)
+		OrderDeletionFailed {
+			order: CloseOrder,
+		},
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Updates the buy interval.
-		///
-		/// ## Events
-		///
-		/// - [UpdatedBuyInterval](Event::UpdatedBuyInterval)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_system::BadOrigin)
-		/// - [ZeroBuyIntervalNotAllowed](pallet_cf_pools::Error::ZeroBuyIntervalNotAllowed)
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::update_buy_interval())]
-		pub fn update_buy_interval(
-			origin: OriginFor<T>,
-			new_buy_interval: BlockNumberFor<T>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(new_buy_interval != Zero::zero(), Error::<T>::ZeroBuyIntervalNotAllowed);
-			FlipBuyInterval::<T>::set(new_buy_interval);
-			Self::deposit_event(Event::<T>::UpdatedBuyInterval { buy_interval: new_buy_interval });
-			Ok(())
-		}
-
 		/// Create a new pool.
 		/// Requires Governance.
 		///
@@ -607,7 +583,7 @@ pub mod pallet {
 					(None, Some(tick_range)) | (Some(tick_range), None) => Ok(tick_range),
 					(Some(previous_tick_range), Some(new_tick_range)) => {
 						if previous_tick_range != new_tick_range {
-							let withdrawn_asset_amounts = Self::inner_update_range_order(
+							let (withdrawn_asset_amounts, _) = Self::inner_update_range_order(
 								pool,
 								&lp,
 								asset_pair,
@@ -702,7 +678,7 @@ pub mod pallet {
 						Ok(option_new_tick_range.unwrap_or(previous_tick_range))
 					},
 				}?;
-				Self::inner_update_range_order(
+				let (_, new_order_liquidity) = Self::inner_update_range_order(
 					pool,
 					&lp,
 					asset_pair,
@@ -719,6 +695,15 @@ pub mod pallet {
 					}),
 					NoOpStatus::Allow,
 				)?;
+
+				// Asset input and resultant liquidity changes should be consistent.
+				// This condition can be breached in cases where eg. the assets amounts are rounded
+				// to zero liquidity.
+				ensure!(
+					(size.max_is_zero() && new_order_liquidity.is_zero()) ||
+						(!size.max_is_zero() && !new_order_liquidity.is_zero()),
+					Error::<T>::InvalidSize
+				);
 
 				Ok(())
 			})
@@ -1002,21 +987,93 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::WeightInfo::cancel_orders_batch())]
+		pub fn cancel_orders_batch(
+			origin: OriginFor<T>,
+			orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		) -> DispatchResult {
+			let lp = &T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			ensure!(
+				T::SafeMode::get().limit_order_update_enabled,
+				Error::<T>::UpdatingLimitOrdersDisabled
+			);
+			ensure!(
+				T::SafeMode::get().limit_order_update_enabled,
+				Error::<T>::UpdatingLimitOrdersDisabled
+			);
+			for order in orders {
+				match order {
+					CloseOrder::Limit { base_asset, quote_asset, side, id } => {
+						Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
+							match (pool.limit_orders_cache[side.to_sold_pair()]
+								.get(lp)
+								.and_then(|limit_orders| limit_orders.get(&id))
+								.cloned(),)
+							{
+								(None,) => {
+									Self::deposit_event(Event::<T>::OrderDeletionFailed { order });
+									Ok::<(), DispatchError>(())
+								},
+								(Some(previous_tick),) => {
+									Self::inner_update_limit_order(
+										pool,
+										lp,
+										asset_pair,
+										side,
+										id,
+										previous_tick,
+										crate::pallet::IncreaseOrDecrease::Decrease(
+											cf_amm::common::Amount::MAX,
+										),
+										crate::NoOpStatus::Allow,
+									)?;
+									Ok(())
+								},
+							}
+						})?;
+					},
+					CloseOrder::Range { base_asset, quote_asset, id } => {
+						Self::try_mutate_order(lp, base_asset, quote_asset, |asset_pair, pool| {
+							match (pool
+								.range_orders_cache
+								.get(lp)
+								.and_then(|range_orders| range_orders.get(&id))
+								.cloned(),)
+							{
+								(None,) => {
+									Self::deposit_event(Event::<T>::OrderDeletionFailed { order });
+									Ok::<(), DispatchError>(())
+								},
+								(Some(previous_tick_range),) => {
+									Self::inner_update_range_order(
+										pool,
+										lp,
+										asset_pair,
+										id,
+										previous_tick_range.clone(),
+										IncreaseOrDecrease::Decrease(
+											range_orders::Size::Liquidity {
+												liquidity: Liquidity::MAX,
+											},
+										),
+										NoOpStatus::Allow,
+									)?;
+									Ok(())
+								},
+							}
+						})?;
+					},
+				};
+			}
+
+			Ok(())
+		}
 	}
 }
 
 impl<T: Config> SwappingApi for Pallet<T> {
-	fn take_network_fee(input: AssetAmount) -> NetworkFeeTaken {
-		if input.is_zero() {
-			return NetworkFeeTaken { remaining_amount: 0, network_fee: 0 };
-		}
-		let (remaining, fee) = utilities::calculate_network_fee(T::NetworkFee::get(), input);
-		CollectedNetworkFee::<T>::mutate(|total| {
-			total.saturating_accrue(fee);
-		});
-		NetworkFeeTaken { remaining_amount: remaining, network_fee: fee }
-	}
-
 	#[transactional]
 	fn swap_single_leg(
 		from: any::Asset,
@@ -1084,13 +1141,51 @@ impl<T: Config> PoolApi for Pallet<T> {
 
 	fn open_order_count(
 		who: &Self::AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
+		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
-		let pool_orders = Self::pool_orders(base_asset, quote_asset, Some(who.clone()))?;
+		let pool_orders =
+			Self::pool_orders(asset_pair.base, asset_pair.quote, Some(who.clone()), true)?;
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
+	}
+
+	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		let mut result: AssetMap<AssetAmount> = AssetMap::from_fn(|_| 0);
+
+		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
+			let pool_orders =
+				match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()), false) {
+					Ok(orders) => orders,
+					Err(_) => continue,
+				};
+			for ask in pool_orders.limit_orders.asks {
+				result[base_asset] = result[base_asset]
+					.saturating_add(ask.sell_amount.saturated_into::<AssetAmount>());
+			}
+			for bid in pool_orders.limit_orders.bids {
+				result[Asset::Usdc] = result[Asset::Usdc]
+					.saturating_add(bid.sell_amount.saturated_into::<AssetAmount>());
+			}
+			for range_order in pool_orders.range_orders {
+				let pair = Self::pool_range_order_liquidity_value(
+					base_asset,
+					Asset::Usdc,
+					range_order.range,
+					range_order.liquidity,
+				)
+				.expect("Cannot fail we are sure the pool exists and the orders too");
+				result[base_asset] =
+					result[base_asset].saturating_add(pair.base.saturated_into::<AssetAmount>());
+				result[Asset::Usdc] =
+					result[Asset::Usdc].saturating_add(pair.quote.saturated_into::<AssetAmount>());
+			}
+		}
+		result
+	}
+
+	fn pools() -> Vec<PoolPairsMap<Asset>> {
+		Pools::<T>::iter_keys().map(|asset_pair| asset_pair.assets()).collect()
 	}
 }
 
@@ -1403,7 +1498,7 @@ impl<T: Config> Pallet<T> {
 		tick_range: Range<cf_amm::common::Tick>,
 		size_change: IncreaseOrDecrease<range_orders::Size>,
 		noop_status: NoOpStatus,
-	) -> Result<AssetAmounts, DispatchError> {
+	) -> Result<(AssetAmounts, Liquidity), DispatchError> {
 		let (liquidity_change, position_info, assets_change, collected) = match size_change {
 			IncreaseOrDecrease::Increase(size) => {
 				let (assets_debited, minted_liquidity, collected, position_info) =
@@ -1503,7 +1598,9 @@ impl<T: Config> Pallet<T> {
 			asset_pair.assets().zip(collected.fees).try_map(|(asset, collected_fees)| {
 				AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
 					|collected_fees| {
-						T::LpBalance::record_fees(lp, collected_fees, asset);
+						HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
+							*balance = balance.saturating_add(collected_fees)
+						});
 						T::LpBalance::try_credit_account(lp, asset, collected_fees)
 							.map(|()| collected_fees)
 					},
@@ -1546,7 +1643,7 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
-		Ok(assets_change)
+		Ok((assets_change, *liquidity_change.abs()))
 	}
 
 	pub fn try_add_limit_order(
@@ -1573,47 +1670,6 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	#[allow(clippy::type_complexity)]
-	#[transactional]
-	pub fn swap_with_network_fee(
-		from: any::Asset,
-		to: any::Asset,
-		input_amount: AssetAmount,
-	) -> Result<SwapOutput, DispatchError> {
-		Ok(match (from, to) {
-			(_, STABLE_ASSET) => {
-				let NetworkFeeTaken { remaining_amount: output, network_fee } =
-					Self::take_network_fee(Self::swap_single_leg(from, to, input_amount)?);
-
-				SwapOutput { intermediary: None, output, network_fee }
-			},
-			(STABLE_ASSET, _) => {
-				let NetworkFeeTaken { remaining_amount: input_amount, network_fee } =
-					Self::take_network_fee(input_amount);
-
-				SwapOutput {
-					intermediary: None,
-					output: Self::swap_single_leg(from, to, input_amount)?,
-					network_fee,
-				}
-			},
-			_ => {
-				let NetworkFeeTaken { remaining_amount: intermediary, network_fee } =
-					Self::take_network_fee(Self::swap_single_leg(
-						from,
-						STABLE_ASSET,
-						input_amount,
-					)?);
-
-				SwapOutput {
-					intermediary: Some(intermediary),
-					output: Self::swap_single_leg(STABLE_ASSET, to, intermediary)?,
-					network_fee,
-				}
-			},
-		})
-	}
-
 	fn try_mutate_pool<
 		R,
 		E: From<pallet::Error<T>>,
@@ -1634,7 +1690,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		f: F,
 	) -> Result<R, DispatchError> {
-		T::LpBalance::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
+		T::LpRegistrationApi::ensure_has_refund_address_for_pair(lp, base_asset, quote_asset)?;
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)
@@ -1813,10 +1869,6 @@ impl<T: Config> Pallet<T> {
 		.collect())
 	}
 
-	pub fn pools() -> Vec<PoolPairsMap<Asset>> {
-		Pools::<T>::iter_keys().map(|asset_pair| asset_pair.assets()).collect()
-	}
-
 	pub fn pool_info(
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
@@ -1861,6 +1913,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 		option_lp: Option<T::AccountId>,
+		filled_orders: bool,
 	) -> Result<PoolOrders<T>, DispatchError> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
@@ -1891,9 +1944,7 @@ impl<T: Config> Pallet<T> {
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
 							.unwrap();
-						if position_info.amount.is_zero() {
-							None
-						} else {
+						if filled_orders || !position_info.amount.is_zero() {
 							Some(LimitOrder {
 								lp: lp.clone(),
 								id: id.into(),
@@ -1902,6 +1953,8 @@ impl<T: Config> Pallet<T> {
 								fees_earned: collected.accumulative_fees,
 								original_sell_amount: collected.original_amount,
 							})
+						} else {
+							None
 						}
 					})
 					.collect()
@@ -1979,7 +2032,9 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		let collected_fees: AssetAmount = collected.fees.try_into()?;
 		let asset = asset_pair.assets()[!order.to_sold_pair()];
-		T::LpBalance::record_fees(lp, collected_fees, asset);
+		HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
+			*balance = balance.saturating_add(collected_fees)
+		});
 		T::LpBalance::try_credit_account(lp, asset, collected_fees)?;
 
 		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
@@ -2030,95 +2085,22 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> cf_traits::AssetConverter for Pallet<T> {
-	fn calculate_input_for_gas_output<C: Chain>(
-		input_asset: C::ChainAsset,
-		required_gas: C::ChainAmount,
-	) -> Option<C::ChainAmount> {
-		use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
-
-		if required_gas.is_zero() {
-			return Some(Zero::zero())
-		}
-
-		let output_asset = C::GAS_ASSET.into();
-		let input_asset = input_asset.into();
-		if input_asset == output_asset {
-			return Some(required_gas)
-		}
-
-		let estimation_input = utilities::fee_estimation_basis(input_asset).defensive_proof(
-			"Fee estimation cap not available. Please report this to Chainflip Labs.",
-		)?;
-
-		let estimation_output = with_transaction_unchecked(|| {
-			TransactionOutcome::Rollback(
-				Self::swap_with_network_fee(input_asset, output_asset, estimation_input).ok(),
-			)
-		})?
-		.output;
-
-		if estimation_output == 0 {
-			None
-		} else {
-			let input_amount_to_convert = multiply_by_rational_with_rounding(
-				required_gas.into(),
-				estimation_input,
-				estimation_output,
-				sp_arithmetic::Rounding::Down,
-			)
-			.defensive_proof(
-				"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
-			)?;
-
-			Some(input_amount_to_convert.unique_saturated_into())
-		}
+impl<T: Config> HistoricalFeeMigration for Pallet<T> {
+	type AccountId = T::AccountId;
+	fn migrate_historical_fee(account_id: Self::AccountId, asset: Asset, amount: AssetAmount) {
+		HistoricalEarnedFees::<T>::mutate(account_id, asset, |balance| {
+			*balance = balance.saturating_add(amount)
+		});
+	}
+	fn get_fee_amount(account_id: Self::AccountId, asset: Asset) -> AssetAmount {
+		HistoricalEarnedFees::<T>::get(account_id, asset)
 	}
 }
 
-pub mod utilities {
-	use super::*;
+pub struct DeleteHistoricalEarnedFees<T: Config>(sp_std::marker::PhantomData<T>);
 
-	pub fn calculate_network_fee(
-		fee_percentage: Permill,
-		input: AssetAmount,
-	) -> (AssetAmount, AssetAmount) {
-		let fee = fee_percentage * input;
-		(input - fee, fee)
-	}
-
-	/// The amount of a non-gas asset to be used for transaction fee estimation.
-	///
-	/// This should be of a similar order of magnitude to expected fees to get an accurate result.
-	///
-	/// The value should be large enough to allow a good estimation of the fee, but small enough
-	/// to not exhaust the pool liquidity.
-	///
-	/// ```
-	/// use pallet_cf_pools::utilities::fee_estimation_basis;
-	/// use cf_primitives::Asset;
-	///
-	/// for asset in Asset::all() {
-	///     if !asset.is_gas_asset() {
-	///         assert!(
-	///             fee_estimation_basis(asset).is_some(),
-	///             "No fee estimation cap defined for {:?}. Add one to the fee_estimation_basis function definition.",
-	///             asset,
-	///         );
-	///     }
-	/// }
-	/// ```
-	pub fn fee_estimation_basis(asset: Asset) -> Option<u128> {
-		use cf_primitives::FLIPPERINOS_PER_FLIP;
-		/// 20 Dollars.
-		const USD_ESTIMATION_CAP: u128 = 20_000_000;
-
-		match asset {
-			Asset::Flip => Some(10 * FLIPPERINOS_PER_FLIP),
-			Asset::Usdc => Some(USD_ESTIMATION_CAP),
-			Asset::Usdt => Some(USD_ESTIMATION_CAP),
-			Asset::ArbUsdc => Some(USD_ESTIMATION_CAP),
-			_ => None,
-		}
+impl<T: Config> OnKilledAccount<T::AccountId> for DeleteHistoricalEarnedFees<T> {
+	fn on_killed_account(who: &T::AccountId) {
+		let _ = HistoricalEarnedFees::<T>::clear_prefix(who, u32::MAX, None);
 	}
 }

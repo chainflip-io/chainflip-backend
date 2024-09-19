@@ -1,8 +1,8 @@
+use super::{MockPallet, MockPalletStorage};
 use crate::AccountRoleRegistry;
 use cf_primitives::AccountRole;
+use frame_support::{pallet_prelude::DispatchError, sp_runtime::DispatchResult};
 use frame_system::{ensure_signed, Config};
-
-use super::{MockPallet, MockPalletStorage};
 
 pub struct MockAccountRoleRegistry;
 
@@ -11,16 +11,18 @@ impl MockPallet for MockAccountRoleRegistry {
 }
 
 const ACCOUNT_ROLES: &[u8] = b"AccountRoles";
+pub const ALREADY_REGISTERED_ERROR: DispatchError =
+	DispatchError::Other("Account already registered");
 
 impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 	fn register_account_role(
 		account_id: &<T as frame_system::Config>::AccountId,
 		role: AccountRole,
-	) -> sp_runtime::DispatchResult {
+	) -> DispatchResult {
 		if <Self as MockPalletStorage>::get_storage::<_, AccountRole>(ACCOUNT_ROLES, account_id)
 			.is_some()
 		{
-			return Err("Account already registered".into())
+			return Err(ALREADY_REGISTERED_ERROR)
 		}
 		<Self as MockPalletStorage>::put_storage(ACCOUNT_ROLES, account_id, role);
 		Ok(())
@@ -29,7 +31,7 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 	fn deregister_account_role(
 		account_id: &<T as Config>::AccountId,
 		role: AccountRole,
-	) -> sp_runtime::DispatchResult {
+	) -> DispatchResult {
 		match <Self as MockPalletStorage>::take_storage::<_, AccountRole>(ACCOUNT_ROLES, account_id)
 		{
 			Some(r) if r == role => Ok(()),

@@ -1,9 +1,8 @@
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{Chain, ChainCrypto, Ethereum, ForeignChain};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_ensure_witnessed_for_origin, impl_mock_on_account_funded,
-	impl_mock_waived_fees, mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey,
-	CommKeyBroadcaster, WaivedFees,
+	impl_mock_chainflip, impl_mock_on_account_funded, impl_mock_waived_fees,
+	mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey, CommKeyBroadcaster, WaivedFees,
 };
 use codec::{Decode, Encode};
 use frame_support::{derive_impl, parameter_types, traits::HandleLifetime};
@@ -61,7 +60,6 @@ impl system::Config for Test {
 }
 
 impl_mock_chainflip!(Test);
-impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;

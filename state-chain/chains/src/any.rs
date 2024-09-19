@@ -3,7 +3,11 @@ use crate::{
 	none::NoneChainCrypto,
 	Chain, FeeRefundCalculator,
 };
+use codec::{FullCodec, MaxEncodedLen};
+use frame_support::Parameter;
+use sp_runtime::traits::Member;
 
+use crate::benchmarking_value::BenchmarkValue;
 use cf_primitives::{
 	chains::{assets, AnyChain},
 	AssetAmount, ChannelId,
@@ -20,15 +24,18 @@ impl Chain for AnyChain {
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = ();
 	type ChainAsset = assets::any::Asset;
+	type ChainAssetMap<
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
+	> = assets::any::AssetMap<T>;
 	type ChainAccount = ForeignChainAddress;
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
 	type DepositDetails = ();
 	type Transaction = ();
 	type TransactionMetadata = ();
+	type TransactionRef = ();
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
-	type TransactionRef = ();
 }
 
 impl FeeRefundCalculator<AnyChain> for () {

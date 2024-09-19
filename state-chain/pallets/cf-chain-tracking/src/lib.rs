@@ -12,7 +12,7 @@ pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState, FeeEstimationApi};
 use cf_traits::{AdjustedFeeEstimationApi, Chainflip, GetBlockHeight};
-use frame_support::{dispatch::DispatchResultWithPostInfo, pallet_prelude::*};
+use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::{FixedPointNumber, FixedU128};
@@ -62,7 +62,7 @@ pub mod pallet {
 	pub type CurrentChainState<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChainState<T::TargetChain>>;
 
-	/// The fee multiplier value used when estimating ingress/egree fees
+	/// The fee multiplier value used when estimating ingress/egress fees
 	#[pallet::storage]
 	#[pallet::getter(fn fee_multiplier)]
 	pub type FeeMultiplier<T: Config<I>, I: 'static = ()> =
@@ -130,25 +130,14 @@ pub mod pallet {
 		pub fn update_chain_state(
 			origin: OriginFor<T>,
 			new_chain_state: ChainState<T::TargetChain>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 			ensure!(
 				<T::TargetChain as Chain>::is_block_witness_root(new_chain_state.block_height),
 				Error::<T, I>::InvalidBlockHeight
 			);
-			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
-				ensure!(
-					new_chain_state.block_height >
-						previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
-					Error::<T, I>::StaleDataSubmitted
-				);
-				*previous_chain_state = Some(new_chain_state.clone());
 
-				Ok(())
-			})?;
-			Self::deposit_event(Event::<T, I>::ChainStateUpdated { new_chain_state });
-
-			Ok(().into())
+			Self::inner_update_chain_state(new_chain_state)
 		}
 
 		/// Update the fee multiplier with the provided value
@@ -167,6 +156,25 @@ pub mod pallet {
 
 			Ok(())
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn inner_update_chain_state(new_chain_state: ChainState<T::TargetChain>) -> DispatchResult {
+		CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
+			ensure!(
+				new_chain_state.block_height >
+					previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
+				Error::<T, I>::StaleDataSubmitted
+			);
+			*previous_chain_state = Some(new_chain_state.clone());
+
+			Ok(())
+		})?;
+
+		Self::deposit_event(Event::<T, I>::ChainStateUpdated { new_chain_state });
+
+		Ok(())
 	}
 }
 

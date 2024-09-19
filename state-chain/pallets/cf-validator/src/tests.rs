@@ -5,7 +5,11 @@ use core::ops::Range;
 use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
-	mocks::{key_rotator::MockKeyRotatorA, reputation_resetter::MockReputationResetter},
+	mocks::{
+		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
+		key_rotator::MockKeyRotatorA,
+		reputation_resetter::MockReputationResetter,
+	},
 	AccountRoleRegistry, SafeMode, SetSafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
@@ -170,6 +174,10 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 fn should_rotate_when_forced() {
 	new_test_ext().then_execute_with_checks(|| {
 		set_default_test_bids();
+		assert_noop!(
+			ValidatorPallet::force_rotation(RuntimeOrigin::signed(ALICE)),
+			sp_runtime::traits::BadOrigin
+		);
 		assert_ok!(ValidatorPallet::force_rotation(RuntimeOrigin::root()));
 		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
 		assert_noop!(
@@ -323,14 +331,16 @@ fn register_peer_id() {
 			10,
 			alice_peer_keypair.sign(&ALICE.encode()[..]),
 		));
+
 		assert_eq!(
-			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
-				ALICE,
-				alice_peer_public_key,
-				40044,
-				10
-			)),
+			MockCfeInterface::take_events(),
+			vec![
+			MockCfeEvent::PeerIdRegistered {
+				account_id: ALICE,
+				pubkey: alice_peer_public_key,
+				port: 40044,
+				ip: 10
+			}],
 			"should emit event on register peer id"
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&alice_peer_public_key), Some(()));
@@ -358,14 +368,16 @@ fn register_peer_id() {
 			11,
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		),);
+
 		assert_eq!(
-			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
-				BOB,
-				bob_peer_public_key,
-				40043,
-				11
-			)),
+			MockCfeInterface::take_events(),
+			vec![
+			MockCfeEvent::PeerIdRegistered {
+				account_id: BOB,
+				pubkey: bob_peer_public_key,
+				port: 40043,
+				ip: 11
+			}],
 			"should emit event on register peer id"
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
@@ -394,14 +406,16 @@ fn register_peer_id() {
 			11,
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
+
 		assert_eq!(
-			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
-				BOB,
-				bob_peer_public_key,
-				40043,
-				11
-			)),
+			MockCfeInterface::take_events(),
+			vec![
+			MockCfeEvent::PeerIdRegistered {
+				account_id: BOB,
+				pubkey: bob_peer_public_key,
+				port: 40043,
+				ip: 11
+			}],
 			"should emit event on register peer id"
 		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
@@ -415,16 +429,6 @@ fn register_peer_id() {
 			12,
 			bob_peer_keypair.sign(&BOB.encode()[..]),
 		));
-		assert_eq!(
-			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::PeerIdRegistered(
-				BOB,
-				bob_peer_public_key,
-				40043,
-				12
-			)),
-			"should emit event on register peer id"
-		);
 		assert_eq!(ValidatorPallet::mapped_peer(&bob_peer_public_key), Some(()));
 		assert_eq!(ValidatorPallet::node_peer_id(&BOB), Some((bob_peer_public_key, 40043, 12)));
 	});
@@ -573,6 +577,17 @@ fn no_validator_rotation_when_disabled_by_safe_mode() {
 		set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
 		assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+	});
+}
+
+#[test]
+fn only_governance_can_force_rotation() {
+	new_test_ext().then_execute_with_checks(|| {
+		assert_noop!(
+			ValidatorPallet::force_rotation(OriginTrait::none()),
+			sp_runtime::traits::BadOrigin
+		);
+		assert_ok!(ValidatorPallet::force_rotation(RuntimeOrigin::root()));
 	});
 }
 
@@ -731,7 +746,7 @@ fn test_expect_validator_register_fails() {
 		// Trying to register again passes the funding check but fails for other reasons.
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ID)),
-			DispatchError::Other("Account already registered")
+			cf_traits::mocks::account_role_registry::ALREADY_REGISTERED_ERROR,
 		);
 	});
 }
@@ -1167,6 +1182,17 @@ fn qualification_by_cfe_version() {
 			}
 		));
 		assert!(!QualifyByCfeVersion::<Test>::is_qualified(&VALIDATOR));
+
+		// Make sure that only governance can update the config
+		assert_noop!(
+			ValidatorPallet::update_pallet_config(
+				OriginTrait::signed(ALICE),
+				PalletConfigUpdate::MinimumReportedCfeVersion {
+					version: SemVer { major: 0, minor: 0, patch: 0 }
+				}
+			),
+			sp_runtime::traits::BadOrigin
+		);
 	});
 }
 
@@ -1198,6 +1224,27 @@ fn validator_registration_and_deregistration() {
 
 		// State should be cleaned up.
 		assert!(!pallet_session::NextKeys::<Test>::contains_key(ALICE));
+	});
+}
+
+#[test]
+fn validator_deregistration_after_expired_epoch() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE),));
+		ValidatorPallet::transition_to_next_epoch(vec![1, ALICE], 100);
+
+		// Can't deregister
+		assert_noop!(
+			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),),
+			Error::<Test>::StillKeyHolder
+		);
+
+		let epoch_to_expire = ValidatorPallet::current_epoch();
+		ValidatorPallet::transition_to_next_epoch(vec![1, 2], 100);
+		ValidatorPallet::expire_epoch(epoch_to_expire);
+
+		// Now you can deregister
+		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),));
 	});
 }
 
@@ -1337,4 +1384,97 @@ fn validator_set_change_propagates_to_session_pallet() {
 		.then_process_blocks_until(|_| CurrentRotationPhase::<Test>::get() == RotationPhase::Idle)
 		// Do the consistency checks.
 		.then_execute_with_checks(|| {});
+}
+
+#[test]
+fn can_update_all_config_items() {
+	new_test_ext().execute_with(|| {
+		const NEW_AUCTION_BID_CUTOFF_PERCENTAGE: Percent = Percent::from_percent(10);
+		const NEW_REDEMPTION_PERIOD_AS_PERCENTAGE: Percent = Percent::from_percent(10);
+		const NEW_REGISTRATION_BOND_PERCENTAGE: Percent = Percent::from_percent(10);
+		const NEW_AUTHORITY_SET_MIN_SIZE: u32 = 0;
+		const NEW_BACKUP_REWARD_NODE_PERCENTAGE: Percent = Percent::from_percent(10);
+		const NEW_EPOCH_DURATION: u32 = 1;
+		const NEW_AUCTION_PARAMETERS: SetSizeParameters =
+			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 };
+		const NEW_MINIMUM_REPORTED_CFE_VERSION: SemVer = SemVer { major: 1, minor: 0, patch: 0 };
+		const NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE: Percent = Percent::from_percent(10);
+
+		// Check that the default values are different from the new ones
+		assert_ne!(AuctionBidCutoffPercentage::<Test>::get(), NEW_AUCTION_BID_CUTOFF_PERCENTAGE);
+		assert_ne!(
+			RedemptionPeriodAsPercentage::<Test>::get(),
+			NEW_REDEMPTION_PERIOD_AS_PERCENTAGE
+		);
+		assert_ne!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
+		assert_ne!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
+		assert_ne!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
+		assert_ne!(BlocksPerEpoch::<Test>::get(), NEW_EPOCH_DURATION as u64);
+		assert_ne!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
+		assert_ne!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
+		assert_ne!(
+			MaxAuthoritySetContractionPercentage::<Test>::get(),
+			NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE
+		);
+
+		// Update all config items
+		let updates = vec![
+			PalletConfigUpdate::AuctionBidCutoffPercentage {
+				percentage: NEW_AUCTION_BID_CUTOFF_PERCENTAGE,
+			},
+			PalletConfigUpdate::RedemptionPeriodAsPercentage {
+				percentage: NEW_REDEMPTION_PERIOD_AS_PERCENTAGE,
+			},
+			PalletConfigUpdate::RegistrationBondPercentage {
+				percentage: NEW_REGISTRATION_BOND_PERCENTAGE,
+			},
+			PalletConfigUpdate::AuthoritySetMinSize { min_size: NEW_AUTHORITY_SET_MIN_SIZE },
+			PalletConfigUpdate::BackupRewardNodePercentage {
+				percentage: NEW_BACKUP_REWARD_NODE_PERCENTAGE,
+			},
+			PalletConfigUpdate::EpochDuration { blocks: NEW_EPOCH_DURATION },
+			PalletConfigUpdate::AuctionParameters { parameters: NEW_AUCTION_PARAMETERS },
+			PalletConfigUpdate::MinimumReportedCfeVersion {
+				version: NEW_MINIMUM_REPORTED_CFE_VERSION,
+			},
+			PalletConfigUpdate::MaxAuthoritySetContractionPercentage {
+				percentage: NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE,
+			},
+		];
+		for update in updates {
+			assert_ok!(ValidatorPallet::update_pallet_config(OriginTrait::root(), update.clone()));
+			// Check that the events were emitted
+			System::assert_has_event(RuntimeEvent::ValidatorPallet(
+				crate::Event::PalletConfigUpdated { update },
+			));
+		}
+
+		// Check that the new values were set
+		assert_eq!(AuctionBidCutoffPercentage::<Test>::get(), NEW_AUCTION_BID_CUTOFF_PERCENTAGE);
+		assert_eq!(
+			RedemptionPeriodAsPercentage::<Test>::get(),
+			NEW_REDEMPTION_PERIOD_AS_PERCENTAGE
+		);
+		assert_eq!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
+		assert_eq!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
+		assert_eq!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
+		assert_eq!(BlocksPerEpoch::<Test>::get(), NEW_EPOCH_DURATION as u64);
+		assert_eq!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
+		assert_eq!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
+		assert_eq!(
+			MaxAuthoritySetContractionPercentage::<Test>::get(),
+			NEW_MAX_AUTHORITY_SET_CONTRACTION_PERCENTAGE
+		);
+
+		// Make sure that only governance can update the config
+		assert_noop!(
+			ValidatorPallet::update_pallet_config(
+				OriginTrait::signed(ALICE),
+				PalletConfigUpdate::AuctionBidCutoffPercentage {
+					percentage: NEW_AUCTION_BID_CUTOFF_PERCENTAGE,
+				}
+			),
+			sp_runtime::traits::BadOrigin
+		);
+	});
 }

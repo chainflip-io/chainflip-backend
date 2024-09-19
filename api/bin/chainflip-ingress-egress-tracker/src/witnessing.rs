@@ -1,5 +1,4 @@
 mod btc;
-pub mod btc_mempool;
 mod dot;
 mod eth;
 pub mod state_chain;
@@ -111,7 +110,7 @@ pub(super) async fn start(
 	scope: &task_scope::Scope<'_, anyhow::Error>,
 	settings: DepositTrackerSettings,
 	store: RedisStore,
-) -> anyhow::Result<EnvironmentParameters> {
+) -> anyhow::Result<()> {
 	let (state_chain_stream, unfinalized_chain_stream, state_chain_client) = {
 		state_chain_observer::client::StateChainClient::connect_without_account(
 			scope,
@@ -172,7 +171,5 @@ pub(super) async fn start(
 		unfinalized_chain_stream,
 		epoch_source,
 	)
-	.await?;
-
-	Ok(env_params)
+	.await
 }

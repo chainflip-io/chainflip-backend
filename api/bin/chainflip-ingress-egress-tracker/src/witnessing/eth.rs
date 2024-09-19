@@ -15,6 +15,7 @@ use chainflip_engine::{
 	},
 	witness::{
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
+		eth::EthCallBuilder,
 		evm::{
 			erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
 			source::EvmSource,
@@ -118,7 +119,7 @@ where
 
 	eth_source
 		.clone()
-		.vault_witnessing(
+		.vault_witnessing::<EthCallBuilder, _, _, _>(
 			witness_call.clone(),
 			eth_client.clone(),
 			env_params.eth_vault_address,

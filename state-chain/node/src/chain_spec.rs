@@ -1,20 +1,15 @@
 use cf_chains::{
 	arb::ArbitrumTrackedData,
 	assets::btc,
-	btc::BITCOIN_DUST_LIMIT,
-	dot::{PolkadotAccountId, PolkadotHash},
-	sol::{SolAddress, SolTrackedData},
-	Arbitrum, ChainState, Solana,
+	btc::{BitcoinFeeInfo, BitcoinTrackedData, BITCOIN_DUST_LIMIT},
+	dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion},
+	eth::EthereumTrackedData,
+	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, SolTrackedData},
+	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
 };
 use cf_primitives::{
-	AccountRole, AuthorityCount, NetworkEnvironment, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
-};
-
-use cf_chains::{
-	btc::{BitcoinFeeInfo, BitcoinTrackedData},
-	dot::{PolkadotTrackedData, RuntimeVersion},
-	eth::EthereumTrackedData,
-	Bitcoin, Ethereum, Polkadot,
+	chains::Solana, AccountRole, AuthorityCount, NetworkEnvironment,
+	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
 };
 use common::FLIPPERINOS_PER_FLIP;
 pub use sc_service::{ChainType, Properties};
@@ -26,8 +21,11 @@ use sp_core::{
 	Pair, Public,
 };
 use state_chain_runtime::{
-	chainflip::Offence, opaque::SessionKeys, AccountId, BlockNumber, FlipBalance,
-	RuntimeGenesisConfig, SetSizeParameters, Signature, WASM_BINARY,
+	chainflip::{solana_elections, Offence},
+	constants::common::MINUTES,
+	opaque::SessionKeys,
+	AccountId, BlockNumber, FlipBalance, RuntimeGenesisConfig, SetSizeParameters, Signature,
+	SolanaElectionsConfig, WASM_BINARY,
 };
 
 use std::{
@@ -100,7 +98,16 @@ pub struct StateChainEnvironment {
 	dot_genesis_hash: PolkadotHash,
 	dot_vault_account_id: Option<PolkadotAccountId>,
 	dot_runtime_version: RuntimeVersion,
-	sol_vault_address: SolAddress,
+	// Solana related
+	sol_genesis_hash: Option<SolHash>,
+	sol_vault_program: SolAddress,
+	sol_vault_program_data_account: SolAddress,
+	sol_usdc_token_mint_pubkey: SolAddress,
+	sol_token_vault_pda_account: SolAddress,
+	sol_usdc_token_vault_ata: SolAddress,
+	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 10], /* we inject 10 nonce
+	                                                                * accounts
+	                                                                * at genesis */
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -137,7 +144,15 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
-	from_env_var!(FromStr::from_str, SOL_VAULT_ADDRESS, sol_vault_address);
+	from_env_var!(FromStr::from_str, SOL_VAULT_ADDRESS, sol_vault_program);
+	from_env_var!(
+		FromStr::from_str,
+		SOL_VAULT_PROGRAM_DATA_ACCOUNT,
+		sol_vault_program_data_account
+	);
+	from_env_var!(FromStr::from_str, SOL_TOKEN_VAULT_PDA_ACCOUNT, sol_token_vault_pda_account);
+	from_env_var!(FromStr::from_str, SOL_USDC_TOKEN_MINT_PUBKEY, sol_usdc_token_mint_pubkey);
+	from_env_var!(FromStr::from_str, SOL_USDC_TOKEN_VAULT_ATA, sol_usdc_token_vault_ata);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
 		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
@@ -155,6 +170,16 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	let dot_transaction_version: u32 = match env::var("DOT_TRANSACTION_VERSION") {
 		Ok(s) => s.parse().unwrap(),
 		Err(_) => defaults.dot_runtime_version.transaction_version,
+	};
+
+	let sol_genesis_hash = match env::var("SOL_GENESIS_HASH") {
+		Ok(s) => Some(SolHash::from_str(&s).unwrap()),
+		Err(_) => defaults.sol_genesis_hash,
+	};
+
+	let sol_durable_nonces_and_accounts = match env::var("SOL_NONCES_AND_ACCOUNTS") {
+		Ok(_) => unimplemented!("Solana nonces and nonce accounts should not be supplied via environment variables since its a complex type"),
+		Err(_) => defaults.sol_durable_nonces_and_accounts,
 	};
 
 	StateChainEnvironment {
@@ -181,7 +206,13 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			spec_version: dot_spec_version,
 			transaction_version: dot_transaction_version,
 		},
-		sol_vault_address,
+		sol_genesis_hash,
+		sol_vault_program,
+		sol_vault_program_data_account,
+		sol_usdc_token_mint_pubkey,
+		sol_token_vault_pda_account,
+		sol_usdc_token_vault_ata,
+		sol_durable_nonces_and_accounts,
 	}
 }
 
@@ -242,7 +273,13 @@ pub fn inner_cf_development_config(
 		dot_genesis_hash,
 		dot_vault_account_id,
 		dot_runtime_version,
-		sol_vault_address,
+		sol_genesis_hash,
+		sol_vault_program,
+		sol_vault_program_data_account,
+		sol_usdc_token_mint_pubkey,
+		sol_token_vault_pda_account,
+		sol_usdc_token_vault_ata,
+		sol_durable_nonces_and_accounts,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, None)
 		.with_name("CF Develop")
@@ -273,7 +310,15 @@ pub fn inner_cf_development_config(
 				arbitrum_chain_id,
 				polkadot_genesis_hash: dot_genesis_hash,
 				polkadot_vault_account_id: dot_vault_account_id,
-				sol_vault_address,
+				sol_genesis_hash,
+				sol_api_env: SolApiEnvironment {
+					vault_program: sol_vault_program,
+					vault_program_data_account: sol_vault_program_data_account,
+					usdc_token_mint_pubkey: sol_usdc_token_mint_pubkey,
+					token_vault_pda_account: sol_token_vault_pda_account,
+					usdc_token_vault_ata: sol_usdc_token_vault_ata,
+				},
+				sol_durable_nonces_and_accounts: sol_durable_nonces_and_accounts.to_vec(),
 				network_environment: NetworkEnvironment::Development,
 				..Default::default()
 			},
@@ -307,6 +352,13 @@ pub fn inner_cf_development_config(
 			devnet::ARBITRUM_SAFETY_MARGIN,
 			devnet::SOLANA_SAFETY_MARGIN,
 			devnet::AUCTION_BID_CUTOFF_PERCENTAGE,
+			SolanaElectionsConfig {
+				option_initial_state: Some(solana_elections::initial_state(
+					100_000,
+					sol_vault_program,
+					sol_usdc_token_mint_pubkey,
+				)),
+			},
 		))
 		.build())
 }
@@ -347,7 +399,13 @@ macro_rules! network_spec {
 					dot_genesis_hash,
 					dot_vault_account_id,
 					dot_runtime_version,
-					sol_vault_address,
+					sol_genesis_hash,
+					sol_vault_program,
+					sol_vault_program_data_account,
+					sol_usdc_token_mint_pubkey,
+					sol_token_vault_pda_account,
+					sol_usdc_token_vault_ata,
+					sol_durable_nonces_and_accounts,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -408,7 +466,16 @@ macro_rules! network_spec {
 							arbitrum_chain_id,
 							polkadot_genesis_hash: dot_genesis_hash,
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
-							sol_vault_address,
+							sol_genesis_hash,
+							sol_durable_nonces_and_accounts: sol_durable_nonces_and_accounts
+								.to_vec(),
+							sol_api_env: SolApiEnvironment {
+								vault_program: sol_vault_program,
+								vault_program_data_account: sol_vault_program_data_account,
+								usdc_token_mint_pubkey: sol_usdc_token_mint_pubkey,
+								token_vault_pda_account: sol_token_vault_pda_account,
+								usdc_token_vault_ata: sol_usdc_token_vault_ata,
+							},
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()
 						},
@@ -441,6 +508,13 @@ macro_rules! network_spec {
 						ARBITRUM_SAFETY_MARGIN,
 						SOLANA_SAFETY_MARGIN,
 						AUCTION_BID_CUTOFF_PERCENTAGE,
+						SolanaElectionsConfig {
+							option_initial_state: Some(solana_elections::initial_state(
+								100000,
+								sol_vault_program,
+								sol_usdc_token_mint_pubkey,
+							)),
+						},
 					))
 					.build())
 			}
@@ -492,6 +566,7 @@ fn testnet_genesis(
 	arbitrum_safety_margin: u64,
 	solana_safety_margin: u64,
 	auction_bid_cutoff_percentage: Percent,
+	solana_elections: state_chain_runtime::SolanaElectionsConfig,
 ) -> serde_json::Value {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -722,7 +797,7 @@ fn testnet_genesis(
 		solana_chain_tracking: state_chain_runtime::SolanaChainTrackingConfig {
 			init_chain_state: ChainState::<Solana> {
 				block_height: 0,
-				tracked_data: SolTrackedData { priority_fee: 100000u32.into() },
+				tracked_data: SolTrackedData { priority_fee: 100_000 },
 			},
 		},
 		// Channel lifetimes are set to ~2 hours at average block times.
@@ -750,14 +825,41 @@ fn testnet_genesis(
 			witness_safety_margin: Some(solana_safety_margin),
 			..Default::default()
 		},
+		solana_elections,
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.
-		liquidity_pools: Default::default(),
+		swapping: Default::default(),
 		bitcoin_vault: Default::default(),
 		polkadot_vault: Default::default(),
 		system: Default::default(),
 		transaction_payment: Default::default(),
+
+		// instance1
+		ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
+			broadcast_timeout: 5 * MINUTES,
+			..Default::default()
+		},
+		// instance2
+		polkadot_broadcaster: state_chain_runtime::PolkadotBroadcasterConfig {
+			broadcast_timeout: 4 * MINUTES,
+			..Default::default()
+		},
+		// instance3
+		bitcoin_broadcaster: state_chain_runtime::BitcoinBroadcasterConfig {
+			broadcast_timeout: 90 * MINUTES,
+			..Default::default()
+		},
+		// instance 4
+		arbitrum_broadcaster: state_chain_runtime::ArbitrumBroadcasterConfig {
+			broadcast_timeout: 2 * MINUTES,
+			..Default::default()
+		},
+		// instance 5
+		solana_broadcaster: state_chain_runtime::SolanaBroadcasterConfig {
+			broadcast_timeout: 4 * MINUTES,
+			..Default::default()
+		},
 	})
 	.expect("Genesis config is JSON-compatible.")
 }

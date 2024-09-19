@@ -46,6 +46,7 @@ pub type BasisPoints = u16;
 pub type BroadcastId = u32;
 
 pub type SwapId = u64;
+pub type SwapRequestId = u64;
 
 pub type PrewitnessedDepositId = u64;
 
@@ -134,6 +135,8 @@ pub const SECONDS_PER_BLOCK: u64 = MILLISECONDS_PER_BLOCK / 1000;
 
 pub const BASIS_POINTS_PER_MILLION: u32 = 100;
 
+pub const MAX_BASIS_POINTS: u16 = 10_000;
+
 pub const STABLE_ASSET: Asset = Asset::Usdc;
 
 /// Determines the default (genesis) maximum allowed reduction of authority set size in
@@ -150,6 +153,9 @@ pub struct TxId {
 
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;
+
+/// Number of blocks in the future a swap is scheduled for.
+pub const SWAP_DELAY_BLOCKS: u32 = 2;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -342,4 +348,12 @@ pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<{ MAX_AFFILIAT
 pub struct Beneficiary<Id> {
 	pub account: Id,
 	pub bps: BasisPoints,
+}
+
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+pub struct DcaParameters {
+	/// The number of individual swaps to be executed
+	pub number_of_chunks: u32,
+	/// The interval in blocks between each swap.
+	pub chunk_interval: u32,
 }

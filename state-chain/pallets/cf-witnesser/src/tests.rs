@@ -612,7 +612,7 @@ fn can_punish_failed_witnesser_after_forced_witness() {
 			OffenceReporter::assert_reported(PalletOffence::FailedToWitnessInTime, vec![]);
 			call_hash
 		})
-		.then_execute_at_block(target, |_| {})
+		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
 			// After deadline has passed, all nodes that are late are reported.
 			OffenceReporter::assert_reported(
@@ -668,7 +668,7 @@ fn can_punish_failed_witnesser_in_previous_epochs() {
 			OffenceReporter::assert_reported(PalletOffence::FailedToWitnessInTime, vec![]);
 			call_hash
 		})
-		.then_execute_at_block(target, |_| {})
+		.then_process_blocks_until_block(target)
 		.then_execute_with(|_| {
 			// Nodes from previous epoch is reported.
 			OffenceReporter::assert_reported(
@@ -734,5 +734,34 @@ fn test_extra_call_data() {
 			CallHash(frame_support::Hashable::blake2_256(&*call))
 		)
 		.is_none(),);
+	});
+}
+
+#[test]
+fn only_governance_can_force_witness() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Witnesser::force_witness(
+				RuntimeOrigin::signed(100),
+				Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {})),
+				MockEpochInfo::epoch_index()
+			),
+			sp_runtime::traits::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn ensure_witnessed_origin_checks() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		assert_noop!(
+			Witnesser::prewitness(RuntimeOrigin::none(), call.clone()),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Witnesser::prewitness_and_execute(RuntimeOrigin::none(), call),
+			sp_runtime::traits::BadOrigin,
+		);
 	});
 }

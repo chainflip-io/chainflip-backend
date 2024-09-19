@@ -39,7 +39,7 @@ mod test_set_agg_key_with_agg_key {
 	use crate::{
 		eth::api::abi::load_abi,
 		evm::{
-			api::{ApiCall, EvmReplayProtection, EvmTransactionBuilder},
+			api::{EvmReplayProtection, EvmTransactionBuilder},
 			SchnorrVerificationComponents,
 		},
 	};
@@ -99,10 +99,13 @@ mod test_set_agg_key_with_agg_key {
 		let expected_msg_hash = set_agg_key_runtime.threshold_signature_payload();
 		let runtime_payload = set_agg_key_runtime
 			.clone()
-			.signed(&SchnorrVerificationComponents {
-				s: FAKE_SIG,
-				k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
-			})
+			.signed(
+				&SchnorrVerificationComponents {
+					s: FAKE_SIG,
+					k_times_g_address: FAKE_NONCE_TIMES_G_ADDR,
+				},
+				Default::default(),
+			)
 			.chain_encoded();
 		// Ensure signing payload isn't modified by signature.
 		assert_eq!(set_agg_key_runtime.threshold_signature_payload(), expected_msg_hash);

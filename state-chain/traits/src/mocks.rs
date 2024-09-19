@@ -7,34 +7,34 @@ pub mod account_role_registry;
 pub mod address_converter;
 pub mod api_call;
 pub mod asset_converter;
+pub mod asset_withholding;
+pub mod balance_api;
 pub mod block_height_provider;
 pub mod broadcaster;
-pub mod callback;
-pub mod ccm_handler;
 pub mod ceremony_id_provider;
 pub mod cfe_interface_mock;
 pub mod chain_tracking;
 pub mod deposit_handler;
 pub mod egress_handler;
 pub mod ensure_origin_mock;
-pub mod ensure_witnessed;
 pub mod epoch_info;
 pub mod eth_environment_provider;
 pub mod fee_payment;
+pub mod fetches_transfers_limit_provider;
 pub mod flip_burn_info;
 pub mod funding_info;
 pub mod ingress_egress_fee_handler;
 pub mod key_provider;
 pub mod key_rotator;
-pub mod lp_balance;
+pub mod liability_tracker;
 pub mod offence_reporting;
 pub mod on_account_funded;
 pub mod qualify_node;
 pub mod reputation_resetter;
 pub mod safe_mode;
 pub mod signer_nomination;
-pub mod swap_deposit_handler;
-pub mod swap_queue_api;
+pub mod swap_limits_provider;
+pub mod swap_request_api;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod tracked_data_provider;
@@ -47,7 +47,7 @@ macro_rules! impl_mock_chainflip {
 			impl_mock_epoch_info,
 			mocks::{
 				account_role_registry::MockAccountRoleRegistry,
-				ensure_origin_mock::NeverFailingOriginCheck, funding_info::MockFundingInfo,
+				ensure_origin_mock::FailOnNoneOrigin, funding_info::MockFundingInfo,
 			},
 			Chainflip,
 		};
@@ -61,12 +61,13 @@ macro_rules! impl_mock_chainflip {
 
 		impl Chainflip for $runtime {
 			type Amount = u128;
-			type ValidatorId = <$runtime as frame_system::Config>::AccountId;
+			type ValidatorId = <Self as frame_system::Config>::AccountId;
 			type RuntimeCall = RuntimeCall;
-			type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-			type EnsurePrewitnessed = NeverFailingOriginCheck<Self>;
-			type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-			type EnsureGovernance = NeverFailingOriginCheck<Self>;
+			type EnsureWitnessed = FailOnNoneOrigin<Self>;
+			type EnsurePrewitnessed = FailOnNoneOrigin<Self>;
+			type EnsureWitnessedAtCurrentEpoch = FailOnNoneOrigin<Self>;
+			type EnsureGovernance =
+				frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
 			type EpochInfo = MockEpochInfo;
 			type AccountRoleRegistry = MockAccountRoleRegistry;
 			type FundingInfo = MockFundingInfo<Self>;

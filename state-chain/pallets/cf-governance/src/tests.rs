@@ -50,6 +50,15 @@ fn not_a_member() {
 fn propose_a_governance_extrinsic_and_expect_execution() {
 	new_test_ext()
 		.execute_with(|| {
+			// Make sure only a governance member can propose
+			assert_noop!(
+				Governance::propose_governance_extrinsic(
+					RuntimeOrigin::signed(NOT_GOV_MEMBER),
+					mock_extrinsic(),
+					ExecutionMode::Automatic,
+				),
+				Error::<Test>::NotMember
+			);
 			// Propose a governance extrinsic
 			assert_ok!(Governance::propose_governance_extrinsic(
 				RuntimeOrigin::signed(ALICE),
@@ -59,6 +68,11 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 			assert_eq!(
 				last_event::<Test>(),
 				crate::mock::RuntimeEvent::Governance(crate::Event::Approved(1)),
+			);
+			// Make sure only a governance member can approve
+			assert_noop!(
+				Governance::approve(RuntimeOrigin::signed(NOT_GOV_MEMBER), 1),
+				Error::<Test>::NotMember
 			);
 			// Do the second approval to reach majority
 			assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
@@ -196,6 +210,11 @@ fn sudo_extrinsic() {
 			let sudo_call = Box::new(RuntimeCall::System(
 				frame_system::Call::<Test>::set_code_without_checks { code: vec![1, 2, 3, 4] },
 			));
+			// Make sure that only governance can sudo, not governance member.
+			assert_noop!(
+				Governance::call_as_sudo(RuntimeOrigin::signed(ALICE), sudo_call.clone()),
+				sp_runtime::traits::BadOrigin
+			);
 			// Wrap the sudo call as governance extrinsic
 			let governance_extrinsic = Box::new(RuntimeCall::Governance(
 				pallet_cf_governance::Call::<Test>::call_as_sudo { call: sudo_call },
@@ -244,6 +263,20 @@ fn wrong_upgrade_conditions() {
 				DUMMY_WASM_BLOB
 			),
 			<Error<Test>>::UpgradeConditionsNotMet
+		);
+	});
+}
+
+#[test]
+fn only_governance_can_runtime_upgrade() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Governance::chainflip_runtime_upgrade(
+				RuntimeOrigin::signed(ALICE),
+				None,
+				DUMMY_WASM_BLOB
+			),
+			sp_runtime::traits::BadOrigin
 		);
 	});
 }
@@ -315,6 +348,10 @@ fn whitelisted_gov_call() {
 		));
 		assert_ok!(Governance::approve(RuntimeOrigin::signed(BOB), 1));
 		assert!(PreAuthorisedGovCalls::<Test>::contains_key(1));
+		assert_noop!(
+			Governance::dispatch_whitelisted_call(RuntimeOrigin::none(), 1),
+			sp_runtime::traits::BadOrigin
+		);
 		assert_ok!(Governance::dispatch_whitelisted_call(RuntimeOrigin::signed(CHARLES), 1));
 		assert!(!PreAuthorisedGovCalls::<Test>::contains_key(1));
 	});
@@ -330,6 +367,15 @@ fn replacing_governance_members() {
 		assert_eq!(System::sufficients(&EVE), 0);
 		assert_eq!(System::sufficients(&PETER), 0);
 		assert_eq!(System::sufficients(&MAX), 0);
+
+		// Make sure only governance can replace the members
+		assert_noop!(
+			Governance::new_membership_set(
+				RuntimeOrigin::signed(ALICE),
+				BTreeSet::from_iter([EVE, PETER, MAX])
+			),
+			sp_runtime::traits::BadOrigin
+		);
 
 		assert_ok!(Governance::new_membership_set(
 			crate::RawOrigin::GovernanceApproval.into(),

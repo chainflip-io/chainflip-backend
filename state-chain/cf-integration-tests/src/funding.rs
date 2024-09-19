@@ -253,6 +253,7 @@ fn apy_can_be_above_100_percent() {
 			let (mut network, _, _) =
 				crate::authorities::fund_authorities_and_join_auction(NUM_BACKUPS);
 			network.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
 
 			let validator = Validator::current_authorities().into_iter().next().unwrap();
 

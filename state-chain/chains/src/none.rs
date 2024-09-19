@@ -1,5 +1,6 @@
 use super::*;
 use crate::address::IntoForeignChainAddress;
+use cf_primitives::chains::assets::any::AssetMap;
 use frame_support::traits::ConstBool;
 
 /// A Chain that can't be constructed.
@@ -25,6 +26,9 @@ impl Chain for NoneChain {
 	type ReplayProtectionParams = ();
 	type ReplayProtection = ();
 	type TransactionRef = ();
+	type ChainAssetMap<
+		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
+	> = AssetMap<T>;
 }
 
 impl FeeRefundCalculator<NoneChain> for () {

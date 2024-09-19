@@ -4,12 +4,13 @@ import * as toml from 'toml';
 import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from './bump_release_version';
 import { simpleRuntimeUpgrade } from './simple_runtime_upgrade';
-import { compareSemVer, sleep } from './utils';
+import { compareSemVer, getNodesInfo, killEngines, sleep, startEngines } from './utils';
 import { bumpSpecVersionAgainstNetwork } from './utils/spec_version';
 import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 import { execWithLog } from './utils/exec_with_log';
 import { submitGovernanceExtrinsic } from './cf_governance';
+import { setupLpAccount } from './setup_lp_account';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -100,9 +101,7 @@ async function compatibleUpgrade(
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
-  const nodeCount = numberOfNodes + '-node';
-
-  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
 
   execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
     INIT_RPC_PORT: `9944`,
@@ -139,28 +138,11 @@ async function incompatibleUpgradeNoBuild(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  const SELECTED_NODES = numberOfNodes === 1 ? 'bashful' : 'bashful doc dopey';
-
   // We need to kill the engine process before starting the new engine (engine-runner)
   // Since the new engine contains the old one.
   console.log('Killing the old engines');
-  execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
-
-  console.log('Starting all the engines');
-
-  const nodeCount = numberOfNodes + '-node';
-  execWithLog(`${localnetInitPath}/scripts/start-all-engines.sh`, 'start-all-engines-pre-upgrade', {
-    INIT_RUN: 'false',
-    LOG_SUFFIX: '-pre-upgrade',
-    NODE_COUNT: nodeCount,
-    SELECTED_NODES,
-    LOCALNET_INIT_DIR: localnetInitPath,
-    BINARY_ROOT_PATH: binaryPath,
-  });
-
-  await sleep(7000);
-
-  console.log('Engines started');
+  await killEngines();
+  await startEngines(localnetInitPath, binaryPath, numberOfNodes);
 
   await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
 
@@ -198,6 +180,7 @@ async function incompatibleUpgradeNoBuild(
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
   execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, 'start-all-nodes', {
     INIT_RPC_PORT: `9944`,
     KEYS_DIR,
@@ -366,6 +349,10 @@ export async function upgradeNetworkPrebuilt(
   } else {
     console.log('The versions are incompatible.');
     await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
+  }
+
+  if (cleanOldVersion.startsWith('1.6')) {
+    await setupLpAccount('//LP_3');
   }
 
   console.log('Upgrade complete.');

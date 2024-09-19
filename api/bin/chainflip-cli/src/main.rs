@@ -8,8 +8,7 @@ use api::{
 	lp::LpApi,
 	primitives::{EpochIndex, RedemptionAmount, FLIP_DECIMALS},
 	queries::QueryApi,
-	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, SwapDepositAddress,
-	ValidatorApi,
+	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
 use cf_chains::eth::Address as EthereumAddress;
 use chainflip_api as api;
@@ -59,35 +58,10 @@ async fn run_cli() -> Result<()> {
 			let api = StateChainApi::connect(scope, cli_settings.state_chain).await?;
 			match command_line_opts.cmd {
 				Broker(subcommand) => match subcommand {
-					BrokerSubcommands::RequestSwapDepositAddress(params) => {
-						let SwapDepositAddress { address, .. } = api
-							.broker_api()
-							.request_swap_deposit_address(
-								params.source_asset,
-								params.destination_asset,
-								chainflip_api::clean_foreign_chain_address(
-									params.destination_asset.into(),
-									&params.destination_address,
-								)?,
-								params.broker_commission,
-								None,
-								params.boost_fee,
-								Default::default(),
-								None,
-							)
-							.await?;
-						println!("Deposit Address: {address}");
-					},
 					BrokerSubcommands::WithdrawFees(params) => {
 						let withdraw_details = api
 							.broker_api()
-							.withdraw_fees(
-								params.asset,
-								chainflip_api::clean_foreign_chain_address(
-									params.asset.into(),
-									&params.destination_address,
-								)?,
-							)
+							.withdraw_fees(params.asset, params.destination_address)
 							.await?;
 						println!("Withdrawal request successfull submitted: {}", withdraw_details);
 					},
@@ -119,10 +93,8 @@ async fn run_cli() -> Result<()> {
 						chain,
 						address,
 					} => {
-						let lra_address =
-							chainflip_api::clean_foreign_chain_address(chain, &address)?;
 						let tx_hash =
-							api.lp_api().register_liquidity_refund_address(lra_address).await?;
+							api.lp_api().register_liquidity_refund_address(chain, address).await?;
 						println!("Liquidity Refund address registered. Tx hash: {tx_hash}");
 					},
 					LiquidityProviderSubcommands::RegisterAccount => {

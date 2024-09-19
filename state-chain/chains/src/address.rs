@@ -24,6 +24,7 @@ pub enum AddressDerivationError {
 	MissingPolkadotVault,
 	MissingBitcoinVault,
 	BitcoinChannelIdTooLarge,
+	MissingSolanaApiEnvironment,
 	SolanaDerivationError(sol::AddressDerivationError),
 }
 
@@ -79,6 +80,21 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Sol(_) => ForeignChain::Solana,
 		}
 	}
+	pub fn to_source_address(self) -> Vec<u8> {
+		match self {
+			ForeignChainAddress::Eth(source_address) => source_address.0.to_vec(),
+			ForeignChainAddress::Arb(source_address) => source_address.0.to_vec(),
+			ForeignChainAddress::Sol(source_address) => source_address.0.to_vec(),
+			ForeignChainAddress::Dot(source_address) => source_address.aliased_ref().to_vec(),
+			ForeignChainAddress::Btc(_) => {
+				cf_runtime_utilities::log_or_panic!(
+					"Bitcoin should not be used as a source address as the encoding depends on the
+				network",
+				);
+				sp_std::vec::Vec::new()
+			},
+		}
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
@@ -87,7 +103,7 @@ pub enum EncodedAddress {
 	Dot([u8; 32]),
 	Btc(Vec<u8>),
 	Arb([u8; 20]),
-	Sol([u8; crate::sol::consts::SOLANA_ADDRESS_SIZE]),
+	Sol([u8; sol_prim::consts::SOLANA_ADDRESS_LEN]),
 }
 
 pub trait AddressConverter: Sized {
@@ -95,6 +111,11 @@ pub trait AddressConverter: Sized {
 	#[allow(clippy::result_unit_err)]
 	fn try_from_encoded_address(encoded_address: EncodedAddress)
 		-> Result<ForeignChainAddress, ()>;
+
+	fn decode_and_validate_address_for_asset(
+		encoded_address: EncodedAddress,
+		asset: cf_primitives::Asset,
+	) -> Result<ForeignChainAddress, AddressError>;
 }
 
 #[cfg(feature = "std")]
@@ -118,6 +139,7 @@ impl core::fmt::Display for EncodedAddress {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum AddressError {
 	InvalidAddress,
+	InvalidAddressForChain,
 }
 
 impl TryFrom<ForeignChainAddress> for H160 {
@@ -256,6 +278,22 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		)),
 		EncodedAddress::Sol(address_bytes) => Ok(ForeignChainAddress::Sol(address_bytes.into())),
 	}
+}
+
+pub fn decode_and_validate_address_for_asset<GetNetwork: FnOnce() -> NetworkEnvironment>(
+	encoded_address: EncodedAddress,
+	asset: cf_primitives::Asset,
+	network_environment: GetNetwork,
+) -> Result<ForeignChainAddress, AddressError> {
+	let address = try_from_encoded_address(encoded_address, network_environment)
+		.map_err(|_| AddressError::InvalidAddress)?;
+
+	frame_support::ensure!(
+		address.chain() == ForeignChain::from(asset),
+		AddressError::InvalidAddressForChain
+	);
+
+	Ok(address)
 }
 
 pub trait ToHumanreadableAddress {

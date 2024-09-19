@@ -26,7 +26,7 @@ use cfe_events::{KeyHandoverRequest, KeygenRequest, ThresholdSignatureRequest};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	instances::Instance1,
-	pallet_prelude::DispatchResultWithPostInfo,
+	pallet_prelude::DispatchResult,
 	traits::{Hooks, OnInitialize},
 };
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -180,7 +180,9 @@ fn happy_path_no_callback() {
 
 			// Signature is available
 			assert!(matches!(
-				EvmThresholdSigner::signature(request_context.request_id),
+				EvmThresholdSigner::signer_and_signature(request_context.request_id)
+					.unwrap()
+					.signature_result,
 				AsyncResult::Ready(..)
 			));
 
@@ -213,12 +215,11 @@ fn happy_path_with_callback() {
 
 			// Signature has been consumed.
 			assert!(
-				matches!(
-					EvmThresholdSigner::signature(request_context.request_id),
-					AsyncResult::Void
-				),
-				"Expected Void, got {:?}",
-				EvmThresholdSigner::signature(request_context.request_id)
+				EvmThresholdSigner::signer_and_signature(request_context.request_id).is_none(),
+				"Expected None, got {:?}",
+				EvmThresholdSigner::signer_and_signature(request_context.request_id)
+					.unwrap()
+					.signature_result
 			);
 		});
 }
@@ -1472,11 +1473,7 @@ fn keygen_report_failure() {
 fn test_key_ceremony_timeout_period<PendingSince, ReportFn>(report_fn: ReportFn)
 where
 	PendingSince: frame_support::StorageValue<BlockNumberFor<Test>, Query = BlockNumberFor<Test>>,
-	ReportFn: Fn(
-		RuntimeOrigin,
-		CeremonyId,
-		Result<MockAggKey, BTreeSet<u64>>,
-	) -> DispatchResultWithPostInfo,
+	ReportFn: Fn(RuntimeOrigin, CeremonyId, Result<MockAggKey, BTreeSet<u64>>) -> DispatchResult,
 {
 	let ceremony_id = current_ceremony_id();
 
@@ -1763,7 +1760,7 @@ mod key_rotation {
 			assert_eq!(MockVaultActivator::status(), AsyncResult::Pending);
 
 			// Request is complete
-			assert_eq!(EvmThresholdSigner::signature(4), AsyncResult::Void);
+			assert_eq!(EvmThresholdSigner::signer_and_signature(4), None);
 
 			// Proceed to complete activation
 			EvmThresholdSigner::status();
@@ -1963,5 +1960,23 @@ fn can_recover_from_abort_key_rotation_after_key_handover_failed() {
 
 		// Can restart the key rotation and succeed.
 		do_full_key_rotation();
+	});
+}
+
+#[test]
+fn ensure_governance_origin_checks() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			EvmThresholdSigner::set_keygen_response_timeout(RuntimeOrigin::signed(ALICE), 1),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			EvmThresholdSigner::set_keygen_slash_amount(RuntimeOrigin::signed(ALICE), 1),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			EvmThresholdSigner::set_threshold_signature_timeout(RuntimeOrigin::signed(ALICE), 1),
+			sp_runtime::traits::BadOrigin,
+		);
 	});
 }

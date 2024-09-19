@@ -28,7 +28,7 @@ env:
 
 jobs:
   get-date-time:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     outputs:
       date: ${{ steps.date.outputs.date }}
       time: ${{ steps.date.outputs.time }}
@@ -39,7 +39,7 @@ jobs:
           echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
           echo "time=$(date +'%H:%M:%S')" >> "$GITHUB_OUTPUT"
   get-version-from-branch-name:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -56,7 +56,7 @@ jobs:
             echo "version=$version" >> "$GITHUB_OUTPUT"
           fi
   set-dockerfile-name:
-    runs-on: ubuntu-22.04
+    runs-on: namespace-profile-default
     outputs:
       dockerfile_path: ${{ steps.dockerfile.outputs.dockerfile_path }}
     steps:
@@ -91,7 +91,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download binaries 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: chainflip-backend-bin
 
@@ -151,9 +151,9 @@ jobs:
 
       - name: Upload image 📤
         if: inputs.save_tags != ''
-        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
-          name: chainflip-backend-private-images
+          name: chainflip-backend-private-images-${{ matrix.target }}
           path: private
 
   public-images:
@@ -176,7 +176,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Download binaries 📥
-        uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
           name: chainflip-backend-bin
 
@@ -234,7 +234,23 @@ jobs:
 
       - name: Upload image 📤
         if: inputs.save_tags != ''
-        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
-          name: chainflip-backend-public-images
+          name: chainflip-backend-public-images-${{ matrix.target }}
           path: public
+
+  merge-artefacts:
+    needs: [private-images, public-images]
+    runs-on: ubuntu-latest
+    if: inputs.save_tags != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        artifact: [private, public]
+    steps:
+      - name: Merge artifacts 🧩
+        uses: actions/upload-artifact/merge@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        with:
+          name: chainflip-backend-${{ matrix.artifact }}-images
+          pattern: chainflip-backend-${{ matrix.artifact }}-images-*
+          delete-merged: true

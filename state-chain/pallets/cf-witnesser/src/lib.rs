@@ -24,15 +24,28 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	ensure,
-	pallet_prelude::{DispatchResultWithPostInfo, Member, RuntimeDebug},
+	pallet_prelude::{DispatchResult, Member, RuntimeDebug},
 	storage::with_storage_layer,
 	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
 	Hashable,
 };
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+)]
 pub enum PalletSafeMode<CallPermission> {
 	CodeGreen,
 	CodeRed,
@@ -282,9 +295,9 @@ pub mod pallet {
 			let mut authorities_cache = BTreeMap::new();
 			for (epoch, call_hash) in WitnessDeadline::<T>::take(n) {
 				if let Some(votes) = Votes::<T>::get(epoch, call_hash) {
-					let authorities = authorities_cache.entry(epoch).or_insert_with(|| {
-						T::EpochInfo::authorities_at_epoch(epoch).into_iter().collect::<Vec<_>>()
-					});
+					let authorities = authorities_cache
+						.entry(epoch)
+						.or_insert_with(|| T::EpochInfo::authorities_at_epoch(epoch));
 					let failed_witnessers = BitVec::<u8, Msb0>::from_vec(votes)
 						.into_iter()
 						.enumerate()
@@ -399,7 +412,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			mut call: Box<<T as Config>::RuntimeCall>,
 			epoch_index: EpochIndex,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 
 			let last_expired_epoch = T::EpochInfo::last_expired_epoch();
@@ -480,10 +493,10 @@ pub mod pallet {
 					));
 				}
 			}
-			Ok(().into())
+			Ok(())
 		}
 
-		/// This allows the root user to force through a witness call.
+		/// This allows the governance user to force through a witness call.
 		///
 		/// This can be useful when votes haven't reached the threshold because of witnesser
 		/// check-pointing issues or similar.
@@ -498,7 +511,7 @@ pub mod pallet {
 			call: Box<<T as Config>::RuntimeCall>,
 			epoch_index: EpochIndex,
 		) -> DispatchResult {
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 
 			ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
 

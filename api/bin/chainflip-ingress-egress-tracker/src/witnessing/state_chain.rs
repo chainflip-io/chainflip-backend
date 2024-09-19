@@ -351,7 +351,8 @@ where
 		SolanaBroadcaster(_) |
 		Swapping(_) |
 		LiquidityProvider(_) |
-		LiquidityPools(_) => {},
+		LiquidityPools(_) |
+		SolanaElections(_) => {},
 	};
 
 	Ok(())

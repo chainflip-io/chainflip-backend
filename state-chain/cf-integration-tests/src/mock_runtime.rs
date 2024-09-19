@@ -1,28 +1,33 @@
-use chainflip_node::{
-	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
-	test_account_from_seed,
-};
-use pallet_cf_validator::SetSizeParameters;
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::{Percent, Permill};
-use state_chain_runtime::{
-	chainflip::Offence, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId,
-	AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumVaultConfig, EmissionsConfig,
-	EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
-	ReputationConfig, SessionConfig, SolanaChainTrackingConfig, SolanaVaultConfig, ValidatorConfig,
-};
-
 use cf_chains::{
 	arb::ArbitrumTrackedData,
 	btc::{BitcoinFeeInfo, BitcoinTrackedData},
 	dot::{PolkadotTrackedData, RuntimeVersion},
 	eth::EthereumTrackedData,
-	sol::SolTrackedData,
+	sol::{sol_tx_core::sol_test_values, SolTrackedData},
 	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
 };
+use chainflip_node::{
+	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
+	test_account_from_seed,
+};
+use pallet_cf_elections::InitialState;
+use pallet_cf_validator::SetSizeParameters;
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_consensus_grandpa::AuthorityId as GrandpaId;
+use sp_runtime::{FixedU128, Percent, Permill};
 use state_chain_runtime::{
-	BitcoinChainTrackingConfig, EthereumChainTrackingConfig, PolkadotChainTrackingConfig,
+	chainflip::{
+		solana_elections::{SolanaFeeUnsynchronisedSettings, SolanaIngressSettings},
+		Offence,
+	},
+	constants::common::*,
+	opaque::SessionKeys,
+	test_runner::*,
+	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, BitcoinChainTrackingConfig,
+	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumVaultConfig,
+	EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
+	PolkadotChainTrackingConfig, ReputationConfig, SessionConfig, SolanaChainTrackingConfig,
+	SolanaElectionsConfig, ValidatorConfig,
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
@@ -31,6 +36,8 @@ pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 
 pub const ACCRUAL_RATIO: (i32, u32) = (1, 1);
+
+const COMPUTE_PRICE: u64 = 1_000u64;
 
 /// The offences committable within the protocol and their respective reputation penalty and
 /// suspension durations.
@@ -200,11 +207,7 @@ impl ExtBuilder {
 				deployment_block: Some(0),
 				chain_initialized: true,
 			},
-			arbitrum_vault: ArbitrumVaultConfig {
-				deployment_block: None,
-				chain_initialized: false,
-			},
-			solana_vault: SolanaVaultConfig { deployment_block: None, chain_initialized: false },
+
 			emissions: EmissionsConfig {
 				current_authority_emission_inflation: CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				backup_node_emission_inflation: BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -223,8 +226,8 @@ impl ExtBuilder {
 				init_chain_state: ChainState::<Ethereum> {
 					block_height: 0,
 					tracked_data: EthereumTrackedData {
-						base_fee: 0u32.into(),
-						priority_fee: 0u32.into(),
+						base_fee: 100000u32.into(),
+						priority_fee: 1u32.into(),
 					},
 				},
 			},
@@ -258,7 +261,7 @@ impl ExtBuilder {
 			solana_chain_tracking: SolanaChainTrackingConfig {
 				init_chain_state: ChainState::<Solana> {
 					block_height: 0,
-					tracked_data: SolTrackedData { priority_fee: 100000u32.into() },
+					tracked_data: SolTrackedData { priority_fee: COMPUTE_PRICE },
 				},
 			},
 			bitcoin_threshold_signer: Default::default(),
@@ -269,12 +272,22 @@ impl ExtBuilder {
 				amount_to_slash: FLIPPERINOS_PER_FLIP,
 				_instance: std::marker::PhantomData,
 			},
+			environment: EnvironmentConfig {
+				sol_durable_nonces_and_accounts: vec![
+					(Default::default(), Default::default()),
+					(Default::default(), Default::default()),
+					(Default::default(), Default::default()),
+					(Default::default(), Default::default()),
+				],
+				..Default::default()
+			},
 			polkadot_threshold_signer: Default::default(),
 			solana_threshold_signer: Default::default(),
 			bitcoin_vault: Default::default(),
 			polkadot_vault: Default::default(),
-			environment: Default::default(),
-			liquidity_pools: Default::default(),
+			arbitrum_vault: Default::default(),
+			solana_vault: Default::default(),
+			swapping: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),
 			bitcoin_ingress_egress: Default::default(),
@@ -282,6 +295,56 @@ impl ExtBuilder {
 			ethereum_ingress_egress: Default::default(),
 			arbitrum_ingress_egress: Default::default(),
 			solana_ingress_egress: Default::default(),
+			solana_elections: SolanaElectionsConfig {
+				option_initial_state: Some(InitialState {
+					unsynchronised_state: (
+						/* chain tracking */ Default::default(),
+						/* priority_fee */ COMPUTE_PRICE,
+						(),
+						(),
+						(),
+					),
+					unsynchronised_settings: (
+						(),
+						SolanaFeeUnsynchronisedSettings {
+							fee_multiplier: FixedU128::from_u32(1u32),
+						},
+						(),
+						(),
+						(),
+					),
+					settings: (
+						(),
+						(),
+						SolanaIngressSettings {
+							vault_program: sol_test_values::VAULT_PROGRAM,
+							usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
+						},
+						(),
+						(),
+					),
+				}),
+			},
+			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
+				broadcast_timeout: 5 * MINUTES,
+				..Default::default()
+			},
+			polkadot_broadcaster: state_chain_runtime::PolkadotBroadcasterConfig {
+				broadcast_timeout: 4 * MINUTES,
+				..Default::default()
+			},
+			bitcoin_broadcaster: state_chain_runtime::BitcoinBroadcasterConfig {
+				broadcast_timeout: 90 * MINUTES,
+				..Default::default()
+			},
+			arbitrum_broadcaster: state_chain_runtime::ArbitrumBroadcasterConfig {
+				broadcast_timeout: 2 * MINUTES,
+				..Default::default()
+			},
+			solana_broadcaster: state_chain_runtime::SolanaBroadcasterConfig {
+				broadcast_timeout: 4 * MINUTES,
+				..Default::default()
+			},
 		})
 	}
 }

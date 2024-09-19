@@ -25,12 +25,11 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 			nominee,
 		},
 	);
-	ThresholdSignatureData::<T, I>::insert(
+	PendingApiCalls::<T, I>::insert(
 		broadcast_id,
-		(
-			ApiCallFor::<T, I>::benchmark_value()
-				.signed(&ThresholdSignatureFor::<T, I>::benchmark_value()),
-			ThresholdSignatureFor::<T, I>::benchmark_value(),
+		ApiCallFor::<T, I>::benchmark_value().signed(
+			&ThresholdSignatureFor::<T, I>::benchmark_value(),
+			AggKey::<T, I>::benchmark_value(),
 		),
 	);
 	PendingBroadcasts::<T, I>::append(broadcast_id);
@@ -44,6 +43,7 @@ fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T
 	T::ThresholdSigner::insert_signature(
 		threshold_request_id,
 		ThresholdSignatureFor::<T, I>::benchmark_value(),
+		AggKey::<T, I>::benchmark_value(),
 	);
 	Call::<T, I>::on_signature_ready {
 		threshold_request_id,
@@ -60,11 +60,28 @@ mod benchmarks {
 	use super::*;
 
 	#[benchmark]
+	fn update_pallet_config() {
+		let blocks: u32 = 30;
+		let call = Call::<T, I>::update_pallet_config {
+			update: PalletConfigUpdate::BroadcastTimeout { blocks },
+		};
+		let o = T::EnsureGovernance::try_successful_origin().unwrap();
+
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(o));
+		}
+
+		assert_eq!(BroadcastTimeout::<T, I>::get(), blocks.into())
+	}
+
+	#[benchmark]
 	fn on_initialize(t: Linear<1, 50>, r: Linear<1, 50>) {
 		let caller: T::AccountId = whitelisted_caller();
 		// We add one because one is added at genesis
-		let timeout_block =
-			frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get() + 1_u32.into();
+		let timeout_block = frame_system::Pallet::<T>::block_number() +
+			crate::BroadcastTimeout::<T, I>::get() +
+			1_u32.into();
 		// Complexity parameter for expiry queue.
 
 		let mut broadcast_id = 0;
@@ -110,7 +127,8 @@ mod benchmarks {
 	fn on_signature_ready() {
 		let broadcast_id = 0;
 		frame_system::Pallet::<T>::set_block_number(100u32.into());
-		let timeout_block = frame_system::Pallet::<T>::block_number() + T::BroadcastTimeout::get();
+		let timeout_block =
+			frame_system::Pallet::<T>::block_number() + crate::BroadcastTimeout::<T, I>::get();
 		insert_transaction_broadcast_attempt::<T, I>(Some(whitelisted_caller()), broadcast_id);
 		let call = generate_on_signature_ready_call::<T, I>();
 

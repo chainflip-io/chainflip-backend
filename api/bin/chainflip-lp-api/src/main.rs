@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cf_primitives::{AccountId, BasisPoints, BlockNumber, EgressId};
+use cf_primitives::{BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
 	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
@@ -8,19 +8,23 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	lp::{
-		types::{LimitOrder, RangeOrder},
-		ApiWaitForResult, LpApi, PoolPairsMap, Side, Tick,
+		types::{LimitOrRangeOrder, LimitOrder, RangeOrder},
+		ApiWaitForResult, LpApi, Side, Tick,
 	},
 	primitives::{
 		chains::{assets::any::AssetMap, Bitcoin, Ethereum, Polkadot},
+		state_chain_runtime::{Runtime, RuntimeEvent},
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	AccountId32, BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
+	AccountId32, AddressString, BlockInfo, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
 	SignedExtrinsicApi, StateChainApi, StorageApi, WaitFor,
 };
 use clap::Parser;
-use custom_rpc::CustomApiClient;
+use custom_rpc::{
+	order_fills::{order_fills_from_block_updates, OrderFills},
+	CustomApiClient,
+};
 use futures::{try_join, FutureExt, StreamExt};
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
@@ -29,15 +33,10 @@ use jsonrpsee::{
 	types::SubscriptionResult,
 	SubscriptionSink,
 };
-use pallet_cf_pools::{AssetPair, IncreaseOrDecrease, OrderId, RangeOrderSize};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
-use sp_core::{H256, U256};
-use std::{
-	collections::{HashMap, HashSet},
-	ops::Range,
-	path::PathBuf,
-	sync::Arc,
-};
+use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
+use std::{collections::BTreeMap, ops::Range, path::PathBuf, sync::Arc};
 use tracing::log;
 
 /// Contains RPC interface types that differ from internal types.
@@ -111,7 +110,7 @@ pub trait Rpc {
 	async fn register_liquidity_refund_address(
 		&self,
 		chain: ForeignChain,
-		address: &str,
+		address: AddressString,
 	) -> RpcResult<Hash>;
 
 	#[method(name = "withdraw_asset")]
@@ -119,7 +118,7 @@ pub trait Rpc {
 		&self,
 		amount: NumberOrHex,
 		asset: Asset,
-		destination_address: &str,
+		destination_address: AddressString,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<EgressId>>;
 
@@ -198,6 +197,19 @@ pub trait Rpc {
 
 	#[method(name = "order_fills")]
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
+
+	#[method(name = "cancel_all_orders")]
+	async fn cancel_all_orders(
+		&self,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<Vec<ApiWaitForResult<Vec<LimitOrRangeOrder>>>>;
+
+	#[method(name = "cancel_orders_batch")]
+	async fn cancel_orders_batch(
+		&self,
+		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>>;
 }
 
 pub struct RpcServerImpl {
@@ -214,37 +226,6 @@ impl RpcServerImpl {
 				.await?,
 		})
 	}
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct OrderFills {
-	fills: Vec<OrderFilled>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-#[serde(rename_all = "snake_case")]
-pub enum OrderFilled {
-	LimitOrder {
-		lp: AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
-		side: Side,
-		id: U256,
-		tick: Tick,
-		sold: U256,
-		bought: U256,
-		fees: U256,
-		remaining: U256,
-	},
-	RangeOrder {
-		lp: AccountId,
-		base_asset: Asset,
-		quote_asset: Asset,
-		id: U256,
-		range: Range<Tick>,
-		fees: PoolPairsMap<U256>,
-		liquidity: U256,
-	},
 }
 
 #[async_trait]
@@ -267,10 +248,9 @@ impl RpcServer for RpcServerImpl {
 	async fn register_liquidity_refund_address(
 		&self,
 		chain: ForeignChain,
-		address: &str,
+		address: AddressString,
 	) -> RpcResult<Hash> {
-		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)?;
-		Ok(self.api.lp_api().register_liquidity_refund_address(ewa_address).await?)
+		Ok(self.api.lp_api().register_liquidity_refund_address(chain, address).await?)
 	}
 
 	/// Returns an egress id
@@ -278,12 +258,9 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		amount: NumberOrHex,
 		asset: Asset,
-		destination_address: &str,
+		destination_address: AddressString,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<EgressId>> {
-		let destination_address =
-			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)?;
-
 		Ok(self
 			.api
 			.lp_api()
@@ -502,6 +479,90 @@ impl RpcServer for RpcServerImpl {
 
 		Ok(order_fills(state_chain_client.clone(), block).await?)
 	}
+
+	async fn cancel_all_orders(
+		&self,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<Vec<ApiWaitForResult<Vec<LimitOrRangeOrder>>>> {
+		let mut orders_to_delete: Vec<CloseOrder> = vec![];
+		let pool_pairs = self
+			.api
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_available_pools(None)
+			.await?;
+		for pool in pool_pairs {
+			let orders = self
+				.api
+				.state_chain_client
+				.base_rpc_client
+				.raw_rpc_client
+				.cf_pool_orders(
+					pool.base,
+					pool.quote,
+					Some(self.api.state_chain_client.account_id()),
+					None,
+					None,
+				)
+				.await?;
+			for order in orders.range_orders {
+				orders_to_delete.push(CloseOrder::Range {
+					base_asset: pool.base,
+					quote_asset: pool.quote,
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
+				});
+			}
+			for order in orders.limit_orders.asks {
+				orders_to_delete.push(CloseOrder::Limit {
+					base_asset: pool.base,
+					quote_asset: pool.quote,
+					side: Side::Sell,
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
+				});
+			}
+			for order in orders.limit_orders.bids {
+				orders_to_delete.push(CloseOrder::Limit {
+					base_asset: pool.base,
+					quote_asset: pool.quote,
+					side: Side::Buy,
+					id: order.id.try_into().expect("Internal AMM OrderId is a u64"),
+				});
+			}
+		}
+
+		// in case there are more than 100 elements we need to split the orders into chunks of 100
+		// and submit multiple extrinsics
+		let mut extrinsic_submissions = vec![];
+		for order_chunk in orders_to_delete.chunks(MAX_ORDERS_DELETE as usize) {
+			extrinsic_submissions.push(
+				self.api
+					.lp_api()
+					.cancel_orders_batch(
+						BoundedVec::<_, ConstU32<MAX_ORDERS_DELETE>>::try_from(
+							order_chunk.to_vec(),
+						)
+						.expect("Guaranteed by `chunk` method."),
+						wait_for.unwrap_or_default(),
+					)
+					.await?,
+			);
+		}
+
+		Ok(extrinsic_submissions)
+	}
+
+	async fn cancel_orders_batch(
+		&self,
+		orders: BoundedVec<CloseOrder, ConstU32<MAX_ORDERS_DELETE>>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<Vec<LimitOrRangeOrder>>> {
+		Ok(self
+			.api
+			.lp_api()
+			.cancel_orders_batch(orders, wait_for.unwrap_or_default())
+			.await?)
+	}
 }
 
 async fn order_fills<StateChainClient>(
@@ -511,166 +572,29 @@ async fn order_fills<StateChainClient>(
 where
 	StateChainClient: StorageApi,
 {
+	let (previous_pools, pools, events) = try_join!(
+		state_chain_client
+			.storage_map::<pallet_cf_pools::Pools<Runtime>, BTreeMap<_, _>>(block.parent_hash),
+		state_chain_client
+			.storage_map::<pallet_cf_pools::Pools<Runtime>, BTreeMap<_, _>>(block.hash),
+		state_chain_client.storage_value::<frame_system::Events<Runtime>>(block.hash)
+	)?;
+
+	let lp_events = events
+		.into_iter()
+		.filter_map(|event_record| {
+			if let RuntimeEvent::LiquidityPools(pools_event) = event_record.event {
+				Some(pools_event)
+			} else {
+				None
+			}
+		})
+		.collect();
+
 	Ok(BlockUpdate::<OrderFills> {
 		block_hash: block.hash,
 		block_number: block.number,
-		data: {
-			let (previous_pools, pools, events) = try_join!(
-				state_chain_client.storage_map::<pallet_cf_pools::Pools<
-					chainflip_api::primitives::state_chain_runtime::Runtime,
-				>, HashMap<_, _>>(block.parent_hash),
-				state_chain_client.storage_map::<pallet_cf_pools::Pools<
-					chainflip_api::primitives::state_chain_runtime::Runtime,
-				>, HashMap<_, _>>(block.hash),
-				state_chain_client.storage_value::<frame_system::Events<
-					chainflip_api::primitives::state_chain_runtime::Runtime,
-				>>(block.hash)
-			)?;
-
-			let updated_range_orders = events.iter().filter_map(|event_record| {
-				match &event_record.event {
-					chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::RangeOrderUpdated {
-						lp,
-						base_asset,
-						quote_asset,
-						id,
-						..
-					}) => {
-						Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *id))
-					},
-					_ => {
-						None
-					}
-				}
-			}).collect::<HashSet<_>>();
-
-			let updated_limit_orders = events.iter().filter_map(|event_record| {
-				match &event_record.event {
-					chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
-						lp,
-						base_asset,
-						quote_asset,
-						side,
-						id,
-						..
-					}) => {
-						Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *side, *id))
-					},
-					_ => {
-						None
-					}
-				}
-			}).collect::<HashSet<_>>();
-
-			let order_fills = pools
-				.iter()
-				.flat_map(|(asset_pair, pool)| {
-					let updated_range_orders = &updated_range_orders;
-					let updated_limit_orders = &updated_limit_orders;
-					let previous_pools = &previous_pools;
-					[Side::Sell, Side::Buy]
-						.into_iter()
-						.flat_map(move |side| {
-							pool.pool_state.limit_orders(side).filter_map(
-								move |((lp, id), tick, collected, position_info)| {
-									let (fees, sold, bought) = {
-										let option_previous_order_state = if updated_limit_orders
-											.contains(&(lp.clone(), *asset_pair, side, id))
-										{
-											None
-										} else {
-											previous_pools.get(asset_pair).and_then(|pool| {
-												pool.pool_state
-													.limit_order(&(lp.clone(), id), side, tick)
-													.ok()
-											})
-										};
-
-										if let Some((previous_collected, _)) =
-											option_previous_order_state
-										{
-											(
-												collected.fees - previous_collected.fees,
-												collected.sold_amount -
-													previous_collected.sold_amount,
-												collected.bought_amount -
-													previous_collected.bought_amount,
-											)
-										} else {
-											(
-												collected.fees,
-												collected.sold_amount,
-												collected.bought_amount,
-											)
-										}
-									};
-
-									if fees.is_zero() && sold.is_zero() && bought.is_zero() {
-										None
-									} else {
-										Some(OrderFilled::LimitOrder {
-											lp,
-											base_asset: asset_pair.assets().base,
-											quote_asset: asset_pair.assets().quote,
-											side,
-											id: id.into(),
-											tick,
-											sold,
-											bought,
-											fees,
-											remaining: position_info.amount,
-										})
-									}
-								},
-							)
-						})
-						.chain(pool.pool_state.range_orders().filter_map(
-							move |((lp, id), range, collected, position_info)| {
-								let fees = {
-									let option_previous_order_state = if updated_range_orders
-										.contains(&(lp.clone(), *asset_pair, id))
-									{
-										None
-									} else {
-										previous_pools.get(asset_pair).and_then(|pool| {
-											pool.pool_state
-												.range_order(&(lp.clone(), id), range.clone())
-												.ok()
-										})
-									};
-
-									if let Some((previous_collected, _)) =
-										option_previous_order_state
-									{
-										collected
-											.fees
-											.zip(previous_collected.fees)
-											.map(|(fees, previous_fees)| fees - previous_fees)
-									} else {
-										collected.fees
-									}
-								};
-
-								if fees == Default::default() {
-									None
-								} else {
-									Some(OrderFilled::RangeOrder {
-										lp: lp.clone(),
-										base_asset: asset_pair.assets().base,
-										quote_asset: asset_pair.assets().quote,
-										id: id.into(),
-										range: range.clone(),
-										fees: fees.map(|fees| fees),
-										liquidity: position_info.liquidity.into(),
-									})
-								}
-							},
-						))
-				})
-				.collect::<Vec<_>>();
-
-			OrderFills { fills: order_fills }
-		},
+		data: order_fills_from_block_updates(&previous_pools, &pools, lp_events),
 	})
 }
 

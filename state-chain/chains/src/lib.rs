@@ -1,15 +1,23 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(step_trait)]
 #![feature(extract_if)]
+#![feature(split_array)]
 
 use core::{fmt::Display, iter::Step};
+use sp_std::marker::PhantomData;
 
-use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
+use crate::{
+	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
+	sol::api::SolanaTransactionBuildingError,
+};
 pub use address::ForeignChainAddress;
 use address::{
-	AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress, ToHumanreadableAddress,
+	AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
+	IntoForeignChainAddress, ToHumanreadableAddress,
 };
-use cf_primitives::{AssetAmount, BroadcastId, ChannelId, EthAmount, Price, TransactionHash};
+use cf_primitives::{
+	Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TransactionHash,
+};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -17,7 +25,8 @@ use frame_support::{
 		traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub},
 		BoundedVec, DispatchError,
 	},
-	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, StorageHasher,
+	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Never, Parameter, PartialEqNoBound,
+	StorageHasher,
 };
 use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
 use scale_info::TypeInfo;
@@ -48,8 +57,10 @@ pub mod sol;
 
 pub mod address;
 pub mod deposit_channel;
+use cf_primitives::chains::assets::any::GetChainAssetMap;
 pub use deposit_channel::*;
 use strum::IntoEnumIterator;
+pub mod ccm_checker;
 pub mod instances;
 
 pub mod mocks;
@@ -180,6 +191,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ Default
 		+ AtLeast32BitUnsigned
 		+ Into<AssetAmount>
+		+ TryFrom<AssetAmount>
 		+ FullCodec
 		+ MaxEncodedLen
 		+ BenchmarkValue;
@@ -204,8 +216,26 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ FullCodec
 		+ Into<cf_primitives::Asset>
 		+ Into<cf_primitives::ForeignChain>
+		+ TryFrom<cf_primitives::Asset>
 		+ IntoEnumIterator
 		+ Unpin;
+
+	type ChainAssetMap<
+		T: Member
+			+ Parameter
+			+ MaxEncodedLen
+			+ Copy
+			+ BenchmarkValue
+			+ FullCodec
+			+ Unpin
+	>: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Copy
+		+ BenchmarkValue
+		+ FullCodec
+		+ Unpin
+		+ GetChainAssetMap<T, Asset = Self::ChainAsset>;
 
 	type ChainAccount: Member
 		+ Parameter
@@ -315,7 +345,11 @@ pub trait ApiCall<C: ChainCrypto>: Parameter {
 	fn threshold_signature_payload(&self) -> <C as ChainCrypto>::Payload;
 
 	/// Add the threshold signature to the api call.
-	fn signed(self, threshold_signature: &<C as ChainCrypto>::ThresholdSignature) -> Self;
+	fn signed(
+		self,
+		threshold_signature: &<C as ChainCrypto>::ThresholdSignature,
+		signer: <C as ChainCrypto>::AggKey,
+	) -> Self;
 
 	/// Construct the signed call, encoded according to the chain's native encoding.
 	///
@@ -327,6 +361,12 @@ pub trait ApiCall<C: ChainCrypto>: Parameter {
 
 	/// Generates an identifier for the output of the transaction.
 	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId;
+
+	/// Refresh the replay protection data.
+	fn refresh_replay_protection(&mut self);
+
+	/// Returns the signer of this Apicall
+	fn signer(&self) -> Option<<C as ChainCrypto>::AggKey>;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
@@ -350,7 +390,8 @@ where
 	fn requires_signature_refresh(
 		call: &Call,
 		payload: &<<C as Chain>::ChainCrypto as ChainCrypto>::Payload,
-	) -> bool;
+		maybe_current_onchain_key: Option<<<C as Chain>::ChainCrypto as ChainCrypto>::AggKey>,
+	) -> RequiresSignatureRefresh<C::ChainCrypto, Call>;
 
 	/// Calculate the Units of gas that is allowed to make this call.
 	fn calculate_gas_limit(_call: &Call) -> Option<U256> {
@@ -402,8 +443,10 @@ pub trait ChainEnvironment<
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
 
+#[derive(RuntimeDebug, Clone, PartialEq, Eq)]
 pub enum SetAggKeyWithAggKeyError {
 	Failed,
+	FinalTransactionExceededMaxLength,
 }
 
 /// Constructs the `SetAggKeyWithAggKey` api call.
@@ -440,8 +483,6 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 		expiry: u64,
 		executor: Option<eth::Address>,
 	) -> Self;
-
-	fn amount(&self) -> u128;
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
@@ -460,6 +501,9 @@ pub enum AllBatchError {
 
 	/// Unable to select Utxos.
 	UtxoSelectionFailed,
+
+	/// Failed to build Solana transaction.
+	FailedToBuildSolanaTransaction(SolanaTransactionBuildingError),
 
 	/// Some other DispatchError occurred.
 	DispatchError(DispatchError),
@@ -484,8 +528,18 @@ pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<C>>,
-		transfer_params: Vec<TransferAssetParams<C>>,
-	) -> Result<Self, AllBatchError>;
+		transfer_params: Vec<(TransferAssetParams<C>, EgressId)>,
+	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError>;
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
+pub enum ExecutexSwapAndCallError {
+	/// The chain does not support CCM functionality.
+	Unsupported,
+	/// Failed to build CCM for the Solana chain.
+	FailedToBuildCcmForSolana(SolanaTransactionBuildingError),
+	/// Some other DispatchError occurred.
+	DispatchError(DispatchError),
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -495,11 +549,19 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
-	) -> Result<Self, DispatchError>;
+		cf_parameters: Vec<u8>,
+	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
+pub enum TransferFallbackError {
+	/// The chain does not support this functionality.
+	Unsupported,
+	/// Failed to lookup the given token address, so the asset is invalid.
+	CannotLookupTokenAddress,
+}
 pub trait TransferFallback<C: Chain>: ApiCall<C::ChainCrypto> {
-	fn new_unsigned(transfer_param: TransferAssetParams<C>) -> Result<Self, DispatchError>;
+	fn new_unsigned(transfer_param: TransferAssetParams<C>) -> Result<Self, TransferFallbackError>;
 }
 
 pub trait FeeRefundCalculator<C: Chain> {
@@ -522,6 +584,7 @@ pub enum SwapOrigin {
 	Vault {
 		tx_hash: TransactionHash,
 	},
+	Internal,
 }
 
 pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
@@ -576,11 +639,94 @@ pub struct CcmChannelMetadata {
 	pub cf_parameters: CcmCfParameters,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct CcmSwapAmounts {
+	pub principal_swap_amount: AssetAmount,
+	pub gas_budget: AssetAmount,
+	// if the gas asset is different to the input asset, it will require a swap
+	pub other_gas_asset: Option<Asset>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum CcmFailReason {
+	UnsupportedForTargetChain,
+	InsufficientDepositAmount,
+	InvalidMetadata,
+	InvalidDestinationAddress,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct CcmDepositMetadata {
-	pub source_chain: ForeignChain,
-	pub source_address: Option<ForeignChainAddress>,
+pub struct CcmDepositMetadataGeneric<Address> {
 	pub channel_metadata: CcmChannelMetadata,
+	pub source_chain: ForeignChain,
+	pub source_address: Option<Address>,
+}
+
+impl<Address> CcmDepositMetadataGeneric<Address> {
+	pub fn into_swap_metadata(
+		self,
+		deposit_amount: AssetAmount,
+		source_asset: Asset,
+		destination_asset: Asset,
+	) -> Result<CcmSwapMetadataGeneric<Address>, CcmFailReason> {
+		let gas_budget = self.channel_metadata.gas_budget;
+
+		let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
+
+		let destination_chain: ForeignChain = destination_asset.into();
+		if !destination_chain.ccm_support() {
+			return Err(CcmFailReason::UnsupportedForTargetChain)
+		} else if deposit_amount < gas_budget {
+			return Err(CcmFailReason::InsufficientDepositAmount)
+		}
+
+		// Return gas asset only if it is different from the input asset (and thus requires a swap)
+		let output_gas_asset = destination_chain.gas_asset();
+
+		Ok(CcmSwapMetadataGeneric {
+			deposit_metadata: self,
+			swap_amounts: CcmSwapAmounts {
+				principal_swap_amount,
+				gas_budget,
+				other_gas_asset: if source_asset == output_gas_asset || gas_budget == 0 {
+					None
+				} else {
+					Some(output_gas_asset)
+				},
+			},
+		})
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct CcmSwapMetadataGeneric<Address> {
+	pub deposit_metadata: CcmDepositMetadataGeneric<Address>,
+	pub swap_amounts: CcmSwapAmounts,
+}
+
+pub type CcmSwapMetadata = CcmSwapMetadataGeneric<ForeignChainAddress>;
+pub type CcmSwapMetadataEncoded = CcmSwapMetadataGeneric<EncodedAddress>;
+
+pub type CcmDepositMetadata = CcmDepositMetadataGeneric<ForeignChainAddress>;
+pub type CcmDepositMetadataEncoded = CcmDepositMetadataGeneric<EncodedAddress>;
+
+impl CcmDepositMetadata {
+	pub fn to_encoded<Converter: AddressConverter>(self) -> CcmDepositMetadataEncoded {
+		CcmDepositMetadataEncoded {
+			source_address: self.source_address.map(Converter::to_encoded_address),
+			channel_metadata: self.channel_metadata,
+			source_chain: self.source_chain,
+		}
+	}
+}
+
+impl CcmSwapMetadata {
+	pub fn to_encoded<Converter: AddressConverter>(self) -> CcmSwapMetadataEncoded {
+		CcmSwapMetadataEncoded {
+			deposit_metadata: self.deposit_metadata.to_encoded::<Converter>(),
+			swap_amounts: self.swap_amounts,
+		}
+	}
 }
 
 #[derive(
@@ -639,15 +785,33 @@ impl RetryPolicy for DefaultRetryPolicy {
 )]
 pub struct SwapRefundParameters {
 	pub refund_block: cf_primitives::BlockNumber,
-	pub refund_address: ForeignChainAddress,
 	pub min_output: cf_primitives::AssetAmount,
 }
 
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
 )]
-pub struct ChannelRefundParameters {
+pub struct ChannelRefundParametersGeneric<A> {
 	pub retry_duration: cf_primitives::BlockNumber,
-	pub refund_address: ForeignChainAddress,
+	pub refund_address: A,
 	pub min_price: Price,
+}
+
+pub type ChannelRefundParameters = ChannelRefundParametersGeneric<ForeignChainAddress>;
+pub type ChannelRefundParametersEncoded = ChannelRefundParametersGeneric<EncodedAddress>;
+
+impl<A: Clone> ChannelRefundParametersGeneric<A> {
+	pub fn map_address<B, F: FnOnce(A) -> B>(&self, f: F) -> ChannelRefundParametersGeneric<B> {
+		ChannelRefundParametersGeneric {
+			retry_duration: self.retry_duration,
+			refund_address: f(self.refund_address.clone()),
+			min_price: self.min_price,
+		}
+	}
+}
+
+pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
+	True(Option<Api>),
+	False,
+	_Phantom(PhantomData<C>, Never),
 }

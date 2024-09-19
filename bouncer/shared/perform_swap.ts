@@ -1,15 +1,19 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { encodeAddress } from '../polkadot/util-crypto';
-import { newSwap } from './new_swap';
+import { newSwap, RefundParameters } from './new_swap';
 import { send, sendViaCfTester } from './send';
 import { getBalance } from './get_balance';
 import {
   observeBalanceIncrease,
   observeCcmReceived,
   shortChainFromAsset,
-  observeSwapScheduled,
   observeSwapEvents,
   observeBroadcastSuccess,
+  getEncodedSolAddress,
+  observeFetch,
+  chainFromAsset,
+  observeSwapRequested,
+  SwapRequestType,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swapping';
@@ -20,6 +24,8 @@ function encodeDestinationAddress(address: string, destAsset: Asset): string {
 
   if (destAddress && destAsset === 'Dot') {
     destAddress = encodeAddress(destAddress);
+  } else if (shortChainFromAsset(destAsset) === 'Sol') {
+    destAddress = getEncodedSolAddress(destAddress);
   }
 
   return destAddress;
@@ -42,6 +48,7 @@ export async function requestNewSwap(
   brokerCommissionBps?: number,
   log = true,
   boostFeeBps = 0,
+  refundParameters?: RefundParameters,
 ): Promise<SwapParams> {
   const addressPromise = observeEvent('swapping:SwapDepositAddressReady', {
     test: (event) => {
@@ -58,17 +65,18 @@ export async function requestNewSwap(
         destAddressEvent.toLowerCase() ===
         encodeDestinationAddress(destAddress, destAsset).toLowerCase();
 
-      // CF Parameters is always set to '' by the SDK for now
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
           event.data.channelMetadata.message === messageMetadata.message &&
           Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
-            messageMetadata.gasBudget
+            messageMetadata.gasBudget &&
+          event.data.channelMetadata.cfParameters === messageMetadata.cfParameters
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
     },
   }).event;
+
   await newSwap(
     sourceAsset,
     destAsset,
@@ -76,13 +84,14 @@ export async function requestNewSwap(
     messageMetadata,
     brokerCommissionBps,
     boostFeeBps,
+    refundParameters,
   );
 
   const res = (await addressPromise).data;
 
   const depositAddress = res.depositAddress[shortChainFromAsset(sourceAsset)];
   const channelDestAddress = res.destinationAddress[shortChainFromAsset(destAsset)];
-  const channelId = Number(res.channelId);
+  const channelId = Number(res.channelId.replaceAll(',', ''));
 
   if (log) {
     console.log(`${tag} Deposit address: ${depositAddress}`);
@@ -116,7 +125,12 @@ export async function doPerformSwap(
 
   if (log) console.log(`${tag} Old balance: ${oldBalance}`);
 
-  const swapScheduledHandle = observeSwapScheduled(sourceAsset, destAsset, channelId);
+  const swapRequestedHandle = observeSwapRequested(
+    sourceAsset,
+    destAsset,
+    channelId,
+    messageMetadata ? SwapRequestType.Ccm : SwapRequestType.Regular,
+  );
 
   const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
@@ -130,7 +144,7 @@ export async function doPerformSwap(
 
   swapContext?.updateStatus(tag, SwapStatus.Funded);
 
-  await swapScheduledHandle;
+  await swapRequestedHandle;
 
   swapContext?.updateStatus(tag, SwapStatus.SwapScheduled);
 
@@ -141,6 +155,12 @@ export async function doPerformSwap(
       observeBalanceIncrease(destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
+
+    const chain = chainFromAsset(sourceAsset);
+    if (chain !== 'Bitcoin' && chain !== 'Polkadot') {
+      if (log) console.log(`${tag} Waiting deposit fetch ${depositAddress}`);
+      await observeFetch(sourceAsset, depositAddress);
+    }
 
     if (log) console.log(`${tag} Swap success! New balance: ${newBalance}!`);
     swapContext?.updateStatus(tag, SwapStatus.Success);

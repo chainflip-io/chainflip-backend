@@ -37,6 +37,12 @@ jobs:
     with:
       profile: "production"
       binary-subdir: "production"
+  build-m2:
+    uses: ./.github/workflows/_21_build_m2.yml
+    secrets: inherit
+    with:
+      profile: "production"
+      binary-subdir: "production"
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
     needs: [test]
@@ -82,8 +88,6 @@ jobs:
     secrets: inherit
     with:
       run-job: true
-      upgrade-from-release: "perseverance"
-      upgrade-to-workflow-name: "ci-main.yml"
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
@@ -96,3 +100,7 @@ jobs:
     uses: ./.github/workflows/_70_post_release.yml
     with:
       network: "sisyphos"
+  upload-versioned-build-artifacts:
+    needs: [upgrade-check, build, build-m2]
+    uses: ./.github/workflows/_61_upload_versioned_build_artifacts.yml
+    secrets: inherit

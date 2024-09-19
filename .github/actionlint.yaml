@@ -4,6 +4,7 @@ self-hosted-runner:
     [
       digitalocean,
       hetzner,
+      namespace-profile-default,
       namespace-profile-rust-builder,
       nscloud-ubuntu-22.04-amd64-2x4,
       nscloud-ubuntu-22.04-amd64-2x4-with-cache,
@@ -15,6 +16,7 @@ self-hosted-runner:
       nscloud-ubuntu-22.04-amd64-4x8-with-cache,
       nscloud-ubuntu-22.04-amd64-8x16,
       nscloud-ubuntu-22.04-amd64-8x16-with-cache,
+      namespace-profile-rust-builder-m2
     ]
 # Configuration variables in array of strings defined in your repository or
 # organization. `null` means disabling configuration variables check.
