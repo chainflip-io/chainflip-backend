@@ -16,10 +16,10 @@ use pallet_cf_witnesser::{CallHash, CallHashExecuted, WitnessDeadline};
 
 #[test]
 fn can_punish_failed_witnesser() {
-	const EPOCH_BLOCKS: u32 = 1000;
+	const EPOCH_DURATION_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 50;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_DURATION_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -46,7 +46,7 @@ fn can_punish_failed_witnesser() {
 			assert_ok!(Reputation::set_penalty(
 				pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
 				Offence::FailedToWitnessInTime,
-				Penalty { reputation: -100, suspension: EPOCH_BLOCKS },
+				Penalty { reputation: -100, suspension: EPOCH_DURATION_BLOCKS },
 			));
 
 			// Before the deadline is set, no one has been reported.

@@ -1363,7 +1363,7 @@ fn can_determine_is_auction_phase() {
 
 		// In Idle phase, must be within certain % of epoch progress.
 		CurrentEpochStartedAt::<Test>::set(1_000);
-		BlocksPerEpoch::<Test>::set(100);
+		EpochDuration::<Test>::set(100);
 		RedemptionPeriodAsPercentage::<Test>::set(Percent::from_percent(85));
 
 		// First block of auction phase = 1_000 + 100 * 85% = 1085
@@ -1446,7 +1446,7 @@ fn can_update_all_config_items() {
 		assert_ne!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
 		assert_ne!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
 		assert_ne!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
-		assert_ne!(BlocksPerEpoch::<Test>::get(), NEW_EPOCH_DURATION as u64);
+		assert_ne!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_ne!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
 		assert_ne!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
 		assert_ne!(
@@ -1495,7 +1495,7 @@ fn can_update_all_config_items() {
 		assert_eq!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
 		assert_eq!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
 		assert_eq!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
-		assert_eq!(BlocksPerEpoch::<Test>::get(), NEW_EPOCH_DURATION as u64);
+		assert_eq!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_eq!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
 		assert_eq!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
 		assert_eq!(
