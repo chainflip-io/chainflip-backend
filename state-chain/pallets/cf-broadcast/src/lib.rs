@@ -418,11 +418,9 @@ pub mod pallet {
 			// and separately the expired values, after that iterate again to delete all collected
 			// keys from storage.
 			Timeouts::<T, I>::mutate(|timeouts| {
-				// NB: As per documentation, retain visits every element exactly once,
-				// and can thus be used for iterations with state change.
-				timeouts.retain(|(ix, val)| {
-					if *ix <= current_chain_block {
-						expiries.append(&mut val.clone());
+				timeouts.retain(|(expiry_block, broadcast_ids)| {
+					if *expiry_block <= current_chain_block {
+						expiries.append(&mut broadcast_ids.clone());
 						false
 					} else {
 						true

@@ -1051,7 +1051,6 @@ fn broadcast_timeout_works_when_external_chain_advances_multiple_blocks() {
 			(broadcast_ids, max(expiry1, expiry2))
 		})
 		.then_process_next_block()
-		.then_process_next_block()
 		// move external block height into the future past both timeouts
 		.then_execute_with_keep_context(|(_, expiry)| {
 			BlockHeightProvider::<MockEthereum>::set_block_height(expiry + 1)
