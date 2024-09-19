@@ -68,7 +68,7 @@ frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag =
 pallet-transaction-payment = { default-features = false, git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+1' }
 
 # These dependencies are used for the node template's RPCs
-jsonrpsee = { version = "0.16.2", features = ["full"] }
+jsonrpsee = { version = "0.23.2", features = ["full"] }
 sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+1' }
 sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+1' }
 sp-blockchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+1' }

@@ -30,7 +30,7 @@ anyhow = "1.0.66"
 clap = { version = "4.5.3", features = ["derive"] }
 futures = "0.3.30"
 hex = "0.4.3"
-jsonrpsee = { version = "0.16.2", features = ["full"] }
+jsonrpsee = { version = "0.23.2", features = ["full"] }
 serde = { version = '1.0.197', features = ['derive'] }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
 sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
