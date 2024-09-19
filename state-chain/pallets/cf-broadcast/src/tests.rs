@@ -167,7 +167,7 @@ fn get_timeouts_for(
 	let mut result = BTreeSet::new();
 	for (timeout, broadcast_id, nominee) in Timeouts::<Test, Instance1>::get() {
 		if timeout == chainblock {
-			result.insert((broadcast_id, nominee).clone());
+			result.insert((broadcast_id, nominee));
 		}
 	}
 	result

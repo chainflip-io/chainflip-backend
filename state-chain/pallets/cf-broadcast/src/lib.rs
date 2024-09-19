@@ -413,7 +413,7 @@ pub mod pallet {
 			Timeouts::<T, I>::mutate(|timeouts| {
 				timeouts.retain(|(expiry_block, broadcast_id, nominee)| {
 					if *expiry_block <= current_chain_block {
-						expiries.insert((broadcast_id.clone(), nominee.clone()));
+						expiries.insert((*broadcast_id, nominee.clone()));
 						false
 					} else {
 						true

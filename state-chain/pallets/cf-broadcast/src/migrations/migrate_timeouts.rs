@@ -57,8 +57,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		for (broadcast_id, nominee) in data.timeouts {
 			let (new_timeout, _, _) = new_timeouts
 				.iter()
-				.filter(|(_, id, nom)| (id, nom) == (&broadcast_id, &nominee))
-				.next()
+				.find(|(_, id, nom)| (id, nom) == (&broadcast_id, &nominee))
 				.unwrap();
 			assert!(*new_timeout >= data.target_chainblock);
 		}
