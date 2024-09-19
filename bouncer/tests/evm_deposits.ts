@@ -17,11 +17,15 @@ import {
   observeSwapRequested,
   SwapRequestType,
 } from '../shared/utils';
-import { signAndSendTxEvm } from './send_evm';
-import { getCFTesterAbi } from './contract_interfaces';
-import { send } from './send';
+import { signAndSendTxEvm } from '../shared/send_evm';
+import { getCFTesterAbi } from '../shared/contract_interfaces';
+import { send } from '../shared/send';
 
-import { observeEvent, observeBadEvent } from './utils/substrate';
+import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
+import { ExecutableTest } from '../shared/executable_test';
+
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testEvmDeposits = new ExecutableTest('Evm-Deposits', main, 250);
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -31,8 +35,8 @@ async function testSuccessiveDepositEvm(sourceAsset: Asset, destAsset: Asset) {
     destAsset,
     undefined,
     undefined,
-    undefined,
-    ' EvmDepositTestFirstDeposit',
+    testEvmDeposits.swapContext,
+    'EvmDepositTestFirstDeposit',
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
@@ -47,8 +51,8 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
     destAsset,
     undefined,
     undefined,
-    undefined,
-    ' NoDuplicateWitnessingTest',
+    testEvmDeposits.swapContext,
+    'NoDuplicateWitnessingTest',
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
@@ -124,7 +128,7 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
   while (eventCounter === 0) {
     await sleep(2000);
   }
-  console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
+  testEvmDeposits.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
   // Wait some more time after the first event to ensure another one is not emited
   await sleep(30000);
@@ -170,9 +174,7 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
   }
 }
 
-export async function testEvmDeposits(numberOfNodes: number) {
-  console.log('=== Testing EVM Deposits ===');
-
+async function main(numberOfNodes: 1 | 3 = 1) {
   // There is some issue in CI with 3-nodes and these swaps.
   // To investigate in PRO-1591
   const depositTests = [];
@@ -216,6 +218,4 @@ export async function testEvmDeposits(numberOfNodes: number) {
     multipleTxSwapsTest,
     doubleDepositTests,
   ]);
-
-  console.log('=== EVM Deposit Test completed ===');
 }

@@ -8,7 +8,7 @@
 // For example: ./commands/send_arbeth.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6 1.2
 // will send 1.2 Arb to account 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { sendEvmNative } from '../shared/send_evm';
 
 async function main() {
@@ -19,4 +19,4 @@ async function main() {
   await sendEvmNative('Arbitrum', arbitrumAddress, arbAmount);
 }
 
-await executeWithTimeout(main(), 20);
+await runWithTimeoutAndExit(main(), 20);

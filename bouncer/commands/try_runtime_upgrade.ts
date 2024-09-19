@@ -23,7 +23,7 @@ import {
   tryRuntimeUpgrade,
   tryRuntimeUpgradeWithCompileRuntime,
 } from '../shared/try_runtime_upgrade';
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { getChainflipApi } from '../shared/utils/substrate';
 
 async function main(): Promise<void> {
@@ -73,4 +73,4 @@ async function main(): Promise<void> {
   }
 }
 
-await executeWithTimeout(main(), 1200);
+await runWithTimeoutAndExit(main(), 1200);

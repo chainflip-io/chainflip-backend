@@ -1,16 +1,18 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { Keyring } from '../polkadot/keyring';
-import { handleSubstrateError, amountToFineAmount, lpMutex, assetDecimals } from '../shared/utils';
+import {
+  handleSubstrateError,
+  amountToFineAmount,
+  lpMutex,
+  assetDecimals,
+  createStateChainKeypair,
+} from '../shared/utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 
 export async function rangeOrder(ccy: Asset, amount: number) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
   await using chainflip = await getChainflipApi();
 
-  const keyring = new Keyring({ type: 'sr25519' });
-  keyring.setSS58Format(2112);
-  const lpUri = process.env.LP_URI || '//LP_1';
-  const lp = keyring.createFromUri(lpUri);
+  const lp = createStateChainKeypair(process.env.LP_URI || '//LP_1');
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const currentPools: any = (

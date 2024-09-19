@@ -6,6 +6,6 @@
 // For example: ./commands/setup_swaps.ts
 
 import { setupSwaps } from '../shared/setup_swaps';
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 
-await executeWithTimeout(setupSwaps(), 240);
+await runWithTimeoutAndExit(setupSwaps(), 240);

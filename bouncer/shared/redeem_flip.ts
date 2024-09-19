@@ -2,7 +2,6 @@ import assert from 'assert';
 import { InternalAssets as Assets, executeRedemption, getRedemptionDelay } from '@chainflip/cli';
 import type { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
-import Keyring from '../polkadot/keyring';
 import { getNextEvmNonce } from './send_evm';
 import { getGatewayAbi } from './contract_interfaces';
 import {
@@ -15,6 +14,7 @@ import {
   getEvmEndpoint,
   getWhaleKey,
   assetDecimals,
+  createStateChainKeypair,
 } from './utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 
@@ -36,9 +36,7 @@ export async function redeemFlip(
   flipAmount: RedeemAmount,
 ): Promise<string> {
   await using chainflip = await getChainflipApi();
-  const keyring = new Keyring({ type: 'sr25519' });
-  keyring.setSS58Format(2112);
-  const flipWallet = keyring.createFromUri('//' + flipSeed);
+  const flipWallet = createStateChainKeypair('//' + flipSeed);
   const accountIdHex: HexString = `0x${Buffer.from(flipWallet.publicKey).toString('hex')}`;
   const ethWallet = new Wallet(getWhaleKey('Ethereum')).connect(
     ethers.getDefaultProvider(getEvmEndpoint('Ethereum')),
