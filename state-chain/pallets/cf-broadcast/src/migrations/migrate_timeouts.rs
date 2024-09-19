@@ -49,7 +49,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		}
 		let data: MigrationData<T, I> = MigrationData {
 			timeouts,
-			new_timeout_chainblock: BlockHeightProvider::<T::TargetChain>::get_block_height() +
+			target_chainblock: BlockHeightProvider::<T::TargetChain>::get_block_height() +
 				BroadcastTimeout::<T, I>::get(),
 		};
 		Ok(data.encode())
@@ -60,8 +60,16 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		let data = MigrationData::<T, I>::decode(&mut &state[..]).unwrap();
 		let new_timeouts = Timeouts::<T, I>::get();
 
+		// We don't know whether the timeout is set to exactly the `new_timeout` value or a higher
+		// one, because between getting the current block height in `pre_upgrade` and in
+		// `on_runtime_upgrade` some time might have passed.
 		for (broadcast_id, nominee) in data.timeouts {
-			assert!(new_timeouts.contains(&(data.new_timeout_chainblock, broadcast_id, nominee)))
+			let (new_timeout, _, _) = new_timeouts
+				.iter()
+				.filter(|(_, id, nom)| (id, nom) == (&broadcast_id, &nominee))
+				.next()
+				.unwrap();
+			assert!(*new_timeout >= data.target_chainblock);
 		}
 		Ok(())
 	}
@@ -70,7 +78,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 #[derive(Encode, Decode)]
 pub struct MigrationData<T: Config<I>, I: 'static> {
 	pub timeouts: Vec<(BroadcastId, <T as Chainflip>::ValidatorId)>,
-	pub new_timeout_chainblock: ChainBlockNumberFor<T, I>,
+	pub target_chainblock: ChainBlockNumberFor<T, I>,
 }
 
 #[cfg(test)]
