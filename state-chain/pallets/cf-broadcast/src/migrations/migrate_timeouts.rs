@@ -1,4 +1,3 @@
-use cf_traits::mocks::block_height_provider::BlockHeightProvider;
 use frame_support::{pallet_prelude::ValueQuery, traits::OnRuntimeUpgrade, weights::Weight};
 
 use crate::*;
@@ -22,8 +21,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		// Instead of trying to translate the previous timeout into external chain blocks,
 		// we simply reset the remaining timeout duration to the new `BroadcastTimeout` value.
-		let new_timeout = BlockHeightProvider::<T::TargetChain>::get_block_height() +
-			BroadcastTimeout::<T, I>::get();
+		let new_timeout = T::ChainTracking::get_block_height() + BroadcastTimeout::<T, I>::get();
 		for (_, timeouts) in old::Timeouts::<T, I>::drain() {
 			for (broadcast_id, nominee) in timeouts {
 				Timeouts::<T, I>::append((new_timeout, broadcast_id, nominee))
@@ -42,7 +40,7 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 		}
 		let data: MigrationData<T, I> = MigrationData {
 			timeouts,
-			target_chainblock: BlockHeightProvider::<T::TargetChain>::get_block_height() +
+			target_chainblock: T::ChainTracking::get_block_height() +
 				BroadcastTimeout::<T, I>::get(),
 		};
 		Ok(data.encode())
