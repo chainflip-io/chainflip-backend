@@ -1,5 +1,4 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { Keyring } from '../polkadot/keyring';
 import {
   newAddress,
   decodeDotAddressForContract,
@@ -12,6 +11,7 @@ import {
   decodeSolAddress,
   chainContractId,
   assetDecimals,
+  createStateChainKeypair,
 } from '../shared/utils';
 import { send } from '../shared/send';
 import { getChainflipApi, observeEvent } from './utils/substrate';
@@ -25,10 +25,7 @@ export async function depositLiquidity(
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
 
-  const keyring = new Keyring({ type: 'sr25519' });
-  keyring.setSS58Format(2112);
-  const lpUri = lpKey ?? (process.env.LP_URI || '//LP_1');
-  const lp = keyring.createFromUri(lpUri);
+  const lp = createStateChainKeypair(lpKey ?? (process.env.LP_URI || '//LP_1'));
 
   // If no liquidity refund address is registered, then do that now
   if (

@@ -8,7 +8,7 @@
 //              ./commands/encode_decode_sol.ts DEBC3T7JCWr6ur6vUEaBan3ix4ibH5fDhuKuYqPK1Xht
 // might print: DEBC3T7JCWr6ur6vUEaBan3ix4ibH5fDhuKuYqPK1Xht
 
-import { runWithTimeout, decodeSolAddress, encodeSolAddress } from '../shared/utils';
+import { runWithTimeoutAndExit, decodeSolAddress, encodeSolAddress } from '../shared/utils';
 
 export async function encodeDecodeSol(address: string) {
   if (/^0x[a-fA-F0-9]+$/.test(address)) {
@@ -24,7 +24,4 @@ export async function encodeDecodeSol(address: string) {
 
 const solAddress = process.argv[2] ?? '0';
 
-runWithTimeout(encodeDecodeSol(solAddress), 5000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await runWithTimeoutAndExit(encodeDecodeSol(solAddress), 5);
