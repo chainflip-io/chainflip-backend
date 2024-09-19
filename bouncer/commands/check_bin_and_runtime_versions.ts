@@ -96,15 +96,15 @@ const releaseSpecVersion = Number(
 );
 console.log(`Release spec version: ${releaseSpecVersion}`);
 
-const specVersionInToml = specVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, 'read');
-console.log(`Spec version in TOML: ${specVersionInToml}`);
+const specVersionInSource = specVersion(`${projectRoot}/state-chain/runtime/src/lib.rs`, 'read');
+console.log(`Spec version in runtime/src/lib.rs: ${specVersionInSource}`);
 
-if (specVersionInToml >= releaseSpecVersion) {
+if (specVersionInSource >= releaseSpecVersion) {
   console.log(
     `Spec version is correct. Version in TOML is greater than or equal to the release spec version.`,
   );
 } else {
   throw Error(
-    `Spec version is incorrect. Version in TOML (${specVersionInToml}) should be greater than or equal to the release spec version (${releaseSpecVersion}).`,
+    `Spec version is incorrect. Version in TOML (${specVersionInSource}) should be greater than or equal to the release spec version (${releaseSpecVersion}).`,
   );
 }
