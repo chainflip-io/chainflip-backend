@@ -11,10 +11,10 @@
 // For example: ./commands/add_boost_funds.ts Btc 5 0.1 "//LP_2"
 
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { executeWithTimeout } from '../shared/utils';
-import { addBoostFunds } from '../shared/boost';
+import { runWithTimeoutAndExit } from '../shared/utils';
+import { addBoostFunds } from '../tests/boost';
 
-await executeWithTimeout(
+await runWithTimeoutAndExit(
   addBoostFunds(
     process.argv[2] as Asset,
     Number(process.argv[3]),

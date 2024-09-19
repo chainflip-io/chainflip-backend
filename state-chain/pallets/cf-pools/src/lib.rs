@@ -24,7 +24,7 @@ use cf_traits::HistoricalFeeMigration;
 use cf_traits::LpRegistration;
 use frame_system::pallet_prelude::OriginFor;
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::traits::SaturatedConversion;
+use sp_arithmetic::traits::{SaturatedConversion, Zero};
 use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 pub use pallet::*;
@@ -215,6 +215,18 @@ pub mod pallet {
 		Liquidity { liquidity: Liquidity },
 	}
 
+	impl RangeOrderSize {
+		/// Returns whether or not the maximum amount of assets contained is 0.
+		pub fn max_is_zero(&self) -> bool {
+			match self {
+				RangeOrderSize::AssetAmounts { maximum: PoolPairsMap { base, quote }, .. } =>
+					*base + *quote,
+				RangeOrderSize::Liquidity { liquidity } => *liquidity,
+			}
+			.is_zero()
+		}
+	}
+
 	/// Indicates the change caused by an operation in the positions size, both in terms of
 	/// liquidity and equivalently in asset amounts
 	#[derive(
@@ -398,6 +410,8 @@ pub mod pallet {
 		UnsupportedCall,
 		/// The update can't be scheduled because it has expired (dispatch_at is in the past).
 		LimitOrderUpdateExpired,
+		/// The range order size is invalid.
+		InvalidSize,
 	}
 
 	#[pallet::event]
@@ -569,7 +583,7 @@ pub mod pallet {
 					(None, Some(tick_range)) | (Some(tick_range), None) => Ok(tick_range),
 					(Some(previous_tick_range), Some(new_tick_range)) => {
 						if previous_tick_range != new_tick_range {
-							let withdrawn_asset_amounts = Self::inner_update_range_order(
+							let (withdrawn_asset_amounts, _) = Self::inner_update_range_order(
 								pool,
 								&lp,
 								asset_pair,
@@ -664,7 +678,7 @@ pub mod pallet {
 						Ok(option_new_tick_range.unwrap_or(previous_tick_range))
 					},
 				}?;
-				Self::inner_update_range_order(
+				let (_, new_order_liquidity) = Self::inner_update_range_order(
 					pool,
 					&lp,
 					asset_pair,
@@ -681,6 +695,15 @@ pub mod pallet {
 					}),
 					NoOpStatus::Allow,
 				)?;
+
+				// Asset input and resultant liquidity changes should be consistent.
+				// This condition can be breached in cases where eg. the assets amounts are rounded
+				// to zero liquidity.
+				ensure!(
+					(size.max_is_zero() && new_order_liquidity.is_zero()) ||
+						(!size.max_is_zero() && !new_order_liquidity.is_zero()),
+					Error::<T>::InvalidSize
+				);
 
 				Ok(())
 			})
@@ -1475,7 +1498,7 @@ impl<T: Config> Pallet<T> {
 		tick_range: Range<cf_amm::common::Tick>,
 		size_change: IncreaseOrDecrease<range_orders::Size>,
 		noop_status: NoOpStatus,
-	) -> Result<AssetAmounts, DispatchError> {
+	) -> Result<(AssetAmounts, Liquidity), DispatchError> {
 		let (liquidity_change, position_info, assets_change, collected) = match size_change {
 			IncreaseOrDecrease::Increase(size) => {
 				let (assets_debited, minted_liquidity, collected, position_info) =
@@ -1620,7 +1643,7 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
-		Ok(assets_change)
+		Ok((assets_change, *liquidity_change.abs()))
 	}
 
 	pub fn try_add_limit_order(

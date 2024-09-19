@@ -1,13 +1,12 @@
 use crate::{
 	electoral_system::{
-		AuthorityVoteOf, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
+		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
 		ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
 use cf_chains::benchmarking_value::BenchmarkValue;
-use cf_primitives::AuthorityCount;
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -86,21 +85,17 @@ impl<
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		mut votes: Vec<(
-			VotePropertiesOf<Self>,
-			<Self::Vote as VoteStorage>::Vote,
-			Self::ValidatorId,
-		)>,
-		authorities: AuthorityCount,
+		votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-		let votes_count = votes.len();
+		let num_authorities = votes.num_authorities();
+		let mut active_votes = votes.active_votes();
+		let num_active_votes = active_votes.len() as u32;
 		Ok(
-			if votes_count != 0 &&
-				votes_count >= success_threshold_from_share_count(authorities) as usize
+			if num_active_votes != 0 &&
+				num_active_votes >= success_threshold_from_share_count(num_authorities)
 			{
-				// TODO: We should just select on the vote
-				let (_, (_properties, median_vote, _validator), _) =
-					votes.select_nth_unstable((votes_count - 1) / 2);
+				let (_, median_vote, _) =
+					active_votes.select_nth_unstable(((num_active_votes - 1) / 2) as usize);
 				Some(median_vote.clone())
 			} else {
 				None

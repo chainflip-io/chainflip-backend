@@ -1,14 +1,11 @@
-import { Keyring } from '../polkadot/keyring';
+import { lpApiRpc } from '../tests/lp_api_test';
+import { createStateChainKeypair } from './utils';
 import { getChainflipApi } from './utils/substrate';
-import { lpApiRpc } from './lp_api_test';
 
-export async function createAndDeleteAllOrdersLpApi() {
+export async function DeleteAllOrdersLpApi() {
   await using chainflip = await getChainflipApi();
 
-  const keyring = new Keyring({ type: 'sr25519' });
-  keyring.setSS58Format(2112);
-  const lpUri = process.env.LP_URI || '//LP_1';
-  const lp = keyring.createFromUri(lpUri);
+  const lp = createStateChainKeypair(process.env.LP_URI || '//LP_1');
 
   let orders = await chainflip.rpc('cf_pool_orders', 'BTC', 'USDC', lp.address);
   console.log(`BTC pool: ${JSON.stringify(orders)}`);

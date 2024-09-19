@@ -10,12 +10,37 @@ use crate::{
 	CorruptStorageError, ElectionIdentifier,
 };
 
+pub struct ConsensusVote<ES: ElectoralSystem> {
+	// If the validator hasn't voted, they will get a None.
+	pub vote: Option<(VotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote)>,
+	pub validator_id: ES::ValidatorId,
+}
+
+pub struct ConsensusVotes<ES: ElectoralSystem> {
+	pub votes: Vec<ConsensusVote<ES>>,
+}
+
+impl<ES: ElectoralSystem> ConsensusVotes<ES> {
+	// We expect that the number of votes is equal to the authority count.
+	pub fn num_authorities(&self) -> AuthorityCount {
+		self.votes.len() as AuthorityCount
+	}
+
+	// Returns all votes of those who actually voted.
+	pub fn active_votes(self) -> Vec<<ES::Vote as VoteStorage>::Vote> {
+		self.votes
+			.into_iter()
+			.filter_map(|ConsensusVote { vote, .. }| vote.map(|v| v.1))
+			.collect()
+	}
+}
+
 /// A trait that describes a method of coming to consensus on some aspect of an external chain, and
 /// how that consensus should be processed.
 ///
 /// Implementations of this trait should *NEVER* directly access the storage of the elections
 /// pallet, and only access it through the passed-in accessors.
-pub trait ElectoralSystem: 'static {
+pub trait ElectoralSystem: 'static + Sized {
 	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
 
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
@@ -172,8 +197,7 @@ pub trait ElectoralSystem: 'static {
 		// the "last" consensus, i.e. this can be `None` even if on some previous check we had
 		// consensus, but it was subsequently lost.
 		previous_consensus: Option<&Self::Consensus>,
-		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
-		authorities: AuthorityCount,
+		votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError>;
 }
 

@@ -555,31 +555,35 @@ fn can_process_ccm_via_swap_deposit_address() {
 	});
 }
 
+fn ccm_deposit_metadata_mock() -> CcmDepositMetadata {
+	CcmDepositMetadata {
+		source_chain: ForeignChain::Ethereum,
+		source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+		channel_metadata: CcmChannelMetadata {
+			message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
+			gas_budget: 100_000_000,
+			cf_parameters: Default::default(),
+		},
+	}
+}
+
 #[test]
 fn can_process_ccm_via_direct_deposit() {
 	super::genesis::with_test_defaults().build().execute_with(|| {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
-		let gas_budget = 100_000_000;
 		let deposit_amount = 100_000_000_000;
-		let deposit_metadata = CcmDepositMetadata {
-			source_chain: ForeignChain::Ethereum,
-			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			channel_metadata: CcmChannelMetadata {
-				message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
-				gas_budget,
-				cf_parameters: Default::default(),
-			},
-		};
 
-		witness_call(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
-			source_asset: Asset::Flip,
-			deposit_amount,
-			destination_asset: Asset::Usdc,
-			destination_address: EncodedAddress::Eth([0x02; 20]),
-			deposit_metadata,
-			tx_hash: Default::default(),
-		}));
+		witness_call(RuntimeCall::EthereumIngressEgress(
+			pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
+				source_asset: Asset::Flip,
+				deposit_amount,
+				destination_asset: Asset::Usdc,
+				destination_address: EncodedAddress::Eth([0x02; 20]),
+				deposit_metadata: ccm_deposit_metadata_mock(),
+				tx_hash: Default::default(),
+			},
+		));
 
 		// It is sufficient to check that swap is "requested", the rest is
 		// covered by the `can_process_ccm_via_swap_deposit_address` test
@@ -606,37 +610,38 @@ fn failed_swaps_are_rolled_back() {
 			.expect("Btc pool should be set up with liquidity.")
 			.price;
 
-		let witness_swap_ingress =
-			|from: Asset, to: Asset, amount: AssetAmount, destination_address: EncodedAddress| {
-				witness_call(RuntimeCall::Swapping(
-					pallet_cf_swapping::Call::schedule_swap_from_contract {
-						from,
-						to,
-						deposit_amount: amount,
-						destination_address,
-						tx_hash: Default::default(),
-					},
-				))
-			};
+		witness_call(RuntimeCall::EthereumIngressEgress(
+			pallet_cf_ingress_egress::Call::contract_swap_request {
+				from: Asset::Eth,
+				to: Asset::Flip,
+				deposit_amount: 1_000,
+				destination_address: EncodedAddress::Eth(Default::default()),
+				tx_hash: Default::default(),
+			},
+		));
 
-		witness_swap_ingress(
-			Asset::Eth,
-			Asset::Flip,
-			1_000,
-			EncodedAddress::Eth(Default::default()),
-		);
-		witness_swap_ingress(
-			Asset::Eth,
-			Asset::Btc,
-			1_000,
-			EncodedAddress::Btc("bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec()),
-		);
-		witness_swap_ingress(
-			Asset::Btc,
-			Asset::Usdc,
-			1_000,
-			EncodedAddress::Eth(Default::default()),
-		);
+		witness_call(RuntimeCall::EthereumIngressEgress(
+			pallet_cf_ingress_egress::Call::contract_swap_request {
+				from: Asset::Eth,
+				to: Asset::Btc,
+				deposit_amount: 1_000,
+				destination_address: EncodedAddress::Btc(
+					"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec(),
+				),
+				tx_hash: Default::default(),
+			},
+		));
+
+		witness_call(RuntimeCall::BitcoinIngressEgress(
+			pallet_cf_ingress_egress::Call::contract_swap_request {
+				from: Asset::Btc,
+				to: Asset::Usdc,
+				deposit_amount: 1_000,
+				destination_address: EncodedAddress::Eth(Default::default()),
+				tx_hash: Default::default(),
+			},
+		));
+
 		System::reset_events();
 
 		let swaps_scheduled_at = System::block_number() + SWAP_DELAY_BLOCKS;
@@ -838,25 +843,17 @@ fn can_resign_failed_ccm() {
 			witness_ethereum_rotation_broadcast(1);
 			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
-			// Deposit CCM and process the swap
-			let deposit_metadata = CcmDepositMetadata {
-				source_chain: ForeignChain::Ethereum,
-				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-				channel_metadata: CcmChannelMetadata {
-					message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
-					gas_budget: 1_000,
-					cf_parameters: Default::default(),
+			witness_call(RuntimeCall::EthereumIngressEgress(
+				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
+					source_asset: Asset::Flip,
+					deposit_amount: 10_000_000_000_000,
+					destination_asset: Asset::Usdc,
+					destination_address: EncodedAddress::Eth([0x02; 20]),
+					deposit_metadata: ccm_deposit_metadata_mock(),
+					// deposit_metadata,
+					tx_hash: Default::default(),
 				},
-			};
-
-			witness_call(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit {
-				source_asset: Asset::Flip,
-				deposit_amount: 10_000,
-				destination_asset: Asset::Usdc,
-				destination_address: EncodedAddress::Eth([0x02; 20]),
-				deposit_metadata,
-				tx_hash: Default::default(),
-			}));
+			));
 
 			// Process the swap -> egress -> threshold sign -> broadcast
 			let starting_epoch = Validator::current_epoch();

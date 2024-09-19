@@ -7,7 +7,7 @@
 // For example: ./commands/get_eth_balance.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 // might print: 1.2
 
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { getEvmNativeBalance } from '../shared/get_evm_native_balance';
 
 export async function getEthBalanceCommand(address: string) {
@@ -15,4 +15,4 @@ export async function getEthBalanceCommand(address: string) {
 }
 
 const ethereumAddress = process.argv[2] ?? '0';
-await executeWithTimeout(getEthBalanceCommand(ethereumAddress), 5);
+await runWithTimeoutAndExit(getEthBalanceCommand(ethereumAddress), 5);

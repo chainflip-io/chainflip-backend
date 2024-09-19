@@ -38,9 +38,4 @@ impl LiabilityTracker for MockLiabilityTracker {
 			},
 		);
 	}
-
-	#[cfg(feature = "try-runtime")]
-	fn total_liabilities(asset: Asset) -> AssetAmount {
-		Self::total_liabilities(asset)
-	}
 }

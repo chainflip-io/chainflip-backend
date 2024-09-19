@@ -1,20 +1,18 @@
 #!/usr/bin/env -S NODE_OPTIONS=--max-old-space-size=6144 pnpm tsx
-import { SwapContext, testAllSwaps } from '../shared/swapping';
-import { testEvmDeposits } from '../shared/evm_deposits';
-import { checkAvailabilityAllSolanaNonces, runWithTimeout } from '../shared/utils';
-import { testFundRedeem } from '../shared/fund_redeem';
-import { testMultipleMembersGovernance } from '../shared/multiple_members_governance';
-import { testLpApi } from '../shared/lp_api_test';
-import { swapLessThanED } from '../shared/swap_less_than_existential_deposit_dot';
-import { testPolkadotRuntimeUpdate } from '../shared/polkadot_runtime_update';
-import { testBrokerFeeCollection } from '../shared/broker_fee_collection';
-import { testBoostingSwap } from '../shared/boost';
+import { testEvmDeposits } from './evm_deposits';
+import { checkAvailabilityAllSolanaNonces, runWithTimeoutAndExit } from '../shared/utils';
+import { testFundRedeem } from './fund_redeem';
+import { testMultipleMembersGovernance } from './multiple_members_governance';
+import { testLpApi } from './lp_api_test';
+import { swapLessThanED } from './swap_less_than_existential_deposit_dot';
+import { testPolkadotRuntimeUpdate } from './polkadot_runtime_update';
+import { testBrokerFeeCollection } from './broker_fee_collection';
+import { testBoostingSwap } from './boost';
 import { observeBadEvent } from '../shared/utils/substrate';
-import { testFillOrKill } from '../shared/fill_or_kill';
-import { testDCASwaps } from '../shared/DCA_test';
-import { createAndDeleteMultipleOrders } from '../shared/create_and_delete_multiple_orders';
-
-const swapContext = new SwapContext();
+import { testFillOrKill } from './fill_or_kill';
+import { testDCASwaps } from './DCA_test';
+import { testCancelOrdersBatch } from './create_and_delete_multiple_orders';
+import { testAllSwaps } from './all_swaps';
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.
@@ -32,23 +30,23 @@ async function runAllConcurrentTests() {
 
   // Tests that work with any number of nodes and can be run concurrently
   const tests = [
-    swapLessThanED(),
-    testAllSwaps(swapContext),
-    testEvmDeposits(numberOfNodes),
-    testFundRedeem('redeem'),
-    testMultipleMembersGovernance(),
-    testLpApi(),
-    testBrokerFeeCollection(),
-    testBoostingSwap(),
-    testFillOrKill(),
-    testDCASwaps(),
-    createAndDeleteMultipleOrders(30),
+    swapLessThanED.run(),
+    testAllSwaps.run(),
+    testEvmDeposits.run(numberOfNodes),
+    testFundRedeem.run('redeem'),
+    testMultipleMembersGovernance.run(),
+    testLpApi.run(),
+    testBrokerFeeCollection.run(),
+    testBoostingSwap.run(),
+    testFillOrKill.run(),
+    testDCASwaps.run(),
+    testCancelOrdersBatch.run(),
   ];
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
     console.log(`Also running multi-node tests (${numberOfNodes} nodes)`);
-    const multiNodeTests = [testPolkadotRuntimeUpdate()];
+    const multiNodeTests = [testPolkadotRuntimeUpdate.run()];
     tests.push(...multiNodeTests);
   }
 
@@ -59,15 +57,4 @@ async function runAllConcurrentTests() {
   await checkAvailabilityAllSolanaNonces();
 }
 
-runWithTimeout(runAllConcurrentTests(), 2000000)
-  .then(() => {
-    // There are some dangling resources that prevent the process from exiting
-    process.exit(0);
-  })
-  .catch((error) => {
-    swapContext.print_report();
-    const now = new Date();
-    const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-    console.error(`${timestamp} ${error}`);
-    process.exit(-1);
-  });
+await runWithTimeoutAndExit(runAllConcurrentTests(), 2000);

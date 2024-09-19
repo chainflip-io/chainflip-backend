@@ -2,10 +2,17 @@
 import { connectContainerToNetwork, disconnectContainerFromNetwork } from '../shared/docker_utils';
 import { sleep } from '../shared/utils';
 import { testSwap } from '../shared/swapping';
+import { ExecutableTest } from '../shared/executable_test';
 
-try {
-  console.log('=== Testing a swap after temporarily disconnecting external nodes ===');
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testSwapAfterDisconnection = new ExecutableTest(
+  'Swap-After-Disconnection',
+  main,
+  1300,
+);
 
+// Testing a swap after temporarily disconnecting external nodes
+async function main() {
   const networkName = 'chainflip-localnet_default';
   const allExternalNodes = ['bitcoin', 'geth', 'polkadot'];
 
@@ -19,12 +26,9 @@ try {
     allExternalNodes.map((container) => connectContainerToNetwork(container, networkName)),
   );
 
-  await Promise.all([testSwap('Dot', 'Btc'), testSwap('Btc', 'Flip'), testSwap('Eth', 'Usdc')]);
-
-  console.log('=== Test complete ===');
-
-  process.exit(0);
-} catch (e) {
-  console.log('Error: ', e);
-  process.exit(1);
+  await Promise.all([
+    testSwap('Dot', 'Btc', undefined, undefined, testSwapAfterDisconnection.swapContext),
+    testSwap('Btc', 'Flip', undefined, undefined, testSwapAfterDisconnection.swapContext),
+    testSwap('Eth', 'Usdc', undefined, undefined, testSwapAfterDisconnection.swapContext),
+  ]);
 }

@@ -736,3 +736,32 @@ fn test_extra_call_data() {
 		.is_none(),);
 	});
 }
+
+#[test]
+fn only_governance_can_force_witness() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Witnesser::force_witness(
+				RuntimeOrigin::signed(100),
+				Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {})),
+				MockEpochInfo::epoch_index()
+			),
+			sp_runtime::traits::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn ensure_witnessed_origin_checks() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(RuntimeCall::Dummy(pallet_dummy::Call::<Test>::increment_value {}));
+		assert_noop!(
+			Witnesser::prewitness(RuntimeOrigin::none(), call.clone()),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Witnesser::prewitness_and_execute(RuntimeOrigin::none(), call),
+			sp_runtime::traits::BadOrigin,
+		);
+	});
+}

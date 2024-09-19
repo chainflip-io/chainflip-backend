@@ -79,7 +79,6 @@ impl pallet_cf_flip::Config for Test {
 	type WaivedFees = WaivedFeesMock;
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -166,7 +165,7 @@ impl pallet_cf_funding::Config for Test {
 	type FunderId = AccountId;
 	type Broadcaster = MockFundingBroadcaster;
 	type ThresholdCallable = RuntimeCall;
-	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type EnsureThresholdSigned = FailOnNoneOrigin<Self>;
 	type RedemptionChecker = MockRedemptionChecker;
 	type SafeMode = MockRuntimeSafeMode;
 	type RegisterRedemption = MockRegisterRedemption;

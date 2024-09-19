@@ -29,18 +29,18 @@ fn swap_output_amounts_correctly_account_for_fees() {
 			};
 
 			{
-				assert_ok!(Swapping::init_swap_request(
+				Swapping::init_swap_request(
 					from,
 					INPUT_AMOUNT,
 					to,
 					SwapRequestType::Regular {
-						output_address: ForeignChainAddress::Eth(H160::zero())
+						output_address: ForeignChainAddress::Eth(H160::zero()),
 					},
 					Default::default(),
 					None,
 					None,
-					SwapOrigin::Vault { tx_hash: Default::default() }
-				));
+					SwapOrigin::Vault { tx_hash: Default::default() },
+				);
 
 				Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
 
@@ -189,7 +189,7 @@ fn network_fee_swap_gets_burnt() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_ok!(Swapping::init_swap_request(
+			Swapping::init_swap_request(
 				INPUT_ASSET,
 				AMOUNT,
 				OUTPUT_ASSET,
@@ -197,8 +197,8 @@ fn network_fee_swap_gets_burnt() {
 				Default::default(),
 				None,
 				None,
-				SwapOrigin::Internal
-			));
+				SwapOrigin::Internal,
+			);
 
 			assert_eq!(FlipToBurn::<Test>::get(), 0);
 
@@ -235,7 +235,7 @@ fn transaction_fees_are_collected() {
 
 	new_test_ext()
 		.execute_with(|| {
-			assert_ok!(Swapping::init_swap_request(
+			Swapping::init_swap_request(
 				INPUT_ASSET,
 				AMOUNT,
 				OUTPUT_ASSET,
@@ -243,8 +243,8 @@ fn transaction_fees_are_collected() {
 				Default::default(),
 				None,
 				None,
-				SwapOrigin::Internal
-			));
+				SwapOrigin::Internal,
+			);
 
 			System::assert_has_event(RuntimeEvent::Swapping(Event::SwapRequested {
 				swap_request_id: SWAP_REQUEST_ID,
@@ -333,7 +333,7 @@ fn input_amount_excludes_network_fee() {
 		.execute_with(|| {
 			swap_with_custom_broker_fee(FROM_ASSET, TO_ASSET, AMOUNT, bounded_vec![]);
 
-			assert_ok!(<Pallet<Test> as SwapRequestHandler>::init_swap_request(
+			<Pallet<Test> as SwapRequestHandler>::init_swap_request(
 				FROM_ASSET,
 				AMOUNT,
 				TO_ASSET,
@@ -342,7 +342,7 @@ fn input_amount_excludes_network_fee() {
 				None,
 				None,
 				SwapOrigin::Vault { tx_hash: Default::default() },
-			));
+			);
 		})
 		.then_process_blocks_until(|_| System::block_number() == 3)
 		.then_execute_with(|_| {

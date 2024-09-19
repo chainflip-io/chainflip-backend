@@ -13,7 +13,7 @@ import { hideBin } from 'yargs/helpers';
 import { InternalAsset } from '@chainflip/cli';
 import {
   parseAssetString,
-  executeWithTimeout,
+  runWithTimeoutAndExit,
   assetPriceToInternalAssetPrice,
   decodeDotAddressForContract,
 } from '../shared/utils';
@@ -108,4 +108,4 @@ async function newSwapCommand() {
   );
 }
 
-await executeWithTimeout(newSwapCommand(), 60);
+await runWithTimeoutAndExit(newSwapCommand(), 60);
