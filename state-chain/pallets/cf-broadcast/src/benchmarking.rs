@@ -92,7 +92,8 @@ mod benchmarks {
 			insert_transaction_broadcast_attempt::<T, I>(Some(caller.clone().into()), broadcast_id);
 			Timeouts::<T, I>::append((
 				timeout_target_block,
-				BTreeSet::from([(broadcast_id, T::ValidatorId::from(caller.clone()))]),
+				broadcast_id,
+				T::ValidatorId::from(caller.clone()),
 			));
 		}
 		for _ in 1..r {
@@ -145,7 +146,7 @@ mod benchmarks {
 		assert_eq!(Pallet::<T, I>::attempt_count(broadcast_id), 0);
 		assert!(Timeouts::<T, I>::get()
 			.iter()
-			.any(|(chainblock, _)| *chainblock == timeout_chainblock));
+			.any(|(chainblock, _, _)| *chainblock == timeout_chainblock));
 	}
 
 	#[benchmark]
