@@ -159,17 +159,27 @@ fn new_mock_broadcast_attempt(
 
 /// Since there might be multiple entries with the same timeout chainblock number,
 /// we collect all of their "values" into a single `BTreeSet`. This improves the
-/// readability of a few test cases.
+/// readability of a few test cases. Since we don't care about the order of the timeouts,
+/// we use a `BTreeSet` instead of a vector.
 fn get_timeouts_for(
 	chainblock: ChainBlockNumberFor<Test, Instance1>,
 ) -> BTreeSet<(BroadcastId, ValidatorId)> {
 	let mut result = BTreeSet::new();
-	for (timeout, val) in Timeouts::<Test, Instance1>::get() {
+	for (timeout, broadcast_id, nominee) in Timeouts::<Test, Instance1>::get() {
 		if timeout == chainblock {
-			result.append(&mut val.clone());
+			result.insert((broadcast_id, nominee).clone());
 		}
 	}
 	result
+}
+/// Append multiple timeout entries for the same target chain block.
+fn append_timeouts_for(
+	chainblock: ChainBlockNumberFor<Test, Instance1>,
+	timeouts: Vec<(BroadcastId, ValidatorId)>,
+) {
+	for (broadcast_id, nominee) in timeouts {
+		Timeouts::<Test, Instance1>::append((chainblock, broadcast_id, nominee));
+	}
 }
 
 #[test]
@@ -233,12 +243,10 @@ fn ready_to_abort_broadcast(broadcast_id: BroadcastId) -> u64 {
 	// Extract nominee for current broadcast_id from the Timeouts storage.
 	// If none can be found the default is 0.
 	let mut nominee = 0;
-	for (_, vals) in Timeouts::<Test, Instance1>::get() {
-		for (id, nom) in vals.iter() {
-			if id == &broadcast_id {
-				nominee = *nom;
-				break;
-			}
+	for (_, id, nom) in Timeouts::<Test, Instance1>::get() {
+		if id == broadcast_id {
+			nominee = nom;
+			break;
 		}
 	}
 
@@ -1314,22 +1322,22 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 				<<Test as crate::Config<Instance1>>::SafeModeChainBlockMargin as Get<u64>>::get();
 
 			// Ensure next block's data is ready to be re-scheduled during safe mode.
-			Timeouts::<Test, Instance1>::append((
+			append_timeouts_for(
 				current_chainblock,
-				BTreeSet::from([(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)]),
-			));
-			Timeouts::<Test, Instance1>::append((
+				vec![(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)],
+			);
+			append_timeouts_for(
 				current_chainblock,
-				BTreeSet::from([(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)]),
-			));
+				vec![(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)],
+			);
 			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::get(next_block)
 				.contains(&broadcast_id,));
 
 			// add mock data to the target block storage.
-			Timeouts::<Test, Instance1>::append((
+			append_timeouts_for(
 				target_chainblock,
-				BTreeSet::from([(100, 0), (101, 0), (102, 0), (103, 0), (104, 0)]),
-			));
+				vec![(100, 0), (101, 0), (102, 0), (103, 0), (104, 0)],
+			);
 			DelayedBroadcastRetryQueue::<Test, Instance1>::append(target_block, 100);
 			DelayedBroadcastRetryQueue::<Test, Instance1>::append(target_block, 101);
 
