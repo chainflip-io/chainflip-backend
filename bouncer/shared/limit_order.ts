@@ -8,11 +8,17 @@ import {
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 
-export async function limitOrder(ccy: Asset, amount: number, orderId: number, tick: number) {
+export async function limitOrder(
+  ccy: Asset,
+  amount: number,
+  orderId: number,
+  tick: number,
+  lpKey?: string,
+) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
   await using chainflip = await getChainflipApi();
 
-  const lp = createStateChainKeypair(process.env.LP_URI || '//LP_1');
+  const lp = createStateChainKeypair(lpKey ?? (process.env.LP_URI || '//LP_1'));
 
   console.log('Setting up ' + ccy + ' limit order');
   const orderCreatedEvent = observeEvent('liquidityPools:LimitOrderUpdated', {
