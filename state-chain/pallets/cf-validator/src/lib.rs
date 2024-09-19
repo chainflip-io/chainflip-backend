@@ -69,7 +69,7 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
@@ -174,10 +174,10 @@ pub mod pallet {
 	#[pallet::getter(fn current_epoch_started_at)]
 	pub type CurrentEpochStartedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
-	/// The duration of an epoch in blocks.
+	/// The amount of blocks in an epoch.
 	#[pallet::storage]
-	#[pallet::getter(fn blocks_per_epoch)]
-	pub type BlocksPerEpoch<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	#[pallet::getter(fn epoch_duration)]
+	pub type EpochDuration<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Current epoch index.
 	#[pallet::storage]
@@ -389,7 +389,7 @@ pub mod pallet {
 			weight.saturating_accrue(match CurrentRotationPhase::<T>::get() {
 				RotationPhase::Idle => {
 					if block_number.saturating_sub(CurrentEpochStartedAt::<T>::get()) >=
-						BlocksPerEpoch::<T>::get() {
+						EpochDuration::<T>::get() {
 						if T::RotationBroadcastsPending::rotation_broadcasts_pending() {
 							Self::deposit_event(Event::PreviousRotationStillPending);
 							T::ValidatorWeightInfo::rotation_phase_idle()
@@ -536,7 +536,7 @@ pub mod pallet {
 				},
 				PalletConfigUpdate::EpochDuration { blocks } => {
 					ensure!(blocks > 0, Error::<T>::InvalidEpochDuration);
-					BlocksPerEpoch::<T>::set(blocks.into());
+					EpochDuration::<T>::set(blocks.into());
 				},
 				PalletConfigUpdate::AuctionParameters { parameters } => {
 					Self::try_update_auction_parameters(parameters)?;
@@ -820,7 +820,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_authorities: BTreeSet<ValidatorIdOf<T>>,
 		pub genesis_backups: BackupMap<T>,
-		pub blocks_per_epoch: BlockNumberFor<T>,
+		pub epoch_duration: BlockNumberFor<T>,
 		pub bond: T::Amount,
 		pub redemption_period_as_percentage: Percent,
 		pub backup_reward_node_percentage: Percent,
@@ -835,7 +835,7 @@ pub mod pallet {
 			Self {
 				genesis_authorities: Default::default(),
 				genesis_backups: Default::default(),
-				blocks_per_epoch: Zero::zero(),
+				epoch_duration: Zero::zero(),
 				bond: Default::default(),
 				redemption_period_as_percentage: Zero::zero(),
 				backup_reward_node_percentage: Zero::zero(),
@@ -856,7 +856,7 @@ pub mod pallet {
 		fn build(&self) {
 			use cf_primitives::GENESIS_EPOCH;
 			LastExpiredEpoch::<T>::set(Default::default());
-			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
+			EpochDuration::<T>::set(self.epoch_duration);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
 			RedemptionPeriodAsPercentage::<T>::set(self.redemption_period_as_percentage);
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
@@ -988,7 +988,7 @@ impl<T: Config> Pallet<T> {
 
 		// Set the expiry block number for the old epoch.
 		EpochExpiries::<T>::insert(
-			frame_system::Pallet::<T>::current_block_number() + BlocksPerEpoch::<T>::get(),
+			frame_system::Pallet::<T>::current_block_number() + EpochDuration::<T>::get(),
 			old_epoch,
 		);
 
@@ -1326,7 +1326,7 @@ impl<T: Config> Pallet<T> {
 
 		// current_block > start + ((epoch * epoch%_can_redeem))
 		CurrentEpochStartedAt::<T>::get()
-			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * BlocksPerEpoch::<T>::get()) <=
+			.saturating_add(RedemptionPeriodAsPercentage::<T>::get() * EpochDuration::<T>::get()) <=
 			frame_system::Pallet::<T>::current_block_number()
 	}
 }
@@ -1431,14 +1431,14 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 
 impl<T: Config> EstimateNextSessionRotation<BlockNumberFor<T>> for Pallet<T> {
 	fn average_session_length() -> BlockNumberFor<T> {
-		Self::blocks_per_epoch()
+		Self::epoch_duration()
 	}
 
 	fn estimate_current_session_progress(now: BlockNumberFor<T>) -> (Option<Permill>, Weight) {
 		(
 			Some(Permill::from_rational(
 				now.saturating_sub(CurrentEpochStartedAt::<T>::get()),
-				BlocksPerEpoch::<T>::get(),
+				EpochDuration::<T>::get(),
 			)),
 			T::DbWeight::get().reads(2),
 		)
@@ -1448,7 +1448,7 @@ impl<T: Config> EstimateNextSessionRotation<BlockNumberFor<T>> for Pallet<T> {
 		_now: BlockNumberFor<T>,
 	) -> (Option<BlockNumberFor<T>>, Weight) {
 		(
-			Some(CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get()),
+			Some(CurrentEpochStartedAt::<T>::get() + EpochDuration::<T>::get()),
 			T::DbWeight::get().reads(2),
 		)
 	}
