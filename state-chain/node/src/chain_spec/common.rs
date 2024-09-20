@@ -54,7 +54,7 @@ const REPUTATION_PENALTY_LARGE: i32 = REPUTATION_PER_HEARTBEAT * 8; // Two hours
 
 // A penalty of 1 is missing an Ethereum witnessing every 15 seconds. We do liveness every minute.
 // which is equivalent to ~4 missed Ethereum witnessings.
-const LIVENESS_REPUTATION_PENALTY: i32 = 4;
+const LIVENESS_REPUTATION_PENALTY: i32 = REPUTATION_PER_HEARTBEAT / 5;
 
 /// The offences committable within the protocol and their respective reputation penalty and
 /// suspension durations.
