@@ -174,21 +174,7 @@ pub struct Sol {
 
 impl Sol {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
-		self.nodes.validate()?;
-
-		// Check that all endpoints have a port number
-		let validate_sol_endpoints = |endpoint: &HttpEndpoint| -> Result<(), ConfigError> {
-			validate_port_exists(&endpoint.http_endpoint).map_err(|e| {
-				ConfigError::Message(format!(
-					"Solana node endpoints must include a port number: {e}"
-				))
-			})
-		};
-		validate_sol_endpoints(&self.nodes.primary)?;
-		if let Some(backup) = &self.nodes.backup {
-			validate_sol_endpoints(backup)?;
-		}
-		Ok(())
+		self.nodes.validate()
 	}
 }
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
@@ -1276,35 +1262,6 @@ pub mod tests {
 		assert_ok!(is_valid_db_path(Path::new("/my/user/data/data.db")));
 		assert!(is_valid_db_path(Path::new("data.errdb")).is_err());
 		assert!(is_valid_db_path(Path::new("thishasnoextension")).is_err());
-	}
-
-	#[test]
-	fn test_dot_port_validation() {
-		let valid_settings = Dot {
-			nodes: NodeContainer {
-				primary: WsHttpEndpoints {
-					ws_endpoint: "wss://valid.endpoint_with_port:443/secret_key".into(),
-					http_endpoint: "https://valid.endpoint_with_port:443/secret_key".into(),
-				},
-				backup: Some(WsHttpEndpoints {
-					ws_endpoint: "ws://valid.endpoint_with_port:1234".into(),
-					http_endpoint: "http://valid.endpoint_with_port:6969".into(),
-				}),
-			},
-		};
-		assert_ok!(valid_settings.validate_settings());
-
-		let mut invalid_primary_settings = valid_settings.clone();
-		invalid_primary_settings.nodes.primary.ws_endpoint =
-			"ws://invalid.no_port_in_url/secret_key".into();
-		assert!(invalid_primary_settings.validate_settings().is_err());
-
-		let mut invalid_backup_settings = valid_settings.clone();
-		invalid_backup_settings.nodes.backup = Some(WsHttpEndpoints {
-			ws_endpoint: "ws://valid.endpoint_with_port:443".into(),
-			http_endpoint: "http://invalid.no_port_in_url/secret_key".into(),
-		});
-		assert!(invalid_backup_settings.validate_settings().is_err());
 	}
 
 	#[test]
