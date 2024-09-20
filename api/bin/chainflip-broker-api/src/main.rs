@@ -1,4 +1,7 @@
-use cf_utilities::task_scope::{task_scope, Scope};
+use cf_utilities::{
+	health::{self, HealthCheck},
+	task_scope::{task_scope, Scope},
+};
 use chainflip_api::{
 	self,
 	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
@@ -13,7 +16,10 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
-use std::path::PathBuf;
+use std::{
+	path::PathBuf,
+	sync::{atomic::AtomicBool, Arc},
+};
 use tracing::log;
 
 #[rpc(server, client, namespace = "broker")]
@@ -135,6 +141,10 @@ pub struct BrokerOptions {
 		help = "A path to a file that contains the broker's secret key for signing extrinsics."
 	)]
 	pub signing_key_file: PathBuf,
+	#[clap(long = "health_check.hostname")]
+	pub health_check_hostname: Option<String>,
+	#[clap(long = "health_check.port")]
+	pub health_check_port: Option<u16>,
 }
 
 #[tokio::main]
@@ -148,6 +158,14 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
+			// initialize healthcheck endpoint
+			let has_completed_initialising = Arc::new(AtomicBool::new(false));
+			let h = HealthCheck {
+				hostname: opts.health_check_hostname.clone().unwrap_or("localhost".to_string()),
+				port: opts.health_check_port.unwrap_or(1337),
+			};
+			health::start(scope, &h, has_completed_initialising.clone()).await?;
+
 			let server = ServerBuilder::default()
 				.max_connections(opts.max_connections)
 				.build(format!("0.0.0.0:{}", opts.port))
@@ -156,6 +174,9 @@ async fn main() -> anyhow::Result<()> {
 			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
 
 			log::info!("🎙 Server is listening on {server_addr}.");
+
+			// notify healthcheck completed
+			has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
 
 			server.stopped().await;
 

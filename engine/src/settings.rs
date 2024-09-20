@@ -17,7 +17,8 @@ use url::Url;
 
 use clap::Parser;
 use utilities::{
-	logging::LoggingSettings, metrics::Prometheus, redact_endpoint_secret::SecretUrl, Port,
+	health::HealthCheck, logging::LoggingSettings, metrics::Prometheus,
+	redact_endpoint_secret::SecretUrl, Port,
 };
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
@@ -206,11 +207,6 @@ impl Sol {
 		}
 		Ok(())
 	}
-}
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct HealthCheck {
-	pub hostname: String,
-	pub port: Port,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]

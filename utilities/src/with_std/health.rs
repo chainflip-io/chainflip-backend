@@ -5,9 +5,9 @@
 
 use std::{net::IpAddr, sync::Arc};
 
+use crate::{task_scope, Port};
 use serde::Deserialize;
 use tracing::info;
-use crate::{task_scope, Port};
 use warp::Filter;
 
 // use crate::settings;
@@ -51,7 +51,6 @@ pub async fn start<'a, 'env>(
 
 	Ok(())
 }
-
 
 // #[cfg(test)]
 // mod tests {
