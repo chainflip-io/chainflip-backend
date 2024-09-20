@@ -1,3 +1,5 @@
+use sp_std::collections::btree_set::BTreeSet;
+
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVote, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
@@ -27,7 +29,7 @@ pub struct Liveness<ChainBlockNumber, ChainBlockHash, BlockNumber, Hook, Validat
 }
 
 pub trait OnCheckComplete<ValidatorId> {
-	fn on_check_complete(validator_ids: Vec<ValidatorId>);
+	fn on_check_complete(validator_ids: BTreeSet<ValidatorId>);
 }
 
 impl<
@@ -60,7 +62,7 @@ impl<
 	// The SC block number that we started the election at.
 	type ElectionState = BlockNumber;
 	type Vote = vote_storage::bitmap::Bitmap<ChainBlockHash>;
-	type Consensus = Vec<Self::ValidatorId>;
+	type Consensus = BTreeSet<Self::ValidatorId>;
 	// The current SC block number, and the current chain tracking height.
 	type OnFinalizeContext = (BlockNumber, ChainBlockNumber);
 	type OnFinalizeReturn = ();
@@ -145,38 +147,29 @@ impl<
 		let num_authorities = consensus_votes.num_authorities();
 		let success_threshold = success_threshold_from_share_count(num_authorities);
 
-		let mut active_votes = BTreeMap::new();
-		let mut non_voters = Vec::new();
+		let mut grouped_votes = BTreeMap::new();
 		for ConsensusVote { vote, validator_id } in consensus_votes.votes {
-			match vote {
-				Some(vote) => {
-					active_votes.entry(vote.1).or_insert_with(Vec::new).push(validator_id);
-				},
-				None => non_voters.push(validator_id),
-			}
+			grouped_votes
+				.entry(vote.map(|v| v.1))
+				.or_insert_with(Vec::new)
+				.push(validator_id);
 		}
 
 		let (consensus_validators, non_consensus_validators): (Vec<_>, Vec<_>) =
-			active_votes.into_iter().partition(|(_, validator_ids)| {
+			grouped_votes.into_iter().partition(|(_, validator_ids)| {
 				validator_ids.len() as AuthorityCount >= success_threshold
 			});
 
-		debug_assert!(
-			consensus_validators.len() <= 1,
-			"there should only be one group that gained consensus"
-		);
-
-		Ok(if consensus_validators.len() == 1 {
+		Ok(if let Some((Some(_block_hash), _)) = consensus_validators.first() {
+			// If we have consensus on a value then we punish all validators that didn't vote for
+			// that value.
 			Some(
 				non_consensus_validators
 					.into_iter()
 					.flat_map(|(_, validator_ids)| validator_ids)
-					.chain(non_voters)
 					.collect(),
 			)
 		} else {
-			// If we didn't gain consensus on a value, then we don't punish anyone. We assume
-			// there's an issue with the external network.
 			None
 		})
 	}

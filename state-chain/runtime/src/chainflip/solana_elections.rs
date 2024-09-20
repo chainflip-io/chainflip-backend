@@ -31,7 +31,7 @@ use pallet_cf_elections::{
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
@@ -135,7 +135,7 @@ pub type SolanaLiveness = electoral_systems::liveness::Liveness<
 pub struct OnCheckCompleteHook;
 
 impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHook {
-	fn on_check_complete(validator_ids: Vec<<Runtime as Chainflip>::ValidatorId>) {
+	fn on_check_complete(validator_ids: BTreeSet<<Runtime as Chainflip>::ValidatorId>) {
 		Reputation::report_many(Offence::FailedLivenessCheck(ForeignChain::Solana), validator_ids);
 	}
 }

@@ -1,3 +1,5 @@
+use sp_std::collections::btree_set::BTreeSet;
+
 use super::{mocks::*, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes},
@@ -16,7 +18,7 @@ thread_local! {
 struct MockHook;
 
 impl OnCheckComplete<ValidatorId> for MockHook {
-	fn on_check_complete(_validator_ids: Vec<ValidatorId>) {
+	fn on_check_complete(_validator_ids: BTreeSet<ValidatorId>) {
 		HOOK_CALLED_COUNT.with(|hook_called| hook_called.set(hook_called.get() + 1));
 	}
 }
@@ -56,9 +58,9 @@ const CORRECT_VOTE: ChainBlockHash = 69420;
 const INCORRECT_VOTE: ChainBlockHash = 666;
 
 fn generate_votes(
-	correct_voters: Vec<ValidatorId>,
-	incorrect_voters: Vec<ValidatorId>,
-	did_not_vote: Vec<ValidatorId>,
+	correct_voters: BTreeSet<ValidatorId>,
+	incorrect_voters: BTreeSet<ValidatorId>,
+	did_not_vote: BTreeSet<ValidatorId>,
 ) -> ConsensusVotes<SimpleLiveness> {
 	ConsensusVotes {
 		votes: correct_voters
@@ -80,48 +82,39 @@ fn with_default_state() -> TestContext<SimpleLiveness> {
 
 #[test]
 fn all_vote_for_same_value_means_no_bad_validators() {
-	with_default_state()
-		.expect_consensus(generate_votes((0..50).collect(), vec![], vec![]), Some(vec![]));
+	with_default_state().expect_consensus(
+		generate_votes((0..50).collect(), BTreeSet::default(), BTreeSet::default()),
+		Some(BTreeSet::default()),
+	);
 }
 
 #[test]
 fn no_votes_no_one_bad_validators() {
-	with_default_state().expect_consensus(generate_votes(vec![], vec![], (0..50).collect()), None);
-}
-
-fn check_consensus(
-	new_consensus: Option<Vec<ValidatorId>>,
-	expected_consensus: Option<Vec<ValidatorId>>,
-) {
-	let mut new_consensus = new_consensus.unwrap();
-	new_consensus.sort();
-	let mut expected_consensus = expected_consensus.unwrap();
-	expected_consensus.sort();
-	assert_eq!(new_consensus, expected_consensus);
+	with_default_state().expect_consensus(
+		generate_votes(BTreeSet::default(), BTreeSet::default(), (0..50).collect()),
+		None,
+	);
 }
 
 #[test]
 fn consensus_with_bad_voters() {
-	let correct_voters: Vec<_> = (0..50).collect();
-	let incorrect_voters: Vec<_> = (50..60).collect();
-	let non_voters: Vec<_> = (60..70).collect();
+	let correct_voters: BTreeSet<_> = (0..50).collect();
+	let incorrect_voters: BTreeSet<_> = (50..60).collect();
+	let non_voters: BTreeSet<_> = (60..70).collect();
 
-	with_default_state().expect_consensus_by(
-		generate_votes(correct_voters.clone(), incorrect_voters.clone(), vec![]),
+	with_default_state().expect_consensus(
+		generate_votes(correct_voters.clone(), incorrect_voters.clone(), BTreeSet::default()),
 		Some(incorrect_voters.clone()),
-		check_consensus,
 	);
 
-	with_default_state().expect_consensus_by(
-		generate_votes(correct_voters.clone(), vec![], non_voters.clone()),
+	with_default_state().expect_consensus(
+		generate_votes(correct_voters.clone(), BTreeSet::default(), non_voters.clone()),
 		Some(non_voters.clone()),
-		check_consensus,
 	);
 
-	with_default_state().expect_consensus_by(
+	with_default_state().expect_consensus(
 		generate_votes(correct_voters, incorrect_voters.clone(), non_voters.clone()),
 		Some(incorrect_voters.into_iter().chain(non_voters).collect()),
-		check_consensus,
 	);
 }
 
@@ -131,8 +124,8 @@ fn on_finalize() {
 	const BLOCKS_BETWEEN_CHECKS: BlockNumber = 10;
 	const INIT_CHAIN_TRACKING_BLOCK: ChainBlockNumber = 1000;
 
-	let correct_voters: Vec<_> = (0..50).collect();
-	let non_voters: Vec<_> = (60..70).collect();
+	let correct_voters: BTreeSet<_> = (0..50).collect();
+	let non_voters: BTreeSet<_> = (60..70).collect();
 
 	TestSetup::default()
 		.with_electoral_settings(BLOCKS_BETWEEN_CHECKS)
@@ -145,10 +138,9 @@ fn on_finalize() {
 				Check::<SimpleLiveness>::hook_not_called(),
 			],
 		)
-		.expect_consensus_by(
-			generate_votes(correct_voters.clone(), vec![], non_voters.clone()),
+		.expect_consensus(
+			generate_votes(correct_voters.clone(), BTreeSet::default(), non_voters.clone()),
 			Some(non_voters.clone()),
-			check_consensus,
 		)
 		.test_on_finalize(
 			// check duration has not yet elapsed, so no change
@@ -188,10 +180,9 @@ fn on_finalize() {
 				Check::<SimpleLiveness>::hook_called_once(),
 			],
 		)
-		.expect_consensus_by(
-			generate_votes(correct_voters.clone(), vec![], non_voters.clone()),
+		.expect_consensus(
+			generate_votes(correct_voters.clone(), BTreeSet::default(), non_voters.clone()),
 			Some(non_voters),
-			check_consensus,
 		)
 		// we have votes now and expect nodes to be punished by having the hook called again.
 		.test_on_finalize(

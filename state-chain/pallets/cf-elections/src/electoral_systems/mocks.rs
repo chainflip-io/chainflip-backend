@@ -118,24 +118,8 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 	#[track_caller]
 	pub fn expect_consensus(
 		self,
-		consensus_votes: ConsensusVotes<ES>,
-		expected_consensus: Option<ES::Consensus>,
-	) -> Self {
-		Self::expect_consensus_by(
-			self,
-			consensus_votes,
-			expected_consensus,
-			|new_consensus, expected_consensus| {
-				assert_eq!(new_consensus, expected_consensus);
-			},
-		)
-	}
-
-	pub fn expect_consensus_by<C: FnOnce(Option<ES::Consensus>, Option<ES::Consensus>)>(
-		self,
 		mut consensus_votes: ConsensusVotes<ES>,
 		expected_consensus: Option<ES::Consensus>,
-		check: C,
 	) -> Self {
 		assert!(consensus_votes.num_authorities() > 0, "Cannot have zero authorities.");
 
@@ -153,7 +137,7 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 			.unwrap();
 
 		// Should assert on some condition about the consensus.
-		check(new_consensus.clone(), expected_consensus);
+		assert_eq!(new_consensus.clone(), expected_consensus);
 
 		self.inner_force_consensus_update(
 			current_election_id,
