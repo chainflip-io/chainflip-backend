@@ -26,17 +26,12 @@ if [[ $CI == true ]]; then
   if [[ -z NODE_COUNT ]]; then
     export NODE_COUNT="1-node"
   fi
-  if [[ $NODE_COUNT == "1-node" ]]; then
-    export SELECTED_NODES="${GENESIS_NODES[0]}"
-  elif [[ $NODE_COUNT == "3-node" ]]; then
-    export SELECTED_NODES="${GENESIS_NODES[@]}"
-  fi
 else
   additional_docker_compose_up_args=""
   additional_docker_compose_down_args="--volumes --remove-orphans"
 fi
 
-echo "👋 Welcome to Chainflip localnet manager"
+echo "👋 Welcome to Chainflip localnet"
 echo "🔧 Setting up..."
 echo "🕵🏻‍♂️  For full debug log, check $DEBUG_OUTPUT_DESTINATION"
 
@@ -58,7 +53,16 @@ else
     exit 1
 fi
 
+function select_nodes(){
+  if [[ $NODE_COUNT == "1-node" ]]; then
+    export SELECTED_NODES="${GENESIS_NODES[0]}"
+  elif [[ $NODE_COUNT == "3-node" ]]; then
+    export SELECTED_NODES="${GENESIS_NODES[@]}"
+  fi
+}
+
 build-localnet() {
+  select_nodes
 
   if [[ ! -d $BINARY_ROOT_PATH ]]; then
     echo "❌  Couldn't find directory at $BINARY_ROOT_PATH"
@@ -72,6 +76,7 @@ build-localnet() {
   done
 
   mkdir -p $CHAINFLIP_BASE_PATH
+  save_settings
   touch $DEBUG_OUTPUT_DESTINATION
 
   echo "🪢 Pulling Docker Images"
@@ -292,4 +297,20 @@ bouncer() {
     pnpm install >>$DEBUG_OUTPUT_DESTINATION 2>&1
     ./run.sh $NODE_COUNT
   )
+}
+
+function save_settings() {
+cat <<EOF > $CHAINFLIP_BASE_PATH/settings.sh
+export NODE_COUNT=${NODE_COUNT}
+export BINARY_ROOT_PATH=${BINARY_ROOT_PATH}
+export START_TRACKER=${START_TRACKER}
+export BINARY_ROOT_PATH=${BINARY_ROOT_PATH}
+EOF
+}
+
+function load_settings(){
+  if [ -f $CHAINFLIP_BASE_PATH/settings.sh ]; then
+    source $CHAINFLIP_BASE_PATH/settings.sh
+    echo "📦 Loaded settings from $CHAINFLIP_BASE_PATH/settings.sh"
+  fi
 }
