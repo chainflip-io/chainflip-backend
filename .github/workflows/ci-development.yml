@@ -89,4 +89,4 @@ jobs:
   #   secrets: inherit
   # merge-commit-summary:
   #   needs: [publish]
-    uses: ./.github/workflows/_04_merge_commit_summary.yml
+    # uses: ./.github/workflows/_04_merge_commit_summary.yml
