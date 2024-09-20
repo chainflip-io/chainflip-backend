@@ -37,9 +37,15 @@ jobs:
         run: |
           brew install protobuf
 
+      - name: print rust details before install
+        run: rustc -vV
+
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2024-02-04
+
+      - name: print rust details after install
+        run: rustc -vV
 
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
       - name: Configure Git 🛠️
