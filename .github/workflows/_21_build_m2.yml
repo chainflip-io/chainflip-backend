@@ -37,6 +37,10 @@ jobs:
         run: |
           brew install protobuf
 
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2024-02-04
+
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
       - name: Configure Git 🛠️
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
