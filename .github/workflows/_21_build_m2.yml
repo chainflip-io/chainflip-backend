@@ -44,6 +44,9 @@ jobs:
         with:
           toolchain: nightly-2024-02-04
 
+      - name: Set the default toolchain
+        run: rustup set default-toolchain nightly-2024-02-04
+
       - name: print rust details after install
         run: rustc -vV
 
