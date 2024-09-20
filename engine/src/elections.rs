@@ -87,7 +87,12 @@ where
 		let mut rng = rand::rngs::OsRng;
 		let latest_unfinalized_block = self.state_chain_client.latest_unfinalized_block();
 		if let Some(_electoral_data) = self.state_chain_client.electoral_data(latest_unfinalized_block).await {
-			let (_, _, block_header, _) = self.state_chain_client.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::ignore_my_votes {}).await.until_in_block().await?;
+			let (_, _, block_header) = self
+				.state_chain_client
+				.submit_signed_extrinsic(pallet_cf_elections::Call::<state_chain_runtime::Runtime, Instance>::ignore_my_votes {})
+				.await
+				.until_in_block()
+				.await?;
 
 			if let Some(electoral_data) = self.state_chain_client.electoral_data(block_header.into()).await {
 				stream::iter(electoral_data.current_elections).map(|(election_identifier, election_data)| {

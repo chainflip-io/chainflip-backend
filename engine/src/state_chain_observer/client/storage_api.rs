@@ -132,78 +132,6 @@ pub trait StorageApi {
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query>;
 
-	async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>;
-
-	async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		key: &StorageMap::Key,
-	) -> RpcResult<
-		<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
-	>
-	where
-		StorageMap::Key: Sync;
-
-	async fn storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		key1: &StorageDoubleMap::Key1,
-		key2: &StorageDoubleMap::Key2,
-	) -> RpcResult<
-		<StorageDoubleMap::QueryKind as QueryKindTrait<
-			StorageDoubleMap::Value,
-			StorageDoubleMap::OnEmpty,
-		>>::Query,
-	>
-	where
-		StorageDoubleMap::Key1: Sync,
-		StorageDoubleMap::Key2: Sync;
-
-	async fn storage_map<
-		StorageMap: StorageMapAssociatedTypes + 'static,
-		ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)> + 'static,
-	>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<ReturnedIter>;
-
-	async fn storage_map_values<StorageMap: StorageMapAssociatedTypes + 'static>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<Vec<StorageMap::Value>> {
-		Ok(self
-			.storage_map::<StorageMap, Vec<_>>(block_hash)
-			.await?
-			.into_iter()
-			.map(|(_k, v)| v)
-			.collect())
-	}
-}
-
-#[async_trait]
-impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> StorageApi
-	for BaseRpcApi
-{
-	#[track_caller]
-	async fn storage_item<
-		Value: codec::FullCodec + 'static,
-		OnEmpty: 'static,
-		QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
-	>(
-		&self,
-		storage_key: StorageKey,
-		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
-		Ok(QueryKind::from_optional_value_to_query(
-			self.storage(block_hash, storage_key.clone())
-				.await?
-				.map(|data| context!(Value::decode(&mut &data.0[..])).expect(SUBSTRATE_BEHAVIOUR)),
-		))
-	}
-
 	#[track_caller]
 	async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
 		&self,
@@ -250,7 +178,53 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		StorageDoubleMap::Key1: Sync,
 		StorageDoubleMap::Key2: Sync,
 	{
-		self.storage_item::<StorageDoubleMap::Value, StorageDoubleMap::OnEmpty, StorageDoubleMap::QueryKind>(StorageDoubleMap::_hashed_key_for(key1, key2), block_hash).await
+		self.storage_item::<
+			StorageDoubleMap::Value,
+			StorageDoubleMap::OnEmpty,
+			StorageDoubleMap::QueryKind
+		>(StorageDoubleMap::_hashed_key_for(key1, key2), block_hash).await
+	}
+
+	async fn storage_map<
+		StorageMap: StorageMapAssociatedTypes + 'static,
+		ReturnedIter: FromIterator<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)> + 'static,
+	>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<ReturnedIter>;
+
+	async fn storage_map_values<StorageMap: StorageMapAssociatedTypes + 'static>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Vec<StorageMap::Value>> {
+		Ok(self
+			.storage_map::<StorageMap, Vec<_>>(block_hash)
+			.await?
+			.into_iter()
+			.map(|(_k, v)| v)
+			.collect())
+	}
+}
+
+#[async_trait]
+impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> StorageApi
+	for BaseRpcApi
+{
+	#[track_caller]
+	async fn storage_item<
+		Value: codec::FullCodec + 'static,
+		OnEmpty: 'static,
+		QueryKind: QueryKindTrait<Value, OnEmpty> + 'static,
+	>(
+		&self,
+		storage_key: StorageKey,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
+		Ok(QueryKind::from_optional_value_to_query(
+			self.storage(block_hash, storage_key.clone())
+				.await?
+				.map(|data| context!(Value::decode(&mut &data.0[..])).expect(SUBSTRATE_BEHAVIOUR)),
+		))
 	}
 
 	/// Gets all the storage pairs (key, value) of a StorageMap.
@@ -297,49 +271,6 @@ impl<
 	) -> RpcResult<<QueryKind as QueryKindTrait<Value, OnEmpty>>::Query> {
 		self.base_rpc_client
 			.storage_item::<Value, OnEmpty, QueryKind>(storage_key, block_hash)
-			.await
-	}
-
-	#[track_caller]
-	async fn storage_value<StorageValue: StorageValueAssociatedTypes + 'static>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-	) -> RpcResult<<StorageValue::QueryKind as QueryKindTrait<StorageValue::Value, StorageValue::OnEmpty>>::Query>{
-		self.base_rpc_client.storage_value::<StorageValue>(block_hash).await
-	}
-
-	#[track_caller]
-	async fn storage_map_entry<StorageMap: StorageMapAssociatedTypes + 'static>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		key: &StorageMap::Key,
-	) -> RpcResult<
-		<StorageMap::QueryKind as QueryKindTrait<StorageMap::Value, StorageMap::OnEmpty>>::Query,
-	>
-	where
-		StorageMap::Key: Sync,
-	{
-		self.base_rpc_client.storage_map_entry::<StorageMap>(block_hash, key).await
-	}
-
-	#[track_caller]
-	async fn storage_double_map_entry<StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static>(
-		&self,
-		block_hash: state_chain_runtime::Hash,
-		key1: &StorageDoubleMap::Key1,
-		key2: &StorageDoubleMap::Key2,
-	) -> RpcResult<
-		<StorageDoubleMap::QueryKind as QueryKindTrait<
-			StorageDoubleMap::Value,
-			StorageDoubleMap::OnEmpty,
-		>>::Query,
-	>
-	where
-		StorageDoubleMap::Key1: Sync,
-		StorageDoubleMap::Key2: Sync,
-	{
-		self.base_rpc_client
-			.storage_double_map_entry::<StorageDoubleMap>(block_hash, key1, key2)
 			.await
 	}
 

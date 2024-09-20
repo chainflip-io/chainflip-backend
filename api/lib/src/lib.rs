@@ -53,7 +53,7 @@ use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
 };
-use utilities::{clean_hex_address, rpc::NumberOrHex, task_scope::Scope};
+use utilities::{clean_hex_address, dynamic_events::JsonExt, rpc::NumberOrHex, task_scope::Scope};
 
 lazy_static::lazy_static! {
 	static ref API_VERSION: SemVer = SemVer {
@@ -433,34 +433,20 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.until_in_block()
 			.await?;
 
-		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::SwapDepositAddressReady {
-				deposit_address,
-				channel_id,
-				source_chain_expiry_block,
-				channel_opening_fee,
-				refund_parameters,
-				..
-			},
-		)) = events.iter().find(|event| {
-			matches!(
-				event,
-				state_chain_runtime::RuntimeEvent::Swapping(
-					pallet_cf_swapping::Event::SwapDepositAddressReady { .. }
-				)
-			)
-		}) {
+		if let Some(event) = events
+			.iter()
+			.find_map(|e| e.pallet_event("Swapping", "SwapDepositAddressReady"))
+		{
 			Ok(SwapDepositAddress {
-				address: AddressString::from_encoded_address(deposit_address),
+				// TODO: ensure correct chain-specific formatting of deposit address.
+				address: event["deposit_address"].try_deserialize_into::<AddressString>()?,
 				issued_block: header.number,
-				channel_id: *channel_id,
-				source_chain_expiry_block: (*source_chain_expiry_block).into(),
-				channel_opening_fee: (*channel_opening_fee).into(),
-				refund_parameters: refund_parameters.as_ref().map(|params| {
-					params.map_address(|refund_address| {
-						AddressString::from_encoded_address(&refund_address)
-					})
-				}),
+				channel_id: event["channel_id"].try_deserialize_into::<u64>()?,
+				source_chain_expiry_block: event["source_chain_expiry_block"]
+					.try_deserialize_into::<u64>()?,
+				channel_opening_fee: event["channel_opening_fee"].try_parse_from_str()?,
+				refund_parameters: event["refund_parameters"]
+					.try_deserialize_into::<ChannelRefundParametersGeneric<AddressString>>()?,
 			})
 		} else {
 			bail!("No SwapDepositAddressReady event was found");
@@ -481,32 +467,28 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.until_in_block()
 			.await?;
 
-		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::WithdrawalRequested {
-				egress_amount,
-				egress_fee,
-				destination_address,
-				egress_id,
-				..
-			},
-		)) = events.iter().find(|event| {
-			matches!(
-				event,
-				state_chain_runtime::RuntimeEvent::Swapping(
-					pallet_cf_swapping::Event::WithdrawalRequested { .. }
-				)
-			)
-		}) {
-			Ok(WithdrawFeesDetail {
-				tx_hash,
-				egress_id: *egress_id,
-				egress_amount: (*egress_amount).into(),
-				egress_fee: (*egress_fee).into(),
-				destination_address: AddressString::from_encoded_address(destination_address),
+		// if let Some(state_chain_runtime::RuntimeEvent::Swapping(
+		// 	pallet_cf_swapping::Event::WithdrawalRequested {
+		// 		egress_amount,
+		// 		egress_fee,
+		// 		destination_address,
+		// 		egress_id,
+		// 		..
+		// 	},
+		events
+			.iter()
+			.find_map(|event| event.pallet_event("Swapping", "WithdrawalRequested"))
+			.ok_or_else(|| anyhow!("No WithdrawalRequested event was found"))
+			.and_then(|pallet_event| {
+				Ok(WithdrawFeesDetail {
+					tx_hash,
+					egress_id: pallet_event["egress_id"].try_deserialize_into()?,
+					egress_amount: pallet_event["egress_amount"].try_deserialize_into()?,
+					egress_fee: pallet_event["egress_fee"].try_deserialize_into()?,
+					destination_address: pallet_event["destination_address"]
+						.try_deserialize_into::<AddressString>()?,
+				})
 			})
-		} else {
-			bail!("No WithdrawalRequested event was found");
-		}
 	}
 	async fn register_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_as_broker {})

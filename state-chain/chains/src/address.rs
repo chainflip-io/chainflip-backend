@@ -97,13 +97,18 @@ impl ForeignChainAddress {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub enum EncodedAddress {
-	Eth([u8; 20]),
-	Dot([u8; 32]),
-	Btc(Vec<u8>),
-	Arb([u8; 20]),
-	Sol([u8; sol_prim::consts::SOLANA_ADDRESS_LEN]),
+	Eth(#[serde(with = "cf_utilities::serde_helpers::prefixed_hex")] [u8; 20]),
+	Dot(#[serde(with = "cf_utilities::serde_helpers::prefixed_hex")] [u8; 32]),
+	Btc(#[serde(with = "cf_utilities::serde_helpers::prefixed_hex")] Vec<u8>),
+	Arb(#[serde(with = "cf_utilities::serde_helpers::prefixed_hex")] [u8; 20]),
+	Sol(
+		#[serde(with = "cf_utilities::serde_helpers::prefixed_hex")]
+		[u8; sol_prim::consts::SOLANA_ADDRESS_LEN],
+	),
 }
 
 pub trait AddressConverter: Sized {

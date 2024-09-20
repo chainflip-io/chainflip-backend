@@ -76,7 +76,6 @@ pub trait MonitoringApi {
 
 macro_rules! pass_through {
 	($( $name:ident -> $result_type:ty ),+) => {
-
 		$(
 			fn $name(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<$result_type> {
 				self.client
