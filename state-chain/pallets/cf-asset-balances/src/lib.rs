@@ -2,7 +2,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
-use cf_primitives::{AccountId, Asset, AssetAmount};
+use cf_primitives::{accounting::AssetBalance, AccountId, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AssetWithholding, BalanceApi, Chainflip, EgressApi, KeyProvider,
@@ -140,12 +140,12 @@ pub mod pallet {
 	/// Liabilities are funds that are owed to some external party.
 	#[pallet::storage]
 	pub type Liabilities<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, BTreeMap<ExternalOwner, AssetAmount>, ValueQuery>;
+		StorageMap<_, Twox64Concat, Asset, BTreeMap<ExternalOwner, AssetBalance>, OptionQuery>;
 
 	/// Funds that have been set aside to refund external [Liabilities].
 	#[pallet::storage]
 	pub type WithheldAssets<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+		StorageMap<_, Twox64Concat, Asset, AssetBalance, OptionQuery>;
 
 	#[pallet::storage]
 	/// Storage for user's free balances.
@@ -208,24 +208,24 @@ impl<T: Config> Pallet<T> {
 	fn reconcile(
 		chain: ForeignChain,
 		owner: &ExternalOwner,
-		amount_owed: &mut AssetAmount,
-		available: &mut AssetAmount,
+		amount_owed: &mut AssetBalance,
+		available: &mut AssetBalance,
 	) -> Result<(), DispatchError> {
-		if *amount_owed > *available {
+		if amount_owed > available {
 			Self::deposit_event(Event::VaultDeficitDetected {
 				chain,
-				amount_owed: *amount_owed,
-				available: *available,
+				amount_owed: amount_owed.amount(),
+				available: available.amount(),
 			});
 		}
 		let amount_reconciled = match chain {
 			ForeignChain::Ethereum | ForeignChain::Arbitrum => match owner {
 				ExternalOwner::Account(address) =>
-					if *amount_owed > *available {
+					if amount_owed > available {
 						0
 					} else {
-						Self::refund_via_egress(chain, address.clone(), *amount_owed)?;
-						*amount_owed
+						Self::refund_via_egress(chain, address.clone(), amount_owed.amount())?;
+						amount_owed.amount()
 					},
 				other => {
 					log_or_panic!(
@@ -238,7 +238,8 @@ impl<T: Config> Pallet<T> {
 			ForeignChain::Polkadot => match owner {
 				ExternalOwner::AggKey => {
 					if let Some(active_key) = T::PolkadotKeyProvider::active_epoch_key() {
-						let refund_amount = core::cmp::min(*amount_owed, *available);
+						let refund_amount =
+							core::cmp::min(amount_owed.amount(), available.amount());
 						Self::refund_via_egress(
 							chain,
 							ForeignChainAddress::Dot(active_key.key),
@@ -260,7 +261,7 @@ impl<T: Config> Pallet<T> {
 				},
 			},
 			ForeignChain::Bitcoin | ForeignChain::Solana => match owner {
-				ExternalOwner::Vault => core::cmp::min(*amount_owed, *available),
+				ExternalOwner::Vault => core::cmp::min(amount_owed.amount(), available.amount()),
 				other => {
 					log_or_panic!(
 						"{:?} Liabilities are not supported for chain {:?}.",
@@ -272,8 +273,11 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		available.defensive_saturating_reduce(amount_reconciled);
-		amount_owed.defensive_saturating_reduce(amount_reconciled);
+		// TODO: either implement the trait on AssetBalance or use another method to reduce the
+		// available.defensive_saturating_reduce(amount_reconciled);
+		// amount_owed.defensive_saturating_reduce(amount_reconciled);
+		available.saturating_primitive_sub(amount_reconciled);
+		amount_owed.saturating_primitive_sub(amount_reconciled);
 
 		Ok(())
 	}
@@ -288,20 +292,24 @@ impl<T: Config> Pallet<T> {
 		}
 
 		for chain in ForeignChain::iter() {
-			WithheldAssets::<T>::mutate(chain.gas_asset(), |total_withheld| {
-				let mut owed_assets =
-					Liabilities::<T>::take(chain.gas_asset()).into_iter().collect::<Vec<_>>();
-				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(*amount));
+			WithheldAssets::<T>::mutate(chain.gas_asset(), |maybe_total_withheld| {
+				let mut total_withheld = maybe_total_withheld.as_mut().unwrap();
+				let mut owed_assets = Liabilities::<T>::take(chain.gas_asset())
+					.unwrap()
+					.into_iter()
+					.collect::<Vec<_>>();
+
+				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(amount.amount()));
 
 				for (destination, amount) in owed_assets.iter_mut() {
-					debug_assert!(*amount > 0);
-					let _ = Self::reconcile(chain, destination, amount, total_withheld);
-					if *total_withheld == 0 {
+					debug_assert!(amount.amount() > 0);
+					let _ = Self::reconcile(chain, destination, amount, &mut total_withheld);
+					if total_withheld.is_zero() {
 						break;
 					}
 				}
 
-				owed_assets.retain(|(_, amount)| *amount > 0);
+				owed_assets.retain(|(_, amount)| amount.amount() > 0);
 				if !owed_assets.is_empty() {
 					Liabilities::<T>::insert(
 						chain.gas_asset(),
@@ -312,9 +320,11 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	// Note: In this function we bypass the implicit asset check -> be aware!
 	pub fn vault_imbalance(asset: Asset) -> VaultImbalance<AssetAmount> {
-		let owed = Liabilities::<T>::get(asset).values().sum::<u128>();
-		let withheld = WithheldAssets::<T>::get(asset);
+		let owed: u128 =
+			Liabilities::<T>::get(asset).unwrap().values().map(AssetBalance::amount).sum();
+		let withheld = WithheldAssets::<T>::get(asset).unwrap().amount();
 		if owed > withheld {
 			VaultImbalance::Deficit(owed - withheld)
 		} else {
@@ -343,22 +353,28 @@ impl<A> VaultImbalance<A> {
 impl<T: Config> LiabilityTracker for Pallet<T> {
 	fn record_liability(address: ForeignChainAddress, asset: Asset, amount: AssetAmount) {
 		debug_assert_eq!(ForeignChain::from(asset), address.chain());
-		Liabilities::<T>::mutate(asset, |fees| {
-			fees.entry(match ForeignChain::from(asset) {
-				ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
-				ForeignChain::Polkadot => ExternalOwner::AggKey,
-				ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
-			})
-			.and_modify(|fee| fee.saturating_accrue(amount))
-			.or_insert(amount);
+		// Note: Temporary hack to make the compiler shut up!
+		let amount = AssetBalance::mint(amount, asset);
+		Liabilities::<T>::mutate(asset, |maybe_fees| {
+			if let Some(fees) = maybe_fees.as_mut() {
+				fees.entry(address.into()).and_modify(|fee| fee.accrue(amount));
+			} else {
+				*maybe_fees = Some(vec![(address.into(), amount)].into_iter().collect());
+			}
 		});
 	}
 }
 
 impl<T: Config> AssetWithholding for Pallet<T> {
 	fn withhold_assets(asset: Asset, amount: AssetAmount) {
-		WithheldAssets::<T>::mutate(asset, |fees| {
-			fees.saturating_accrue(amount);
+		// Note: Temporary hack to make the compiler shut up!
+		let amount = AssetBalance::mint(amount, asset);
+		WithheldAssets::<T>::mutate(asset, |maybe_fees| {
+			if let Some(fees) = maybe_fees {
+				fees.accrue(amount);
+			} else {
+				*maybe_fees = Some(amount);
+			}
 		});
 	}
 }

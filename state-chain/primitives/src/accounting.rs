@@ -1,14 +1,24 @@
 use crate::{Asset, AssetAmount};
+use codec::{Decode, Encode};
 use frame_support::sp_runtime::traits::Saturating;
+use scale_info::TypeInfo;
+use sp_std::{
+	iter::Sum,
+	ops::{Add, Sub},
+};
 
 #[must_use = "AssetBalance must be burned before dropping"]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Encode, Decode, TypeInfo, Eq)]
 pub struct AssetBalance {
 	amount: AssetAmount,
 	asset: Asset,
 }
 
 impl AssetBalance {
+	pub fn is_zero(&self) -> bool {
+		self.amount == 0
+	}
+
 	pub fn mint(amount: AssetAmount, asset: Asset) -> Self {
 		Self { amount, asset }
 	}
@@ -17,13 +27,23 @@ impl AssetBalance {
 		self.amount
 	}
 
+	pub fn asset(&self) -> Asset {
+		self.asset
+	}
+
 	pub fn burn(mut self) -> AssetAmount {
 		core::mem::take(&mut self.amount)
 	}
 
+	/// Consumes the other asset, burns it and adds it to the balance.
 	pub fn accrue(&mut self, other: Self) {
-		debug_assert_eq!(self.asset, other.asset, "AssetBalance::deposit: asset mismatch");
+		Self::ensure_asset_compatibility(&self, &other);
 		self.amount.saturating_accrue(other.burn());
+	}
+
+	pub fn reduce(&mut self, other: Self) {
+		Self::ensure_asset_compatibility(&self, &other);
+		self.amount.saturating_reduce(other.burn());
 	}
 
 	pub fn take(&mut self, amount: AssetAmount) -> Option<Self> {
@@ -39,11 +59,94 @@ impl AssetBalance {
 		self.amount -= taken;
 		Self { amount: taken, asset: self.asset }
 	}
+
+	/// Subtracts the given amount from the balance, saturating at 0.
+	/// Note: This is a primitive operation and should be used with caution.
+	/// It is the caller's responsibility to ensure **not** to mix assets.
+	pub fn saturating_primitive_sub(&mut self, amount: AssetAmount) {
+		self.amount = self.amount.saturating_sub(amount);
+	}
+
+	/// Adds the given amount to the balance, saturating at MAX.
+	/// Note: This is a primitive operation and should be used with caution.
+	/// It is the caller's responsibility to ensure **not** to mix assets.
+	pub fn saturating_primitive_add(&mut self, amount: AssetAmount) {
+		self.amount = self.amount.saturating_add(amount);
+	}
+
+	/// Ensures that the asset of the two balances is the same.
+	fn ensure_asset_compatibility(&self, other: &Self) {
+		debug_assert_eq!(self.asset, other.asset, "AssetBalance: asset mismatch");
+	}
 }
 
 impl Drop for AssetBalance {
 	fn drop(&mut self) {
 		debug_assert!(self.amount == 0, "AssetBalance was not burned before dropping");
+	}
+}
+
+impl Ord for AssetBalance {
+	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+		Self::ensure_asset_compatibility(&self, &other);
+		self.amount.cmp(&other.amount)
+	}
+}
+
+impl PartialEq for AssetBalance {
+	fn eq(&self, other: &Self) -> bool {
+		Self::ensure_asset_compatibility(&self, &other);
+		self.amount == other.amount
+	}
+
+	fn ne(&self, other: &Self) -> bool {
+		Self::ensure_asset_compatibility(&self, &other);
+		!self.eq(other)
+	}
+}
+
+impl PartialOrd for AssetBalance {
+	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+		Self::ensure_asset_compatibility(&self, &other);
+		Some(self.cmp(other))
+	}
+
+	fn lt(&self, other: &Self) -> bool {
+		Self::ensure_asset_compatibility(&self, &other);
+		self.amount < other.amount
+	}
+
+	fn le(&self, other: &Self) -> bool {
+		Self::ensure_asset_compatibility(&self, &other);
+		self.amount <= other.amount
+	}
+
+	fn gt(&self, other: &Self) -> bool {
+		Self::ensure_asset_compatibility(&self, &other);
+		self.amount > other.amount
+	}
+
+	fn ge(&self, other: &Self) -> bool {
+		Self::ensure_asset_compatibility(&self, &other);
+		self.amount >= other.amount
+	}
+}
+
+impl Add for AssetBalance {
+	type Output = Self;
+
+	fn add(self, other: Self) -> Self {
+		Self::ensure_asset_compatibility(&self, &other);
+		Self { amount: self.amount + other.amount, asset: self.asset }
+	}
+}
+
+impl Sub for AssetBalance {
+	type Output = Self;
+
+	fn sub(self, other: Self) -> Self {
+		Self::ensure_asset_compatibility(&self, &other);
+		Self { amount: self.amount - other.amount, asset: self.asset }
 	}
 }
 
@@ -60,6 +163,7 @@ impl core::fmt::Display for AssetBalance {
 			Asset::ArbEth => 18,
 			Asset::ArbUsdc => 18,
 			Asset::Sol => todo!(),
+			Asset::SolUsdc => todo!(),
 		};
 		let amount = self.amount as f64 / 10f64.powi(decimals);
 		write!(f, "{} {}", amount, self.asset)
