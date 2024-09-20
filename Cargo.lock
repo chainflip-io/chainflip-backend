@@ -2619,6 +2619,7 @@ dependencies = [
  "pallet-cf-witnesser",
  "parity-scale-codec",
  "sc-client-api",
+ "sc-rpc",
  "sc-rpc-api",
  "serde",
  "serde_json",

@@ -18,10 +18,10 @@ use cf_primitives::{
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
-	core::{error::SubscriptionClosed, RpcResult},
+	core::RpcResult,
 	proc_macros::rpc,
-	types::error::{CallError, SubscriptionEmptyError},
-	SubscriptionSink,
+	types::error::{ErrorObject, ErrorObjectOwned},
+	PendingSubscriptionSink,
 };
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
@@ -58,7 +58,7 @@ use std::{
 
 pub mod monitoring;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEpochState {
 	pub blocks_per_epoch: u32,
 	pub current_epoch_started_at: u32,
@@ -77,7 +77,7 @@ impl From<EpochState> for RpcEpochState {
 		}
 	}
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcRedemptionsInfo {
 	pub total_balance: NumberOrHex,
 	pub count: u32,
@@ -90,7 +90,7 @@ impl From<RedemptionsInfo> for RpcRedemptionsInfo {
 
 pub type RpcFeeImbalance = FeeImbalance<NumberOrHex>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcFlipSupply {
 	pub total_supply: NumberOrHex,
 	pub offchain_supply: NumberOrHex,
@@ -104,7 +104,7 @@ impl From<FlipSupply> for RpcFlipSupply {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcMonitoringData {
 	pub external_chains_height: ExternalChainsBlockHeight,
 	pub btc_utxos: BtcUtxos,
@@ -191,7 +191,7 @@ impl ScheduledSwap {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcLiquidityProviderBoostPoolInfo {
 	pub fee_tier: u16,
 	pub total_balance: U256,
@@ -222,7 +222,7 @@ impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum RpcAccountInfo {
 	Unregistered {
@@ -320,7 +320,7 @@ impl RpcAccountInfo {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcAccountInfoV2 {
 	pub balance: NumberOrHex,
 	pub bond: NumberOrHex,
@@ -337,7 +337,7 @@ pub struct RpcAccountInfoV2 {
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcPenalty {
 	reputation_points: i32,
 	suspension_duration_blocks: u32,
@@ -345,7 +345,7 @@ pub struct RpcPenalty {
 
 type RpcSuspensions = Vec<(Offence, Vec<(u32, state_chain_runtime::AccountId)>)>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcAuctionState {
 	blocks_per_epoch: u32,
 	current_epoch_started_at: u32,
@@ -355,7 +355,7 @@ pub struct RpcAuctionState {
 	min_active_bid: Option<NumberOrHex>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcSwapOutputV1 {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<NumberOrHex>,
@@ -372,14 +372,14 @@ impl From<RpcSwapOutputV2> for RpcSwapOutputV1 {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcFee {
 	#[serde(flatten)]
 	pub asset: Asset,
 	pub amount: Amount,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcSwapOutputV2 {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<U256>,
@@ -408,12 +408,12 @@ impl From<PoolInfo> for RpcPoolInfo {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PoolsEnvironment {
 	pub fees: any::AssetMap<Option<RpcPoolInfo>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct IngressEgressEnvironment {
 	pub minimum_deposit_amounts: any::AssetMap<NumberOrHex>,
 	pub ingress_fees: any::AssetMap<Option<NumberOrHex>>,
@@ -423,13 +423,13 @@ pub struct IngressEgressEnvironment {
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct FundingEnvironment {
 	pub redemption_tax: NumberOrHex,
 	pub minimum_funding_amount: NumberOrHex,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SwappingEnvironment {
 	maximum_swap_amounts: any::AssetMap<Option<NumberOrHex>>,
 	network_fee_hundredth_pips: Permill,
@@ -438,7 +438,7 @@ pub struct SwappingEnvironment {
 	max_swap_request_duration_blocks: u32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEnvironment {
 	ingress_egress: IngressEgressEnvironment,
 	swapping: SwappingEnvironment,
@@ -476,25 +476,25 @@ mod boost_pool_rpc {
 
 	use super::*;
 
-	#[derive(Serialize, Deserialize)]
+	#[derive(Serialize, Deserialize, Clone)]
 	struct AccountAndAmount {
 		account_id: AccountId32,
 		amount: U256,
 	}
 
-	#[derive(Serialize, Deserialize)]
+	#[derive(Serialize, Deserialize, Clone)]
 	struct PendingBoost {
 		deposit_id: PrewitnessedDepositId,
 		owed_amounts: Vec<AccountAndAmount>,
 	}
 
-	#[derive(Serialize, Deserialize)]
+	#[derive(Serialize, Deserialize, Clone)]
 	struct PendingWithdrawal {
 		account_id: AccountId32,
 		pending_deposits: BTreeSet<PrewitnessedDepositId>,
 	}
 
-	#[derive(Serialize, Deserialize)]
+	#[derive(Serialize, Deserialize, Clone)]
 	pub struct BoostPoolDetailsRpc {
 		fee_tier: u16,
 		#[serde(flatten)]
@@ -543,13 +543,13 @@ mod boost_pool_rpc {
 		}
 	}
 
-	#[derive(Serialize, Deserialize)]
+	#[derive(Serialize, Deserialize, Clone)]
 	struct PendingFees {
 		deposit_id: PrewitnessedDepositId,
 		fees: Vec<AccountAndAmount>,
 	}
 
-	#[derive(Serialize, Deserialize)]
+	#[derive(Serialize, Deserialize, Clone)]
 	pub struct BoostPoolFeesRpc {
 		fee_tier: u16,
 		#[serde(flatten)]
@@ -920,20 +920,28 @@ where
 	}
 }
 
-fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> jsonrpsee::core::Error {
-	CallError::from_std_error(e).into()
+fn str_to_rpc_error(e: &str) -> ErrorObjectOwned {
+	ErrorObject::owned(jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE, e, Option::<()>::None)
 }
 
-fn map_dispatch_error(e: DispatchErrorWithMessage) -> jsonrpsee::core::Error {
-	jsonrpsee::core::Error::from(match e {
-		DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
-			Ok(message) => anyhow::anyhow!("DispatchError: {message}"),
-			Err(error) =>
-				anyhow::anyhow!("DispatchError: Unable to deserialize error message: '{error}'"),
+fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> ErrorObjectOwned {
+	ErrorObject::owned(jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE, format!("{:?}", e), Option::<()>::None)
+}
+
+fn map_dispatch_error(e: DispatchErrorWithMessage) -> ErrorObjectOwned {
+	ErrorObject::owned(
+		jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE,
+		match e {
+			DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
+				Ok(message) => format!("DispatchError: {message}"),
+				Err(error) =>
+					format!("DispatchError: Unable to deserialize error message: '{error}'"),
+			},
+			DispatchErrorWithMessage::Other(e) =>
+				format!("DispatchError: {}", <&'static str>::from(e)),
 		},
-		DispatchErrorWithMessage::Other(e) =>
-			anyhow::anyhow!("DispatchError: {}", <&'static str>::from(e)),
-	})
+		Option::<()>::None,
+	)
 }
 
 impl<C, B> CustomApiServer for CustomRpc<C, B>
@@ -1288,7 +1296,7 @@ where
 							Ok(amount)
 						}
 					})
-					.map_err(|str| anyhow::anyhow!(str))?,
+					.map_err(|str| str_to_rpc_error(str))?,
 				additional_orders.map(|additional_orders| {
 					additional_orders
 						.into_iter()
@@ -1593,28 +1601,28 @@ where
 
 	fn cf_subscribe_pool_price(
 		&self,
-		sink: SubscriptionSink,
+		pending_sink: PendingSubscriptionSink,
 		from_asset: Asset,
 		to_asset: Asset,
-	) -> Result<(), SubscriptionEmptyError> {
+	) {
 		self.new_subscription(
 			true,  /* only_on_changes */
 			false, /* end_on_error */
-			sink,
+			pending_sink,
 			move |api, hash| api.cf_pool_price(hash, from_asset, to_asset),
 		)
 	}
 
 	fn cf_subscribe_pool_price_v2(
 		&self,
-		sink: SubscriptionSink,
+		pending_sink: PendingSubscriptionSink,
 		base_asset: Asset,
 		quote_asset: Asset,
-	) -> Result<(), SubscriptionEmptyError> {
+	) {
 		self.new_subscription(
 			false, /* only_on_changes */
 			true,  /* end_on_error */
-			sink,
+			pending_sink,
 			move |api, hash| {
 				api.cf_pool_price_v2(hash, base_asset, quote_asset)
 					.map_err(to_rpc_error)
@@ -1626,23 +1634,23 @@ where
 
 	fn cf_subscribe_scheduled_swaps(
 		&self,
-		sink: SubscriptionSink,
+		pending_sink: PendingSubscriptionSink,
 		base_asset: Asset,
 		quote_asset: Asset,
-	) -> Result<(), SubscriptionEmptyError> {
+	) {
 		// Check that the requested pool exists:
 		let Ok(Ok(_)) = self.client.runtime_api().cf_pool_info(
 			self.client.info().best_hash,
 			base_asset,
 			quote_asset,
 		) else {
-			return Err(SubscriptionEmptyError);
+			return;
 		};
 
 		self.new_subscription(
 			false, /* only_on_changes */
 			true,  /* end_on_error */
-			sink,
+			pending_sink,
 			move |api, hash| {
 				Ok::<_, ApiError>(SwapResponse {
 					swaps: api
@@ -1652,7 +1660,7 @@ where
 						.collect(),
 				})
 			},
-		)
+		);
 	}
 
 	fn cf_scheduled_swaps(
@@ -1680,17 +1688,17 @@ where
 
 	fn cf_subscribe_prewitness_swaps(
 		&self,
-		sink: SubscriptionSink,
+		pending_sink: PendingSubscriptionSink,
 		base_asset: Asset,
 		quote_asset: Asset,
 		side: Side,
-	) -> Result<(), SubscriptionEmptyError> {
+	) {
 		self.new_subscription(
 			false, /* only_on_changes */
 			true,  /* end_on_error */
-			sink,
+			pending_sink,
 			move |api, hash| {
-				Ok::<RpcPrewitnessedSwap, jsonrpsee::core::Error>(RpcPrewitnessedSwap {
+				Ok::<RpcPrewitnessedSwap, ErrorObjectOwned>(RpcPrewitnessedSwap {
 					base_asset,
 					quote_asset,
 					side,
@@ -1876,20 +1884,20 @@ where
 		&self,
 		only_on_changes: bool,
 		end_on_error: bool,
-		mut sink: SubscriptionSink,
+		pending_sink: PendingSubscriptionSink,
 		f: F,
-	) -> Result<(), SubscriptionEmptyError> {
-		use futures::{future::FutureExt, stream::StreamExt};
+	) {
+		use futures::{stream::StreamExt, FutureExt};
 
 		let info = self.client.info();
 
 		let initial = match f(&self.client.runtime_api(), info.best_hash) {
 			Ok(initial) => initial,
 			Err(e) => {
-				let _ = sink.reject(sc_rpc_api_error_to_jsonrpsee_error(
-					sc_rpc_api::state::error::Error::Client(Box::new(e)),
-				));
-				return Ok(())
+				let _ = pending_sink.reject(
+					sc_rpc_api::state::error::Error::Client(Box::new(to_rpc_error(e))),
+				);
+				return;
 			},
 		};
 		let stream = futures::stream::iter(std::iter::once(Ok(BlockUpdate {
@@ -1914,7 +1922,7 @@ where
 									data: new,
 								}))
 							},
-							Err(error) if end_on_error => Some(Err(error)),
+							Err(error) if end_on_error => Some(Err(to_rpc_error(error))),
 							_ => None,
 						})
 					}
@@ -1924,16 +1932,8 @@ where
 		self.executor.spawn(
 			"cf-rpc-update-subscription",
 			Some("rpc"),
-			async move {
-				if let SubscriptionClosed::Failed(err) = sink.pipe_from_try_stream(stream).await {
-					log::error!("Subscription closed due to error: {err:?}");
-					sink.close(err);
-				}
-			}
-			.boxed(),
+			sc_rpc::utils::pipe_from_stream(pending_sink, stream).boxed(),
 		);
-
-		Ok(())
 	}
 }
 
@@ -2290,24 +2290,5 @@ mod test {
 			egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
 		})
 		.unwrap());
-	}
-}
-
-/// Function used to convert sc_rpc_api error into 0.16.x version of jsonrpsee error.
-/// TODO: Remove after we update our codebase to jsonrpsee 0.23.2
-fn sc_rpc_api_error_to_jsonrpsee_error(e: sc_rpc_api::state::Error) -> jsonrpsee::core::Error {
-	use jsonrpsee::types::error::{CallError, ErrorObject};
-	
-	/// Base code for all state errors.
-	const BASE_ERROR: i32 = 4000;
-
-	match e {
-		sc_rpc_api::state::Error::InvalidBlockRange { .. } =>
-			CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, e.to_string(), None::<()>))
-				.into(),
-		sc_rpc_api::state::Error::InvalidCount { .. } =>
-			CallError::Custom(ErrorObject::owned(BASE_ERROR + 2, e.to_string(), None::<()>))
-				.into(),
-		e => jsonrpsee::core::Error::to_call_error(e),
 	}
 }
