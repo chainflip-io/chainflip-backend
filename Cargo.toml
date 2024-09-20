@@ -51,7 +51,7 @@ members = [
   'utilities/scale-json-event-logger',
   'state-chain/custom-rpc',
   'state-chain/cf-session-benchmarking',
-  'engine/multisig',
+  'engine/multisig', "docgen",
 ]
 
 [workspace.lints.clippy]
