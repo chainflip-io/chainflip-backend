@@ -1,19 +1,20 @@
 use regex::Regex;
 use serde::Deserialize;
+use core::str::FromStr;
 use std::fmt::{Debug, Display};
 use url::Url;
 
 const MAX_SECRET_CHARACTERS_REVEALED: usize = 3;
 const SCHEMA_PADDING_LEN: usize = 3;
 
-/// A wrapper around a `String` that redacts a secret in the url when displayed. Used for node
+/// A wrapper around a `Url` that redacts a secret in the url when displayed. Used for node
 /// endpoints.
-#[derive(Clone, PartialEq, Eq, Deserialize, Default)]
-pub struct SecretUrl(String);
+#[derive(Clone, PartialEq, Deserialize, Eq)]
+pub struct SecretUrl(Url);
 
 impl Display for SecretUrl {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", redact_secret_endpoint(&self.0))
+		write!(f, "{}", redact_secret_endpoint(self.0.as_ref()))
 	}
 }
 
@@ -23,32 +24,40 @@ impl Debug for SecretUrl {
 		if cfg!(debug_assertions) {
 			write!(f, "{:?}", self.0)
 		} else {
-			write!(f, "{:?}", redact_secret_endpoint(&self.0))
+			write!(f, "{:?}", redact_secret_endpoint(self.0.as_ref()))
 		}
 	}
 }
 
-impl From<String> for SecretUrl {
-	fn from(s: String) -> Self {
-		SecretUrl(s)
+impl From<Url> for SecretUrl {
+	fn from(value: Url) -> Self {
+		SecretUrl(value)
 	}
 }
 
-impl<'a> From<&'a str> for SecretUrl {
-	fn from(s: &'a str) -> Self {
-		SecretUrl(s.to_string())
+impl From<SecretUrl> for Url {
+	fn from(value: SecretUrl) -> Self {
+		value.0
+	}
+}
+
+impl FromStr for SecretUrl {
+	type Err = url::ParseError;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		s.parse().map(SecretUrl)
 	}
 }
 
 impl From<SecretUrl> for String {
 	fn from(s: SecretUrl) -> Self {
-		s.0
+		s.0.into()
 	}
 }
 
 impl AsRef<str> for SecretUrl {
 	fn as_ref(&self) -> &str {
-		&self.0
+		self.0.as_ref()
 	}
 }
 
@@ -107,7 +116,7 @@ mod tests {
 			format!(
 				"{}",
 				SecretUrl(
-					"wss://mainnet.infura.io/ws/v3/d52c362116b640b98a166d08d3170a42".to_string()
+					"wss://mainnet.infura.io/ws/v3/d52c362116b640b98a166d08d3170a42".parse().unwrap()
 				)
 			),
 			"wss://mainnet.infura.io/ws/v3/d52****"
@@ -116,23 +125,23 @@ mod tests {
 			format!(
 				"{}",
 				SecretUrl(
-					"wss://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.ws.rivet.cloud/".to_string()
+					"wss://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.ws.rivet.cloud/".parse().unwrap()
 				)
 			),
 			"wss://cdc****.rinkeby.ws.rivet.cloud/"
 		);
 		assert_eq!(
-			format!("{}", SecretUrl("wss://non_32hex_secret.rinkeby.ws.rivet.cloud/".to_string())),
+			format!("{}", SecretUrl("wss://non_32hex_secret.rinkeby.ws.rivet.cloud/".parse().unwrap())),
 			"wss://non****"
 		);
-		assert_eq!(format!("{}", SecretUrl("wss://a".to_string())), "wss://a****");
+		assert_eq!(format!("{}", SecretUrl("wss://a".parse().unwrap())), "wss://a****");
 
 		// Same, but HTTPS
 		assert_eq!(
 			format!(
 				"{}",
 				SecretUrl(
-					"https://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.rpc.rivet.cloud/".to_string()
+					"https://cdcd639308194d3f977a1a5a7ff0d545.rinkeby.rpc.rivet.cloud/".parse().unwrap()
 				)
 			),
 			"https://cdc****.rinkeby.rpc.rivet.cloud/"
@@ -140,24 +149,24 @@ mod tests {
 		assert_eq!(
 			format!(
 				"{}",
-				SecretUrl("https://non_32hex_secret.rinkeby.ws.rivet.cloud/".to_string())
+				SecretUrl("https://non_32hex_secret.rinkeby.ws.rivet.cloud/".parse().unwrap())
 			),
 			"https://non****"
 		);
-		assert_eq!(format!("{}", SecretUrl("https://a".to_string())), "https://a****");
+		assert_eq!(format!("{}", SecretUrl("https://a".parse().unwrap())), "https://a****");
 
-		assert_eq!(format!("{}", SecretUrl("no.schema.com".to_string())), "no.****");
+		assert_eq!(format!("{}", SecretUrl("no.schema.com".parse().unwrap())), "no.****");
 		if cfg!(debug_assertions) {
-			assert_eq!(format!("{:?}", SecretUrl("debug_print".to_string())), "\"debug_print\"");
+			assert_eq!(format!("{:?}", SecretUrl("debug_print".parse().unwrap())), "\"debug_print\"");
 		} else {
-			assert_eq!(format!("{:?}", SecretUrl("debug_print".to_string())), "\"deb****\"");
+			assert_eq!(format!("{:?}", SecretUrl("debug_print".parse().unwrap())), "\"deb****\"");
 		}
 
 		assert_eq!(
 			format!(
 				"{}",
 				SecretUrl(
-					"btc.getblock.io/de76678e-a489-4503-2ba2-81156c471220/mainnet".to_string()
+					"btc.getblock.io/de76678e-a489-4503-2ba2-81156c471220/mainnet".parse().unwrap()
 				)
 			),
 			"btc.getblock.io/de7****/mainnet"

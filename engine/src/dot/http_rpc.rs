@@ -109,7 +109,10 @@ fn ensure_port(url: SecretUrl) -> Result<SecretUrl> {
 	let uri = Uri::from_parts(parts)
 		.map_err(|err| anyhow!("Unexpected error when trying to append port to url: {err}"))?;
 
-	Ok(format!("{uri}").into())
+	let url: Url = Url::parse(&format!("{uri}"))
+		.map_err(|err| anyhow!("Unexpected error when trying to append port to url: {err}"))?;
+
+	Ok(url.into())
 }
 
 #[derive(Clone)]
@@ -261,7 +264,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_http_rpc() {
 		let dot_http_rpc =
-			DotHttpRpcClient::new("http://localhost:9945".into(), None).unwrap().await;
+			DotHttpRpcClient::new("http://localhost:9945".parse().unwrap(), None).unwrap().await;
 		let block_hash = dot_http_rpc.block_hash(1).await.unwrap();
 		println!("block_hash: {:?}", block_hash);
 	}
@@ -290,7 +293,7 @@ mod tests {
 		];
 
 		let dot_http_rpc =
-			DotHttpRpcClient::new("https://polkadot-rpc-tn.dwellir.com:443".into(), None)
+			DotHttpRpcClient::new("https://polkadot-rpc-tn.dwellir.com:443".parse().unwrap(), None)
 				.unwrap()
 				.await;
 
@@ -317,7 +320,7 @@ mod tests {
 	#[test]
 	fn test_ensure_port() {
 		fn call_ensure(url: String) -> String {
-			ensure_port(url.into()).unwrap().into()
+			ensure_port(url.parse().unwrap()).unwrap().into()
 		}
 		let examples = vec![
 			// default ports are added

@@ -234,7 +234,7 @@ fn account_role_parser(s: &str) -> Result<AccountRole, String> {
 	}
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug)]
 pub struct CLISettings {
 	pub state_chain: StateChain,
 }

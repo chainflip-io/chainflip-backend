@@ -89,7 +89,7 @@ pub fn settings_and_run_main(
 			if let Some(CreateStateChainClientError::CompatibilityError(block_compatibility)) =
 				e.downcast_ref::<CreateStateChainClientError>()
 			{
-				match block_compatibility.compatibility {
+	match block_compatibility.compatibility {
 					// we're no longer compatible, so we want to pass on the start to the one that is
 					// now compatible so that it can start from that number, ensuring we don't miss any blocks.
 					CfeCompatibility::NoLongerCompatible => ExitStatus {

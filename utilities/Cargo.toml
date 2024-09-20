@@ -47,7 +47,7 @@ tracing-subscriber = { version = "0.3", features = [
   "json",
   "env-filter",
 ], optional = true }
-url = { version = "2.4", optional = true }
+url = { version = "2.4", features = ["serde"], optional = true }
 warp = { version = "0.3.5", optional = true }
 
 # local dependencies

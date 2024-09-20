@@ -86,10 +86,10 @@ impl From<state_chain_runtime::Header> for BlockInfo {
 pub type DefaultRpcClient = base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>;
 
 impl DefaultRpcClient {
-	pub async fn connect(ws_endpoint: &str) -> Result<Self> {
+	pub async fn connect(ws_endpoint: &url::Url) -> Result<Self> {
 		Ok(BaseRpcClient::new(
 			jsonrpsee::ws_client::WsClientBuilder::default()
-				.build(ws_endpoint)
+				.build(ws_endpoint.as_ref())
 				.await
 				.with_context(|| {
 					format!("Failed to establish rpc connection to substrate node '{ws_endpoint}'")
@@ -123,7 +123,7 @@ pub struct StateChainClient<
 impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 	pub async fn connect_with_account<'a>(
 		scope: &Scope<'a, anyhow::Error>,
-		ws_endpoint: &str,
+		ws_endpoint: &url::Url,
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
@@ -147,7 +147,7 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 impl StateChainClient<()> {
 	pub async fn connect_without_account<'a>(
 		scope: &Scope<'a, anyhow::Error>,
-		ws_endpoint: &str,
+		ws_endpoint: &url::Url,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
 		Self::new_without_account(scope, DefaultRpcClient::connect(ws_endpoint).await?.into()).await

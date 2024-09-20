@@ -612,7 +612,7 @@ pub struct LPOptions {
 		default_value = "ws://localhost:9944",
 		help = "The state chain node's RPC endpoint."
 	)]
-	pub ws_endpoint: String,
+	pub ws_endpoint: url::Url,
 	#[clap(
 		long = "state_chain.signing_key_file",
 		default_value = "/etc/chainflip/keys/signing_key_file",

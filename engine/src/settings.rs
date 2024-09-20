@@ -33,9 +33,9 @@ pub struct P2P {
 	pub allow_local_ip: bool,
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct StateChain {
-	pub ws_endpoint: String,
+	pub ws_endpoint: Url,
 	#[serde(deserialize_with = "deser_path")]
 	pub signing_key_file: PathBuf,
 }
@@ -48,13 +48,13 @@ impl StateChain {
 	}
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct WsHttpEndpoints {
 	pub ws_endpoint: SecretUrl,
 	pub http_endpoint: SecretUrl,
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct HttpEndpoint {
 	pub http_endpoint: SecretUrl,
 }
@@ -101,7 +101,7 @@ impl<NodeConfig: ValidateSettings> NodeContainer<NodeConfig> {
 	}
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Evm {
 	#[serde(flatten)]
 	pub nodes: NodeContainer<WsHttpEndpoints>,
@@ -115,7 +115,7 @@ impl Evm {
 	}
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Dot {
 	#[serde(flatten)]
 	pub nodes: NodeContainer<WsHttpEndpoints>,
@@ -127,18 +127,7 @@ impl Dot {
 	}
 }
 
-// Checks that the url has a port number
-fn validate_port_exists(url: &SecretUrl) -> Result<()> {
-	// NB: We are using regex instead of Url because Url.port() returns None for wss/https urls with
-	// default ports.
-	let re = Regex::new(r":([0-9]+)").unwrap();
-	if re.captures(url.as_ref()).is_none() {
-		bail!("No port found in url: {url}");
-	}
-	Ok(())
-}
-
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct HttpBasicAuthEndpoint {
 	pub http_endpoint: SecretUrl,
 	pub basic_auth_user: String,
@@ -154,7 +143,7 @@ impl ValidateSettings for HttpBasicAuthEndpoint {
 	}
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Btc {
 	#[serde(flatten)]
 	pub nodes: NodeContainer<HttpBasicAuthEndpoint>,
@@ -166,7 +155,7 @@ impl Btc {
 	}
 }
 
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Sol {
 	#[serde(flatten)]
 	pub nodes: NodeContainer<HttpEndpoint>,
@@ -209,7 +198,7 @@ pub struct Settings {
 #[derive(Parser, Debug, Clone, Default)]
 pub struct StateChainOptions {
 	#[clap(long = "state_chain.ws_endpoint")]
-	pub state_chain_ws_endpoint: Option<String>,
+	pub state_chain_ws_endpoint: Option<url::Url>,
 	#[clap(long = "state_chain.signing_key_file")]
 	pub state_chain_signing_key_file: Option<PathBuf>,
 }
@@ -956,7 +945,7 @@ pub mod tests {
 		let settings = Settings::new(CommandLineOptions::default())
 			.expect("Check that the test environment is set correctly");
 
-		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
+		assert_eq!(settings.state_chain.ws_endpoint.as_ref(), "ws://localhost:9944");
 		assert_eq!(settings.eth.nodes.primary.http_endpoint.as_ref(), "http://localhost:8545");
 		assert_eq!(settings.arb.nodes.primary.http_endpoint.as_ref(), "http://localhost:8547");
 		assert_eq!(settings.sol.nodes.primary.http_endpoint.as_ref(), "http://localhost:8899");
@@ -1018,8 +1007,8 @@ pub mod tests {
 			.contains(env!("CF_TEST_CONFIG_ROOT")));
 
 		assert_eq!(
-			custom_base_path_settings.btc.nodes.primary.http_endpoint,
-			"http://localhost:18443".into()
+			custom_base_path_settings.btc.nodes.primary.http_endpoint.as_ref(),
+			"http://localhost:18443"
 		);
 		assert!(custom_base_path_settings.btc.nodes.backup.is_none());
 	}
@@ -1098,8 +1087,8 @@ pub mod tests {
 		assert_eq!(opts.p2p_opts.allow_local_ip.unwrap(), settings.node_p2p.allow_local_ip);
 
 		assert_eq!(
-			opts.state_chain_opts.state_chain_ws_endpoint.unwrap(),
-			settings.state_chain.ws_endpoint
+			opts.state_chain_opts.state_chain_ws_endpoint.unwrap().as_ref(),
+			settings.state_chain.ws_endpoint.as_ref()
 		);
 		assert!(settings.state_chain.signing_key_file.ends_with("signing_key_file_2"));
 
