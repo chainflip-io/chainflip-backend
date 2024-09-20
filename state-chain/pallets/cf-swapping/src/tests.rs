@@ -855,17 +855,21 @@ fn swaps_get_retried_after_failure() {
 		})
 		.then_execute_with(|_| {
 			assert_eq!(System::block_number(), 3);
-			assert_event_sequence!(
+
+			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: 1,
 					execute_at: RETRY_AT_BLOCK
-				}),
+				})
+			);
+
+			assert_has_matching_event!(
+				Test,
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: 2,
 					execute_at: RETRY_AT_BLOCK
-				}),
+				})
 			);
 
 			assert_eq!(SwapQueue::<Test>::get(RETRY_AT_BLOCK).len(), 2);
@@ -893,12 +897,12 @@ fn swaps_get_retried_after_failure() {
 			// now be successful):
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 1, .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 2, .. }),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 2 }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: 1 }),
 			);
 		});
 }
@@ -1306,5 +1310,216 @@ fn test_fee_estimation_basis() {
 	             asset,
 	         );
 		}
+	}
+}
+
+#[cfg(test)]
+mod swap_batching {
+
+	use super::*;
+
+	impl<T: Config> Swap<T> {
+		fn to_state(&self, stable_amount: Option<AssetAmount>) -> SwapState<T> {
+			SwapState {
+				swap: self.clone(),
+				network_fee_taken: None,
+				broker_fee_taken: None,
+				stable_amount,
+				final_output: None,
+			}
+		}
+	}
+
+	#[test]
+	fn single_swap() {
+		let swap1 = Swap::new(0, 0, Asset::Btc, Asset::Usdc, 1000, None, []);
+		let swaps = vec![swap1.clone()];
+
+		let swap_states = vec![swap1.to_state(None)];
+
+		assert_eq!(
+			utilities::split_off_highest_impact_swap::<mock::Test>(
+				swaps,
+				&swap_states,
+				SwapLeg::ToStable
+			),
+			(Some(swap1), vec![])
+		);
+	}
+
+	#[test]
+	fn swaps_fail_into_stable() {
+		let swap1 = Swap::new(0, 0, Asset::Btc, Asset::Usdc, 500, None, []);
+		let swap2 = Swap::new(1, 1, Asset::Btc, Asset::Eth, 1000, None, []);
+		let swap3 = Swap::new(2, 2, Asset::Eth, Asset::Usdc, 1000, None, []);
+
+		let swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
+
+		// The test assumes the BTC->USDC leg failed (so swap3 is excluded from `swap_states`)
+		let swap_states = vec![swap1.to_state(None), swap2.to_state(None)];
+
+		assert_eq!(
+			utilities::split_off_highest_impact_swap::<mock::Test>(
+				swaps,
+				&swap_states,
+				SwapLeg::ToStable
+			),
+			(Some(swap2), vec![swap1, swap3])
+		);
+	}
+
+	#[test]
+	fn swaps_fail_from_stable() {
+		// BTC swap should be removed because it would result in a larger amount
+		// of USDC and thus will have higher impact on the Eth pool
+		let swap1 = Swap::new(1, 1, Asset::Btc, Asset::Eth, 1, None, []);
+		let swap2 = Swap::new(2, 2, Asset::Usdc, Asset::Eth, 1000, None, []);
+		let swap3 = Swap::new(3, 3, Asset::Eth, Asset::Usdc, 100, None, []);
+
+		let swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
+
+		// The test assumes the USDC->ETH leg failed (so swap3 is excluded from `swap_states`)
+		let swap_state = vec![swap1.to_state(Some(60000)), swap2.to_state(Some(3000))];
+
+		assert_eq!(
+			utilities::split_off_highest_impact_swap::<mock::Test>(
+				swaps,
+				&swap_state,
+				SwapLeg::FromStable
+			),
+			(Some(swap1), vec![swap2, swap3])
+		);
+	}
+
+	#[test]
+	fn zero_swaps() {
+		assert_eq!(
+			utilities::split_off_highest_impact_swap::<mock::Test>(vec![], &[], SwapLeg::ToStable),
+			(None, vec![])
+		);
+	}
+
+	#[test]
+	fn zero_matching_swaps() {
+		let swap = Swap::new(0, 0, Asset::Usdc, Asset::Btc, 1000, None, []);
+		let swaps = vec![swap.clone()];
+
+		assert_eq!(
+			utilities::split_off_highest_impact_swap::<mock::Test>(swaps, &[], SwapLeg::ToStable),
+			(None, vec![swap])
+		);
+	}
+
+	#[test]
+	fn price_impact_removes_one_swap() {
+		// Initial execution of a batch results in a "price impact" error while swapping from
+		// stable asset. A swap with "the largest" impact should be removed (rescheduled for a later
+		// block), and the remaining swaps should be retried immediately and succeed.
+
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const SWAP_RESCHEDULED_BLOCK: u64 = SWAP_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64;
+
+		new_test_ext()
+			.execute_with(|| {
+				NetworkFee::set(Permill::from_percent(1));
+
+				let swap = |input_asset: Asset, output_asset: Asset, input_amount: AssetAmount| {
+					TestSwapParams {
+						input_asset,
+						output_asset,
+						input_amount,
+						refund_params: None,
+						dca_params: None,
+						output_address: ForeignChainAddress::Eth([2; 20].into()),
+						is_ccm: false,
+					}
+				};
+
+				let swap1 = swap(Asset::Btc, Asset::Eth, 100_000);
+				let swap2 = swap(Asset::Usdc, Asset::Eth, 150_000);
+
+				insert_swaps(&[swap1, swap2]);
+
+				// This amount of liquidity would only be enough for one of the swaps
+				// (USDC liquidity is not set is thus will not be checked):
+				MockSwappingApi::add_liquidity(Asset::Eth, 500_000);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
+					RuntimeEvent::Swapping(Event::SwapEgressScheduled { .. }),
+					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
+					RuntimeEvent::Swapping(Event::SwapRescheduled {
+						swap_id: 1,
+						execute_at: SWAP_RESCHEDULED_BLOCK
+					}),
+				);
+
+				// Ensure that storage has been reverted from the first (failed) attempt
+				// by checking the network fee (which should only be collected
+				// from swap 2):
+				assert_eq!(CollectedNetworkFee::<Test>::get(), 1500);
+
+				// Adding some more liquidity to make the other swap succeed:
+				MockSwappingApi::add_liquidity(Asset::Eth, 500_000);
+			})
+			.then_process_blocks_until_block(SWAP_RESCHEDULED_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
+				);
+
+				assert_eq!(CollectedNetworkFee::<Test>::get(), 1500 + 2000);
+			});
+	}
+
+	#[test]
+	fn price_impact_removes_all_swaps() {
+		// Initial execution of a batch results in a "price impact" error while swapping into stable
+		// asset. Both swaps end up being rescheduled (i.e. removing swaps individually did not
+		// help).
+
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+		new_test_ext()
+			.execute_with(|| {
+				NetworkFee::set(Permill::from_percent(1));
+				let swap = |input_asset: Asset, output_asset: Asset, input_amount: AssetAmount| {
+					TestSwapParams {
+						input_asset,
+						output_asset,
+						input_amount,
+						refund_params: None,
+						dca_params: None,
+						output_address: ForeignChainAddress::Eth([2; 20].into()),
+						is_ccm: false,
+					}
+				};
+
+				let swap1 = swap(Asset::Btc, Asset::Eth, 100_000);
+				let swap2 = swap(Asset::Eth, Asset::Usdc, 150_000);
+
+				insert_swaps(&[swap1, swap2]);
+
+				// This activates liquidity check for USDC in the Mock, and provides insufficient
+				// amount, leading to all swaps failing:
+				MockSwappingApi::add_liquidity(Asset::Usdc, 0);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				assert_event_sequence!(
+					Test,
+					RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+					RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+					RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: 2, .. }),
+					RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: 1, .. }),
+				);
+
+				assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+			});
 	}
 }

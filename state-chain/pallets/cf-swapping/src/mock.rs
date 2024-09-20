@@ -1,4 +1,5 @@
 use core::cell::Cell;
+use std::collections::HashMap;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::{ccm_checker::CcmValidityCheck, AnyChain};
@@ -75,6 +76,7 @@ parameter_types! {
 	pub static NetworkFee: Permill = Permill::from_perthousand(0);
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
 	pub static SwapRate: f64 = DEFAULT_SWAP_RATE as f64;
+	pub static Liquidity: HashMap<Asset, AssetAmount> = HashMap::default();
 }
 
 thread_local! {
@@ -91,6 +93,12 @@ impl MockSwappingApi {
 	fn swaps_should_fail() -> bool {
 		SWAPS_SHOULD_FAIL.with(|cell| cell.get())
 	}
+
+	pub fn add_liquidity(asset: Asset, amount: AssetAmount) {
+		Liquidity::mutate(|liquidity| {
+			*liquidity.entry(asset).or_default() += amount;
+		});
+	}
 }
 
 impl SwappingApi for MockSwappingApi {
@@ -106,7 +114,25 @@ impl SwappingApi for MockSwappingApi {
 		let mut swaps = Swaps::get();
 		swaps.push((from, to, input_amount));
 		Swaps::set(swaps);
-		Ok((input_amount as f64 * SwapRate::get()) as AssetAmount)
+
+		let output_amount = (input_amount as f64 * SwapRate::get()) as AssetAmount;
+
+		if !Liquidity::mutate(|liquidity| {
+			// We don't check/update liquidity if it hasn't been initialised
+			// (i.e. it is not checked in tests that don't use it):
+			let Some(asset_liquidity) = liquidity.get_mut(&to) else {
+				return true;
+			};
+
+			asset_liquidity
+				.checked_sub(output_amount)
+				.map(|remaining| *asset_liquidity = remaining)
+				.is_some()
+		}) {
+			return Err(DispatchError::from("Insufficient liquidity"))
+		}
+
+		Ok(output_amount)
 	}
 }
 
