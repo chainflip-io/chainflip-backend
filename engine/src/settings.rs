@@ -11,7 +11,6 @@ use config::{Config, ConfigBuilder, ConfigError, Environment, File, Map, Source,
 use serde::{de, Deserialize, Deserializer};
 
 pub use anyhow::Result;
-use regex::Regex;
 use sp_runtime::DeserializeOwned;
 use url::Url;
 
@@ -125,17 +124,6 @@ impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
 		self.nodes.validate()
 	}
-}
-
-// Checks that the url has a port number
-fn validate_port_exists(url: &SecretUrl) -> Result<()> {
-	// NB: We are using regex instead of Url because Url.port() returns None for wss/https urls with
-	// default ports.
-	let re = Regex::new(r":([0-9]+)").unwrap();
-	if re.captures(url.as_ref()).is_none() {
-		bail!("No port found in url: {url}");
-	}
-	Ok(())
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
