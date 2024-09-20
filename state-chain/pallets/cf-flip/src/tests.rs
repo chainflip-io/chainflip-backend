@@ -633,3 +633,13 @@ mod test_tx_payments {
 		});
 	}
 }
+
+#[test]
+fn only_governance_can_set_slashing_rate() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Flip::set_slashing_rate(RuntimeOrigin::signed(ALICE), Permill::from_percent(0)),
+			sp_runtime::traits::BadOrigin,
+		);
+	});
+}

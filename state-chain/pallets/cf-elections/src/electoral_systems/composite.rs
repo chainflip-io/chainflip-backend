@@ -55,6 +55,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 electoral_system::{
                     ElectoralSystem,
                     ConsensusStatus,
+                    ConsensusVote,
                     ElectionReadAccess,
                     ElectionWriteAccess,
                     ElectoralReadAccess,
@@ -62,6 +63,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     AuthorityVoteOf,
                     VotePropertiesOf,
                     ElectionIdentifierOf,
+                    ConsensusVotes,
                 },
                 vote_storage::{
                     AuthorityVote,
@@ -72,7 +74,6 @@ macro_rules! generate_electoral_system_tuple_impls {
             use crate::vote_storage::composite::$module::{CompositeVoteProperties, CompositeVote, CompositePartialVote};
 
             use frame_support::{Parameter, pallet_prelude::{Member, MaybeSerializeDeserialize}};
-            use cf_primitives::AuthorityCount;
 
             use codec::{Encode, Decode};
             use scale_info::TypeInfo;
@@ -330,8 +331,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
                     election_access: &ElectionAccess,
                     previous_consensus: Option<&Self::Consensus>,
-                    votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
-                    authorities: AuthorityCount,
+                    consensus_votes: ConsensusVotes<Self>,
                 ) -> Result<Option<Self::Consensus>, CorruptStorageError> {
                     Ok(match *election_identifier.extra() {
                         $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
@@ -344,16 +344,28 @@ macro_rules! generate_electoral_system_tuple_impls {
                                         _ => Err(CorruptStorageError::new()),
                                     }
                                 }).transpose()?,
-                                votes.into_iter().map(|(properties, vote, validator_id)| {
-                                    match (properties, vote) {
-                                        (
-                                            CompositeVoteProperties::$electoral_system(properties),
-                                            CompositeVote::$electoral_system(vote),
-                                        ) => Ok((properties, vote, validator_id)),
-                                        _ => Err(CorruptStorageError::new()),
-                                    }
-                                }).collect::<Result<Vec<_>, _>>()?,
-                                authorities,
+                                ConsensusVotes {
+                                    votes: consensus_votes.votes.into_iter().map(|ConsensusVote { vote, validator_id }| {
+                                        if let Some((properties, vote)) = vote {
+                                            match (properties, vote) {
+                                                (
+                                                    CompositeVoteProperties::$electoral_system(properties),
+                                                    CompositeVote::$electoral_system(vote),
+                                                ) => Ok(ConsensusVote {
+                                                    vote: Some((properties, vote)),
+                                                    validator_id
+                                                }),
+                                                _ => Err(CorruptStorageError::new()),
+                                            }
+                                        } else {
+                                            Ok(ConsensusVote {
+                                                vote: None,
+                                                validator_id
+                                            })
+                                        }
+
+                                    }).collect::<Result<Vec<_>, _>>()?
+                                }
                             )?.map(CompositeConsensus::$electoral_system)
                         },)*
                     })

@@ -1,12 +1,11 @@
 use crate::{
 	electoral_system::{
-		AuthorityVoteOf, ElectionIdentifierOf, ElectionReadAccess, ElectionWriteAccess,
-		ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
+		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
+		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError,
 };
-use cf_primitives::AuthorityCount;
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -131,28 +130,26 @@ impl<
 		_election_identifier: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
-		authorities: AuthorityCount,
+		consensus_votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-		let votes_count = votes.len();
-		Ok(
-			if votes_count != 0 &&
-				votes_count >= success_threshold_from_share_count(authorities) as usize
-			{
-				let mut counts = BTreeMap::new();
-				for (_, vote, _validator_id) in votes {
-					counts.entry(vote).and_modify(|count| *count += 1).or_insert(1);
+		let num_authorities = consensus_votes.num_authorities();
+		let active_votes = consensus_votes.active_votes();
+		let num_active_votes = active_votes.len() as u32;
+		let success_threshold = success_threshold_from_share_count(num_authorities);
+		Ok(if num_active_votes >= success_threshold {
+			let mut counts = BTreeMap::new();
+			for vote in active_votes {
+				counts.entry(vote).and_modify(|count| *count += 1).or_insert(1);
+			}
+			counts.iter().find_map(|(vote, count)| {
+				if *count >= success_threshold {
+					Some(vote.clone())
+				} else {
+					None
 				}
-				counts.iter().find_map(|(vote, count)| {
-					if *count >= success_threshold_from_share_count(authorities) {
-						Some(vote.clone())
-					} else {
-						None
-					}
-				})
-			} else {
-				None
-			},
-		)
+			})
+		} else {
+			None
+		})
 	}
 }

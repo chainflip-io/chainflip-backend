@@ -20,7 +20,7 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-runWithTimeout(main(), 60000).catch(() => {
+runWithTimeout(main(), 60).catch(() => {
   console.log('Failed to observe block no. ' + process.argv[2]);
   process.exit(-1);
 });

@@ -1,11 +1,7 @@
-use crate::{
-	electoral_system::{
-		ConsensusStatus, ElectionIdentifierOf, ElectoralReadAccess, ElectoralSystem,
-		ElectoralWriteAccess, VotePropertiesOf,
-	},
-	vote_storage::VoteStorage,
+use crate::electoral_system::{
+	ConsensusStatus, ConsensusVotes, ElectionIdentifierOf, ElectoralReadAccess, ElectoralSystem,
+	ElectoralWriteAccess,
 };
-use cf_primitives::AuthorityCount;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 
 pub mod access;
@@ -96,8 +92,7 @@ where
 			.unwrap();
 
 		// A new election should not have consensus at any authority count.
-		assert_eq!(election.check_consensus(None, vec![], 0).unwrap(), None);
-		assert_eq!(election.check_consensus(None, vec![], 150).unwrap(), None);
+		assert_eq!(election.check_consensus(None, ConsensusVotes { votes: vec![] }).unwrap(), None);
 
 		TestContext { setup, electoral_access }
 	}
@@ -109,18 +104,13 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 	#[track_caller]
 	pub fn expect_consensus(
 		self,
-		authority_count: AuthorityCount,
-		mut votes: Vec<(VotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote, ES::ValidatorId)>,
+		mut consensus_votes: ConsensusVotes<ES>,
 		expected_consensus: Option<ES::Consensus>,
 	) -> Self {
-		assert!(
-			authority_count >= votes.len() as AuthorityCount,
-			"Cannot have more votes than authorities."
-		);
-		assert!(authority_count > 0, "Cannot have zero authorities.");
+		assert!(consensus_votes.num_authorities() > 0, "Cannot have zero authorities.");
 
 		use rand::seq::SliceRandom;
-		votes.shuffle(&mut rand::thread_rng());
+		consensus_votes.votes.shuffle(&mut rand::thread_rng());
 
 		// Expect only one election.
 		let current_election_id = self.only_election_id();
@@ -129,7 +119,7 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 			.electoral_access
 			.election(current_election_id)
 			.unwrap()
-			.check_consensus(None, votes, authority_count)
+			.check_consensus(None, consensus_votes)
 			.unwrap();
 
 		assert_eq!(new_consensus, expected_consensus);

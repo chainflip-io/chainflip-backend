@@ -864,19 +864,6 @@ pub trait EgressApi<C: Chain> {
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 
-impl<C: Chain + Get<ForeignChain>> EgressApi<C> for () {
-	type EgressError = DispatchError;
-
-	fn schedule_egress(
-		_asset: C::ChainAsset,
-		_amount: <C as Chain>::ChainAmount,
-		_destination_address: <C as Chain>::ChainAccount,
-		_maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
-	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
-		Ok(Default::default())
-	}
-}
-
 pub trait VaultKeyWitnessedHandler<C: Chain> {
 	fn on_first_key_activated(block_number: C::ChainBlockNumber) -> DispatchResult;
 }
@@ -971,16 +958,10 @@ pub trait IngressEgressFeeApi<C: Chain> {
 
 pub trait LiabilityTracker {
 	fn record_liability(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
-
-	#[cfg(feature = "try-runtime")]
-	fn total_liabilities(gas_asset: Asset) -> AssetAmount;
 }
 
 pub trait AssetWithholding {
 	fn withhold_assets(asset: Asset, amount: AssetAmount);
-
-	#[cfg(feature = "try-runtime")]
-	fn withheld_assets(gas_asset: Asset) -> AssetAmount;
 }
 
 pub trait FetchesTransfersLimitProvider {
@@ -1035,21 +1016,21 @@ pub trait BalanceApi {
 }
 
 pub trait IngressSink {
-	type Chain: Chain;
+	type Account: Member + Parameter;
+	type Asset: Member + Parameter + Copy;
+	type Amount: Member + Parameter + Copy + AtLeast32BitUnsigned;
+	type BlockNumber: Member + Parameter + Copy + AtLeast32BitUnsigned;
+	type DepositDetails;
 
 	fn on_ingress(
-		channel: <Self::Chain as Chain>::ChainAccount,
-		asset: <Self::Chain as Chain>::ChainAsset,
-		amount: <Self::Chain as Chain>::ChainAmount,
-		block_number: <Self::Chain as Chain>::ChainBlockNumber,
-		details: <Self::Chain as Chain>::DepositDetails,
+		channel: Self::Account,
+		asset: Self::Asset,
+		amount: Self::Amount,
+		block_number: Self::BlockNumber,
+		details: Self::DepositDetails,
 	);
-	fn on_ingress_reverted(
-		channel: <Self::Chain as Chain>::ChainAccount,
-		asset: <Self::Chain as Chain>::ChainAsset,
-		amount: <Self::Chain as Chain>::ChainAmount,
-	);
-	fn on_channel_closed(channel: <Self::Chain as Chain>::ChainAccount);
+	fn on_ingress_reverted(channel: Self::Account, asset: Self::Asset, amount: Self::Amount);
+	fn on_channel_closed(channel: Self::Account);
 }
 
 pub trait IngressSource {

@@ -91,7 +91,7 @@ fn get_available_amount(asset: eth::Asset, fee_tier: BoostPoolTier) -> AssetAmou
 // Setup accounts, create eth boost pools and ensure that ingress fee is `INGRESS_FEE`
 fn setup() {
 	assert_ok!(Pallet::<Test, _>::create_boost_pools(
-		RuntimeOrigin::signed(ALICE),
+		RuntimeOrigin::root(),
 		vec![
 			BoostPoolId { asset: eth::Asset::Eth, tier: TIER_5_BPS },
 			BoostPoolId { asset: eth::Asset::Eth, tier: TIER_10_BPS },
@@ -279,7 +279,7 @@ fn can_boost_non_eth_asset() {
 	fn test_for_asset(asset: eth::Asset) {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Pallet::<Test, _>::create_boost_pools(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::root(),
 				vec![BoostPoolId { asset, tier: TIER_10_BPS },]
 			));
 
@@ -929,7 +929,7 @@ fn test_create_boost_pools() {
 
 		// Create all 3 pools in one go
 		assert_ok!(Pallet::<Test, _>::create_boost_pools(
-			RuntimeOrigin::signed(ALICE),
+			RuntimeOrigin::root(),
 			vec![
 				BoostPoolId { asset: eth::Asset::Eth, tier: TIER_5_BPS },
 				BoostPoolId { asset: eth::Asset::Eth, tier: TIER_10_BPS },
@@ -959,7 +959,7 @@ fn test_create_boost_pools() {
 		// Should not be able to create the same pool again
 		assert_noop!(
 			Pallet::<Test, _>::create_boost_pools(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::root(),
 				vec![BoostPoolId { asset: eth::Asset::Eth, tier: TIER_5_BPS }]
 			),
 			pallet_cf_ingress_egress::Error::<Test, ()>::BoostPoolAlreadyExists
@@ -971,10 +971,16 @@ fn test_create_boost_pools() {
 		// Should not be able to create a pool with a tier of 0
 		assert_noop!(
 			Pallet::<Test, _>::create_boost_pools(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::root(),
 				vec![BoostPoolId { asset: eth::Asset::Eth, tier: 0 }]
 			),
 			pallet_cf_ingress_egress::Error::<Test, ()>::InvalidBoostPoolTier
+		);
+
+		// Make sure that only governance can create boost pools
+		assert_noop!(
+			Pallet::<Test, _>::create_boost_pools(OriginTrait::none(), vec![]),
+			sp_runtime::traits::BadOrigin
 		);
 	});
 }

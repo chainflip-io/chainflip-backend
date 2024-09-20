@@ -1,19 +1,18 @@
 use crate::{
 	electoral_system::{
-		AuthorityVoteOf, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
+		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
 		ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError, ElectionIdentifier,
 };
-use cf_chains::Chain;
-use cf_primitives::AuthorityCount;
 use cf_traits::IngressSink;
 use cf_utilities::success_threshold_from_share_count;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cmp::Ordering;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	sp_runtime::traits::Zero,
 	storage::bounded_btree_map::BoundedBTreeMap,
 	Parameter,
 };
@@ -29,48 +28,46 @@ pub const MAXIMUM_CHANNELS_PER_ELECTION: u32 = 50;
 
 /// Represents the total ingressed amount over all time of a given asset at a particular
 /// `block_number`.
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-#[scale_info(skip_type_params(TargetChain))]
-pub struct ChannelTotalIngressed<TargetChain: Chain> {
-	pub block_number: <TargetChain as Chain>::ChainBlockNumber,
-	pub amount: <TargetChain as Chain>::ChainAmount,
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct ChannelTotalIngressed<BlockNumber, Amount> {
+	pub block_number: BlockNumber,
+	pub amount: Amount,
 }
-impl<TargetChain: Chain> Copy for ChannelTotalIngressed<TargetChain> {}
 
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-#[scale_info(skip_type_params(TargetChain))]
-pub struct OpenChannelDetails<TargetChain: Chain> {
-	pub asset: <TargetChain as Chain>::ChainAsset,
-	pub close_block: <TargetChain as Chain>::ChainBlockNumber,
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct OpenChannelDetails<Asset, BlockNumber> {
+	pub asset: Asset,
+	pub close_block: BlockNumber,
 }
+
+pub type ChannelTotalIngressedFor<Sink> =
+	ChannelTotalIngressed<<Sink as IngressSink>::BlockNumber, <Sink as IngressSink>::Amount>;
+pub type OpenChannelDetailsFor<Sink> =
+	OpenChannelDetails<<Sink as IngressSink>::Asset, <Sink as IngressSink>::BlockNumber>;
 
 pub struct DeltaBasedIngress<Sink: IngressSink, Settings, ValidatorId> {
 	_phantom: core::marker::PhantomData<(Sink, Settings, ValidatorId)>,
 }
-impl<
-		Sink: IngressSink + 'static,
-		Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
-		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> DeltaBasedIngress<Sink, Settings, ValidatorId>
+impl<Sink, Settings, ValidatorId> DeltaBasedIngress<Sink, Settings, ValidatorId>
 where
-	<Sink::Chain as Chain>::DepositDetails: Default,
+	Sink: IngressSink<DepositDetails = ()> + 'static,
+	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
+	<Sink as IngressSink>::Account: Ord,
+	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	pub fn open_channel<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
 		election_identifiers: Vec<
 			ElectionIdentifier<<Self as ElectoralSystem>::ElectionIdentifierExtra>,
 		>,
 		electoral_access: &mut ElectoralAccess,
-		channel: <Sink::Chain as Chain>::ChainAccount,
-		asset: <Sink::Chain as Chain>::ChainAsset,
-		close_block: <Sink::Chain as Chain>::ChainBlockNumber,
+		channel: Sink::Account,
+		asset: Sink::Asset,
+		close_block: Sink::BlockNumber,
 	) -> Result<(), CorruptStorageError> {
 		let channel_details = (
 			OpenChannelDetails { asset, close_block },
 			electoral_access.unsynchronised_state_map(&(channel.clone(), asset))?.unwrap_or(
-				ChannelTotalIngressed {
-					block_number: Default::default(),
-					amount: Default::default(),
-				},
+				ChannelTotalIngressed { block_number: Zero::zero(), amount: Zero::zero() },
 			),
 		);
 		if let Some(election_identifier) = election_identifiers.last() {
@@ -99,13 +96,12 @@ where
 		Ok(())
 	}
 }
-impl<
-		Sink: IngressSink + 'static,
-		Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
-		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for DeltaBasedIngress<Sink, Settings, ValidatorId>
+impl<Sink, Settings, ValidatorId> ElectoralSystem for DeltaBasedIngress<Sink, Settings, ValidatorId>
 where
-	<Sink::Chain as Chain>::DepositDetails: Default,
+	Sink: IngressSink<DepositDetails = ()> + 'static,
+	Settings: Parameter + Member + MaybeSerializeDeserialize + Eq,
+	<Sink as IngressSink>::Account: Ord,
+	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
 	type ValidatorId = ValidatorId;
 
@@ -114,37 +110,32 @@ where
 	// Stores the total ingressed amounts for all channels that have already been dispatched i.e. we
 	// told the `IngressEgress` pallet about, and for example, for swap deposit channels, has been
 	// scheduled to be swapped.
-	type ElectoralUnsynchronisedStateMapKey =
-		(<Sink::Chain as Chain>::ChainAccount, <Sink::Chain as Chain>::ChainAsset);
-	type ElectoralUnsynchronisedStateMapValue = ChannelTotalIngressed<Sink::Chain>;
+	type ElectoralUnsynchronisedStateMapKey = (Sink::Account, Sink::Asset);
+	type ElectoralUnsynchronisedStateMapValue = ChannelTotalIngressedFor<Sink>;
 
 	type ElectoralUnsynchronisedSettings = ();
 	type ElectoralSettings = Settings;
 	type ElectionIdentifierExtra = u32;
 
 	// Stores the channels a given election is witnessing, and a recent total ingressed value.
-	type ElectionProperties = BTreeMap<
-		<Sink::Chain as Chain>::ChainAccount,
-		(OpenChannelDetails<Sink::Chain>, ChannelTotalIngressed<Sink::Chain>),
-	>;
+	type ElectionProperties =
+		BTreeMap<Sink::Account, (OpenChannelDetailsFor<Sink>, ChannelTotalIngressedFor<Sink>)>;
 
 	// Stores the any pending total ingressed values that are waiting for
 	// the safety margin to pass.
-	type ElectionState =
-		BTreeMap<<Sink::Chain as Chain>::ChainAccount, ChannelTotalIngressed<Sink::Chain>>;
+	type ElectionState = BTreeMap<Sink::Account, ChannelTotalIngressedFor<Sink>>;
 	type Vote = vote_storage::individual::Individual<
 		(),
 		vote_storage::individual::identity::Identity<
 			BoundedBTreeMap<
-				<Sink::Chain as Chain>::ChainAccount,
-				ChannelTotalIngressed<Sink::Chain>,
+				Sink::Account,
+				ChannelTotalIngressedFor<Sink>,
 				ConstU32<MAXIMUM_CHANNELS_PER_ELECTION>,
 			>,
 		>,
 	>;
-	type Consensus =
-		BTreeMap<<Sink::Chain as Chain>::ChainAccount, ChannelTotalIngressed<Sink::Chain>>;
-	type OnFinalizeContext = <Sink::Chain as Chain>::ChainBlockNumber;
+	type Consensus = BTreeMap<Sink::Account, ChannelTotalIngressedFor<Sink>>;
+	type OnFinalizeContext = Sink::BlockNumber;
 	type OnFinalizeReturn = ();
 
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
@@ -231,7 +222,7 @@ where
 				if let Some(ingress_total) = option_ingress_total_before_chain_tracking {
 					let previous_amount = electoral_access
 						.unsynchronised_state_map(&(account.clone(), details.asset))?
-						.map_or(Default::default(), |previous_total_ingressed| {
+						.map_or(Zero::zero(), |previous_total_ingressed| {
 							previous_total_ingressed.amount
 						});
 					match previous_amount.cmp(&ingress_total.amount) {
@@ -241,7 +232,7 @@ where
 								details.asset,
 								ingress_total.amount - previous_amount,
 								ingress_total.block_number,
-								Default::default(),
+								(),
 							);
 							electoral_access.set_unsynchronised_state_map(
 								(account.clone(), details.asset),
@@ -303,18 +294,17 @@ where
 		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
-		votes: Vec<(VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::Vote, Self::ValidatorId)>,
-		authorities: AuthorityCount,
+		consensus_votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-		let threshold = success_threshold_from_share_count(authorities) as usize;
-		let votes_count = votes.len();
-		if votes_count >= threshold {
+		let num_authorities = consensus_votes.num_authorities();
+		let threshold = success_threshold_from_share_count(num_authorities);
+		let active_votes = consensus_votes.active_votes();
+		let num_active_votes = active_votes.len() as u32;
+		if num_active_votes >= threshold {
 			let election_channels = election_access.properties()?;
 
 			let mut votes_grouped_by_channel = BTreeMap::<_, Vec<_>>::new();
-			for (account, channel_vote) in
-				votes.into_iter().flat_map(|(_properties, vote, _validator_id)| vote)
-			{
+			for (account, channel_vote) in active_votes.into_iter().flatten() {
 				votes_grouped_by_channel.entry(account).or_default().push(channel_vote);
 			}
 
@@ -359,22 +349,23 @@ where
 						// ingress total if they haven't provided a vote for that channel) or if the
 						// channel has expired (To ensure we get consensus at a block number after
 						// the expiry, so we can safely close the channel).
-						channel_votes.resize(votes_count, *recent_ingress_total);
+						channel_votes.resize(num_active_votes as usize, *recent_ingress_total);
 						channel_votes.sort_by_key(|channel_vote| channel_vote.block_number);
 						let contributing_channel_votes = longest_increasing_subsequence_by_key(
 							&channel_votes[..],
 							|channel_vote| channel_vote.amount,
 						);
-						if contributing_channel_votes.len() >= threshold {
+						if contributing_channel_votes.len() as u32 >= threshold {
 							Some((
 								account,
 								ChannelTotalIngressed {
 									// Requires 2/3 to decrease the block_number,
-									block_number: contributing_channel_votes[threshold - 1]
+									block_number: contributing_channel_votes
+										[threshold as usize - 1]
 										.block_number,
 									// Requires 2/3 to increase the amount
 									amount: contributing_channel_votes
-										[contributing_channel_votes.len() - threshold]
+										[contributing_channel_votes.len() - threshold as usize]
 										.amount,
 								},
 							))

@@ -1,5 +1,8 @@
 use super::{mocks::*, register_checks};
-use crate::electoral_systems::change::*;
+use crate::{
+	electoral_system::{ConsensusVote, ConsensusVotes},
+	electoral_systems::change::*,
+};
 
 use cf_primitives::AuthorityCount;
 
@@ -46,31 +49,47 @@ fn with_default_state() -> TestContext<SimpleChange> {
 	TestSetup::<SimpleChange>::default().build()
 }
 
+fn generate_votes(
+	correct_voters: AuthorityCount,
+	correct_value: u64,
+	incorrect_voters: AuthorityCount,
+	incorrect_value: u64,
+) -> ConsensusVotes<SimpleChange> {
+	ConsensusVotes {
+		votes: (0..correct_voters)
+			.map(|_| ConsensusVote { vote: Some(((), correct_value as Vote)), validator_id: () })
+			.chain((0..incorrect_voters).map(|_| ConsensusVote {
+				vote: Some(((), incorrect_value as Vote)),
+				validator_id: (),
+			}))
+			.chain(
+				(0..AUTHORITY_COUNT - correct_voters - incorrect_voters)
+					.map(|_| ConsensusVote { vote: None, validator_id: () }),
+			)
+			.collect(),
+	}
+}
+
 #[test]
 fn consensus_not_possible_because_of_different_votes() {
 	with_default_state().expect_consensus(
-		AUTHORITY_COUNT,
-		(0..AUTHORITY_COUNT).map(|i| ((), i as Vote, ())).collect(),
+		ConsensusVotes {
+			votes: (0..AUTHORITY_COUNT)
+				.map(|i| ConsensusVote { vote: Some(((), i as Vote)), validator_id: () })
+				.collect(),
+		},
 		None,
 	);
 }
 
 #[test]
 fn consensus_when_all_votes_the_same() {
-	with_default_state().expect_consensus(
-		AUTHORITY_COUNT,
-		vec![((), 1, ()); SUCCESS_THRESHOLD as usize],
-		Some(1),
-	);
+	with_default_state().expect_consensus(generate_votes(SUCCESS_THRESHOLD, 1, 0, 0), Some(1));
 }
 
 #[test]
 fn not_enough_votes_for_consensus() {
-	with_default_state().expect_consensus(
-		AUTHORITY_COUNT,
-		(0..THRESHOLD).map(|i| ((), i as Vote, ())).collect(),
-		None,
-	);
+	with_default_state().expect_consensus(generate_votes(THRESHOLD, 1, 0, 0), None);
 }
 
 #[test]
@@ -78,11 +97,12 @@ fn minority_cannot_prevent_consensus() {
 	const CORRECT_VALUE: Vote = 1;
 	const INCORRECT_VALUE: Vote = 2;
 	with_default_state().expect_consensus(
-		AUTHORITY_COUNT,
-		(0..SUCCESS_THRESHOLD)
-			.map(|_| ((), CORRECT_VALUE, ()))
-			.chain((SUCCESS_THRESHOLD..AUTHORITY_COUNT).map(|_| ((), INCORRECT_VALUE, ())))
-			.collect(),
+		generate_votes(
+			SUCCESS_THRESHOLD,
+			CORRECT_VALUE,
+			AUTHORITY_COUNT - SUCCESS_THRESHOLD,
+			INCORRECT_VALUE,
+		),
 		Some(CORRECT_VALUE),
 	);
 }
@@ -91,8 +111,7 @@ fn minority_cannot_prevent_consensus() {
 fn finalization_only_on_consensus_change() {
 	with_default_state()
 		.expect_consensus(
-			AUTHORITY_COUNT,
-			vec![((), Vote::default(), ()); AUTHORITY_COUNT as usize],
+			generate_votes(AUTHORITY_COUNT, Vote::default(), 0, 0),
 			Some(Vote::default()),
 		)
 		.test_on_finalize(
@@ -103,8 +122,7 @@ fn finalization_only_on_consensus_change() {
 			vec![Check::<SimpleChange>::hook_not_called(), Check::assert_unchanged()],
 		)
 		.expect_consensus(
-			AUTHORITY_COUNT,
-			vec![((), Vote::default() + 1, ()); AUTHORITY_COUNT as usize],
+			generate_votes(AUTHORITY_COUNT, Vote::default() + 1, 0, 0),
 			Some(Vote::default() + 1),
 		)
 		.test_on_finalize(

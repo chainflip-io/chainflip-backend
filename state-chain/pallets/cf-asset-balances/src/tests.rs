@@ -112,45 +112,6 @@ pub fn not_enough_withheld_fees() {
 }
 
 #[test]
-pub fn max_refunds_per_epoch() {
-	new_test_ext().execute_with(|| {
-		const SMALL_FEE: AssetAmount = 30;
-		let asset = ForeignChain::Ethereum.gas_asset();
-		for i in 0..crate::MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH {
-			payed_gas(
-				ForeignChain::Ethereum,
-				100,
-				ForeignChainAddress::Eth(sp_core::H160([i as u8; 20])),
-			);
-		}
-		// Add 2 small fees, which will be payed out last.
-		for i in 254u8..=255u8 {
-			payed_gas(
-				ForeignChain::Ethereum,
-				SMALL_FEE,
-				ForeignChainAddress::Eth(sp_core::H160([i; 20])),
-			);
-		}
-		assert_eq!(
-			WithheldAssets::<Test>::get(asset),
-			(100 * (crate::MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH as u128) + SMALL_FEE * 2)
-		);
-		Pallet::<Test>::trigger_reconciliation();
-
-		// Fees are paid out in reverse order (largest -> smallest). The 2 smallest fees are left
-		// out as available funds ran out.
-		assert_eq!(Liabilities::<Test>::get(asset).values().sum::<u128>(), SMALL_FEE * 2u128);
-		assert_eq!(WithheldAssets::<Test>::get(asset), SMALL_FEE * 2u128);
-		assert!(WithheldAssets::<Test>::get(asset) > 0);
-		assert_eq!(Liabilities::<Test>::get(asset).len(), 2);
-
-		Pallet::<Test>::trigger_reconciliation();
-		assert_eq!(WithheldAssets::<Test>::get(asset), 0);
-		assert_eq!(Liabilities::<Test>::get(asset).len(), 0);
-	});
-}
-
-#[test]
 pub fn do_not_refund_if_amount_is_too_low() {
 	new_test_ext().execute_with(|| {
 		const REFUND_AMOUNT: u128 = 10;

@@ -37,8 +37,6 @@ pub trait WeightInfo {
 	fn withdraw() -> Weight;
 	fn register_as_broker() -> Weight;
 	fn deregister_as_broker() -> Weight;
-	fn schedule_swap_from_contract() -> Weight;
-	fn ccm_deposit() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -167,44 +165,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(11_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::MaximumSwapAmount` (r:1 w:0)
-	/// Proof: `Swapping::MaximumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapQueue` (r:1 w:1)
-	/// Proof: `Swapping::SwapQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequests` (r:0 w:1)
-	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn schedule_swap_from_contract() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `103`
-		//  Estimated: `3568`
-		// Minimum execution time: 22_619_000 picoseconds.
-		Weight::from_parts(22_899_000, 3568)
-			.saturating_add(T::DbWeight::get().reads(4_u64))
-			.saturating_add(T::DbWeight::get().writes(4_u64))
-	}
-	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::MaximumSwapAmount` (r:1 w:0)
-	/// Proof: `Swapping::MaximumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapQueue` (r:1 w:1)
-	/// Proof: `Swapping::SwapQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequests` (r:0 w:1)
-	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn ccm_deposit() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `103`
-		//  Estimated: `3568`
-		// Minimum execution time: 23_424_000 picoseconds.
-		Weight::from_parts(24_082_000, 3568)
-			.saturating_add(T::DbWeight::get().reads(4_u64))
-			.saturating_add(T::DbWeight::get().writes(4_u64))
-	}
 }
 
 // For backwards compatibility and tests
@@ -331,43 +291,5 @@ impl WeightInfo for () {
 		Weight::from_parts(45_894_000, 26353)
 			.saturating_add(RocksDbWeight::get().reads(11_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::MaximumSwapAmount` (r:1 w:0)
-	/// Proof: `Swapping::MaximumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapQueue` (r:1 w:1)
-	/// Proof: `Swapping::SwapQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequests` (r:0 w:1)
-	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn schedule_swap_from_contract() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `103`
-		//  Estimated: `3568`
-		// Minimum execution time: 22_619_000 picoseconds.
-		Weight::from_parts(22_899_000, 3568)
-			.saturating_add(RocksDbWeight::get().reads(4_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
-	}
-	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::MaximumSwapAmount` (r:1 w:0)
-	/// Proof: `Swapping::MaximumSwapAmount` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
-	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapQueue` (r:1 w:1)
-	/// Proof: `Swapping::SwapQueue` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Swapping::SwapRequests` (r:0 w:1)
-	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn ccm_deposit() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `103`
-		//  Estimated: `3568`
-		// Minimum execution time: 23_424_000 picoseconds.
-		Weight::from_parts(24_082_000, 3568)
-			.saturating_add(RocksDbWeight::get().reads(4_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
 }

@@ -137,6 +137,7 @@ pub mod pallet {
 	use cf_primitives::{AuthorityCount, EpochIndex};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
 
+	use crate::electoral_system::{ConsensusVote, ConsensusVotes};
 	use access_impls::{ElectionAccess, ElectoralAccess};
 	use bitmap_components::ElectionBitmapComponents;
 	use electoral_system::{
@@ -739,18 +740,29 @@ pub mod pallet {
 								},
 								validator_id,
 							)
-						).filter(|(_, validator_id)| {
-							ContributingAuthorities::<T, I>::contains_key(validator_id)
-						}).filter_map(|(vote_components, validator_id)| {
-							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash| {
-								// We don't bother to check if the reference has expired, as if we have the data we may as well use it, even if it was provided after the shared data reference expired (But before the reference was cleaned up `on_finalize`).
-								Ok(SharedData::<T, I>::get(shared_data_hash))
-							}).map(|vote| vote.map(|vote| (vote.0, vote.1, validator_id))).transpose()
-						}).filter_map_ok(|(properties, authority_vote, validator_id)| match authority_vote {
-							AuthorityVote::Vote(vote) => Some((properties, vote, validator_id)),
-							_ => None,
-						})
-						.collect::<Result<Vec<_>, _>>()?;
+						).map(|(vote_components, validator_id)| {
+							if ContributingAuthorities::<T, I>::contains_key(&validator_id) {
+								match <<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash| {
+									// We don't bother to check if the reference has expired, as if we have the data we may as well use it, even if it was provided after the shared data reference expired (But before the reference was cleaned up `on_finalize`).
+									Ok(SharedData::<T, I>::get(shared_data_hash))
+								}) {
+									// Only a full vote can count towards consensus.
+									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties, vote))),
+									Ok(Some((_properties, AuthorityVote::PartialVote(_)))) => Ok(None),
+									Ok(None) => Ok(None),
+									Err(e) => Err(e),
+								}
+							} else {
+								Ok(None)
+							}.map(|props_and_vote|
+								ConsensusVote {
+									vote: props_and_vote,
+									validator_id
+								}
+							)
+						}).collect::<Result<Vec<_>, _>>()?;
+
+						debug_assert!(votes.len() == current_authorities_count as usize);
 
 						// Remove individual components from non-authorities
 						for (validator_id, (_, individual_component)) in individual_components {
@@ -777,8 +789,7 @@ pub mod pallet {
 										Some(&consensus_history.most_recent)
 									}
 								}),
-								votes,
-								current_authorities_count,
+								ConsensusVotes { votes },
 							)?;
 
 						ElectionConsensusHistory::<T, I>::set(

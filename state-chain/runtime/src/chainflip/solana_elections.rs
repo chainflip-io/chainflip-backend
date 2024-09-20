@@ -1,6 +1,5 @@
 use crate::{Environment, Runtime, SolanaBroadcaster, SolanaChainTracking, SolanaThresholdSigner};
 use cf_chains::{
-	benchmarking_value::BenchmarkValue,
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto},
 	Chain, FeeEstimationApi, Solana,
@@ -28,6 +27,9 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
 use sp_std::vec::Vec;
+
+#[cfg(feature = "runtime-benchmarks")]
+use cf_chains::benchmarking_value::BenchmarkValue;
 
 type Instance = <Solana as ChainInstanceAlias>::Instance;
 
@@ -105,7 +107,7 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	<Runtime as Chainflip>::ValidatorId,
 >;
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
 	pub tx_fee: u64,
 }

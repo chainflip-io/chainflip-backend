@@ -24,7 +24,7 @@ import {
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { send } from './send';
-import { SwapContext, SwapStatus } from './swapping';
+import { SwapContext, SwapStatus } from './swap_context';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 

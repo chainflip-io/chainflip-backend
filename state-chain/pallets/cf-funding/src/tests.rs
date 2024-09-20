@@ -1755,3 +1755,21 @@ fn account_references_must_be_zero_for_full_redeem() {
 		);
 	});
 }
+
+#[test]
+fn only_governance_can_update_settings() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Funding::update_minimum_funding(RuntimeOrigin::signed(ALICE), 0),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Funding::update_restricted_addresses(RuntimeOrigin::signed(ALICE), vec![], vec![]),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Funding::update_redemption_tax(RuntimeOrigin::signed(ALICE), 0),
+			sp_runtime::traits::BadOrigin,
+		);
+	});
+}

@@ -1,8 +1,11 @@
-#!/usr/bin/env -S pnpm tsx
 import { Keyring } from '../polkadot/keyring';
-import { runWithTimeout, sleep, hexStringToBytesArray, newAddress, lpMutex } from '../shared/utils';
+import { sleep, hexStringToBytesArray, newAddress, lpMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { sendEvmNative } from '../shared/send_evm';
+import { ExecutableTest } from '../shared/executable_test';
+
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testDoubleDeposit = new ExecutableTest('DoubleDeposit', main, 120);
 
 async function main(): Promise<void> {
   const keyring = new Keyring({ type: 'sr25519' });
@@ -30,7 +33,7 @@ async function main(): Promise<void> {
       test: (event) => event.data.depositAddress.Eth,
     }).event
   ).data.depositAddress.Eth as string;
-  console.log('Eth ingress address: ' + ethIngressKey);
+  testDoubleDeposit.log('Eth ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
   await sendEvmNative('Ethereum', ethIngressKey, '10');
 
@@ -38,8 +41,3 @@ async function main(): Promise<void> {
   await sendEvmNative('Ethereum', ethIngressKey, '10');
   await observeEvent('assetBalances:AccountCredited').event;
 }
-
-runWithTimeout(main(), 120000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});

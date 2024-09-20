@@ -14,9 +14,9 @@ use cf_chains::{
 		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
 		SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ExecutexSwapAndCallError, ForeignChainAddress,
-	RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin,
-	TransactionBuilder,
+	CcmChannelMetadata, CcmDepositMetadata, CcmFailReason, Chain, ExecutexSwapAndCallError,
+	ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError,
+	Solana, SwapOrigin, TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -125,7 +125,7 @@ fn schedule_deposit_to_swap(
 		},
 		..
 	}) if <Solana as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone())
-		.expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address 
+		.expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address
 		=> swap_request_id)
 }
 
@@ -408,20 +408,32 @@ fn solana_ccm_fails_with_invalid_input() {
 			);
 
 			// Contract call fails with invalid CCM
-			assert_noop!(
-				RuntimeCall::Swapping(pallet_cf_swapping::Call::<Runtime>::ccm_deposit {
+			assert_ok!(RuntimeCall::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
 					source_asset: Asset::Sol,
 					deposit_amount: 1_000_000_000_000u128,
 					destination_asset: Asset::SolUsdc,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
 					deposit_metadata: invalid_ccm,
 					tx_hash: Default::default(),
-				})
-				.dispatch_bypass_filter(
-					pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into()
-				),
-				pallet_cf_swapping::Error::<Runtime>::InvalidCcm,
+				}
+			)
+			.dispatch_bypass_filter(
+				pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into()
+			),);
+
+			assert_has_matching_event!(
+				Runtime,
+				RuntimeEvent::SolanaIngressEgress(pallet_cf_ingress_egress::Event::<
+					Runtime,
+					SolanaInstance,
+				>::CcmFailed {
+					reason: CcmFailReason::InvalidMetadata,
+					..
+				}),
 			);
+
+			System::reset_events();
 
 			// CCM building can still fail at building stage.
 			let receiver = SolAddress([0xFF; 32]);
@@ -444,14 +456,16 @@ fn solana_ccm_fails_with_invalid_input() {
 				},
 			};
 
-			witness_call(RuntimeCall::Swapping(pallet_cf_swapping::Call::<Runtime>::ccm_deposit {
-				source_asset: Asset::Sol,
-				deposit_amount: 1_000_000_000_000u128,
-				destination_asset: Asset::SolUsdc,
-				destination_address: EncodedAddress::Sol([1u8; 32]),
-				deposit_metadata: ccm,
-				tx_hash: Default::default(),
-			}));
+			witness_call(RuntimeCall::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
+					source_asset: Asset::Sol,
+					deposit_amount: 1_000_000_000_000u128,
+					destination_asset: Asset::SolUsdc,
+					destination_address: EncodedAddress::Sol([1u8; 32]),
+					deposit_metadata: ccm,
+					tx_hash: Default::default(),
+				},
+			));
 			// Setting the current agg key will invalidate the CCM.
 			let epoch = SolanaThresholdSigner::current_key_epoch().unwrap();
 			pallet_cf_threshold_signature::Keys::<Runtime, SolanaInstance>::set(

@@ -496,7 +496,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// This allows the root user to force through a witness call.
+		/// This allows the governance user to force through a witness call.
 		///
 		/// This can be useful when votes haven't reached the threshold because of witnesser
 		/// check-pointing issues or similar.
@@ -511,7 +511,7 @@ pub mod pallet {
 			call: Box<<T as Config>::RuntimeCall>,
 			epoch_index: EpochIndex,
 		) -> DispatchResult {
-			ensure_root(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 
 			ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
 

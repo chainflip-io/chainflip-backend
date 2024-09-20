@@ -1,13 +1,18 @@
 use std::marker::PhantomData;
-pub struct NeverFailingOriginCheck<T>(PhantomData<T>);
+
+/// Used by default on most mocks for any non-governance origin checks.
+pub struct FailOnNoneOrigin<T>(PhantomData<T>);
 
 impl<T: frame_system::Config> frame_support::traits::EnsureOrigin<T::RuntimeOrigin>
-	for NeverFailingOriginCheck<T>
+	for FailOnNoneOrigin<T>
 {
 	type Success = ();
 
-	fn try_origin(_o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		Ok(())
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
+		match o.clone().into() {
+			Ok(frame_system::RawOrigin::None) => Err(o),
+			_ => Ok(()),
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

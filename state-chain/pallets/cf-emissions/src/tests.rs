@@ -7,7 +7,10 @@ use cf_traits::{
 	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnInfo},
 	RewardsDistribution, SetSafeMode,
 };
-use frame_support::traits::OnInitialize;
+use frame_support::{
+	assert_noop,
+	traits::{OnInitialize, OriginTrait},
+};
 use pallet_cf_flip::Pallet as Flip;
 
 use cf_chains::Ethereum;
@@ -238,5 +241,24 @@ fn dont_burn_flip_below_threshold() {
 			"Expected total issuance to be reduced by net egress amount."
 		);
 		assert_eq!(MockFlipBurnInfo::peek_flip_to_burn(), 0, "Expected flip to be burned.");
+	});
+}
+
+#[test]
+fn ensure_governance_origin_checks() {
+	let non_gov_origin: RuntimeOrigin = OriginTrait::signed(100);
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Emissions::update_current_authority_emission_inflation(non_gov_origin.clone(), 0),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Emissions::update_backup_node_emission_inflation(non_gov_origin.clone(), 0),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Emissions::update_supply_update_interval(non_gov_origin, 0),
+			sp_runtime::traits::BadOrigin,
+		);
 	});
 }

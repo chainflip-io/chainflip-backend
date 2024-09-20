@@ -135,6 +135,7 @@ impl crate::Config for Test {
 	type FetchesTransfersLimitProvider = MockFetchesTransfersLimitProvider;
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
+	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

@@ -71,6 +71,12 @@ fn can_update_all_config_items() {
 				blocks: MAX_SWAP_REQUEST_DURATION
 			})
 		);
+
+		// Make sure that only governance can update the config
+		assert_noop!(
+			Swapping::update_pallet_config(OriginTrait::signed(ALICE), vec![].try_into().unwrap()),
+			sp_runtime::traits::BadOrigin
+		);
 	});
 }
 
@@ -84,14 +90,23 @@ fn max_swap_amount_can_be_removed() {
 
 		// Initial max swap amount is set.
 		set_maximum_swap_amount(from, Some(max_swap));
-		assert_ok!(Swapping::schedule_swap_from_contract(
-			RuntimeOrigin::signed(ALICE),
-			from,
-			to,
-			amount,
-			EncodedAddress::Eth(Default::default()),
-			Default::default(),
-		));
+
+		let initiate_swap = || {
+			Swapping::init_swap_request(
+				from,
+				amount,
+				to,
+				SwapRequestType::Regular {
+					output_address: ForeignChainAddress::Eth([1; 20].into()),
+				},
+				Default::default(),
+				None,
+				None,
+				SwapOrigin::Vault { tx_hash: Default::default() },
+			);
+		};
+
+		initiate_swap();
 
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 900u128);
 
@@ -102,14 +117,7 @@ fn max_swap_amount_can_be_removed() {
 		// Max is removed.
 		set_maximum_swap_amount(from, None);
 
-		assert_ok!(Swapping::schedule_swap_from_contract(
-			RuntimeOrigin::signed(ALICE),
-			from,
-			to,
-			amount,
-			EncodedAddress::Eth(Default::default()),
-			Default::default(),
-		));
+		initiate_swap();
 
 		let execute_at = System::block_number() + u64::from(SWAP_DELAY_BLOCKS);
 
@@ -164,14 +172,17 @@ fn can_swap_below_max_amount() {
 
 		// Initial max swap amount is set.
 		set_maximum_swap_amount(from, Some(max_swap));
-		assert_ok!(Swapping::schedule_swap_from_contract(
-			RuntimeOrigin::signed(ALICE),
+
+		Swapping::init_swap_request(
 			from,
-			to,
 			amount,
-			EncodedAddress::Eth(Default::default()),
+			to,
+			SwapRequestType::Regular { output_address: ForeignChainAddress::Eth([1; 20].into()) },
 			Default::default(),
-		));
+			None,
+			None,
+			SwapOrigin::Vault { tx_hash: Default::default() },
+		);
 
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0u128);
 
@@ -179,39 +190,6 @@ fn can_swap_below_max_amount() {
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
 			vec![Swap::new(1, 1, from, to, amount, None, [FeeType::NetworkFee]),]
 		);
-	});
-}
-
-#[test]
-fn can_swap_ccm_below_max_amount() {
-	new_test_ext().execute_with(|| {
-		let gas_budget = GAS_BUDGET;
-		let principal_amount = 999;
-		let max_swap = gas_budget + principal_amount;
-		let from: Asset = Asset::Usdc;
-		let to: Asset = Asset::Flip;
-		let ccm = generate_ccm_deposit();
-
-		set_maximum_swap_amount(from, Some(max_swap));
-
-		// Register CCM via Swap deposit
-		assert_ok!(Swapping::ccm_deposit(
-			RuntimeOrigin::root(),
-			from,
-			gas_budget + principal_amount,
-			to,
-			EncodedAddress::Eth(Default::default()),
-			ccm,
-			Default::default(),
-		));
-
-		let execute_at = System::block_number() + u64::from(SWAP_DELAY_BLOCKS);
-
-		assert_eq!(
-			SwapQueue::<Test>::get(execute_at),
-			vec![Swap::new(1, 1, from, to, principal_amount, None, [FeeType::NetworkFee]),]
-		);
-		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
 	});
 }
 

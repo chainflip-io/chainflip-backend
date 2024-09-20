@@ -636,3 +636,49 @@ fn cannot_governance_recover_unused_sol_durable_nonce() {
 		);
 	});
 }
+
+#[test]
+fn ensure_governance_origin_checks() {
+	let non_gov_origin: RuntimeOrigin = OriginTrait::signed(100);
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Environment::witness_polkadot_vault_creation(
+				non_gov_origin.clone(),
+				Default::default(),
+				cf_primitives::TxId { block_number: 0, extrinsic_index: 0 },
+			),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Environment::witness_current_bitcoin_block_number_for_key(
+				non_gov_origin.clone(),
+				0,
+				Default::default(),
+			),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Environment::update_safe_mode(non_gov_origin.clone(), SafeModeUpdate::CodeRed),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Environment::update_consolidation_parameters(
+				non_gov_origin.clone(),
+				Default::default(),
+			),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Environment::witness_initialize_arbitrum_vault(non_gov_origin.clone(), 0),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Environment::witness_initialize_solana_vault(non_gov_origin.clone(), 0),
+			sp_runtime::traits::BadOrigin,
+		);
+		assert_noop!(
+			Environment::force_recover_sol_nonce(non_gov_origin, Default::default(), None),
+			sp_runtime::traits::BadOrigin,
+		);
+	});
+}
