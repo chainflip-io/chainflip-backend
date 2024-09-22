@@ -164,7 +164,11 @@ pub fn new_full<
 		)
 	};
 
-	let mut net_config = sc_network::config::FullNetworkConfiguration::new(&config.network);
+	let mut net_config = sc_network::config::FullNetworkConfiguration::<
+		Block,
+		<Block as sp_runtime::traits::Block>::Hash,
+		Network
+	>::new(&config.network);
 	let peer_store_handle = net_config.peer_store_handle();
 	
 	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
