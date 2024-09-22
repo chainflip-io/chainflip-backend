@@ -925,23 +925,19 @@ fn str_to_rpc_error(e: &str) -> ErrorObjectOwned {
 }
 
 fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> ErrorObjectOwned {
-	ErrorObject::owned(jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE, format!("{:?}", e), Option::<()>::None)
+	str_to_rpc_error(&format!("{:?}", e)[..])
 }
 
 fn map_dispatch_error(e: DispatchErrorWithMessage) -> ErrorObjectOwned {
-	ErrorObject::owned(
-		jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE,
-		match e {
-			DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
-				Ok(message) => format!("DispatchError: {message}"),
-				Err(error) =>
-					format!("DispatchError: Unable to deserialize error message: '{error}'"),
-			},
-			DispatchErrorWithMessage::Other(e) =>
-				format!("DispatchError: {}", <&'static str>::from(e)),
+	str_to_rpc_error( &(match e {
+		DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
+			Ok(message) => format!("DispatchError: {message}"),
+			Err(error) =>
+				format!("DispatchError: Unable to deserialize error message: '{error}'"),
 		},
-		Option::<()>::None,
-	)
+		DispatchErrorWithMessage::Other(e) =>
+			format!("DispatchError: {}", <&'static str>::from(e)),
+	})[..])
 }
 
 impl<C, B> CustomApiServer for CustomRpc<C, B>
