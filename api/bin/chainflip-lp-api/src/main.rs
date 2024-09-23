@@ -651,8 +651,8 @@ async fn main() -> anyhow::Result<()> {
 			// initialize healthcheck endpoint
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 			let h = HealthCheck {
-				hostname: opts.health_check_hostname.clone().unwrap_or("localhost".to_string()),
-				port: opts.health_check_port.unwrap_or(1337),
+				hostname: opts.health_check_hostname.clone().unwrap_or("127.0.0.1".to_string()),
+				port: opts.health_check_port.unwrap_or(5555),
 			};
 			health::start(scope, &h, has_completed_initialising.clone()).await?;
 
