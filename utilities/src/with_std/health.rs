@@ -16,14 +16,14 @@ pub struct HealthCheckOptions {
 	#[clap(
 		id = "HEALTH_CHECK_HOSTNAME",
 		long = "health_check.hostname",
-		help = "Hostname for this server's healthcheck. Requires HEALTH_CHECK_PORT to be given as well.",
+		help = "Hostname for this server's healthcheck. Requires the parameter <HEALTH_CHECK_PORT> to be set as well.",
 		requires("HEALTH_CHECK_PORT")
 	)]
 	pub health_check_hostname: Option<String>,
 	#[clap(
 		id = "HEALTH_CHECK_PORT",
 		long = "health_check.port",
-		help = "Port for this server's healthcheck. Requires HEALTH_CHECK_HOSTNAME to be given as well.",
+		help = "Port for this server's healthcheck. Requires the parameter <HEALTH_CHECK_HOSTNAME> to be set as well.",
 		requires("HEALTH_CHECK_HOSTNAME")
 	)]
 	pub health_check_port: Option<u16>,
