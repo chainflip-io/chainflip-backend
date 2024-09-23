@@ -9,7 +9,6 @@ pub mod common;
 pub mod constants;
 pub mod db;
 pub mod elections;
-pub mod health;
 pub mod multisig;
 pub mod p2p;
 pub mod retrier;
@@ -54,9 +53,7 @@ use std::{
 	sync::{atomic::AtomicBool, Arc},
 	time::Duration,
 };
-use utilities::{cached_stream::CachedStream, metrics, task_scope::task_scope};
-
-use utilities::logging::ErrorType;
+use utilities::{cached_stream::CachedStream, logging::ErrorType, metrics, task_scope::task_scope};
 
 pub fn settings_and_run_main(
 	settings_strings: Vec<String>,
@@ -141,8 +138,12 @@ async fn run_main(
 			tokio::time::sleep(Duration::from_secs(4)).await;
 
 			if let Some(health_check_settings) = &settings.health_check {
-				health::start(scope, health_check_settings, has_completed_initialising.clone())
-					.await?;
+				utilities::health::start(
+					scope,
+					health_check_settings,
+					has_completed_initialising.clone(),
+				)
+				.await?;
 			}
 
 			if let Some(prometheus_settings) = &settings.prometheus {

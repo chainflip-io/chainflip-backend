@@ -16,7 +16,8 @@ use url::Url;
 
 use clap::Parser;
 use utilities::{
-	logging::LoggingSettings, metrics::Prometheus, redact_endpoint_secret::SecretUrl, Port,
+	health::HealthCheck, logging::LoggingSettings, metrics::Prometheus,
+	redact_endpoint_secret::SecretUrl, Port,
 };
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
@@ -164,11 +165,6 @@ impl Sol {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
 		self.nodes.validate()
 	}
-}
-#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct HealthCheck {
-	pub hostname: String,
-	pub port: Port,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
