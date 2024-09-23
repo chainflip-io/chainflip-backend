@@ -37,7 +37,6 @@ use jsonrpsee::{
 use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
 use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
-use core::error;
 use std::{
 	collections::BTreeMap,
 	ops::Range,
@@ -664,8 +663,8 @@ async fn main() -> anyhow::Result<()> {
 			if opts.health_check_hostname.is_some() || opts.health_check_port.is_some() {
 				let error_msg = "Clap enforces that both health_check.hostname and health_check.port are present.";
 				let h = HealthCheck {
-					hostname: opts.health_check_hostname.clone().expect(&error_msg),
-					port: opts.health_check_port.expect(&error_msg),
+					hostname: opts.health_check_hostname.clone().expect(error_msg),
+					port: opts.health_check_port.expect(error_msg),
 				};
 				health::start(scope, &h, has_completed_initialising.clone()).await?;
 			}
