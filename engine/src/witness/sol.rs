@@ -113,12 +113,13 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 		properties: <SolanaNonceTracking as ElectoralSystem>::ElectionProperties,
 	) -> Result<<<SolanaNonceTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error>
 	{
-		let (nonce_account, previous_nonce) = properties;
-		Ok(nonce_witnessing::get_durable_nonce(&self.client, nonce_account)
-			.await?
+		let (nonce_account, previous_nonce, previous_slot) = properties;
+
+		let nonce_and_slot = nonce_witnessing::get_durable_nonce(&self.client, nonce_account, previous_slot)
+			.await?;
 			// If the nonce is not found, we default to the previous nonce.
 			// The `Change` electoral system ensure this vote is filtered.
-			.unwrap_or(previous_nonce))
+		Ok((nonce_and_slot.0.unwrap_or(previous_nonce), nonce_and_slot.1))
 	}
 }
 

@@ -11,15 +11,17 @@ use crate::sol::{
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 use std::str::FromStr;
+use crate::sol::rpc_client_api::RpcResponseContext;
 
 pub async fn get_durable_nonce<SolRetryRpcClient>(
 	sol_client: &SolRetryRpcClient,
 	nonce_account: SolAddress,
-) -> Result<Option<SolHash>>
+	previous_nonce: u64,
+) -> Result<(Option<SolHash>, u64)>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
-	let account_info = sol_client
+	let response = sol_client
 		.get_multiple_accounts(
 			&[nonce_account],
 			RpcAccountInfoConfig {
@@ -29,10 +31,11 @@ where
 				encoding: Some(UiAccountEncoding::JsonParsed),
 				data_slice: None,
 				commitment: Some(CommitmentConfig::finalized()),
-				min_context_slot: None,
+				min_context_slot: Some(previous_nonce),
 			},
 		)
-		.await
+		.await;
+	let account_info = response
 		.value
 		.into_iter()
 		.exactly_one()
@@ -61,11 +64,10 @@ where
 					.and_then(Value::as_str)
 					.ok_or_else(|| anyhow!("Blockhash not found"))?,
 			)?;
-
-			Ok(Some(hash))
+			Ok((Some(hash), response.context.slot))
 		},
 		Some(_) => Err(anyhow!("Expected UiAccountData::Json(ParsedAccount)")),
-		None => Ok(None),
+		None => Ok((None, 0)),
 	}
 }
 
