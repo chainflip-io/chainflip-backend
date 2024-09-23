@@ -1726,7 +1726,13 @@ impl_runtime_apis! {
 				refund_addresses,
 				balances: Asset::all().map(|asset|
 					(asset, pallet_cf_asset_balances::FreeBalances::<Runtime>::get(&account_id, asset))
-				).collect(),
+				).map(|(asset, maybe_balance)| {
+					(asset, if let Some(balance) = maybe_balance {
+						balance.amount()
+					} else {
+						0u128.into()
+					})
+				}).collect(),
 				earned_fees: AssetMap::from_iter(HistoricalEarnedFees::<Runtime>::iter_prefix(&account_id)),
 				boost_balances: AssetMap::from_fn(|asset| {
 					let pool_details = Self::cf_boost_pool_details(asset);

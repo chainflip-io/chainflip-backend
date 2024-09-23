@@ -155,8 +155,8 @@ pub mod pallet {
 		T::AccountId,
 		Twox64Concat,
 		Asset,
-		AssetAmount,
-		ValueQuery,
+		AssetBalance,
+		OptionQuery,
 	>;
 }
 
@@ -391,13 +391,18 @@ where
 		asset: Asset,
 		amount: AssetAmount,
 	) -> DispatchResult {
+		let asset_amount = AssetBalance::mint(amount, asset);
 		if amount == 0 {
 			return Ok(())
 		}
-
-		let new_balance = FreeBalances::<T>::try_mutate(account_id, asset, |balance| {
-			*balance = balance.checked_add(amount).ok_or(Error::<T>::BalanceOverflow)?;
-			Ok::<_, Error<T>>(*balance)
+		let new_balance = FreeBalances::<T>::try_mutate(account_id, asset, |maybe_balance| {
+			if let Some(balance) = maybe_balance {
+				*balance = balance.checked_add(asset_amount).ok_or(Error::<T>::BalanceOverflow)?;
+				Ok::<_, Error<T>>(balance.amount())
+			} else {
+				*maybe_balance = Some(asset_amount);
+				Ok::<_, Error<T>>(amount)
+			}
 		})?;
 
 		Self::deposit_event(Event::AccountCredited {
@@ -418,16 +423,19 @@ where
 			return Ok(())
 		}
 
+		let asset_amount = AssetBalance::mint(amount, asset);
+
 		let new_balance = FreeBalances::<T>::try_mutate_exists(account_id, asset, |balance| {
 			let new_balance = match balance.take() {
 				None => Err(Error::<T>::InsufficientBalance),
 				Some(balance) =>
-					Ok(balance.checked_sub(amount).ok_or(Error::<T>::InsufficientBalance)?),
+					Ok(balance.checked_sub(asset_amount).ok_or(Error::<T>::InsufficientBalance)?),
 			}?;
-			if new_balance > 0 {
+			let new_amount = new_balance.amount();
+			if new_balance.amount() > 0 {
 				*balance = Some(new_balance);
 			}
-			Ok::<_, Error<T>>(new_balance)
+			Ok::<_, Error<T>>(new_amount)
 		})?;
 
 		Self::deposit_event(Event::AccountDebited {
@@ -441,11 +449,13 @@ where
 	}
 
 	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
-		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
+		AssetMap::from_fn(|asset| {
+			FreeBalances::<T>::get(who, asset).map_or(0, |balance| balance.amount())
+		})
 	}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
-		FreeBalances::<T>::get(who, asset)
+		FreeBalances::<T>::get(who, asset).map_or(0, |balance| balance.amount())
 	}
 }
 

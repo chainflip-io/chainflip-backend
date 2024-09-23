@@ -41,6 +41,24 @@ impl AssetBalance {
 		self.amount.saturating_accrue(other.burn());
 	}
 
+	pub fn checked_add(&self, other: Self) -> Option<Self> {
+		Self::ensure_asset_compatibility(&self, &other);
+		if let Some(result) = self.amount.checked_add(other.amount) {
+			Some(Self { amount: result, asset: self.asset })
+		} else {
+			None
+		}
+	}
+
+	pub fn checked_sub(&self, other: Self) -> Option<Self> {
+		Self::ensure_asset_compatibility(&self, &other);
+		if let Some(result) = self.amount.checked_sub(other.amount) {
+			Some(Self { amount: result, asset: self.asset })
+		} else {
+			None
+		}
+	}
+
 	pub fn reduce(&mut self, other: Self) {
 		Self::ensure_asset_compatibility(&self, &other);
 		self.amount.saturating_reduce(other.burn());
