@@ -9,7 +9,6 @@ pub mod common;
 pub mod constants;
 pub mod db;
 pub mod elections;
-// pub mod health;
 pub mod multisig;
 pub mod p2p;
 pub mod retrier;

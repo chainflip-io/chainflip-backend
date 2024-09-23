@@ -13999,6 +13999,7 @@ dependencies = [
  "async-channel 1.9.0",
  "bs58 0.5.1",
  "futures",
+ "futures-util",
  "hex",
  "itertools 0.11.0",
  "jsonrpsee 0.16.3",

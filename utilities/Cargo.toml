@@ -20,6 +20,7 @@ async-broadcast = { version = "0.5", optional = true }
 async-channel = { version = "1.7.1", optional = true }
 bs58 = { version = "0.5.1", default-features = false }
 futures = { version = "0.3.14", optional = true }
+futures-util = { version = "0.3.14", optional = true }
 hex = { version = "0.4.3", default-features = false }
 itertools = { version = "0.11", default_features = false }
 lazy_format = "2.0"
@@ -68,6 +69,7 @@ std = [
   'dep:predicates',
   'dep:mockall',
   'dep:futures',
+  'dep:futures-util',
   'dep:tokio',
   'hex/std',
   'dep:async-channel',
