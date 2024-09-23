@@ -2,7 +2,7 @@
 // INSTRUCTIONS
 //
 // Request a new swap with the provided parameters:
-// <sourceAsset> <destAsset> <destAddress> [maxBoostFeeBps] [refundAddress] [minPrice] [refundDuration]
+// <sourceAsset> <destAsset> <destAddress> [maxBoostFeeBps] [refundAddress] [minPrice] [refundDuration] [numberOfChunks] [chunkInterval]
 // Use `-h` for help.
 // If the refundAddress is provided, the minPrice must also be provided. The minPrice is in source asset per dest asset. eg. 100 (= 100 Dot per Btc in the following example).
 // The refundDuration is in blocks and will default to 0 if not provided.
@@ -18,7 +18,7 @@ import {
   decodeDotAddressForContract,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
-import { RefundParameters } from '../shared/new_swap';
+import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
 
 interface Args {
   sourceAsset: string;
@@ -28,12 +28,14 @@ interface Args {
   refundAddress?: string;
   minPrice?: number;
   refundDuration: number;
+  numberOfChunks?: number;
+  chunkInterval?: number;
 }
 
 async function newSwapCommand() {
   const args = yargs(hideBin(process.argv))
     .command(
-      '$0 <sourceAsset> <destAsset> <destAddress> [maxBoostFeeBps] [refundAddress] [minPrice] [refundDuration]',
+      '$0 <sourceAsset> <destAsset> <destAddress> [maxBoostFeeBps] [refundAddress] [minPrice] [refundDuration] [numberOfChunks] [chunkInterval]',
       'Request a new swap with the provided parameters',
       (a) => {
         console.log('Parsing options');
@@ -71,15 +73,26 @@ async function newSwapCommand() {
             type: 'number',
             demandOption: false,
             default: 0,
+          })
+          .option('numberOfChunks', {
+            describe: 'DCA, number of chunks to split the swap into',
+            type: 'number',
+            demandOption: false,
+          })
+          .option('chunkInterval', {
+            describe: 'DCA, number of blocks between each chunk',
+            type: 'number',
+            demandOption: false,
           });
       },
     )
     .help('h').argv as unknown as Args;
 
+  // Fill or kill
   if ((args.refundAddress === undefined) !== (args.minPrice === undefined)) {
     throw new Error('Must specify both refundAddress and minimumPrice when using refund options');
   }
-  const refundParameters: RefundParameters | undefined =
+  const refundParameters: FillOrKillParamsX128 | undefined =
     args.refundAddress !== undefined && args.minPrice !== undefined
       ? {
           retryDurationBlocks: args.refundDuration,
@@ -87,11 +100,23 @@ async function newSwapCommand() {
             args.sourceAsset === 'Dot'
               ? decodeDotAddressForContract(args.refundAddress)
               : args.refundAddress,
-          minPrice: assetPriceToInternalAssetPrice(
+          minPriceX128: assetPriceToInternalAssetPrice(
             args.sourceAsset as InternalAsset,
             args.destAsset as InternalAsset,
             args.minPrice,
           ),
+        }
+      : undefined;
+
+  // DCA
+  if ((args.numberOfChunks === undefined) !== (args.chunkInterval === undefined)) {
+    throw new Error('Must specify both numberOfChunks and chunkInterval when using DCA');
+  }
+  const dcaParameters: DcaParams | undefined =
+    args.numberOfChunks !== undefined && args.chunkInterval !== undefined
+      ? {
+          numberOfChunks: args.numberOfChunks,
+          chunkInterval: args.chunkInterval,
         }
       : undefined;
 
@@ -105,6 +130,7 @@ async function newSwapCommand() {
     true, // log
     args.maxBoostFeeBps,
     refundParameters,
+    dcaParameters,
   );
 }
 

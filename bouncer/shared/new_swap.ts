@@ -9,10 +9,15 @@ export interface CcmDepositMetadata {
   cfParameters: string;
 }
 
-export interface RefundParameters {
+export interface FillOrKillParamsX128 {
   retryDurationBlocks: number;
   refundAddress: string;
-  minPrice: string;
+  minPriceX128: string;
+}
+
+export interface DcaParams {
+  numberOfChunks: number;
+  chunkInterval: number;
 }
 
 export async function newSwap(
@@ -22,7 +27,8 @@ export async function newSwap(
   messageMetadata?: CcmDepositMetadata,
   brokerCommissionBps = defaultCommissionBps,
   boostFeeBps = 0,
-  refundParameters?: RefundParameters,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
 ): Promise<void> {
   const destinationAddress =
     destAsset === 'Dot' ? decodeDotAddressForContract(destAddress) : destAddress;
@@ -40,14 +46,15 @@ export async function newSwap(
           srcChain: chainFromAsset(sourceAsset) as Chain,
           destAddress: destinationAddress,
           destChain: chainFromAsset(destAsset) as Chain,
-          ccmMetadata: messageMetadata && {
+          ccmParams: messageMetadata && {
             message: messageMetadata.message as `0x${string}`,
             gasBudget: messageMetadata.gasBudget.toString(),
             cfParameters: messageMetadata.cfParameters as `0x${string}`,
           },
           commissionBps: brokerCommissionBps,
           maxBoostFeeBps: boostFeeBps,
-          refundParameters,
+          fillOrKillParams,
+          dcaParams,
         },
         {
           url: brokerUrl,
