@@ -2063,7 +2063,7 @@ pub mod pallet {
 			)
 		}
 
-		fn ensure_can_vote(
+		pub(crate) fn ensure_can_vote(
 			origin: OriginFor<T>,
 		) -> Result<(EpochIndex, T::ValidatorId, AuthorityCount), DispatchError> {
 			let epoch_index = T::EpochInfo::epoch_index();

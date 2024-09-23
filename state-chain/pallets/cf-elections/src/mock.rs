@@ -64,6 +64,20 @@ impl TestSetup {
 	pub fn all_authorities(&self) -> Vec<u64> {
 		(0..self.num_contributing_authorities + self.num_non_contributing_authorities).collect()
 	}
+
+	pub fn contributing_authorities(&self) -> Vec<u64> {
+		self.all_authorities()
+			.into_iter()
+			.take(self.num_contributing_authorities as usize)
+			.collect()
+	}
+
+	pub fn non_contributing_authorities(&self) -> Vec<u64> {
+		self.all_authorities()
+			.into_iter()
+			.skip(self.num_contributing_authorities as usize)
+			.collect()
+	}
 }
 
 #[derive(Clone, Debug)]
