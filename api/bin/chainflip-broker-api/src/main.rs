@@ -141,9 +141,19 @@ pub struct BrokerOptions {
 		help = "A path to a file that contains the broker's secret key for signing extrinsics."
 	)]
 	pub signing_key_file: PathBuf,
-	#[clap(long = "health_check.hostname", help = "Host name for this broker's healthcheck")]
+	#[clap(
+		id = "health_check.hostname",
+		long = "health_check.hostname",
+		help = "Host name for this broker's healthcheck",
+		requires("health_check.port")
+	)]
 	pub health_check_hostname: Option<String>,
-	#[clap(long = "health_check.port", help = "Port for this broker's healthcheck")]
+	#[clap(
+		id = "health_check.port",
+		long = "health_check.port",
+		help = "Port for this broker's healthcheck",
+		requires("health_check.hostname")
+	)]
 	pub health_check_port: Option<u16>,
 }
 
@@ -161,9 +171,10 @@ async fn main() -> anyhow::Result<()> {
 			// initialize healthcheck endpoint
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 			if opts.health_check_hostname.is_some() || opts.health_check_port.is_some() {
+				let error_msg = "Clap enforces that both health_check.hostname and health_check.port are present.";
 				let h = HealthCheck {
-					hostname: opts.health_check_hostname.clone().unwrap_or("127.0.0.1".to_string()),
-					port: opts.health_check_port.unwrap_or(5556),
+					hostname: opts.health_check_hostname.clone().expect(&error_msg),
+					port: opts.health_check_port.expect(&error_msg),
 				};
 				health::start(scope, &h, has_completed_initialising.clone()).await?;
 			}
