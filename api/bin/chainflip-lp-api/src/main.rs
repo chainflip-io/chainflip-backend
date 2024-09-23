@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use cf_primitives::{BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
-	health::{self, HealthCheck},
+	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
 	try_parse_number_or_hex,
@@ -625,20 +625,8 @@ pub struct LPOptions {
 		help = "A path to a file that contains the LP's secret key for signing extrinsics."
 	)]
 	pub signing_key_file: PathBuf,
-	#[clap(
-		id = "health_check.hostname",
-		long = "health_check.hostname",
-		help = "Hostname for this LP server's healthcheck. Requires --health_check.port to be present as well.",
-		requires("health_check.port")
-	)]
-	pub health_check_hostname: Option<String>,
-	#[clap(
-		id = "health_check.port",
-		long = "health_check.port",
-		help = "Port for this LP server's healthcheck. Requires --health_check.hostname to be present as well.",
-		requires("health_check.hostname")
-	)]
-	pub health_check_port: Option<u16>,
+	#[clap(flatten)]
+	pub health_check: HealthCheckOptions,
 }
 
 #[tokio::main]
@@ -660,14 +648,12 @@ async fn main() -> anyhow::Result<()> {
 		async move {
 			// initialize healthcheck endpoint
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
-			if opts.health_check_hostname.is_some() || opts.health_check_port.is_some() {
-				let error_msg = "Clap enforces that both health_check.hostname and health_check.port are present.";
-				let h = HealthCheck {
-					hostname: opts.health_check_hostname.clone().expect(error_msg),
-					port: opts.health_check_port.expect(error_msg),
-				};
-				health::start(scope, &h, has_completed_initialising.clone()).await?;
-			}
+			health::start_if_configured(
+				scope,
+				&opts.health_check,
+				has_completed_initialising.clone(),
+			)
+			.await?;
 
 			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
 			let server_addr = server.local_addr()?;

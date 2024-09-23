@@ -19,6 +19,7 @@ anyhow = { version = '1.0', optional = true }
 async-broadcast = { version = "0.5", optional = true }
 async-channel = { version = "1.7.1", optional = true }
 bs58 = { version = "0.5.1", default-features = false }
+clap = { version = "3.2.23", features = ["derive"], optional = true }
 futures = { version = "0.3.14", optional = true }
 futures-util = { version = "0.3.14", optional = true }
 hex = { version = "0.4.3", default-features = false }
@@ -89,4 +90,5 @@ std = [
   'dep:jsonrpsee',
   'dep:regex',
   'dep:url',
+  'dep:clap',
 ]
