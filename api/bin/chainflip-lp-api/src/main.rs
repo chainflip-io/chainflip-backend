@@ -628,14 +628,14 @@ pub struct LPOptions {
 	#[clap(
 		id = "health_check.hostname",
 		long = "health_check.hostname",
-		help = "Host name for this LP server's healthcheck",
+		help = "Hostname for this LP server's healthcheck. Requires --health_check.port to be present as well.",
 		requires("health_check.port")
 	)]
 	pub health_check_hostname: Option<String>,
 	#[clap(
 		id = "health_check.port",
 		long = "health_check.port",
-		help = "Port for this LP server's healthcheck",
+		help = "Port for this LP server's healthcheck. Requires --health_check.hostname to be present as well.",
 		requires("health_check.hostname")
 	)]
 	pub health_check_port: Option<u16>,
