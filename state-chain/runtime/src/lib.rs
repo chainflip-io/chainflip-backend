@@ -60,6 +60,7 @@ use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
+use migrations::add_liveness_electoral_system_solana::LivenessSettingsMigration;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
@@ -1264,6 +1265,7 @@ type MigrationsForV1_7 = (
 	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 9>,
 	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 9>,
 	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 9>,
+	LivenessSettingsMigration,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
