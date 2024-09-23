@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use cf_primitives::{BasisPoints, BlockNumber, EgressId, Port};
+use cf_primitives::{BasisPoints, BlockNumber, EgressId};
 use cf_utilities::{
 	health::{self, HealthCheck},
 	rpc::NumberOrHex,
@@ -625,10 +625,18 @@ pub struct LPOptions {
 		help = "A path to a file that contains the LP's secret key for signing extrinsics."
 	)]
 	pub signing_key_file: PathBuf,
-	#[clap(long = "health_check.hostname")]
-	pub health_check_hostname: Option<String>,
-	#[clap(long = "health_check.port")]
-	pub health_check_port: Option<Port>,
+	#[clap(
+		long = "health_check.hostname",
+		default_value = "127.0.0.1",
+		help = "Host name for this LP server's healthcheck"
+	)]
+	pub health_check_hostname: String,
+	#[clap(
+		long = "health_check.port",
+		default_value = "5557",
+		help = "Port for this LP server's healthcheck"
+	)]
+	pub health_check_port: u16,
 }
 
 #[tokio::main]
@@ -651,8 +659,8 @@ async fn main() -> anyhow::Result<()> {
 			// initialize healthcheck endpoint
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 			let h = HealthCheck {
-				hostname: opts.health_check_hostname.clone().unwrap_or("127.0.0.1".to_string()),
-				port: opts.health_check_port.unwrap_or(5555),
+				hostname: opts.health_check_hostname.clone(),
+				port: opts.health_check_port,
 			};
 			health::start(scope, &h, has_completed_initialising.clone()).await?;
 
