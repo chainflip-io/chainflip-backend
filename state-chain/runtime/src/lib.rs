@@ -1025,71 +1025,132 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 }
 
-construct_runtime!(
-	pub struct Runtime
-	{
-		System: frame_system,
-		Timestamp: pallet_timestamp,
-		Environment: pallet_cf_environment,
-		Flip: pallet_cf_flip,
-		Emissions: pallet_cf_emissions,
-		// AccountRoles after funding, since account creation comes first.
-		Funding: pallet_cf_funding,
-		AccountRoles: pallet_cf_account_roles,
-		TransactionPayment: pallet_transaction_payment,
-		Witnesser: pallet_cf_witnesser,
-		Validator: pallet_cf_validator,
-		Session: pallet_session,
-		Historical: session_historical::{Pallet},
-		Aura: pallet_aura,
-		Authorship: pallet_authorship,
-		Grandpa: pallet_grandpa,
-		Governance: pallet_cf_governance,
-		TokenholderGovernance: pallet_cf_tokenholder_governance,
-		Reputation: pallet_cf_reputation,
+#[frame_support::runtime]
+mod runtime {
+	#[runtime::runtime]
+	#[runtime::derive(
+		RuntimeCall,
+		RuntimeEvent,
+		RuntimeError,
+		RuntimeOrigin,
+		RuntimeFreezeReason,
+		RuntimeHoldReason,
+		RuntimeSlashReason,
+		RuntimeLockId,
+		RuntimeTask
+	)]
+	pub struct Runtime;
 
-		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
-		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
-		BitcoinChainTracking: pallet_cf_chain_tracking::<Instance3>,
+	#[runtime::pallet_index(0)]
+	pub type System = frame_system;
+	#[runtime::pallet_index(1)]
+	pub type Timestamp = pallet_timestamp;
+	#[runtime::pallet_index(2)]
+	pub type Environment = pallet_cf_environment;
+	#[runtime::pallet_index(3)]
+	pub type Flip = pallet_cf_flip;
+	#[runtime::pallet_index(4)]
+	pub type Emissions = pallet_cf_emissions;
 
-		EthereumVault: pallet_cf_vaults::<Instance1>,
-		PolkadotVault: pallet_cf_vaults::<Instance2>,
-		BitcoinVault: pallet_cf_vaults::<Instance3>,
+	// AccountRoles after funding; since account creation comes first.
+	#[runtime::pallet_index(5)]
+	pub type Funding = pallet_cf_funding;
+	#[runtime::pallet_index(6)]
+	pub type AccountRoles = pallet_cf_account_roles;
+	#[runtime::pallet_index(7)]
+	pub type TransactionPayment = pallet_transaction_payment;
+	#[runtime::pallet_index(8)]
+	pub type Witnesser = pallet_cf_witnesser;
+	#[runtime::pallet_index(9)]
+	pub type Validator = pallet_cf_validator;
+	#[runtime::pallet_index(10)]
+	pub type Session = pallet_session;
+	#[runtime::pallet_index(11)]
+	pub type Historical = session_historical;
+	#[runtime::pallet_index(12)]
+	pub type Aura = pallet_aura;
+	#[runtime::pallet_index(13)]
+	pub type Authorship = pallet_authorship;
+	#[runtime::pallet_index(14)]
+	pub type Grandpa = pallet_grandpa;
+	#[runtime::pallet_index(15)]
+	pub type Governance = pallet_cf_governance;
+	#[runtime::pallet_index(16)]
+	pub type TokenholderGovernance = pallet_cf_tokenholder_governance;
+	#[runtime::pallet_index(17)]
+	pub type Reputation = pallet_cf_reputation;
 
-		EvmThresholdSigner: pallet_cf_threshold_signature::<Instance16>,
-		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
-		BitcoinThresholdSigner: pallet_cf_threshold_signature::<Instance3>,
+	#[runtime::pallet_index(18)]
+	pub type EthereumChainTracking = pallet_cf_chain_tracking<Instance1>;
+	#[runtime::pallet_index(19)]
+	pub type PolkadotChainTracking = pallet_cf_chain_tracking<Instance2>;
+	#[runtime::pallet_index(20)]
+	pub type BitcoinChainTracking = pallet_cf_chain_tracking<Instance3>;
 
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
-		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
-		BitcoinBroadcaster: pallet_cf_broadcast::<Instance3>,
+	#[runtime::pallet_index(21)]
+	pub type EthereumVault = pallet_cf_vaults<Instance1>;
+	#[runtime::pallet_index(22)]
+	pub type PolkadotVault = pallet_cf_vaults<Instance2>;
+	#[runtime::pallet_index(23)]
+	pub type BitcoinVault = pallet_cf_vaults<Instance3>;
 
-		Swapping: pallet_cf_swapping,
-		LiquidityProvider: pallet_cf_lp,
+	#[runtime::pallet_index(24)]
+	pub type EvmThresholdSigner = pallet_cf_threshold_signature<Instance16>;
+	#[runtime::pallet_index(25)]
+	pub type PolkadotThresholdSigner = pallet_cf_threshold_signature<Instance2>;
+	#[runtime::pallet_index(26)]
+	pub type BitcoinThresholdSigner = pallet_cf_threshold_signature<Instance3>;
 
-		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
-		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
-		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
+	#[runtime::pallet_index(27)]
+	pub type EthereumBroadcaster = pallet_cf_broadcast<Instance1>;
+	#[runtime::pallet_index(28)]
+	pub type PolkadotBroadcaster = pallet_cf_broadcast<Instance2>;
+	#[runtime::pallet_index(29)]
+	pub type BitcoinBroadcaster = pallet_cf_broadcast<Instance3>;
 
-		LiquidityPools: pallet_cf_pools,
+	#[runtime::pallet_index(30)]
+	pub type Swapping = pallet_cf_swapping;
+	#[runtime::pallet_index(31)]
+	pub type LiquidityProvider = pallet_cf_lp;
 
-		CfeInterface: pallet_cf_cfe_interface,
+	#[runtime::pallet_index(32)]
+	pub type EthereumIngressEgress = pallet_cf_ingress_egress<Instance1>;
+	#[runtime::pallet_index(33)]
+	pub type PolkadotIngressEgress = pallet_cf_ingress_egress<Instance2>;
+	#[runtime::pallet_index(34)]
+	pub type BitcoinIngressEgress = pallet_cf_ingress_egress<Instance3>;
 
-		ArbitrumChainTracking: pallet_cf_chain_tracking::<Instance4>,
-		ArbitrumVault: pallet_cf_vaults::<Instance4>,
-		ArbitrumBroadcaster: pallet_cf_broadcast::<Instance4>,
-		ArbitrumIngressEgress: pallet_cf_ingress_egress::<Instance4>,
+	#[runtime::pallet_index(35)]
+	pub type LiquidityPools = pallet_cf_pools;
 
-		SolanaVault: pallet_cf_vaults::<Instance5>,
-		SolanaThresholdSigner: pallet_cf_threshold_signature::<Instance5>,
-		SolanaBroadcaster: pallet_cf_broadcast::<Instance5>,
-		SolanaIngressEgress: pallet_cf_ingress_egress::<Instance5>,
-		SolanaElections: pallet_cf_elections::<Instance5>,
-		SolanaChainTracking: pallet_cf_chain_tracking::<Instance5>,
+	#[runtime::pallet_index(36)]
+	pub type CfeInterface = pallet_cf_cfe_interface;
 
-		AssetBalances: pallet_cf_asset_balances,
-	}
-);
+	#[runtime::pallet_index(37)]
+	pub type ArbitrumChainTracking = pallet_cf_chain_tracking<Instance4>;
+	#[runtime::pallet_index(38)]
+	pub type ArbitrumVault = pallet_cf_vaults<Instance4>;
+	#[runtime::pallet_index(39)]
+	pub type ArbitrumBroadcaster = pallet_cf_broadcast<Instance4>;
+	#[runtime::pallet_index(40)]
+	pub type ArbitrumIngressEgress = pallet_cf_ingress_egress<Instance4>;
+
+	#[runtime::pallet_index(41)]
+	pub type SolanaVault = pallet_cf_vaults<Instance5>;
+	#[runtime::pallet_index(42)]
+	pub type SolanaThresholdSigner = pallet_cf_threshold_signature<Instance5>;
+	#[runtime::pallet_index(43)]
+	pub type SolanaBroadcaster = pallet_cf_broadcast<Instance5>;
+	#[runtime::pallet_index(44)]
+	pub type SolanaIngressEgress = pallet_cf_ingress_egress<Instance5>;
+	#[runtime::pallet_index(45)]
+	pub type SolanaElections = pallet_cf_elections<Instance5>;
+	#[runtime::pallet_index(46)]
+	pub type SolanaChainTracking = pallet_cf_chain_tracking<Instance5>;
+
+	#[runtime::pallet_index(47)]
+	pub type AssetBalances = pallet_cf_asset_balances;
+}
 
 /// The address format for describing accounts.
 pub type Address = sp_runtime::MultiAddress<AccountId, ()>;
