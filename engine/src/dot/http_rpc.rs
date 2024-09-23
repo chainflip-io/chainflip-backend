@@ -82,7 +82,7 @@ impl RpcClientT for PolkadotHttpClient {
 fn ensure_port(url: SecretUrl) -> Result<SecretUrl> {
 	// we use url::Url to get the default port for our scheme
 	let targetport = Url::parse(url.as_ref())
-		.unwrap() // We know that `url` is valid
+		.expect("SecretUrl was validated by being passed into `Url::parse`.")
 		.port_or_known_default()
 		.ok_or(anyhow::anyhow!("Unknown scheme and no port given."))?;
 
@@ -91,25 +91,22 @@ fn ensure_port(url: SecretUrl) -> Result<SecretUrl> {
 	let mut parts = url
 		.as_ref()
 		.parse::<Uri>()
-		.unwrap() // We know that `url` is valid
+		.map_err(|err| anyhow!("Unexpected error when trying to append port to url: {err}"))?
 		.into_parts();
 
 	// Update the authority part of the uri by mapping over it.
-	let authority = parts.authority.unwrap();
-	parts.authority =
-		if authority.port().is_none() {
+	let authority = parts.authority.clone().expect("SecretUrl contains authority.");
+	if authority.port().is_none() {
+		parts.authority =
 			Some(format!("{}:{}", authority.as_str(), targetport).parse().map_err(|err| {
 				anyhow!("Unexpected error when trying to append port to url: {err}")
-			})?)
-		} else {
-			Some(authority)
-		};
+			})?);
+	};
 
 	// Reconstruct uri.
-	let uri = Uri::from_parts(parts)
-		.map_err(|err| anyhow!("Unexpected error when trying to append port to url: {err}"))?;
-
-	Ok(format!("{uri}").into())
+	Uri::from_parts(parts)
+		.map_err(|err| anyhow!("Unexpected error when trying to append port to url: {err}"))
+		.map(|uri| uri.to_string().into())
 }
 
 #[derive(Clone)]
