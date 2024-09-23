@@ -111,6 +111,7 @@ pub type SolanaIngressTracking =
 pub type SolanaNonceTracking = electoral_systems::change::Change<
 	SolAddress,
 	SolHash,
+	u64,
 	(),
 	SolanaNonceTrackingHook,
 	<Runtime as Chainflip>::ValidatorId,
@@ -452,7 +453,6 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 					let (_, _, _, access_translator, ..) = &access_translators;
 					let mut electoral_access =
 						access_translator.translate_electoral_access(electoral_access);
-
 					SolanaNonceTracking::watch_for_change(
 						&mut electoral_access,
 						nonce_account,
