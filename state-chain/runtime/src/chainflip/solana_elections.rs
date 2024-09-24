@@ -14,7 +14,6 @@ use cf_traits::{
 };
 
 use codec::{Decode, Encode};
-use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
 	electoral_systems::{
@@ -35,6 +34,7 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
+use sol_prim::SlotNumber;
 
 type Instance = <Solana as ChainInstanceAlias>::Instance;
 
@@ -111,7 +111,7 @@ pub type SolanaIngressTracking =
 pub type SolanaNonceTracking = electoral_systems::change::Change<
 	SolAddress,
 	SolHash,
-	u64,
+	SlotNumber,
 	(),
 	SolanaNonceTrackingHook,
 	<Runtime as Chainflip>::ValidatorId,

@@ -12,7 +12,6 @@ use frame_support::{
 	Parameter,
 };
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
-use crate::vote_storage::composite::tuple_2_impls::CompositeVoteProperties;
 
 /// This electoral system detects if a value changes. The SC can request that it detects if a
 /// particular value, the instance of which is specified by an identifier, has changed from some
@@ -46,8 +45,10 @@ impl<
 		identifier: Identifier,
 		previous_value: Value,
 	) -> Result<(), CorruptStorageError> {
-        // TODO: we can probably switch to expect, after initialization we always expect to have a value here!
-		let previous_slot = electoral_access.unsynchronised_state_map(&identifier)?.unwrap_or_default();
+		// TODO: we can probably switch to expect, after initialization we always expect to have a
+		// value here!
+		let previous_slot =
+			electoral_access.unsynchronised_state_map(&identifier)?.unwrap_or_default();
 		electoral_access.new_election((), (identifier, previous_value, previous_slot), ())?;
 		Ok(())
 	}
@@ -70,18 +71,10 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = (Identifier, Value, Slot);
 	type ElectionState = ();
-	type Vote = (vote_storage::bitmap::Bitmap<Value>, vote_storage::individual::Individual<(), vote_storage::individual::identity::Identity<Slot>>);
+	type Vote = vote_storage::nonce::NonceStorage<Value, Slot>;
 	type Consensus = (Value, Slot);
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
-
-	fn generate_vote_properties(
-		_election_identifier: ElectionIdentifierOf<Self>,
-		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
-		_vote: &<Self::Vote as VoteStorage>::PartialVote,
-	) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
-		Ok(CompositeVoteProperties::A(()))
-	}
 
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_identifier: ElectionIdentifierOf<Self>,
@@ -119,7 +112,7 @@ impl<
 		for election_identifier in election_identifiers {
 			let mut election_access = electoral_access.election_mut(election_identifier)?;
 			if let Some((value, slot)) = election_access.check_consensus()?.has_consensus() {
-				let (identifier, previous_value, _) = election_access.properties()?;
+				let (identifier, previous_value, previous_slot) = election_access.properties()?;
 				if previous_value != value {
 					election_access.delete();
 					Hook::on_change(identifier.clone(), value);
@@ -142,15 +135,16 @@ impl<
 		let num_active_votes = active_votes.len() as u32;
 		let success_threshold = success_threshold_from_share_count(num_authorities);
 		Ok(if num_active_votes >= success_threshold {
-			// TODO: change how we select the new_slot -> use the highest 3rd slot number (similar to monotonic_median but the opposite). The slot number is not used to reach consensus
-			// let new_slot = active_votes[0].clone();
 			let mut counts = BTreeMap::new();
-			for vote in active_votes {
-				counts.entry(vote.0).and_modify(|count| *count += 1).or_insert(1);
+			for vote in active_votes.clone() {
+				counts.entry(vote.value).and_modify(|count| *count += 1).or_insert(1);
 			}
+			let mut active_slots = active_votes.iter().map(|elem| elem.slot).collect::<Vec<_>>();
 			counts.iter().find_map(|(vote, count)| {
 				if *count >= success_threshold {
-					Some((vote.clone(), 0))
+					let (_, median_vote, _) =
+						{ active_slots.select_nth_unstable((num_authorities - success_threshold) as usize) };
+					Some((vote.clone(), *median_vote))
 				} else {
 					None
 				}
