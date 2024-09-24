@@ -234,6 +234,8 @@ fn storage_state_rolls_back_on_fok_violation() {
 		.then_execute_at_block(INIT_BLOCK, |_| {
 			NetworkFee::set(Permill::from_percent(1));
 
+			MockSwappingApi::add_liquidity(INPUT_ASSET, 0);
+
 			// This is about 2 times (ignoring fees) what the output will be, so will fail
 			const MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE * 2;
 			insert_swaps(&[fok_swap(Some(TestRefundParams {
@@ -265,6 +267,11 @@ fn storage_state_rolls_back_on_fok_violation() {
 			// This ensures that storage from the initial failure was reverted (otherwise
 			// we would see the network fee charged more than once)
 			assert_eq!(CollectedNetworkFee::<Test>::get(), EXPECTED_NETWORK_FEE_AMOUNT);
+
+			assert_eq!(
+				MockSwappingApi::get_liquidity(&INPUT_ASSET),
+				INPUT_AMOUNT - BROKER_FEE - EXPECTED_NETWORK_FEE_AMOUNT
+			);
 		});
 }
 

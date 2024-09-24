@@ -209,7 +209,7 @@ enum BatchExecutionError<T: Config> {
 		asset: Asset,
 		direction: SwapLeg,
 		amount: AssetAmount,
-		swaps: Vec<SwapState<T>>,
+		failed_swap_group: Vec<SwapState<T>>,
 	},
 	PriceViolation {
 		violating_swaps: Vec<Swap<T>>,
@@ -1250,7 +1250,7 @@ pub mod pallet {
 						asset,
 						direction,
 						amount,
-						swaps: ref swap_states,
+						failed_swap_group,
 					}) => {
 						Self::deposit_event(Event::<T>::BatchSwapFailed {
 							asset,
@@ -1262,7 +1262,7 @@ pub mod pallet {
 						let (swap_to_remove, remaining_swaps) =
 							utilities::split_off_highest_impact_swap(
 								swaps_to_execute,
-								swap_states,
+								&failed_swap_group,
 								direction,
 							);
 
@@ -1690,7 +1690,7 @@ pub mod pallet {
 						asset,
 						direction,
 						amount,
-						swaps: swaps.into_iter().map(|swap| swap.clone()).collect(),
+						failed_swap_group: swaps.into_iter().map(|swap| swap.clone()).collect(),
 					}
 				})?;
 			}

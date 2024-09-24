@@ -1,5 +1,4 @@
 use core::cell::Cell;
-use std::collections::HashMap;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::{ccm_checker::CcmValidityCheck, AnyChain};
@@ -17,10 +16,10 @@ use cf_traits::{
 };
 use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
-use sp_core::H256;
+use sp_core::{ConstU32, H256};
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	Permill,
+	BoundedBTreeMap, Permill,
 };
 
 type AccountId = u64;
@@ -76,7 +75,7 @@ parameter_types! {
 	pub static NetworkFee: Permill = Permill::from_perthousand(0);
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
 	pub static SwapRate: f64 = DEFAULT_SWAP_RATE as f64;
-	pub static Liquidity: HashMap<Asset, AssetAmount> = HashMap::default();
+	pub storage Liquidity: BoundedBTreeMap<Asset, AssetAmount, ConstU32<100>> = Default::default();
 }
 
 thread_local! {
@@ -95,9 +94,17 @@ impl MockSwappingApi {
 	}
 
 	pub fn add_liquidity(asset: Asset, amount: AssetAmount) {
-		Liquidity::mutate(|liquidity| {
-			*liquidity.entry(asset).or_default() += amount;
-		});
+		let liquidity = Liquidity::get()
+			.try_mutate(|liquidity| {
+				*liquidity.entry(asset).or_default() += amount;
+			})
+			.unwrap();
+
+		Liquidity::set(&liquidity);
+	}
+
+	pub fn get_liquidity(asset: &Asset) -> AssetAmount {
+		*Liquidity::get().get(&asset).expect("liquidity not initialised for asset")
 	}
 }
 
@@ -117,20 +124,23 @@ impl SwappingApi for MockSwappingApi {
 
 		let output_amount = (input_amount as f64 * SwapRate::get()) as AssetAmount;
 
-		if !Liquidity::mutate(|liquidity| {
-			// We don't check/update liquidity if it hasn't been initialised
-			// (i.e. it is not checked in tests that don't use it):
-			let Some(asset_liquidity) = liquidity.get_mut(&to) else {
-				return true;
-			};
+		let mut liquidity = Liquidity::get();
 
-			asset_liquidity
-				.checked_sub(output_amount)
-				.map(|remaining| *asset_liquidity = remaining)
-				.is_some()
-		}) {
-			return Err(DispatchError::from("Insufficient liquidity"))
+		// We only check/update liquidity if it has been initialised
+		// (i.e. it is not checked in tests that don't use it):
+		if let Some(asset_liquidity) = liquidity.get_mut(&to) {
+			if let Some(remaining) = asset_liquidity.checked_sub(output_amount) {
+				*asset_liquidity = remaining;
+			} else {
+				return Err(DispatchError::from("Insufficient liquidity"))
+			}
 		}
+
+		if let Some(asset_liquidity) = liquidity.get_mut(&from) {
+			*asset_liquidity += input_amount;
+		}
+
+		Liquidity::set(&liquidity);
 
 		Ok(output_amount)
 	}
