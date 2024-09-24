@@ -726,10 +726,15 @@ impl BitcoinTransaction {
 				if deposit_address.pubkey_x == agg_key.current {
 					None
 				} else {
-					agg_key.previous.map(|previous| {
-						// TODO: enforce this assumption ie. ensure we never use unspendable utxos.
-						assert!(deposit_address.pubkey_x == previous);
-						i
+					agg_key.previous.and_then(|previous| {
+						if deposit_address.pubkey_x == previous {
+							Some(i)
+						} else {
+							cf_runtime_utilities::log_or_panic!(
+								"Utxo is not spendable by the current or previous key"
+							);
+							None
+						}
 					})
 				}
 			})

@@ -2,11 +2,29 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.6] - 2024-09-24
+
+### Fixes
+
+- Prevent stale utxos from being selected for egress.
+
+## [1.6.5] - 2024-09-10
+
+### Fixes
+
+- Correct consensus for egress witnessing (no unanimity required)
+
+## [1.6.4] - 2024-09-06
+
+### Fixes
+
+- Consensus for Change elections should not require unanimity
+
 ## [1.6.3] - 2024-09-04
 
 ### Fixes
 
-- Decrease broadcast timeout constants for sol, arb, eth, dot
+- Decrease broadcast timeout constants for sol and arb
 - More accurate compute unit limits for Solana
 - Only call monotonic median hook if state is updated. ([#5223](https://github.com/chainflip-io/chainflip-backend/issues/5223))
 - Remove WS endpoint from Solana settings as it's not used.
