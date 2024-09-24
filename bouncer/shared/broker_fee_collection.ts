@@ -56,10 +56,15 @@ const feeAsset = Assets.Usdc;
 async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> {
   await using chainflip = await getChainflipApi();
   // NOTE: All broker fees are collected in USDC now:
-  const feeStr = (
+  const fee = (
     await chainflip.query.assetBalances.freeBalances(brokerKeypair.address, Assets.Usdc)
-  ).toString();
-  return BigInt(feeStr);
+  ).toJSON();
+
+  if (!fee) {
+    return BigInt(0);
+  }
+
+  return BigInt(fee.amount);
 }
 
 /// Runs a swap, checks that the broker fees are collected,
@@ -144,7 +149,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   console.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
     depositAmountAfterIngressFee >= 0 &&
-      depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
+    depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
     `Unexpected ${inputAsset} deposit amount ${depositAmountAfterIngressFee},
     }`,
   );
