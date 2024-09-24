@@ -290,34 +290,30 @@ impl<T: Config> Pallet<T> {
 
 		for chain in ForeignChain::iter() {
 			WithheldAssets::<T>::mutate(chain.gas_asset(), |maybe_total_withheld| {
-				if maybe_total_withheld.is_none() {
-					return;
-				}
-				if Liabilities::<T>::get(chain.gas_asset()).is_none() {
-					return;
-				}
-				let mut total_withheld = maybe_total_withheld.as_mut().unwrap();
-				let mut owed_assets = Liabilities::<T>::take(chain.gas_asset())
-					.unwrap()
-					.into_iter()
-					.collect::<Vec<_>>();
+				let maybe_liabilities = Liabilities::<T>::take(chain.gas_asset());
 
-				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(amount.amount()));
+				if let (Some(total_withheld), Some(liabilities)) =
+					(maybe_total_withheld, maybe_liabilities)
+				{
+					let mut owed_assets = liabilities.into_iter().collect::<Vec<_>>();
 
-				for (destination, amount) in owed_assets.iter_mut() {
-					debug_assert!(amount.amount() > 0);
-					let _ = Self::reconcile(chain, destination, amount, &mut total_withheld);
-					if total_withheld.is_zero() {
-						break;
+					owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(amount.amount()));
+
+					for (destination, amount) in owed_assets.iter_mut() {
+						debug_assert!(amount.amount() > 0);
+						let _ = Self::reconcile(chain, destination, amount, total_withheld);
+						if total_withheld.is_zero() {
+							break;
+						}
 					}
-				}
 
-				owed_assets.retain(|(_, amount)| amount.amount() > 0);
-				if !owed_assets.is_empty() {
-					Liabilities::<T>::insert(
-						chain.gas_asset(),
-						owed_assets.into_iter().collect::<BTreeMap<_, _>>(),
-					);
+					owed_assets.retain(|(_, amount)| amount.amount() > 0);
+					if !owed_assets.is_empty() {
+						Liabilities::<T>::insert(
+							chain.gas_asset(),
+							owed_assets.into_iter().collect::<BTreeMap<_, _>>(),
+						);
+					}
 				}
 			});
 		}
