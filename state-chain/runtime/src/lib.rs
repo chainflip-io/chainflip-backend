@@ -1232,6 +1232,101 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
+// v-- START: DO NOT MERGE TO MAIN --v //
+use cf_chains::sol::SolAddress;
+use cf_primitives::chains::assets::sol::Asset as SolAsset;
+use cf_traits::DepositApi;
+use sp_runtime::{AccountId32, DispatchError};
+use sp_std::collections::btree_set::BTreeSet;
+
+pub struct IngressMigration;
+
+const CHANNEL_ADDRESS: SolAddress = cf_chains::sol::SolAddress(hex_literal::hex!(
+	"d9d4b610668b08816b2517c1ef0e32df1a4752ccec6c27b6f1201d79c93e57f6"
+));
+const CHANNEL_ACCOUNT: [u8; 32] =
+	hex_literal::hex!("e2644714269df89935cfe2e2bc6ebe8295a9ba32320ea02c7bbe39046b09fc67");
+
+pub fn should_run() -> bool {
+	!pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::contains_key(
+		&CHANNEL_ADDRESS,
+	)
+}
+
+pub fn reopen<T: pallet_cf_ingress_egress::Config<I, AccountId = AccountId32>, I: 'static>(
+	channel_id: u64,
+	asset: <T::TargetChain as cf_chains::Chain>::ChainAsset,
+) -> Result<(), DispatchError> {
+	let channel =
+		cf_chains::DepositChannel::<T::TargetChain>::generate_new::<T::AddressDerivation>(
+			channel_id, asset,
+		)
+		.map_err(|_| DispatchError::Other("Failed to generate new deposit channel"))?;
+	pallet_cf_ingress_egress::DepositChannelPool::<T, I>::insert(
+		&channel.channel_id,
+		channel.clone(),
+	);
+
+	let (channel_id, address, ..) =
+		pallet_cf_ingress_egress::Pallet::<T, I>::request_liquidity_deposit_address(
+			AccountId32::new(CHANNEL_ACCOUNT),
+			asset,
+			Default::default(),
+		)?;
+
+	frame_support::ensure!(channel_id == channel.channel_id, "Channel IDs don't match");
+	frame_support::ensure!(
+		<<T::TargetChain as cf_chains::Chain>::ChainAccount>::try_from(address)
+			.map_err(|_| "Failed to convert address")? ==
+			channel.address,
+		"Addresses don't match"
+	);
+
+	Ok(())
+}
+
+impl frame_support::traits::OnRuntimeUpgrade for IngressMigration {
+	fn on_runtime_upgrade() -> Weight {
+		if should_run() {
+			let _ = reopen::<Runtime, SolanaInstance>(9, SolAsset::Sol).map_err(|e| {
+				log::warn!("⛔️ Failed to reopen channel: {:?}", e);
+			});
+		}
+		Weight::zero()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		let open_channels_pre_upgrade =
+			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
+				.map(|(addr, details)| (addr.0, details.deposit_channel.channel_id))
+				.collect::<BTreeSet<_>>();
+		Ok((should_run(), open_channels_pre_upgrade).encode())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		let (should_have_run, open_channels_pre_upgrade) =
+			<(bool, BTreeSet<([u8; 32], u64)>)>::decode(&mut &state[..])
+				.map_err(|_| "Failed to decode pre-upgrade state")?;
+		let open_channels_post_upgrade =
+			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
+				.map(|(addr, details)| (addr.0, details.deposit_channel.channel_id))
+				.collect::<BTreeSet<_>>();
+		let diff = open_channels_post_upgrade
+			.difference(&open_channels_pre_upgrade)
+			.collect::<Vec<_>>();
+		if should_have_run {
+			assert!(diff.len() == 1);
+			assert_eq!(diff[0].clone(), (CHANNEL_ADDRESS.0, 9));
+		} else {
+			assert!(diff.is_empty());
+		}
+		Ok(())
+	}
+}
+// ^-- END: DO NOT MERGE TO MAIN --^ //
+
 type MigrationsForV1_6 = (
 	VersionedMigration<
 		pallet_cf_environment::Pallet<Runtime>,
@@ -1241,6 +1336,8 @@ type MigrationsForV1_6 = (
 	>,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
+	// DO NOT MERGE TO MAIN:
+	IngressMigration,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
