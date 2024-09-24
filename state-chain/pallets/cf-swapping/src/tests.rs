@@ -1333,18 +1333,19 @@ mod swap_batching {
 	#[test]
 	fn single_swap() {
 		let swap1 = Swap::new(0, 0, Asset::Btc, Asset::Usdc, 1000, None, []);
-		let swaps = vec![swap1.clone()];
+		let mut swaps = vec![swap1.clone()];
 
 		let swap_states = vec![swap1.to_state(None)];
 
 		assert_eq!(
 			utilities::split_off_highest_impact_swap::<mock::Test>(
-				swaps,
+				&mut swaps,
 				&swap_states,
 				SwapLeg::ToStable
 			),
-			(Some(swap1), vec![])
+			Some(swap1)
 		);
+		assert_eq!(swaps, vec![]);
 	}
 
 	#[test]
@@ -1353,19 +1354,20 @@ mod swap_batching {
 		let swap2 = Swap::new(1, 1, Asset::Btc, Asset::Eth, 1000, None, []);
 		let swap3 = Swap::new(2, 2, Asset::Eth, Asset::Usdc, 1000, None, []);
 
-		let swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
+		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
 
 		// The test assumes the BTC->USDC leg failed (so swap3 is excluded from `swap_states`)
 		let swap_states = vec![swap1.to_state(None), swap2.to_state(None)];
 
 		assert_eq!(
 			utilities::split_off_highest_impact_swap::<mock::Test>(
-				swaps,
+				&mut swaps,
 				&swap_states,
 				SwapLeg::ToStable
 			),
-			(Some(swap2), vec![swap1, swap3])
+			Some(swap2)
 		);
+		assert_eq!(swaps, vec![swap1, swap3]);
 	}
 
 	#[test]
@@ -1376,38 +1378,51 @@ mod swap_batching {
 		let swap2 = Swap::new(2, 2, Asset::Usdc, Asset::Eth, 1000, None, []);
 		let swap3 = Swap::new(3, 3, Asset::Eth, Asset::Usdc, 100, None, []);
 
-		let swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
+		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
 
 		// The test assumes the USDC->ETH leg failed (so swap3 is excluded from `swap_states`)
 		let swap_state = vec![swap1.to_state(Some(60000)), swap2.to_state(Some(3000))];
 
 		assert_eq!(
 			utilities::split_off_highest_impact_swap::<mock::Test>(
-				swaps,
+				&mut swaps,
 				&swap_state,
 				SwapLeg::FromStable
 			),
-			(Some(swap1), vec![swap2, swap3])
+			Some(swap1)
 		);
+		assert_eq!(swaps, vec![swap2, swap3]);
 	}
 
 	#[test]
 	fn zero_swaps() {
+		let mut swaps = vec![];
 		assert_eq!(
-			utilities::split_off_highest_impact_swap::<mock::Test>(vec![], &[], SwapLeg::ToStable),
-			(None, vec![])
+			utilities::split_off_highest_impact_swap::<mock::Test>(
+				&mut swaps,
+				&[],
+				SwapLeg::ToStable
+			),
+			None
 		);
+		assert_eq!(swaps, vec![]);
 	}
 
 	#[test]
 	fn zero_matching_swaps() {
 		let swap = Swap::new(0, 0, Asset::Usdc, Asset::Btc, 1000, None, []);
-		let swaps = vec![swap.clone()];
+		let mut swaps = vec![swap.clone()];
 
 		assert_eq!(
-			utilities::split_off_highest_impact_swap::<mock::Test>(swaps, &[], SwapLeg::ToStable),
-			(None, vec![swap])
+			utilities::split_off_highest_impact_swap::<mock::Test>(
+				&mut swaps,
+				&[],
+				SwapLeg::ToStable
+			),
+			None
 		);
+
+		assert_eq!(swaps, vec![swap]);
 	}
 
 	#[test]

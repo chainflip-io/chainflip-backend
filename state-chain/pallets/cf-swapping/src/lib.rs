@@ -1259,20 +1259,18 @@ pub mod pallet {
 						});
 
 						// Find the largest swap from the failing pool/direction:
-						let (swap_to_remove, remaining_swaps) =
-							utilities::split_off_highest_impact_swap(
-								swaps_to_execute,
-								&failed_swap_group,
-								direction,
-							);
+						let swap_to_remove = utilities::split_off_highest_impact_swap(
+							&mut swaps_to_execute,
+							&failed_swap_group,
+							direction,
+						);
 
 						// Abort if we couldn't find a swap to remove; otherwise, remove the
 						// swap and try again with the remaining swaps:
 						if let Some(swap) = swap_to_remove {
 							failed_swaps.push(swap);
-							swaps_to_execute = remaining_swaps;
 						} else {
-							failed_swaps.extend(remaining_swaps);
+							failed_swaps.extend(swaps_to_execute);
 							return Ok(BatchExecutionOutcomes {
 								successful_swaps: vec![],
 								failed_swaps,
@@ -2318,15 +2316,29 @@ pub(crate) mod utilities {
 		}
 	}
 
+	// Note:
 	pub(super) fn split_off_highest_impact_swap<T: Config>(
-		mut swaps: Vec<Swap<T>>,
-		swap_states: &[SwapState<T>],
+		swaps: &mut Vec<Swap<T>>,
+		failed_swap_group: &[SwapState<T>],
 		direction: SwapLeg,
-	) -> (Option<Swap<T>>, Vec<Swap<T>>) {
+	) -> Option<Swap<T>> {
+		// Check invariants:
+		if failed_swap_group.is_empty() {
+			log_or_panic!(
+				"Invariant violation: there should be at least one swap in a failed group"
+			)
+		}
+		for failed_swap in failed_swap_group {
+			if !swaps.iter().any(|swap| swap.swap_id == failed_swap.swap_id()) {
+				log_or_panic!(
+					"Invariant violation: failed group must be a subset of all executed swaps"
+				)
+			}
+		}
 		// Find a swap id that we want to remove (in theory there should always be
 		// one from the failing asset/direction, but if we don't for some reason, the fallback is to
 		// remove nothing, which would abort the entire batch):
-		let maybe_swap_id_to_remove = swap_states
+		let maybe_swap_id_to_remove = failed_swap_group
 			.iter()
 			// If the direction is TO_STABLE, swap amount is in the input amount of
 			// *the same* asset (swaps from different assets are executed separately).
@@ -2335,10 +2347,8 @@ pub(crate) mod utilities {
 			.max_by_key(|swap| swap.swap_amount(direction).unwrap_or_default())
 			.map(|swap| swap.swap_id());
 
-		let swap_to_remove = maybe_swap_id_to_remove.and_then(|swap_id_to_remove| {
+		maybe_swap_id_to_remove.and_then(|swap_id_to_remove| {
 			swaps.extract_if(|swap| swap.swap_id == swap_id_to_remove).next()
-		});
-
-		(swap_to_remove, swaps)
+		})
 	}
 }

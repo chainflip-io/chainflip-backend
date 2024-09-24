@@ -104,7 +104,7 @@ impl MockSwappingApi {
 	}
 
 	pub fn get_liquidity(asset: &Asset) -> AssetAmount {
-		*Liquidity::get().get(&asset).expect("liquidity not initialised for asset")
+		*Liquidity::get().get(asset).expect("liquidity not initialised for asset")
 	}
 }
 
