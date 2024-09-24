@@ -1730,7 +1730,7 @@ impl_runtime_apis! {
 					(asset, if let Some(balance) = maybe_balance {
 						balance.amount()
 					} else {
-						0u128.into()
+						0u128
 					})
 				}).collect(),
 				earned_fees: AssetMap::from_iter(HistoricalEarnedFees::<Runtime>::iter_prefix(&account_id)),

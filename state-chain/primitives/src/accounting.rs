@@ -104,6 +104,7 @@ impl PartialEq for AssetBalance {
 		self.amount == other.amount
 	}
 
+	#[allow(clippy::partialeq_ne_impl)]
 	fn ne(&self, other: &Self) -> bool {
 		Self::ensure_asset_compatibility(self, other);
 		!self.eq(other)
@@ -111,6 +112,7 @@ impl PartialEq for AssetBalance {
 }
 
 impl PartialOrd for AssetBalance {
+	#[allow(clippy::non_canonical_partial_ord_impl)]
 	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
 		Self::ensure_asset_compatibility(self, other);
 		Some(self.cmp(other))

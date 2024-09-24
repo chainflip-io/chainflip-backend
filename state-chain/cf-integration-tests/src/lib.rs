@@ -21,7 +21,7 @@ mod witnessing;
 use cf_chains::{
 	eth::Address as EthereumAddress, evm::EvmTransactionMetadata, TransactionMetadata,
 };
-use cf_primitives::{AssetAmount, AuthorityCount, BlockNumber, FlipBalance};
+use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
 use cf_traits::EpochInfo;
 use frame_support::{assert_noop, assert_ok, sp_runtime::AccountId32, traits::OnInitialize};
 use pallet_cf_broadcast::AwaitingBroadcast;

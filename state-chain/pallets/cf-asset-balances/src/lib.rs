@@ -360,7 +360,7 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 					ForeignChain::Polkadot => ExternalOwner::AggKey,
 					ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
 				})
-				.and_modify(|fee| fee.accrue(asset_balance.clone()))
+				.and_modify(|fee| fee.accrue(asset_balance))
 				.or_insert(asset_balance);
 			} else {
 				let mut map = BTreeMap::new();

@@ -118,10 +118,7 @@ impl QueryApi {
 		.into_iter()
 		.map(|result| {
 			result.map(|(asset, maybe_balance)| {
-				(
-					asset,
-					if let Some(balance) = maybe_balance { balance.amount() } else { 0u128.into() },
-				)
+				(asset, if let Some(balance) = maybe_balance { balance.amount() } else { 0u128 })
 			})
 		})
 		.collect()

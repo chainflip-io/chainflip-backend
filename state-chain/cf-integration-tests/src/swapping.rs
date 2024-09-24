@@ -79,7 +79,7 @@ fn credit_account(account_id: &AccountId, asset: Asset, amount: AssetAmount) {
 	{
 		balance.amount()
 	} else {
-		0u128.into()
+		0u128
 	};
 	assert_ok!(AssetBalances::try_credit_account(account_id, asset, amount));
 	assert_eq!(
@@ -124,13 +124,13 @@ fn set_range_order(
 
 	assert!(new_balances
 		.as_ref()
-		.into_iter()
+		.iter()
 		.zip(balances.as_ref())
 		.all(|(new, old)| { new <= old }));
 
 	for ((maybe_new_balance, maybe_old_balance), expected_asset) in new_balances
 		.as_ref()
-		.into_iter()
+		.iter()
 		.zip(balances.as_ref())
 		.zip([base_asset, quote_asset])
 	{
