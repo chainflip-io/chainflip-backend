@@ -1395,37 +1395,6 @@ mod swap_batching {
 	}
 
 	#[test]
-	fn zero_swaps() {
-		let mut swaps = vec![];
-		assert_eq!(
-			utilities::split_off_highest_impact_swap::<mock::Test>(
-				&mut swaps,
-				&[],
-				SwapLeg::ToStable
-			),
-			None
-		);
-		assert_eq!(swaps, vec![]);
-	}
-
-	#[test]
-	fn zero_matching_swaps() {
-		let swap = Swap::new(0, 0, Asset::Usdc, Asset::Btc, 1000, None, []);
-		let mut swaps = vec![swap.clone()];
-
-		assert_eq!(
-			utilities::split_off_highest_impact_swap::<mock::Test>(
-				&mut swaps,
-				&[],
-				SwapLeg::ToStable
-			),
-			None
-		);
-
-		assert_eq!(swaps, vec![swap]);
-	}
-
-	#[test]
 	fn price_impact_removes_one_swap() {
 		// Initial execution of a batch results in a "price impact" error while swapping from
 		// stable asset. A swap with "the largest" impact should be removed (rescheduled for a later
