@@ -1,11 +1,5 @@
-use core::str::FromStr as _;
-
-use crate::{Runtime, SolEnvironment};
-use cf_chains::{
-	instances::{ArbitrumInstance, EthereumInstance, PolkadotInstance, SolanaInstance},
-	sol::{api::SolanaApi, SolAddress, SolAsset},
-	ForeignChain, Solana, TransferAssetParams,
-};
+use crate::Runtime;
+use cf_chains::instances::{ArbitrumInstance, EthereumInstance, PolkadotInstance};
 use cf_runtime_upgrade_utilities::genesis_hashes;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use pallet_cf_broadcast::migrations::remove_aborted_broadcasts;
