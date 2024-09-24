@@ -5,6 +5,6 @@
 // This command will create 3 tiers of boost pools for every asset. Tiers: 5, 10 and 30 bps.
 
 import { setupBoostPools } from '../shared/setup_boost_pools';
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 
-await executeWithTimeout(setupBoostPools(), 120);
+await runWithTimeoutAndExit(setupBoostPools(), 120);

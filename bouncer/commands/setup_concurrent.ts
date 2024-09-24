@@ -7,7 +7,7 @@
 // Setup_vaults.ts must be ran first.
 import { setupBoostPools } from '../shared/setup_boost_pools';
 import { setupSwaps } from '../shared/setup_swaps';
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 
 async function main(): Promise<void> {
   console.log('=== Setup concurrent ===');
@@ -15,4 +15,4 @@ async function main(): Promise<void> {
   console.log('=== Setup concurrent complete ===');
 }
 
-await executeWithTimeout(main(), 240);
+await runWithTimeoutAndExit(main(), 240);

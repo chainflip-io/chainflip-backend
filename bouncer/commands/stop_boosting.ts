@@ -10,8 +10,8 @@
 // For example: ./commands/stop_boosting.ts Btc 5 "//LP_2"
 
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { executeWithTimeout } from '../shared/utils';
-import { stopBoosting } from '../shared/boost';
+import { runWithTimeoutAndExit } from '../shared/utils';
+import { stopBoosting } from '../tests/boost';
 
 async function main(): Promise<void> {
   const event = await stopBoosting(
@@ -23,4 +23,4 @@ async function main(): Promise<void> {
   console.log(`Stopped boosting event: ${JSON.stringify(event)}`);
 }
 
-await executeWithTimeout(main(), 30);
+await runWithTimeoutAndExit(main(), 30);

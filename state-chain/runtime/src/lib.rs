@@ -863,6 +863,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
+	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_ETHEREUM>;
 	type ChainTracking = EthereumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
@@ -888,6 +889,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
+	type SafeModeChainBlockMargin = ConstU32<BLOCKS_PER_MINUTE_POLKADOT>;
 	type ChainTracking = PolkadotChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
@@ -913,6 +915,7 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
+	type SafeModeChainBlockMargin = ConstU64<1>; // 10 minutes
 	type ChainTracking = BitcoinChainTracking;
 	type RetryPolicy = BitcoinRetryPolicy;
 	type LiabilityTracker = AssetBalances;
@@ -938,6 +941,7 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
+	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_ARBITRUM>;
 	type ChainTracking = ArbitrumChainTracking;
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
@@ -970,6 +974,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
+	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_SOLANA>;
 	type ChainTracking = SolanaChainTrackingProvider;
 	type RetryPolicy = DefaultRetryPolicy;
 	type LiabilityTracker = AssetBalances;
@@ -1252,13 +1257,13 @@ type MigrationsForV1_7 = (
 	VersionedMigration<
 		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
 		SerializeSolanaBroadcastMigration,
-		7,
 		8,
+		9,
 	>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 7, 8>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 7, 8>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 7, 8>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 7, 8>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 8, 9>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 9>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 9>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 9>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]

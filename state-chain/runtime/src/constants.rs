@@ -59,6 +59,19 @@ pub mod common {
 	pub const DAYS: BlockNumber = HOURS * 24;
 	pub const YEAR: BlockNumber = DAYS * 365;
 
+	// Measurements for other chains
+	pub const MILLISECONDS_PER_BLOCK_ETHEREUM: u64 = 14 * 1000;
+	pub const MILLISECONDS_PER_BLOCK_POLKADOT: u32 = 6 * 1000;
+	pub const MILLISECONDS_PER_BLOCK_BITCOIN: u64 = 10 * 60 * 1000;
+	pub const MILLISECONDS_PER_BLOCK_ARBITRUM: u64 = 250;
+	pub const MILLISECONDS_PER_BLOCK_SOLANA: u64 = 400;
+
+	pub const BLOCKS_PER_MINUTE_ETHEREUM: u64 = 60000 / MILLISECONDS_PER_BLOCK_ETHEREUM;
+	pub const BLOCKS_PER_MINUTE_POLKADOT: u32 = 60000 / MILLISECONDS_PER_BLOCK_POLKADOT;
+	// no constant for bitcoin since the block time is too large
+	pub const BLOCKS_PER_MINUTE_ARBITRUM: u64 = 60000 / MILLISECONDS_PER_BLOCK_ARBITRUM;
+	pub const BLOCKS_PER_MINUTE_SOLANA: u64 = 60000 / MILLISECONDS_PER_BLOCK_SOLANA;
+
 	/// Percent of the epoch we are allowed to redeem
 	pub const REDEMPTION_PERIOD_AS_PERCENTAGE: u8 = 50;
 

@@ -2,7 +2,9 @@
 
 use std::cell::RefCell;
 
-use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence, PalletSafeMode};
+use crate::{
+	self as pallet_cf_broadcast, ChainBlockNumberFor, Instance1, PalletOffence, PalletSafeMode,
+};
 use cf_chains::{
 	eth::Ethereum,
 	evm::EvmCrypto,
@@ -71,6 +73,7 @@ impl frame_system::Config for Test {
 }
 
 pub const BROADCAST_EXPIRY_BLOCKS: BlockNumberFor<Test> = 4;
+pub const SAFEMODE_CHAINBLOCK_MARGIN: ChainBlockNumberFor<Test, Instance1> = 10;
 
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<u64, PalletOffence>;
@@ -143,6 +146,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
+	type SafeModeChainBlockMargin = ConstU64<SAFEMODE_CHAINBLOCK_MARGIN>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<MockEthereumChainCrypto>;
 	type RetryPolicy = MockRetryPolicy;
@@ -156,7 +160,6 @@ cf_test_utilities::impl_test_helpers! {
 	RuntimeGenesisConfig {
 		broadcaster: pallet_cf_broadcast::GenesisConfig {
 			broadcast_timeout: 4,
-			..Default::default()
 		},
 		..Default::default()
 	},

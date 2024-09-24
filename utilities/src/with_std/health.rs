@@ -1,23 +1,69 @@
-//! Health monitor for the CFE
+//! Health monitor for the CFE and apis
 //! allowing external services to query, ensuring it's online
 //! Returns a HTTP 200 response to any request on {hostname}:{port}/health
 //! Method returns a Sender, allowing graceful termination of the infinite loop
 
 use std::{net::IpAddr, sync::Arc};
 
+use crate::{task_scope, Port};
+use clap::Args;
+use serde::Deserialize;
 use tracing::info;
-use utilities::task_scope;
 use warp::Filter;
 
-use crate::settings;
+#[derive(Args, Debug, Clone, Default)]
+pub struct HealthCheckOptions {
+	#[clap(
+		id = "HEALTH_CHECK_HOSTNAME",
+		long = "health_check.hostname",
+		help = "Hostname for this server's healthcheck. Requires the <HEALTH_CHECK_PORT> parameter to be given as well.",
+		requires("HEALTH_CHECK_PORT")
+	)]
+	pub health_check_hostname: Option<String>,
+	#[clap(
+		id = "HEALTH_CHECK_PORT",
+		long = "health_check.port",
+		help = "Port for this server's healthcheck. Requires the <HEALTH_CHECK_HOSTNAME> parameter to be given as well.",
+		requires("HEALTH_CHECK_HOSTNAME")
+	)]
+	pub health_check_port: Option<u16>,
+}
+
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct HealthCheck {
+	pub hostname: String,
+	pub port: Port,
+}
 
 const INITIALISING: &str = "INITIALISING";
 const RUNNING: &str = "RUNNING";
 
+pub async fn start_if_configured<'a, 'env>(
+	scope: &'a task_scope::Scope<'env, anyhow::Error>,
+	opts: &'a HealthCheckOptions,
+	has_completed_initialising: Arc<std::sync::atomic::AtomicBool>,
+) -> Result<(), anyhow::Error> {
+	if opts.health_check_hostname.is_some() || opts.health_check_port.is_some() {
+		let error_msg =
+			"Clap enforces that both health_check.hostname and health_check.port are present.";
+		start(
+			scope,
+			&HealthCheck {
+				hostname: opts.health_check_hostname.clone().expect(error_msg),
+				port: opts.health_check_port.expect(error_msg),
+			},
+			has_completed_initialising,
+		)
+		.await
+	} else {
+		Ok(())
+	}
+}
+
 #[tracing::instrument(name = "health-check", skip_all)]
 pub async fn start<'a, 'env>(
 	scope: &'a task_scope::Scope<'env, anyhow::Error>,
-	health_check_settings: &'a settings::HealthCheck,
+	health_check_settings: &'a HealthCheck,
 	has_completed_initialising: Arc<std::sync::atomic::AtomicBool>,
 ) -> Result<(), anyhow::Error> {
 	info!("Starting");
@@ -50,13 +96,11 @@ mod tests {
 
 	use futures_util::FutureExt;
 
-	use crate::settings::Settings;
-
 	use super::*;
 
 	#[tokio::test]
 	async fn health_check_test() {
-		let health_check = Settings::new_test().unwrap().health_check.unwrap();
+		let health_check = HealthCheck { hostname: "127.0.0.1".to_string(), port: 5555 };
 
 		task_scope::task_scope(|scope| {
 			async {
