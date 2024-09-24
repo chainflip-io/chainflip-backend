@@ -21,12 +21,13 @@ pub use pallet::*;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 pub const MAX_REFUNDED_VALIDATORS_ETH_PER_EPOCH: usize = 50;
 pub const MAX_REFUNDED_VALIDATORS_ARB_ETH_PER_EPOCH: usize = 50;
