@@ -6,6 +6,7 @@ use cf_traits::{
 
 use crate::FreeBalances;
 use cf_chains::AnyChain;
+use cf_primitives::{accounting::AssetBalance, Asset};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, BalanceApi, SafeMode};
 use frame_support::{assert_noop, assert_ok, traits::OnKilledAccount};
@@ -13,7 +14,7 @@ use frame_support::{assert_noop, assert_ok, traits::OnKilledAccount};
 use crate::{mock::*, ExternalOwner, Liabilities, Pallet, WithheldAssets};
 
 fn payed_gas(chain: ForeignChain, amount: AssetAmount, account: ForeignChainAddress) {
-	Pallet::<Test>::record_liability(account, chain.gas_asset(), amount);
+	Pallet::<Test>::record_liability(account, AssetBalance::mint(amount, chain.gas_asset()));
 	Pallet::<Test>::withhold_assets(chain.gas_asset(), amount);
 }
 
@@ -34,10 +35,16 @@ fn skip_refunding_if_safe_mode_is_enabled() {
 	new_test_ext().execute_with(|| {
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
 
-		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
+		let recorded_fees_eth =
+			Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).unwrap();
 
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()).unwrap().amount(), 100);
+		assert_eq!(
+			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset())
+				.unwrap()
+				.amount(),
+			100
+		);
 
 		MockRuntimeSafeMode::set_safe_mode(MockRuntimeSafeMode {
 			refunding: crate::PalletSafeMode::CODE_RED,
@@ -47,8 +54,13 @@ fn skip_refunding_if_safe_mode_is_enabled() {
 
 		assert_egress(0, None);
 
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()).unwrap().amount(), 100);
+		assert_eq!(
+			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset())
+				.unwrap()
+				.amount(),
+			100
+		);
 	});
 }
 
@@ -59,30 +71,48 @@ pub fn keep_fees_in_storage_if_egress_fails() {
 
 		payed_gas(ForeignChain::Ethereum, 100, ETH_ADDR_1.clone());
 
-		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
+		let recorded_fees_eth =
+			Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).unwrap();
 
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()).unwrap().amount(), 100);
+		assert_eq!(
+			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset())
+				.unwrap()
+				.amount(),
+			100
+		);
 
 		Pallet::<Test>::trigger_reconciliation();
 
-		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()), Some(&100));
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), 100);
+		assert_eq!(recorded_fees_eth.get(&ETH_ADDR_1.into()).unwrap().amount(), 100);
+		assert_eq!(
+			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset())
+				.unwrap()
+				.amount(),
+			100
+		);
 	});
 }
 
 #[test]
 pub fn not_enough_withheld_fees() {
 	new_test_ext().execute_with(|| {
-		const BTC_OWED: u128 = 100;
-		const BTC_AVAILABLE: u128 = 99;
-		const ETH_OWED: u128 = 200;
-		const ETH_AVAILABLE: u128 = 199;
+		const BTC_OWED: AssetAmount = 100;
+		const BTC_AVAILABLE: AssetAmount = 99;
+		const ETH_OWED: AssetAmount = 200;
+		const ETH_AVAILABLE: AssetAmount = 199;
+
 		payed_gas(ForeignChain::Bitcoin, BTC_OWED, BTC_ADDR_1.clone());
-		WithheldAssets::<Test>::insert(ForeignChain::Bitcoin.gas_asset(), BTC_AVAILABLE);
+		WithheldAssets::<Test>::insert(
+			ForeignChain::Bitcoin.gas_asset(),
+			AssetBalance::mint(BTC_AVAILABLE, Asset::Btc),
+		);
 
 		payed_gas(ForeignChain::Ethereum, ETH_OWED, ETH_ADDR_1.clone());
-		WithheldAssets::<Test>::insert(ForeignChain::Ethereum.gas_asset(), ETH_AVAILABLE);
+		WithheldAssets::<Test>::insert(
+			ForeignChain::Ethereum.gas_asset(),
+			AssetBalance::mint(ETH_AVAILABLE, Asset::Eth),
+		);
 
 		Pallet::<Test>::trigger_reconciliation();
 
@@ -99,15 +129,26 @@ pub fn not_enough_withheld_fees() {
 
 		// For Bitcoin, reconciliate as much as possible.
 		assert_eq!(
-			Liabilities::<Test>::get(ForeignChain::Bitcoin.gas_asset())[&ExternalOwner::Vault],
+			Liabilities::<Test>::get(ForeignChain::Bitcoin.gas_asset()).unwrap()
+				[&ExternalOwner::Vault]
+				.amount(),
 			BTC_OWED - BTC_AVAILABLE
 		);
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Bitcoin.gas_asset()), 0);
+		assert_eq!(
+			WithheldAssets::<Test>::get(ForeignChain::Bitcoin.gas_asset()).unwrap().amount(),
+			0
+		);
 
 		// For Ethereum, either refund the entirety or do nothing.
-		let recorded_fees_eth = Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset());
-		assert_eq!(recorded_fees_eth[&ExternalOwner::Account(ETH_ADDR_1)], ETH_OWED);
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), ETH_AVAILABLE);
+		let recorded_fees_eth =
+			Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).unwrap();
+		assert_eq!(recorded_fees_eth[&ExternalOwner::Account(ETH_ADDR_1)].amount(), ETH_OWED);
+		assert_eq!(
+			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset())
+				.unwrap()
+				.amount(),
+			ETH_AVAILABLE
+		);
 	});
 }
 
@@ -118,7 +159,12 @@ pub fn do_not_refund_if_amount_is_too_low() {
 		payed_gas(ForeignChain::Ethereum, REFUND_AMOUNT, ETH_ADDR_1.clone());
 
 		MockEgressHandler::<Ethereum>::set_fee(REFUND_AMOUNT * 2);
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), REFUND_AMOUNT);
+		assert_eq!(
+			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset())
+				.unwrap()
+				.amount(),
+			REFUND_AMOUNT
+		);
 
 		Pallet::<Test>::trigger_reconciliation();
 
@@ -131,11 +177,19 @@ pub fn do_not_refund_if_amount_is_too_low() {
 			.into(),
 		);
 
-		assert_eq!(WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset()), REFUND_AMOUNT);
+		assert_eq!(
+			WithheldAssets::<Test>::get(ForeignChain::Ethereum.gas_asset())
+				.unwrap()
+				.amount(),
+			REFUND_AMOUNT
+		);
 		assert_eq!(
 			Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset())
-				.get(&ExternalOwner::Account(ETH_ADDR_1)),
-			Some(&REFUND_AMOUNT)
+				.unwrap()
+				.get(&ExternalOwner::Account(ETH_ADDR_1))
+				.unwrap()
+				.amount(),
+			REFUND_AMOUNT
 		);
 
 		assert_egress(0, None);
@@ -156,17 +210,20 @@ fn test_refund_validators_with_checks(
 		let total_gas_paid = REFUND_AMOUNT * addresses.len() as u128;
 		addresses.into_iter().for_each(|addr| payed_gas(chain, REFUND_AMOUNT, addr));
 
-		assert_eq!(WithheldAssets::<Test>::get(asset), total_gas_paid);
+		assert_eq!(WithheldAssets::<Test>::get(asset).unwrap().amount(), total_gas_paid);
 
 		liabilities.into_iter().for_each(|liability| {
-			assert_eq!(Liabilities::<Test>::get(asset).get(&liability), Some(&REFUND_AMOUNT))
+			assert_eq!(
+				Liabilities::<Test>::get(asset).unwrap().get(&liability).unwrap().amount(),
+				REFUND_AMOUNT
+			)
 		});
 
 		Pallet::<Test>::trigger_reconciliation();
 
 		// Check all fees owed have been paid out.
-		assert!(Liabilities::<Test>::get(asset).is_empty());
-		assert_eq!(WithheldAssets::<Test>::get(asset), 0);
+		assert!(Liabilities::<Test>::get(asset).is_none());
+		assert_eq!(WithheldAssets::<Test>::get(asset).unwrap().amount(), 0);
 
 		egress_check();
 	});
@@ -252,7 +309,10 @@ fn can_reconciliate_multiple_chains_at_once() {
 
 		test_accounts.iter().for_each(|(chain, acc)| {
 			payed_gas(*chain, REFUND_AMOUNT, acc.clone());
-			assert_eq!(WithheldAssets::<Test>::get(chain.gas_asset()), REFUND_AMOUNT);
+			assert_eq!(
+				WithheldAssets::<Test>::get(chain.gas_asset()).unwrap().amount(),
+				REFUND_AMOUNT
+			);
 		});
 
 		Pallet::<Test>::trigger_reconciliation();
@@ -269,8 +329,8 @@ fn can_reconciliate_multiple_chains_at_once() {
 
 		test_accounts.into_iter().for_each(|(chain, _)| {
 			let asset = chain.gas_asset();
-			assert!(Liabilities::<Test>::get(asset).is_empty());
-			assert_eq!(WithheldAssets::<Test>::get(asset), 0);
+			assert!(Liabilities::<Test>::get(asset).is_none());
+			assert_eq!(WithheldAssets::<Test>::get(asset).unwrap().amount(), 0);
 		});
 	});
 }
@@ -303,7 +363,9 @@ pub mod balance_api {
 				.into(),
 			);
 			assert_eq!(
-				FreeBalances::<Test>::get(&alice, ForeignChain::Ethereum.gas_asset()),
+				FreeBalances::<Test>::get(&alice, ForeignChain::Ethereum.gas_asset())
+					.unwrap()
+					.amount(),
 				AMOUNT
 			);
 			assert_noop!(
@@ -323,7 +385,9 @@ pub mod balance_api {
 				FreeBalances::<Test>::get(
 					AccountId::from([1; 32]),
 					ForeignChain::Ethereum.gas_asset()
-				),
+				)
+				.unwrap()
+				.amount(),
 				DELTA
 			);
 			assert_has_event::<Test>(
@@ -344,15 +408,14 @@ pub mod balance_api {
 			FreeBalances::<Test>::insert(
 				AccountId::from([1; 32]),
 				ForeignChain::Ethereum.gas_asset(),
-				100,
+				AssetBalance::mint(100, Asset::Eth),
 			);
 			DeleteAccount::<Test>::on_killed_account(&AccountId::from([1; 32]));
-			assert!(
-				FreeBalances::<Test>::get(
-					AccountId::from([1; 32]),
-					ForeignChain::Ethereum.gas_asset()
-				) == 0
-			);
+			assert!(FreeBalances::<Test>::get(
+				AccountId::from([1; 32]),
+				ForeignChain::Ethereum.gas_asset()
+			)
+			.is_none());
 		});
 	}
 
@@ -362,7 +425,7 @@ pub mod balance_api {
 			FreeBalances::<Test>::insert(
 				AccountId::from([1; 32]),
 				ForeignChain::Ethereum.gas_asset(),
-				100,
+				AssetBalance::mint(100, Asset::Eth),
 			);
 			assert_eq!(
 				Pallet::<Test>::free_balances(&AccountId::from([1; 32])).eth,

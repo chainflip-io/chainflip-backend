@@ -11,7 +11,7 @@ mod tests;
 pub mod migrations;
 pub mod weights;
 
-use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{accounting::AssetBalance, BroadcastId, ThresholdSignatureRequestId};
 
 use cf_chains::{
 	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
@@ -686,10 +686,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					>>::into_foreign_chain_address(signer_id.clone());
 
 					use cf_traits::LiabilityTracker;
+
 					T::LiabilityTracker::record_liability(
 						address_to_refund,
-						<T::TargetChain as Chain>::GAS_ASSET.into(),
-						to_refund.into(),
+						AssetBalance::mint(
+							to_refund.into(),
+							<T::TargetChain as Chain>::GAS_ASSET.into(),
+						),
 					);
 
 					Self::deposit_event(Event::<T, I>::TransactionFeeDeficitRecorded {

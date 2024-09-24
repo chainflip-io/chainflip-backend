@@ -26,9 +26,10 @@ use cf_chains::{
 	DepositChannel, Ethereum,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BlockNumber,
-	BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex,
-	FlipBalance, ForeignChain, Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
+	accounting::AssetBalance, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints,
+	Beneficiaries, BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey,
+	EgressCounter, EgressId, EpochIndex, FlipBalance, ForeignChain, Ipv6Addr, NetworkEnvironment,
+	SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -957,7 +958,7 @@ pub trait IngressEgressFeeApi<C: Chain> {
 }
 
 pub trait LiabilityTracker {
-	fn record_liability(account_id: ForeignChainAddress, asset: Asset, amount: AssetAmount);
+	fn record_liability(account_id: ForeignChainAddress, asset_balance: AssetBalance);
 }
 
 pub trait AssetWithholding {

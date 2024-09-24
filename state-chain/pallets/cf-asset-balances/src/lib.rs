@@ -9,10 +9,7 @@ use cf_traits::{
 	LiabilityTracker, ScheduledEgressDetails,
 };
 use frame_support::{
-	pallet_prelude::*,
-	sp_runtime::traits::Saturating,
-	storage::transactional::with_storage_layer,
-	traits::{DefensiveSaturating, OnKilledAccount},
+	pallet_prelude::*, storage::transactional::with_storage_layer, traits::OnKilledAccount,
 };
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
@@ -293,6 +290,12 @@ impl<T: Config> Pallet<T> {
 
 		for chain in ForeignChain::iter() {
 			WithheldAssets::<T>::mutate(chain.gas_asset(), |maybe_total_withheld| {
+				if maybe_total_withheld.is_none() {
+					return;
+				}
+				if Liabilities::<T>::get(chain.gas_asset()).is_none() {
+					return;
+				}
 				let mut total_withheld = maybe_total_withheld.as_mut().unwrap();
 				let mut owed_assets = Liabilities::<T>::take(chain.gas_asset())
 					.unwrap()
@@ -351,15 +354,29 @@ impl<A> VaultImbalance<A> {
 }
 
 impl<T: Config> LiabilityTracker for Pallet<T> {
-	fn record_liability(address: ForeignChainAddress, asset: Asset, amount: AssetAmount) {
-		debug_assert_eq!(ForeignChain::from(asset), address.chain());
-		// Note: Temporary hack to make the compiler shut up!
-		let amount = AssetBalance::mint(amount, asset);
+	fn record_liability(address: ForeignChainAddress, asset_balance: AssetBalance) {
+		debug_assert_eq!(ForeignChain::from(asset_balance.asset()), address.chain());
+		let asset = asset_balance.asset();
 		Liabilities::<T>::mutate(asset, |maybe_fees| {
-			if let Some(fees) = maybe_fees.as_mut() {
-				fees.entry(address.into()).and_modify(|fee| fee.accrue(amount));
+			if let Some(fees) = maybe_fees {
+				fees.entry(match ForeignChain::from(asset) {
+					ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
+					ForeignChain::Polkadot => ExternalOwner::AggKey,
+					ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
+				})
+				.and_modify(|fee| fee.accrue(asset_balance.clone()))
+				.or_insert(asset_balance);
 			} else {
-				*maybe_fees = Some(vec![(address.into(), amount)].into_iter().collect());
+				let mut map = BTreeMap::new();
+				map.insert(
+					match ForeignChain::from(asset) {
+						ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
+						ForeignChain::Polkadot => ExternalOwner::AggKey,
+						ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
+					},
+					asset_balance,
+				);
+				*maybe_fees = Some(map);
 			}
 		});
 	}
