@@ -26,7 +26,7 @@ chainflip-api = { path = "../../lib" }
 cf-utilities = { package = "utilities", path = "../../../utilities" }
 custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
-anyhow = "1.0.66"
+anyhow = "1.0"
 clap = { version = "4.5.3", features = ["derive"] }
 futures = "0.3.30"
 hex = "0.4.3"

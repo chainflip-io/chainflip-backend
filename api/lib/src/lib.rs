@@ -333,14 +333,14 @@ impl fmt::Display for AddressString {
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RefundParameters {
 	pub retry_duration: BlockNumber,
 	pub refund_address: AddressString,
 	pub min_price: Price,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SwapDepositAddress {
 	pub address: AddressString,
 	pub issued_block: state_chain_runtime::BlockNumber,
@@ -350,7 +350,7 @@ pub struct SwapDepositAddress {
 	pub refund_parameters: Option<ChannelRefundParametersGeneric<AddressString>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WithdrawFeesDetail {
 	pub tx_hash: H256,
 	pub egress_id: (ForeignChain, u64),

@@ -124,7 +124,7 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 }
 
 /// Builds a new service for a full client.
-pub fn new_full<
+pub fn new_full_base<
 	Network: sc_network::NetworkBackend<Block, <Block as sp_runtime::traits::Block>::Hash>
 >(config: Configuration) -> Result<TaskManager, ServiceError> {
 	use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
@@ -405,4 +405,23 @@ pub fn new_full<
 
 	network_starter.start_network();
 	Ok(task_manager)
+}
+
+
+/// Builds a new service for a full client.
+pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
+	Ok(match config.network.network_backend {
+		sc_network::config::NetworkBackendType::Libp2p => {
+			let task_manager = new_full_base::<sc_network::NetworkWorker<_, _>>(
+				config,
+			)?;
+			task_manager
+		},
+		sc_network::config::NetworkBackendType::Litep2p => {
+			let task_manager = new_full_base::<sc_network::Litep2pNetworkBackend>(
+				config,
+			)?;
+			task_manager
+		},
+	})
 }

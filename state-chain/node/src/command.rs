@@ -123,9 +123,11 @@ pub fn run() -> sc_cli::Result<()> {
 							You can enable it with `--features runtime-benchmarks`."
 									.into(),
 							)
+						} else {
+							cmd.run_with_spec::<sp_runtime::traits::HashingFor<Block>, ()>(Some(
+								config.chain_spec,
+							))
 						}
-
-						cmd.run::<Block, ()>(config)
 					},
 					BenchmarkCmd::Block(cmd) => {
 						let PartialComponents { client, .. } = service::new_partial(&config)?;

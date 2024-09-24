@@ -27,7 +27,7 @@ use state_chain_runtime::{
 		BLOCKS_PER_MINUTE_SOLANA,
 	},
 	opaque::SessionKeys,
-	AccountId, BlockNumber, FlipBalance, RuntimeGenesisConfig, SetSizeParameters, Signature,
+	AccountId, BlockNumber, FlipBalance, SetSizeParameters, Signature,
 	SolanaElectionsConfig, WASM_BINARY,
 };
 
@@ -73,7 +73,7 @@ where
 }
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
-pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
+pub type ChainSpec = sc_service::GenericChainSpec;
 
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {

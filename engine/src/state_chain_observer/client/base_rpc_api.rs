@@ -13,7 +13,7 @@ use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 
 use codec::Encode;
-use custom_rpc::CustomApiClient;
+use custom_rpc::{CustomApiClient, to_rpc_error};
 use sc_rpc_api::{
 	author::AuthorApiClient,
 	chain::ChainApiClient,
@@ -183,28 +183,28 @@ fn unwrap_value<T>(list_or_value: sp_rpc::list::ListOrValue<T>) -> T {
 #[async_trait]
 impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcClient> {
 	async fn health(&self) -> RpcResult<Health> {
-		self.raw_rpc_client.system_health().await
+		self.raw_rpc_client.system_health().await.map_err(to_rpc_error)
 	}
 
 	async fn next_account_nonce(
 		&self,
 		account_id: state_chain_runtime::AccountId,
 	) -> RpcResult<state_chain_runtime::Nonce> {
-		self.raw_rpc_client.nonce(account_id).await
+		self.raw_rpc_client.nonce(account_id).await.map_err(to_rpc_error)
 	}
 
 	async fn submit_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,
 	) -> RpcResult<sp_core::H256> {
-		self.raw_rpc_client.submit_extrinsic(Bytes::from(extrinsic.encode())).await
+		self.raw_rpc_client.submit_extrinsic(Bytes::from(extrinsic.encode())).await.map_err(to_rpc_error)
 	}
 
 	async fn submit_and_watch_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,
 	) -> RpcResult<Subscription<TransactionStatus<sp_core::H256, sp_core::H256>>> {
-		self.raw_rpc_client.watch_extrinsic(Bytes::from(extrinsic.encode())).await
+		self.raw_rpc_client.watch_extrinsic(Bytes::from(extrinsic.encode())).await.map_err(to_rpc_error)
 	}
 
 	async fn storage(
@@ -212,7 +212,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		block_hash: state_chain_runtime::Hash,
 		storage_key: StorageKey,
 	) -> RpcResult<Option<StorageData>> {
-		self.raw_rpc_client.storage(storage_key, Some(block_hash)).await
+		self.raw_rpc_client.storage(storage_key, Some(block_hash)).await.map_err(to_rpc_error)
 	}
 
 	async fn storage_pairs(
@@ -220,11 +220,11 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		block_hash: state_chain_runtime::Hash,
 		storage_key: StorageKey,
 	) -> RpcResult<Vec<(StorageKey, StorageData)>> {
-		self.raw_rpc_client.storage_pairs(storage_key, Some(block_hash)).await
+		self.raw_rpc_client.storage_pairs(storage_key, Some(block_hash)).await.map_err(to_rpc_error)
 	}
 
 	async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<Option<SignedBlock>> {
-		self.raw_rpc_client.block(Some(block_hash)).await
+		self.raw_rpc_client.block(Some(block_hash)).await.map_err(to_rpc_error)
 	}
 
 	async fn block_hash(
@@ -234,7 +234,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		Ok(unwrap_value(
 			self.raw_rpc_client
 				.block_hash(Some(sp_rpc::list::ListOrValue::Value(block_number.into())))
-				.await?,
+				.await.map_err(to_rpc_error)?,
 		))
 	}
 
@@ -242,34 +242,34 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<state_chain_runtime::Header> {
-		Ok(self.raw_rpc_client.header(Some(block_hash)).await?.expect(SUBSTRATE_BEHAVIOUR))
+		Ok(self.raw_rpc_client.header(Some(block_hash)).await.map_err(to_rpc_error)?.expect(SUBSTRATE_BEHAVIOUR))
 	}
 
 	async fn latest_unfinalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {
-		Ok(unwrap_value(self.raw_rpc_client.block_hash(None).await?).expect(SUBSTRATE_BEHAVIOUR))
+		Ok(unwrap_value(self.raw_rpc_client.block_hash(None).await.map_err(to_rpc_error)?).expect(SUBSTRATE_BEHAVIOUR))
 	}
 
 	async fn latest_finalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {
-		self.raw_rpc_client.finalized_head().await
+		self.raw_rpc_client.finalized_head().await.map_err(to_rpc_error)
 	}
 
 	async fn subscribe_finalized_block_headers(
 		&self,
 	) -> RpcResult<Subscription<state_chain_runtime::Header>> {
-		self.raw_rpc_client.subscribe_finalized_heads().await
+		self.raw_rpc_client.subscribe_finalized_heads().await.map_err(to_rpc_error)
 	}
 
 	async fn subscribe_unfinalized_block_headers(
 		&self,
 	) -> RpcResult<Subscription<state_chain_runtime::Header>> {
-		self.raw_rpc_client.subscribe_new_heads().await
+		self.raw_rpc_client.subscribe_new_heads().await.map_err(to_rpc_error)
 	}
 
 	async fn runtime_version(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RuntimeVersion> {
-		self.raw_rpc_client.runtime_version(at).await
+		self.raw_rpc_client.runtime_version(at).await.map_err(to_rpc_error)
 	}
 
 	async fn dry_run(
@@ -277,7 +277,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		extrinsic: Bytes,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<Bytes> {
-		self.raw_rpc_client.dry_run(extrinsic, Some(block_hash)).await
+		self.raw_rpc_client.dry_run(extrinsic, Some(block_hash)).await.map_err(to_rpc_error)
 	}
 
 	async fn request_raw(
@@ -285,7 +285,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		method: &str,
 		params: Option<Box<RawValue>>,
 	) -> RpcResult<Box<RawValue>> {
-		self.raw_rpc_client.request(method, Params(params)).await
+		self.raw_rpc_client.request(method, Params(params)).await.map_err(to_rpc_error)
 	}
 
 	async fn subscribe_raw(
@@ -294,14 +294,14 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		params: Option<Box<RawValue>>,
 		unsub: &str,
 	) -> RpcResult<Subscription<Box<RawValue>>> {
-		self.raw_rpc_client.subscribe(sub, Params(params), unsub).await
+		self.raw_rpc_client.subscribe(sub, Params(params), unsub).await.map_err(to_rpc_error)
 	}
 }
 
 struct Params(Option<Box<RawValue>>);
 
 impl jsonrpsee::core::traits::ToRpcParams for Params {
-	fn to_rpc_params(self) -> RpcResult<Option<Box<RawValue>>> {
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 		Ok(self.0)
 	}
 }

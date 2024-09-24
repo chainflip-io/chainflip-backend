@@ -996,11 +996,11 @@ where
 	}
 }
 
-fn str_to_rpc_error(e: &str) -> ErrorObjectOwned {
+pub fn str_to_rpc_error(e: &str) -> ErrorObjectOwned {
 	ErrorObject::owned(jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE, e, Option::<()>::None)
 }
 
-fn to_rpc_error<E: std::error::Error + Send + Sync + 'static>(e: E) -> ErrorObjectOwned {
+pub fn to_rpc_error<E: std::fmt::Debug + Send + Sync + 'static>(e: E) -> ErrorObjectOwned {
 	str_to_rpc_error(&format!("{:?}", e)[..])
 }
 
