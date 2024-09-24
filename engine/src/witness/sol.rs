@@ -115,11 +115,11 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 	{
 		let (nonce_account, previous_nonce, previous_slot) = properties;
 
-		let nonce_and_slot = nonce_witnessing::get_durable_nonce(&self.client, nonce_account, previous_slot)
-			.await?;
-			// If the nonce is not found, we default to the previous nonce.
-			// The `Change` electoral system ensure this vote is filtered.
-		Ok((nonce_and_slot.0.unwrap_or(previous_nonce), nonce_and_slot.1))
+		let nonce_and_slot =
+			nonce_witnessing::get_durable_nonce(&self.client, nonce_account, previous_slot).await?;
+		// If the nonce is not found, we default to the previous nonce and slot.
+		// The `Nonce` electoral system ensure this vote is filtered.
+		Ok(nonce_and_slot.unwrap_or(NonceVote{value: previous_nonce, slot: previous_slot}))
 	}
 }
 

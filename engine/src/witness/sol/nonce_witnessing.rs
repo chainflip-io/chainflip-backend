@@ -11,13 +11,13 @@ use crate::sol::{
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 use std::str::FromStr;
-use crate::sol::rpc_client_api::RpcResponseContext;
-
+use sol_prim::SlotNumber;
+use pallet_cf_elections::vote_storage::nonce::NonceVote;
 pub async fn get_durable_nonce<SolRetryRpcClient>(
 	sol_client: &SolRetryRpcClient,
 	nonce_account: SolAddress,
-	previous_nonce: u64,
-) -> Result<(Option<SolHash>, u64)>
+	previous_nonce: SlotNumber,
+) -> Result<Option<NonceVote<SolHash, SlotNumber>>>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
@@ -64,10 +64,10 @@ where
 					.and_then(Value::as_str)
 					.ok_or_else(|| anyhow!("Blockhash not found"))?,
 			)?;
-			Ok((Some(hash), response.context.slot))
+			Ok(Some(NonceVote {value: hash, slot: response.context.slot}))
 		},
 		Some(_) => Err(anyhow!("Expected UiAccountData::Json(ParsedAccount)")),
-		None => Ok((None, 0)),
+		None => Ok(None),
 	}
 }
 
