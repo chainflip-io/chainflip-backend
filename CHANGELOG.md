@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.6] - 2024-09-24
+
+### Fixes
+
+- Prevent stale utxos from being selected for egress.
+
 ## [1.6.5] - 2024-09-10
 
 ### Fixes
