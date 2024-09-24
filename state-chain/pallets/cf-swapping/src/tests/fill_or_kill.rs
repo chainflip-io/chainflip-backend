@@ -222,6 +222,53 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 }
 
 #[test]
+fn storage_state_rolls_back_on_fok_violation() {
+	const FOK_SWAP_ID: u64 = 1;
+	const OTHER_SWAP_ID: u64 = 2;
+
+	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+	const EXPECTED_NETWORK_FEE_AMOUNT: AssetAmount = INPUT_AMOUNT / 100;
+
+	new_test_ext()
+		.then_execute_at_block(INIT_BLOCK, |_| {
+			NetworkFee::set(Permill::from_percent(1));
+
+			// This is about 2 times (ignoring fees) what the output will be, so will fail
+			const MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE * 2;
+			insert_swaps(&[fok_swap(Some(TestRefundParams {
+				retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
+				min_output: MIN_OUTPUT,
+			}))]);
+			// However, swap 2 is non-FoK and should still be executed:
+			insert_swaps(&[fok_swap(None)]);
+
+			assert_swaps_scheduled_for_block(
+				&[FOK_SWAP_ID, OTHER_SWAP_ID],
+				SWAPS_SCHEDULED_FOR_BLOCK,
+			);
+		})
+		.then_process_blocks_until_block(SWAPS_SCHEDULED_FOR_BLOCK)
+		.then_execute_with(|_| {
+			// Swap 1 should fail here and rescheduled for a later block,
+			// but swap 2 (without FoK parameters) should still be successful:
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: OTHER_SWAP_ID, .. })
+			);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: FOK_SWAP_ID, .. }),
+			);
+
+			// This ensures that storage from the initial failure was reverted (otherwise
+			// we would see the network fee charged more than once)
+			assert_eq!(CollectedNetworkFee::<Test>::get(), EXPECTED_NETWORK_FEE_AMOUNT);
+		});
+}
+
+#[test]
 fn fok_swap_gets_refunded_due_to_price_impact_protection() {
 	const FOK_SWAP_REQUEST_ID: u64 = 1;
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;

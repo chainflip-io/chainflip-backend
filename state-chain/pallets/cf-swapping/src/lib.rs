@@ -211,6 +211,10 @@ enum BatchExecutionError<T: Config> {
 		amount: AssetAmount,
 		swaps: Vec<SwapState<T>>,
 	},
+	PriceViolation {
+		violating_swaps: Vec<Swap<T>>,
+		non_violating_swaps: Vec<Swap<T>>,
+	},
 	DispatchError {
 		error: DispatchError,
 	},
@@ -1196,7 +1200,7 @@ pub mod pallet {
 		}
 
 		#[transactional]
-		fn try_execute_within_price_impact_limit(
+		fn try_execute_without_violations(
 			swaps: Vec<Swap<T>>,
 		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
@@ -1205,7 +1209,24 @@ pub mod pallet {
 			// Swap from Stable asset, and complete the swap logic.
 			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
 
-			return Ok(swaps)
+			// Successfully executed without hitting price impact limit.
+			// Now checking for FoK violations:
+			let (non_violating, violating): (Vec<_>, Vec<_>) =
+				swaps.into_iter().partition(|swap| {
+					let final_output = swap.final_output.unwrap();
+					swap.refund_params()
+						.as_ref()
+						.map_or(true, |params| final_output >= params.min_output)
+				});
+
+			if violating.is_empty() {
+				Ok(non_violating)
+			} else {
+				Err(BatchExecutionError::PriceViolation {
+					violating_swaps: violating.into_iter().map(|ctx| ctx.swap).collect(),
+					non_violating_swaps: non_violating.into_iter().map(|ctx| ctx.swap).collect(),
+				})
+			}
 		}
 
 		/// Attempts to find (and execute) a batch of swaps that wouldn't result in hitting the
@@ -1213,45 +1234,24 @@ pub mod pallet {
 		/// needed.
 		#[transactional]
 		fn execute_batch(
-			mut swaps: Vec<Swap<T>>,
+			mut swaps_to_execute: Vec<Swap<T>>,
 		) -> Result<BatchExecutionOutcomes<T>, DispatchError> {
-			let mut removed_swaps = vec![];
+			let mut failed_swaps = vec![];
 
 			loop {
-				match Self::try_execute_within_price_impact_limit(swaps.clone()) {
-					Ok(executed_swaps) => {
-						// No liquidity failures, but we still need to check
-						// for FoK violations:
+				if swaps_to_execute.is_empty() {
+					return Ok(BatchExecutionOutcomes { successful_swaps: vec![], failed_swaps });
+				}
 
-						let (non_violating, violating): (Vec<_>, Vec<_>) =
-							executed_swaps.into_iter().partition(|swap| {
-								let final_output = swap.final_output.unwrap();
-								swap.refund_params()
-									.as_ref()
-									.map_or(true, |params| final_output >= params.min_output)
-							});
-
-						if violating.is_empty() {
-							break Ok(BatchExecutionOutcomes {
-								successful_swaps: non_violating,
-								failed_swaps: removed_swaps,
-							});
-						} else {
-							swaps = non_violating.into_iter().map(|ctx| ctx.swap).collect();
-							removed_swaps.extend(violating.into_iter().map(|ctx| ctx.swap));
-						}
-					},
-					Err(error) => {
-						let (asset, direction, amount, ref swap_states) = match error {
-							BatchExecutionError::SwapLegFailed {
-								asset,
-								direction,
-								amount,
-								swaps,
-							} => (asset, direction, amount, swaps),
-							BatchExecutionError::DispatchError { error } => return Err(error),
-						};
-
+				match Self::try_execute_without_violations(swaps_to_execute.clone()) {
+					Ok(successful_swaps) =>
+						return Ok(BatchExecutionOutcomes { successful_swaps, failed_swaps }),
+					Err(BatchExecutionError::SwapLegFailed {
+						asset,
+						direction,
+						amount,
+						swaps: ref swap_states,
+					}) => {
 						Self::deposit_event(Event::<T>::BatchSwapFailed {
 							asset,
 							direction,
@@ -1260,31 +1260,34 @@ pub mod pallet {
 
 						// Find the largest swap from the failing pool/direction:
 						let (swap_to_remove, remaining_swaps) =
-							utilities::split_off_highest_impact_swap(swaps, swap_states, direction);
+							utilities::split_off_highest_impact_swap(
+								swaps_to_execute,
+								swap_states,
+								direction,
+							);
 
-						// If we couldn't find a swap to remove, or the remaining swaps are
-						// empty, abort; otherwise, remove the swap and try again with the
-						// remaining swaps:
-						match swap_to_remove {
-							Some(swap_to_remove) if !remaining_swaps.is_empty() => {
-								removed_swaps.push(swap_to_remove);
-								swaps = remaining_swaps;
-							},
-							_ => {
-								if let Some(swap_to_remove) = swap_to_remove {
-									removed_swaps.push(swap_to_remove);
-								}
-								// This branch means that `remaining_swaps` is either empty,
-								// or has swaps that all need to be rescheduled:
-								removed_swaps.extend(remaining_swaps.into_iter());
-								break Ok(BatchExecutionOutcomes {
-									successful_swaps: vec![],
-									failed_swaps: removed_swaps,
-								});
-							},
+						// Abort if we couldn't find a swap to remove; otherwise, remove the
+						// swap and try again with the remaining swaps:
+						if let Some(swap) = swap_to_remove {
+							failed_swaps.push(swap);
+							swaps_to_execute = remaining_swaps;
+						} else {
+							failed_swaps.extend(remaining_swaps);
+							return Ok(BatchExecutionOutcomes {
+								successful_swaps: vec![],
+								failed_swaps,
+							});
 						}
 					},
-				};
+					Err(BatchExecutionError::PriceViolation {
+						violating_swaps,
+						non_violating_swaps,
+					}) => {
+						failed_swaps.extend(violating_swaps);
+						swaps_to_execute = non_violating_swaps;
+					},
+					Err(BatchExecutionError::DispatchError { error }) => return Err(error),
+				}
 			}
 		}
 
