@@ -18,7 +18,7 @@ use cf_chains::{
 	ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError,
 	Solana, SwapOrigin, TransactionBuilder,
 };
-use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapId};
+use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
 use cf_utilities::bs58_array;
 use codec::Encode;
@@ -73,7 +73,7 @@ fn schedule_deposit_to_swap(
 	from: Asset,
 	to: Asset,
 	ccm: Option<CcmChannelMetadata>,
-) -> SwapId {
+) -> SwapRequestId {
 	assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 		RuntimeOrigin::signed(who.clone()),
 		from,
@@ -161,8 +161,8 @@ fn can_build_solana_batch_all() {
 
 			// Initiate 2 swaps - Sol -> SolUsdc and SolUsdc -> Sol
 			// This will results in 2 fetches and 2 transfers of different assets.
-			assert_eq!(schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, None), 1);
-			assert_eq!(schedule_deposit_to_swap(BOB, Asset::SolUsdc, Asset::Sol, None), 3);
+			assert_eq!(schedule_deposit_to_swap(ALICE, Asset::Sol, Asset::SolUsdc, None), 1.into());
+			assert_eq!(schedule_deposit_to_swap(BOB, Asset::SolUsdc, Asset::Sol, None), 3.into());
 
 			// Verify the correct API call has been built, signed and broadcasted
 
@@ -299,7 +299,7 @@ fn can_send_solana_ccm() {
 					Asset::SolUsdc,
 					Some(sol_test_values::ccm_parameter().channel_metadata)
 				),
-				1
+				1.into()
 			);
 			assert_eq!(
 				schedule_deposit_to_swap(
@@ -308,7 +308,7 @@ fn can_send_solana_ccm() {
 					Asset::Sol,
 					Some(sol_test_values::ccm_parameter().channel_metadata)
 				),
-				3
+				3.into()
 			);
 
 			// Wait until calls are built, signed and broadcasted.

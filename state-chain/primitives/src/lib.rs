@@ -13,9 +13,56 @@ use serde::{Deserialize, Serialize};
 use sp_core::{ConstU32, U256};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
+	fmt,
 	vec::Vec,
 };
 pub mod chains;
+
+macro_rules! define_wrapper_type {
+	($name: ident, $inner: ty) => {
+		#[derive(
+			Clone,
+			Copy,
+			RuntimeDebug,
+			PartialEq,
+			Eq,
+			Encode,
+			Decode,
+			TypeInfo,
+			MaxEncodedLen,
+			Default,
+			serde::Serialize,
+			serde::Deserialize,
+		)]
+		pub struct $name(pub $inner);
+
+		impl std::ops::Deref for $name {
+			type Target = $inner;
+
+			fn deref(&self) -> &Self::Target {
+				&self.0
+			}
+		}
+
+		impl std::ops::DerefMut for $name {
+			fn deref_mut(&mut self) -> &mut Self::Target {
+				&mut self.0
+			}
+		}
+
+		impl From<$inner> for $name {
+			fn from(value: $inner) -> Self {
+				$name(value)
+			}
+		}
+
+		impl fmt::Display for $name {
+			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+				write!(f, "{}", self.0)
+			}
+		}
+	};
+}
 
 pub use chains::{assets::any::Asset, ForeignChain};
 
@@ -44,8 +91,8 @@ pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;
 
-pub type SwapId = u64;
-pub type SwapRequestId = u64;
+define_wrapper_type!(SwapId, u64);
+define_wrapper_type!(SwapRequestId, u64);
 
 pub type PrewitnessedDepositId = u64;
 

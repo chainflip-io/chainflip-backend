@@ -185,7 +185,7 @@ pub struct SwapLegInfo {
 impl<T: Config> Swap<T> {
 	fn new(
 		swap_id: SwapId,
-		swap_request_id: SwapId,
+		swap_request_id: SwapRequestId,
 		from: Asset,
 		to: Asset,
 		input_amount: AssetAmount,
