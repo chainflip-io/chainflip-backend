@@ -7,6 +7,7 @@ All notable changes included in each Chainflip release will be documented in thi
 ### Fixes
 
 - Add missing broker fees migration.
+- Close expired Solana channels.
 
 ## [1.6.6] - 2024-09-24
 
