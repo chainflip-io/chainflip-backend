@@ -317,9 +317,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn vault_imbalance(asset: Asset) -> VaultImbalance<AssetAmount> {
-		let owed: u128 =
-			Liabilities::<T>::get(asset).unwrap().values().map(AssetBalance::amount).sum();
-		let withheld = WithheldAssets::<T>::get(asset).unwrap().amount();
+		let owed: AssetAmount = if let Some(liabilities) = Liabilities::<T>::get(asset) {
+			liabilities.values().map(AssetBalance::amount).sum()
+		} else {
+			0
+		};
+		let withheld: AssetAmount =
+			WithheldAssets::<T>::get(asset).map_or(0, |amount| amount.amount());
 		if owed > withheld {
 			VaultImbalance::Deficit(owed - withheld)
 		} else {
