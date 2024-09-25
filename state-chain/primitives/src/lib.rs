@@ -14,6 +14,7 @@ use sp_core::{ConstU32, U256};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
 	fmt,
+	ops::{Deref, DerefMut},
 	vec::Vec,
 };
 pub mod chains;
@@ -36,7 +37,7 @@ macro_rules! define_wrapper_type {
 		)]
 		pub struct $name(pub $inner);
 
-		impl std::ops::Deref for $name {
+		impl Deref for $name {
 			type Target = $inner;
 
 			fn deref(&self) -> &Self::Target {
@@ -44,7 +45,7 @@ macro_rules! define_wrapper_type {
 			}
 		}
 
-		impl std::ops::DerefMut for $name {
+		impl DerefMut for $name {
 			fn deref_mut(&mut self) -> &mut Self::Target {
 				&mut self.0
 			}
