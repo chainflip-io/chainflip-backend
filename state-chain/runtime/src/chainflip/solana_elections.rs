@@ -23,6 +23,7 @@ use pallet_cf_elections::{
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
 		monotonic_median::MedianChangeHook,
+		nonce_wintessing::OnChangeHook,
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 };
@@ -108,7 +109,7 @@ pub type SolanaIngressTracking =
 		<Runtime as Chainflip>::ValidatorId,
 	>;
 
-pub type SolanaNonceTracking = electoral_systems::change::NonceWitnessing<
+pub type SolanaNonceTracking = electoral_systems::nonce_wintessing::NonceWitnessing<
 	SolAddress,
 	SolHash,
 	SlotNumber,
