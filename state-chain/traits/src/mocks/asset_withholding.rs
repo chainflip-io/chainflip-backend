@@ -2,7 +2,7 @@ use crate::{
 	mocks::{MockPallet, MockPalletStorage},
 	AssetWithholding,
 };
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{accounting::AssetBalance, Asset, AssetAmount};
 use frame_support::sp_runtime::Saturating;
 
 pub struct MockAssetWithholding;
@@ -20,12 +20,12 @@ impl MockAssetWithholding {
 const WITHHELD_ASSETS: &[u8] = b"WITHHELD_ASSETS";
 
 impl AssetWithholding for MockAssetWithholding {
-	fn withhold_assets(asset: Asset, amount: AssetAmount) {
+	fn withhold_assets(asset_balance: AssetBalance) {
 		Self::mutate_storage::<Asset, _, AssetAmount, _, _>(
 			WITHHELD_ASSETS,
-			&asset,
+			&asset_balance.asset(),
 			|value: &mut Option<AssetAmount>| {
-				value.get_or_insert_default().saturating_accrue(amount);
+				value.get_or_insert_default().saturating_accrue(asset_balance.amount());
 			},
 		);
 	}

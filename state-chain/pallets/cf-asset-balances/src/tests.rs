@@ -15,7 +15,7 @@ use crate::{mock::*, ExternalOwner, Liabilities, Pallet, WithheldAssets};
 
 fn payed_gas(chain: ForeignChain, amount: AssetAmount, account: ForeignChainAddress) {
 	Pallet::<Test>::record_liability(account, AssetBalance::mint(amount, chain.gas_asset()));
-	Pallet::<Test>::withhold_assets(chain.gas_asset(), amount);
+	Pallet::<Test>::withhold_assets(AssetBalance::mint(amount, chain.gas_asset()));
 }
 
 #[track_caller]

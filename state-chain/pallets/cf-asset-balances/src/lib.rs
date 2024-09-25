@@ -270,9 +270,6 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		// TODO: either implement the trait on AssetBalance or use another method to reduce the
-		// available.defensive_saturating_reduce(amount_reconciled);
-		// amount_owed.defensive_saturating_reduce(amount_reconciled);
 		available.saturating_primitive_sub(amount_reconciled);
 		amount_owed.saturating_primitive_sub(amount_reconciled);
 
@@ -319,7 +316,6 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	// Note: In this function we bypass the implicit asset check -> be aware!
 	pub fn vault_imbalance(asset: Asset) -> VaultImbalance<AssetAmount> {
 		let owed: u128 =
 			Liabilities::<T>::get(asset).unwrap().values().map(AssetBalance::amount).sum();
@@ -379,14 +375,12 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 }
 
 impl<T: Config> AssetWithholding for Pallet<T> {
-	fn withhold_assets(asset: Asset, amount: AssetAmount) {
-		// Note: Temporary hack to make the compiler shut up!
-		let amount = AssetBalance::mint(amount, asset);
-		WithheldAssets::<T>::mutate(asset, |maybe_fees| {
+	fn withhold_assets(asset_balance: AssetBalance) {
+		WithheldAssets::<T>::mutate(asset_balance.asset(), |maybe_fees| {
 			if let Some(fees) = maybe_fees {
-				fees.accrue(amount);
+				fees.accrue(asset_balance);
 			} else {
-				*maybe_fees = Some(amount);
+				*maybe_fees = Some(asset_balance);
 			}
 		});
 	}

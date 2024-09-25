@@ -200,17 +200,5 @@ mod tests {
 		assert_eq!(taken.amount(), 50);
 		assert_eq!(balance.amount(), 0);
 		assert_eq!(taken.burn(), 50);
-
-		// #[cfg(debug_assertions)]
-		// {
-		// 	assert_panics!({
-		// 		let _ = AssetBalance::mint(100, Asset::Dot);
-		// 	});
-		// 	assert_panics!({
-		// 		let mut balance = AssetBalance::mint(100, Asset::Dot);
-		// 		balance.accrue(AssetBalance::mint(50, Asset::Eth));
-		// 		balance.burn();
-		// 	});
-		// }
 	}
 }

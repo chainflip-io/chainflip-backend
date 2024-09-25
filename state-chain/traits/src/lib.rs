@@ -962,7 +962,7 @@ pub trait LiabilityTracker {
 }
 
 pub trait AssetWithholding {
-	fn withhold_assets(asset: Asset, amount: AssetAmount);
+	fn withhold_assets(asset_balance: AssetBalance);
 }
 
 pub trait FetchesTransfersLimitProvider {

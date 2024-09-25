@@ -32,9 +32,10 @@ use cf_chains::{
 	SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
-	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS,
+	accounting::AssetBalance, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier,
+	BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -2281,10 +2282,10 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 		fee: TargetChainAmount<T, I>,
 	) {
 		if !fee.is_zero() {
-			T::AssetWithholding::withhold_assets(
-				<T::TargetChain as Chain>::GAS_ASSET.into(),
+			T::AssetWithholding::withhold_assets(AssetBalance::mint(
 				fee.into(),
-			);
+				<T::TargetChain as Chain>::GAS_ASSET.into(),
+			));
 		}
 	}
 }
