@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.7] - 2024-09-25
+
+### Fixes
+
+- Add missing broker fees migration.
+
 ## [1.6.6] - 2024-09-24
 
 ### Fixes
