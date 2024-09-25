@@ -24,7 +24,8 @@ impl MockHook {
 }
 
 type Vote = u64;
-type SimpleChange = Change<(), Vote, (), MockHook, ()>;
+type Slot = u32;
+type SimpleChange = NonceWitnessing<(), Vote, Slot, (), MockHook, ()>;
 
 register_checks! {
 	SimpleChange {

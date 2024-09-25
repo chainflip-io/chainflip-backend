@@ -1,6 +1,8 @@
 use codec::{Decode, Encode};
-use frame_support::{pallet_prelude::Member, Parameter};
-use frame_support::pallet_prelude::TypeInfo;
+use frame_support::{
+	pallet_prelude::{Member, TypeInfo},
+	Parameter,
+};
 
 use super::{AuthorityVote, VoteComponents, VoteStorage};
 
@@ -9,15 +11,15 @@ use crate::{CorruptStorageError, SharedDataHash};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
 pub struct NonceVote<Value, Slot> {
 	pub value: Value,
-	pub slot: Slot
+	pub slot: Slot,
 }
 pub struct NonceStorage<T: Parameter + Member, S: Parameter + Member> {
 	_phantom: core::marker::PhantomData<(T, S)>,
 }
 impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for NonceStorage<T, S> {
 	type Properties = ();
-	type Vote = NonceVote<T,S>;
-	type PartialVote = NonceVote<T,S>;
+	type Vote = NonceVote<T, S>;
+	type PartialVote = NonceVote<T, S>;
 	type IndividualComponent = S;
 	type BitmapComponent = T;
 	type SharedData = ();
@@ -50,7 +52,13 @@ impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for NonceStorage<
 			VoteComponents {
 				bitmap_component: Some(bitmap_component),
 				individual_component: Some((_properties, individual_component)),
-			} => Some(((), AuthorityVote::Vote(NonceVote{value: bitmap_component, slot: individual_component}))),
+			} => Some((
+				(),
+				AuthorityVote::Vote(NonceVote {
+					value: bitmap_component,
+					slot: individual_component,
+				}),
+			)),
 			_ => None,
 		})
 	}
