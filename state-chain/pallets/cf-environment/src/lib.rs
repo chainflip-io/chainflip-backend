@@ -613,28 +613,29 @@ impl<T: Config> Pallet<T> {
 		let min_fee_required_per_tx = bitcoin_fee_info.min_fee_required_per_tx();
 		let fee_per_output_utxo = bitcoin_fee_info.fee_per_output_utxo();
 
+		fn filter_stale_utxos<T: Config>(available_utxos: &mut Vec<Utxo>, aggkey: &AggKey) {
+			if let Some(previous) = aggkey.previous {
+				let stale = available_utxos
+					.extract_if(|utxo| {
+						utxo.deposit_address.pubkey_x != aggkey.current &&
+							utxo.deposit_address.pubkey_x != previous
+					})
+					.collect::<Vec<_>>();
+				if !stale.is_empty() {
+					log::warn!("Stale utxos detected: {:?}", stale);
+					Pallet::<T>::deposit_event(Event::<T>::StaleUtxosDiscarded { utxos: stale });
+				}
+			}
+		}
+
 		match utxo_selection_type {
 			UtxoSelectionType::SelectForConsolidation =>
 				BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
 					if let Some(cf_traits::EpochKey {
-						key: AggKey { previous, current: current_key },
-						..
+						key: aggkey @ AggKey { previous, .. }, ..
 					}) = T::BitcoinKeyProvider::active_epoch_key()
 					{
-						if let Some(prev_key) = previous {
-							let stale = available_utxos
-								.extract_if(|utxo| {
-									utxo.deposit_address.pubkey_x != current_key &&
-										utxo.deposit_address.pubkey_x != prev_key
-								})
-								.collect::<Vec<_>>();
-
-							if !stale.is_empty() {
-								Self::deposit_event(Event::<T>::StaleUtxosDiscarded {
-									utxos: stale,
-								});
-							}
-						}
+						filter_stale_utxos::<T>(available_utxos, &aggkey);
 
 						let selected_utxo = select_utxos_for_consolidation(
 							previous,
@@ -654,6 +655,11 @@ impl<T: Config> Pallet<T> {
 				}),
 			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
 				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
+					if let Some(cf_traits::EpochKey { key: aggkey, .. }) =
+						T::BitcoinKeyProvider::active_epoch_key()
+					{
+						filter_stale_utxos::<T>(available_utxos, &aggkey);
+					}
 					select_utxos_from_pool(
 						available_utxos,
 						&bitcoin_fee_info,

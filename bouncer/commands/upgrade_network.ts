@@ -29,7 +29,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
 import { upgradeNetworkGit, upgradeNetworkPrebuilt } from '../shared/upgrade_network';
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { SemVerLevel } from '../shared/bump_release_version';
 
 async function main(): Promise<void> {
@@ -122,4 +122,4 @@ async function main(): Promise<void> {
 }
 
 // Quite a long timeout, as the sequence of try-runtime runs takes some time.
-await executeWithTimeout(main(), 30 * 60);
+await runWithTimeoutAndExit(main(), 30 * 60);

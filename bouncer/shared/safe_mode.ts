@@ -37,7 +37,7 @@ export async function setSafeModeToAmber(options: string[]) {
       translatedOptions[entry[0]][entry[1]] = true;
     } catch {
       console.log('The provided feature flag ' + x + ' is not supported!');
-      process.exit(1);
+      process.exit(-1);
     }
   });
   await setSafeMode('CodeAmber', translatedOptions);

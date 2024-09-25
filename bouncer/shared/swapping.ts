@@ -1,9 +1,8 @@
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import Web3 from 'web3';
-import assert from 'assert';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
-import { performSwap, SwapParams } from '../shared/perform_swap';
+import { performSwap } from '../shared/perform_swap';
 import {
   newAddress,
   chainFromAsset,
@@ -13,26 +12,16 @@ import {
   ccmSupportedChains,
   assetDecimals,
 } from '../shared/utils';
-import { BtcAddressType, btcAddressTypes } from '../shared/new_btc_address';
+import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { performSwapViaContract, ContractSwapParams } from '../shared/contract_swap';
+import { performSwapViaContract } from '../shared/contract_swap';
+import { SwapContext, SwapStatus } from './swap_context';
 
 enum SolidityType {
   Uint256 = 'uint256',
   String = 'string',
   Bytes = 'bytes',
   Address = 'address',
-}
-
-export enum SwapStatus {
-  Initiated,
-  Funded,
-  // Contract swap specific statuses
-  ContractApproved,
-  ContractExecuted,
-  SwapScheduled,
-  Success,
-  Failure,
 }
 
 let swapCount = 1;
@@ -197,6 +186,7 @@ export async function prepareSwap(
   messageMetadata?: CcmDepositMetadata,
   tagSuffix?: string,
   log = true,
+  swapContext?: SwapContext,
 ) {
   // Seed needs to be unique per swap:
   const seed = randomAsHex(32);
@@ -205,7 +195,7 @@ export async function prepareSwap(
 
   let tag = `[${(swapCount++).toString().concat(':').padEnd(4, ' ')} ${sourceAsset}->${destAsset}`;
   tag += messageMetadata ? ' CCM' : '';
-  tag += tagSuffix ? `${tagSuffix}]` : ']';
+  tag += tagSuffix ? ` ${tagSuffix}]` : ']';
 
   // For swaps with a message force the address to be the CF Tester address.
   if (
@@ -220,6 +210,8 @@ export async function prepareSwap(
     destAddress = await newAddress(destAsset, seed, addressType);
     if (log) console.log(`${tag} Created new ${destAsset} address: ${destAddress}`);
   }
+
+  swapContext?.updateStatus(tag, SwapStatus.Initiated);
 
   return { destAddress, tag };
 }
@@ -241,9 +233,8 @@ export async function testSwap(
     messageMetadata,
     tagSuffix,
     log,
+    swapContext,
   );
-
-  swapContext?.updateStatus(tag, SwapStatus.Initiated);
 
   return performSwap(
     sourceAsset,
@@ -273,9 +264,10 @@ export async function testSwapViaContract(
     addressType,
     messageMetadata,
     (tagSuffix ?? '') + ' Contract',
+    log,
+    swapContext,
   );
 
-  swapContext?.updateStatus(tag, SwapStatus.Initiated);
   return performSwapViaContract(
     sourceAsset,
     destAsset,
@@ -285,142 +277,4 @@ export async function testSwapViaContract(
     swapContext,
     log,
   );
-}
-
-export class SwapContext {
-  allSwaps: Map<string, SwapStatus>;
-
-  constructor() {
-    this.allSwaps = new Map();
-  }
-
-  updateStatus(tag: string, status: SwapStatus) {
-    const currentStatus = this.allSwaps.get(tag);
-
-    // Sanity checks:
-    switch (status) {
-      case SwapStatus.Initiated: {
-        assert(currentStatus === undefined, `Unexpected status transition for ${tag}`);
-        break;
-      }
-      case SwapStatus.Funded: {
-        assert(currentStatus === SwapStatus.Initiated, `Unexpected status transition for ${tag}`);
-        break;
-      }
-      case SwapStatus.ContractApproved: {
-        assert(currentStatus === SwapStatus.Initiated, `Unexpected status transition for ${tag}`);
-        break;
-      }
-      case SwapStatus.ContractExecuted: {
-        assert(
-          currentStatus === SwapStatus.ContractApproved,
-          `Unexpected status transition for ${tag}`,
-        );
-        break;
-      }
-      case SwapStatus.SwapScheduled: {
-        assert(
-          currentStatus === SwapStatus.ContractExecuted || currentStatus === SwapStatus.Funded,
-          `Unexpected status transition for ${tag}`,
-        );
-        break;
-      }
-      case SwapStatus.Success: {
-        assert(
-          currentStatus === SwapStatus.SwapScheduled ||
-            currentStatus === SwapStatus.ContractExecuted,
-          `Unexpected status transition for ${tag}`,
-        );
-        break;
-      }
-      default:
-        // nothing to do
-        break;
-    }
-
-    this.allSwaps.set(tag, status);
-  }
-
-  print_report() {
-    const unsuccessfulSwapsEntries: string[] = [];
-    this.allSwaps.forEach((status, tag) => {
-      if (status !== SwapStatus.Success) {
-        unsuccessfulSwapsEntries.push(`${tag}: ${SwapStatus[status]}`);
-      }
-    });
-
-    if (unsuccessfulSwapsEntries.length === 0) {
-      console.log('All swaps are successful!');
-    } else {
-      let report = `Unsuccessful swaps:\n`;
-      report += unsuccessfulSwapsEntries.join('\n');
-      console.error(report);
-    }
-  }
-}
-
-export async function testAllSwaps(swapContext: SwapContext) {
-  const allSwaps: Promise<SwapParams | ContractSwapParams>[] = [];
-
-  function appendSwap(
-    sourceAsset: Asset,
-    destAsset: Asset,
-    functionCall: typeof testSwap | typeof testSwapViaContract,
-    ccmSwap: boolean = false,
-  ) {
-    if (destAsset === 'Btc') {
-      const btcAddressTypesArray = Object.values(btcAddressTypes);
-      allSwaps.push(
-        functionCall(
-          sourceAsset,
-          destAsset,
-          btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-          swapContext,
-        ),
-      );
-    } else {
-      allSwaps.push(
-        functionCall(
-          sourceAsset,
-          destAsset,
-          undefined,
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
-          swapContext,
-        ),
-      );
-    }
-  }
-
-  console.log('=== Testing all swaps ===');
-
-  Object.values(Assets).forEach((sourceAsset) => {
-    Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset)
-      .forEach((destAsset) => {
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
-
-        const sourceChain = chainFromAsset(sourceAsset);
-        const destChain = chainFromAsset(destAsset);
-        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
-          // Contract Swaps
-          appendSwap(sourceAsset, destAsset, testSwapViaContract);
-
-          if (ccmSupportedChains.includes(destChain)) {
-            // CCM contract swaps
-            appendSwap(sourceAsset, destAsset, testSwapViaContract, true);
-          }
-        }
-
-        if (ccmSupportedChains.includes(destChain)) {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, true);
-        }
-      });
-  });
-
-  await Promise.all(allSwaps);
-
-  console.log('=== Swapping test complete ===');
 }

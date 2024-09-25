@@ -12,6 +12,7 @@ use cf_traits::Chainflip;
 use sp_std::vec::Vec;
 use std::{cell::RefCell, collections::BTreeMap};
 
+// TODO: Consider using frame_support::parameter_types! with storage instead of using thread local.
 thread_local! {
 	static VOTE_DESIRED: RefCell<bool> = RefCell::new(true);
 	static VOTE_NEEDED: RefCell<bool> = RefCell::new(true);
@@ -20,6 +21,7 @@ thread_local! {
 	static CONSENSUS_STATUS: RefCell<
 		BTreeMap<UniqueMonotonicIdentifier, ConsensusStatus<AuthorityCount>>
 	> = RefCell::new(Default::default());
+	static DELETE_ELECTIONS_ON_FINALIZE_CONSENSUS: RefCell<bool> = RefCell::new(false);
 }
 
 /// Mock electoral system for testing.
@@ -32,19 +34,38 @@ thread_local! {
 /// If assume_consensus is set to `true`, then the consensus value will be the number of votes.
 pub struct MockElectoralSystem;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BehaviourUpdate {
+	VoteDesired(bool),
+	VoteNeeded(bool),
+	VoteValid(bool),
+	AssumeConsensus(bool),
+	DeleteOnFinalizeConsensus(bool),
+}
+
+impl BehaviourUpdate {
+	pub fn apply(&self) {
+		match self {
+			BehaviourUpdate::VoteDesired(desired) => {
+				VOTE_DESIRED.with(|v| *v.borrow_mut() = *desired);
+			},
+			BehaviourUpdate::VoteNeeded(needed) => {
+				VOTE_NEEDED.with(|v| *v.borrow_mut() = *needed);
+			},
+			BehaviourUpdate::VoteValid(valid) => {
+				VOTE_VALID.with(|v| *v.borrow_mut() = *valid);
+			},
+			BehaviourUpdate::AssumeConsensus(assume) => {
+				ASSUME_CONSENSUS.with(|v| *v.borrow_mut() = *assume);
+			},
+			BehaviourUpdate::DeleteOnFinalizeConsensus(delete) => {
+				DELETE_ELECTIONS_ON_FINALIZE_CONSENSUS.with(|v| *v.borrow_mut() = *delete);
+			},
+		}
+	}
+}
+
 impl MockElectoralSystem {
-	pub fn set_vote_desired(desired: bool) {
-		VOTE_DESIRED.with(|v| *v.borrow_mut() = desired);
-	}
-
-	pub fn set_vote_needed(needed: bool) {
-		VOTE_NEEDED.with(|v| *v.borrow_mut() = needed);
-	}
-
-	pub fn set_vote_valid(valid: bool) {
-		VOTE_VALID.with(|v| *v.borrow_mut() = valid);
-	}
-
 	pub fn vote_desired() -> bool {
 		VOTE_DESIRED.with(|v| *v.borrow())
 	}
@@ -57,12 +78,12 @@ impl MockElectoralSystem {
 		VOTE_VALID.with(|v| *v.borrow())
 	}
 
-	pub fn set_assume_consensus(assume: bool) {
-		ASSUME_CONSENSUS.with(|v| *v.borrow_mut() = assume);
-	}
-
 	pub fn should_assume_consensus() -> bool {
 		ASSUME_CONSENSUS.with(|v| *v.borrow())
+	}
+
+	pub fn should_delete_on_finalize_consensus() -> bool {
+		DELETE_ELECTIONS_ON_FINALIZE_CONSENSUS.with(|v| *v.borrow())
 	}
 
 	pub fn consensus_status(umi: UniqueMonotonicIdentifier) -> ConsensusStatus<AuthorityCount> {
@@ -78,29 +99,19 @@ impl MockElectoralSystem {
 		});
 	}
 
+	pub fn update(updates: &[BehaviourUpdate]) {
+		updates.iter().for_each(BehaviourUpdate::apply);
+	}
+
 	pub fn reset() {
-		Self::set_vote_desired(true);
-		Self::set_vote_needed(true);
-		Self::set_vote_valid(true);
-		Self::set_assume_consensus(false);
-	}
-
-	pub fn delete_elections<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
-		election_identifiers: Vec<ElectionIdentifier<()>>,
-	) -> Result<(), CorruptStorageError> {
-		for id in election_identifiers {
-			electoral_access.election_mut(id)?.delete();
-		}
-
-		Ok(())
-	}
-
-	pub fn delete_all_elections<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
-		election_identifiers: Vec<ElectionIdentifier<()>>,
-	) -> Result<(), CorruptStorageError> {
-		Self::delete_elections(electoral_access, election_identifiers)
+		Self::update(&[
+			BehaviourUpdate::VoteDesired(true),
+			BehaviourUpdate::VoteNeeded(true),
+			BehaviourUpdate::VoteValid(true),
+			BehaviourUpdate::AssumeConsensus(false),
+			BehaviourUpdate::DeleteOnFinalizeConsensus(false),
+		]);
+		CONSENSUS_STATUS.with(|v| v.borrow_mut().clear());
 	}
 }
 
@@ -137,10 +148,12 @@ impl ElectoralSystem for MockElectoralSystem {
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for id in election_identifiers {
 			// Read the current consensus status and save it.
-			Self::set_consensus_status(
-				*id.unique_monotonic(),
-				electoral_access.election_mut(id)?.check_consensus()?,
-			);
+			let mut election = electoral_access.election_mut(id)?;
+			let consensus = election.check_consensus()?;
+			Self::set_consensus_status(*id.unique_monotonic(), consensus.clone());
+			if consensus.has_consensus().is_some() && Self::should_delete_on_finalize_consensus() {
+				election.delete();
+			}
 		}
 
 		Ok(())

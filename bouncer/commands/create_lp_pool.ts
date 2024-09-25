@@ -7,8 +7,8 @@
 // For example: ./commands/create_lp_pool.ts btc 10000
 
 import { createLpPool } from '../shared/create_lp_pool';
-import { parseAssetString, executeWithTimeout } from '../shared/utils';
+import { parseAssetString, runWithTimeoutAndExit } from '../shared/utils';
 
 const initialPrice = parseFloat(process.argv[3]);
 const asset = parseAssetString(process.argv[2]);
-await executeWithTimeout(createLpPool(asset, initialPrice), 20);
+await runWithTimeoutAndExit(createLpPool(asset, initialPrice), 20);

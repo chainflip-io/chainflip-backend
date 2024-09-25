@@ -1,17 +1,22 @@
 #!/usr/bin/env -S pnpm tsx
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { ExecutableTest } from '../shared/executable_test';
 import { testSwapViaContract } from '../shared/swapping';
 import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 
-async function rotateAndSwap() {
+/* eslint-disable @typescript-eslint/no-use-before-define */
+export const testRotateAndSwap = new ExecutableTest('Rotation-Barrier', main, 280);
+
+// Testing broadcast through vault rotations
+async function main() {
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
 
   // Wait for the activation key to be created and the activation key to be sent for signing
-  console.log(`Vault rotation initiated`);
+  testRotateAndSwap.log(`Vault rotation initiated`);
   await observeEvent('evmThresholdSigner:KeygenSuccess').event;
-  console.log(`Waiting for the bitcoin key handover`);
+  testRotateAndSwap.log(`Waiting for the bitcoin key handover`);
   await observeEvent('bitcoinThresholdSigner:KeyHandoverSuccessReported').event;
-  console.log(`Waiting for eth key activation transaction to be sent for signing`);
+  testRotateAndSwap.log(`Waiting for eth key activation transaction to be sent for signing`);
   await observeEvent('evmThresholdSigner:ThresholdSignatureRequest').event;
 
   const broadcastAborted = observeBadEvent(':BroadcastAborted', { label: 'Rotate and swap' });
@@ -20,14 +25,4 @@ async function rotateAndSwap() {
   await testSwapViaContract('ArbEth', 'Eth');
 
   await broadcastAborted.stop();
-}
-
-try {
-  console.log('=== Testing broadcast through vault rotations ===');
-  await rotateAndSwap();
-  console.log('=== Test complete ===');
-  process.exit(0);
-} catch (e) {
-  console.error(e);
-  process.exit(-1);
 }

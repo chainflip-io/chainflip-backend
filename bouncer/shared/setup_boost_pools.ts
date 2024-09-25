@@ -7,7 +7,7 @@ import {
 } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { getChainflipApi, Event, observeEvent } from './utils/substrate';
-import { addBoostFunds } from './boost';
+import { addBoostFunds } from '../tests/boost';
 import { depositLiquidity } from './deposit_liquidity';
 
 export type BoostPoolId = {

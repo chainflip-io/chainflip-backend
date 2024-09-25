@@ -9,6 +9,7 @@ pub use scale_json;
 
 pub mod dynamic_events;
 pub mod future_map;
+pub mod health;
 pub mod loop_select;
 pub mod metrics;
 pub mod rle_bitmap;

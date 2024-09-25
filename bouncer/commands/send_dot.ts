@@ -9,7 +9,7 @@
 // will send 1.2 Dot to account 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB
 
 import { sendDot } from '../shared/send_dot';
-import { executeWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 
 async function main() {
   const polkadotAddress = process.argv[2];
@@ -18,4 +18,4 @@ async function main() {
   await sendDot(polkadotAddress, dotAmount);
 }
 
-await executeWithTimeout(main(), 20);
+await runWithTimeoutAndExit(main(), 20);

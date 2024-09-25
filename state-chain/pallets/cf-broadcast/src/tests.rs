@@ -1,10 +1,12 @@
 #![cfg(test)]
 
+use core::cmp::max;
+
 use crate::{
 	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData,
-	BroadcastId, Config, DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent,
-	FailedBroadcasters, Instance1, PalletConfigUpdate, PalletOffence, PendingApiCalls,
-	PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts,
+	BroadcastId, ChainBlockNumberFor, Config, DelayedBroadcastRetryQueue, Error,
+	Event as BroadcastEvent, FailedBroadcasters, Instance1, PalletConfigUpdate, PalletOffence,
+	PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts,
 	TransactionMetadata, TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
@@ -19,13 +21,14 @@ use cf_chains::{
 use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
+		block_height_provider::BlockHeightProvider,
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
 		liability_tracker::MockLiabilityTracker,
 		signer_nomination::MockNominator,
 		threshold_signer::MockThresholdSigner,
 	},
-	AsyncResult, Broadcaster as BroadcasterTrait, Chainflip, EpochInfo, SetSafeMode,
-	ThresholdSigner,
+	AsyncResult, Broadcaster as BroadcasterTrait, Chainflip, EpochInfo, GetBlockHeight,
+	SetSafeMode, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use frame_support::{
@@ -154,6 +157,31 @@ fn new_mock_broadcast_attempt(
 	}
 }
 
+/// Since there might be multiple entries with the same timeout chainblock number,
+/// we collect all of their "values" into a single `BTreeSet`. This improves the
+/// readability of a few test cases. Since we don't care about the order of the timeouts,
+/// we use a `BTreeSet` instead of a vector.
+fn get_timeouts_for(
+	chainblock: ChainBlockNumberFor<Test, Instance1>,
+) -> BTreeSet<(BroadcastId, ValidatorId)> {
+	let mut result = BTreeSet::new();
+	for (timeout, broadcast_id, nominee) in Timeouts::<Test, Instance1>::get() {
+		if timeout == chainblock {
+			result.insert((broadcast_id, nominee));
+		}
+	}
+	result
+}
+/// Append multiple timeout entries for the same target chain block.
+fn append_timeouts_for(
+	chainblock: ChainBlockNumberFor<Test, Instance1>,
+	timeouts: Vec<(BroadcastId, ValidatorId)>,
+) {
+	for (broadcast_id, nominee) in timeouts {
+		Timeouts::<Test, Instance1>::append((chainblock, broadcast_id, nominee));
+	}
+}
+
 #[test]
 fn transaction_succeeded_results_in_refund_for_signer() {
 	new_test_ext().execute_with(|| {
@@ -212,11 +240,23 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 
 // Helper function: make a broadcast to be aborted upon the next failure.
 fn ready_to_abort_broadcast(broadcast_id: BroadcastId) -> u64 {
+	// Extract nominee for current broadcast_id from the Timeouts storage.
+	// If none can be found the default is 0.
+	let mut nominee = 0;
+	for (_, id, nom) in Timeouts::<Test, Instance1>::get() {
+		if id == broadcast_id {
+			nominee = nom;
+			break;
+		}
+	}
+
 	// Mock when all the possible broadcasts have failed another broadcast, and are
 	// therefore aborted.
 	let mut validators =
 		MockEpochInfo::current_authorities().into_iter().collect::<BTreeSet<u64>>();
-	let nominee = validators.pop_first().unwrap();
+
+	// The nominee should be the last one *not* in the `FailedBroadcasters` list
+	validators.remove(&nominee);
 	FailedBroadcasters::<Test, Instance1>::insert(broadcast_id, validators);
 	nominee
 }
@@ -329,7 +369,6 @@ fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 
 #[test]
 fn test_signature_request_expiry() {
-	let mut expiry = 0;
 	let check_end_state = |broadcast_id| {
 		// old attempt has expired, but the data still exists
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_id).is_some());
@@ -341,15 +380,20 @@ fn test_signature_request_expiry() {
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
 			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
-			expiry = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
+			let expiry =
+				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
+			(broadcast_id, expiry)
+		})
+		.then_execute_at_next_block(|(broadcast_id, expiry)| {
+			MockCfe::respond(Scenario::Timeout);
+			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
+			(broadcast_id, expiry)
+		})
+		.then_execute_with(|(broadcast_id, expiry)| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(expiry);
 			broadcast_id
 		})
 		.then_execute_at_next_block(|broadcast_id| {
-			MockCfe::respond(Scenario::Timeout);
-			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
-			broadcast_id
-		})
-		.then_execute_at_block(expiry, |broadcast_id| {
 			MockCfe::respond(Scenario::Timeout);
 			check_end_state(broadcast_id);
 			broadcast_id
@@ -363,7 +407,6 @@ fn test_signature_request_expiry() {
 
 #[test]
 fn test_transmission_request_expiry() {
-	let mut expiry = 0;
 	let check_end_state = |broadcast_id| {
 		assert_eq!(TIMEDOUT_ATTEMPTS.with(|cell| *cell.borrow().first().unwrap()), broadcast_id,);
 		// New attempt is live with same broadcast_id and incremented attempt_count.
@@ -373,15 +416,23 @@ fn test_transmission_request_expiry() {
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
 			MockCfe::respond(Scenario::HappyPath);
-			expiry = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
+			let expiry =
+				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
+			(broadcast_id, expiry)
+		})
+		.then_execute_with(|(broadcast_id, expiry)| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(expiry);
 			broadcast_id
 		})
-		.then_execute_at_block(expiry, |broadcast_id| {
+		.then_execute_at_next_block(|broadcast_id| {
 			MockCfe::respond(Scenario::Timeout);
 			check_end_state(broadcast_id);
 			broadcast_id
 		})
-		.then_execute_at_block(expiry + 1, |broadcast_id| {
+		.then_execute_with_keep_context(|_| {
+			BlockHeightProvider::<MockEthereum>::increment_block_height()
+		})
+		.then_execute_at_next_block(|broadcast_id| {
 			// Subsequent calls to the hook have no further effect.
 			MockCfe::respond(Scenario::Timeout);
 			check_end_state(broadcast_id);
@@ -393,7 +444,6 @@ fn test_transmission_request_expiry() {
 // we should stop and re-threshold sign using the new runtime version.
 #[test]
 fn re_request_threshold_signature_on_invalid_tx_params() {
-	let mut expiry = 0;
 	new_test_ext()
 		.execute_with(|| {
 			let (_, api_call) = api_call(1);
@@ -407,10 +457,14 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
 
 			MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_requires_refresh();
-			expiry = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
-			broadcast_id
+			let expiry =
+				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
+			(broadcast_id, expiry)
 		})
-		.then_execute_at_block(expiry, |broadcast_id| {
+		.then_execute_with_keep_context(|(_, expiry)| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(*expiry)
+		})
+		.then_execute_at_next_block(|(broadcast_id, _)| {
 			// Verify storage has been deleted
 			assert!(TransactionOutIdToBroadcastId::<Test, Instance1>::get(MOCK_TRANSACTION_OUT_ID)
 				.is_none());
@@ -483,12 +537,25 @@ fn ensure_safe_mode_is_moving_timeouts() {
 		.execute_with(|| {
 			<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 			let _ = start_mock_broadcast();
-			assert!(Timeouts::<Test, Instance1>::get(5u64).len() == 1);
+			let start_block_height = BlockHeightProvider::<MockEthereum>::get_block_height();
+			assert!(get_timeouts_for(start_block_height + BROADCAST_EXPIRY_BLOCKS).len() == 1);
+			start_block_height
 		})
-		.then_process_blocks_until_block(5u64)
-		.then_execute_with(|_| {
-			assert!(Timeouts::<Test, Instance1>::get(5u64).is_empty());
-			assert!(Timeouts::<Test, Instance1>::get(15u64).len() == 1);
+		.then_execute_at_next_block(|start_block_height| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(
+				start_block_height + BROADCAST_EXPIRY_BLOCKS,
+			);
+			start_block_height
+		})
+		.then_process_next_block()
+		.then_execute_with(|start_block_height| {
+			assert!(get_timeouts_for(start_block_height + BROADCAST_EXPIRY_BLOCKS).is_empty());
+			assert!(
+				get_timeouts_for(
+					start_block_height + BROADCAST_EXPIRY_BLOCKS + SAFEMODE_CHAINBLOCK_MARGIN
+				)
+				.len() == 1
+			);
 		});
 }
 
@@ -618,7 +685,6 @@ fn retry_and_success_in_same_block() {
 // there is transaction_succeeded witnessed late due to some delay, the success still goes through.
 #[test]
 fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt() {
-	let mut expected_expiry_block = 0;
 	const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
 	new_test_ext()
 		.execute_with(|| {
@@ -630,34 +696,32 @@ fn retry_with_threshold_signing_still_allows_late_success_witness_second_attempt
 			assert_eq!(Broadcaster::attempt_count(broadcast_id), 0);
 			let nominee = MockNominator::get_last_nominee().unwrap();
 
-			let current_block = frame_system::Pallet::<Test>::block_number();
-
-			expected_expiry_block = current_block + BROADCAST_EXPIRY_BLOCKS;
+			let expected_expiry_block =
+				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
 
 			assert_eq!(
-				Timeouts::<Test, Instance1>::get(expected_expiry_block)
-					.into_iter()
-					.next()
-					.unwrap()
-					.0,
+				get_timeouts_for(expected_expiry_block).into_iter().next().unwrap().0,
 				broadcast_id
 			);
 
 			// We want to run test test on the second attempt.
 			MockCfe::respond(Scenario::BroadcastFailure);
-			(nominee, awaiting_broadcast)
+			(nominee, awaiting_broadcast, expected_expiry_block)
 		})
 		// on idle runs and the retry is kicked off.
 		.then_execute_at_next_block(|p| p)
-		.then_execute_at_next_block(|(nominee, broadcast_data)| {
+		.then_execute_at_next_block(|(nominee, broadcast_data, expected_expiry_block)| {
 			assert_eq!(Broadcaster::attempt_count(broadcast_data.broadcast_id), 1);
 			MockTransactionBuilder::<MockEthereum, RuntimeCall>::set_requires_refresh();
 			MockCfe::respond(Scenario::Timeout);
-			(nominee, broadcast_data)
+			(nominee, broadcast_data, expected_expiry_block)
 		})
 		// The broadcast times out
-		.then_execute_at_block(expected_expiry_block, |p| p)
-		.then_execute_at_next_block(|(nominee, broadcast_data)| {
+		.then_execute_with_keep_context(|(_, _, expected_expiry_block)| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(*expected_expiry_block)
+		})
+		.then_process_next_block()
+		.then_execute_at_next_block(|(nominee, broadcast_data, _)| {
 			// Taking the invalid signature code path results in the metadata being removed, so the
 			// check for the fee is ignored, however, the transaction_succeeded should still pass.
 			assert_ok!(Broadcaster::transaction_succeeded(
@@ -916,12 +980,11 @@ fn witness_broadcast(tx_out_id: [u8; 4]) {
 }
 
 #[test]
-fn timed_out_broadcaster_are_reported() {
-	let mut expiry = 0u64;
+fn timed_out_broadcasters_are_reported() {
 	new_test_ext()
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
-			expiry = System::block_number()
+			let expiry = BlockHeightProvider::<MockEthereum>::get_block_height()
 				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
 			let nominee = AwaitingBroadcast::<Test, Instance1>::get(broadcast_id)
 				.unwrap()
@@ -929,9 +992,12 @@ fn timed_out_broadcaster_are_reported() {
 				.unwrap();
 
 			assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_empty());
-			(broadcast_id, nominee)
+			(broadcast_id, nominee, expiry)
 		})
-		.then_execute_at_block(expiry, |(broadcast_id, nominee)| {
+		.then_execute_with_keep_context(|(_, _, expiry)| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(*expiry)
+		})
+		.then_execute_at_next_block(|(broadcast_id, nominee, _)| {
 			// The nominated broadcaster is added to `FailedBroadcasters` to be reported later.
 			assert_eq!(
 				FailedBroadcasters::<Test, Instance1>::get(broadcast_id),
@@ -942,17 +1008,20 @@ fn timed_out_broadcaster_are_reported() {
 
 #[test]
 fn broadcast_can_be_aborted_due_to_time_out() {
-	let mut expiry = 0;
 	new_test_ext()
 		.execute_with(|| {
 			let (broadcast_id, _) = start_mock_broadcast();
-			expiry = System::block_number()
+			let expiry = BlockHeightProvider::<MockEthereum>::get_block_height()
 				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
 			ready_to_abort_broadcast(broadcast_id);
 
+			(broadcast_id, expiry)
+		})
+		.then_execute_at_next_block(|(broadcast_id, expiry)| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(expiry);
 			broadcast_id
 		})
-		.then_execute_at_block(expiry, |broadcast_id| broadcast_id)
+		.then_process_next_block()
 		.then_execute_with(|broadcast_id| {
 			// Broadcast should be aborted
 			System::assert_last_event(RuntimeEvent::Broadcaster(
@@ -966,21 +1035,67 @@ fn broadcast_can_be_aborted_due_to_time_out() {
 }
 
 #[test]
+fn broadcast_timeout_works_when_external_chain_advances_multiple_blocks() {
+	new_test_ext()
+		.execute_with(|| {
+			let (broadcast_id, _) = start_mock_broadcast();
+			ready_to_abort_broadcast(broadcast_id);
+
+			let expiry1 = BlockHeightProvider::<MockEthereum>::get_block_height()
+				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
+
+			(vec![broadcast_id], expiry1)
+		})
+		// add start a second broadcast during the next external block
+		.then_execute_with_keep_context(|_| {
+			BlockHeightProvider::<MockEthereum>::increment_block_height()
+		})
+		.then_execute_with(|(mut broadcast_ids, expiry1)| {
+			let (broadcast_id, _) = start_mock_broadcast();
+			broadcast_ids.push(broadcast_id);
+			ready_to_abort_broadcast(broadcast_id);
+			let expiry2 = BlockHeightProvider::<MockEthereum>::get_block_height()
+				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
+			(broadcast_ids, max(expiry1, expiry2))
+		})
+		.then_process_next_block()
+		// move external block height into the future past both timeouts
+		.then_execute_with_keep_context(|(_, expiry)| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(expiry + 1)
+		})
+		.then_process_next_block()
+		.then_execute_with(|(broadcast_ids, _)| {
+			// All broadcast should be aborted
+			for broadcast_id in broadcast_ids {
+				System::assert_has_event(RuntimeEvent::Broadcaster(crate::Event::<
+					Test,
+					Instance1,
+				>::BroadcastAborted {
+					broadcast_id,
+				}));
+				assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+				assert!(FailedBroadcasters::<Test, Instance1>::decode_non_dedup_len(broadcast_id)
+					.is_none());
+			}
+		});
+}
+
+#[test]
 fn aborted_broadcasts_can_still_succeed() {
-	let mut expiry = 0;
 	new_test_ext()
 		.execute_with(|| {
 			let (broadcast_id, transaction_out_id) = start_mock_broadcast();
-			expiry = System::block_number()
+			let expiry = BlockHeightProvider::<MockEthereum>::get_block_height()
 				.saturating_add(crate::BroadcastTimeout::<Test, Instance1>::get());
 			ready_to_abort_broadcast(broadcast_id);
 
-			(broadcast_id, transaction_out_id)
+			(broadcast_id, transaction_out_id, expiry)
 		})
-		.then_execute_at_block(expiry, |(broadcast_id, transaction_out_id)| {
-			(broadcast_id, transaction_out_id)
+		.then_execute_with_keep_context(|(_, _, expiry)| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(*expiry)
 		})
-		.then_execute_with(|(broadcast_id, transaction_out_id)| {
+		.then_execute_at_next_block(|ctx| ctx)
+		.then_execute_with(|(broadcast_id, transaction_out_id, _)| {
 			// Broadcast should be aborted
 			System::assert_last_event(RuntimeEvent::Broadcaster(
 				crate::Event::<Test, Instance1>::BroadcastAborted { broadcast_id },
@@ -1075,6 +1190,7 @@ fn broadcast_retry_delay_works() {
 #[test]
 fn broadcast_timeout_delay_works() {
 	let mut target = 0;
+	let mut external_target = 0;
 	let mut broadcast_id = 0;
 	let delay = 10;
 	new_test_ext()
@@ -1083,8 +1199,14 @@ fn broadcast_timeout_delay_works() {
 
 			BroadcastDelay::set(Some(delay));
 			target = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
+			external_target =
+				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
 		})
 		.then_process_blocks_until_block(target)
+		.then_execute_with(|_| {
+			BlockHeightProvider::<MockEthereum>::set_block_height(external_target);
+		})
+		.then_process_next_block()
 		.then_execute_with(|_| {
 			target = System::block_number() + delay;
 
@@ -1182,7 +1304,8 @@ fn succeeded_broadcasts_will_not_retry() {
 
 #[test]
 fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
-	let mut target: u64 = 0u64;
+	let mut target_chainblock: u64 = 0u64;
+	let mut target_block: u64 = 0u64;
 	let mut broadcast_id = 0;
 	new_test_ext()
 		.then_execute_at_block(1_000u64, |_| {
@@ -1192,24 +1315,31 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 
 			// On safe mode next block, storage will be re-added to this target block.
 			let next_block = System::block_number() + 1u64;
-			target = next_block +
+			target_block = next_block +
 				<<Test as crate::Config<Instance1>>::SafeModeBlockMargin as Get<u64>>::get();
+			let current_chainblock = BlockHeightProvider::<MockEthereum>::get_block_height();
+			target_chainblock = current_chainblock +
+				<<Test as crate::Config<Instance1>>::SafeModeChainBlockMargin as Get<u64>>::get();
 
 			// Ensure next block's data is ready to be re-scheduled during safe mode.
-			Timeouts::<Test, Instance1>::insert(
-				next_block,
-				BTreeSet::from_iter(vec![(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)]),
+			append_timeouts_for(
+				current_chainblock,
+				vec![(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)],
+			);
+			append_timeouts_for(
+				current_chainblock,
+				vec![(100, 0), (101, 0), (102, 0), (105, 0), (106, 0)],
 			);
 			assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::get(next_block)
 				.contains(&broadcast_id,));
 
 			// add mock data to the target block storage.
-			Timeouts::<Test, Instance1>::insert(
-				target,
-				BTreeSet::from_iter(vec![(100, 0), (101, 0), (102, 0), (103, 0), (104, 0)]),
+			append_timeouts_for(
+				target_chainblock,
+				vec![(100, 0), (101, 0), (102, 0), (103, 0), (104, 0)],
 			);
-			DelayedBroadcastRetryQueue::<Test, Instance1>::append(target, 100);
-			DelayedBroadcastRetryQueue::<Test, Instance1>::append(target, 101);
+			DelayedBroadcastRetryQueue::<Test, Instance1>::append(target_block, 100);
+			DelayedBroadcastRetryQueue::<Test, Instance1>::append(target_block, 101);
 
 			// Activate safe mode code red.
 			<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -1219,7 +1349,7 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 			// Hook should re-schedule the `Timeouts` and Broadcast retries.
 			// Entries should be appended to the target block's storage, not replace it.
 			assert_eq!(
-				Timeouts::<Test, Instance1>::get(target),
+				get_timeouts_for(target_chainblock),
 				// 105 and 106 are added from the next_block's storage.
 				BTreeSet::from_iter(vec![
 					(100, 0),
@@ -1232,7 +1362,7 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 				])
 			);
 			assert_eq!(
-				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target),
+				DelayedBroadcastRetryQueue::<Test, Instance1>::get(target_block),
 				BTreeSet::from_iter([100, 101, broadcast_id])
 			);
 		});

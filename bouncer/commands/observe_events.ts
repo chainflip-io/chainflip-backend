@@ -2,7 +2,7 @@
 // INSTRUCTIONS
 //
 // Arguments:
-// timeout - (optional, default=10000) The command will fail after this many milliseconds
+// timeout - (optional, default=10) The command will fail after this many seconds
 // succeed_on - If ALL of the provided events are observed, the command will succeed. Events are
 //              separated by commas
 // fail_on - If ANY of the provided events is observed, the command will fail
@@ -14,7 +14,7 @@
 // For example: ./commands/observe_events.ts --succeed_on ethereumThresholdSigner:ThresholdSignatureSuccess --fail_on ethereumThresholdSigner:SignersUnavailable
 
 import minimist from 'minimist';
-import { runWithTimeout } from '../shared/utils';
+import { runWithTimeoutAndExit } from '../shared/utils';
 import { getChainflipApi } from '../shared/utils/substrate';
 
 const args = minimist(process.argv.slice(2));
@@ -54,7 +54,4 @@ async function main(): Promise<void> {
   });
 }
 
-runWithTimeout(main(), args.timeout ?? 10000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+await runWithTimeoutAndExit(main(), args.timeout ?? 10);
