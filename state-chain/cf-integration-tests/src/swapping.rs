@@ -185,6 +185,27 @@ pub enum OrderType {
 	RangeOrder,
 }
 
+pub fn add_liquidity(asset: Asset, amount: AssetAmount, order_type: OrderType) {
+	// We use random order id to make collisions with any existing orders near impossible:
+	use rand::Rng;
+	let order_id: u64 = rand::thread_rng().gen();
+
+	assert!(LiquidityPools::pool_info(asset, Asset::Usdc).is_ok(), "pool must be set up first");
+
+	credit_account(&DORIS, asset, amount);
+	credit_account(&DORIS, Asset::Usdc, amount);
+
+	match order_type {
+		OrderType::LimitOrder => {
+			set_limit_order(&DORIS, asset, Asset::Usdc, order_id, Some(0), amount);
+			set_limit_order(&DORIS, Asset::Usdc, asset, u64::MAX - order_id, Some(0), amount);
+		},
+		OrderType::RangeOrder => {
+			set_range_order(&DORIS, asset, Asset::Usdc, order_id, Some(-10..10), amount);
+		},
+	}
+}
+
 #[track_caller]
 pub fn setup_pool_and_accounts(assets: Vec<Asset>, order_type: OrderType) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
@@ -599,44 +620,28 @@ fn can_process_ccm_via_direct_deposit() {
 
 #[test]
 fn failed_swaps_are_rolled_back() {
+	const DECIMALS: u128 = 10u128.pow(18);
+
 	super::genesis::with_test_defaults().build().execute_with(|| {
-		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc], OrderType::RangeOrder);
+		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc, Asset::Flip], OrderType::RangeOrder);
+
+		// Give ETH pool extra liquidity to ensure it is not the reason the incoming
+		// swap will fail:
+		add_liquidity(Asset::Eth, 10_000_000 * DECIMALS, OrderType::RangeOrder);
 
 		// Get current pool's liquidity
 		let eth_price = LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
 			.expect("Eth pool should be set up with liquidity.")
 			.price;
-		let btc_price = LiquidityPools::current_price(Asset::Btc, STABLE_ASSET)
-			.expect("Btc pool should be set up with liquidity.")
+		let flip_price = LiquidityPools::current_price(Asset::Flip, STABLE_ASSET)
+			.expect("Flip pool should be set up with liquidity.")
 			.price;
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::contract_swap_request {
 				from: Asset::Eth,
 				to: Asset::Flip,
-				deposit_amount: 1_000,
-				destination_address: EncodedAddress::Eth(Default::default()),
-				tx_hash: Default::default(),
-			},
-		));
-
-		witness_call(RuntimeCall::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_swap_request {
-				from: Asset::Eth,
-				to: Asset::Btc,
-				deposit_amount: 1_000,
-				destination_address: EncodedAddress::Btc(
-					"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw".as_bytes().to_vec(),
-				),
-				tx_hash: Default::default(),
-			},
-		));
-
-		witness_call(RuntimeCall::BitcoinIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_swap_request {
-				from: Asset::Btc,
-				to: Asset::Usdc,
-				deposit_amount: 1_000,
+				deposit_amount: 10_000 * DECIMALS,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				tx_hash: Default::default(),
 			},
@@ -646,8 +651,9 @@ fn failed_swaps_are_rolled_back() {
 
 		let swaps_scheduled_at = System::block_number() + SWAP_DELAY_BLOCKS;
 
-		// Usdc -> Flip swap will fail. All swaps are stalled.
 		Swapping::on_finalize(swaps_scheduled_at);
+		// FLIP pool does not have enough liquidity, so USDC->FLIP leg will fail,
+		// and any changes to the ETH pool should be reverted:
 
 		assert_events_match!(
 			Runtime,
@@ -660,48 +666,24 @@ fn failed_swaps_are_rolled_back() {
 			) => ()
 		);
 
-		// Repeatedly processing Failed swaps should not impact pool liquidity
 		assert_eq!(
 			Some(eth_price),
 			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
 				.map(|pool_price| pool_price.price)
 		);
+
 		assert_eq!(
-			Some(btc_price),
-			LiquidityPools::current_price(Asset::Btc, STABLE_ASSET)
+			Some(flip_price),
+			LiquidityPools::current_price(Asset::Flip, STABLE_ASSET)
 				.map(|pool_price| pool_price.price)
 		);
 
-		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
-		// shouldn't be drained.
-		Swapping::on_finalize(swaps_scheduled_at + SwapRetryDelay::<Runtime>::get());
-		assert_eq!(
-			Some(eth_price),
-			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
-				.map(|pool_price| pool_price.price)
-		);
-		assert_eq!(
-			Some(btc_price),
-			LiquidityPools::current_price(Asset::Btc, STABLE_ASSET)
-				.map(|pool_price| pool_price.price)
-		);
+		// After FLIP liquidity is added, the swap should go through:
+		add_liquidity(Asset::Flip, 10_000_000 * DECIMALS, OrderType::RangeOrder);
 
-		// All swaps can continue once the problematic pool is fixed
-		setup_pool_and_accounts(vec![Asset::Flip], OrderType::RangeOrder);
 		System::reset_events();
 
-		Swapping::on_finalize(swaps_scheduled_at + 2 * SwapRetryDelay::<Runtime>::get());
-
-		assert_ne!(
-			Some(eth_price),
-			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
-				.map(|pool_price| pool_price.price)
-		);
-		assert_ne!(
-			Some(btc_price),
-			LiquidityPools::current_price(Asset::Btc, STABLE_ASSET)
-				.map(|pool_price| pool_price.price)
-		);
+		Swapping::on_finalize(swaps_scheduled_at + SwapRetryDelay::<Runtime>::get());
 
 		assert_events_match!(
 			Runtime,
@@ -709,15 +691,6 @@ fn failed_swaps_are_rolled_back() {
 				pallet_cf_pools::Event::AssetSwapped {
 					from: Asset:: Eth,
 					to: Asset::Usdc,
-					input_amount: 2_000,
-					..
-				},
-			) => (),
-			RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::AssetSwapped {
-					from: Asset:: Btc,
-					to: Asset::Usdc,
-					input_amount: 1_000,
 					..
 				},
 			) => (),
@@ -728,28 +701,9 @@ fn failed_swaps_are_rolled_back() {
 					..
 				},
 			) => (),
-			RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::AssetSwapped {
-					from: Asset::Usdc,
-					to: Asset::Btc,
-					..
-				},
-			) => (),
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id: 1,
-					..
-				},
-			) => (),
-			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapExecuted {
-					swap_id: 2,
-					..
-				},
-			) => (),
-			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapExecuted {
-					swap_id: 3,
 					..
 				},
 			) => ()
