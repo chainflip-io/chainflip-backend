@@ -154,6 +154,16 @@ jobs:
           path: latest-release-bins
           search_artifacts: true
 
+      - name: Extract tar.gz if necessary
+        run: |
+          cd latest-release-bins
+          for file in *.tar.gz; do
+            if [ -f "$file" ]; then
+              tar -xzvf "$file"
+              rm "$file"
+            fi
+          done
+
       - name: Permissions for latest binaries 🛡️
         if: inputs.run-job
         run: |
