@@ -56,7 +56,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Fetch chainflip-node with benchmarks from ${{ inputs.commit_sha }}
-        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
+        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11
         with:
           workflow: ci-benchmarks.yml
           workflow_conclusion: completed

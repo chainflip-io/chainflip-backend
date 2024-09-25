@@ -114,7 +114,7 @@ jobs:
       # If we're on a release branch we need to download the previous release binaries
       - name: Download latest release binaries for release branch.
         if: env.IS_RELEASE_BRANCH == 'true'
-        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
+        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11
         with:
           workflow: release-berghain.yml
           name: chainflip-backend-bin
@@ -126,7 +126,7 @@ jobs:
       # Therefore we don't need to provide a commit.
       - name: Download latest release binaries for main/PR branches.
         if: env.IS_RELEASE_BRANCH == 'false'
-        uses: dawidd6/action-download-artifact@e7466d1a7587ed14867642c2ca74b5bcc1e19a2d
+        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11
         with:
           workflow: release-sisyphos.yml
           name: chainflip-backend-bin
