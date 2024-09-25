@@ -122,22 +122,13 @@ fn set_range_order(
 	let new_balances = [base_asset, quote_asset]
 		.map(|asset| pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, asset));
 
-	assert!(new_balances
-		.as_ref()
-		.iter()
-		.zip(balances.as_ref())
-		.all(|(new, old)| { new <= old }));
+	assert!(new_balances.iter().zip(balances).all(|(new, old)| { *new <= old }));
 
-	for ((maybe_new_balance, maybe_old_balance), expected_asset) in new_balances
-		.as_ref()
-		.iter()
-		.zip(balances.as_ref())
-		.zip([base_asset, quote_asset])
+	for ((maybe_new_balance, maybe_old_balance), expected_asset) in
+		new_balances.iter().zip(balances).zip([base_asset, quote_asset])
 	{
-		let (new_balance, old_balance) = (
-			maybe_new_balance.as_ref().unwrap().amount(),
-			maybe_old_balance.as_ref().unwrap().amount(),
-		);
+		let (new_balance, old_balance) =
+			(maybe_new_balance.unwrap().amount(), maybe_old_balance.unwrap().amount());
 		if new_balance < old_balance {
 			assert_has_matching_event!(
 				Runtime,
