@@ -108,7 +108,7 @@ pub type SolanaIngressTracking =
 		<Runtime as Chainflip>::ValidatorId,
 	>;
 
-pub type SolanaNonceTracking = electoral_systems::change::Change<
+pub type SolanaNonceTracking = electoral_systems::change::NonceWitnessing<
 	SolAddress,
 	SolHash,
 	SlotNumber,

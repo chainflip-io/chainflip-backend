@@ -23,7 +23,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 ///
 /// Authorities only need to vote if their observed value is different than the one specified in the
 /// `ElectionProperties`.
-pub struct Change<Identifier, Value, Slot, Settings, Hook, ValidatorId> {
+pub struct NonceWitnessing<Identifier, Value, Slot, Settings, Hook, ValidatorId> {
 	_phantom: core::marker::PhantomData<(Identifier, Value, Slot, Settings, Hook, ValidatorId)>,
 }
 
@@ -38,7 +38,7 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> Change<Identifier, Value, Slot, Settings, Hook, ValidatorId>
+	> NonceWitnessing<Identifier, Value, Slot, Settings, Hook, ValidatorId>
 {
 	pub fn watch_for_change<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
 		electoral_access: &mut ElectoralAccess,
@@ -60,7 +60,7 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for Change<Identifier, Value, Slot, Settings, Hook, ValidatorId>
+	> ElectoralSystem for NonceWitnessing<Identifier, Value, Slot, Settings, Hook, ValidatorId>
 {
 	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = ();
@@ -104,6 +104,22 @@ impl<
 		}
 	}
 
+	fn is_vote_valid<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
+		_election_identifier: ElectionIdentifierOf<Self>,
+		election_access: &ElectionAccess,
+		partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
+	) -> Result<bool, CorruptStorageError> {
+		let (_, previous_value, previous_slot) = election_access.properties()?;
+		Ok(partial_vote.value != previous_value && partial_vote.slot > previous_slot)
+	}
+	fn generate_vote_properties(
+		_election_identifier: ElectionIdentifierOf<Self>,
+		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		_vote: &<Self::Vote as VoteStorage>::PartialVote,
+	) -> Result<VotePropertiesOf<Self>, CorruptStorageError> {
+		Ok(())
+	}
+
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
 		electoral_access: &mut ElectoralAccess,
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
@@ -113,7 +129,7 @@ impl<
 			let mut election_access = electoral_access.election_mut(election_identifier)?;
 			if let Some((value, slot)) = election_access.check_consensus()?.has_consensus() {
 				let (identifier, previous_value, previous_slot) = election_access.properties()?;
-				if previous_value != value {
+				if previous_value != value && slot > previous_slot {
 					election_access.delete();
 					Hook::on_change(identifier.clone(), value);
 					electoral_access.set_unsynchronised_state_map(identifier, Some(slot))?;
@@ -143,7 +159,7 @@ impl<
 			counts.iter().find_map(|(vote, count)| {
 				if *count >= success_threshold {
 					let (_, median_vote, _) =
-						{ active_slots.select_nth_unstable((num_authorities - success_threshold) as usize) };
+						{ active_slots.select_nth_unstable((success_threshold - 1) as usize) };
 					Some((vote.clone(), *median_vote))
 				} else {
 					None
