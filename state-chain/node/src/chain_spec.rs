@@ -27,8 +27,8 @@ use state_chain_runtime::{
 		BLOCKS_PER_MINUTE_SOLANA,
 	},
 	opaque::SessionKeys,
-	AccountId, BlockNumber, FlipBalance, SetSizeParameters, Signature,
-	SolanaElectionsConfig, WASM_BINARY,
+	AccountId, BlockNumber, FlipBalance, SetSizeParameters, Signature, SolanaElectionsConfig,
+	WASM_BINARY,
 };
 
 use std::{

@@ -13,7 +13,7 @@ use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 
 use codec::Encode;
-use custom_rpc::{CustomApiClient, to_rpc_error};
+use custom_rpc::{to_rpc_error, CustomApiClient};
 use sc_rpc_api::{
 	author::AuthorApiClient,
 	chain::ChainApiClient,
@@ -197,14 +197,20 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,
 	) -> RpcResult<sp_core::H256> {
-		self.raw_rpc_client.submit_extrinsic(Bytes::from(extrinsic.encode())).await.map_err(to_rpc_error)
+		self.raw_rpc_client
+			.submit_extrinsic(Bytes::from(extrinsic.encode()))
+			.await
+			.map_err(to_rpc_error)
 	}
 
 	async fn submit_and_watch_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,
 	) -> RpcResult<Subscription<TransactionStatus<sp_core::H256, sp_core::H256>>> {
-		self.raw_rpc_client.watch_extrinsic(Bytes::from(extrinsic.encode())).await.map_err(to_rpc_error)
+		self.raw_rpc_client
+			.watch_extrinsic(Bytes::from(extrinsic.encode()))
+			.await
+			.map_err(to_rpc_error)
 	}
 
 	async fn storage(
@@ -212,7 +218,10 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		block_hash: state_chain_runtime::Hash,
 		storage_key: StorageKey,
 	) -> RpcResult<Option<StorageData>> {
-		self.raw_rpc_client.storage(storage_key, Some(block_hash)).await.map_err(to_rpc_error)
+		self.raw_rpc_client
+			.storage(storage_key, Some(block_hash))
+			.await
+			.map_err(to_rpc_error)
 	}
 
 	async fn storage_pairs(
@@ -220,7 +229,10 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		block_hash: state_chain_runtime::Hash,
 		storage_key: StorageKey,
 	) -> RpcResult<Vec<(StorageKey, StorageData)>> {
-		self.raw_rpc_client.storage_pairs(storage_key, Some(block_hash)).await.map_err(to_rpc_error)
+		self.raw_rpc_client
+			.storage_pairs(storage_key, Some(block_hash))
+			.await
+			.map_err(to_rpc_error)
 	}
 
 	async fn block(&self, block_hash: state_chain_runtime::Hash) -> RpcResult<Option<SignedBlock>> {
@@ -234,7 +246,8 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		Ok(unwrap_value(
 			self.raw_rpc_client
 				.block_hash(Some(sp_rpc::list::ListOrValue::Value(block_number.into())))
-				.await.map_err(to_rpc_error)?,
+				.await
+				.map_err(to_rpc_error)?,
 		))
 	}
 
@@ -242,11 +255,17 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<state_chain_runtime::Header> {
-		Ok(self.raw_rpc_client.header(Some(block_hash)).await.map_err(to_rpc_error)?.expect(SUBSTRATE_BEHAVIOUR))
+		Ok(self
+			.raw_rpc_client
+			.header(Some(block_hash))
+			.await
+			.map_err(to_rpc_error)?
+			.expect(SUBSTRATE_BEHAVIOUR))
 	}
 
 	async fn latest_unfinalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {
-		Ok(unwrap_value(self.raw_rpc_client.block_hash(None).await.map_err(to_rpc_error)?).expect(SUBSTRATE_BEHAVIOUR))
+		Ok(unwrap_value(self.raw_rpc_client.block_hash(None).await.map_err(to_rpc_error)?)
+			.expect(SUBSTRATE_BEHAVIOUR))
 	}
 
 	async fn latest_finalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {
@@ -277,7 +296,10 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		extrinsic: Bytes,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<Bytes> {
-		self.raw_rpc_client.dry_run(extrinsic, Some(block_hash)).await.map_err(to_rpc_error)
+		self.raw_rpc_client
+			.dry_run(extrinsic, Some(block_hash))
+			.await
+			.map_err(to_rpc_error)
 	}
 
 	async fn request_raw(
@@ -294,7 +316,10 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		params: Option<Box<RawValue>>,
 		unsub: &str,
 	) -> RpcResult<Subscription<Box<RawValue>>> {
-		self.raw_rpc_client.subscribe(sub, Params(params), unsub).await.map_err(to_rpc_error)
+		self.raw_rpc_client
+			.subscribe(sub, Params(params), unsub)
+			.await
+			.map_err(to_rpc_error)
 	}
 }
 

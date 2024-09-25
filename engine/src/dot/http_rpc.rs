@@ -4,7 +4,7 @@ use futures_core::Future;
 use http::uri::Uri;
 use jsonrpsee::{
 	core::{client::ClientT, traits::ToRpcParams},
-	http_client::{HttpClient, HttpClientBuilder}, 
+	http_client::{HttpClient, HttpClientBuilder},
 };
 use serde_json::value::RawValue;
 use sp_core::H256;

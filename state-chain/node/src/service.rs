@@ -125,8 +125,10 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 
 /// Builds a new service for a full client.
 pub fn new_full_base<
-	Network: sc_network::NetworkBackend<Block, <Block as sp_runtime::traits::Block>::Hash>
->(config: Configuration) -> Result<TaskManager, ServiceError> {
+	Network: sc_network::NetworkBackend<Block, <Block as sp_runtime::traits::Block>::Hash>,
+>(
+	config: Configuration,
+) -> Result<TaskManager, ServiceError> {
 	use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
 
 	let sc_service::PartialComponents {
@@ -167,10 +169,10 @@ pub fn new_full_base<
 	let mut net_config = sc_network::config::FullNetworkConfiguration::<
 		Block,
 		<Block as sp_runtime::traits::Block>::Hash,
-		Network
+		Network,
 	>::new(&config.network);
 	let peer_store_handle = net_config.peer_store_handle();
-	
+
 	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
 	let grandpa_protocol_name =
 		sc_consensus_grandpa::protocol_standard_name(&genesis_hash, &config.chain_spec);
@@ -407,20 +409,15 @@ pub fn new_full_base<
 	Ok(task_manager)
 }
 
-
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
 	Ok(match config.network.network_backend {
 		sc_network::config::NetworkBackendType::Libp2p => {
-			let task_manager = new_full_base::<sc_network::NetworkWorker<_, _>>(
-				config,
-			)?;
+			let task_manager = new_full_base::<sc_network::NetworkWorker<_, _>>(config)?;
 			task_manager
 		},
 		sc_network::config::NetworkBackendType::Litep2p => {
-			let task_manager = new_full_base::<sc_network::Litep2pNetworkBackend>(
-				config,
-			)?;
+			let task_manager = new_full_base::<sc_network::Litep2pNetworkBackend>(config)?;
 			task_manager
 		},
 	})

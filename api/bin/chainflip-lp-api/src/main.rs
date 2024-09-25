@@ -440,8 +440,8 @@ impl RpcServer for RpcServerImpl {
 			api.get_open_swap_channels::<Ethereum>(None),
 			api.get_open_swap_channels::<Bitcoin>(None),
 			api.get_open_swap_channels::<Polkadot>(None),
-		)
-		.map_err(to_rpc_error)?;
+		)?;
+
 		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
 	}
 
@@ -473,8 +473,10 @@ impl RpcServer for RpcServerImpl {
 				while let Some(block) = finalized_block_stream.next().await {
 					match order_fills(state_chain_client.clone(), block).await {
 						Ok(order_fills) => {
-							if let Err(e) =
-								sink.send(sc_rpc::utils::to_sub_message(&sink, &order_fills)).await
+							if sink
+								.send(sc_rpc::utils::to_sub_message(&sink, &order_fills))
+								.await
+								.is_err()
 							{
 								break;
 							}
@@ -616,7 +618,164 @@ where
 	Ok(BlockUpdate::<OrderFills> {
 		block_hash: block.hash,
 		block_number: block.number,
-		data: order_fills_from_block_updates(&previous_pools, &pools, lp_events),
+		data: {
+			let (previous_pools, pools, events) = try_join!(
+				state_chain_client.storage_map::<pallet_cf_pools::Pools<
+					chainflip_api::primitives::state_chain_runtime::Runtime,
+				>, HashMap<_, _>>(block.parent_hash),
+				state_chain_client.storage_map::<pallet_cf_pools::Pools<
+					chainflip_api::primitives::state_chain_runtime::Runtime,
+				>, HashMap<_, _>>(block.hash),
+				state_chain_client.storage_value::<frame_system::Events<
+					chainflip_api::primitives::state_chain_runtime::Runtime,
+				>>(block.hash)
+			)
+			.map_err(to_rpc_error)?;
+
+			let updated_range_orders = events.iter().filter_map(|event_record| {
+				match &event_record.event {
+					chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::RangeOrderUpdated {
+						lp,
+						base_asset,
+						quote_asset,
+						id,
+						..
+					}) => {
+						Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *id))
+					},
+					_ => {
+						None
+					}
+				}
+			}).collect::<HashSet<_>>();
+
+			let updated_limit_orders = events.iter().filter_map(|event_record| {
+				match &event_record.event {
+					chainflip_api::primitives::state_chain_runtime::RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
+						lp,
+						base_asset,
+						quote_asset,
+						side,
+						id,
+						..
+					}) => {
+						Some((lp.clone(), AssetPair::new(*base_asset, *quote_asset).unwrap(), *side, *id))
+					},
+					_ => {
+						None
+					}
+				}
+			}).collect::<HashSet<_>>();
+
+			let order_fills = pools
+				.iter()
+				.flat_map(|(asset_pair, pool)| {
+					let updated_range_orders = &updated_range_orders;
+					let updated_limit_orders = &updated_limit_orders;
+					let previous_pools = &previous_pools;
+					[Side::Sell, Side::Buy]
+						.into_iter()
+						.flat_map(move |side| {
+							pool.pool_state.limit_orders(side).filter_map(
+								move |((lp, id), tick, collected, position_info)| {
+									let (fees, sold, bought) = {
+										let option_previous_order_state = if updated_limit_orders
+											.contains(&(lp.clone(), *asset_pair, side, id))
+										{
+											None
+										} else {
+											previous_pools.get(asset_pair).and_then(|pool| {
+												pool.pool_state
+													.limit_order(&(lp.clone(), id), side, tick)
+													.ok()
+											})
+										};
+
+										if let Some((previous_collected, _)) =
+											option_previous_order_state
+										{
+											(
+												collected.fees - previous_collected.fees,
+												collected.sold_amount -
+													previous_collected.sold_amount,
+												collected.bought_amount -
+													previous_collected.bought_amount,
+											)
+										} else {
+											(
+												collected.fees,
+												collected.sold_amount,
+												collected.bought_amount,
+											)
+										}
+									};
+
+									if fees.is_zero() && sold.is_zero() && bought.is_zero() {
+										None
+									} else {
+										Some(OrderFilled::LimitOrder {
+											lp,
+											base_asset: asset_pair.assets().base,
+											quote_asset: asset_pair.assets().quote,
+											side,
+											id: id.into(),
+											tick,
+											sold,
+											bought,
+											fees,
+											remaining: position_info.amount,
+										})
+									}
+								},
+							)
+						})
+						.chain(pool.pool_state.range_orders().filter_map(
+							move |((lp, id), range, collected, position_info)| {
+								let fees = {
+									let option_previous_order_state = if updated_range_orders
+										.contains(&(lp.clone(), *asset_pair, id))
+									{
+										None
+									} else {
+										previous_pools.get(asset_pair).and_then(|pool| {
+											pool.pool_state
+												.range_order(&(lp.clone(), id), range.clone())
+												.ok()
+										})
+									};
+
+									if let Some((previous_collected, _)) =
+										option_previous_order_state
+									{
+										collected
+											.fees
+											.zip(previous_collected.fees)
+											.map(|(fees, previous_fees)| fees - previous_fees)
+									} else {
+										collected.fees
+									}
+								};
+
+								if fees == Default::default() {
+									None
+								} else {
+									Some(OrderFilled::RangeOrder {
+										lp: lp.clone(),
+										base_asset: asset_pair.assets().base,
+										quote_asset: asset_pair.assets().quote,
+										id: id.into(),
+										range: range.clone(),
+										fees: fees.map(|fees| fees),
+										liquidity: position_info.liquidity.into(),
+									})
+								}
+							},
+						))
+				})
+				.collect::<Vec<_>>();
+
+			OrderFills { fills: order_fills }
+		},
 	})
 }
 

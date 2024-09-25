@@ -1005,15 +1005,17 @@ pub fn to_rpc_error<E: std::fmt::Debug + Send + Sync + 'static>(e: E) -> ErrorOb
 }
 
 fn map_dispatch_error(e: DispatchErrorWithMessage) -> ErrorObjectOwned {
-	str_to_rpc_error( &(match e {
-		DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
-			Ok(message) => format!("DispatchError: {message}"),
-			Err(error) =>
-				format!("DispatchError: Unable to deserialize error message: '{error}'"),
-		},
-		DispatchErrorWithMessage::Other(e) =>
-			format!("DispatchError: {}", <&'static str>::from(e)),
-	})[..])
+	str_to_rpc_error(
+		&(match e {
+			DispatchErrorWithMessage::Module(message) => match std::str::from_utf8(&message) {
+				Ok(message) => format!("DispatchError: {message}"),
+				Err(error) =>
+					format!("DispatchError: Unable to deserialize error message: '{error}'"),
+			},
+			DispatchErrorWithMessage::Other(e) =>
+				format!("DispatchError: {}", <&'static str>::from(e)),
+		})[..],
+	)
 }
 
 impl<C, B> CustomApiServer for CustomRpc<C, B>
@@ -2025,9 +2027,8 @@ where
 		let (initial_item, initial_state) = match f(&self.client, info.best_hash, None) {
 			Ok(initial) => initial,
 			Err(e) => {
-				let _ = pending_sink.reject(
-					sc_rpc_api::state::error::Error::Client(Box::new(to_rpc_error(e))),
-				);
+				let _ = pending_sink
+					.reject(sc_rpc_api::state::error::Error::Client(Box::new(to_rpc_error(e))));
 				return;
 			},
 		};

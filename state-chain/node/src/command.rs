@@ -116,7 +116,7 @@ pub fn run() -> sc_cli::Result<()> {
 				// This switch needs to be in the client, since the client decides
 				// which sub-commands it wants to support.
 				match cmd {
-					BenchmarkCmd::Pallet(cmd) => {
+					BenchmarkCmd::Pallet(cmd) =>
 						if !cfg!(feature = "runtime-benchmarks") {
 							return Err(
 								"Runtime benchmarking wasn't enabled when building the node. \
@@ -127,8 +127,7 @@ pub fn run() -> sc_cli::Result<()> {
 							cmd.run_with_spec::<sp_runtime::traits::HashingFor<Block>, ()>(Some(
 								config.chain_spec,
 							))
-						}
-					},
+						},
 					BenchmarkCmd::Block(cmd) => {
 						let PartialComponents { client, .. } = service::new_partial(&config)?;
 						cmd.run(client)
