@@ -11,7 +11,7 @@ use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 /// This electoral system detects if a value changes. The SC can request that it detects if a
 /// particular value, the instance of which is specified by an identifier, has changed from some
