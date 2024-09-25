@@ -45,8 +45,6 @@ impl<
 		identifier: Identifier,
 		previous_value: Value,
 	) -> Result<(), CorruptStorageError> {
-		// TODO: we can probably switch to expect, after initialization we always expect to have a
-		// value here!
 		let previous_slot =
 			electoral_access.unsynchronised_state_map(&identifier)?.unwrap_or_default();
 		electoral_access.new_election((), (identifier, previous_value, previous_slot), ())?;
