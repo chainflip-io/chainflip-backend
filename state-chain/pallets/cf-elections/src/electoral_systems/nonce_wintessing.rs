@@ -151,15 +151,26 @@ impl<
 		let num_active_votes = active_votes.len() as u32;
 		let success_threshold = success_threshold_from_share_count(num_authorities);
 		Ok(if num_active_votes >= success_threshold {
-			let mut counts = BTreeMap::new();
+			let mut counts: BTreeMap<Value, (u32, Vec<Slot>)> = BTreeMap::new();
 			for vote in active_votes.clone() {
-				counts.entry(vote.value).and_modify(|count| *count += 1).or_insert(1);
+				counts
+					.entry(vote.value)
+					.and_modify(|(count, slots)| {
+						*count += 1;
+						slots.push(vote.slot)
+					})
+					.or_insert((1, vec![]));
 			}
-			let mut active_slots = active_votes.iter().map(|elem| elem.slot).collect::<Vec<_>>();
-			counts.iter().find_map(|(vote, count)| {
+
+			counts.iter().find_map(|(vote, (count, slots))| {
 				if *count >= success_threshold {
-					let (_, median_vote, _) =
-						{ active_slots.select_nth_unstable((success_threshold - 1) as usize) };
+					let mut slots = slots.clone();
+					let num_slots = slots.len() as u32;
+					let (_, median_vote, _) = {
+						slots.select_nth_unstable(
+							success_threshold_from_share_count(num_slots) as usize
+						)
+					};
 					Some((vote.clone(), *median_vote))
 				} else {
 					None

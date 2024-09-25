@@ -16,7 +16,7 @@ use std::str::FromStr;
 pub async fn get_durable_nonce<SolRetryRpcClient>(
 	sol_client: &SolRetryRpcClient,
 	nonce_account: SolAddress,
-	previous_nonce: SlotNumber,
+	previous_slot: SlotNumber,
 ) -> Result<Option<NonceVote<SolHash, SlotNumber>>>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
@@ -31,7 +31,7 @@ where
 				encoding: Some(UiAccountEncoding::JsonParsed),
 				data_slice: None,
 				commitment: Some(CommitmentConfig::finalized()),
-				min_context_slot: Some(previous_nonce),
+				min_context_slot: Some(previous_slot),
 			},
 		)
 		.await;
@@ -105,6 +105,7 @@ mod tests {
 				let nonce_account = get_durable_nonce(
 					&retry_client,
 					SolAddress::from_str("6TcAavZQgsTCGJkrxrtu8X26H7DuzMH4Y9FfXXgoyUGe").unwrap(),
+					0,
 				)
 				.await
 				.unwrap()
@@ -112,7 +113,7 @@ mod tests {
 
 				println!("Durable Nonce Info: {:?}", nonce_account);
 				assert_eq!(
-					nonce_account,
+					nonce_account.value,
 					SolHash::from_str("F9X2sMsGGJUGrVPs42vQc3fyi9rGqd7NFUWKT8SQTkCW").unwrap(),
 				);
 
