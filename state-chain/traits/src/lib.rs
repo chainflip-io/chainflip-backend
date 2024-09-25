@@ -640,13 +640,14 @@ pub trait ExecutionCondition {
 	fn is_satisfied() -> bool;
 }
 
-impl<A, B> ExecutionCondition for (A, B)
+impl<A, B, C> ExecutionCondition for (A, B, C)
 where
 	A: ExecutionCondition,
 	B: ExecutionCondition,
+	C: ExecutionCondition,
 {
 	fn is_satisfied() -> bool {
-		A::is_satisfied() && B::is_satisfied()
+		A::is_satisfied() && B::is_satisfied() && C::is_satisfied()
 	}
 }
 
