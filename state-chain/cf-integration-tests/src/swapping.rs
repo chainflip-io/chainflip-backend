@@ -180,15 +180,21 @@ fn set_limit_order(
 	System::reset_events();
 }
 
+#[derive(Clone, Copy)]
 pub enum OrderType {
 	LimitOrder,
 	RangeOrder,
 }
 
-pub fn add_liquidity(asset: Asset, amount: AssetAmount, order_type: OrderType) {
-	// We use random order id to make collisions with any existing orders near impossible:
+pub fn add_liquidity(
+	asset: Asset,
+	amount: AssetAmount,
+	order_type: OrderType,
+	order_id: Option<u64>,
+) {
 	use rand::Rng;
-	let order_id: u64 = rand::thread_rng().gen();
+	// We use random order id to make collisions with any existing orders near impossible:
+	let order_id: u64 = order_id.unwrap_or_else(|| rand::thread_rng().gen());
 
 	assert!(LiquidityPools::pool_info(asset, Asset::Usdc).is_ok(), "pool must be set up first");
 
@@ -215,38 +221,7 @@ pub fn setup_pool_and_accounts(assets: Vec<Asset>, order_type: OrderType) {
 
 	for (order_id, asset) in (0..).zip(assets) {
 		new_pool(asset, 0u32, price_at_tick(0).unwrap());
-		credit_account(&DORIS, asset, 10_000_000 * DECIMALS);
-		credit_account(&DORIS, Asset::Usdc, 10_000_000 * DECIMALS);
-		match order_type {
-			OrderType::LimitOrder => {
-				set_limit_order(
-					&DORIS,
-					asset,
-					Asset::Usdc,
-					order_id,
-					Some(0),
-					1_000_000 * DECIMALS,
-				);
-				set_limit_order(
-					&DORIS,
-					Asset::Usdc,
-					asset,
-					u64::MAX - order_id,
-					Some(0),
-					1_000_000 * DECIMALS,
-				);
-			},
-			OrderType::RangeOrder => {
-				set_range_order(
-					&DORIS,
-					asset,
-					Asset::Usdc,
-					order_id,
-					Some(-10..10),
-					10_000_000 * DECIMALS,
-				);
-			},
-		}
+		add_liquidity(asset, 10_000_000 * DECIMALS, order_type, Some(order_id));
 	}
 }
 
@@ -627,7 +602,7 @@ fn failed_swaps_are_rolled_back() {
 
 		// Give ETH pool extra liquidity to ensure it is not the reason the incoming
 		// swap will fail:
-		add_liquidity(Asset::Eth, 10_000_000 * DECIMALS, OrderType::RangeOrder);
+		add_liquidity(Asset::Eth, 10_000_000 * DECIMALS, OrderType::RangeOrder, None);
 
 		// Get current pool's liquidity
 		let eth_price = LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
@@ -679,7 +654,7 @@ fn failed_swaps_are_rolled_back() {
 		);
 
 		// After FLIP liquidity is added, the swap should go through:
-		add_liquidity(Asset::Flip, 10_000_000 * DECIMALS, OrderType::RangeOrder);
+		add_liquidity(Asset::Flip, 10_000_000 * DECIMALS, OrderType::RangeOrder, None);
 
 		System::reset_events();
 
