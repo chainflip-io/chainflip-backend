@@ -1236,6 +1236,7 @@ type PalletMigrations = (
 // v-- START: DO NOT MERGE TO MAIN --v //
 use cf_chains::sol::SolAddress;
 use cf_primitives::chains::assets::sol::Asset as SolAsset;
+use cf_runtime_upgrade_utilities::genesis_hashes;
 use cf_traits::DepositApi;
 use sp_runtime::{AccountId32, DispatchError};
 use sp_std::collections::btree_set::BTreeSet;
@@ -1249,9 +1250,10 @@ const CHANNEL_ACCOUNT: [u8; 32] =
 	hex_literal::hex!("e2644714269df89935cfe2e2bc6ebe8295a9ba32320ea02c7bbe39046b09fc67");
 
 pub fn should_run() -> bool {
-	!pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::contains_key(
-		&CHANNEL_ADDRESS,
-	)
+	genesis_hashes::genesis_hash::<Runtime>() == genesis_hashes::BERGHAIN &&
+		!pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::contains_key(
+			CHANNEL_ADDRESS,
+		)
 }
 
 pub fn reopen<T: pallet_cf_ingress_egress::Config<I, AccountId = AccountId32>, I: 'static>(
@@ -1264,7 +1266,7 @@ pub fn reopen<T: pallet_cf_ingress_egress::Config<I, AccountId = AccountId32>, I
 		)
 		.map_err(|_| DispatchError::Other("Failed to generate new deposit channel"))?;
 	pallet_cf_ingress_egress::DepositChannelPool::<T, I>::insert(
-		&channel.channel_id,
+		channel.channel_id,
 		channel.clone(),
 	);
 
@@ -1292,37 +1294,65 @@ impl frame_support::traits::OnRuntimeUpgrade for IngressMigration {
 			let _ = reopen::<Runtime, SolanaInstance>(9, SolAsset::Sol).map_err(|e| {
 				log::warn!("⛔️ Failed to reopen channel: {:?}", e);
 			});
+			log::info!("♻️ Reopened channel");
+		}
+		let expired_deposit_channels =
+			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
+				.filter(|(_, details)| {
+					details.expires_at < pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::get_block_height()
+				})
+				.collect::<Vec<_>>();
+		for (address, details) in expired_deposit_channels {
+			log::info!("🗑️ Closing channel {} due to expiry", details.deposit_channel.channel_id);
+			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::remove(
+				address,
+			);
 		}
 		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		let num_expired_channels =
+			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
+				.filter(|(_, details)| {
+					details.expires_at < pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::get_block_height()
+				})
+				.count() as u32;
 		let open_channels_pre_upgrade =
 			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
 				.map(|(addr, details)| (addr.0, details.deposit_channel.channel_id))
 				.collect::<BTreeSet<_>>();
-		Ok((should_run(), open_channels_pre_upgrade).encode())
+		Ok((should_run(), open_channels_pre_upgrade, num_expired_channels).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let (should_have_run, open_channels_pre_upgrade) =
-			<(bool, BTreeSet<([u8; 32], u64)>)>::decode(&mut &state[..])
+		let (should_have_run, open_channels_pre_upgrade, num_expired_channels) =
+			<(bool, BTreeSet<([u8; 32], u64)>, u32)>::decode(&mut &state[..])
 				.map_err(|_| "Failed to decode pre-upgrade state")?;
 		let open_channels_post_upgrade =
 			pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
 				.map(|(addr, details)| (addr.0, details.deposit_channel.channel_id))
 				.collect::<BTreeSet<_>>();
-		let diff = open_channels_post_upgrade
+		let opened_channels = open_channels_post_upgrade
 			.difference(&open_channels_pre_upgrade)
 			.collect::<Vec<_>>();
+		let closed_channels = open_channels_pre_upgrade
+			.difference(&open_channels_post_upgrade)
+			.collect::<Vec<_>>();
 		if should_have_run {
-			assert!(diff.len() == 1);
-			assert_eq!(diff[0].clone(), (CHANNEL_ADDRESS.0, 9));
+			assert!(opened_channels.len() == 1);
+			assert_eq!(opened_channels[0].clone(), (CHANNEL_ADDRESS.0, 9));
 		} else {
-			assert!(diff.is_empty());
+			assert!(opened_channels.is_empty());
 		}
+		assert_eq!(num_expired_channels, closed_channels.len() as u32);
+		assert!(pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::iter()
+			.filter(|(_, details)| details.expires_at <
+				pallet_cf_chain_tracking::Pallet::<Runtime, SolanaInstance>::get_block_height())
+			.collect::<Vec<_>>()
+			.is_empty());
 		Ok(())
 	}
 }
