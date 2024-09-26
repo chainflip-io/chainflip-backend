@@ -11,7 +11,7 @@ use crate::{
 
 use cf_chains::mocks::{MockAggKey, MockEthereumChainCrypto};
 use cf_primitives::{FlipBalance, GENESIS_EPOCH};
-use cf_test_utilities::{last_event, maybe_last_event};
+use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},

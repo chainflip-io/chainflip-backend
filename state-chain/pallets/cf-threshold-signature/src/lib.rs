@@ -23,7 +23,7 @@ use scale_info::{
 	Path, Type, TypeInfo,
 };
 
-use cf_chains::{btc::BlockNumber, ChainCrypto};
+use cf_chains::ChainCrypto;
 use cf_primitives::{
 	AuthorityCount, CeremonyId, EpochIndex, FlipBalance, ThresholdSignatureRequestId as RequestId,
 };
@@ -103,18 +103,18 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	},
 }
 
-macro_rules! append_chain_to_name {
-	($name:ident) => {
-		match T::TargetChain::NAME {
-			"Ethereum" => concat!(stringify!($name), "Ethereum"),
-			"Polkadot" => concat!(stringify!($name), "Polkadot"),
-			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
-			"Arbitrum" => concat!(stringify!($name), "Arbitrum"),
-			"Solana" => concat!(stringify!($name), "Solana"),
-			_ => concat!(stringify!($name), "Other"),
-		}
-	};
-}
+// macro_rules! append_chain_to_name {
+// 	($name:ident) => {
+// 		match T::TargetChain::NAME {
+// 			"Ethereum" => concat!(stringify!($name), "Ethereum"),
+// 			"Polkadot" => concat!(stringify!($name), "Polkadot"),
+// 			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
+// 			"Arbitrum" => concat!(stringify!($name), "Arbitrum"),
+// 			"Solana" => concat!(stringify!($name), "Solana"),
+// 			_ => concat!(stringify!($name), "Other"),
+// 		}
+// 	};
+// }
 
 impl<T, I> TypeInfo for PalletConfigUpdate<T, I>
 where
@@ -1296,6 +1296,7 @@ pub mod pallet {
 
 				PalletConfigUpdate::KeygenSlashAmount { amount_to_slash } => {
 					KeygenSlashAmount::<T, I>::put(amount_to_slash);
+					Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
 				},
 
 				PalletConfigUpdate::Other { .. } => (),

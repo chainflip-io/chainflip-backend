@@ -400,6 +400,6 @@ cf_test_utilities::impl_test_helpers! {
 	}
 }
 
-pub(crate) fn new_test_ext_no_key() -> TestRunner<()> {
-	TestRunner::<()>::new(RuntimeGenesisConfig::default())
-}
+// pub(crate) fn new_test_ext_no_key() -> TestRunner<()> {
+// 	TestRunner::<()>::new(RuntimeGenesisConfig::default())
+// }
