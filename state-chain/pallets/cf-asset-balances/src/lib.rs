@@ -270,8 +270,8 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		available.saturating_primitive_sub(amount_reconciled);
-		amount_owed.saturating_primitive_sub(amount_reconciled);
+		available.saturating_sub_amount(amount_reconciled);
+		amount_owed.saturating_sub_amount(amount_reconciled);
 
 		Ok(())
 	}
@@ -359,8 +359,8 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 					ForeignChain::Polkadot => ExternalOwner::AggKey,
 					ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
 				})
-				.and_modify(|fee| fee.accrue(AssetBalance::mint(amount, asset)))
-				.or_insert(AssetBalance::mint(amount, asset));
+				.and_modify(|fee| fee.saturating_accrue(AssetBalance::new(asset, amount)))
+				.or_insert(AssetBalance::new(asset, amount));
 			} else {
 				let mut map = BTreeMap::new();
 				map.insert(
@@ -369,7 +369,7 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 						ForeignChain::Polkadot => ExternalOwner::AggKey,
 						ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
 					},
-					AssetBalance::mint(amount, asset),
+					AssetBalance::new(asset, amount),
 				);
 				*maybe_fees = Some(map);
 			}
@@ -381,9 +381,9 @@ impl<T: Config> AssetWithholding for Pallet<T> {
 	fn withhold_assets(asset: Asset, amount: AssetAmount) {
 		WithheldAssets::<T>::mutate(asset, |maybe_fees| {
 			if let Some(fees) = maybe_fees {
-				fees.accrue(AssetBalance::mint(amount, asset));
+				fees.saturating_accrue(AssetBalance::new(asset, amount));
 			} else {
-				*maybe_fees = Some(AssetBalance::mint(amount, asset));
+				*maybe_fees = Some(AssetBalance::new(asset, amount));
 			}
 		});
 	}
@@ -401,7 +401,7 @@ where
 		asset: Asset,
 		amount: AssetAmount,
 	) -> DispatchResult {
-		let asset_amount = AssetBalance::mint(amount, asset);
+		let asset_amount = AssetBalance::new(asset, amount);
 		if amount == 0 {
 			return Ok(())
 		}
@@ -433,7 +433,7 @@ where
 			return Ok(())
 		}
 
-		let asset_amount = AssetBalance::mint(amount, asset);
+		let asset_amount = AssetBalance::new(asset, amount);
 
 		let new_balance = FreeBalances::<T>::try_mutate_exists(account_id, asset, |balance| {
 			let new_balance = match balance.take() {

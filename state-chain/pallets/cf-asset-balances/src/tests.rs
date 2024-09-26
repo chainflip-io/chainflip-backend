@@ -105,13 +105,13 @@ pub fn not_enough_withheld_fees() {
 		payed_gas(ForeignChain::Bitcoin, BTC_OWED, BTC_ADDR_1.clone());
 		WithheldAssets::<Test>::insert(
 			ForeignChain::Bitcoin.gas_asset(),
-			AssetBalance::mint(BTC_AVAILABLE, Asset::Btc),
+			AssetBalance::new(Asset::Btc, BTC_AVAILABLE),
 		);
 
 		payed_gas(ForeignChain::Ethereum, ETH_OWED, ETH_ADDR_1.clone());
 		WithheldAssets::<Test>::insert(
 			ForeignChain::Ethereum.gas_asset(),
-			AssetBalance::mint(ETH_AVAILABLE, Asset::Eth),
+			AssetBalance::new(Asset::Eth, ETH_AVAILABLE),
 		);
 
 		Pallet::<Test>::trigger_reconciliation();
@@ -408,7 +408,7 @@ pub mod balance_api {
 			FreeBalances::<Test>::insert(
 				AccountId::from([1; 32]),
 				ForeignChain::Ethereum.gas_asset(),
-				AssetBalance::mint(100, Asset::Eth),
+				AssetBalance::new(Asset::Eth, 100),
 			);
 			DeleteAccount::<Test>::on_killed_account(&AccountId::from([1; 32]));
 			assert!(FreeBalances::<Test>::get(
@@ -425,7 +425,7 @@ pub mod balance_api {
 			FreeBalances::<Test>::insert(
 				AccountId::from([1; 32]),
 				ForeignChain::Ethereum.gas_asset(),
-				AssetBalance::mint(100, Asset::Eth),
+				AssetBalance::new(Asset::Eth, 100),
 			);
 			assert_eq!(
 				Pallet::<Test>::free_balances(&AccountId::from([1; 32])).eth,

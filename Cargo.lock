@@ -1547,10 +1547,12 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
+ "cf-runtime-utilities",
  "ethabi",
  "frame-support",
  "hex",
  "lazy_format",
+ "log",
  "parity-scale-codec",
  "scale-info",
  "serde",
