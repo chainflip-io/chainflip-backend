@@ -116,7 +116,7 @@ async function newSwapCommand() {
     args.numberOfChunks !== undefined && args.chunkInterval !== undefined
       ? {
           numberOfChunks: args.numberOfChunks,
-          chunkInterval: args.chunkInterval,
+          chunkIntervalBlocks: args.chunkInterval,
         }
       : undefined;
 

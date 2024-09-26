@@ -69,8 +69,7 @@ export async function requestNewSwap(
       const ccmMetadataMatches = messageMetadata
         ? event.data.channelMetadata !== null &&
           event.data.channelMetadata.message === messageMetadata.message &&
-          Number(event.data.channelMetadata.gasBudget.replace(/,/g, '')) ===
-            messageMetadata.gasBudget &&
+          event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
           event.data.channelMetadata.cfParameters === messageMetadata.cfParameters
         : event.data.channelMetadata === null;
 

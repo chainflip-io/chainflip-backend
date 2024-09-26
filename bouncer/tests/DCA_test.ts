@@ -25,7 +25,7 @@ async function testDCASwap(inputAsset: Asset, amount: number, numberOfChunks: nu
 
   const dcaParameters: DcaParams = {
     numberOfChunks,
-    chunkInterval: CHUNK_INTERVAL,
+    chunkIntervalBlocks: CHUNK_INTERVAL,
   };
 
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;

@@ -3,22 +3,11 @@ import { decodeDotAddressForContract, chainFromAsset, stateChainAssetFromAsset }
 
 const defaultCommissionBps = 100; // 1%
 
-export interface CcmDepositMetadata {
-  message: string;
-  gasBudget: number;
-  cfParameters: string;
-}
+type RequestDepositChannelParams = Parameters<(typeof broker)['requestSwapDepositAddress']>[0];
 
-export interface FillOrKillParamsX128 {
-  retryDurationBlocks: number;
-  refundAddress: string;
-  minPriceX128: string;
-}
-
-export interface DcaParams {
-  numberOfChunks: number;
-  chunkInterval: number;
-}
+export type CcmDepositMetadata = NonNullable<RequestDepositChannelParams['ccmParams']>;
+export type FillOrKillParamsX128 = NonNullable<RequestDepositChannelParams['fillOrKillParams']>;
+export type DcaParams = NonNullable<RequestDepositChannelParams['dcaParams']>;
 
 export async function newSwap(
   sourceAsset: Asset,
