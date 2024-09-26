@@ -23,9 +23,6 @@ use std::{io::Write, path::PathBuf, sync::Arc};
 use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 mod settings;
 
-// Using a set number of decimal places of accuracy to avoid floating point rounding errors
-const REDEMPTION_MAX_DECIMAL_PLACES: u32 = 6;
-
 #[tokio::main]
 async fn main() {
 	// TODO: call this implicitly from within the API?
@@ -182,11 +179,13 @@ async fn run_cli() -> Result<()> {
 
 /// Turns the amount of FLIP into a RedemptionAmount in Flipperinos.
 fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
+	// Using a set number of decimal places of accuracy to avoid floating point rounding errors
+	const MAX_DECIMAL_PLACES: u32 = 6;
 	match amount {
 		Some(amount_float) => {
-			let atomic_amount = ((round_f64(amount_float, REDEMPTION_MAX_DECIMAL_PLACES) *
-				10_f64.powi(REDEMPTION_MAX_DECIMAL_PLACES as i32)) as u128) *
-				10_u128.pow(FLIP_DECIMALS - REDEMPTION_MAX_DECIMAL_PLACES);
+			let atomic_amount = ((round_f64(amount_float, MAX_DECIMAL_PLACES) *
+				10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
+				10_u128.pow(FLIP_DECIMALS - MAX_DECIMAL_PLACES);
 			RedemptionAmount::Exact(atomic_amount)
 		},
 		None => RedemptionAmount::Max,
