@@ -135,7 +135,16 @@ fn consensus_when_all_votes_the_same_but_different_slot() {
 			0,
 			NonceVote { value: 0, slot: 0 },
 		),
-		Some((1, 5)),
+		Some((1, 4)),
+	);
+	with_default_state().expect_consensus(
+		generate_votes_with_differen_slots(
+			AUTHORITY_COUNT,
+			NonceVote { value: 1, slot: 0 },
+			0,
+			NonceVote { value: 0, slot: 0 },
+		),
+		Some((1, 6)),
 	);
 }
 
