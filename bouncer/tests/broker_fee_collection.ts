@@ -1,8 +1,6 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-// eslint-disable-next-line no-restricted-imports
-import { KeyringPair } from '@polkadot/keyring/types';
 import Keyring from '../polkadot/keyring';
 import {
   brokerMutex,
@@ -56,23 +54,6 @@ export async function submitBrokerWithdrawal(
 }
 
 const feeAsset = Assets.Usdc;
-
-async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> {
-  await using chainflip = await getChainflipApi();
-  // NOTE: All broker fees are collected in USDC now:
-  const fee = await chainflip.query.assetBalances.freeBalances(brokerKeypair.address, Assets.Usdc);
-
-  if (fee.isEmpty) {
-    return BigInt(0);
-  }
-
-  console.log(`fee: ${fee}`);
-
-  const amount = JSON.parse(fee.toString()).amount;
-
-  console.log(`amount: ${amount}`);
-  return BigInt(amount);
-}
 
 /// Runs a swap, checks that the broker fees are collected,
 /// then withdraws the broker fees, making sure the balance is correct after the withdrawal.
@@ -162,7 +143,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   );
 
   // Check that the detected increase in earned broker fees matches the swap event values and it is equal to the expected amount (after the deposit fee is accounted for)
-  const earnedBrokerFeesAfter = await getEarnedBrokerFees(broker);
+  const earnedBrokerFeesAfter = await getFreeBalance(broker.address, Assets.Usdc);
   testBrokerFeeCollection.log(`${inputAsset} earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
 
   assert(earnedBrokerFeesAfter > earnedBrokerFeesBefore, 'No increase in earned broker fees');
