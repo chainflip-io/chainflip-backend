@@ -18,11 +18,14 @@ mod response_status;
 use response_status::ResponseStatus;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::TypeInfo;
+use scale_info::{
+	build::{Fields, Variants},
+	Path, Type, TypeInfo,
+};
 
-use cf_chains::ChainCrypto;
+use cf_chains::{btc::BlockNumber, ChainCrypto};
 use cf_primitives::{
-	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId as RequestId,
+	AuthorityCount, CeremonyId, EpochIndex, FlipBalance, ThresholdSignatureRequestId as RequestId,
 };
 use cf_runtime_utilities::{log_or_panic, EnumVariant};
 use cf_traits::{
@@ -40,7 +43,7 @@ use frame_support::{
 	},
 	traits::{DefensiveOption, EnsureOrigin, Get, StorageVersion, UnfilteredDispatchable},
 	weights::Weight,
-	RuntimeDebugNoBound,
+	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
@@ -71,6 +74,72 @@ pub type KeygenResponseStatus<T, I> =
 
 pub type KeyHandoverResponseStatus<T, I> =
 	ResponseStatus<T, KeyHandoverSuccessVoters<T, I>, KeyHandoverFailureVoters<T, I>, I>;
+
+// #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+// #[scale_info(skip_type_params(T, I))]
+// pub enum PalletConfigUpdate<T: Config> {
+// }
+
+#[derive(
+	CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, MaxEncodedLen,
+)]
+pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
+	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
+	// ChannelOpeningFee { fee: T::Amount },
+	// /// Set the minimum deposit allowed for a particular asset.
+	// SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I>
+	// },
+	ThresholdSignatureResponseTimeout {
+		new_timeout: BlockNumberFor<T>,
+	},
+	KeygenResponseTimeout {
+		new_timeout: BlockNumberFor<T>,
+	},
+	KeygenSlashAmount {
+		amount_to_slash: FlipBalance,
+	},
+	Other {
+		marker: std::marker::PhantomData<I>,
+	},
+}
+
+macro_rules! append_chain_to_name {
+	($name:ident) => {
+		match T::TargetChain::NAME {
+			"Ethereum" => concat!(stringify!($name), "Ethereum"),
+			"Polkadot" => concat!(stringify!($name), "Polkadot"),
+			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
+			"Arbitrum" => concat!(stringify!($name), "Arbitrum"),
+			"Solana" => concat!(stringify!($name), "Solana"),
+			_ => concat!(stringify!($name), "Other"),
+		}
+	};
+}
+
+impl<T, I> TypeInfo for PalletConfigUpdate<T, I>
+where
+	T: Config<I>,
+	I: 'static,
+{
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("Other", module_path!())) // Path::new(append_chain_to_name!(PalletConfigUpdate), module_path!()))
+			.variant(
+				Variants::new().variant("ChannelOpeningFee", |v| {
+					v.index(0).fields(Fields::named().field(|f| f.ty::<T::Amount>().name("fee")))
+				}), /* .variant(append_chain_to_name!(SetMinimumDeposit), |v| {
+				     * 	v.index(1).fields(
+				     * 		Fields::named()
+				     * 			.field(|f| f.ty::<TargetChainAsset<T, I>>().name("asset"))
+				     * 			.field(|f| {
+				     * 				f.ty::<TargetChainAmount<T, I>>().name("minimum_deposit")
+				     * 			}),
+				     * 	)
+				     * }), */
+			)
+	}
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
@@ -599,11 +668,10 @@ pub mod pallet {
 			request_id: RequestId,
 			attempt_count: AttemptCount,
 		},
-		/// The threshold signature response timeout has been updated
-		ThresholdSignatureResponseTimeoutUpdated {
-			new_timeout: BlockNumberFor<T>,
-		},
-
+		// /// The threshold signature response timeout has been updated
+		// ThresholdSignatureResponseTimeoutUpdated {
+		// 	new_timeout: BlockNumberFor<T>,
+		// },
 		/// Request a key generation
 		KeygenRequest {
 			ceremony_id: CeremonyId,
@@ -660,15 +728,19 @@ pub mod pallet {
 			ceremony_id: CeremonyId,
 		},
 		/// Keygen response timeout was updated \[new_timeout\]
-		KeygenResponseTimeoutUpdated {
-			new_timeout: BlockNumberFor<T>,
-		},
+		// KeygenResponseTimeoutUpdated {
+		// 	new_timeout: BlockNumberFor<T>,
+		// },
 		/// Key handover has failed
 		KeyHandoverFailure {
 			ceremony_id: CeremonyId,
 		},
 		/// The vault on chains associated with this key have all rotated
 		KeyRotationCompleted,
+		/// Some pallet configuration has been updated.
+		PalletConfigUpdated {
+			update: PalletConfigUpdate<T, I>,
+		},
 	}
 
 	#[pallet::error]
@@ -1049,23 +1121,23 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(2)]
-		#[pallet::weight(T::Weights::set_threshold_signature_timeout())]
-		pub fn set_threshold_signature_timeout(
-			origin: OriginFor<T>,
-			new_timeout: BlockNumberFor<T>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
+		// #[pallet::call_index(2)]
+		// #[pallet::weight(T::Weights::set_threshold_signature_timeout())]
+		// pub fn set_threshold_signature_timeout(
+		// 	origin: OriginFor<T>,
+		// 	new_timeout: BlockNumberFor<T>,
+		// ) -> DispatchResult {
+		// 	T::EnsureGovernance::ensure_origin(origin)?;
 
-			if new_timeout != ThresholdSignatureResponseTimeout::<T, I>::get() {
-				ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureResponseTimeoutUpdated {
-					new_timeout,
-				});
-			}
+		// 	if new_timeout != ThresholdSignatureResponseTimeout::<T, I>::get() {
+		// 		ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);
+		// 		Self::deposit_event(Event::<T, I>::ThresholdSignatureResponseTimeoutUpdated {
+		// 			new_timeout,
+		// 		});
+		// 	}
 
-			Ok(())
-		}
+		// 	Ok(())
+		// }
 
 		/// Report the outcome of a keygen ceremony.
 		///
@@ -1168,31 +1240,66 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(7)]
+		// #[pallet::call_index(7)]
+		// #[pallet::weight(T::Weights::set_keygen_response_timeout())]
+		// pub fn set_keygen_response_timeout(
+		// 	origin: OriginFor<T>,
+		// 	new_timeout: BlockNumberFor<T>,
+		// ) -> DispatchResult {
+		// 	T::EnsureGovernance::ensure_origin(origin)?;
+
+		// 	if new_timeout != KeygenResponseTimeout::<T, I>::get() {
+		// 		KeygenResponseTimeout::<T, I>::put(new_timeout);
+		// 		Pallet::<T, I>::deposit_event(Event::KeygenResponseTimeoutUpdated { new_timeout });
+		// 	}
+
+		// 	Ok(())
+		// }
+
+		// #[pallet::call_index(8)]
+		// #[pallet::weight(T::Weights::set_keygen_response_timeout())]
+		// pub fn set_keygen_slash_amount(
+		// 	origin: OriginFor<T>,
+		// 	amount_to_slash: FlipBalance,
+		// ) -> DispatchResult {
+		// 	T::EnsureGovernance::ensure_origin(origin)?;
+
+		// 	KeygenSlashAmount::<T, I>::put(amount_to_slash);
+
+		// 	Ok(())
+		// }
+
+		/// Apply a list of configuration updates to the pallet.
+		///
+		/// Requires Governance.
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::Weights::set_keygen_response_timeout())]
-		pub fn set_keygen_response_timeout(
+		pub fn update_pallet_config(
 			origin: OriginFor<T>,
-			new_timeout: BlockNumberFor<T>,
+			update: PalletConfigUpdate<T, I>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			if new_timeout != KeygenResponseTimeout::<T, I>::get() {
-				KeygenResponseTimeout::<T, I>::put(new_timeout);
-				Pallet::<T, I>::deposit_event(Event::KeygenResponseTimeoutUpdated { new_timeout });
+			match update {
+				PalletConfigUpdate::ThresholdSignatureResponseTimeout { new_timeout } =>
+					if new_timeout != ThresholdSignatureResponseTimeout::<T, I>::get() {
+						ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);
+						Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
+					},
+
+				PalletConfigUpdate::KeygenResponseTimeout { new_timeout } => {
+					if new_timeout != KeygenResponseTimeout::<T, I>::get() {
+						KeygenResponseTimeout::<T, I>::put(new_timeout);
+						Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
+					}
+				},
+
+				PalletConfigUpdate::KeygenSlashAmount { amount_to_slash } => {
+					KeygenSlashAmount::<T, I>::put(amount_to_slash);
+				},
+
+				PalletConfigUpdate::Other { .. } => (),
 			}
-
-			Ok(())
-		}
-
-		#[pallet::call_index(8)]
-		#[pallet::weight(T::Weights::set_keygen_response_timeout())]
-		pub fn set_keygen_slash_amount(
-			origin: OriginFor<T>,
-			amount_to_slash: FlipBalance,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			KeygenSlashAmount::<T, I>::put(amount_to_slash);
 
 			Ok(())
 		}

@@ -113,11 +113,13 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn set_threshold_signature_timeout() {
+	fn update_pallet_config() {
 		let old_timeout: BlockNumberFor<T> = 5u32.into();
 		ThresholdSignatureResponseTimeout::<T, I>::put(old_timeout);
 		let new_timeout: BlockNumberFor<T> = old_timeout + 1u32.into();
-		let call = Call::<T, I>::set_threshold_signature_timeout { new_timeout };
+		let call = Call::<T, I>::update_pallet_config {
+			update: PalletConfigUpdate::ThresholdSignatureResponseTimeout { new_timeout },
+		};
 
 		#[block]
 		{
@@ -128,6 +130,23 @@ mod benchmarks {
 
 		assert_eq!(ThresholdSignatureResponseTimeout::<T, I>::get(), new_timeout);
 	}
+
+	// #[benchmark]
+	// fn set_threshold_signature_timeout() {
+	// 	let old_timeout: BlockNumberFor<T> = 5u32.into();
+	// 	ThresholdSignatureResponseTimeout::<T, I>::put(old_timeout);
+	// 	let new_timeout: BlockNumberFor<T> = old_timeout + 1u32.into();
+	// 	let call = Call::<T, I>::set_threshold_signature_timeout { new_timeout };
+
+	// 	#[block]
+	// 	{
+	// 		assert_ok!(call.dispatch_bypass_filter(
+	// 			<T as Chainflip>::EnsureGovernance::try_successful_origin().unwrap()
+	// 		));
+	// 	}
+
+	// 	assert_eq!(ThresholdSignatureResponseTimeout::<T, I>::get(), new_timeout);
+	// }
 
 	#[benchmark]
 	fn on_initialize_keygen_failure_no_pending_sig_ceremonies(b: Linear<1, 100>) {
@@ -323,21 +342,21 @@ mod benchmarks {
 		))
 	}
 
-	#[benchmark]
-	fn set_keygen_response_timeout() {
-		let old_timeout: BlockNumberFor<T> = 5u32.into();
-		KeygenResponseTimeout::<T, I>::put(old_timeout);
-		let new_timeout: BlockNumberFor<T> = old_timeout + 1u32.into();
-		// ensure it's a different value for most expensive path.
-		let call = Call::<T, I>::set_keygen_response_timeout { new_timeout };
-		#[block]
-		{
-			assert_ok!(
-				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
-			);
-		}
+	// #[benchmark]
+	// fn set_keygen_response_timeout() {
+	// 	let old_timeout: BlockNumberFor<T> = 5u32.into();
+	// 	KeygenResponseTimeout::<T, I>::put(old_timeout);
+	// 	let new_timeout: BlockNumberFor<T> = old_timeout + 1u32.into();
+	// 	// ensure it's a different value for most expensive path.
+	// 	let call = Call::<T, I>::set_keygen_response_timeout { new_timeout };
+	// 	#[block]
+	// 	{
+	// 		assert_ok!(
+	// 			call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+	// 		);
+	// 	}
 
-		assert_eq!(KeygenResponseTimeout::<T, I>::get(), new_timeout);
-	}
+	// 	assert_eq!(KeygenResponseTimeout::<T, I>::get(), new_timeout);
+	// }
 	// NOTE: Test suite not included because of dependency mismatch between benchmarks and mocks.
 }
