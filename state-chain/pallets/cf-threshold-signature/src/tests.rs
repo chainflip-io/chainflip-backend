@@ -1771,26 +1771,6 @@ mod key_rotation {
 	}
 }
 
-// #[test]
-// fn set_keygen_response_timeout_works() {
-// 	new_test_ext_no_key().execute_with(|| {
-// 		let init_timeout = KeygenResponseTimeout::<Test, _>::get();
-
-// 		EvmThresholdSigner::set_keygen_response_timeout(RuntimeOrigin::root(), init_timeout)
-// 			.unwrap();
-
-// 		assert!(maybe_last_event::<Test>().is_none());
-
-// 		let new_timeout = init_timeout + 1;
-
-// 		EvmThresholdSigner::set_keygen_response_timeout(RuntimeOrigin::root(), new_timeout)
-// 			.unwrap();
-
-// 		assert_last_events!(crate::Event::KeygenResponseTimeoutUpdated { .. });
-// 		assert_eq!(KeygenResponseTimeout::<Test, _>::get(), new_timeout)
-// 	});
-// }
-
 #[test]
 fn dont_slash_in_safe_mode() {
 	new_test_ext().execute_with(|| {
@@ -1963,42 +1943,22 @@ fn can_recover_from_abort_key_rotation_after_key_handover_failed() {
 	});
 }
 
-// #[test]
-// fn ensure_governance_origin_checks() {
-// 	new_test_ext().execute_with(|| {
-// 		assert_noop!(
-// 			EvmThresholdSigner::set_keygen_response_timeout(RuntimeOrigin::signed(ALICE), 1),
-// 			sp_runtime::traits::BadOrigin,
-// 		);
-// 		assert_noop!(
-// 			EvmThresholdSigner::set_keygen_slash_amount(RuntimeOrigin::signed(ALICE), 1),
-// 			sp_runtime::traits::BadOrigin,
-// 		);
-// 		assert_noop!(
-// 			EvmThresholdSigner::set_threshold_signature_timeout(RuntimeOrigin::signed(ALICE), 1),
-// 			sp_runtime::traits::BadOrigin,
-// 		);
-// 		assert_noop!(
-// 			EvmThresholdSigner::update_pallet_config(RuntimeOrigin::signed(ALICE),
-// PalletConfigUpdate::ThresholdSignatureResponseTimeout { new_timeout: 1}),
-// 			sp_runtime::traits::BadOrigin,
-// 		);
-// 	});
-// }
-
 #[test]
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
-		const NEW_THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT: BlockNumberFor<Test> = 100;
-		const NEW_KEYGEN_RESPONSE_TIMEOUT: BlockNumberFor<Test> = 101;
+		const NEW_THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT: u32 = 100;
+		const NEW_KEYGEN_RESPONSE_TIMEOUT: u32 = 101;
 		const NEW_KEYGEN_SLASH_AMOUNT: FlipBalance = 102;
 
 		// Check that the default values are different from the new ones
 		assert_ne!(
 			ThresholdSignatureResponseTimeout::<Test, Instance1>::get(),
-			NEW_THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT
+			BlockNumberFor::<Test>::from(NEW_THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT)
 		);
-		assert_ne!(KeygenResponseTimeout::<Test, Instance1>::get(), NEW_KEYGEN_RESPONSE_TIMEOUT);
+		assert_ne!(
+			KeygenResponseTimeout::<Test, Instance1>::get(),
+			BlockNumberFor::<Test>::from(NEW_KEYGEN_RESPONSE_TIMEOUT)
+		);
 		assert_ne!(KeygenSlashAmount::<Test, Instance1>::get(), NEW_KEYGEN_SLASH_AMOUNT);
 
 		// Update all config items
@@ -2023,9 +1983,12 @@ fn can_update_all_config_items() {
 		// Check that the new values were set
 		assert_eq!(
 			ThresholdSignatureResponseTimeout::<Test, Instance1>::get(),
-			NEW_THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT
+			BlockNumberFor::<Test>::from(NEW_THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT)
 		);
-		assert_eq!(KeygenResponseTimeout::<Test, Instance1>::get(), NEW_KEYGEN_RESPONSE_TIMEOUT);
+		assert_eq!(
+			KeygenResponseTimeout::<Test, Instance1>::get(),
+			BlockNumberFor::<Test>::from(NEW_KEYGEN_RESPONSE_TIMEOUT)
+		);
 		assert_eq!(KeygenSlashAmount::<Test, Instance1>::get(), NEW_KEYGEN_SLASH_AMOUNT);
 
 		// Make sure that only governance can update the config

@@ -399,7 +399,3 @@ cf_test_utilities::impl_test_helpers! {
 		MockEpochInfo::set_authorities(authorities);
 	}
 }
-
-// pub(crate) fn new_test_ext_no_key() -> TestRunner<()> {
-// 	TestRunner::<()>::new(RuntimeGenesisConfig::default())
-// }
