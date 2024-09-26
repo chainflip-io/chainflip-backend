@@ -1,0 +1,33 @@
+[package]
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+edition = '2021'
+build = 'build.rs'
+name = "chainflip-btc-deposit-monitor"
+version = "1.7.0"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1.0"
+base64 = "0.22.1"
+bigdecimal = "0.4.5"
+clap = { version = "3.2.16", features = ["derive", "env"] }
+config = "0.13.1"
+futures = "0.3.14"
+hex = { version = "0.4.3", features = ["serde"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
+tokio = { version = "1.13.1", features = ["full"] }
+serde_json = "1.0"
+reqwest = { version = "0.11.4", features = ["rustls-tls"] }
+
+# Local Deps
+# chainflip-engine = { path = "../../../engine/" }
+chainflip-api = { path = "../../lib" }
+cf-chains = { path = "../../../state-chain/chains" }
+utilities = { path = "../../../utilities" }
+custom-rpc = { path = "../../../state-chain/custom-rpc" }
+
+[build-dependencies]
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
+
