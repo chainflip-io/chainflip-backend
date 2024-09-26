@@ -350,9 +350,8 @@ impl<A> VaultImbalance<A> {
 }
 
 impl<T: Config> LiabilityTracker for Pallet<T> {
-	fn record_liability(address: ForeignChainAddress, asset_balance: AssetBalance) {
-		debug_assert_eq!(ForeignChain::from(asset_balance.asset()), address.chain());
-		let asset = asset_balance.asset();
+	fn record_liability(address: ForeignChainAddress, asset: Asset, amount: AssetAmount) {
+		debug_assert_eq!(ForeignChain::from(asset), address.chain());
 		Liabilities::<T>::mutate(asset, |maybe_fees| {
 			if let Some(fees) = maybe_fees {
 				fees.entry(match ForeignChain::from(asset) {
@@ -360,8 +359,8 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 					ForeignChain::Polkadot => ExternalOwner::AggKey,
 					ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
 				})
-				.and_modify(|fee| fee.accrue(asset_balance))
-				.or_insert(asset_balance);
+				.and_modify(|fee| fee.accrue(AssetBalance::mint(amount, asset)))
+				.or_insert(AssetBalance::mint(amount, asset));
 			} else {
 				let mut map = BTreeMap::new();
 				map.insert(
@@ -370,7 +369,7 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 						ForeignChain::Polkadot => ExternalOwner::AggKey,
 						ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
 					},
-					asset_balance,
+					AssetBalance::mint(amount, asset),
 				);
 				*maybe_fees = Some(map);
 			}
@@ -379,12 +378,12 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 }
 
 impl<T: Config> AssetWithholding for Pallet<T> {
-	fn withhold_assets(asset_balance: AssetBalance) {
-		WithheldAssets::<T>::mutate(asset_balance.asset(), |maybe_fees| {
+	fn withhold_assets(asset: Asset, amount: AssetAmount) {
+		WithheldAssets::<T>::mutate(asset, |maybe_fees| {
 			if let Some(fees) = maybe_fees {
-				fees.accrue(asset_balance);
+				fees.accrue(AssetBalance::mint(amount, asset));
 			} else {
-				*maybe_fees = Some(asset_balance);
+				*maybe_fees = Some(AssetBalance::mint(amount, asset));
 			}
 		});
 	}
