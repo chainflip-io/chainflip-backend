@@ -114,9 +114,9 @@ mod benchmarks {
 
 	#[benchmark]
 	fn update_pallet_config() {
-		let old_timeout = 5u32; // : BlockNumberFor<T> = 5u32.into();
+		let old_timeout = 5u32;
 		ThresholdSignatureResponseTimeout::<T, I>::put(BlockNumberFor::<T>::from(old_timeout));
-		let new_timeout = old_timeout + 1u32; // .into();
+		let new_timeout = old_timeout + 1u32;
 		let call = Call::<T, I>::update_pallet_config {
 			update: PalletConfigUpdate::ThresholdSignatureResponseTimeout { new_timeout },
 		};
