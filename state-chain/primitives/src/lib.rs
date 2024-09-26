@@ -19,8 +19,10 @@ use sp_std::{
 };
 pub mod chains;
 
+#[macro_export]
 macro_rules! define_wrapper_type {
-	($name: ident, $inner: ty) => {
+	($name: ident, $inner: ty, extra_derives: $( $extra_derive: ident ),* ) => {
+
 		#[derive(
 			Clone,
 			Copy,
@@ -32,8 +34,7 @@ macro_rules! define_wrapper_type {
 			TypeInfo,
 			MaxEncodedLen,
 			Default,
-			serde::Serialize,
-			serde::Deserialize,
+			$( $extra_derive ),*
 		)]
 		pub struct $name(pub $inner);
 
@@ -63,6 +64,11 @@ macro_rules! define_wrapper_type {
 			}
 		}
 	};
+
+	($name: ident, $inner: ty) => {
+		$crate::define_wrapper_type!($name, $inner, extra_derives:)
+	};
+
 }
 
 pub use chains::{assets::any::Asset, ForeignChain};
@@ -92,8 +98,9 @@ pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;
 
-define_wrapper_type!(SwapId, u64);
-define_wrapper_type!(SwapRequestId, u64);
+define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize);
+
+define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize);
 
 pub type PrewitnessedDepositId = u64;
 
