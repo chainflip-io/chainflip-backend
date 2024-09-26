@@ -19,6 +19,7 @@ import { sendEvmNative } from '../shared/send_evm';
 import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { ExecutableTest } from '../shared/executable_test';
+import { getFreeBalance } from '../shared/get_free_balance';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testLpApi = new ExecutableTest('LP-API', main, 200);
@@ -145,20 +146,15 @@ async function testWithdrawAsset() {
 }
 
 async function testTransferAsset() {
-  await using chainflip = await getChainflipApi();
   const amountToTransfer = testAssetAmount.toString(16);
-
-  const getLpBalance = async (account: string) =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((await chainflip.query.assetBalances.freeBalances(account, testAsset)) as any).toBigInt();
 
   const keyring = new Keyring({ type: 'sr25519' });
 
   const sourceLpAccount = keyring.createFromUri('//LP_1');
   const destinationLpAccount = keyring.createFromUri('//LP_2');
 
-  const oldBalanceSource = await getLpBalance(sourceLpAccount.address);
-  const oldBalanceDestination = await getLpBalance(destinationLpAccount.address);
+  const oldBalanceSource = await getFreeBalance(sourceLpAccount.address, testAsset);
+  const oldBalanceDestination = await getFreeBalance(destinationLpAccount.address, testAsset);
 
   const result = await lpApiRpc(`lp_transfer_asset`, [
     amountToTransfer,
@@ -166,8 +162,8 @@ async function testTransferAsset() {
     destinationLpAccount.address,
   ]);
 
-  let newBalancesSource = await getLpBalance(sourceLpAccount.address);
-  let newBalanceDestination = await getLpBalance(destinationLpAccount.address);
+  let newBalancesSource = await getFreeBalance(sourceLpAccount.address, testAsset);
+  let newBalanceDestination = await getFreeBalance(destinationLpAccount.address, testAsset);
 
   // Wait max for 18 seconds aka 3 blocks for the balances to update.
   for (let i = 0; i < 18; i++) {
@@ -177,8 +173,8 @@ async function testTransferAsset() {
 
     await sleep(1000);
 
-    newBalancesSource = await getLpBalance(sourceLpAccount.address);
-    newBalanceDestination = await getLpBalance(destinationLpAccount.address);
+    newBalancesSource = await getFreeBalance(sourceLpAccount.address, testAsset);
+    newBalanceDestination = await getFreeBalance(destinationLpAccount.address, testAsset);
   }
 
   // Expect result to be a block hash

@@ -20,6 +20,7 @@ import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { send } from '../shared/send';
 import { ExecutableTest } from '../shared/executable_test';
+import { getFreeBalance } from '../shared/get_free_balance';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testBrokerFeeCollection = new ExecutableTest('Broker-Fee-Collection', main, 200);
@@ -65,7 +66,11 @@ async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> 
     return BigInt(0);
   }
 
+  console.log(`fee: ${fee}`);
+
   let amount = JSON.parse(fee.toString()).amount;
+
+  console.log(`amount: ${amount}`);
   return BigInt(amount);
 }
 
@@ -74,7 +79,7 @@ async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> 
 async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   await using chainflip = await getChainflipApi();
   // Check the broker fees before the swap
-  const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker);
+  const earnedBrokerFeesBefore = await getFreeBalance(broker.address, Assets.Usdc);
   testBrokerFeeCollection.log(`${inputAsset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
   // Run a swap
@@ -151,7 +156,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   testBrokerFeeCollection.log('depositAmount:', depositAmountAfterIngressFee);
   assert(
     depositAmountAfterIngressFee >= 0 &&
-      depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
+    depositAmountAfterIngressFee <= rawDepositForSwapAmountBigInt,
     `Unexpected ${inputAsset} deposit amount ${depositAmountAfterIngressFee},
     }`,
   );
