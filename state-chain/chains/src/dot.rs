@@ -186,7 +186,7 @@ impl PolkadotUncheckedExtrinsic {
 	pub fn signature(&self) -> Option<PolkadotSignature> {
 		self.0.signature.as_ref().and_then(|signature| {
 			if let MultiSignature::Sr25519(signature) = &signature.1 {
-				Some(PolkadotSignature(signature.clone()))
+				Some(PolkadotSignature(*signature))
 			} else {
 				None
 			}
@@ -681,8 +681,8 @@ pub enum ProxyCall {
 	/// Parameters:
 	/// - `proxy`: The account that the `caller` would like to make a proxy.
 	/// - `proxy_type`: The permissions allowed for this proxy account.
-	/// - `delay`: The announcement period required of the initial proxy. Will generally be
-	/// zero.
+	/// - `delay`: The announcement period required of the initial proxy. This will generally be
+	///   set to zero.
 	///
 	/// # <weight>
 	/// Weight is a function of the number of proxies the user has (P).
@@ -733,17 +733,16 @@ pub enum ProxyCall {
 	///
 	/// Requires a `Signed` origin.
 	///
-	/// - `proxy_type`: The type of the proxy that the sender will be registered as over the
-	/// new account. This will almost always be the most permissive `ProxyType` possible to
-	/// allow for maximum flexibility.
+	/// - `proxy_type`: The type of the proxy that the sender will be registered as over the new
+	///   account. This will almost always be the most permissive `ProxyType` possible to allow for
+	///   maximum flexibility.
 	/// - `index`: A disambiguation index, in case this is called multiple times in the same
-	/// transaction (e.g. with `utility::batch`). Unless you're using `batch` you probably just
-	/// want to use `0`.
-	/// - `delay`: The announcement period required of the initial proxy. Will generally be
-	/// zero.
+	///   transaction (e.g. with `utility::batch`). Unless you're using `batch` you probably just
+	///   want to use `0`.
+	/// - `delay`: The announcement period required of the initial proxy. Will generally be zero.
 	///
-	/// Fails with `Duplicate` if this has already been called in this transaction, from the
-	/// same sender, with the same parameters.
+	/// Fails with `Duplicate` if this has already been called in this transaction, from the same
+	/// sender, with the same parameters.
 	///
 	/// Fails if there are insufficient funds to pay for deposit.
 	///

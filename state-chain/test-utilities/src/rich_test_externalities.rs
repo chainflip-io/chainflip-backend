@@ -428,6 +428,11 @@ mod test_examples {
 		type OnSetCode = ();
 		type MaxConsumers = frame_support::traits::ConstU32<5>;
 		type RuntimeTask = ();
+		type SingleBlockMigrations = ();
+		type MultiBlockMigrator = ();
+		type PreInherents = ();
+		type PostInherents = ();
+		type PostTransactions = ();
 	}
 
 	impl HasAllPallets for Test {

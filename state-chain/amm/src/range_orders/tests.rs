@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use rand::{prelude::Distribution, Rng, SeedableRng};
 
 #[cfg(feature = "slow-tests")]

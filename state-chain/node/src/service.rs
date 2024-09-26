@@ -411,14 +411,10 @@ pub fn new_full_base<
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
-	Ok(match config.network.network_backend {
-		sc_network::config::NetworkBackendType::Libp2p => {
-			let task_manager = new_full_base::<sc_network::NetworkWorker<_, _>>(config)?;
-			task_manager
-		},
-		sc_network::config::NetworkBackendType::Litep2p => {
-			let task_manager = new_full_base::<sc_network::Litep2pNetworkBackend>(config)?;
-			task_manager
-		},
-	})
+	match config.network.network_backend {
+		sc_network::config::NetworkBackendType::Libp2p =>
+			new_full_base::<sc_network::NetworkWorker<_, _>>(config),
+		sc_network::config::NetworkBackendType::Litep2p =>
+			new_full_base::<sc_network::Litep2pNetworkBackend>(config),
+	}
 }

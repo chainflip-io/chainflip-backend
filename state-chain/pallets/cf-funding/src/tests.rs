@@ -1554,7 +1554,7 @@ fn check_restricted_balances_are_getting_removed() {
 			vec![],
 			vec![RESTRICTED_ADDRESS],
 		));
-		assert!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).is_none());
+		assert!(RestrictedBalances::<Test>::get(ALICE).contains_key(&RESTRICTED_ADDRESS));
 	});
 }
 

@@ -77,7 +77,7 @@ impl QueryApi {
 					block_hash
 				),
 		)?;
-		
+
 		Ok(channels
 			.into_iter()
 			.filter_map(|(_, DepositChannelDetails { action, deposit_channel, .. })| match action {

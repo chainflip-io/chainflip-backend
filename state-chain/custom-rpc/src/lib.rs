@@ -1371,7 +1371,7 @@ where
 							Ok(amount)
 						}
 					})
-					.map_err(|str| str_to_rpc_error(str))?,
+					.map_err(str_to_rpc_error)?,
 				additional_orders.map(|additional_orders| {
 					additional_orders
 						.into_iter()
@@ -2027,8 +2027,13 @@ where
 		let (initial_item, initial_state) = match f(&self.client, info.best_hash, None) {
 			Ok(initial) => initial,
 			Err(e) => {
-				let _ = pending_sink
-					.reject(sc_rpc_api::state::error::Error::Client(Box::new(to_rpc_error(e))));
+				self.executor.spawn(
+					"cf-rpc-update-subscription",
+					Some("rpc"),
+					pending_sink
+						.reject(sc_rpc_api::state::error::Error::Client(Box::new(to_rpc_error(e))))
+						.boxed(),
+				);
 				return;
 			},
 		};

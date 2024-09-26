@@ -15,7 +15,7 @@ use utilities::{
 fn create_node_info(id: AccountId, node_key: &ed25519_dalek::SigningKey, port: Port) -> PeerInfo {
 	use std::net::Ipv4Addr;
 	let ip = "0.0.0.0".parse::<Ipv4Addr>().unwrap().to_ipv6_mapped();
-	let pubkey = Public(node_key.verifying_key().to_bytes());
+	let pubkey = Public::from(node_key.verifying_key().to_bytes());
 	PeerInfo::new(id, pubkey, ip, port)
 }
 

@@ -36,6 +36,7 @@ type CfeEvent = cfe_events::CfeEvent<<Runtime as Chainflip>::ValidatorId>;
 
 // TODO: Can we use the actual events here?
 // Events from ethereum contract
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum ContractEvent {
 	Funded { node_id: NodeId, amount: FlipBalance, total: FlipBalance, epoch: EpochIndex },

@@ -119,6 +119,9 @@ pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainfl
 
 cf-test-utilities = { path = '../test-utilities', optional = true }
 
+[dev-dependencies]
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
+
 [features]
 default = ['std']
 runtime-benchmarks = [

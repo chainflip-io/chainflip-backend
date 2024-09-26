@@ -64,6 +64,11 @@ impl frame_system::Config for Test {
 	type SS58Prefix = frame_support::traits::ConstU16<2112>;
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
+	type SingleBlockMigrations = ();
+	type MultiBlockMigrator = ();
+	type PreInherents = ();
+	type PostInherents = ();
+	type PostTransactions = ();
 }
 
 impl_mock_chainflip!(Test);

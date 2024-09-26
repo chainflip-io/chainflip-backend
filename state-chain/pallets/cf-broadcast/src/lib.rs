@@ -437,10 +437,8 @@ pub mod pallet {
 
 				// Retry broadcast (allowed by broadcast barrier)
 				let next_block = block_number.saturating_add(One::one());
-				let id_limit = BroadcastBarriers::<T, I>::get()
-					.first()
-					.copied()
-					.unwrap_or(BroadcastId::max_value());
+				let id_limit =
+					BroadcastBarriers::<T, I>::get().first().copied().unwrap_or(BroadcastId::MAX);
 				delayed_retries.retain(|broadcast_id| {
 					if *broadcast_id <= id_limit {
 						// If retry is allowed by the barrier - start the retry.
