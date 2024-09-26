@@ -1,5 +1,5 @@
-import { getChainflipApi } from './utils/substrate';
 import { InternalAsset as Asset } from '@chainflip/cli';
+import { getChainflipApi } from './utils/substrate';
 
 export async function getFreeBalance(address: string, asset: Asset): Promise<bigint> {
   await using chainflip = await getChainflipApi();
@@ -7,7 +7,7 @@ export async function getFreeBalance(address: string, asset: Asset): Promise<big
   // If the option is none we assume the balance is 0 for tests.
   if (fee.isEmpty) {
     return BigInt(0);
-  } else {
+  } 
     return BigInt(JSON.parse(fee.toString()).amount);
-  }
+  
 }

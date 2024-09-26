@@ -17,7 +17,7 @@ import { jsonRpc } from '../shared/json_rpc';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { sendEvmNative } from '../shared/send_evm';
 import { getBalance } from '../shared/get_balance';
-import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
+import { observeEvent } from '../shared/utils/substrate';
 import { ExecutableTest } from '../shared/executable_test';
 import { getFreeBalance } from '../shared/get_free_balance';
 

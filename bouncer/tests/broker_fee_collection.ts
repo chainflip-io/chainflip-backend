@@ -68,7 +68,7 @@ async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> 
 
   console.log(`fee: ${fee}`);
 
-  let amount = JSON.parse(fee.toString()).amount;
+  const amount = JSON.parse(fee.toString()).amount;
 
   console.log(`amount: ${amount}`);
   return BigInt(amount);
