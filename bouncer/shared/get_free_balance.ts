@@ -7,7 +7,6 @@ export async function getFreeBalance(address: string, asset: Asset): Promise<big
   // If the option is none we assume the balance is 0 for tests.
   if (fee.isEmpty) {
     return BigInt(0);
-  } 
-    return BigInt(JSON.parse(fee.toString()).amount);
-  
+  }
+  return BigInt(JSON.parse(fee.toString()).amount);
 }
