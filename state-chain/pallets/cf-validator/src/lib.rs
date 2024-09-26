@@ -1030,15 +1030,11 @@ impl<T: Config> Pallet<T> {
 		}
 		T::EpochTransitionHandler::on_expired_epoch(epoch);
 
-		// WIP: delete left-over data regarding this old epoch
-		// get all validators for old epoch
 		let validators = HistoricalAuthorities::<T>::take(epoch);
 		for validator in validators {
 			AuthorityIndex::<T>::remove(epoch, validator);
 		}
 		HistoricalBonds::<T>::remove(epoch);
-		// HistoricalActiveEpochs::<T>::remove(epoch);
-		// EpochExpiries::<T>::remove()
 
 		T::ValidatorWeightInfo::expire_epoch(num_expired_authorities)
 	}
