@@ -6,7 +6,7 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError,
 };
-use cf_utilities::success_threshold_from_share_count;
+use cf_utilities::{success_threshold_from_share_count, threshold_from_share_count};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
@@ -157,7 +157,7 @@ impl<
 						*count += 1;
 						slots.push(vote.slot)
 					})
-					.or_insert((1, vec![]));
+					.or_insert((1, vec![vote.slot]));
 			}
 
 			counts.iter().find_map(|(vote, (count, slots))| {
@@ -165,9 +165,7 @@ impl<
 					let mut slots = slots.clone();
 					let num_slots = slots.len() as u32;
 					let (_, median_vote, _) = {
-						slots.select_nth_unstable(
-							success_threshold_from_share_count(num_slots) as usize
-						)
+						slots.select_nth_unstable(threshold_from_share_count(num_slots) as usize)
 					};
 					Some((vote.clone(), *median_vote))
 				} else {
