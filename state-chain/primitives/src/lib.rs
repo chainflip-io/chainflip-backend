@@ -21,7 +21,7 @@ pub mod chains;
 
 #[macro_export]
 macro_rules! define_wrapper_type {
-	($name: ident, $inner: ty, extra_derives: $( $extra_derive: ident ),* ) => {
+	($name: ident, $inner: ty $(, extra_derives: $( $extra_derive: ident ),*)? ) => {
 
 		#[derive(
 			Clone,
@@ -34,7 +34,7 @@ macro_rules! define_wrapper_type {
 			TypeInfo,
 			MaxEncodedLen,
 			Default,
-			$( $extra_derive ),*
+			$($( $extra_derive ),*)?
 		)]
 		pub struct $name(pub $inner);
 
@@ -64,11 +64,6 @@ macro_rules! define_wrapper_type {
 			}
 		}
 	};
-
-	($name: ident, $inner: ty) => {
-		$crate::define_wrapper_type!($name, $inner, extra_derives:)
-	};
-
 }
 
 pub use chains::{assets::any::Asset, ForeignChain};
