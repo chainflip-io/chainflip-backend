@@ -1243,17 +1243,15 @@ pub mod pallet {
 							amount,
 						});
 
-						// Find the largest swap from the failing pool/direction:
-						let swap_to_remove = utilities::split_off_highest_impact_swap(
+						// Find the largest swap from the failing pool/direction and remove it
+						// so we can try the remaining swaps again. We should always be able to
+						// find a swap to remove, but if we can't for some reason, abort.
+						if let Some(removed_swap) = utilities::split_off_highest_impact_swap(
 							&mut swaps_to_execute,
 							&failed_swap_group,
 							direction,
-						);
-
-						// Abort if we couldn't find a swap to remove; otherwise, remove the
-						// swap and try again with the remaining swaps:
-						if let Some(swap) = swap_to_remove {
-							failed_swaps.push(swap);
+						) {
+							failed_swaps.push(removed_swap);
 						} else {
 							break;
 						}
@@ -2306,7 +2304,6 @@ pub(crate) mod utilities {
 		}
 	}
 
-	// Note:
 	pub(super) fn split_off_highest_impact_swap<T: Config>(
 		swaps: &mut Vec<Swap<T>>,
 		failed_swap_group: &[SwapState<T>],
