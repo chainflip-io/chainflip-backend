@@ -16,13 +16,15 @@ clap = { version = "3.2.16", features = ["derive", "env"] }
 config = "0.13.1"
 futures = "0.3.14"
 hex = { version = "0.4.3", features = ["serde"] }
+hmac = "0.12.1"
 serde = { version = "1.0", features = ["derive", "rc"] }
 tokio = { version = "1.13.1", features = ["full"] }
 serde_json = "1.0"
+sha2 = "0.10.8"
 reqwest = { version = "0.11.4", features = ["rustls-tls"] }
 
 # Local Deps
-# chainflip-engine = { path = "../../../engine/" }
+chainflip-engine = { path = "../../../engine/" }
 chainflip-api = { path = "../../lib" }
 cf-chains = { path = "../../../state-chain/chains" }
 utilities = { path = "../../../utilities" }
