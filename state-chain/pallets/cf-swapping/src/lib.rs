@@ -726,24 +726,12 @@ pub mod pallet {
 				return
 			}
 
-			let failed_swaps = match Self::execute_batch(swaps_to_execute.clone()) {
-				Ok(BatchExecutionOutcomes { successful_swaps, failed_swaps }) => {
-					for swap in successful_swaps {
-						Self::process_swap_outcome(swap);
-					}
+			let BatchExecutionOutcomes { successful_swaps, failed_swaps } =
+				Self::execute_batch(swaps_to_execute.clone());
 
-					failed_swaps
-				},
-				Err(err) => {
-					// This should only happen when the transaction nested too deep,
-					// which should not happen in practice (max nesting is 255):
-					log_or_panic!(
-						"Failed to execute swap batch at block {current_block:?}: {err:?}",
-					);
-
-					swaps_to_execute
-				},
-			};
+			for swap in successful_swaps {
+				Self::process_swap_outcome(swap);
+			}
 
 			for swap in failed_swaps {
 				match swap.refund_params {
@@ -1232,20 +1220,17 @@ pub mod pallet {
 		/// Attempts to find (and execute) a batch of swaps that wouldn't result in hitting the
 		/// price impact limit, starting with the given batch, and taking swaps out of the batch if
 		/// needed.
-		#[transactional]
-		fn execute_batch(
-			mut swaps_to_execute: Vec<Swap<T>>,
-		) -> Result<BatchExecutionOutcomes<T>, DispatchError> {
+		fn execute_batch(mut swaps_to_execute: Vec<Swap<T>>) -> BatchExecutionOutcomes<T> {
 			let mut failed_swaps = vec![];
 
 			loop {
 				if swaps_to_execute.is_empty() {
-					return Ok(BatchExecutionOutcomes { successful_swaps: vec![], failed_swaps });
+					return BatchExecutionOutcomes { successful_swaps: vec![], failed_swaps };
 				}
 
 				match Self::try_execute_without_violations(swaps_to_execute.clone()) {
 					Ok(successful_swaps) =>
-						return Ok(BatchExecutionOutcomes { successful_swaps, failed_swaps }),
+						return BatchExecutionOutcomes { successful_swaps, failed_swaps },
 					Err(BatchExecutionError::SwapLegFailed {
 						asset,
 						direction,
@@ -1270,11 +1255,7 @@ pub mod pallet {
 						if let Some(swap) = swap_to_remove {
 							failed_swaps.push(swap);
 						} else {
-							failed_swaps.extend(swaps_to_execute);
-							return Ok(BatchExecutionOutcomes {
-								successful_swaps: vec![],
-								failed_swaps,
-							});
+							break;
 						}
 					},
 					Err(BatchExecutionError::PriceViolation {
@@ -1284,9 +1265,18 @@ pub mod pallet {
 						failed_swaps.extend(violating_swaps);
 						swaps_to_execute = non_violating_swaps;
 					},
-					Err(BatchExecutionError::DispatchError { error }) => return Err(error),
+					Err(BatchExecutionError::DispatchError { error }) => {
+						// This should only happen when the transaction nested too deep,
+						// which should not happen in practice (max nesting is 255):
+						log_or_panic!("Failed to execute swap batch: {error:?}");
+						break;
+					},
 				}
 			}
+
+			// If we are here, consider all swaps as failed:
+			failed_swaps.extend(swaps_to_execute);
+			BatchExecutionOutcomes { successful_swaps: vec![], failed_swaps }
 		}
 
 		fn schedule_ccm_gas_swap(
