@@ -8,11 +8,13 @@ use scale_info::TypeInfo;
 /// asset. It provides methods to add, subtract, and compare balances in a more secure way that
 /// gives more guarantees about compatibility and resource handling. We want to use this as a
 /// replacement for the AssetAmount type where it is possible and straight forward. It's intended
-/// that this type is no derive Copy or Clone to force the user to think about the handling of the
-/// resource.
+/// that this type is not deriving Copy or Clone to force the user to think about the handling of
+/// the resource.
 #[derive(Debug, Encode, Decode, TypeInfo, Eq)]
 pub struct AssetBalance {
+	/// The asset of the balance. For example, DOT, ETH, etc.
 	asset: Asset,
+	/// The amount of the balance.
 	amount: AssetAmount,
 }
 
@@ -166,11 +168,75 @@ mod tests {
 
 	use super::*;
 
+	#[cfg(test)]
+	mod ensure_to_not_mix_assets {
+
+		use super::*;
+
+		// Implements a test that takes a body and expects it to panic.
+		#[macro_export]
+		macro_rules! panic_when_mix_assets {
+			($test_name:ident, $body:expr) => {
+				#[test]
+				#[should_panic]
+				fn $test_name() {
+					$body
+				}
+			};
+		}
+
+		panic_when_mix_assets!(add, {
+			AssetBalance::new(Asset::Dot, 100).saturating_accrue(AssetBalance::new(Asset::Eth, 50));
+		});
+
+		panic_when_mix_assets!(sub, {
+			AssetBalance::new(Asset::Dot, 100).saturating_reduce(AssetBalance::new(Asset::Eth, 50));
+		});
+
+		panic_when_mix_assets!(checked_add, {
+			AssetBalance::new(Asset::Dot, 100).checked_add(AssetBalance::new(Asset::Eth, 50));
+		});
+
+		panic_when_mix_assets!(checked_sub, {
+			AssetBalance::new(Asset::Dot, 100).checked_sub(AssetBalance::new(Asset::Eth, 50));
+		});
+
+		panic_when_mix_assets!(lt, {
+			let _ = AssetBalance::new(Asset::Dot, 100) < AssetBalance::new(Asset::Eth, 50);
+		});
+
+		panic_when_mix_assets!(le, {
+			let _ = AssetBalance::new(Asset::Dot, 100) <= AssetBalance::new(Asset::Eth, 50);
+		});
+
+		panic_when_mix_assets!(gt, {
+			let _ = AssetBalance::new(Asset::Dot, 100) > AssetBalance::new(Asset::Eth, 50);
+		});
+
+		panic_when_mix_assets!(ge, {
+			let _ = AssetBalance::new(Asset::Dot, 100) >= AssetBalance::new(Asset::Eth, 50);
+		});
+
+		panic_when_mix_assets!(eq, {
+			let _ = AssetBalance::new(Asset::Dot, 100) == AssetBalance::new(Asset::Eth, 50);
+		});
+
+		panic_when_mix_assets!(ne, {
+			let _ = AssetBalance::new(Asset::Dot, 100) != AssetBalance::new(Asset::Eth, 50);
+		});
+
+		panic_when_mix_assets!(partial_cmp, {
+			let _ =
+				AssetBalance::new(Asset::Dot, 100).partial_cmp(&AssetBalance::new(Asset::Eth, 50));
+		});
+	}
+
 	// Proofs we can add asset A with B and consume B.
 	#[test]
 	fn add_and_consume_balance() {
 		let mut balance = AssetBalance::new(Asset::Dot, 100);
 		let other = AssetBalance::new(Asset::Dot, 50);
+
 		balance.saturating_accrue(other);
 		assert_eq!(balance.amount(), 150);
 	}
@@ -180,18 +246,33 @@ mod tests {
 	fn sub_and_consume_balance() {
 		let mut balance = AssetBalance::new(Asset::Dot, 100);
 		let other = AssetBalance::new(Asset::Dot, 50);
+
 		balance.saturating_reduce(other);
 		assert_eq!(balance.amount(), 50);
 	}
 
-	// Proofs that we can **not** mix up assets.
-	// #[test]
-	// fn can_not_mix_assets() {
-	// 	let result = panic::catch_unwind(|| {
-	// 		let mut balance = AssetBalance::new(Asset::Dot, 100);
-	// 		let other = AssetBalance::new(Asset::Eth, 50);
-	// 		balance.saturating_accrue(other);
-	// 	});
-	// 	assert!(result.is_err());
-	// }
+	// Proofs that we can manipulate a raw amount of the balance.
+	#[test]
+	fn scalar_operations() {
+		let mut balance = AssetBalance::new(Asset::Dot, 100);
+
+		balance.saturating_add_amount(50);
+		assert_eq!(balance.amount(), 150);
+		balance.saturating_sub_amount(50);
+		assert_eq!(balance.amount(), 100);
+	}
+
+	/// Proofs that the overloaded operators work as expected.
+	#[test]
+	fn overloaded_operators() {
+		let balance_a = AssetBalance::new(Asset::Dot, 100);
+		let balance_b = AssetBalance::new(Asset::Dot, 50);
+
+		assert!(balance_a > balance_b);
+		assert!(balance_a >= balance_b);
+		assert!(balance_b < balance_a);
+		assert!(balance_b <= balance_a);
+		assert!(balance_a != balance_b);
+		assert!(balance_a == balance_a);
+	}
 }
