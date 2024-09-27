@@ -14,12 +14,12 @@ on:
         default: false
       node-count:
         type: number
-        default: 1
+        default: 3
 
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v1.18.17
-  NODE_COUNT: "${{ inputs.node-count }}-node"
+  NODE_COUNT: "3-node"
 
 permissions:
   packages: read

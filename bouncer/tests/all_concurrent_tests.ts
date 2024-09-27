@@ -32,7 +32,7 @@ async function runAllConcurrentTests() {
   const tests = [
     swapLessThanED.run(),
     testAllSwaps.run(),
-    testEvmDeposits.run(numberOfNodes),
+    testEvmDeposits.run(),
     testFundRedeem.run('redeem'),
     testMultipleMembersGovernance.run(),
     testLpApi.run(),
@@ -57,4 +57,4 @@ async function runAllConcurrentTests() {
   await checkAvailabilityAllSolanaNonces();
 }
 
-await runWithTimeoutAndExit(runAllConcurrentTests(), 2000);
+await runWithTimeoutAndExit(runAllConcurrentTests(), 3000);
