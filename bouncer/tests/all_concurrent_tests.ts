@@ -57,4 +57,4 @@ async function runAllConcurrentTests() {
   await checkAvailabilityAllSolanaNonces();
 }
 
-await runWithTimeoutAndExit(runAllConcurrentTests(), 3000);
+await runWithTimeoutAndExit(runAllConcurrentTests(), 2000);
