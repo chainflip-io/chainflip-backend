@@ -1211,6 +1211,7 @@ type AllMigrations = (
 	MigrationsForV1_7,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
+	migrations::remove_aborted_broadcasts::AllInstancesMigration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
