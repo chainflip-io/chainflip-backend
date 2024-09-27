@@ -3,6 +3,7 @@ use crate::{BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringD
 use cf_chains::{dot::PolkadotAccountId, sol::SolAddress};
 use jsonrpsee::proc_macros::rpc;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
+use serde::{Deserialize, Serialize};
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
 use state_chain_runtime::{
 	chainflip::Offence,
@@ -12,6 +13,25 @@ use state_chain_runtime::{
 		PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 };
+
+// Temporary struct to hold the deprecated blocks_per_epoch field.
+// Can be deleted after v1.7 is released (meaning: after the version is bumped to 1.8).
+#[derive(Serialize, Deserialize)]
+pub struct RpcEpochState {
+	#[deprecated(
+		since = "1.8.0",
+		note = "This field is deprecated and will be removed in v1.8. Use blocks_per_epoch instead."
+	)]
+	blocks_per_epoch: u32,
+	#[serde(flatten)]
+	epoch_state: EpochState,
+}
+
+impl From<EpochState> for RpcEpochState {
+	fn from(epoch_state: EpochState) -> Self {
+		Self { blocks_per_epoch: epoch_state.epoch_duration, epoch_state }
+	}
+}
 
 #[rpc(server, client, namespace = "cf_monitoring")]
 pub trait MonitoringApi {
@@ -32,7 +52,7 @@ pub trait MonitoringApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(Offence, u32)>>;
 	#[method(name = "epoch_state")]
-	fn cf_epoch_state(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<EpochState>;
+	fn cf_epoch_state(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEpochState>;
 	#[method(name = "redemptions")]
 	fn cf_redemptions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RedemptionsInfo>;
 	#[method(name = "pending_broadcasts")]
@@ -101,7 +121,7 @@ where
 		cf_btc_utxos() -> BtcUtxos,
 		cf_dot_aggkey() -> PolkadotAccountId,
 		cf_suspended_validators() -> Vec<(Offence, u32)>,
-		cf_epoch_state() -> EpochState,
+		cf_epoch_state() -> RpcEpochState [map: RpcEpochState::from],
 		cf_redemptions() -> RedemptionsInfo,
 		cf_pending_broadcasts_count() -> PendingBroadcasts,
 		cf_pending_tss_ceremonies_count() -> PendingTssCeremonies,
