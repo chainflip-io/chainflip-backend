@@ -281,7 +281,7 @@ pub struct P2POptions {
 }
 
 #[derive(Parser, Debug, Clone)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), short_flag = 'v')]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), before_help = format!("chainflip-engine {}", env!("SUBSTRATE_CLI_IMPL_VERSION")))]
 pub struct CommandLineOptions {
 	// Misc Options
 	#[clap(short = 'c', long = "config-root", env = CONFIG_ROOT, default_value = DEFAULT_CONFIG_ROOT)]

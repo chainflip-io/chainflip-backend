@@ -25,7 +25,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 	ensure,
 	sp_runtime::{
-		traits::{CheckedSub, UniqueSaturatedInto, Zero},
+		traits::{CheckedSub, One, UniqueSaturatedInto, Zero},
 		Saturating,
 	},
 	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, StorageVersion, UnixTime},
@@ -705,7 +705,7 @@ pub mod pallet {
 			Self {
 				genesis_accounts: Default::default(),
 				redemption_tax: Default::default(),
-				minimum_funding: Default::default(),
+				minimum_funding: One::one(),
 				redemption_ttl: Default::default(),
 			}
 		}
@@ -716,7 +716,8 @@ pub mod pallet {
 		fn build(&self) {
 			assert!(
 				self.redemption_tax < self.minimum_funding,
-				"Redemption tax must be less than minimum funding"
+				"Redemption tax must be less than minimum funding. Redemption tax: {:?}, Minimum_funding: {:?}", 
+				self.redemption_tax, self.minimum_funding,
 			);
 			MinimumFunding::<T>::set(self.minimum_funding);
 			RedemptionTax::<T>::set(self.redemption_tax);

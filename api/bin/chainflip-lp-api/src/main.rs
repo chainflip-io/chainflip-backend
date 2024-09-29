@@ -780,7 +780,7 @@ where
 }
 
 #[derive(Parser, Debug, Clone, Default)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), short_flag = 'v')]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct LPOptions {
 	#[clap(
 		long = "port",

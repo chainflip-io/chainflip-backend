@@ -7,7 +7,7 @@ use serde::Deserialize;
 use std::{collections::HashMap, env};
 
 #[derive(Parser, Debug, Clone, Default)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), short_flag = 'v')]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct TrackerOptions {
 	#[clap(long = "eth.rpc.ws_endpoint")]
 	eth_ws_endpoint: Option<String>,

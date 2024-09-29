@@ -1743,7 +1743,7 @@ dependencies = [
  "jsonrpsee 0.23.2",
  "lazy_format",
  "lazy_static",
- "mockall 0.11.4",
+ "mockall 0.13.0",
  "multisig",
  "num-bigint",
  "num-derive",
@@ -6968,6 +6968,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mockall"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4c28b3fb6d753d28c20e826cd46ee611fda1cf3cde03a443a974043247c065a"
+dependencies = [
+ "cfg-if",
+ "downcast",
+ "fragile",
+ "mockall_derive 0.13.0",
+ "predicates 3.1.2",
+ "predicates-tree",
+]
+
+[[package]]
 name = "mockall_derive"
 version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6989,6 +7003,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.79",
+]
+
+[[package]]
+name = "mockall_derive"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "341014e7f530314e9a1fdbc7400b244efea7122662c96bfa248c31da5bfb2020"
+dependencies = [
+ "cfg-if",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.77",
 ]
 
 [[package]]

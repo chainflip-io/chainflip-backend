@@ -243,7 +243,9 @@ pub struct PolkadotTrackedData {
 impl Default for PolkadotTrackedData {
 	#[track_caller]
 	fn default() -> Self {
-		panic!("You should not use the default chain tracking, as it's meaningless.")
+		frame_support::print("You should not use the default chain tracking, as it's meaningless.");
+
+		PolkadotTrackedData { median_tip: Default::default(), runtime_version: Default::default() }
 	}
 }
 
