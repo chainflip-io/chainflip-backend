@@ -154,7 +154,8 @@ jobs:
           path: latest-release-bins
           search_artifacts: true
 
-      - name: Extract tar.gz if necessary
+      - name: Extract tar.gz if necessary 🗜️
+        if: inputs.run-job
         run: |
           cd latest-release-bins
           for file in *.tar.gz; do
