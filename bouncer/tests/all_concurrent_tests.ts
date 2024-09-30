@@ -1,6 +1,6 @@
 #!/usr/bin/env -S NODE_OPTIONS=--max-old-space-size=6144 pnpm tsx
 import { testEvmDeposits } from './evm_deposits';
-import { checkAvailabilityAllSolanaNonces, runWithTimeoutAndExit } from '../shared/utils';
+import { checkAvailabilityAllSolanaNonces } from '../shared/utils';
 import { testFundRedeem } from './fund_redeem';
 import { testMultipleMembersGovernance } from './multiple_members_governance';
 import { testLpApi } from './lp_api_test';
@@ -57,4 +57,8 @@ async function runAllConcurrentTests() {
   await checkAvailabilityAllSolanaNonces();
 }
 
-await runWithTimeoutAndExit(runAllConcurrentTests(), 2000);
+await runAllConcurrentTests().catch((e) => {
+  console.error(e);
+  process.exit(-1);
+});
+process.exit(0);
