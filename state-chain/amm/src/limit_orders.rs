@@ -59,7 +59,7 @@ struct FloatBetweenZeroAndOne {
 	/// always has a value between `0.5..1.0`.
 	normalised_mantissa: U256,
 	/// As we are only interested in representing real numbers below 1,
-	/// the exponent is either 0 or negative.                                   
+	/// the exponent is either 0 or negative.
 	negative_exponent: U256,
 }
 impl Ord for FloatBetweenZeroAndOne {
@@ -325,7 +325,9 @@ impl<'a> From<&'a Position> for PositionInfo {
 }
 
 /// Represents a single LP position
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, PartialEq,
+)]
 struct Position {
 	/// Used to identify when the position was created and thereby determine if all the liquidity
 	/// in the position has been used or not. As once all the liquidity at a tick has been used,
@@ -354,7 +356,9 @@ struct Position {
 
 /// Represents a pool that is selling an amount of an asset at a specific/fixed price. A
 /// single fixed pool will contain the liquidity/assets for all limit orders at that specific price.
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, PartialEq,
+)]
 pub(super) struct FixedPool {
 	/// Whenever a FixedPool is destroyed and recreated i.e. all the liquidity in the FixedPool is
 	/// used, a new value for pool_instance is used, and the previously used value will never be
@@ -373,7 +377,7 @@ pub(super) struct FixedPool {
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize, PartialEq)]
 pub(super) struct PoolState<LiquidityProvider: Ord> {
 	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
 	/// I.e. 5000 means 0.5%.

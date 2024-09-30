@@ -595,6 +595,13 @@ fn can_process_ccm_via_direct_deposit() {
 
 #[test]
 fn failed_swaps_are_rolled_back() {
+	let get_pool = |asset| {
+		pallet_cf_pools::pallet::Pools::<Runtime>::get(
+			pallet_cf_pools::AssetPair::new(asset, Asset::Usdc).expect("invalid asset pair"),
+		)
+		.expect("pool must exist")
+	};
+
 	const DECIMALS: u128 = 10u128.pow(18);
 
 	super::genesis::with_test_defaults().build().execute_with(|| {
@@ -604,13 +611,9 @@ fn failed_swaps_are_rolled_back() {
 		// swap will fail:
 		add_liquidity(Asset::Eth, 10_000_000 * DECIMALS, OrderType::RangeOrder, None);
 
-		// Get current pool's liquidity
-		let eth_price = LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
-			.expect("Eth pool should be set up with liquidity.")
-			.price;
-		let flip_price = LiquidityPools::current_price(Asset::Flip, STABLE_ASSET)
-			.expect("Flip pool should be set up with liquidity.")
-			.price;
+		// Get the current state of pools so we can compare agaist this later:
+		let eth_pool = get_pool(Asset::Eth);
+		let flip_pool = get_pool(Asset::Flip);
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::contract_swap_request {
@@ -641,17 +644,9 @@ fn failed_swaps_are_rolled_back() {
 			) => ()
 		);
 
-		assert_eq!(
-			Some(eth_price),
-			LiquidityPools::current_price(Asset::Eth, STABLE_ASSET)
-				.map(|pool_price| pool_price.price)
-		);
-
-		assert_eq!(
-			Some(flip_price),
-			LiquidityPools::current_price(Asset::Flip, STABLE_ASSET)
-				.map(|pool_price| pool_price.price)
-		);
+		// State of pools has not changed:
+		assert_eq!(eth_pool, get_pool(Asset::Eth));
+		assert_eq!(flip_pool, get_pool(Asset::Flip));
 
 		// After FLIP liquidity is added, the swap should go through:
 		add_liquidity(Asset::Flip, 10_000_000 * DECIMALS, OrderType::RangeOrder, None);
@@ -659,6 +654,10 @@ fn failed_swaps_are_rolled_back() {
 		System::reset_events();
 
 		Swapping::on_finalize(swaps_scheduled_at + SwapRetryDelay::<Runtime>::get());
+
+		// Now the state of pools has changed (sanity check):
+		assert_ne!(eth_pool, get_pool(Asset::Eth));
+		assert_ne!(flip_pool, get_pool(Asset::Flip));
 
 		assert_events_match!(
 			Runtime,
