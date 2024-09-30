@@ -1,16 +1,16 @@
 use crate::{
 	to_rpc_error, BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringData,
 };
-use cf_chains::dot::PolkadotAccountId;
+use cf_chains::{dot::PolkadotAccountId, sol::SolAddress};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
 use state_chain_runtime::{
 	chainflip::Offence,
 	monitoring_apis::{
-		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, LastRuntimeUpgradeInfo,
-		MonitoringRuntimeApi, OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies,
-		RedemptionsInfo,
+		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
+		LastRuntimeUpgradeInfo, MonitoringRuntimeApi, OpenDepositChannels, PendingBroadcasts,
+		PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 };
 
@@ -61,6 +61,17 @@ pub trait MonitoringApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<LastRuntimeUpgradeInfo>;
+	#[method(name = "rotation_broadcast_ids")]
+	fn cf_rotation_broadcast_ids(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ActivateKeysBroadcastIds>;
+	#[method(name = "sol_nonces")]
+	fn cf_sol_nonces(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<SolanaNonces>;
+	#[method(name = "sol_aggkey")]
+	fn cf_sol_aggkey(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<SolAddress>;
+	#[method(name = "sol_onchain_key")]
+	fn cf_sol_onchain_key(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<SolAddress>;
 	#[method(name = "data")]
 	fn cf_monitoring_data(
 		&self,
@@ -111,7 +122,11 @@ where
 		cf_pending_tss_ceremonies_count -> PendingTssCeremonies,
 		cf_pending_swaps_count -> u32,
 		cf_open_deposit_channels_count -> OpenDepositChannels,
-		cf_build_version -> LastRuntimeUpgradeInfo
+		cf_build_version -> LastRuntimeUpgradeInfo,
+		cf_rotation_broadcast_ids -> ActivateKeysBroadcastIds,
+		cf_sol_nonces -> SolanaNonces,
+		cf_sol_aggkey -> SolAddress,
+		cf_sol_onchain_key -> SolAddress
 	}
 
 	fn cf_fee_imbalance(

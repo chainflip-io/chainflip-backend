@@ -21,9 +21,9 @@ use crate::{
 	},
 	migrations::serialize_solana_broadcast::{NoopUpgrade, SerializeSolanaBroadcastMigration},
 	monitoring_apis::{
-		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance, FlipSupply,
-		LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels, PendingBroadcasts,
-		PendingTssCeremonies, RedemptionsInfo,
+		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
+		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
+		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, BoostPoolDepth,
@@ -47,7 +47,7 @@ use cf_chains::{
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	sol::SolanaCrypto,
+	sol::{SolAddress, SolanaCrypto},
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
@@ -2154,6 +2154,31 @@ impl_runtime_apis! {
 				spec_name: info.spec_name,
 			}
 		}
+		fn cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds{
+			ActivateKeysBroadcastIds{
+				ethereum: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, EthereumInstance>::get().map(|val| val.1),
+				bitcoin: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, BitcoinInstance>::get().map(|val| val.1),
+				polkadot: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, PolkadotInstance>::get().map(|val| val.1),
+				arbitrum: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, ArbitrumInstance>::get().map(|val| val.1),
+				solana: {
+					let broadcast_id = pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, SolanaInstance>::get().map(|val| val.1);
+					(broadcast_id, pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::get(broadcast_id.unwrap_or_default()).map(|broadcast_data| broadcast_data.transaction_out_id))
+				}
+			}
+		}
+		fn cf_sol_nonces() -> SolanaNonces{
+			SolanaNonces {
+				available: pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::get(),
+				unavailable: pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys().collect()
+			}
+		}
+		fn cf_sol_aggkey() -> SolAddress{
+			let epoch = SolanaThresholdSigner::current_key_epoch().unwrap_or_default();
+			SolanaThresholdSigner::keys(epoch).unwrap_or_default()
+		}
+		fn cf_sol_onchain_key() -> SolAddress{
+			SolanaBroadcaster::current_on_chain_key().unwrap_or_default()
+		}
 		fn cf_monitoring_data() -> MonitoringData {
 			MonitoringData{
 				external_chains_height: Self::cf_external_chains_block_height(),
@@ -2173,6 +2198,10 @@ impl_runtime_apis! {
 					let flip = Self::cf_flip_supply();
 					FlipSupply { total_supply: flip.0, offchain_supply: flip.1}
 				},
+				sol_aggkey: Self::cf_sol_aggkey(),
+				sol_onchain_key: Self::cf_sol_onchain_key(),
+				sol_nonces: Self::cf_sol_nonces(),
+				activating_key_broadcast_ids: Self::cf_rotation_broadcast_ids(),
 			}
 		}
 		fn cf_accounts_info(accounts: BoundedVec<AccountId, ConstU32<10>>) -> Vec<ValidatorInfo> {

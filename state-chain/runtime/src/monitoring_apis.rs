@@ -1,5 +1,8 @@
 use crate::{chainflip::Offence, ValidatorInfo};
-use cf_chains::dot::PolkadotAccountId;
+use cf_chains::{
+	dot::PolkadotAccountId,
+	sol::{api::DurableNonceAndAccount, SolAddress, SolSignature},
+};
 use cf_primitives::AssetAmount;
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::AccountId32;
@@ -104,6 +107,21 @@ pub struct FlipSupply {
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+pub struct SolanaNonces {
+	pub available: Vec<DurableNonceAndAccount>,
+	pub unavailable: Vec<SolAddress>,
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+pub struct ActivateKeysBroadcastIds {
+	pub ethereum: Option<u32>,
+	pub bitcoin: Option<u32>,
+	pub polkadot: Option<u32>,
+	pub arbitrum: Option<u32>,
+	pub solana: (Option<u32>, Option<SolSignature>),
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
 pub struct MonitoringData {
 	pub external_chains_height: ExternalChainsBlockHeight,
 	pub btc_utxos: BtcUtxos,
@@ -119,6 +137,10 @@ pub struct MonitoringData {
 	pub pending_swaps: u32,
 	pub dot_aggkey: PolkadotAccountId,
 	pub flip_supply: FlipSupply,
+	pub sol_aggkey: SolAddress,
+	pub sol_onchain_key: SolAddress,
+	pub sol_nonces: SolanaNonces,
+	pub activating_key_broadcast_ids: ActivateKeysBroadcastIds,
 }
 
 decl_runtime_apis!(
@@ -136,6 +158,10 @@ decl_runtime_apis!(
 		fn cf_open_deposit_channels_count() -> OpenDepositChannels;
 		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount>;
 		fn cf_build_version() -> LastRuntimeUpgradeInfo;
+		fn cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds;
+		fn cf_sol_nonces() -> SolanaNonces;
+		fn cf_sol_aggkey() -> SolAddress;
+		fn cf_sol_onchain_key() -> SolAddress;
 		fn cf_monitoring_data() -> MonitoringData;
 		fn cf_accounts_info(
 			accounts: BoundedVec<AccountId32, sp_core::ConstU32<10>>,

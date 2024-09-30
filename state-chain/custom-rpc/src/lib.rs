@@ -8,6 +8,7 @@ use cf_chains::{
 	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
+	sol::SolAddress,
 	Chain,
 };
 use cf_primitives::{
@@ -40,9 +41,9 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	monitoring_apis::{
-		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance, FlipSupply,
-		LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels, PendingBroadcasts,
-		PendingTssCeremonies, RedemptionsInfo,
+		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
+		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
+		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
 		BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi, DispatchErrorWithMessage,
@@ -123,6 +124,10 @@ pub struct RpcMonitoringData {
 	pub pending_swaps: u32,
 	pub dot_aggkey: PolkadotAccountId,
 	pub flip_supply: RpcFlipSupply,
+	pub sol_aggkey: SolAddress,
+	pub sol_onchain_key: SolAddress,
+	pub sol_nonces: SolanaNonces,
+	pub activating_key_broadcast_ids: ActivateKeysBroadcastIds,
 }
 impl From<MonitoringData> for RpcMonitoringData {
 	fn from(monitoring_data: MonitoringData) -> Self {
@@ -141,6 +146,10 @@ impl From<MonitoringData> for RpcMonitoringData {
 			pending_swaps: monitoring_data.pending_swaps,
 			dot_aggkey: monitoring_data.dot_aggkey,
 			flip_supply: monitoring_data.flip_supply.into(),
+			sol_aggkey: monitoring_data.sol_aggkey,
+			sol_onchain_key: monitoring_data.sol_onchain_key,
+			sol_nonces: monitoring_data.sol_nonces,
+			activating_key_broadcast_ids: monitoring_data.activating_key_broadcast_ids,
 		}
 	}
 }
