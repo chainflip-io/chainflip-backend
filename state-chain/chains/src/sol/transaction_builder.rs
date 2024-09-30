@@ -11,10 +11,11 @@ use sol_prim::consts::{
 
 use crate::{
 	sol::{
-		api::{DurableNonceAndAccount, SolanaTransactionBuildingError},
+		api::{DurableNonceAndAccount, EventAccountAndSender, SolanaTransactionBuildingError},
 		compute_units_costs::{
 			compute_limit_with_buffer, BASE_COMPUTE_UNITS_PER_TX,
-			COMPUTE_UNITS_PER_BUMP_DERIVATION, COMPUTE_UNITS_PER_FETCH_NATIVE,
+			COMPUTE_UNITS_PER_BUMP_DERIVATION, COMPUTE_UNITS_PER_CLOSE_ACCOUNT,
+			COMPUTE_UNITS_PER_CLOSE_EVENT_ACCOUNTS, COMPUTE_UNITS_PER_FETCH_NATIVE,
 			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_ROTATION,
 			COMPUTE_UNITS_PER_SET_GOV_KEY, COMPUTE_UNITS_PER_TRANSFER_NATIVE,
 			COMPUTE_UNITS_PER_TRANSFER_TOKEN,
@@ -22,8 +23,11 @@ use crate::{
 		sol_tx_core::{
 			address_derivation::{derive_associated_token_account, derive_fetch_account},
 			compute_budget::ComputeBudgetInstruction,
-			program_instructions::{InstructionExt, SystemProgramInstruction, VaultProgram},
+			program_instructions::{
+				InstructionExt, SwapEndpointProgram, SystemProgramInstruction, VaultProgram,
+			},
 			token_instructions::AssociatedTokenAccountInstruction,
+			AccountMeta,
 		},
 		AccountBump, SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolCcmAccounts,
 		SolComputeLimit, SolInstruction, SolMessage, SolPubkey, SolTransaction, Solana,
@@ -435,6 +439,41 @@ impl SolanaTransactionBuilder {
 			agg_key.into(),
 			compute_price,
 			compute_limit_with_buffer(COMPUTE_UNITS_PER_SET_GOV_KEY),
+		)
+	}
+
+	/// Creates an instruction to close a number of open event swap accounts created via program
+	/// swap.
+	pub fn close_event_accounts(
+		event_accounts: Vec<EventAccountAndSender>,
+		vault_program_data_account: SolAddress,
+		swap_endpoint_program: SolAddress,
+		swap_endpoint_data_account: SolAddress,
+		agg_key: SolAddress,
+		durable_nonce: DurableNonceAndAccount,
+		compute_price: SolAmount,
+	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+		let number_of_accounts = event_accounts.len();
+		let event_and_sender_vec: Vec<AccountMeta> = event_accounts
+			.into_iter()
+			.flat_map(|(event_account, payee)| vec![event_account, payee])
+			// Both event account and payee should be writable and non-signers
+			.map(|address| AccountMeta::new(address.into(), false))
+			.collect();
+
+		let instructions = vec![SwapEndpointProgram::with_id(swap_endpoint_program)
+			.close_event_accounts(vault_program_data_account, agg_key, swap_endpoint_data_account)
+			.with_remaining_accounts(event_and_sender_vec)];
+
+		Self::build(
+			instructions,
+			durable_nonce,
+			agg_key.into(),
+			compute_price,
+			compute_limit_with_buffer(
+				COMPUTE_UNITS_PER_CLOSE_EVENT_ACCOUNTS +
+					COMPUTE_UNITS_PER_CLOSE_ACCOUNT * number_of_accounts as u32,
+			),
 		)
 	}
 }

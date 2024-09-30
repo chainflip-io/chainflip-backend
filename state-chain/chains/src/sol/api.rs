@@ -23,6 +23,7 @@ use crate::{
 };
 
 use cf_primitives::{EgressId, ForeignChain};
+use cf_utilities::bs58_array;
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
@@ -36,6 +37,7 @@ pub struct ApiEnvironment;
 pub struct CurrentAggKey;
 
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
+pub type EventAccountAndSender = (SolAddress, SolAddress);
 
 /// Super trait combining all Environment lookups required for the Solana chain.
 /// Also contains some calls for easy data retrieval.
@@ -114,6 +116,7 @@ pub enum SolanaTransactionType {
 	RotateAggKey,
 	CcmTransfer,
 	SetGovKeyWithAggKey,
+	CloseEventAccounts,
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
@@ -365,6 +368,39 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 
 		Ok(Self {
 			call_type: SolanaTransactionType::CcmTransfer,
+			transaction,
+			signer: None,
+			_phantom: Default::default(),
+		})
+	}
+
+	pub fn batch_close_event_accounts(
+		event_accounts: Vec<EventAccountAndSender>,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		// Lookup environment variables, such as aggkey and durable nonce.
+		let agg_key = Environment::current_agg_key()?;
+		let sol_api_environment = Environment::api_environment()?;
+		let compute_price = Environment::compute_price()?;
+		// TODO: As we do for other fetches we should have checked before that we still
+		// leave 1 nonce account available for a potential rotation (and potentially more).
+		let durable_nonce = Environment::nonce_account()?;
+		// TODO: To implement swap endpoint environment PRO-1521
+		// TODO: We should set a limit on the number of event accounts that can be closed at once.
+		//       We might have that limit outside of this function.
+
+		// Build the transaction
+		let transaction = SolanaTransactionBuilder::close_event_accounts(
+			event_accounts,
+			sol_api_environment.vault_program_data_account,
+			SolAddress(bs58_array("35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT")), /* TODO: Implement PRO-1521 */
+			SolAddress(bs58_array("2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9")), /* TODO: Implement PRO-1521 */
+			agg_key,
+			durable_nonce,
+			compute_price,
+		)?;
+
+		Ok(Self {
+			call_type: SolanaTransactionType::CloseEventAccounts,
 			transaction,
 			signer: None,
 			_phantom: Default::default(),

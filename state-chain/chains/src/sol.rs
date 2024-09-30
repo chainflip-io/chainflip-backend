@@ -146,6 +146,8 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
+	pub const COMPUTE_UNITS_PER_CLOSE_EVENT_ACCOUNTS: SolComputeLimit = 10_000u32; // TODO: To estimate this
+	pub const COMPUTE_UNITS_PER_CLOSE_ACCOUNT: SolComputeLimit = 10_000u32; // TODO: To estimate this
 
 	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
 
