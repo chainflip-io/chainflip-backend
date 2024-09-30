@@ -1156,9 +1156,13 @@ pub mod pallet {
 			)
 		}
 
-		/// Apply a list of configuration updates to the pallet.
+		/// [GOVERNANCE] Update a pallet config item.
 		///
-		/// Requires Governance.
+		/// The dispatch origin of this function must be governance.
+		///
+		/// ## Events
+		///
+		/// - [PalletConfigUpdate](Event::PalletConfigUpdate)
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::Weights::update_pallet_config())]
 		pub fn update_pallet_config(
@@ -1169,29 +1173,21 @@ pub mod pallet {
 
 			match update {
 				PalletConfigUpdate::ThresholdSignatureResponseTimeout { new_timeout } => {
-					let new_timeout: BlockNumberFor<T> = new_timeout.into();
-					if new_timeout != ThresholdSignatureResponseTimeout::<T, I>::get() {
-						ThresholdSignatureResponseTimeout::<T, I>::put(new_timeout);
-						Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
-					}
+					ThresholdSignatureResponseTimeout::<T, I>::put(BlockNumberFor::<T>::from(
+						new_timeout,
+					));
 				},
 
 				PalletConfigUpdate::KeygenResponseTimeout { new_timeout } => {
-					let new_timeout: BlockNumberFor<T> = new_timeout.into();
-					if new_timeout != KeygenResponseTimeout::<T, I>::get() {
-						KeygenResponseTimeout::<T, I>::put(new_timeout);
-						Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
-					}
+					KeygenResponseTimeout::<T, I>::put(BlockNumberFor::<T>::from(new_timeout));
 				},
 
 				PalletConfigUpdate::KeygenSlashAmount { amount_to_slash } => {
-					if amount_to_slash != KeygenSlashAmount::<T, I>::get() {
-						KeygenSlashAmount::<T, I>::put(amount_to_slash);
-						Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
-					}
+					KeygenSlashAmount::<T, I>::put(amount_to_slash);
 				},
 			}
 
+			Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
 			Ok(())
 		}
 	}
