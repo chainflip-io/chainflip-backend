@@ -3,17 +3,11 @@ import { decodeDotAddressForContract, chainFromAsset, stateChainAssetFromAsset }
 
 const defaultCommissionBps = 100; // 1%
 
-export interface CcmDepositMetadata {
-  message: string;
-  gasBudget: number;
-  cfParameters: string;
-}
+type RequestDepositChannelParams = Parameters<(typeof broker)['requestSwapDepositAddress']>[0];
 
-export interface RefundParameters {
-  retryDurationBlocks: number;
-  refundAddress: string;
-  minPrice: string;
-}
+export type CcmDepositMetadata = NonNullable<RequestDepositChannelParams['ccmParams']>;
+export type FillOrKillParamsX128 = NonNullable<RequestDepositChannelParams['fillOrKillParams']>;
+export type DcaParams = NonNullable<RequestDepositChannelParams['dcaParams']>;
 
 export async function newSwap(
   sourceAsset: Asset,
@@ -22,7 +16,8 @@ export async function newSwap(
   messageMetadata?: CcmDepositMetadata,
   brokerCommissionBps = defaultCommissionBps,
   boostFeeBps = 0,
-  refundParameters?: RefundParameters,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
 ): Promise<void> {
   const destinationAddress =
     destAsset === 'Dot' ? decodeDotAddressForContract(destAddress) : destAddress;
@@ -40,14 +35,15 @@ export async function newSwap(
           srcChain: chainFromAsset(sourceAsset) as Chain,
           destAddress: destinationAddress,
           destChain: chainFromAsset(destAsset) as Chain,
-          ccmMetadata: messageMetadata && {
+          ccmParams: messageMetadata && {
             message: messageMetadata.message as `0x${string}`,
             gasBudget: messageMetadata.gasBudget.toString(),
             cfParameters: messageMetadata.cfParameters as `0x${string}`,
           },
           commissionBps: brokerCommissionBps,
           maxBoostFeeBps: boostFeeBps,
-          refundParameters,
+          fillOrKillParams,
+          dcaParams,
         },
         {
           url: brokerUrl,

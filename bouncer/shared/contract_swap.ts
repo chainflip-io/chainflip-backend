@@ -59,7 +59,7 @@ export async function executeContractSwap(
       destAddress,
       srcAsset: stateChainAssetFromAsset(srcAsset),
       srcChain,
-      ccmMetadata: messageMetadata && {
+      ccmParams: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
         cfParameters: messageMetadata.cfParameters,
