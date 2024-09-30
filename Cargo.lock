@@ -1818,6 +1818,7 @@ dependencies = [
  "substrate-build-script-utils",
  "tokio",
  "utilities",
+ "zmq",
 ]
 
 [[package]]
