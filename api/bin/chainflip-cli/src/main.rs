@@ -10,9 +10,12 @@ use api::{
 	queries::QueryApi,
 	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
+use bigdecimal::BigDecimal;
 use cf_chains::eth::Address as EthereumAddress;
-use chainflip_api as api;
-use chainflip_api::primitives::state_chain_runtime;
+use chainflip_api::{
+	self as api,
+	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
+};
 use clap::Parser;
 use futures::FutureExt;
 use serde::Serialize;
@@ -189,6 +192,12 @@ fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
 	}
 }
 
+/// Turns an amount in Flipperinos back into a string representing
+/// this amount in FLIP.
+fn flipperino_to_flip_string(atomic_amount: u128) -> String {
+	(BigDecimal::from(atomic_amount) / FLIPPERINOS_PER_FLIP).to_string()
+}
+
 async fn request_redemption(
 	api: StateChainApi,
 	amount: Option<f64>,
@@ -214,9 +223,7 @@ async fn request_redemption(
 	let redeem_amount = flip_to_redemption_amount(amount);
 	match redeem_amount {
 		RedemptionAmount::Exact(atomic_amount) => {
-			println!(
-				"Submitting redemption with amount `{}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{redeem_address:?}`.", amount.expect("Exact must be some")
-			);
+			println!( "Submitting redemption with amount `{}` FLIP (`{atomic_amount}` Flipperinos) to ETH address `{redeem_address:?}`.", flipperino_to_flip_string(atomic_amount));
 		},
 		RedemptionAmount::Max => {
 			println!("Submitting redemption with MAX amount to ETH address `{redeem_address:?}`.");
@@ -501,4 +508,21 @@ fn test_flip_to_redemption_amount() {
 		flip_to_redemption_amount(Some(4206900.1234564321)),
 		RedemptionAmount::Exact(4206900123456000000000000)
 	);
+}
+
+#[test]
+fn test_flipperino_flip_roundtrip() {
+	fn assert_eq_flip_string(amount: f64, result: String) {
+		match flip_to_redemption_amount(Some(amount)) {
+			RedemptionAmount::Max => panic!("Expected exact amount."),
+			RedemptionAmount::Exact(amount) =>
+				assert_eq!(flipperino_to_flip_string(amount), result),
+		}
+	}
+	assert_eq_flip_string(0.0, "0".into());
+	assert_eq_flip_string(1.0, "1".into());
+	assert_eq_flip_string(0.1, "0.1".into());
+	assert_eq_flip_string(17777.777777777777, "17777.777778".into());
+	assert_eq_flip_string(0.0000009, "0.000001".into());
+	assert_eq_flip_string(0.50000001, "0.5".into());
 }
