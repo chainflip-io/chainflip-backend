@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@chainflip/cli':
-        specifier: 1.5.0-solana.1
-        version: 1.5.0-solana.1(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.8.0(bufferutil@4.0.8)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)
+        specifier: 1.6.2
+        version: 1.6.2(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)
       '@coral-xyz/anchor':
         specifier: ^0.30.1
         version: 0.30.1(bufferutil@4.0.8)(utf-8-validate@5.0.10)
@@ -63,8 +63,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
       ethers:
-        specifier: 6.8.0
-        version: 6.8.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+        specifier: 6.13.2
+        version: 6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       md5:
         specifier: ^2.3.0
         version: 2.3.0
@@ -126,25 +126,28 @@ importers:
 
 packages:
 
-  '@adraffy/ens-normalize@1.10.0':
-    resolution: {integrity: sha512-nA9XHtlAkYfJxY7bce8DcN7eKxWWCWkU+1GR9d+U6MbNpfwQp8TI7vqOsBsMcHoT4mBu2kypKoSKnghEzOOq5Q==}
+  '@adraffy/ens-normalize@1.10.1':
+    resolution: {integrity: sha512-96Z2IP3mYmF1Xg2cDm8f1gWGf/HUVedQ3FMifV4kG/PQ4yEP51xDtRAEfhVNt5f/uzpNkZHwWQuUcu6D6K+Ekw==}
 
   '@babel/runtime@7.24.7':
     resolution: {integrity: sha512-UwgBRMjJP+xv857DCngvqXI3Iq6J4v0wXmwc6sapg+zyhbwmQX67LUEFrkK5tbyJ30jGuG3ZvWpBiB9LCy1kWw==}
     engines: {node: '>=6.9.0'}
 
-  '@chainflip/bitcoin@0.2.2':
-    resolution: {integrity: sha512-45WfB9VTeAltbAz1GscDcYJISx3kUDY0e3R6a02X5+EbsMsZzaqyCeEFRWTvzsYeRewTB69VEHY5+7jJos7Q5g==}
+  '@chainflip/bitcoin@1.0.2':
+    resolution: {integrity: sha512-OrkjJT5mH9+wvm7lSl09D2VlY/kEvqfFGgiLDvItxTUCrm/McADDiGontjXOwe3u4r8KdocPEF47jLHQLAg33A==}
 
-  '@chainflip/cli@1.5.0-solana.1':
-    resolution: {integrity: sha512-eDMKbEe8y0s3ncIZzI4JDH5X9nf59WW0aHBdiAdAMVNPP+2Ts2sEPcm38rRI2SJyCMDO1Q6aY90qfO3xVG5YHA==}
+  '@chainflip/cli@1.6.2':
+    resolution: {integrity: sha512-wV4bLsn1fqtUxVjEFcfaOnL5AjrgqZ9JxBRmRHTchOWt3+B5QHx0Ehn3pR1dN/9Jnqe0xMSAwBLuH6tJ7hAqQA==}
     hasBin: true
     peerDependencies:
       axios: ^1.x
-      ethers: ^6.x
+      ethers: ^6.13.2
 
-  '@chainflip/rpc@1.4.10':
-    resolution: {integrity: sha512-JUxCM1OK/G14WNFuxFzZ7zLA+jTj4Yuy9J/ttF0MUehlqpo203A/DTkPKH4hAYgkwTqjs2IuxrCTpggTi5cnSA==}
+  '@chainflip/rpc@1.6.7':
+    resolution: {integrity: sha512-OIE2cqzDy9Oq9sHuxJKOtbjP438QwMFdc6tuWdAmjjPcHGATI0Ft/lIKeCutD/8uH/CumOzaOoBaT2pI6G78Gg==}
+
+  '@chainflip/solana@1.0.2':
+    resolution: {integrity: sha512-8M+z0yjVCZBMpdCTGuBRt/Ns9NBJCNFvnSOjDu/kyaBRvxdUvECJOIseL0ENLBd0J/YmO9TcrZ30M0po3a96BA==}
 
   '@chainflip/utils@0.3.0':
     resolution: {integrity: sha512-csW8E3lRcSG1udN/kgsOhjZ7bfRrSbgv8Hdh/pzjM+VjQ6Hh46/LuiZHeQR0rQMimfG+lu2Afxk4jeRXRGFWTg==}
@@ -717,6 +720,7 @@ packages:
 
   '@substrate/connect@0.8.10':
     resolution: {integrity: sha512-DIyQ13DDlXqVFnLV+S6/JDgiGowVRRrh18kahieJxhgvzcWicw5eLc6jpfQ0moVVLBYkO7rctB5Wreldwpva8w==}
+    deprecated: versions below 1.x are no longer maintained
 
   '@substrate/light-client-extension-helpers@0.0.6':
     resolution: {integrity: sha512-girltEuxQ1BvkJWmc8JJlk4ZxnlGXc/wkLcNguhY+UoDEMBK0LsdtfzQKIfrIehi4QdeSBlFEFBoI4RqPmsZzA==}
@@ -1544,8 +1548,8 @@ packages:
     resolution: {integrity: sha512-SDl5kKrQAudFBUe5OJM9Ac6WmMyYmXX/6sTmLZ3ffG2eY6ZIGBes3pEDxNN6V72WyOw4CPD5RomKdsa8DAAwLg==}
     engines: {node: '>=10.0.0'}
 
-  ethers@6.8.0:
-    resolution: {integrity: sha512-zrFbmQRlraM+cU5mE4CZTLBurZTs2gdp2ld0nG/f3ecBK+x6lZ69KSxBqZ4NjclxwfTxl5LeNufcBbMsTdY53Q==}
+  ethers@6.13.2:
+    resolution: {integrity: sha512-9VkriTTed+/27BGuY1s0hf441kqwHJ1wtN2edksEtiRvXx+soxRX3iSXTfFqq2+YwrOqbDoTHjIhQnjJRlzKmg==}
     engines: {node: '>=14.0.0'}
 
   ethjs-unit@0.1.6:
@@ -3036,8 +3040,8 @@ packages:
       utf-8-validate:
         optional: true
 
-  ws@8.18.0:
-    resolution: {integrity: sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw==}
+  ws@8.17.1:
+    resolution: {integrity: sha512-6XQFvXTkbfUOZOKKILFG1PDK2NDQs4azKQl26T0YS5CxqWLgXajbPZ+h4gZekJyRqFU8pvnbAbbs/3TgRPy+GQ==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -3048,12 +3052,12 @@ packages:
       utf-8-validate:
         optional: true
 
-  ws@8.5.0:
-    resolution: {integrity: sha512-BWX0SWVgLPzYwF8lTzEy1egjhS4S4OEAHfsO8o65WOVsrnSRGaSiUaa9e0ggGlkMTtBlmOpEXiie9RUcBO86qg==}
+  ws@8.18.0:
+    resolution: {integrity: sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
-      utf-8-validate: ^5.0.2
+      utf-8-validate: '>=5.0.2'
     peerDependenciesMeta:
       bufferutil:
         optional: true
@@ -3101,23 +3105,26 @@ packages:
 
 snapshots:
 
-  '@adraffy/ens-normalize@1.10.0': {}
+  '@adraffy/ens-normalize@1.10.1': {}
 
   '@babel/runtime@7.24.7':
     dependencies:
       regenerator-runtime: 0.14.1
 
-  '@chainflip/bitcoin@0.2.2': {}
-
-  '@chainflip/cli@1.5.0-solana.1(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.8.0(bufferutil@4.0.8)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)':
+  '@chainflip/bitcoin@1.0.2':
     dependencies:
-      '@chainflip/bitcoin': 0.2.2
-      '@chainflip/rpc': 1.4.10
+      '@chainflip/utils': 0.4.0
+      '@noble/hashes': 1.4.0
+
+  '@chainflip/cli@1.6.2(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)':
+    dependencies:
+      '@chainflip/bitcoin': 1.0.2
+      '@chainflip/rpc': 1.6.7
+      '@chainflip/solana': 1.0.2
       '@chainflip/utils': 0.4.0
       axios: 1.7.2
-      ethers: 6.8.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      ethers: 6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       ioredis: 5.4.1
-      rxjs: 7.8.1
       ws: 8.18.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       yargs: 17.7.2
     transitivePeerDependencies:
@@ -3125,10 +3132,14 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@chainflip/rpc@1.4.10':
+  '@chainflip/rpc@1.6.7':
     dependencies:
       '@chainflip/utils': 0.3.0
       zod: 3.23.8
+
+  '@chainflip/solana@1.0.2':
+    dependencies:
+      '@chainflip/utils': 0.4.0
 
   '@chainflip/utils@0.3.0': {}
 
@@ -5040,15 +5051,15 @@ snapshots:
       ethereum-cryptography: 0.1.3
       rlp: 2.2.7
 
-  ethers@6.8.0(bufferutil@4.0.8)(utf-8-validate@5.0.10):
+  ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10):
     dependencies:
-      '@adraffy/ens-normalize': 1.10.0
+      '@adraffy/ens-normalize': 1.10.1
       '@noble/curves': 1.2.0
       '@noble/hashes': 1.3.2
       '@types/node': 18.15.13
       aes-js: 4.0.0-beta.5
       tslib: 2.4.0
-      ws: 8.5.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      ws: 8.17.1(bufferutil@4.0.8)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -6800,12 +6811,12 @@ snapshots:
       bufferutil: 4.0.8
       utf-8-validate: 5.0.10
 
-  ws@8.18.0(bufferutil@4.0.8)(utf-8-validate@5.0.10):
+  ws@8.17.1(bufferutil@4.0.8)(utf-8-validate@5.0.10):
     optionalDependencies:
       bufferutil: 4.0.8
       utf-8-validate: 5.0.10
 
-  ws@8.5.0(bufferutil@4.0.8)(utf-8-validate@5.0.10):
+  ws@8.18.0(bufferutil@4.0.8)(utf-8-validate@5.0.10):
     optionalDependencies:
       bufferutil: 4.0.8
       utf-8-validate: 5.0.10
