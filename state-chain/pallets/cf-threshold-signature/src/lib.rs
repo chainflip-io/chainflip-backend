@@ -78,7 +78,8 @@ pub enum PalletConfigUpdate {
 	/// and retried.
 	ThresholdSignatureResponseTimeout { new_timeout: u32 },
 	/// Set the maximum duration (in blocks) we wait for all validators to respond during a keygen
-	/// ceremony. After this duration all validators who haven't responded yet are assumed to have failed.
+	/// ceremony. After this duration all validators who haven't responded yet are assumed to have
+	/// failed.
 	KeygenResponseTimeout { new_timeout: u32 },
 	/// Set the amount of FLIP (in Flipperinos) that is slashed for an agreed reported party.
 	KeygenSlashAmount { amount_to_slash: FlipBalance },
