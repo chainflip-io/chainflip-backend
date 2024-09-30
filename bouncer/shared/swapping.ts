@@ -162,7 +162,7 @@ export function newCcmMetadata(
   ccmMessage?: string,
   gasBudgetFraction?: number,
   cfParamsArray?: string,
-) {
+): CcmDepositMetadata {
   const message = ccmMessage ?? newCcmMessage(destAsset);
   const cfParameters = cfParamsArray ?? newCfParameters(destAsset, message);
   const gasDiv = gasBudgetFraction ?? 2;
@@ -170,7 +170,7 @@ export function newCcmMetadata(
   const gasBudget = Math.floor(
     Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) /
       gasDiv,
-  );
+  ).toString();
 
   return {
     message,
