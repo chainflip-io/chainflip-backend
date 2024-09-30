@@ -204,7 +204,7 @@ async function trackGasLimitSwap(
 
   const egressBudgetAmount =
     chainGasAsset(destChain as Chain) === sourceAsset
-      ? messageMetadata.gasBudget
+      ? Number(messageMetadata.gasBudget)
       : await lookForGasSwapAmount();
 
   return { tag, destAddress, egressBudgetAmount, broadcastId, txPayload };

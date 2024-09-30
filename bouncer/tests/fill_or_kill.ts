@@ -13,7 +13,7 @@ import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
 import { getBalance } from '../shared/get_balance';
 import { observeEvent } from '../shared/utils/substrate';
-import { RefundParameters } from '../shared/new_swap';
+import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
@@ -28,12 +28,12 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
 
   const refundBalanceBefore = await getBalance(inputAsset, refundAddress);
 
-  const refundParameters: RefundParameters = {
+  const refundParameters: FillOrKillParamsX128 = {
     retryDurationBlocks: 0, // Short duration to speed up the test
     refundAddress:
       inputAsset === Assets.Dot ? decodeDotAddressForContract(refundAddress) : refundAddress,
     // Unrealistic min price
-    minPrice: amountToFineAmount(
+    minPriceX128: amountToFineAmount(
       '99999999999999999999999999999999999999999999999999999',
       assetDecimals(inputAsset),
     ),

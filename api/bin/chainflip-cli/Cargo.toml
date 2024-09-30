@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 anyhow = "1.0"
+bigdecimal = "0.4.5"
 clap = { version = "3.2.16", features = ["derive", "env"] }
 config = "0.13.1"
 futures = "0.3.14"
