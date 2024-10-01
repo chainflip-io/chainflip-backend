@@ -369,4 +369,8 @@ pub struct SolApiEnvironment {
 	// For Usdc token
 	pub usdc_token_mint_pubkey: SolAddress,
 	pub usdc_token_vault_ata: SolAddress,
+
+	// For program swaps API calls.
+	pub swap_endpoint_program: SolAddress,
+	pub swap_endpoint_program_data_account: SolAddress,
 }

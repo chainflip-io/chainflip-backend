@@ -906,6 +906,10 @@ pub mod sol_test_values {
 		const_address("GUMpVpQFNYJvSbyTtUarZVL7UDUgErKzDTSVJhekUX55"),
 		const_address("AUiHYbzH7qLZSkb3u7nAqtvqC7e41sEzgWjBEvXrpfGv"),
 	];
+	pub const SWAP_ENDPOINT_PROGRAM: SolAddress =
+		const_address("35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT");
+	pub const SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT: SolAddress =
+		const_address("2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9");
 	pub const RAW_KEYPAIR: [u8; 32] = [
 		6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81, 213,
 		117, 199, 196, 243, 219, 33, 79, 217, 157, 69, 205, 140,

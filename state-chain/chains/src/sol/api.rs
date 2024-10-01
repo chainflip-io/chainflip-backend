@@ -23,7 +23,6 @@ use crate::{
 };
 
 use cf_primitives::{EgressId, ForeignChain};
-use cf_utilities::bs58_array;
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
@@ -383,17 +382,15 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 		// TODO: As we do for other fetches we should have checked before that we still
 		// leave 1 nonce account available for a potential rotation (and potentially more).
+		// That should be done as part of PRO-1520.
 		let durable_nonce = Environment::nonce_account()?;
-		// TODO: To implement swap endpoint environment PRO-1521
-		// TODO: We should set a limit on the number of event accounts that can be closed at once.
-		//       We might have that limit outside of this function.
 
 		// Build the transaction
 		let transaction = SolanaTransactionBuilder::close_event_accounts(
 			event_accounts,
 			sol_api_environment.vault_program_data_account,
-			SolAddress(bs58_array("35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT")), /* TODO: Implement PRO-1521 */
-			SolAddress(bs58_array("2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9")), /* TODO: Implement PRO-1521 */
+			sol_api_environment.swap_endpoint_program,
+			sol_api_environment.swap_endpoint_program_data_account,
 			agg_key,
 			durable_nonce,
 			compute_price,
