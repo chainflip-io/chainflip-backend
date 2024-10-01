@@ -133,8 +133,13 @@ fn price_limit_is_respected_in_fok_swap() {
 					swap_request_id: SwapRequestId(1)
 				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: FOK_SWAP_2_ID, .. }),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: SwapRequestId(3), .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: SwapRequestId(3) }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: SwapRequestId(3),
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SwapRequestId(3)
+				}),
 				RuntimeEvent::Swapping(Event::SwapRescheduled {
 					swap_id: FOK_SWAP_1_ID,
 					execute_at: SWAP_RETRIED_AT_BLOCK
@@ -233,8 +238,8 @@ fn fok_swap_gets_refunded_due_to_price_limit() {
 
 #[test]
 fn storage_state_rolls_back_on_fok_violation() {
-	const FOK_SWAP_ID: u64 = 1;
-	const OTHER_SWAP_ID: u64 = 2;
+	const FOK_SWAP_ID: SwapId = SwapId(1);
+	const OTHER_SWAP_ID: SwapId = SwapId(2);
 
 	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 

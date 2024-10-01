@@ -999,11 +999,21 @@ fn swaps_get_retried_after_failure() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: SwapRequestId(2), .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: SwapRequestId(2) }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: SwapRequestId(2),
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SwapRequestId(2)
+				}),
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
-				RuntimeEvent::Swapping(Event::SwapEgressScheduled { swap_request_id: SwapRequestId(1), .. }),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: SwapRequestId(1) }),
+				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+					swap_request_id: SwapRequestId(1),
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
+					swap_request_id: SwapRequestId(1)
+				}),
 			);
 		});
 }
@@ -1433,7 +1443,7 @@ mod swap_batching {
 
 	#[test]
 	fn single_swap() {
-		let swap1 = Swap::new(0, 0, Asset::Btc, Asset::Usdc, 1000, None, []);
+		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 1000, None, []);
 		let mut swaps = vec![swap1.clone()];
 
 		let swap_states = vec![swap1.to_state(None)];
@@ -1451,9 +1461,9 @@ mod swap_batching {
 
 	#[test]
 	fn swaps_fail_into_stable() {
-		let swap1 = Swap::new(0, 0, Asset::Btc, Asset::Usdc, 500, None, []);
-		let swap2 = Swap::new(1, 1, Asset::Btc, Asset::Eth, 1000, None, []);
-		let swap3 = Swap::new(2, 2, Asset::Eth, Asset::Usdc, 1000, None, []);
+		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 500, None, []);
+		let swap2 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1000, None, []);
+		let swap3 = Swap::new(2.into(), 2.into(), Asset::Eth, Asset::Usdc, 1000, None, []);
 
 		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
 
@@ -1475,9 +1485,9 @@ mod swap_batching {
 	fn swaps_fail_from_stable() {
 		// BTC swap should be removed because it would result in a larger amount
 		// of USDC and thus will have higher impact on the Eth pool
-		let swap1 = Swap::new(1, 1, Asset::Btc, Asset::Eth, 1, None, []);
-		let swap2 = Swap::new(2, 2, Asset::Usdc, Asset::Eth, 1000, None, []);
-		let swap3 = Swap::new(3, 3, Asset::Eth, Asset::Usdc, 100, None, []);
+		let swap1 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1, None, []);
+		let swap2 = Swap::new(2.into(), 2.into(), Asset::Usdc, Asset::Eth, 1000, None, []);
+		let swap3 = Swap::new(3.into(), 3.into(), Asset::Eth, Asset::Usdc, 100, None, []);
 
 		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
 
@@ -1534,11 +1544,11 @@ mod swap_batching {
 				assert_event_sequence!(
 					Test,
 					RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
-					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
+					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
 					RuntimeEvent::Swapping(Event::SwapEgressScheduled { .. }),
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 					RuntimeEvent::Swapping(Event::SwapRescheduled {
-						swap_id: 1,
+						swap_id: SwapId(1),
 						execute_at: SWAP_RESCHEDULED_BLOCK
 					}),
 				);
@@ -1555,7 +1565,7 @@ mod swap_batching {
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
-					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
+					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				);
 
 				assert_eq!(CollectedNetworkFee::<Test>::get(), 1500 + 2000);
@@ -1600,8 +1610,8 @@ mod swap_batching {
 					Test,
 					RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
 					RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
-					RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: 2, .. }),
-					RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: 1, .. }),
+					RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: SwapId(2), .. }),
+					RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: SwapId(1), .. }),
 				);
 
 				assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
