@@ -14,7 +14,11 @@ import {
   solanaNumberOfNonces,
 } from '../shared/utils';
 import { sendSol, signAndSendTxSol } from '../shared/send_sol';
-import { getSolanaVaultIdl, getKeyManagerAbi, getSolanaSwapEndpointIdl } from '../shared/contract_interfaces';
+import {
+  getSolanaVaultIdl,
+  getKeyManagerAbi,
+  getSolanaSwapEndpointIdl,
+} from '../shared/contract_interfaces';
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { submitGovernanceExtrinsic } from './cf_governance';
 import { observeEvent } from './utils/substrate';
@@ -234,13 +238,20 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
   await signAndSendTxSol(tx);
 
   // Initialize the Swap Endpoint Data Account
-  const swapEndpointDataAccount = new PublicKey(getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'));
+  const swapEndpointProgramId = new PublicKey(getContractAddress('Solana', 'SWAP_ENDPOINT'));
+  const swapEndpointDataAccount = new PublicKey(
+    getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const swapEndpointIdl: any = await getSolanaSwapEndpointIdl();
 
   const swapEndpointInitializeDiscriminatorString = swapEndpointIdl.instructions.find(
     (instruction: { name: string }) => instruction.name === 'initialize',
   ).discriminator;
-  const swapEndpointInitializeDiscriminator = new Uint8Array(swapEndpointInitializeDiscriminatorString.map(Number));
+  const swapEndpointInitializeDiscriminator = new Uint8Array(
+    swapEndpointInitializeDiscriminatorString.map(Number),
+  );
 
   tx = new Transaction().add(
     new TransactionInstruction({
@@ -250,7 +261,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
         { pubkey: whaleKeypair.publicKey, isSigner: true, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
-      programId: swapEndpointIdl,
+      programId: swapEndpointProgramId,
     }),
   );
   await signAndSendTxSol(tx);
