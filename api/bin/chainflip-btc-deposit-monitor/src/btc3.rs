@@ -35,8 +35,28 @@ struct MempoolMonitor {
     elliptic_client: EllipticClient,
     monitoring_state: MonitoringState,
 
-    monitored_txs: Arc<Mutex<Vec<(bitcoin::Txid, Vec<bitcoin::Address>)>>>,
+    monitored_txs: Arc<Mutex<Vec<(bitcoin::Txid, Vec<bitcoin::Address>, Vec<bitcoin::Txid>)>>>,
 }
+
+// async fn get_input_addresses(client: &BtcRpcClient, tx: &Transaction) -> Vec<bitcoin::Address> {
+//     for input in &tx.input {
+//         match client.get_raw_transactions(vec![input.previous_output.txid]).await {
+//             Ok(input_txs) => {
+//                 if input_txs.len() != 1 {
+//                     println!("Found wrong number of transactions with id")
+//                 }
+//                 for input_tx in input_txs {
+//                     let address = bitcoin::Address::from_script(input_tx.output, network)
+//                 }
+//             },
+//             Err(e) => println!("error getting input for {}", tx.txid())
+//         }
+//         // for input_tx in client.get_raw_transactions(vec![input]).await {
+//         //     let address = 
+//         // }
+//     }
+//     Vec::new()
+// }
 
 async fn poll_addresses_to_monitor() -> Vec<bitcoin::Address> {
     Vec::new()
@@ -47,7 +67,7 @@ async fn poll_mempool(client: &BtcRpcClient) -> Vec<Transaction> {
     let tx_ids = client.get_raw_mempool().await.unwrap();
     println!("Got: {}", tx_ids.len());
     let mut result = Vec::new();
-    for tx_id in tx_ids.chunks_exact(100) {
+    for tx_id in tx_ids.chunks_exact(5) {
         match client.get_raw_transactions(tx_id.to_vec()).await {
             Ok(mut e) => {
                 result.append(&mut e);
@@ -95,9 +115,12 @@ pub async fn start_monitor(endpoint: HttpBasicAuthEndpoint, ) {
 
             println!("Calling Elliptic...");
             let txs = moved_monitored_txs.lock().unwrap().clone();
-            for (tx, addresses) in &*txs {
+            for (tx, addresses, in_hashes) in &*txs {
                 println!("Calling elliptic for a transaction {tx:?} with relevant target address: {addresses:?}");
+
                 let score = monitor.elliptic_client.welltyped_single_analysis(*tx, addresses[0].clone(), "test_customer_1".into()).await;
+                // let score = monitor.elliptic_client.welltyped_single_wallet(addresses[0].clone(), "test_customer_1".into()).await;
+
                 match score {
                     Ok(x) => println!("elliptic score: {}", x.risk_score),
                     Err(error) => println!("error: {error}"),
@@ -137,8 +160,16 @@ pub async fn start_monitor(endpoint: HttpBasicAuthEndpoint, ) {
 
         // add them to the monitored txs
         {
+            println!("main: trying to get lock.");
             let mut txs = monitor.monitored_txs.lock().unwrap();
-            let mut new_txs : Vec<_> = relevant_txs.map(|(tx, outs)| (tx.txid(), outs)).collect();
+            println!("main: got lock.");
+            let mut new_txs : Vec<_> = relevant_txs.map(|(tx, outs)| {
+                // let input_addresses = tx.input;
+                let in_hashes = tx.input.iter().map(|i| i.previous_output.txid).collect::<Vec<_>>();
+                (tx.txid(), outs, in_hashes)
+            })
+            .filter(|(txid,_,_)| txs.iter().find(|(txid2,_,_)| txid == txid2).is_none())
+            .collect();
             txs.append(&mut new_txs);
         }
 

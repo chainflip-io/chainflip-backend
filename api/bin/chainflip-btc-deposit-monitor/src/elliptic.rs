@@ -17,7 +17,7 @@ use hmac::{Hmac, Mac};
 type HmacSha256 = Hmac<Sha256>;
 
 
-const SINGLE_ANALYSIS_URL: &str = "https://aml-api.elliptic.co/v2/analyses/synchronous";
+const BASE_URL: &str = "https://aml-api.elliptic.co";
 
 pub struct EllipticClient {
 	client: Client,
@@ -55,23 +55,11 @@ impl EllipticClient {
 		BASE64_STANDARD.encode(result.into_bytes())
 	}
 
-	pub async fn single_analysis(&self, hash: String, output_address: String, customer_reference: String) -> Result<f64> {
-		let request_body = json!({
-			"subject": {
-				"type": "transaction",
-				"output_type": "address",
-				"asset": "BTC",
-				"blockchain": "bitcoin",
-				"hash": hash,
-				"output_address": output_address,
-			},
-			"type": "source_of_funds",
-			"customer_reference": customer_reference
-		});
+	pub async fn sign_and_request(&self, path: String, request_body: serde_json::Value) -> Result<serde_json::Value> {
 
 		let access_key = env::var("ELLIPTIC_ACCESS_KEY").expect("access key not set");
 		let access_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
-		let access_sign = Self::get_signature(env::var("ELLIPTIC_SECRET_KEY").expect("secret key not set"), access_timestamp, "POST".into(), "/v2/analyses/synchronous".into(), request_body.to_string());
+		let access_sign = Self::get_signature(env::var("ELLIPTIC_SECRET_KEY").expect("secret key not set"), access_timestamp, "POST".into(), path.clone(), request_body.to_string());
 		
 		let mut headers = HeaderMap::new();
 		headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
@@ -80,7 +68,7 @@ impl EllipticClient {
 		headers.insert("x-access-sign", access_sign.parse().unwrap());
 		headers.insert("x-access-timestamp", access_timestamp.to_string().parse().unwrap());
 
-		let result = self.client.post(SINGLE_ANALYSIS_URL)
+		let result = self.client.post(BASE_URL.to_string().clone() + path.clone().as_ref())
 			.json(&request_body)
 			.headers(headers)
 			.send()
@@ -88,16 +76,70 @@ impl EllipticClient {
 			.map_err(|e| anyhow!("error in transport: {e}"))?;
 
 		let res : serde_json::Value = result.json().await?;
-		// match result.json::<serde_json::Value>().await {
-		// 	Ok(x) => println!("Got result: {x}"),
-		// 	Err(e) => println!("Error: {e}")
-		// }
-		// res.
 
-		let filename = format!("elliptic_responses/{}.json", Utc::now());
+		let filename = format!("elliptic_responses/{}/{}.json", Utc::now().date_naive(), Utc::now());
+		let parent = std::path::Path::new(&filename).parent().unwrap();
+		std::fs::create_dir_all(parent)?;
+
 
 		fs::write(filename, res.to_string()).expect("Unable to write file");
 
+		Ok(res)
+
+	}
+
+	pub async fn wallet_analysis(&self, output_address: String, customer_reference: String) -> Result<f64> {
+		let request_body = json!({
+			"subject": {
+				"type": "address",
+				"asset": "holistic",
+				"blockchain": "holistic",
+				"hash": output_address,
+			},
+			"type": "wallet_exposure",
+			"customer_reference": customer_reference
+		});
+
+		let res = self.sign_and_request("/v2/wallet/synchronous".into(), request_body).await?;
+
+		let risk_score = res.as_object()
+			.ok_or(anyhow!("Unexpected format from elliptic"))?
+			.get("risk_score")
+			.ok_or(anyhow!("elliptic response didn't contain a risk_score"))?
+			.as_f64()
+			.ok_or(anyhow!("risk_score is not a float!"))?;
+
+		Ok(risk_score)
+	}
+
+	pub async fn single_analysis(&self, hash: String, output_address: String, customer_reference: String) -> Result<f64> {
+		// let request_body = json!({
+		// 	"subject": {
+		// 		"type": "transaction",
+		// 		"output_type": "address",
+		// 		"asset": "BTC",
+		// 		"blockchain": "bitcoin",
+		// 		"hash": hash,
+		// 		"output_address": output_address,
+		// 	},
+		// 	"type": "source_of_funds",
+		// 	"customer_reference": customer_reference
+		// });
+
+		let request_body = json!({
+			"subject": {
+				"type": "transaction",
+				"output_type": "address",
+				"asset": "holistic",
+				"blockchain": "holistic",
+				"hash": hash,
+				"output_address": output_address,
+			},
+			"type": "source_of_funds",
+			"customer_reference": customer_reference
+		});
+
+		let res = self.sign_and_request("/v2/analyses/synchronous".into() ,request_body).await?;
 
 		let risk_score = res.as_object()
 			.ok_or(anyhow!("Unexpected format from elliptic"))?
@@ -111,6 +153,12 @@ impl EllipticClient {
 
 	pub async fn welltyped_single_analysis(&self, hash: bitcoin::Txid, output_address: bitcoin::Address, customer_reference: String) -> Result<EllipticAnalysisResult> {
 		self.single_analysis(hash.to_string(), output_address.to_string(), customer_reference)
+			.await
+			.map(|risk_score| EllipticAnalysisResult {risk_score})
+	}
+
+	pub async fn welltyped_single_wallet(&self, output_address: bitcoin::Address, customer_reference: String) -> Result<EllipticAnalysisResult> {
+		self.wallet_analysis(output_address.to_string(), customer_reference)
 			.await
 			.map(|risk_score| EllipticAnalysisResult {risk_score})
 	}
