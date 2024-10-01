@@ -1,11 +1,13 @@
 
-use std::{env, time::{SystemTime, UNIX_EPOCH}};
+use std::{env, fmt::format, time::{SystemTime, UNIX_EPOCH}};
 
 use chainflip_api::primitives::state_chain_runtime::Header;
 use reqwest::{header::{self, HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE}, Client, Url};
 use serde_json::json;
 use anyhow::{anyhow, Result};
 use base64::prelude::*;
+use chrono::prelude::*;
+use std::fs;
 
 use sha2::Sha256;
 use hmac::{Hmac, Mac};
@@ -19,6 +21,10 @@ const SINGLE_ANALYSIS_URL: &str = "https://aml-api.elliptic.co/v2/analyses/synch
 
 pub struct EllipticClient {
 	client: Client,
+}
+
+pub struct EllipticAnalysisResult {
+	pub risk_score: f64
 }
 
 impl EllipticClient {
@@ -49,7 +55,7 @@ impl EllipticClient {
 		BASE64_STANDARD.encode(result.into_bytes())
 	}
 
-	pub async fn single_analysis(&self, hash: String, output_address: String, customer_reference: String) -> Result<()> {
+	pub async fn single_analysis(&self, hash: String, output_address: String, customer_reference: String) -> Result<f64> {
 		let request_body = json!({
 			"subject": {
 				"type": "transaction",
@@ -81,11 +87,31 @@ impl EllipticClient {
 			.await
 			.map_err(|e| anyhow!("error in transport: {e}"))?;
 
-		match result.text().await {
-			Ok(x) => println!("Got result: {x}"),
-			Err(e) => println!("Error: {e}")
-		}
+		let res : serde_json::Value = result.json().await?;
+		// match result.json::<serde_json::Value>().await {
+		// 	Ok(x) => println!("Got result: {x}"),
+		// 	Err(e) => println!("Error: {e}")
+		// }
+		// res.
 
-		Ok(())
+		let filename = format!("elliptic_responses/{}.json", Utc::now());
+
+		fs::write(filename, res.to_string()).expect("Unable to write file");
+
+
+		let risk_score = res.as_object()
+			.ok_or(anyhow!("Unexpected format from elliptic"))?
+			.get("risk_score")
+			.ok_or(anyhow!("elliptic response didn't contain a risk_score"))?
+			.as_f64()
+			.ok_or(anyhow!("risk_score is not a float!"))?;
+
+		Ok(risk_score)
+	}
+
+	pub async fn welltyped_single_analysis(&self, hash: bitcoin::Txid, output_address: bitcoin::Address, customer_reference: String) -> Result<EllipticAnalysisResult> {
+		self.single_analysis(hash.to_string(), output_address.to_string(), customer_reference)
+			.await
+			.map(|risk_score| EllipticAnalysisResult {risk_score})
 	}
 }

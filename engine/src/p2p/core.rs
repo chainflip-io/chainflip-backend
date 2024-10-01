@@ -284,7 +284,8 @@ pub(super) async fn start(
 
 	let zmq_context = zmq::Context::new();
 
-	zmq_context.set_max_sockets(65536).expect("should update socket limit");
+	// Actually we have to update our zmq fork!
+	// zmq_context.set_max_sockets(65536).expect("should update socket limit");
 
 	let authenticator = auth::start_authentication_thread(zmq_context.clone());
 
