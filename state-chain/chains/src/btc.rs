@@ -691,6 +691,7 @@ pub struct BitcoinTransaction {
 	pub outputs: Vec<BitcoinOutput>,
 	pub signer_and_signatures: Option<(AggKey, Vec<Signature>)>,
 	pub transaction_bytes: Vec<u8>,
+	/// utxos controlled by the previous epoch key:
 	pub old_utxo_input_indices: VecDeque<u32>,
 }
 

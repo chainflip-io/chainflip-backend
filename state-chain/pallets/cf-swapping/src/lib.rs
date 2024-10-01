@@ -2,6 +2,7 @@
 // lazy_cell has been stabilized in a newer version of rust
 // (feature directive can be removed once we upgrade)
 #![feature(lazy_cell)]
+#![feature(extract_if)]
 
 use cf_amm::common::Side;
 use cf_chains::{
@@ -70,6 +71,7 @@ struct FeeTaken {
 	pub fee: AssetAmount,
 }
 
+#[derive(CloneNoBound, DebugNoBound)]
 struct SwapState<T: Config> {
 	swap: Swap<T>,
 	network_fee_taken: Option<AssetAmount>,
@@ -203,9 +205,25 @@ impl<T: Config> Swap<T> {
 }
 
 enum BatchExecutionError<T: Config> {
-	SwapLegFailed { asset: Asset, direction: SwapLeg, amount: AssetAmount },
-	PriceLimitHit { successful_swaps: Vec<Swap<T>>, failed_swaps: Vec<Swap<T>> },
-	DispatchError { error: DispatchError },
+	SwapLegFailed {
+		asset: Asset,
+		direction: SwapLeg,
+		amount: AssetAmount,
+		failed_swap_group: Vec<SwapState<T>>,
+	},
+	PriceViolation {
+		violating_swaps: Vec<Swap<T>>,
+		non_violating_swaps: Vec<Swap<T>>,
+	},
+	DispatchError {
+		error: DispatchError,
+	},
+}
+
+#[derive(DebugNoBound)]
+struct BatchExecutionOutcomes<T: Config> {
+	successful_swaps: Vec<SwapState<T>>,
+	failed_swaps: Vec<Swap<T>>,
 }
 
 /// This impl is never used. This is purely used to satisfy trait requirement
@@ -696,7 +714,7 @@ pub mod pallet {
 
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(current_block: BlockNumberFor<T>) {
-			let mut swaps_to_execute = SwapQueue::<T>::take(current_block);
+			let swaps_to_execute = SwapQueue::<T>::take(current_block);
 			let retry_block = current_block + max(SwapRetryDelay::<T>::get(), 1u32.into());
 
 			if !T::SafeMode::get().swaps_enabled {
@@ -708,72 +726,25 @@ pub mod pallet {
 				return
 			}
 
-			loop {
-				if swaps_to_execute.is_empty() {
-					return
-				}
+			let BatchExecutionOutcomes { successful_swaps, failed_swaps } =
+				Self::execute_batch(swaps_to_execute.clone());
 
-				match Self::execute_batch(swaps_to_execute.clone()) {
-					Ok(successful_swaps) => {
-						for swap in successful_swaps {
-							Self::process_swap_outcome(swap);
-						}
-						// Nothing else to do here, all swaps are processed for block
-						return
+			for swap in successful_swaps {
+				Self::process_swap_outcome(swap);
+			}
+
+			for swap in failed_swaps {
+				match swap.refund_params {
+					Some(ref params)
+						if BlockNumberFor::<T>::from(params.refund_block) < retry_block =>
+					{
+						// Reached refund block, process refund:
+						Self::refund_failed_swap(swap);
 					},
-					Err(err) => {
-						// Depending on the error, split the swaps into "satisfactory"
-						// (have a chance of succeeding if retried immediately), and "failed"
-						// (unlikely to succeed now and should be retried later or refunded).
-						let (satisfactory_swaps, failed_swaps) = {
-							match err {
-								BatchExecutionError::PriceLimitHit {
-									successful_swaps,
-									failed_swaps,
-								} => (successful_swaps, failed_swaps),
-								BatchExecutionError::SwapLegFailed { asset, direction, amount } => {
-									Self::deposit_event(Event::<T>::BatchSwapFailed {
-										asset,
-										direction,
-										amount,
-									});
-									(vec![], swaps_to_execute)
-								},
-								BatchExecutionError::DispatchError { error } => {
-									// This should only happen when the transaction nested too deep,
-									// which should not happen in practice (max nesting is 255):
-									log_or_panic!(
-										"Failed to execute swap batch at block {:?}: {:?}",
-										current_block,
-										error
-									);
-									(vec![], swaps_to_execute)
-								},
-							}
-						};
-
-						for swap in failed_swaps {
-							match swap.refund_params {
-								Some(ref params)
-									if BlockNumberFor::<T>::from(params.refund_block) <
-										retry_block =>
-								{
-									// Reached refund block, process refund:
-									Self::refund_failed_swap(swap);
-								},
-								_ => {
-									// Either refund parameters not set, or refund block not
-									// reached:
-									Self::reschedule_swap(swap, retry_block);
-								},
-							}
-						}
-
-						if !satisfactory_swaps.is_empty() {
-							swaps_to_execute = satisfactory_swaps;
-						} else {
-							return
-						}
+					_ => {
+						// Either refund parameters not set, or refund block not
+						// reached:
+						Self::reschedule_swap(swap, retry_block);
 					},
 				}
 			}
@@ -1217,16 +1188,17 @@ pub mod pallet {
 		}
 
 		#[transactional]
-		fn execute_batch(swaps: Vec<Swap<T>>) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
+		fn try_execute_without_violations(
+			swaps: Vec<Swap<T>>,
+		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
-
 			Self::swap_into_stable_taking_fees(&mut swaps)?;
 
 			// Swap from Stable asset, and complete the swap logic.
 			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
 
-			// Swaps executed without triggering price impact protection, but we still need to
-			// check that none of the swaps violated their minimum output requirements:
+			// Successfully executed without hitting price impact limit.
+			// Now checking for FoK violations:
 			let (non_violating, violating): (Vec<_>, Vec<_>) =
 				swaps.into_iter().partition(|swap| {
 					let final_output = swap.final_output.unwrap();
@@ -1238,11 +1210,71 @@ pub mod pallet {
 			if violating.is_empty() {
 				Ok(non_violating)
 			} else {
-				Err(BatchExecutionError::PriceLimitHit {
-					successful_swaps: non_violating.into_iter().map(|ctx| ctx.swap).collect(),
-					failed_swaps: violating.into_iter().map(|ctx| ctx.swap).collect(),
+				Err(BatchExecutionError::PriceViolation {
+					violating_swaps: violating.into_iter().map(|ctx| ctx.swap).collect(),
+					non_violating_swaps: non_violating.into_iter().map(|ctx| ctx.swap).collect(),
 				})
 			}
+		}
+
+		/// Attempts to find (and execute) a batch of swaps that wouldn't result in hitting the
+		/// price impact limit, starting with the given batch, and taking swaps out of the batch if
+		/// needed.
+		fn execute_batch(mut swaps_to_execute: Vec<Swap<T>>) -> BatchExecutionOutcomes<T> {
+			let mut failed_swaps = vec![];
+
+			loop {
+				if swaps_to_execute.is_empty() {
+					return BatchExecutionOutcomes { successful_swaps: vec![], failed_swaps };
+				}
+
+				match Self::try_execute_without_violations(swaps_to_execute.clone()) {
+					Ok(successful_swaps) =>
+						return BatchExecutionOutcomes { successful_swaps, failed_swaps },
+					Err(BatchExecutionError::SwapLegFailed {
+						asset,
+						direction,
+						amount,
+						failed_swap_group,
+					}) => {
+						Self::deposit_event(Event::<T>::BatchSwapFailed {
+							asset,
+							direction,
+							amount,
+						});
+
+						// Find the largest swap from the failing pool/direction and remove it
+						// so we can try the remaining swaps again. We should always be able to
+						// find a swap to remove, but if we can't for some reason, abort.
+						if let Some(removed_swap) = utilities::split_off_highest_impact_swap(
+							&mut swaps_to_execute,
+							&failed_swap_group,
+							direction,
+						) {
+							failed_swaps.push(removed_swap);
+						} else {
+							break;
+						}
+					},
+					Err(BatchExecutionError::PriceViolation {
+						violating_swaps,
+						non_violating_swaps,
+					}) => {
+						failed_swaps.extend(violating_swaps);
+						swaps_to_execute = non_violating_swaps;
+					},
+					Err(BatchExecutionError::DispatchError { error }) => {
+						// This should only happen when the transaction nested too deep,
+						// which should not happen in practice (max nesting is 255):
+						log_or_panic!("Failed to execute swap batch: {error:?}");
+						break;
+					},
+				}
+			}
+
+			// If we are here, consider all swaps as failed:
+			failed_swaps.extend(swaps_to_execute);
+			BatchExecutionOutcomes { successful_swaps: vec![], failed_swaps }
 		}
 
 		fn schedule_ccm_gas_swap(
@@ -1638,9 +1670,14 @@ pub mod pallet {
 					groups
 				});
 
-			for (asset, swaps) in swap_groups {
-				Self::execute_group_of_swaps(swaps, asset, direction).map_err(|amount| {
-					BatchExecutionError::SwapLegFailed { asset, direction, amount }
+			for (asset, mut swaps) in swap_groups {
+				Self::execute_group_of_swaps(&mut swaps, asset, direction).map_err(|amount| {
+					BatchExecutionError::SwapLegFailed {
+						asset,
+						direction,
+						amount,
+						failed_swap_group: swaps.into_iter().map(|swap| swap.clone()).collect(),
+					}
 				})?;
 			}
 			Ok(())
@@ -1649,7 +1686,7 @@ pub mod pallet {
 		/// Bundle the given swaps and do a single swap of a given direction. Updates the given
 		/// swaps in-place. If batch swap failed, return the input amount.
 		fn execute_group_of_swaps(
-			swaps: Vec<&mut SwapState<T>>,
+			swaps: &mut [&mut SwapState<T>],
 			asset: Asset,
 			direction: SwapLeg,
 		) -> Result<(), AssetAmount> {
@@ -1677,7 +1714,7 @@ pub mod pallet {
 			)
 			.map_err(|_| bundle_input)?;
 
-			for swap in swaps {
+			for swap in swaps.iter_mut() {
 				let swap_output = if bundle_input > 0 {
 					multiply_by_rational_with_rounding(
 						swap.swap_amount(direction).unwrap_or_default(),
@@ -2265,5 +2302,40 @@ pub(crate) mod utilities {
 			))
 			.unwrap_or(u128::MAX),
 		}
+	}
+
+	pub(super) fn split_off_highest_impact_swap<T: Config>(
+		swaps: &mut Vec<Swap<T>>,
+		failed_swap_group: &[SwapState<T>],
+		direction: SwapLeg,
+	) -> Option<Swap<T>> {
+		// Check invariants:
+		if failed_swap_group.is_empty() {
+			log_or_panic!(
+				"Invariant violation: there should be at least one swap in a failed group"
+			)
+		}
+		for failed_swap in failed_swap_group {
+			if !swaps.iter().any(|swap| swap.swap_id == failed_swap.swap_id()) {
+				log_or_panic!(
+					"Invariant violation: failed group must be a subset of all executed swaps"
+				)
+			}
+		}
+		// Find a swap id that we want to remove (in theory there should always be
+		// one from the failing asset/direction, but if we don't for some reason, the fallback is to
+		// remove nothing, which would abort the entire batch):
+		let maybe_swap_id_to_remove = failed_swap_group
+			.iter()
+			// If the direction is TO_STABLE, swap amount is in the input amount of
+			// *the same* asset (swaps from different assets are executed separately).
+			// If the direction is FROM_STABLE, swap amount is the amount in USDC.
+			// Either way, the amounts are in the same asset, so we can compare them directly:
+			.max_by_key(|swap| swap.swap_amount(direction).unwrap_or_default())
+			.map(|swap| swap.swap_id());
+
+		maybe_swap_id_to_remove.and_then(|swap_id_to_remove| {
+			swaps.extract_if(|swap| swap.swap_id == swap_id_to_remove).next()
+		})
 	}
 }

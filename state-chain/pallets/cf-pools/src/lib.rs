@@ -178,7 +178,7 @@ pub mod pallet {
 		pub call: Call<T>,
 	}
 
-	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
 		/// A cache of all the range orders that exist in the pool. This must be kept up to date
