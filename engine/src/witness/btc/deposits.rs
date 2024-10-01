@@ -168,6 +168,7 @@ pub mod tests {
 		address: ScriptPubkey,
 	) -> DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance> {
 		DepositChannelDetails::<_, BitcoinInstance> {
+			owner: AccountId32::new([0xab; 32]),
 			opened_at: 1,
 			expires_at: 10,
 			deposit_channel: DepositChannel {

@@ -61,6 +61,7 @@ mod benchmarks {
 		DepositChannelLookup::<T, I>::insert(
 			&deposit_address,
 			DepositChannelDetails {
+				owner: account("doogle", 0, 0),
 				opened_at: block_number,
 				expires_at: block_number,
 				deposit_channel:
@@ -102,6 +103,7 @@ mod benchmarks {
 			let block_number = TargetChainBlockNumber::<T, I>::benchmark_value();
 			let mut channel =
 				DepositChannelDetails::<T, I> {
+					owner: account("doogle", 0, 0),
 					opened_at: block_number,
 					expires_at: block_number,
 					deposit_channel: DepositChannel::generate_new::<
