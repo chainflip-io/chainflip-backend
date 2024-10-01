@@ -630,11 +630,6 @@ solana_program!(
 );
 
 pub mod swap_endpoints {
-	// use super::{AccountMeta, Instruction, Pubkey};
-
-	// use crate::sol::sol_tx_core::program_instructions::ProgramInstruction;
-	// use borsh::BorshSerialize;
-	// use sp_std::vec;
 	use super::*;
 
 	solana_program!(
