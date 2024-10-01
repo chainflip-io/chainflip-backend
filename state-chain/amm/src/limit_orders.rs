@@ -1,4 +1,6 @@
-//! This code implements a single liquidity pool pair, that allows LPs to specify particular prices
+//! This code implements a single liquidity pool pair.
+//!
+//! This liquidity pool pair allows LPs to specify particular prices
 //! at with they want to sell one of the two assets in the pair. The price an LP wants to sell at
 //! is specified using `Tick`s.
 //!

@@ -175,6 +175,8 @@ pub trait UnwrapOrCancel {
 }
 impl<T: ?Sized> UnwrapOrCancel for T where T: Future {}
 
+/// Creates a top level tasks that spawns other tasks.
+///
 /// This function allows a top level task to spawn tasks such that if any tasks panic or error,
 /// all other tasks will be cancelled, and the panic or error will be propagated by this function.
 /// It guarantees all tasks spawned using its scope object will finish before this function exits.

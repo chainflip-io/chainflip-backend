@@ -169,9 +169,9 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 		threshold_signature: &<BitcoinCrypto as ChainCrypto>::ThresholdSignature,
 		signer: <BitcoinCrypto as ChainCrypto>::AggKey,
 	) -> Self {
+		#[allow(unreachable_patterns)]
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.signed(threshold_signature, signer).into(),
-
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}

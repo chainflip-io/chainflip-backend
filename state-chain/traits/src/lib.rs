@@ -334,6 +334,7 @@ pub trait EmissionsTrigger {
 }
 
 /// A representation of the current network state for this heartbeat interval.
+///
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
@@ -608,6 +609,7 @@ pub trait QualifyNode<Id: Ord + Clone> {
 }
 
 /// Qualify if the node has registered
+#[allow(dead_code)]
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
 impl<T: Chainflip, R: frame_support::traits::ValidatorRegistration<T::ValidatorId>>

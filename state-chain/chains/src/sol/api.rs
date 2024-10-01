@@ -73,6 +73,7 @@ pub trait SolanaEnvironment:
 }
 
 /// IMPORTANT: This should only be used if the nonce has not been used to sign a transaction.
+///
 /// Once a nonce is actually used, it should ONLY be recovered via Witnessing.
 /// Only use this if you know what you are doing.
 pub trait RecoverDurableNonce {

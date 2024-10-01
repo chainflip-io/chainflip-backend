@@ -10,13 +10,18 @@ pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
 /// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.
 pub type Amount = U256;
+
 /// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
 /// in units of asset One.
 pub type Tick = i32;
-/// The square root of the price, represented as a fixed point integer with 96 fractional bits and
+
+/// The square root of the price.
+///
+/// Represented as a fixed point integer with 96 fractional bits and
 /// 64 integer bits (The higher bits past 96+64 th aren't used). [SqrtPriceQ64F96] is always in sqrt
 /// units of asset one.
 pub type SqrtPriceQ64F96 = U256;
+
 /// The number of fractional bits used by `SqrtPriceQ64F96`.
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 

@@ -2,7 +2,6 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 #![feature(extract_if)]
-#![feature(is_sorted)]
 
 mod benchmarking;
 mod mock;

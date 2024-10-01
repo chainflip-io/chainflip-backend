@@ -51,6 +51,8 @@ impl<AccountId> ImbalanceSource<AccountId> {
 	}
 }
 
+/// Denotes a "Surplus of funds".
+///
 /// Opaque, move-only struct with private fields that serves as a token denoting that funds have
 /// been added from *somewhere*, and that we need to account for this by cancelling it against a
 /// corresponding [Deficit].
@@ -172,6 +174,8 @@ impl<T: Config> Surplus<T> {
 	}
 }
 
+/// Denotes a "Deficit of funds".
+///
 /// Opaque, move-only struct with private fields that serves as a token denoting that funds have
 /// been removed to *somewhere*, and that we need to account for this by cancelling it against a
 /// corresponding [Surplus].

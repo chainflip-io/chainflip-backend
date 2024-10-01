@@ -503,6 +503,7 @@ impl PolkadotExtrinsicBuilder {
 }
 
 // The Polkadot Runtime type that is expected by the polkadot runtime
+#[allow(unreachable_patterns)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum PolkadotRuntimeCall {
 	#[codec(index = 0u8)]
