@@ -104,6 +104,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH';
         case 'SWAP_ENDPOINT':
           return '35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT';
+        case 'SWAP_ENDPOINT_DATA_ACCOUNT':
+            return '2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }

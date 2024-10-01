@@ -629,23 +629,32 @@ solana_program!(
 	}
 );
 
-solana_program!(
-	idl_path: concat!(
-		env!("CF_SOL_PROGRAM_IDL_ROOT"), "/",
-		env!("CF_SOL_PROGRAM_IDL_TAG"), "/" ,
-		"swap_endpoint.json"
-	),
-	SwapEndpointProgram {
-		close_event_accounts => CloseEventAccounts {
-			args: [],
-			account_metas: [
-				data_account: { signer: false, writable: false },
-				agg_key: { signer: true, writable: true },
-				swap_endpoint_data_account: { signer: false, writable: false },
-			]
-		},
-	}
-);
+pub mod swap_endpoints {
+	// use super::{AccountMeta, Instruction, Pubkey};
+
+	// use crate::sol::sol_tx_core::program_instructions::ProgramInstruction;
+	// use borsh::BorshSerialize;
+	// use sp_std::vec;
+	use super::*;
+
+	solana_program!(
+		idl_path: concat!(
+			env!("CF_SOL_PROGRAM_IDL_ROOT"), "/",
+			env!("CF_SOL_PROGRAM_IDL_TAG"), "/" ,
+			"swap_endpoint.json"
+		),
+		SwapEndpointProgram {
+			close_event_accounts => CloseEventAccounts {
+				args: [],
+				account_metas: [
+					data_account: { signer: false, writable: false },
+					agg_key: { signer: true, writable: true },
+					swap_endpoint_data_account: { signer: false, writable: true },
+				]
+			},
+		}
+	);
+}
 
 #[cfg(test)]
 mod idl {

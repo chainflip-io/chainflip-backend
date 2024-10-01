@@ -111,6 +111,8 @@ pub struct StateChainEnvironment {
 	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 10], /* we inject 10 nonce
 	                                                                * accounts
 	                                                                * at genesis */
+	sol_swap_endpoint_program: SolAddress,
+	sol_swap_endpoint_program_data_account: SolAddress,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -156,6 +158,12 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, SOL_TOKEN_VAULT_PDA_ACCOUNT, sol_token_vault_pda_account);
 	from_env_var!(FromStr::from_str, SOL_USDC_TOKEN_MINT_PUBKEY, sol_usdc_token_mint_pubkey);
 	from_env_var!(FromStr::from_str, SOL_USDC_TOKEN_VAULT_ATA, sol_usdc_token_vault_ata);
+	from_env_var!(FromStr::from_str, SOL_SWAP_ENDPOINT_PROGRAM, sol_swap_endpoint_program);
+	from_env_var!(
+		FromStr::from_str,
+		SOL_SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
+		sol_swap_endpoint_program_data_account
+	);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
 		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
@@ -216,6 +224,8 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		sol_token_vault_pda_account,
 		sol_usdc_token_vault_ata,
 		sol_durable_nonces_and_accounts,
+		sol_swap_endpoint_program,
+		sol_swap_endpoint_program_data_account,
 	}
 }
 
@@ -283,6 +293,8 @@ pub fn inner_cf_development_config(
 		sol_token_vault_pda_account,
 		sol_usdc_token_vault_ata,
 		sol_durable_nonces_and_accounts,
+		sol_swap_endpoint_program,
+		sol_swap_endpoint_program_data_account,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::builder(wasm_binary, None)
 		.with_name("CF Develop")
@@ -320,6 +332,8 @@ pub fn inner_cf_development_config(
 					usdc_token_mint_pubkey: sol_usdc_token_mint_pubkey,
 					token_vault_pda_account: sol_token_vault_pda_account,
 					usdc_token_vault_ata: sol_usdc_token_vault_ata,
+					swap_endpoint_program: sol_swap_endpoint_program,
+					swap_endpoint_program_data_account: sol_swap_endpoint_program_data_account,
 				},
 				sol_durable_nonces_and_accounts: sol_durable_nonces_and_accounts.to_vec(),
 				network_environment: NetworkEnvironment::Development,
@@ -409,6 +423,8 @@ macro_rules! network_spec {
 					sol_token_vault_pda_account,
 					sol_usdc_token_vault_ata,
 					sol_durable_nonces_and_accounts,
+					sol_swap_endpoint_program,
+					sol_swap_endpoint_program_data_account,
 				} = env_override.unwrap_or(ENV);
 				let protocol_id = format!(
 					"{}-{}",
@@ -478,6 +494,9 @@ macro_rules! network_spec {
 								usdc_token_mint_pubkey: sol_usdc_token_mint_pubkey,
 								token_vault_pda_account: sol_token_vault_pda_account,
 								usdc_token_vault_ata: sol_usdc_token_vault_ata,
+								swap_endpoint_program: sol_swap_endpoint_program,
+								swap_endpoint_program_data_account:
+									sol_swap_endpoint_program_data_account,
 							},
 							network_environment: NETWORK_ENVIRONMENT,
 							..Default::default()

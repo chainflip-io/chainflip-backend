@@ -107,6 +107,12 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			const_hash("3iiniRfNTFmBn6Y9ZhovefUDaGaJ7buB2vYemnbFoHN3"),
 		),
 	],
+	sol_swap_endpoint_program: SolAddress(bs58_array(
+		"7G6TxoGDsgaZX3HaKkrKyy28tsdr7ZGmeeMbXpm8R5HZ",
+	)),
+	sol_swap_endpoint_program_data_account: SolAddress(bs58_array(
+		"mYabVW1uMXpGqwgHUBQu4Fg6GT9EMYUzYaGYbi3zgT7",
+	)),
 };
 
 pub const BASHFUL_ACCOUNT_ID: &str = "cFLbasoV5juCGacy9LvvwSgkupFiFmwt8RmAuA3xcaY5YmkBe";
