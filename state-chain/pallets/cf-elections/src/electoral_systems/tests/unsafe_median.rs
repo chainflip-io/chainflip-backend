@@ -16,7 +16,7 @@ fn with_default_setup() -> TestSetup<SimpleUnsafeMedian> {
 }
 
 fn with_default_context() -> TestContext<SimpleUnsafeMedian> {
-	with_default_setup().build()
+	with_default_setup().build_with_initial_election()
 }
 
 register_checks! {

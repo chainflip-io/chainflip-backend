@@ -39,6 +39,8 @@ pub const ACCRUAL_RATIO: (i32, u32) = (1, 1);
 
 const COMPUTE_PRICE: u64 = 1_000u64;
 
+const BLOCKS_BETWEEN_LIVENESS_CHECKS: u32 = 10;
+
 /// The offences committable within the protocol and their respective reputation penalty and
 /// suspension durations.
 pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
@@ -50,6 +52,7 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	// so there is no need to suspend them further.
 	(Offence::FailedToBroadcastTransaction, (10, 0)),
 	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
+	(Offence::FailedLivenessCheck(cf_chains::ForeignChain::Solana), (4, 0)),
 ];
 
 use crate::{
@@ -303,12 +306,14 @@ impl ExtBuilder {
 						(),
 						(),
 						(),
+						(),
 					),
 					unsynchronised_settings: (
 						(),
 						SolanaFeeUnsynchronisedSettings {
 							fee_multiplier: FixedU128::from_u32(1u32),
 						},
+						(),
 						(),
 						(),
 						(),
@@ -322,6 +327,7 @@ impl ExtBuilder {
 						},
 						(),
 						(),
+						BLOCKS_BETWEEN_LIVENESS_CHECKS,
 					),
 				}),
 			},

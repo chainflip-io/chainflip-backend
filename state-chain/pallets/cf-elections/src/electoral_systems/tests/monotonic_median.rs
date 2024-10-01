@@ -15,7 +15,7 @@ fn with_default_setup() -> TestSetup<MonotonicMedianTest> {
 }
 
 fn with_default_context() -> TestContext<MonotonicMedianTest> {
-	with_default_setup().build()
+	with_default_setup().build_with_initial_election()
 }
 
 pub struct MockHook;
@@ -131,7 +131,7 @@ fn finalize_election_state_can_not_decrease() {
 		MockHook::reset();
 		with_default_setup()
 			.with_unsynchronised_state(INTITIAL_STATE)
-			.build()
+			.build_with_initial_election()
 			// It's possible for authorities to come to consensus on a lower state,
 			// but this should not change the unsynchronised state.
 			.force_consensus_update(ConsensusStatus::Gained { most_recent: None, new: new_state })

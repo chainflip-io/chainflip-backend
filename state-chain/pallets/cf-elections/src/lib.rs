@@ -124,7 +124,7 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 pub use pallet::UniqueMonotonicIdentifier;
 
@@ -504,7 +504,7 @@ pub mod pallet {
 	/// Stores governance-controlled settings regarding the elections. These settings can be changed
 	/// at anytime, but that change will only affect newly created elections.
 	#[pallet::storage]
-	pub(crate) type ElectoralSettings<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type ElectoralSettings<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,

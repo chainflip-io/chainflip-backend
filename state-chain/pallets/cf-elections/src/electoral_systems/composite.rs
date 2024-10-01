@@ -31,6 +31,7 @@ mod tags {
 	pub struct C;
 	pub struct D;
 	pub struct EE;
+	pub struct FF;
 }
 
 macro_rules! generate_electoral_system_tuple_impls {
@@ -595,4 +596,4 @@ macro_rules! generate_electoral_system_tuple_impls {
     };
 }
 
-generate_electoral_system_tuple_impls!(tuple_5_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0)));
+generate_electoral_system_tuple_impls!(tuple_6_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0), (FF, F0)));
