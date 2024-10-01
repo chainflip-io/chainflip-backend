@@ -14,7 +14,7 @@ use cf_chains::{
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, ForeignChain,
-	NetworkEnvironment, SemVer, SwapId,
+	NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -157,7 +157,7 @@ impl From<MonitoringData> for RpcMonitoringData {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScheduledSwap {
 	pub swap_id: SwapId,
-	pub swap_request_id: SwapId,
+	pub swap_request_id: SwapRequestId,
 	pub base_asset: Asset,
 	pub quote_asset: Asset,
 	pub side: Side,

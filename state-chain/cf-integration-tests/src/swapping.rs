@@ -22,7 +22,7 @@ use cf_chains::{
 	TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
-	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, FLIPPERINOS_PER_FLIP,
+	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, SwapId, FLIPPERINOS_PER_FLIP,
 	GENESIS_EPOCH, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
@@ -677,7 +677,7 @@ fn failed_swaps_are_rolled_back() {
 			) => (),
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
-					swap_id: 1,
+					swap_id: SwapId(1),
 					..
 				},
 			) => ()
