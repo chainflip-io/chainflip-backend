@@ -43,7 +43,12 @@ pub type ThresholdSignatureFor<T, I = ()> =
 #[scale_info(skip_type_params(T, I))]
 pub enum VaultActivationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
-	AwaitingActivation { new_public_key: AggKeyFor<T, I> },
+	AwaitingActivation {
+		new_public_key: AggKeyFor<T, I>,
+	},
+	ActivationFailedAwaitingGovernance {
+		new_public_key: AggKeyFor<T, I>,
+	},
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new
 	/// key.
 	Complete,
@@ -119,6 +124,9 @@ pub mod pallet {
 		/// The new key has been generated, we must activate the new key on the external
 		/// chain via governance.
 		AwaitingGovernanceActivation {
+			new_public_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		},
+		ActivationTxFailedAwaitingGovernance {
 			new_public_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		},
 		ChainInitialized,

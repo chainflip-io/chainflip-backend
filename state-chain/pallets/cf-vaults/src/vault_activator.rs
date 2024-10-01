@@ -10,6 +10,8 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 		if let Some(status_variant) = PendingVaultActivation::<T, I>::decode_variant() {
 			match status_variant {
 				VaultActivationStatusVariant::AwaitingActivation => AsyncResult::Pending,
+				VaultActivationStatusVariant::ActivationFailedAwaitingGovernance =>
+					AsyncResult::Pending,
 				VaultActivationStatusVariant::Complete => AsyncResult::Ready(()),
 			}
 		} else {
@@ -18,7 +20,11 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 	}
 
 	fn activate_key() {
-		if VaultStartBlockNumbers::<T, I>::iter_keys().next().is_some() {
+		if VaultStartBlockNumbers::<T, I>::iter_keys().next().is_some() &&
+			!matches!(
+				PendingVaultActivation::<T, I>::decode_variant(),
+				Some(VaultActivationStatusVariant::ActivationFailedAwaitingGovernance)
+			) {
 			Self::activate_new_key_for_chain(T::ChainTracking::get_block_height());
 		}
 	}
@@ -62,6 +68,14 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 						<T::Chain as cf_chains::Chain>::NAME,
 						err,
 					);
+					PendingVaultActivation::<T, I>::put(
+						VaultActivationStatus::<T, I>::ActivationFailedAwaitingGovernance {
+							new_public_key,
+						},
+					);
+					Self::deposit_event(Event::<T, I>::ActivationTxFailedAwaitingGovernance {
+						new_public_key,
+					});
 					vec![StartKeyActivationResult::ActivationTxFailed]
 				},
 			}
