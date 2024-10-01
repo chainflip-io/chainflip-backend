@@ -123,7 +123,7 @@ impl FloatBetweenZeroAndOne {
 			// 256 bits, so we maintain at least 256 accurate bits in the result.
 			let (d, div_remainder) =
 				U512::div_mod(mul_normalised_mantissa, U512::from(denominator)); // Note that d can never be zero as mul_normalised_mantissa always has at least one bit
-																 // set above the 256th bit.
+																	 // set above the 256th bit.
 			let d = if div_remainder.is_zero() { d } else { d + U512::one() };
 			let normalise_shift = d.leading_zeros();
 			// We right shift and use the lower 256 bits for the mantissa

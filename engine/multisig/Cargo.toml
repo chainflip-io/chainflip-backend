@@ -57,8 +57,8 @@ state-chain-runtime = { path = "../../state-chain/runtime" }
 utilities = { package = "utilities", path = "../../utilities" }
 
 # substrate deps
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 ed25519-dalek = "2.1.1"
 
 [dev-dependencies]

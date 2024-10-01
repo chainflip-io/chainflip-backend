@@ -39,8 +39,8 @@ serde = { optional = true, version = "1.0.197", default-features = false, featur
   "alloc",
   "derive",
 ] }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", optional = true }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1", optional = true }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true }
+sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true }
 tempfile = { version = "3.7.0", optional = true }
 thiserror = { version = "1.0.26", optional = true }
 tokio = { version = "1.13.1", features = ["full"], optional = true }

@@ -771,9 +771,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {
 		AwaitingBroadcast::<T, I>::remove(broadcast_id);
 		TransactionMetadata::<T, I>::remove(broadcast_id);
-		PendingApiCalls::<T, I>::take(broadcast_id).map(|api_call| {
+		PendingApiCalls::<T, I>::take(broadcast_id).inspect(|api_call| {
 			TransactionOutIdToBroadcastId::<T, I>::remove(api_call.transaction_out_id());
-			api_call
 		})
 	}
 

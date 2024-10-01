@@ -67,16 +67,16 @@ impl QueryApi {
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 
 		let (channels, network_environment) = tokio::try_join!(
-			self.state_chain_client
-				.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
-					state_chain_runtime::Runtime,
-					ChainInstanceFor<C>,
-				>, Vec<_>>(block_hash),
-			self.state_chain_client
-				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
-					block_hash
-				),
-		)?;
+				self.state_chain_client
+					.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
+						state_chain_runtime::Runtime,
+						ChainInstanceFor<C>,
+					>, Vec<_>>(block_hash),
+				self.state_chain_client
+					.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
+						state_chain_runtime::Runtime,
+					>>(block_hash),
+			)?;
 
 		Ok(channels
 			.into_iter()

@@ -666,9 +666,8 @@ fn testnet_genesis(
 				.iter()
 				.filter_map(|(id, _, funds)| authority_ids.contains(id).then_some(*funds))
 				.min()
-				.map(|bond| {
+				.inspect(|bond| {
 					log::info!("Bond will be set to {:?} Flip", bond / FLIPPERINOS_PER_FLIP);
-					bond
 				})
 				.expect("At least one authority is required"),
 			authority_set_min_size: min_authorities,

@@ -22,9 +22,9 @@ tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tempfile = "3.8"
 clap = { version = "4.5.3", features = ["derive", "env"] }
 config = "0.13.1"
-redis = { version = "0.24.0", features = ["tokio-comp"] }
+redis = { version = "0.27.2", features = ["tokio-comp"] }
 
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 codec = { package = "parity-scale-codec", version = "3.6.12", features = [
   "derive",
   "full",
@@ -41,10 +41,10 @@ state-chain-runtime = { path = "../../../state-chain/runtime" }
 cf-chains = { path = "../../../state-chain/chains" }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+1' }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
 
 [dev-dependencies]
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 insta = { version = "1.36.1", features = ["json"] }
 jsonrpsee = { version = "0.23.2", features = ["full"] }
 mockall = "0.11.0"
