@@ -14,7 +14,7 @@ import {
   solanaNumberOfNonces,
 } from '../shared/utils';
 import { sendSol, signAndSendTxSol } from '../shared/send_sol';
-import { getSolanaVaultIdl, getKeyManagerAbi } from '../shared/contract_interfaces';
+import { getSolanaVaultIdl, getKeyManagerAbi, getSolanaSwapEndpointIdl } from '../shared/contract_interfaces';
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { submitGovernanceExtrinsic } from './cf_governance';
 import { observeEvent } from './utils/substrate';
@@ -229,6 +229,28 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       programId: solanaVaultProgramId,
+    }),
+  );
+  await signAndSendTxSol(tx);
+
+  // Initialize the Swap Endpoint Data Account
+  const swapEndpointDataAccount = new PublicKey(getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'));
+  const swapEndpointIdl: any = await getSolanaSwapEndpointIdl();
+
+  const swapEndpointInitializeDiscriminatorString = swapEndpointIdl.instructions.find(
+    (instruction: { name: string }) => instruction.name === 'initialize',
+  ).discriminator;
+  const swapEndpointInitializeDiscriminator = new Uint8Array(swapEndpointInitializeDiscriminatorString.map(Number));
+
+  tx = new Transaction().add(
+    new TransactionInstruction({
+      data: Buffer.from(swapEndpointInitializeDiscriminator.buffer),
+      keys: [
+        { pubkey: swapEndpointDataAccount, isSigner: false, isWritable: true },
+        { pubkey: whaleKeypair.publicKey, isSigner: true, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      programId: swapEndpointIdl,
     }),
   );
   await signAndSendTxSol(tx);
