@@ -51,7 +51,9 @@ type FeeGrowthQ128F128 = U256;
 pub const MAX_TICK_GROSS_LIQUIDITY: Liquidity =
 	Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, PartialEq,
+)]
 pub struct Position {
 	/// The `depth` of this range order, this value is proportional to the value of the order i.e.
 	/// the amount of assets that make up the order.
@@ -135,7 +137,9 @@ impl Position {
 	}
 }
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, PartialEq,
+)]
 pub struct TickDelta {
 	/// This is the change in the total amount of liquidity in the pool at this price, i.e. if the
 	/// price moves from a lower price to a higher one, above this tick (higher/lower in literal
@@ -153,7 +157,7 @@ pub struct TickDelta {
 	fee_growth_outside: PoolPairsMap<FeeGrowthQ128F128>,
 }
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize, PartialEq)]
 pub struct PoolState<LiquidityProvider: Ord> {
 	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
 	/// I.e. 5000 means 0.5%.
