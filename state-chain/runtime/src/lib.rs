@@ -1265,7 +1265,7 @@ type MigrationsForV1_7 = (
 	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 9>,
 	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 9>,
 	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 9>,
-	LivenessSettingsMigration,
+	VersionedMigration<pallet_cf_elections::Pallet<Runtime, SolanaInstance>, LivenessSettingsMigration, 0, 1>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
