@@ -22,7 +22,9 @@ pub mod common;
 pub mod limit_orders;
 pub mod range_orders;
 
-#[derive(Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(
+	Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize, PartialEq,
+)]
 pub struct PoolState<LiquidityProvider: Ord> {
 	limit_orders: limit_orders::PoolState<LiquidityProvider>,
 	range_orders: range_orders::PoolState<LiquidityProvider>,
