@@ -25,9 +25,15 @@ pub trait TargetsProvider {
     fn get_addresses(&self) -> impl Stream<Item=Addresses>;
 }
 
+#[derive(Clone, Debug)]
+struct AnalysisItem {
+    tx: bitcoin::Transaction,
+    target_address: bitcoin::Address,
+}
+
 pub trait AnalysisProvider {
     // async fn analyze(&self, txid: &bitcoin::Txid, target_address: &bitcoin::Address) -> Result<AnalysisResult>;
-    async fn analyze(&self, tx: &bitcoin::Transaction) -> AnalysisResult;
+    async fn analyze(&self, tx: &AnalysisItem) -> AnalysisResult;
 }
 
 
@@ -51,25 +57,44 @@ enum Event {
 
 struct State<A: AnalysisProvider> {
     addresses: Addresses,
-    unprocessed_mempool_transactions: Transactions,
-    removed_mempool_transactions: Transactions,
-    unprocessed_chain_transactions: Transactions,
+    unprocessed_mempool_items: Vec<AnalysisItem>,
+    removed_mempool_items: Vec<AnalysisItem>,
+    unprocessed_chain_items: Vec<AnalysisItem>,
     analyzer: A,
 }
 
 
 struct ProcessTransactionsResult {
-    unprocessed_transactions: Transactions,
-    processed_transactions: Vec<(bitcoin::Transaction, Option<f64>)>
+    unprocessed_transactions: Vec<AnalysisItem>,
+    processed_transactions: Vec<(AnalysisItem, Option<f64>)>
 }
 
-async fn process_transactions<A>(transactions: Transactions, analyze: &A) -> ProcessTransactionsResult
+fn make_analysis_items(transaction: bitcoin::Transaction) -> Vec<AnalysisItem> {
+    let mut results = Vec::new();
+
+    for output in transaction.output.clone() {
+        match bitcoin::Address::from_script(&output.script_pubkey, bitcoin::Network::Bitcoin) {
+            Ok(address) => results.push(AnalysisItem {
+                tx: transaction.clone(),
+                target_address: address,
+            }),
+            Err(e) => {
+                println!("monitor: could not derive address from script_pubkey: {e}")
+            },
+        }
+    }
+
+    results
+}
+
+async fn process_transactions<A>(transactions: Vec<AnalysisItem>, analyze: &A) -> ProcessTransactionsResult
     where A : AnalysisProvider 
 {
     let mut unprocessed_transactions = Vec::new();
     let mut processed_transactions = Vec::new();
 
     for transaction in transactions {
+
         match analyze.analyze(&transaction).await {
             AnalysisResult::Complete(result) => {
                 processed_transactions.push((transaction, result));
@@ -125,17 +150,17 @@ pub async fn monitor2<T,M,B,A>(targets: T, mempool_transactions: M, blocks: B, a
 
     let initial = State {
         addresses: Vec::new(),
-        unprocessed_mempool_transactions: Vec::new(),
-        removed_mempool_transactions: Vec::new(),
-        unprocessed_chain_transactions: Vec::new(),
+        unprocessed_mempool_items: Vec::new(),
+        removed_mempool_items: Vec::new(),
+        unprocessed_chain_items: Vec::new(),
         analyzer: analyze
     };
 
     s.fold(initial, |mut state, event| async move {
         println!("monitor: state: mem={}, removed={}, chain={}",
-            state.unprocessed_mempool_transactions.len(),
-            state.removed_mempool_transactions.len(),
-            state.unprocessed_chain_transactions.len(),
+            state.unprocessed_mempool_items.len(),
+            state.removed_mempool_items.len(),
+            state.unprocessed_chain_items.len(),
         );
         match event {
             Event::NewAddresses(new_addresses) => {
@@ -149,9 +174,9 @@ pub async fn monitor2<T,M,B,A>(targets: T, mempool_transactions: M, blocks: B, a
                 //
                 // this means move all removed transactions into the
                 // stale `removed_mempool_transactions` state
-                let mut removed = drain_if(&mut state.unprocessed_mempool_transactions, |tx| update.removed.contains(&tx.txid()));
+                let mut removed = drain_if(&mut state.unprocessed_mempool_items, |tx| update.removed.contains(&tx.tx.txid()));
                 println!("monitor: removed {} transactions from unprocessed", removed.len());
-                state.removed_mempool_transactions.append(&mut removed);
+                state.removed_mempool_items.append(&mut removed);
 
                 //-------------------------
                 // process added transactions
@@ -159,11 +184,13 @@ pub async fn monitor2<T,M,B,A>(targets: T, mempool_transactions: M, blocks: B, a
                 println!("monitor: got {} new transactions", txs.len());
                 filter_relevant_transactions(&mut txs, &state.addresses);
 
-                println!("monitor: {} are relevant", txs.len());
-                let mut result = process_transactions(txs, &state.analyzer).await;
+                println!("monitor: {} txs are relevant", txs.len());
+                let items : Vec<_> = txs.into_iter().flat_map(make_analysis_items).collect();
+                let mut result = process_transactions(items.clone(), &state.analyzer).await;
+                println!("monitor: split into {} analysis items", items.len());
 
-                println!("monitor: successfully analyzed {} transactions", result.processed_transactions.len());
-                state.unprocessed_mempool_transactions.append(&mut result.unprocessed_transactions);
+                println!("monitor: successfully analyzed {} items, failed for {} items", result.processed_transactions.len(), result.unprocessed_transactions.len());
+                state.unprocessed_mempool_items.append(&mut result.unprocessed_transactions);
 
                 state
             }
@@ -181,20 +208,12 @@ pub async fn monitor2<T,M,B,A>(targets: T, mempool_transactions: M, blocks: B, a
 
 
 impl AnalysisProvider for EllipticClient {
-    async fn analyze(&self, tx: &bitcoin::Transaction) -> AnalysisResult {
-        match bitcoin::Address::from_script(&tx.output[0].script_pubkey, bitcoin::Network::Bitcoin) {
-            Ok(address) => {
-                let result = self.welltyped_single_analysis(tx.txid(), address, "test_customer_1".into()).await;
-                match result {
-                    Ok(val) => AnalysisResult::Complete(Some(val.risk_score)),
-                    Err(e) => {
-                        println!("elliptic: analysis error: {e}");
-                        AnalysisResult::Incomplete
-                    },
-                }
-            },
+    async fn analyze(&self, tx: &AnalysisItem) -> AnalysisResult {
+        let result = self.welltyped_single_analysis(tx.tx.txid(), tx.target_address.clone(), "test_customer_1".into()).await;
+        match result {
+            Ok(val) => AnalysisResult::Complete(Some(val.risk_score)),
             Err(e) => {
-                println!("elliptic: could not get address: {e}");
+                println!("elliptic: analysis error: {e}");
                 AnalysisResult::Incomplete
             },
         }
