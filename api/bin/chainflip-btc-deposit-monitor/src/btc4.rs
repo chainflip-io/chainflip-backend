@@ -49,7 +49,9 @@ async fn get_bunched_raw_transactions(client: &BtcRpcClient, tx_ids: Vec<Txid>) 
     let mut result = Vec::new();
     let mut num_calls = 0;
     let mut num_errs = 0;
-    for tx_id in tx_ids.chunks(1000) {
+    let chunk_size = tx_ids.len() / 1000;
+    println!("mempool (getting tx data): requesting for {} txs, chunksize: {chunk_size}", tx_ids.len());
+    for tx_id in tx_ids.chunks(chunk_size) {
         num_calls += 1;
         match client.get_raw_transactions(tx_id.to_vec()).await {
             Ok(mut e) => {
@@ -66,7 +68,7 @@ async fn get_bunched_raw_transactions(client: &BtcRpcClient, tx_ids: Vec<Txid>) 
             }
         }
     }
-    println!("mempool: got transaction data for {} transactions. {num_errs} of {num_calls} calls failed", result.len());
+    println!("mempool (getting tx data): got transaction data for {} of {} transactions. {num_errs} of {num_calls} calls failed", result.len(), tx_ids.len());
     (result, failed_ids)
 }
 
@@ -86,10 +88,11 @@ impl MempoolState {
         let new_tx_ids : BTreeSet<Txid> = 
             BTreeSet::from_iter(client.get_raw_mempool().await.unwrap().into_iter());
 
-        println!("mempool: got {} active txs", new_tx_ids.len());
 
-        let removed_tx_ids = self.tx_ids.difference(&new_tx_ids).map(Clone::clone).collect();
+        let removed_tx_ids : Vec<_> = self.tx_ids.difference(&new_tx_ids).map(Clone::clone).collect();
         let added_tx_ids = new_tx_ids.difference(&self.tx_ids);
+
+        println!("mempool: currently contains {} txs. Of these, {} txs are new, and {} have been removed since the last update.", new_tx_ids.len(), added_tx_ids.clone().count(), removed_tx_ids.len());
 
         let (tx, failed_tx_ids) = get_bunched_raw_transactions(client, added_tx_ids.map(|a| a.clone()).collect()).await;
         let actually_new_tx_ids = new_tx_ids.difference(&failed_tx_ids);
@@ -109,8 +112,8 @@ impl MempoolState {
 }
 
 
-pub async fn call_monitor(endpoint: HttpBasicAuthEndpoint) {
+pub async fn call_monitor(endpoint: HttpBasicAuthEndpoint, addresses: Addresses) {
 
-    monitor2(get_targets().await, get_mempool(endpoint).await, get_blocks().await, EllipticClient::new()).await;
+    monitor2(get_targets(addresses).await, get_mempool(endpoint).await, get_blocks().await, EllipticClient::new()).await;
 }
 

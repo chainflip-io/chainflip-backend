@@ -11,10 +11,10 @@ use crate::monitor_provider::{Addresses, Transactions, monitor2};
 use async_stream::stream;
 
 
-pub async fn get_targets() -> impl Stream<Item=Addresses> {
+pub async fn get_targets(default_targets: Addresses) -> impl Stream<Item=Addresses> {
     stream! {
         loop {
-            yield Vec::new();
+            yield default_targets.clone();
             
             println!("targets sleep");
             sleep(Duration::from_secs(10)).await;

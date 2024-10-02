@@ -86,7 +86,7 @@ async fn process_transactions<A>(transactions: Transactions, analyze: &A) -> Pro
     }
 }
 
-async fn filter_relevant_transactions(txs: &mut Transactions, addresses: &Addresses) {
+fn filter_relevant_transactions(txs: &mut Transactions, addresses: &Addresses) {
     txs.retain(|tx| tx.output.iter().find(|out| {
         match bitcoin::Address::from_script(&out.script_pubkey, bitcoin::Network::Bitcoin) {
             Ok(a) => addresses.contains(&a),
