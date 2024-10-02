@@ -6,6 +6,7 @@ use crate::{
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError,
 };
+use cf_runtime_utilities::log_or_panic;
 use cf_utilities::{success_threshold_from_share_count, threshold_from_share_count};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -23,8 +24,9 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 ///
 /// Authorities only need to vote if their observed value is different than the one specified in the
 /// `ElectionProperties`.
-pub struct NonceWitnessing<Identifier, Value, Slot, Settings, Hook, ValidatorId> {
-	_phantom: core::marker::PhantomData<(Identifier, Value, Slot, Settings, Hook, ValidatorId)>,
+pub struct MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId> {
+	_phantom:
+		core::marker::PhantomData<(Identifier, Value, BlockHeight, Settings, Hook, ValidatorId)>,
 }
 
 pub trait OnChangeHook<Identifier, Value> {
@@ -34,43 +36,47 @@ pub trait OnChangeHook<Identifier, Value> {
 impl<
 		Identifier: Member + Parameter + Ord,
 		Value: Member + Parameter + Eq + Ord,
-		Slot: Member + Parameter + Eq + Ord + Copy + Default,
+		BlockHeight: Member + Parameter + Eq + Ord + Copy + Default,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> NonceWitnessing<Identifier, Value, Slot, Settings, Hook, ValidatorId>
+	> MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId>
 {
 	pub fn watch_for_change<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
 		electoral_access: &mut ElectoralAccess,
 		identifier: Identifier,
 		previous_value: Value,
 	) -> Result<(), CorruptStorageError> {
-		let previous_slot =
+		let previous_block_height =
 			electoral_access.unsynchronised_state_map(&identifier)?.unwrap_or_default();
-		electoral_access.new_election((), (identifier, previous_value, previous_slot), ())?;
+		electoral_access.new_election(
+			(),
+			(identifier, previous_value, previous_block_height),
+			(),
+		)?;
 		Ok(())
 	}
 }
 impl<
 		Identifier: Member + Parameter + Ord,
 		Value: Member + Parameter + Eq + Ord,
-		Slot: Member + Parameter + Eq + Ord + Copy + Default,
+		BlockHeight: Member + Parameter + Eq + Ord + Copy + Default,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for NonceWitnessing<Identifier, Value, Slot, Settings, Hook, ValidatorId>
+	> ElectoralSystem for MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId>
 {
 	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = ();
 	type ElectoralUnsynchronisedStateMapKey = Identifier;
-	type ElectoralUnsynchronisedStateMapValue = Slot;
+	type ElectoralUnsynchronisedStateMapValue = BlockHeight;
 	type ElectoralUnsynchronisedSettings = ();
 	type ElectoralSettings = Settings;
 	type ElectionIdentifierExtra = ();
-	type ElectionProperties = (Identifier, Value, Slot);
+	type ElectionProperties = (Identifier, Value, BlockHeight);
 	type ElectionState = ();
-	type Vote = vote_storage::nonce::NonceStorage<Value, Slot>;
-	type Consensus = (Value, Slot);
+	type Vote = vote_storage::change::MonotonicChange<Value, BlockHeight>;
+	type Consensus = (Value, BlockHeight);
 	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
 
@@ -108,7 +114,7 @@ impl<
 		partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
 	) -> Result<bool, CorruptStorageError> {
 		let (_, previous_value, previous_slot) = election_access.properties()?;
-		Ok(partial_vote.value != previous_value && partial_vote.slot > previous_slot)
+		Ok(partial_vote.value != previous_value && partial_vote.block > previous_slot)
 	}
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
@@ -125,12 +131,17 @@ impl<
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
 			let mut election_access = electoral_access.election_mut(election_identifier)?;
-			if let Some((value, slot)) = election_access.check_consensus()?.has_consensus() {
-				let (identifier, previous_value, previous_slot) = election_access.properties()?;
-				if previous_value != value && slot > previous_slot {
+			if let Some((value, block_height)) = election_access.check_consensus()?.has_consensus()
+			{
+				let (identifier, previous_value, previous_block_height) =
+					election_access.properties()?;
+				if previous_value != value && block_height > previous_block_height {
 					election_access.delete();
 					Hook::on_change(identifier.clone(), value);
-					electoral_access.set_unsynchronised_state_map(identifier, Some(slot))?;
+					electoral_access
+						.set_unsynchronised_state_map(identifier, Some(block_height))?;
+				} else {
+					log_or_panic!("Should be impossible to reach consensus with the same value and/or lower block_height");
 				}
 			}
 		}
@@ -149,25 +160,23 @@ impl<
 		let num_active_votes = active_votes.len() as u32;
 		let success_threshold = success_threshold_from_share_count(num_authorities);
 		Ok(if num_active_votes >= success_threshold {
-			let mut counts: BTreeMap<Value, (u32, Vec<Slot>)> = BTreeMap::new();
+			let mut counts: BTreeMap<Value, Vec<BlockHeight>> = BTreeMap::new();
 			for vote in active_votes.clone() {
 				counts
 					.entry(vote.value)
-					.and_modify(|(count, slots)| {
-						*count += 1;
-						slots.push(vote.slot)
-					})
-					.or_insert((1, vec![vote.slot]));
+					.and_modify(|slots| slots.push(vote.block))
+					.or_insert(vec![vote.block]);
 			}
 
-			counts.iter().find_map(|(vote, (count, slots))| {
-				if *count >= success_threshold {
-					let mut slots = slots.clone();
-					let num_slots = slots.len() as u32;
-					let (_, median_vote, _) = {
-						slots.select_nth_unstable(threshold_from_share_count(num_slots) as usize)
+			counts.iter().find_map(|(vote, blocks_height)| {
+				let num_votes = blocks_height.len() as u32;
+				if num_votes >= success_threshold {
+					let mut blocks_height = blocks_height.clone();
+					let (_, consensus_block_height, _) = {
+						blocks_height
+							.select_nth_unstable(threshold_from_share_count(num_votes) as usize)
 					};
-					Some((vote.clone(), *median_vote))
+					Some((vote.clone(), *consensus_block_height))
 				} else {
 					None
 				}

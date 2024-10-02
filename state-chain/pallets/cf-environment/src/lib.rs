@@ -763,6 +763,6 @@ pub struct NoUsedNonce<T: Config>(PhantomData<T>);
 
 impl<T: Config> ExecutionCondition for NoUsedNonce<T> {
 	fn is_satisfied() -> bool {
-		SolanaAvailableNonceAccounts::<T>::get().len() == 10
+		SolanaUnavailableNonceAccounts::<T>::iter().next().is_none()
 	}
 }

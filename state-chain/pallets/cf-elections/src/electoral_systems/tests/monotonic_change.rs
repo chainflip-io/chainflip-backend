@@ -1,10 +1,10 @@
 use super::{mocks::*, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes},
-	electoral_systems::nonce_wintessing::*,
+	electoral_systems::monotonic_change::*,
 };
 
-use crate::vote_storage::nonce::NonceVote;
+use crate::vote_storage::change::MonotonicChangeVote;
 use cf_primitives::AuthorityCount;
 
 thread_local! {
@@ -24,13 +24,13 @@ impl MockHook {
 	}
 }
 
-type Vote = NonceVote<Value, Slot>;
+type Vote = MonotonicChangeVote<Value, Slot>;
 type Value = u64;
 type Slot = u32;
-type SimpleChange = NonceWitnessing<(), Value, Slot, (), MockHook, ()>;
+type SimpleMonotonicChange = MonotonicChange<(), Value, Slot, (), MockHook, ()>;
 
 register_checks! {
-	SimpleChange {
+	SimpleMonotonicChange {
 		hook_called(_pre, _post) {
 			assert!(MockHook::called(), "Hook should have been called!");
 		},
@@ -48,16 +48,16 @@ const THRESHOLD: AuthorityCount = cf_utilities::threshold_from_share_count(AUTHO
 const SUCCESS_THRESHOLD: AuthorityCount =
 	cf_utilities::success_threshold_from_share_count(AUTHORITY_COUNT);
 
-fn with_default_state() -> TestContext<SimpleChange> {
-	TestSetup::<SimpleChange>::default().build_with_initial_election()
+fn with_default_state() -> TestContext<SimpleMonotonicChange> {
+	TestSetup::<SimpleMonotonicChange>::default().build_with_initial_election()
 }
 
 fn generate_votes(
 	correct_voters: AuthorityCount,
-	correct_value: NonceVote<Value, Slot>,
+	correct_value: MonotonicChangeVote<Value, Slot>,
 	incorrect_voters: AuthorityCount,
-	incorrect_value: NonceVote<Value, Slot>,
-) -> ConsensusVotes<SimpleChange> {
+	incorrect_value: MonotonicChangeVote<Value, Slot>,
+) -> ConsensusVotes<SimpleMonotonicChange> {
 	ConsensusVotes {
 		votes: (0..correct_voters)
 			.map(|_| ConsensusVote { vote: Some(((), correct_value.clone())), validator_id: () })
@@ -73,17 +73,20 @@ fn generate_votes(
 	}
 }
 
-fn generate_votes_with_differen_slots(
+fn generate_votes_with_different_slots(
 	correct_voters: AuthorityCount,
-	correct_value: NonceVote<Value, Slot>,
+	correct_value: MonotonicChangeVote<Value, Slot>,
 	incorrect_voters: AuthorityCount,
-	incorrect_value: NonceVote<Value, Slot>,
-) -> ConsensusVotes<SimpleChange> {
+	incorrect_value: MonotonicChangeVote<Value, Slot>,
+) -> ConsensusVotes<SimpleMonotonicChange> {
 	ConsensusVotes {
 		votes: (0..correct_voters)
 			.enumerate()
 			.map(|(index, _)| ConsensusVote {
-				vote: Some(((), NonceVote { value: correct_value.value, slot: index as u32 })),
+				vote: Some((
+					(),
+					MonotonicChangeVote { value: correct_value.value, block: index as u32 },
+				)),
 				validator_id: (),
 			})
 			.chain((0..incorrect_voters).map(|_| ConsensusVote {
@@ -104,7 +107,7 @@ fn consensus_not_possible_because_of_different_votes() {
 		ConsensusVotes {
 			votes: (0..AUTHORITY_COUNT)
 				.map(|i| ConsensusVote {
-					vote: Some(((), NonceVote { value: i as u64, slot: 0u32 })),
+					vote: Some(((), MonotonicChangeVote { value: i as u64, block: 0u32 })),
 					validator_id: (),
 				})
 				.collect(),
@@ -118,9 +121,9 @@ fn consensus_when_all_votes_the_same() {
 	with_default_state().expect_consensus(
 		generate_votes(
 			SUCCESS_THRESHOLD,
-			NonceVote { value: 1, slot: 1 },
+			MonotonicChangeVote { value: 1, block: 1 },
 			0,
-			NonceVote { value: 0, slot: 0 },
+			MonotonicChangeVote { value: 0, block: 0 },
 		),
 		Some((1, 1)),
 	);
@@ -129,20 +132,20 @@ fn consensus_when_all_votes_the_same() {
 #[test]
 fn consensus_when_all_votes_the_same_but_different_slot() {
 	with_default_state().expect_consensus(
-		generate_votes_with_differen_slots(
+		generate_votes_with_different_slots(
 			SUCCESS_THRESHOLD,
-			NonceVote { value: 1, slot: 0 },
+			MonotonicChangeVote { value: 1, block: 0 },
 			0,
-			NonceVote { value: 0, slot: 0 },
+			MonotonicChangeVote { value: 0, block: 0 },
 		),
 		Some((1, 4)),
 	);
 	with_default_state().expect_consensus(
-		generate_votes_with_differen_slots(
+		generate_votes_with_different_slots(
 			AUTHORITY_COUNT,
-			NonceVote { value: 1, slot: 0 },
+			MonotonicChangeVote { value: 1, block: 0 },
 			0,
-			NonceVote { value: 0, slot: 0 },
+			MonotonicChangeVote { value: 0, block: 0 },
 		),
 		Some((1, 6)),
 	);
@@ -153,9 +156,9 @@ fn not_enough_votes_for_consensus() {
 	with_default_state().expect_consensus(
 		generate_votes(
 			THRESHOLD,
-			NonceVote { value: 1, slot: 1 },
+			MonotonicChangeVote { value: 1, block: 1 },
 			0,
-			NonceVote { value: 0, slot: 0 },
+			MonotonicChangeVote { value: 0, block: 0 },
 		),
 		None,
 	);
@@ -163,8 +166,8 @@ fn not_enough_votes_for_consensus() {
 
 #[test]
 fn minority_cannot_prevent_consensus() {
-	const CORRECT_VALUE: Vote = NonceVote { value: 1, slot: 1 };
-	const INCORRECT_VALUE: Vote = NonceVote { value: 2, slot: 2 };
+	const CORRECT_VALUE: Vote = MonotonicChangeVote { value: 1, block: 1 };
+	const INCORRECT_VALUE: Vote = MonotonicChangeVote { value: 2, block: 2 };
 	with_default_state().expect_consensus(
 		generate_votes(
 			SUCCESS_THRESHOLD,
@@ -172,7 +175,7 @@ fn minority_cannot_prevent_consensus() {
 			AUTHORITY_COUNT - SUCCESS_THRESHOLD,
 			INCORRECT_VALUE,
 		),
-		Some((CORRECT_VALUE.value, CORRECT_VALUE.slot)),
+		Some((CORRECT_VALUE.value, CORRECT_VALUE.block)),
 	);
 }
 
@@ -182,9 +185,9 @@ fn finalization_only_on_consensus_change() {
 		.expect_consensus(
 			generate_votes(
 				AUTHORITY_COUNT,
-				NonceVote { value: 0, slot: 0 },
+				MonotonicChangeVote { value: 0, block: 0 },
 				0,
-				NonceVote { value: 0, slot: 0 },
+				MonotonicChangeVote { value: 0, block: 0 },
 			),
 			Some((0, 0)),
 		)
@@ -193,14 +196,14 @@ fn finalization_only_on_consensus_change() {
 			|_| {
 				assert!(!MockHook::called());
 			},
-			vec![Check::<SimpleChange>::hook_not_called(), Check::assert_unchanged()],
+			vec![Check::<SimpleMonotonicChange>::hook_not_called(), Check::assert_unchanged()],
 		)
 		.expect_consensus(
 			generate_votes(
 				AUTHORITY_COUNT,
-				NonceVote { value: 1, slot: 1 },
+				MonotonicChangeVote { value: 1, block: 1 },
 				0,
-				NonceVote { value: 0, slot: 0 },
+				MonotonicChangeVote { value: 0, block: 0 },
 			),
 			Some((1, 1)),
 		)
@@ -209,6 +212,6 @@ fn finalization_only_on_consensus_change() {
 			|_| {
 				assert!(!MockHook::called());
 			},
-			vec![Check::<SimpleChange>::hook_called(), Check::all_elections_deleted()],
+			vec![Check::<SimpleMonotonicChange>::hook_called(), Check::all_elections_deleted()],
 		);
 }
