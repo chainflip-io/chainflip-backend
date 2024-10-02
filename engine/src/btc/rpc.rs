@@ -113,6 +113,21 @@ impl BtcRpcClient {
 			.map(|v| T::deserialize(v).map_err(anyhow::Error::msg))
 			.collect::<Result<_>>()
 	}
+
+
+	async fn call_rpc_vectorized<T: for<'a> serde::de::Deserialize<'a>>(
+		&self,
+		method: &str,
+		params: ReqParams,
+	) -> Result<Vec<anyhow::Result<T>>> {
+		let res = call_rpc_raw_vectorized(&self.client, &self.endpoint, method, params)
+			.await?
+			.into_iter()
+			.map(|v| v.map_err(anyhow::Error::msg).and_then(|v| T::deserialize(v).map_err(anyhow::Error::msg)))
+			.collect();
+		Ok(res)
+			// .collect::<Result<_>>()
+	}
 }
 
 #[derive(Clone, Debug)]
@@ -186,6 +201,77 @@ async fn call_rpc_raw(
 			}
 		})
 		.collect::<Result<_, Error>>()
+}
+
+
+async fn call_rpc_raw_vectorized(
+	client: &Client,
+	endpoint: &HttpBasicAuthEndpoint,
+	method: &str,
+	params: ReqParams,
+) -> Result<Vec<anyhow::Result<serde_json::Value, Error>>> {
+	let request_body = match params.clone() {
+		ReqParams::Empty => vec![json!({
+			"jsonrpc": "1.0",
+			"id": 0,
+			"method": method,
+			"params": []
+		})],
+		ReqParams::Batch(params) => params
+			.into_iter()
+			.enumerate()
+			.map(|(i, p)| {
+				json!({
+					"jsonrpc": "1.0",
+					"id": i,
+					"method": method,
+					"params": p
+				})
+			})
+			.collect::<Vec<serde_json::Value>>(),
+	};
+
+	let response = client
+		.post(endpoint.http_endpoint.as_ref())
+		.basic_auth(&endpoint.basic_auth_user, Some(&endpoint.basic_auth_password))
+		.json(&request_body)
+		.send()
+		.await
+		.map_err(Error::Transport)?;
+
+	let response = response
+		.json::<Vec<serde_json::Value>>()
+		.await
+		.map_err(Error::Transport)
+		.and_then(|result| match params {
+			ReqParams::Batch(params) =>
+				if params.len() == result.len() {
+					// a bunch of json result values containing an error and a result field.
+					Ok(result)
+				} else {
+					Err(Error::Rpc(RpcError {
+						code: -1,
+						message: "Incorrect response number for batch request".to_string(),
+						data: None,
+					}))
+				},
+			ReqParams::Empty => Ok(result),
+		})?;
+
+	let res = response
+		.into_iter()
+		.map(|r| {
+			let error = &r["error"];
+			if !error.is_null() {
+				Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
+			} else {
+				Ok(r["result"].to_owned())
+			}
+		})
+		.collect();
+
+	Ok(res)
+		// .collect::<Result<_, Error>>()
 }
 
 /// Get the BitcoinNetwork by calling the `getblockchaininfo` RPC.
@@ -348,7 +434,7 @@ pub trait BtcRpcApi {
 
 	async fn get_raw_mempool(&self) -> anyhow::Result<Vec<Txid>>;
 
-	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> anyhow::Result<Vec<Transaction>>;
+	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> anyhow::Result<Vec<anyhow::Result<Transaction>>>;
 }
 
 #[async_trait::async_trait]
@@ -473,7 +559,7 @@ impl BtcRpcApi for BtcRpcClient {
 	}
 
 
-	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> anyhow::Result<Vec<Transaction>> {
+	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> Result<Vec<anyhow::Result<Transaction>>> {
 		let params = tx_hashes
 			.iter()
 			.map(|tx_hash| json!([json!(tx_hash), json!(false)]))
@@ -493,19 +579,24 @@ impl BtcRpcApi for BtcRpcClient {
 		// println!("could not get data for {failed} transactions");
 
 
-		let hex_txs: Vec<String> =
-			self.call_rpc("getrawtransaction", ReqParams::Batch(params)).await?;
+		let hex_txs: Vec<Result<String>> =
+			self.call_rpc_vectorized("getrawtransaction", ReqParams::Batch(params)).await?;
 
-		hex_txs
+		let pre_res = hex_txs
 			.into_iter()
-			.map(|hex| hex::decode(hex).map_err(|e| anyhow!("Response not valid hex ({e}).")))
-			.collect::<Result<Vec<Vec<u8>>>>()?
+			.map(|hex| hex.and_then(|hex| hex::decode(hex).map_err(|e| anyhow!("Response not valid hex ({e})."))))
+			.collect::<Vec<Result<Vec<u8>>>>()
 			.into_iter()
 			.map(|bytes| {
+				bytes.and_then(|bytes|
 				bitcoin::consensus::encode::deserialize(&bytes)
 					.map_err(|_| anyhow!("Failed to deserialize transaction"))
-			})
-			.collect::<Result<_>>()
+				)
+			});
+
+		let myres : Vec<Result<_>> = pre_res.collect();
+		Ok(myres)
+
 	}
 }
 

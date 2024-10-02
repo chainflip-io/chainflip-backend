@@ -4,7 +4,7 @@ use bitcoin::{Transaction, Txid};
 use cf_chains::btc::BitcoinNetwork;
 use chainflip_api::settings::HttpBasicAuthEndpoint;
 use chainflip_engine::btc::rpc::{BtcRpcApi, BtcRpcClient};
-use futures::{stream, Stream};
+use futures::{future::join_all, stream, FutureExt, Stream, TryFutureExt};
 use tokio::time::sleep;
 use crate::{elliptic::EllipticClient, monitor_provider::{monitor2, Addresses, AnalysisResult, Transactions, TransactionsUpdate}, targets::{get_blocks, get_targets}};
 use async_stream::stream;
@@ -25,49 +25,73 @@ pub async fn get_mempool(endpoint: HttpBasicAuthEndpoint) -> impl Stream<Item=Tr
 
 
 /// Naive access to the mempool
-async fn poll_mempool(client: &BtcRpcClient) -> Vec<Transaction> {
-    println!("getting mempool");
-    let tx_ids = client.get_raw_mempool().await.unwrap();
-    println!("Got: {}", tx_ids.len());
-    let mut result = Vec::new();
-    for tx_id in tx_ids.chunks_exact(1000) {
-        match client.get_raw_transactions(tx_id.to_vec()).await {
-            Ok(mut e) => {
-                result.append(&mut e);
-            },
-            Err(e) => {
-                // println!("second rpc call error: {e}");
-            }
-        }
-    }
-    println!("Got txs: {}", result.len());
-    result
-}
+// async fn poll_mempool(client: &BtcRpcClient) -> Vec<Transaction> {
+//     println!("getting mempool");
+//     let tx_ids = client.get_raw_mempool().await.unwrap();
+//     println!("Got: {}", tx_ids.len());
+//     let mut result = Vec::new();
+//     for tx_id in tx_ids.chunks_exact(1000) {
+//         match client.get_raw_transactions(tx_id.to_vec()).await {
+//             Ok(mut e) => {
+//                 result.append(&mut e);
+//             },
+//             Err(e) => {
+//                 // println!("second rpc call error: {e}");
+//             }
+//         }
+//     }
+//     println!("Got txs: {}", result.len());
+//     result
+// }
 
 async fn get_bunched_raw_transactions(client: &BtcRpcClient, tx_ids: Vec<Txid>) -> (Vec<Transaction>, BTreeSet<Txid>) {
-    let mut failed_ids = BTreeSet::new();
+    let mut failed_ids = BTreeSet::from_iter(tx_ids.iter().map(Clone::clone));
     let mut result = Vec::new();
     let mut num_calls = 0;
     let mut num_errs = 0;
-    let chunk_size = tx_ids.len() / 1000;
+    let chunk_size = tx_ids.len() / 100;
     println!("mempool (getting tx data): requesting for {} txs, chunksize: {chunk_size}", tx_ids.len());
-    for tx_id in tx_ids.chunks(chunk_size) {
+
+    // let results = join_all(tx_ids.chunks(chunk_size).map(|tx_ids| client.get_raw_transactions(tx_ids.into()).map(move |res| (tx_ids, res)))).await;
+
+    let results = match client.get_raw_transactions(tx_ids.clone()).await {
+        Ok(txs) => txs,
+        Err(e) => {
+            println!("Error while getting transactions from mempool: {e}");
+            Vec::new()
+        },
+    };
+
+    for tx in results {
         num_calls += 1;
-        match client.get_raw_transactions(tx_id.to_vec()).await {
-            Ok(mut e) => {
-                result.append(&mut e);
+        match tx {
+            Ok(tx) => {
+                failed_ids.remove(&tx.txid());
+                result.push(tx);
             },
             Err(e) => {
                 num_errs += 1;
-
-                // remember failed ids, because these are no longer in the mempool,
-                // probably
-                for id in tx_id {
-                    failed_ids.insert(id.clone());
-                }
             }
         }
     }
+
+    // for tx_id in tx_ids.chunks(chunk_size) {
+    //     num_calls += 1;
+    //     match client.get_raw_transactions(tx_id.to_vec()).await {
+    //         Ok(mut e) => {
+    //             result.append(&mut e);
+    //         },
+    //         Err(e) => {
+    //             num_errs += 1;
+
+    //             // remember failed ids, because these are no longer in the mempool,
+    //             // probably
+    //             for id in tx_id {
+    //                 failed_ids.insert(id.clone());
+    //             }
+    //         }
+    //     }
+    // }
     println!("mempool (getting tx data): got transaction data for {} of {} transactions. {num_errs} of {num_calls} calls failed", result.len(), tx_ids.len());
     (result, failed_ids)
 }

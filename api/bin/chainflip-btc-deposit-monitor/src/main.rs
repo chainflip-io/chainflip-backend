@@ -1,7 +1,7 @@
 #![feature(async_fn_traits)]
 
 // mod btc2;
-mod btc3;
+// mod btc3;
 mod btc4;
 mod elliptic;
 mod monitor_provider;
@@ -9,7 +9,7 @@ mod targets;
 
 use std::{env, str::FromStr, sync::{Arc, Mutex}};
 // use btc2::monitor_mempool;
-use btc3::start_monitor;
+// use btc3::start_monitor;
 use btc4::call_monitor;
 use cf_chains::{assets::btc, Bitcoin};
 use chainflip_api::settings::HttpBasicAuthEndpoint;
