@@ -78,89 +78,13 @@ pallet-transaction-payment = { git = "https://github.com/chainflip-io/polkadot-s
 sp-block-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 sp-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-sp-inherents = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-sp-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-sp-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-sp-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-sp-version = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-sp-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-sp-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+1" }
-
-[features]
-try-runtime = [
-	'frame-support/try-runtime',
-	'frame-system/try-runtime',
-	"cf-traits/try-runtime",
-	"chainflip-node/try-runtime",
-	"frame-executive/try-runtime",
-	"pallet-aura/try-runtime",
-	"pallet-authorship/try-runtime",
-	"pallet-cf-account-roles/try-runtime",
-	"pallet-cf-asset-balances/try-runtime",
-	"pallet-cf-broadcast/try-runtime",
-	"pallet-cf-chain-tracking/try-runtime",
-	"pallet-cf-elections/try-runtime",
-	"pallet-cf-emissions/try-runtime",
-	"pallet-cf-environment/try-runtime",
-	"pallet-cf-flip/try-runtime",
-	"pallet-cf-funding/try-runtime",
-	"pallet-cf-governance/try-runtime",
-	"pallet-cf-ingress-egress/try-runtime",
-	"pallet-cf-lp/try-runtime",
-	"pallet-cf-pools/try-runtime",
-	"pallet-cf-reputation/try-runtime",
-	"pallet-cf-swapping/try-runtime",
-	"pallet-cf-threshold-signature/try-runtime",
-	"pallet-cf-validator/try-runtime",
-	"pallet-cf-vaults/try-runtime",
-	"pallet-cf-witnesser/try-runtime",
-	"pallet-grandpa/try-runtime",
-	"pallet-session/try-runtime",
-	"pallet-timestamp/try-runtime",
-	"pallet-transaction-payment/try-runtime",
-	"sp-runtime/try-runtime",
-	"state-chain-runtime/try-runtime",
-	"cf-chains/try-runtime",
-	"cf-primitives/try-runtime",
-	"cf-test-utilities/try-runtime",
-	"cfe-events/try-runtime",
-	"cf-amm/try-runtime",
-]
-std = ["chainflip-node/std", "log/std"]
-runtime-benchmarks = [
-	"cf-amm/runtime-benchmarks",
-	"cf-chains/runtime-benchmarks",
-	"cf-primitives/runtime-benchmarks",
-	"cf-test-utilities/runtime-benchmarks",
-	"cf-traits/runtime-benchmarks",
-	"cfe-events/runtime-benchmarks",
-	"chainflip-node/runtime-benchmarks",
-	"frame-support/runtime-benchmarks",
-	"frame-system/runtime-benchmarks",
-	"pallet-cf-account-roles/runtime-benchmarks",
-	"pallet-cf-asset-balances/runtime-benchmarks",
-	"pallet-cf-broadcast/runtime-benchmarks",
-	"pallet-cf-chain-tracking/runtime-benchmarks",
-	"pallet-cf-elections/runtime-benchmarks",
-	"pallet-cf-emissions/runtime-benchmarks",
-	"pallet-cf-environment/runtime-benchmarks",
-	"pallet-cf-flip/runtime-benchmarks",
-	"pallet-cf-funding/runtime-benchmarks",
-	"pallet-cf-governance/runtime-benchmarks",
-	"pallet-cf-ingress-egress/runtime-benchmarks",
-	"pallet-cf-lp/runtime-benchmarks",
-	"pallet-cf-pools/runtime-benchmarks",
-	"pallet-cf-reputation/runtime-benchmarks",
-	"pallet-cf-swapping/runtime-benchmarks",
-	"pallet-cf-threshold-signature/runtime-benchmarks",
-	"pallet-cf-validator/runtime-benchmarks",
-	"pallet-cf-vaults/runtime-benchmarks",
-	"pallet-cf-witnesser/runtime-benchmarks",
-	"pallet-grandpa/runtime-benchmarks",
-	"pallet-timestamp/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks",
-	"state-chain-runtime/runtime-benchmarks",
-]
+sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-inherents = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-version = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }

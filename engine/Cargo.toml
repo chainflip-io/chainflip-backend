@@ -136,7 +136,7 @@ features = ["lz4"]
 [dev-dependencies]
 csv = "1.1.6"
 ethereum = "0.14"
-mockall = {version = "0.13.0", features = ["nightly"] }
+mockall = { version = "0.13.0", features = ["nightly"] }
 multisig = { path = "multisig", features = ["test"] }
 rlp = "0.5"
 tempfile = "3.7.0"
@@ -151,3 +151,4 @@ engine-upgrade-utils = { path = "../engine-upgrade-utils" }
 
 [features]
 integration-test = []
+std = []

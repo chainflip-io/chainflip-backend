@@ -1200,7 +1200,6 @@ pub type Executive = frame_executive::Executive<
 	Runtime,
 	PalletExecutionOrder,
 	AllMigrations,
-	AllPalletsWithoutSystem,
 >;
 
 pub type PalletExecutionOrder = (

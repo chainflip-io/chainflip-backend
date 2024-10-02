@@ -71,3 +71,4 @@ utilities = { package = "utilities", path = "../../utilities", features = [
 
 [features]
 test = ['mockall']
+std = []
