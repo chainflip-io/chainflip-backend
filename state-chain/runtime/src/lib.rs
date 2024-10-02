@@ -788,7 +788,6 @@ impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = EvmCrypto;
-	type TargetChain = Arbitrum;
 	type VaultActivator = EvmVaultActivator<EthereumVault, ArbitrumVault>;
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
@@ -805,7 +804,6 @@ impl pallet_cf_threshold_signature::Config<Instance2> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = PolkadotCrypto;
-	type TargetChain = Polkadot;
 	type VaultActivator = PolkadotVault;
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
@@ -822,7 +820,6 @@ impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = BitcoinCrypto;
-	type TargetChain = Bitcoin;
 	type VaultActivator = BitcoinVault;
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
@@ -839,7 +836,6 @@ impl pallet_cf_threshold_signature::Config<Instance5> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = SolanaCrypto;
-	type TargetChain = Solana;
 	type VaultActivator = SolanaVault;
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;

@@ -254,6 +254,7 @@ pub enum PreviousOrCurrent {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BitcoinCrypto;
 impl ChainCrypto for BitcoinCrypto {
+	const NAME: &'static str = "Bitcoin";
 	type UtxoChain = ConstBool<true>;
 
 	type AggKey = AggKey;

@@ -357,6 +357,7 @@ impl ChannelLifecycleHooks for PolkadotChannelState {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PolkadotCrypto;
 impl ChainCrypto for PolkadotCrypto {
+	const NAME: &'static str = "Polkadot";
 	type UtxoChain = ConstBool<false>;
 
 	type AggKey = PolkadotPublicKey;

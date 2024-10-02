@@ -20,7 +20,7 @@ use response_status::ResponseStatus;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::{build::Fields, Path, Type, TypeInfo};
 
-use cf_chains::{Chain, ChainCrypto};
+use cf_chains::ChainCrypto;
 use cf_primitives::{
 	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId as RequestId,
 };
@@ -222,7 +222,6 @@ macro_rules! handle_key_ceremony_report {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::Chain;
 	use cf_primitives::FlipBalance;
 	use cf_traits::{
 		AccountRoleRegistry, AsyncResult, CfeMultisigRequest, ThresholdSignerNomination,
@@ -362,8 +361,6 @@ pub mod pallet {
 
 		/// A marker trait identifying the chain that we are signing for.
 		type TargetChainCrypto: ChainCrypto;
-
-		type TargetChain: Chain<ChainCrypto = Self::TargetChainCrypto>;
 
 		/// trait to activate chains that use this pallet's key
 		type VaultActivator: VaultActivator<Self::TargetChainCrypto>;
@@ -1202,11 +1199,10 @@ pub mod pallet {
 
 macro_rules! append_chain_to_name {
 	($name:ident) => {
-		match T::TargetChain::NAME {
-			"Ethereum" => concat!(stringify!($name), "Ethereum"),
+		match T::TargetChainCrypto::NAME {
+			"EVM" => concat!(stringify!($name), "EVM"),
 			"Polkadot" => concat!(stringify!($name), "Polkadot"),
 			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
-			"Arbitrum" => concat!(stringify!($name), "Arbitrum"),
 			"Solana" => concat!(stringify!($name), "Solana"),
 			_ => concat!(stringify!($name), "Other"),
 		}

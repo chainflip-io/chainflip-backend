@@ -81,6 +81,7 @@ impl Chain for Solana {
 pub struct SolanaCrypto;
 
 impl ChainCrypto for SolanaCrypto {
+	const NAME: &'static str = "Solana";
 	type UtxoChain = ConstBool<false>;
 	type KeyHandoverIsRequired = ConstBool<false>;
 

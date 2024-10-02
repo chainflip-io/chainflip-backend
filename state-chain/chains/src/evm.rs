@@ -33,6 +33,7 @@ pub struct DepositDetails {
 pub struct EvmCrypto;
 
 impl ChainCrypto for EvmCrypto {
+	const NAME: &'static str = "EVM";
 	type UtxoChain = ConstBool<false>;
 
 	type AggKey = evm::AggKey;
