@@ -2027,7 +2027,8 @@ fn detect_tainted_transaction_for_liquidity_provision() {
 				Some(TaintedTransactionDetails { broker: BROKER, refund_address: None }),
 				&generate_deposit_channel_details_for_swap_type(
 					ChannelAction::LiquidityProvision { lp_account: BROKER }
-				)
+				),
+				Asset::Eth
 			),
 			Err(TaintedTransactionDetails { broker: BROKER, refund_address: None })
 		);
@@ -2055,7 +2056,8 @@ fn detect_tainted_transaction_for_ccm_transfer() {
 						min_price: U256::from(0),
 					}),
 					dca_params: None,
-				})
+				}),
+				Asset::Eth
 			),
 			Err(TaintedTransactionDetails {
 				broker: BROKER,
@@ -2081,7 +2083,8 @@ fn detect_tainted_transaction_for_swap() {
 						min_price: U256::from(0),
 					}),
 					dca_params: None,
-				})
+				}),
+				Asset::Eth
 			),
 			Err(TaintedTransactionDetails {
 				broker: BROKER,
@@ -2107,7 +2110,8 @@ fn ignore_tainted_transaction_if_marked_by_other_broker() {
 						min_price: U256::from(0),
 					}),
 					dca_params: None,
-				})
+				}),
+				Asset::Eth
 			),
 			Ok(())
 		);

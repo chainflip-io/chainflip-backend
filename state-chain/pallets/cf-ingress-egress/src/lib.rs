@@ -432,7 +432,7 @@ pub mod pallet {
 		type CcmValidityChecker: CcmValidityCheck;
 
 		/// For accessing the LP refund address.
-		type LpRefundAddress: LpRegistration;
+		type LpRefundAddress: LpRegistration<AccountId = Self::AccountId>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -1812,6 +1812,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn check_if_tx_is_tainted(
 		maybe_tainted_transaction: Option<TaintedTransactionDetails<T::AccountId>>,
 		deposit_channel_details: &DepositChannelDetails<T, I>,
+		asset: Asset,
 	) -> Result<(), TaintedTransactionDetails<T::AccountId>> {
 		if let Some(tainted_transaction) = maybe_tainted_transaction {
 			match &deposit_channel_details.action {
@@ -1838,11 +1839,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					})
 				},
 				ChannelAction::LiquidityProvision { .. } => {
-					if tainted_transaction.broker == deposit_channel_details.owner {
+					let lp = tainted_transaction.clone().broker;
+					if lp == deposit_channel_details.owner {
 						Err(TaintedTransactionDetails {
-							broker: tainted_transaction.broker,
-							refund_address: None, /* TODO: we need a refund address for this
-							                       * case. Most likely the LP has to provide one. */
+							broker: lp.clone(),
+							refund_address: T::LpRefundAddress::get_liquidity_refund_address(
+								&lp, asset,
+							),
 						})
 					} else {
 						Ok(())
@@ -1871,6 +1874,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Err(tainted_transaction_details) = Self::check_if_tx_is_tainted(
 			TaintedTransactions::<T, I>::take(&deposit_details),
 			&deposit_channel_details,
+			asset.into(),
 		) {
 			TaintedTransactions::<T, I>::insert(deposit_details, tainted_transaction_details);
 			return Err(Error::<T, I>::TransactionTainted.into())
