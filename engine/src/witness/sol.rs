@@ -28,6 +28,7 @@ use state_chain_runtime::{
 	SolanaInstance,
 };
 
+use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
 use std::{str::FromStr, sync::Arc};
 use utilities::{task_scope, task_scope::Scope};
 

@@ -14,11 +14,11 @@ use cf_traits::{
 };
 
 use codec::{Decode, Encode};
+use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
 	electoral_systems::{
 		self,
-		change::OnChangeHook,
 		composite::{tuple_6_impls::Hooks, Composite, Translator},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
