@@ -5,8 +5,8 @@ use crate::{
 	EnsureThresholdSigned, Origin, Pallet, PalletOffence, PendingCeremonies, RequestId,
 };
 use cf_chains::{
-	mocks::{MockAggKey, MockEthereumChainCrypto, MockThresholdSignature},
-	ChainCrypto, Ethereum,
+	mocks::{MockAggKey, MockEthereum, MockEthereumChainCrypto, MockThresholdSignature},
+	ChainCrypto,
 };
 use cf_primitives::{AuthorityCount, CeremonyId, FlipBalance, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_traits::{
@@ -174,7 +174,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type ThresholdCallable = MockCallback<MockEthereumChainCrypto>;
 	type TargetChainCrypto = MockEthereumChainCrypto;
-	type TargetChain = Ethereum;
+	type TargetChain = MockEthereum;
 	type ThresholdSignerNomination = MockNominator;
 	type VaultActivator = MockVaultActivator;
 	type OffenceReporter = MockOffenceReporter;
