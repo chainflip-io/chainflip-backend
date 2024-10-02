@@ -71,6 +71,13 @@ lazy_static::lazy_static! {
 	};
 }
 
+pub enum IncompatibilityBehaviour {
+	/// Continue processing the stream. If the initial block is incompatible during stream
+	/// creation, use the given known compatible block.
+	Continue(BlockInfo),
+	ReturnError,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct BlockInfo {
 	pub parent_hash: state_chain_runtime::Hash,
@@ -210,7 +217,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 	>(
 		scope: &Scope<'_, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
-		error_on_incompatible_block: bool,
+		incompatibility_behaviour: IncompatibilityBehaviour,
 		new_stream_fn: NewStreamFn,
 		process_stream_fn: ProcessStreamFn,
 	) -> Result<(
@@ -268,26 +275,35 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			});
 
 		let mut processed_stream = {
-			let latest_block: BlockInfo = block_stream.next().await.unwrap()?;
+			let latest_compatible_block = loop {
+				let latest_block: BlockInfo = block_stream.next().await.unwrap()?;
 
-			let block_stream =
-				process_stream_fn(Box::pin(block_stream.make_try_cached(latest_block))).await?;
+				let block_compatibility =
+					base_rpc_client.check_block_compatibility(latest_block).await?;
 
-			let block_compatibility =
-				base_rpc_client.check_block_compatibility(*block_stream.cache()).await?;
+				match block_compatibility.compatibility {
+					CfeCompatibility::Compatible => break latest_block,
+					_ => match incompatibility_behaviour {
+						IncompatibilityBehaviour::ReturnError => {
+							return Err(CreateStateChainClientError::CompatibilityError(
+								block_compatibility,
+							)
+							.into());
+						},
+						IncompatibilityBehaviour::Continue(compatible_block) => {
+							tracing::warn!(
+								"StateChain block number {} is not compatible. Using known compatible block {}",
+								latest_block.number,
+								compatible_block.number,
+							);
+							break compatible_block;
+						},
+					},
+				}
+			};
 
-			// TODO: It's possible we shutdown on CFE start up if the unfinalised stream is
-			// incompatible (by returning an error here) even if the finalised stream is compatible.
-			// PRO-1334
-			match block_compatibility.compatibility {
-				CfeCompatibility::Compatible => block_stream,
-				_ => {
-					return Err(CreateStateChainClientError::CompatibilityError(
-						block_compatibility,
-					)
-					.into());
-				},
-			}
+			process_stream_fn(Box::pin(block_stream.make_try_cached(latest_compatible_block)))
+				.await?
 		};
 
 		const BLOCK_CAPACITY: usize = 10;
@@ -325,10 +341,13 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 								let _result = latest_block_sender.send(block);
 							},
 							CfeCompatibility::NoLongerCompatible => {
-								if error_on_incompatible_block {
-									break Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into());
-								} else {
-									tracing::warn!("StateChain block number {} is no longer compatible.", block.number);
+								match incompatibility_behaviour {
+									IncompatibilityBehaviour::ReturnError =>{
+										break Err(CreateStateChainClientError::CompatibilityError(block_compatibility).into());
+									}
+									IncompatibilityBehaviour::Continue(_) => {
+										tracing::warn!("StateChain block number {} is no longer compatible.", block.number);
+									}
 								}
 							}
 							CfeCompatibility::NotYetCompatible => {
@@ -451,7 +470,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		) = Self::create_block_stream(
 			scope,
 			base_rpc_client.clone(),
-			true,
+			IncompatibilityBehaviour::ReturnError,
 			|base_rpc_client| base_rpc_client.subscribe_finalized_block_headers(),
 			|sparse_finalized_block_stream| {
 				let base_rpc_client = base_rpc_client.clone();
@@ -560,7 +579,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			// unfinalised stream will hit the boundary first but we want to process as far as
 			// possible on the *finalised* stream, and pass out the block number contained in the
 			// error (where applicable) from the finalised stream back up to main.
-			false,
+			IncompatibilityBehaviour::Continue(*finalized_state_chain_stream.cache()),
 			|base_rpc_client| base_rpc_client.subscribe_unfinalized_block_headers(),
 			|block_stream| futures::future::ready(Ok(block_stream)),
 		)
