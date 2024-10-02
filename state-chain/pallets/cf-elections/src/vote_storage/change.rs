@@ -9,17 +9,17 @@ use super::{AuthorityVote, VoteComponents, VoteStorage};
 use crate::{CorruptStorageError, SharedDataHash};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
-pub struct NonceVote<Value, Slot> {
+pub struct MonotonicChangeVote<Value, BlockHeight> {
 	pub value: Value,
-	pub slot: Slot,
+	pub block: BlockHeight,
 }
-pub struct NonceStorage<T: Parameter + Member, S: Parameter + Member> {
+pub struct MonotonicChange<T: Parameter + Member, S: Parameter + Member> {
 	_phantom: core::marker::PhantomData<(T, S)>,
 }
-impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for NonceStorage<T, S> {
+impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for MonotonicChange<T, S> {
 	type Properties = ();
-	type Vote = NonceVote<T, S>;
-	type PartialVote = NonceVote<T, S>;
+	type Vote = MonotonicChangeVote<T, S>;
+	type PartialVote = MonotonicChangeVote<T, S>;
 	type IndividualComponent = S;
 	type BitmapComponent = T;
 	type SharedData = ();
@@ -36,7 +36,7 @@ impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for NonceStorage<
 	) -> Result<VoteComponents<Self>, CorruptStorageError> {
 		Ok(VoteComponents {
 			bitmap_component: Some(partial_vote.value),
-			individual_component: Some((_properties, partial_vote.slot)),
+			individual_component: Some(((), partial_vote.block)),
 		})
 	}
 	fn components_into_authority_vote<
@@ -54,9 +54,9 @@ impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for NonceStorage<
 				individual_component: Some((_properties, individual_component)),
 			} => Some((
 				(),
-				AuthorityVote::Vote(NonceVote {
+				AuthorityVote::Vote(MonotonicChangeVote {
 					value: bitmap_component,
-					slot: individual_component,
+					block: individual_component,
 				}),
 			)),
 			_ => None,
@@ -79,4 +79,7 @@ impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for NonceStorage<
 	) {
 	}
 }
-impl<T: Parameter + Member, S: Parameter + Member> super::private::Sealed for NonceStorage<T, S> {}
+impl<T: Parameter + Member, S: Parameter + Member> super::private::Sealed
+	for MonotonicChange<T, S>
+{
+}

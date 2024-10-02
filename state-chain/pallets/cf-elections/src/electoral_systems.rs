@@ -4,8 +4,8 @@ pub mod egress_success;
 pub mod liveness;
 #[cfg(test)]
 pub mod mock;
+pub mod monotonic_change;
 pub mod monotonic_median;
-pub mod nonce_wintessing;
 pub mod unsafe_median;
 
 #[cfg(test)]
