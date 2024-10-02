@@ -25,6 +25,7 @@ use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_
 use cf_traits::{
 	mocks::{
 		self,
+		account_role_registry::MockAccountRoleRegistry,
 		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
@@ -36,8 +37,9 @@ use cf_traits::{
 		funding_info::MockFundingInfo,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
-	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
+	AccountRoleRegistry, BalanceApi, DepositApi, EgressApi, EpochInfo,
+	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode, ScheduledEgressDetails,
+	SwapLimitsProvider, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -2028,7 +2030,6 @@ fn detect_tainted_transaction_for_liquidity_provision() {
 				&generate_deposit_channel_details_for_swap_type(
 					ChannelAction::LiquidityProvision { lp_account: BROKER }
 				),
-				Asset::Eth
 			),
 			Err(TaintedTransactionDetails { broker: BROKER, refund_address: None })
 		);
@@ -2057,7 +2058,6 @@ fn detect_tainted_transaction_for_ccm_transfer() {
 					}),
 					dca_params: None,
 				}),
-				Asset::Eth
 			),
 			Err(TaintedTransactionDetails {
 				broker: BROKER,
@@ -2084,7 +2084,6 @@ fn detect_tainted_transaction_for_swap() {
 					}),
 					dca_params: None,
 				}),
-				Asset::Eth
 			),
 			Err(TaintedTransactionDetails {
 				broker: BROKER,
@@ -2111,9 +2110,36 @@ fn ignore_tainted_transaction_if_marked_by_other_broker() {
 					}),
 					dca_params: None,
 				}),
-				Asset::Eth
 			),
 			Ok(())
+		);
+	});
+}
+
+#[test]
+fn process_tainted_transaction_and_expect_refund() {
+	new_test_ext().execute_with(|| {
+		let (_, address) = request_address_and_deposit(BROKER, eth::Asset::Eth);
+		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+			RuntimeOrigin::signed(BROKER),
+			Default::default(),
+		));
+
+		assert_noop!(
+			IngressEgress::process_single_deposit(
+				address,
+				eth::Asset::Eth,
+				DEFAULT_DEPOSIT_AMOUNT,
+				Default::default(),
+				Default::default()
+			),
+			crate::Error::<Test, _>::TransactionTainted
 		);
 	});
 }

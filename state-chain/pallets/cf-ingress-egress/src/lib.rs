@@ -32,9 +32,10 @@ use cf_chains::{
 	SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
-	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS,
+	AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId,
+	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
+	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -1250,9 +1251,16 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		) -> DispatchResult {
-			let requester = T::AccountRoleRegistry::ensure_broker(origin)?;
+			let account_id = ensure_signed(origin)?;
+			let is_broker =
+				T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Broker);
+			let is_lp = T::AccountRoleRegistry::has_account_role(
+				&account_id,
+				AccountRole::LiquidityProvider,
+			);
+			ensure!(is_broker || is_lp, Error::<T, I>::Unauthorized);
 			let tainted_transaction =
-				TaintedTransactionDetails { broker: requester, refund_address: None };
+				TaintedTransactionDetails { broker: account_id, refund_address: None };
 			TaintedTransactions::<T, I>::insert(tx_id, tainted_transaction);
 			Ok(())
 		}
@@ -1812,45 +1820,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn check_if_tx_is_tainted(
 		maybe_tainted_transaction: Option<TaintedTransactionDetails<T::AccountId>>,
 		deposit_channel_details: &DepositChannelDetails<T, I>,
-		asset: Asset,
 	) -> Result<(), TaintedTransactionDetails<T::AccountId>> {
 		if let Some(tainted_transaction) = maybe_tainted_transaction {
-			match &deposit_channel_details.action {
-				ChannelAction::Swap { refund_params, .. } => {
-					if tainted_transaction.broker == deposit_channel_details.owner {
-						let maybe_refund_address = refund_params
-							.as_ref()
-							.map(|refund_params| refund_params.refund_address.clone());
-						Err(TaintedTransactionDetails {
-							broker: tainted_transaction.broker,
-							refund_address: maybe_refund_address,
-						})
-					} else {
-						Ok(())
-					}
-				},
-				ChannelAction::CcmTransfer { refund_params, .. } => {
-					let maybe_refund_address = refund_params
+			if tainted_transaction.broker == deposit_channel_details.owner {
+				let maybe_refund_address = match &deposit_channel_details.action {
+					ChannelAction::Swap { refund_params, .. } => refund_params
 						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone());
-					Err(TaintedTransactionDetails {
-						broker: tainted_transaction.broker,
-						refund_address: maybe_refund_address,
-					})
-				},
-				ChannelAction::LiquidityProvision { .. } => {
-					let lp = tainted_transaction.clone().broker;
-					if lp == deposit_channel_details.owner {
-						Err(TaintedTransactionDetails {
-							broker: lp.clone(),
-							refund_address: T::LpRefundAddress::get_liquidity_refund_address(
-								&lp, asset,
-							),
-						})
-					} else {
-						Ok(())
-					}
-				},
+						.map(|refund_params| refund_params.refund_address.clone()),
+					ChannelAction::CcmTransfer { refund_params, .. } => refund_params
+						.as_ref()
+						.map(|refund_params| refund_params.refund_address.clone()),
+					ChannelAction::LiquidityProvision { .. } =>
+						T::LpRefundAddress::get_liquidity_refund_address(
+							&deposit_channel_details.owner,
+							deposit_channel_details.deposit_channel.asset.into(),
+						),
+				};
+				Err(TaintedTransactionDetails {
+					broker: tainted_transaction.broker,
+					refund_address: maybe_refund_address,
+				})
+			} else {
+				Ok(())
 			}
 		} else {
 			Ok(())
@@ -1869,12 +1860,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
+		ensure!(
+			deposit_channel_details.deposit_channel.asset == asset,
+			Error::<T, I>::AssetMismatch
+		);
+
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
 
 		if let Err(tainted_transaction_details) = Self::check_if_tx_is_tainted(
 			TaintedTransactions::<T, I>::take(&deposit_details),
 			&deposit_channel_details,
-			asset.into(),
 		) {
 			TaintedTransactions::<T, I>::insert(deposit_details, tainted_transaction_details);
 			return Err(Error::<T, I>::TransactionTainted.into())
@@ -1888,11 +1883,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			#[cfg(not(debug_assertions))]
 			return Err(Error::<T, I>::InvalidDepositAddress.into())
 		}
-
-		ensure!(
-			deposit_channel_details.deposit_channel.asset == asset,
-			Error::<T, I>::AssetMismatch
-		);
 
 		// TODO: only apply this check if the deposit hasn't been boosted
 		// already (in case MinimumDeposit increases after some small deposit
