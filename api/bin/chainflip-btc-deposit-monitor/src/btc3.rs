@@ -67,7 +67,7 @@ async fn poll_mempool(client: &BtcRpcClient) -> Vec<Transaction> {
     let tx_ids = client.get_raw_mempool().await.unwrap();
     println!("Got: {}", tx_ids.len());
     let mut result = Vec::new();
-    for tx_id in tx_ids.chunks_exact(5) {
+    for tx_id in tx_ids.chunks_exact(1000) {
         match client.get_raw_transactions(tx_id.to_vec()).await {
             Ok(mut e) => {
                 result.append(&mut e);
@@ -116,15 +116,20 @@ pub async fn start_monitor(endpoint: HttpBasicAuthEndpoint, ) {
             println!("Calling Elliptic...");
             let txs = moved_monitored_txs.lock().unwrap().clone();
             for (tx, addresses, in_hashes) in &*txs {
-                println!("Calling elliptic for a transaction {tx:?} with relevant target address: {addresses:?}");
+                // println!("Calling elliptic for a transaction {tx:?} with relevant target address: {addresses:?}");
+                println!("Calling elliptic for a transaction {tx:?} for each hash in in_hashes: {in_hashes:?}");
 
-                let score = monitor.elliptic_client.welltyped_single_analysis(*tx, addresses[0].clone(), "test_customer_1".into()).await;
+                for hash in in_hashes {
+                    println!("hash: {hash}");
+                    let score = monitor.elliptic_client.welltyped_single_analysis(*hash, addresses[0].clone(), "test_customer_1".into()).await;
+
+                    match score {
+                        Ok(x) => println!("elliptic score: {}", x.risk_score),
+                        Err(error) => println!("error: {error}"),
+                    }
+                }
                 // let score = monitor.elliptic_client.welltyped_single_wallet(addresses[0].clone(), "test_customer_1".into()).await;
 
-                match score {
-                    Ok(x) => println!("elliptic score: {}", x.risk_score),
-                    Err(error) => println!("error: {error}"),
-                }
             }
         }
 

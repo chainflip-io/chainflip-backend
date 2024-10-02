@@ -1,15 +1,20 @@
+#![feature(async_fn_traits)]
 
 // mod btc2;
 mod btc3;
+mod btc4;
 mod elliptic;
 mod monitor_provider;
+mod targets;
 
 use std::{env, sync::{Arc, Mutex}};
 // use btc2::monitor_mempool;
 use btc3::start_monitor;
+use btc4::call_monitor;
 use cf_chains::assets::btc;
 use chainflip_api::settings::HttpBasicAuthEndpoint;
 use elliptic::EllipticClient;
+use monitor_provider::monitor2;
 
 
 #[tokio::main]
@@ -33,5 +38,6 @@ async fn main() {
         basic_auth_user: basic_auth_user.into(),
         basic_auth_password: basic_auth_password.into(),
     };
-	start_monitor(endpoint).await;
+	// start_monitor(endpoint).await;
+    call_monitor(endpoint).await;
 }

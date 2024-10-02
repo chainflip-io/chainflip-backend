@@ -30,6 +30,8 @@ futures-util = "0.3.14"
 # bitcoincore-zmq = { version = "1.5.2", features = ["async"]}
 bitcoin = "0.30.2"
 chrono = "*"
+merge-streams = "0.1.2"
+async-stream = "0.3.3"
 
 # Local Deps
 chainflip-engine = { path = "../../../engine/" }

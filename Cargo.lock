@@ -777,6 +777,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-stream"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd56dd203fef61ac097dd65721a419ddccb106b2d2b70ba60a6b529f03961a51"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+ "pin-project-lite 0.2.13",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16e62a023e7c117e27523144c5d2459f4397fcc3cab0085af8e2224f643a0193"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.61",
+]
+
+[[package]]
 name = "async-task"
 version = "4.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1801,6 +1823,7 @@ name = "chainflip-btc-deposit-monitor"
 version = "1.7.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "base64 0.22.1",
  "bigdecimal",
  "bitcoin",
@@ -1815,6 +1838,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hmac 0.12.1",
+ "merge-streams",
  "reqwest",
  "serde",
  "serde_json",
@@ -6746,6 +6770,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "808b50db46293432a45e63bc15ea51e0ab4c0a1647b8eb114e31a3e698dd6fbe"
 dependencies = [
  "hash-db 0.16.0",
+]
+
+[[package]]
+name = "merge-streams"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f84f6452969abd246e7ac1fe4fe75906c76e8ec88d898df9aef37e0f3b6a7c2"
+dependencies = [
+ "futures-core",
+ "pin-project",
 ]
 
 [[package]]

@@ -19,6 +19,7 @@ type HmacSha256 = Hmac<Sha256>;
 
 const BASE_URL: &str = "https://aml-api.elliptic.co";
 
+#[derive(Clone)]
 pub struct EllipticClient {
 	client: Client,
 }
