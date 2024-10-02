@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.8] - 2024-10-02
+
+### Features
+
+- Remove swap and retry batch on price limit breach ([#5285](https://github.com/chainflip-io/chainflip-backend/issues/5285))
+
 ## [1.6.7] - 2024-09-25
 
 ### Fixes
