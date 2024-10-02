@@ -437,4 +437,11 @@ impl<T: Config> LpRegistration for Pallet<T> {
 		);
 		Ok(())
 	}
+
+	fn get_liquidity_refund_address(
+		account_id: &Self::AccountId,
+		asset: Asset,
+	) -> Option<ForeignChainAddress> {
+		LiquidityRefundAddress::<T>::get(account_id, ForeignChain::from(asset))
+	}
 }

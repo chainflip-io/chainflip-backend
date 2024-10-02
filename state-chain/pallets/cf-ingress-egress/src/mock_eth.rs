@@ -20,7 +20,7 @@ use cf_traits::{
 		api_call::{MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
-		balance_api::MockBalance,
+		balance_api::{MockBalance, MockLpRegistration},
 		broadcaster::MockBroadcaster,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
@@ -136,6 +136,7 @@ impl crate::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type LpRefundAddress = MockLpRegistration;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

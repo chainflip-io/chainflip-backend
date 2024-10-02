@@ -6,7 +6,6 @@ use frame_support::sp_runtime::{
 	DispatchError, DispatchResult,
 };
 
-#[cfg(feature = "runtime-benchmarks")]
 use cf_chains::ForeignChainAddress;
 
 use super::{MockPallet, MockPalletStorage};
@@ -96,5 +95,12 @@ impl LpRegistration for MockLpRegistration {
 		_quote_asset: Asset,
 	) -> DispatchResult {
 		Ok(())
+	}
+
+	fn get_liquidity_refund_address(
+		_who: &Self::AccountId,
+		_asset: Asset,
+	) -> Option<ForeignChainAddress> {
+		None
 	}
 }

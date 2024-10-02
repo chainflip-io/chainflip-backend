@@ -41,7 +41,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
 	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
 	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
-	IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit, PoolApi,
+	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit, PoolApi,
 	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
@@ -430,6 +430,9 @@ pub mod pallet {
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
+
+		/// For accessing the LP refund address.
+		type LpRefundAddress: LpRegistration;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
