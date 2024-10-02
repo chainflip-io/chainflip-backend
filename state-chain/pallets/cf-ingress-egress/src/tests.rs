@@ -2,11 +2,12 @@ mod boost;
 
 use crate::{
 	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
-	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
-	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
-	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelDetails,
+	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
+	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
+	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
+	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, TaintedTransactionDetails,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -17,7 +18,8 @@ use cf_chains::{
 	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	chains::assets::eth, AssetAmount, ChannelId, DcaParameters, ForeignChain, SWAP_DELAY_BLOCKS,
+	chains::assets::eth, AssetAmount, Beneficiaries, ChannelId, DcaParameters, ForeignChain,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -42,7 +44,7 @@ use frame_support::{
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::H160;
+use sp_core::{H160, U256};
 use sp_runtime::DispatchError;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
@@ -2006,6 +2008,108 @@ fn failed_ccm_deposit_can_deposit_event() {
 				reason: CcmFailReason::InsufficientDepositAmount,
 				..
 			})
+		);
+	});
+}
+
+fn generate_deposit_channel_details_for_swap_type(
+	swap_type: ChannelAction<u64>,
+) -> DepositChannelDetails<Test, ()> {
+	let channel = IngressEgress::open_channel(&BROKER, eth::Asset::Eth, swap_type, 0).unwrap();
+	DepositChannelLookup::<Test, ()>::get(channel.1).unwrap()
+}
+
+#[test]
+fn detect_tainted_transaction_for_liquidity_provision() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(
+			IngressEgress::check_if_tx_is_tainted(
+				Some(TaintedTransactionDetails { broker: BROKER, refund_address: None }),
+				&generate_deposit_channel_details_for_swap_type(
+					ChannelAction::LiquidityProvision { lp_account: BROKER }
+				)
+			),
+			Err(TaintedTransactionDetails { broker: BROKER, refund_address: None })
+		);
+	});
+}
+
+#[test]
+fn detect_tainted_transaction_for_ccm_transfer() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(
+			IngressEgress::check_if_tx_is_tainted(
+				Some(TaintedTransactionDetails { broker: BROKER, refund_address: None }),
+				&generate_deposit_channel_details_for_swap_type(ChannelAction::CcmTransfer {
+					destination_asset: Asset::Eth,
+					destination_address: ForeignChainAddress::Eth([1; 20].into()),
+					broker_fees: Beneficiaries::new(),
+					channel_metadata: CcmChannelMetadata {
+						message: vec![0x01].try_into().unwrap(),
+						gas_budget: 1_000,
+						cf_parameters: Default::default(),
+					},
+					refund_params: Some(ChannelRefundParameters {
+						refund_address: ForeignChainAddress::Eth([2; 20].into()),
+						retry_duration: 10,
+						min_price: U256::from(0),
+					}),
+					dca_params: None,
+				})
+			),
+			Err(TaintedTransactionDetails {
+				broker: BROKER,
+				refund_address: Some(ForeignChainAddress::Eth([2; 20].into()))
+			})
+		);
+	});
+}
+
+#[test]
+fn detect_tainted_transaction_for_swap() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(
+			IngressEgress::check_if_tx_is_tainted(
+				Some(TaintedTransactionDetails { broker: BROKER, refund_address: None }),
+				&generate_deposit_channel_details_for_swap_type(ChannelAction::Swap {
+					destination_asset: Asset::Eth,
+					destination_address: ForeignChainAddress::Eth([1; 20].into()),
+					broker_fees: Beneficiaries::new(),
+					refund_params: Some(ChannelRefundParameters {
+						refund_address: ForeignChainAddress::Eth([2; 20].into()),
+						retry_duration: 10,
+						min_price: U256::from(0),
+					}),
+					dca_params: None,
+				})
+			),
+			Err(TaintedTransactionDetails {
+				broker: BROKER,
+				refund_address: Some(ForeignChainAddress::Eth([2; 20].into()))
+			})
+		);
+	});
+}
+
+#[test]
+fn ignore_tainted_transaction_if_marked_by_other_broker() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(
+			IngressEgress::check_if_tx_is_tainted(
+				Some(TaintedTransactionDetails { broker: ALICE, refund_address: None }),
+				&generate_deposit_channel_details_for_swap_type(ChannelAction::Swap {
+					destination_asset: Asset::Eth,
+					destination_address: ForeignChainAddress::Eth([1; 20].into()),
+					broker_fees: Beneficiaries::new(),
+					refund_params: Some(ChannelRefundParameters {
+						refund_address: ForeignChainAddress::Eth([2; 20].into()),
+						retry_duration: 10,
+						min_price: U256::from(0),
+					}),
+					dca_params: None,
+				})
+			),
+			Ok(())
 		);
 	});
 }
