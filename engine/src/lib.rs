@@ -4,6 +4,9 @@
 #![feature(extract_if)]
 #![feature(map_try_insert)]
 #![feature(step_trait)]
+// lazy_cell has been stabilized in a newer version of rust
+// (feature directive can be removed once we upgrade)
+#![feature(lazy_cell)]
 
 pub mod common;
 pub mod constants;
