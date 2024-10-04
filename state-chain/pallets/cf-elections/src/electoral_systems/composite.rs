@@ -61,9 +61,10 @@ macro_rules! generate_electoral_system_tuple_impls {
                     ElectoralWriteAccess,
                     ConsensusVotes,
                     ElectionIdentifierOf,
+                    ConsensusStatus,
                 },
                 electoral_system_runner::{ElectoralSystemRunner, AuthorityVoteOf, RunnerStorageAccessTrait,
-                    VotePropertiesOf, CompositeConsensusVotes, ConsensusStatus, CompositeElectionIdentifierOf, CompositeConsensusVote},
+                    VotePropertiesOf, CompositeConsensusVotes, CompositeConsensusStatus, CompositeElectionIdentifierOf, CompositeConsensusVote},
                 vote_storage::{
                     AuthorityVote,
                     VoteStorage
@@ -118,6 +119,7 @@ macro_rules! generate_electoral_system_tuple_impls {
 
             #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
             pub enum CompositeElectoralUnsynchronisedStateMapKey<$($electoral_system,)*> {
+                // struct A is used here  in the wrapped version
                 $($electoral_system($electoral_system),)*
             }
             #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
@@ -169,13 +171,13 @@ macro_rules! generate_electoral_system_tuple_impls {
 
                 pub fn with_access_translators<R, F: for<'a> FnOnce(
                     ($(
-                        ElectoralAccessTranslator<tags::$electoral_system, Self>,
+                        ElectoralAccessTranslator<tags::$electoral_system, $electoral_system, Self>,
                     )*)
                 ) -> R>(
                     f: F,
                 ) -> R {
                     f((
-                        $(ElectoralAccessTranslator::<tags::$electoral_system, Self>::new(),)*
+                        $(ElectoralAccessTranslator::<tags::$electoral_system, $electoral_system, Self>::new(),)*
                     ))
                 }
             }
@@ -202,62 +204,64 @@ macro_rules! generate_electoral_system_tuple_impls {
                         AuthorityVoteOf<Self>,
                     )>,
                 ) -> Result<bool, CorruptStorageError> {
-                    match *election_identifier.extra() {
-                        $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
-                            <$electoral_system as ElectoralSystem>::is_vote_desired(
-                                election_identifier.with_extra(extra),
-                                &CompositeElectionAccess::<tags::$electoral_system, _, StorageAccess>::new(storage_access),
-                                current_vote.map(|(properties, vote)| {
-                                    Ok((
-                                        match properties {
-                                            CompositeVoteProperties::$electoral_system(properties) => properties,
-                                            _ => return Err(CorruptStorageError::new()),
-                                        },
-                                        match vote {
-                                            AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
-                                            AuthorityVote::Vote(CompositeVote::$electoral_system(vote)) => AuthorityVote::Vote(vote),
-                                            _ => return Err(CorruptStorageError::new()),
-                                        },
-                                    ))
-                                }).transpose()?,
-                            )
-                        },)*
-                    }
+                    todo!()
+                    // match *election_identifier.extra() {
+                    //     $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
+                    //         <$electoral_system as ElectoralSystem>::is_vote_desired(
+                    //             election_identifier.with_extra(extra),
+                    //             &CompositeElectionAccess::<tags::$electoral_system, _, StorageAccess>::new(storage_access),
+                    //             current_vote.map(|(properties, vote)| {
+                    //                 Ok((
+                    //                     match properties {
+                    //                         CompositeVoteProperties::$electoral_system(properties) => properties,
+                    //                         _ => return Err(CorruptStorageError::new()),
+                    //                     },
+                    //                     match vote {
+                    //                         AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
+                    //                         AuthorityVote::Vote(CompositeVote::$electoral_system(vote)) => AuthorityVote::Vote(vote),
+                    //                         _ => return Err(CorruptStorageError::new()),
+                    //                     },
+                    //                 ))
+                    //             }).transpose()?,
+                    //         )
+                    //     },)*
+                    // }
                 }
 
                 fn is_vote_needed(
                     (current_vote_properties, current_partial_vote, current_authority_vote): (VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::PartialVote, AuthorityVoteOf<Self>),
                     (proposed_partial_vote, proposed_vote): (<Self::Vote as VoteStorage>::PartialVote, <Self::Vote as VoteStorage>::Vote),
                 ) -> bool {
-                    match (current_vote_properties, current_partial_vote, current_authority_vote, proposed_partial_vote, proposed_vote) {
-                        $(
-                            (
-                                CompositeVoteProperties::$electoral_system(current_vote_properties),
-                                CompositePartialVote::$electoral_system(current_partial_vote),
-                                AuthorityVote::Vote(CompositeVote::$electoral_system(current_authority_vote)),
-                                CompositePartialVote::$electoral_system(proposed_partial_vote),
-                                CompositeVote::$electoral_system(proposed_vote),
-                            ) => {
-                                <$electoral_system as ElectoralSystem>::is_vote_needed(
-                                    (current_vote_properties, current_partial_vote, AuthorityVote::Vote(current_authority_vote)),
-                                    (proposed_partial_vote, proposed_vote),
-                                )
-                            },
-                            (
-                                CompositeVoteProperties::$electoral_system(current_vote_properties),
-                                CompositePartialVote::$electoral_system(current_partial_vote),
-                                AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(current_authority_partial_vote)),
-                                CompositePartialVote::$electoral_system(proposed_partial_vote),
-                                CompositeVote::$electoral_system(proposed_vote),
-                            ) => {
-                                <$electoral_system as ElectoralSystem>::is_vote_needed(
-                                    (current_vote_properties, current_partial_vote, AuthorityVote::PartialVote(current_authority_partial_vote)),
-                                    (proposed_partial_vote, proposed_vote),
-                                )
-                            },
-                        )*
-                        _ => true,
-                    }
+                    todo!()
+                    // match (current_vote_properties, current_partial_vote, current_authority_vote, proposed_partial_vote, proposed_vote) {
+                    //     $(
+                    //         (
+                    //             CompositeVoteProperties::$electoral_system(current_vote_properties),
+                    //             CompositePartialVote::$electoral_system(current_partial_vote),
+                    //             AuthorityVote::Vote(CompositeVote::$electoral_system(current_authority_vote)),
+                    //             CompositePartialVote::$electoral_system(proposed_partial_vote),
+                    //             CompositeVote::$electoral_system(proposed_vote),
+                    //         ) => {
+                    //             <$electoral_system as ElectoralSystem>::is_vote_needed(
+                    //                 (current_vote_properties, current_partial_vote, AuthorityVote::Vote(current_authority_vote)),
+                    //                 (proposed_partial_vote, proposed_vote),
+                    //             )
+                    //         },
+                    //         (
+                    //             CompositeVoteProperties::$electoral_system(current_vote_properties),
+                    //             CompositePartialVote::$electoral_system(current_partial_vote),
+                    //             AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(current_authority_partial_vote)),
+                    //             CompositePartialVote::$electoral_system(proposed_partial_vote),
+                    //             CompositeVote::$electoral_system(proposed_vote),
+                    //         ) => {
+                    //             <$electoral_system as ElectoralSystem>::is_vote_needed(
+                    //                 (current_vote_properties, current_partial_vote, AuthorityVote::PartialVote(current_authority_partial_vote)),
+                    //                 (proposed_partial_vote, proposed_vote),
+                    //             )
+                    //         },
+                    //     )*
+                    //     _ => true,
+                    // }
                 }
 
 
@@ -266,14 +270,15 @@ macro_rules! generate_electoral_system_tuple_impls {
                     election_access: &ElectionAccess,
                     partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
                 ) -> Result<bool, CorruptStorageError> {
-                    Ok(match (*election_identifier.extra(), partial_vote) {
-                        $((CompositeElectionIdentifierExtra::$electoral_system(extra), CompositePartialVote::$electoral_system(partial_vote)) => <$electoral_system as ElectoralSystem>::is_vote_valid(
-                            election_identifier.with_extra(extra),
-                            &CompositeElectionAccess::<tags::$electoral_system, _, ElectionAccess>::new(election_access),
-                            partial_vote,
-                        )?,)*
-                        _ => false,
-                    })
+                    todo!()
+                    // Ok(match (*election_identifier.extra(), partial_vote) {
+                    //     $((CompositeElectionIdentifierExtra::$electoral_system(extra), CompositePartialVote::$electoral_system(partial_vote)) => <$electoral_system as ElectoralSystem>::is_vote_valid(
+                    //         election_identifier.with_extra(extra),
+                    //         &CompositeElectionAccess::<tags::$electoral_system, _, ElectionAccess>::new(election_access),
+                    //         partial_vote,
+                    //     )?,)*
+                    //     _ => false,
+                    // })
                 }
 
                 fn generate_vote_properties(
@@ -332,57 +337,58 @@ macro_rules! generate_electoral_system_tuple_impls {
                     previous_consensus: Option<&Self::Consensus>,
                     consensus_votes: CompositeConsensusVotes<Self>,
                 ) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-                    Ok(match *election_identifier.extra() {
-                        $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
-                            <$electoral_system as ElectoralSystem>::check_consensus(
-                                election_identifier.with_extra(extra),
-                                &CompositeElectionAccess::<tags::$electoral_system, _, ElectionAccess>::new(election_access),
-                                previous_consensus.map(|previous_consensus| {
-                                    match previous_consensus {
-                                        CompositeConsensus::$electoral_system(previous_consensus) => Ok(previous_consensus),
-                                        _ => Err(CorruptStorageError::new()),
-                                    }
-                                }).transpose()?,
-                                ConsensusVotes {
-                                    votes: consensus_votes.votes.into_iter().map(|CompositeConsensusVote { vote, validator_id }| {
-                                        if let Some((properties, vote)) = vote {
-                                            match (properties, vote) {
-                                                (
-                                                    CompositeVoteProperties::$electoral_system(properties),
-                                                    CompositeVote::$electoral_system(vote),
-                                                ) => Ok(ConsensusVote {
-                                                    vote: Some((properties, vote)),
-                                                    validator_id
-                                                }),
-                                                _ => Err(CorruptStorageError::new()),
-                                            }
-                                        } else {
-                                            Ok(ConsensusVote {
-                                                vote: None,
-                                                validator_id
-                                            })
-                                        }
+                    // Ok(match *election_identifier.extra() {
+                    //     $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
+                    //         <$electoral_system as ElectoralSystem>::check_consensus(
+                    //             election_identifier.with_extra(extra),
+                    //             &CompositeElectionAccess::<tags::$electoral_system, _, ElectionAccess>::new(election_access),
+                    //             previous_consensus.map(|previous_consensus| {
+                    //                 match previous_consensus {
+                    //                     CompositeConsensus::$electoral_system(previous_consensus) => Ok(previous_consensus),
+                    //                     _ => Err(CorruptStorageError::new()),
+                    //                 }
+                    //             }).transpose()?,
+                    //             ConsensusVotes {
+                    //                 votes: consensus_votes.votes.into_iter().map(|CompositeConsensusVote { vote, validator_id }| {
+                    //                     if let Some((properties, vote)) = vote {
+                    //                         match (properties, vote) {
+                    //                             (
+                    //                                 CompositeVoteProperties::$electoral_system(properties),
+                    //                                 CompositeVote::$electoral_system(vote),
+                    //                             ) => Ok(ConsensusVote {
+                    //                                 vote: Some((properties, vote)),
+                    //                                 validator_id
+                    //                             }),
+                    //                             _ => Err(CorruptStorageError::new()),
+                    //                         }
+                    //                     } else {
+                    //                         Ok(ConsensusVote {
+                    //                             vote: None,
+                    //                             validator_id
+                    //                         })
+                    //                     }
 
-                                    }).collect::<Result<Vec<_>, _>>()?
-                                }
-                            )?.map(CompositeConsensus::$electoral_system)
-                        },)*
-                    })
+                    //                 }).collect::<Result<Vec<_>, _>>()?
+                    //             }
+                    //         )?.map(CompositeConsensus::$electoral_system)
+                    //     },)*
+                    // })
+                    todo!()
                 }
             }
 
             // The election accessors, access the runner
-            pub struct CompositeElectionAccess<Tag, BorrowRunner, Runner> {
+            pub struct CompositeElectionAccess<Tag, ES, BorrowRunner, Runner> {
                 // TOOD: Look at simplifying this
                 runner: BorrowRunner,
-                _phantom: core::marker::PhantomData<(Tag, Runner)>,
+                _phantom: core::marker::PhantomData<(Tag, ES, Runner)>,
             }
 
             // We want something that has read access to the composite. This is the runner.
             // This doesn't have to take a Read access, it just has to take something that can be translated into a specific acccessor - we effectively want a ReadAccess where the electoral system is actually a runner instead. The runner *is* a composite.
             // TODO: Rename
             // The runner should contain them in some way, but not as an access as it was done before.
-            impl<Tag, BorrowRunner: Borrow<Runner>, Runner: RunnerStorageAccessTrait> CompositeElectionAccess<Tag, BorrowRunner, Runner> {
+            impl<Tag, ES: ElectoralSystem, BorrowRunner: Borrow<Runner>, Runner: RunnerStorageAccessTrait> CompositeElectionAccess<Tag, ES, BorrowRunner, Runner> {
                 fn new(runner: BorrowRunner) -> Self {
                     Self {
                         runner,
@@ -390,11 +396,11 @@ macro_rules! generate_electoral_system_tuple_impls {
                     }
                 }
             }
-            pub struct CompositeElectoralAccess<'a, Tag, Runner> {
+            pub struct CompositeElectoralAccess<'a, Tag, ES, Runner> {
                 runner: &'a mut Runner,
-                _phantom: core::marker::PhantomData<Tag>,
+                _phantom: core::marker::PhantomData<(Tag, ES)>,
             }
-            impl<'a, Tag, Runner> CompositeElectoralAccess<'a, Tag, Runner> {
+            impl<'a, Tag, ES, Runner> CompositeElectoralAccess<'a, Tag, ES, Runner> {
                 fn new(runner: &'a mut Runner) -> Self {
                     Self {
                         runner,
@@ -403,10 +409,10 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
             }
 
-            pub struct ElectoralAccessTranslator<Tag, Runner> {
-                _phantom: core::marker::PhantomData<(Tag, Runner)>,
+            pub struct ElectoralAccessTranslator<Tag, ES, Runner> {
+                _phantom: core::marker::PhantomData<(Tag, ES, Runner)>,
             }
-            impl<Tag, Runner> ElectoralAccessTranslator<Tag, Runner> {
+            impl<Tag, ES, Runner> ElectoralAccessTranslator<Tag, ES, Runner> {
                 fn new() -> Self {
                     Self {
                         _phantom: Default::default(),
@@ -423,7 +429,8 @@ macro_rules! generate_electoral_system_tuple_impls {
     (@ $($previous:ident,)*;: $($electoral_system:ident,)*) => {};
     (@ $($previous:ident,)*; $current:ident, $($remaining:ident,)*: $($electoral_system:ident,)*) => {
 
-        impl<BorrowRunner: Borrow<Runner>, Runner: RunnerStorageAccessTrait> ElectionReadAccess for CompositeElectionAccess<tags::$current, BorrowRunner, Runner> {
+        // This is where the undeclared is coming from? We use a generic that is not initialised.
+        impl<$current: ElectoralSystem, BorrowRunner: Borrow<Runner>, Runner: RunnerStorageAccessTrait> ElectionReadAccess for CompositeElectionAccess<tags::$current, $current, BorrowRunner, Runner> {
             type ElectoralSystem = $current;
 
             fn settings(&self) -> Result<$current::ElectoralSettings, CorruptStorageError> {
@@ -461,7 +468,7 @@ macro_rules! generate_electoral_system_tuple_impls {
 
         }
 
-        impl<Runner: RunnerStorageAccessTrait> ElectionWriteAccess for CompositeElectionAccess<tags::$current, Runner, Runner> {
+        impl<$current: ElectoralSystem, Runner: RunnerStorageAccessTrait> ElectionWriteAccess for CompositeElectionAccess<tags::$current, $current, Runner, Runner> {
             fn set_state(&mut self, state: $current::ElectionState) -> Result<(), CorruptStorageError> {
                 // self.runner.set_state(CompositeElectionState::$current(state))
                 todo!()
@@ -500,9 +507,9 @@ macro_rules! generate_electoral_system_tuple_impls {
         }
 
         // TODO: Rename to ElectoralReadAccessForSpecificES or something similar...
-        impl<'a, Runner: RunnerStorageAccessTrait> ElectoralReadAccess for CompositeElectoralAccess<'a, tags::$current, Runner> {
+        impl<'a, $current: ElectoralSystem, Runner: RunnerStorageAccessTrait> ElectoralReadAccess for CompositeElectoralAccess<'a, tags::$current, $current, Runner> {
             type ElectoralSystem = $current;
-            type ElectionReadAccess<'b> = CompositeElectionAccess<tags::$current, Runner, Runner>
+            type ElectionReadAccess<'b> = CompositeElectionAccess<tags::$current, $current, Runner, Runner>
             where
                 Self: 'b;
 
@@ -543,8 +550,9 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
         }
 
-        impl<'a, Runner: RunnerStorageAccessTrait> ElectoralWriteAccess for CompositeElectoralAccess<'a, tags::$current, Runner> {
-            type ElectionWriteAccess<'b> = CompositeElectionAccess<tags::$current, Runner, Runner>
+        // TODO: Check if we even need the tags after this?
+        impl<'a, $current: ElectoralSystem, Runner: RunnerStorageAccessTrait> ElectoralWriteAccess for CompositeElectoralAccess<'a, tags::$current, $current, Runner> {
+            type ElectionWriteAccess<'b> = CompositeElectionAccess<tags::$current, $current, Runner, Runner>
             where
                 Self: 'b;
 
@@ -608,9 +616,9 @@ macro_rules! generate_electoral_system_tuple_impls {
         }
 
 
-        impl<Runner: RunnerStorageAccessTrait> Translator<Runner> for ElectoralAccessTranslator<tags::$current, Runner> {
+        impl<$current: ElectoralSystem, Runner: RunnerStorageAccessTrait> Translator<Runner> for ElectoralAccessTranslator<tags::$current, $current, Runner> {
             type ElectoralSystem = $current;
-            type ElectionAccess<'a> = CompositeElectoralAccess<'a, tags::$current, Runner>
+            type ElectionAccess<'a> = CompositeElectoralAccess<'a, tags::$current, $current, Runner>
             where
                 Self: 'a, Runner: 'a;
 

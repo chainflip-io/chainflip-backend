@@ -146,8 +146,8 @@ pub mod pallet {
 	};
 	use bitmap_components::ElectionBitmapComponents;
 	pub use electoral_system_runner::{
-		AuthorityVoteOf, CompositeElectionIdentifierOf, ConsensusStatus, ElectoralSystemRunner,
-		IndividualComponentOf, VotePropertiesOf,
+		AuthorityVoteOf, CompositeConsensusStatus, CompositeElectionIdentifierOf,
+		ElectoralSystemRunner, IndividualComponentOf, VotePropertiesOf,
 	};
 
 	use frame_support::{
@@ -716,7 +716,9 @@ pub mod pallet {
 			fn check_consensus(
 				&mut self,
 			) -> Result<
-				ConsensusStatus<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus>,
+				CompositeConsensusStatus<
+					<T::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus,
+				>,
 				CorruptStorageError,
 			> {
 				todo!("check consensus");

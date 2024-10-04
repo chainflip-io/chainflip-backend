@@ -210,7 +210,7 @@ mod access {
 	/// Represents the current consensus, and how it has changed since it was last checked (i.e.
 	/// 'check_consensus' was called).
 	#[cfg_attr(test, derive(Clone, Debug, PartialEq, Eq))]
-	pub enum ConsensusStatus<Consensus> {
+	pub enum CompositeConsensusStatus<Consensus> {
 		/// You did not have consensus when previously checked, but now consensus has been gained.
 		Gained {
 			/// If you previously had consensus, this will be `Some(...)` and will contain the most
@@ -227,34 +227,35 @@ mod access {
 		/// You did not have consensus when previously checked, and still do not.
 		None,
 	}
-	impl<Consensus> ConsensusStatus<Consensus> {
+	impl<Consensus> CompositeConsensusStatus<Consensus> {
 		/// Apply a closure to each `Consensus` value.
 		pub fn try_map<T, E, F: Fn(Consensus) -> Result<T, E>>(
 			self,
 			f: F,
-		) -> Result<ConsensusStatus<T>, E> {
+		) -> Result<CompositeConsensusStatus<T>, E> {
 			Ok(match self {
-				ConsensusStatus::Gained { most_recent, new } => ConsensusStatus::Gained {
-					most_recent: most_recent.map(&f).transpose()?,
-					new: f(new)?,
-				},
-				ConsensusStatus::Lost { previous } =>
-					ConsensusStatus::Lost { previous: f(previous)? },
-				ConsensusStatus::Changed { previous, new } =>
-					ConsensusStatus::Changed { previous: f(previous)?, new: f(new)? },
-				ConsensusStatus::Unchanged { current } =>
-					ConsensusStatus::Unchanged { current: f(current)? },
-				ConsensusStatus::None => ConsensusStatus::None,
+				CompositeConsensusStatus::Gained { most_recent, new } =>
+					CompositeConsensusStatus::Gained {
+						most_recent: most_recent.map(&f).transpose()?,
+						new: f(new)?,
+					},
+				CompositeConsensusStatus::Lost { previous } =>
+					CompositeConsensusStatus::Lost { previous: f(previous)? },
+				CompositeConsensusStatus::Changed { previous, new } =>
+					CompositeConsensusStatus::Changed { previous: f(previous)?, new: f(new)? },
+				CompositeConsensusStatus::Unchanged { current } =>
+					CompositeConsensusStatus::Unchanged { current: f(current)? },
+				CompositeConsensusStatus::None => CompositeConsensusStatus::None,
 			})
 		}
 
 		/// Returns the current consensus. Returns `None` if we currently do not have consensus.
 		pub fn has_consensus(self) -> Option<Consensus> {
 			match self {
-				ConsensusStatus::Unchanged { current: consensus } |
-				ConsensusStatus::Changed { new: consensus, .. } |
-				ConsensusStatus::Gained { new: consensus, .. } => Some(consensus),
-				ConsensusStatus::None | ConsensusStatus::Lost { .. } => None,
+				CompositeConsensusStatus::Unchanged { current: consensus } |
+				CompositeConsensusStatus::Changed { new: consensus, .. } |
+				CompositeConsensusStatus::Gained { new: consensus, .. } => Some(consensus),
+				CompositeConsensusStatus::None | CompositeConsensusStatus::Lost { .. } => None,
 			}
 		}
 	}
@@ -321,7 +322,9 @@ mod access {
 		fn check_consensus(
 			&mut self,
 		) -> Result<
-			ConsensusStatus<<Self::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus>,
+			CompositeConsensusStatus<
+				<Self::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus,
+			>,
 			CorruptStorageError,
 		>;
 
@@ -390,4 +393,4 @@ mod access {
 	}
 }
 
-pub use access::{ConsensusStatus, RunnerStorageAccessTrait};
+pub use access::{CompositeConsensusStatus, RunnerStorageAccessTrait};
