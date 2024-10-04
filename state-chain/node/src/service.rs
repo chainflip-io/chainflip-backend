@@ -86,23 +86,30 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
-	let slot_duration = sc_consensus_aura::slot_duration(&*client)?;
+	let cidp_client = client.clone();
 
 	let import_queue =
 		sc_consensus_aura::import_queue::<AuraPair, _, _, _, _, _>(ImportQueueParams {
 			block_import: grandpa_block_import.clone(),
 			justification_import: Some(Box::new(grandpa_block_import.clone())),
 			client: client.clone(),
-			create_inherent_data_providers: move |_, ()| async move {
-				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+			create_inherent_data_providers: move |parent_hash, _| {
+				let cidp_client = cidp_client.clone();
+				async move {
+					let slot_duration = sc_consensus_aura::standalone::slot_duration_at(
+						&*cidp_client,
+						parent_hash,
+					)?;
+					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-				let slot =
-					sp_consensus_aura::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
-						slot_duration,
-					);
+					let slot =
+						sp_consensus_aura::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
+							*timestamp,
+							slot_duration,
+						);
 
-				Ok((slot, timestamp))
+					Ok((slot, timestamp))
+				}
 			},
 			spawner: &task_manager.spawn_essential_handle(),
 			registry: config.prometheus_registry(),
@@ -124,8 +131,8 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 }
 
 /// Builds a new service for a full client.
-pub fn new_full_base<
-	Network: sc_network::NetworkBackend<Block, <Block as sp_runtime::traits::Block>::Hash>,
+pub fn new_full<
+	N: sc_network::NetworkBackend<Block, <Block as sp_runtime::traits::Block>::Hash>,
 >(
 	config: Configuration,
 ) -> Result<TaskManager, ServiceError> {
@@ -142,47 +149,24 @@ pub fn new_full_base<
 		other: (block_import, grandpa_link, mut telemetry),
 	} = new_partial(&config)?;
 
-	let metrics = Network::register_notification_metrics(
-		config.prometheus_config.as_ref().map(|cfg| &cfg.registry),
-	);
-
-	let (shared_voter_state, shared_authority_set, justification_stream, finality_provider) = {
-		let (_grandpa_block_import, grandpa_link) = sc_consensus_grandpa::block_import(
-			client.clone(),
-			GRANDPA_JUSTIFICATION_PERIOD,
-			&(client.clone() as Arc<_>),
-			select_chain.clone(),
-			telemetry.as_ref().map(|x| x.handle()),
-		)?;
-
-		(
-			sc_consensus_grandpa::SharedVoterState::empty(),
-			grandpa_link.shared_authority_set().clone(),
-			grandpa_link.justification_stream(),
-			sc_consensus_grandpa::FinalityProofProvider::new_for_service(
-				backend.clone(),
-				Some(grandpa_link.shared_authority_set().clone()),
-			),
-		)
-	};
-
 	let mut net_config = sc_network::config::FullNetworkConfiguration::<
 		Block,
 		<Block as sp_runtime::traits::Block>::Hash,
-		Network,
+		N,
 	>::new(&config.network);
-	let peer_store_handle = net_config.peer_store_handle();
+	let metrics = N::register_notification_metrics(config.prometheus_registry());
 
-	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
-	let grandpa_protocol_name =
-		sc_consensus_grandpa::protocol_standard_name(&genesis_hash, &config.chain_spec);
+	let peer_store_handle = net_config.peer_store_handle();
+	let grandpa_protocol_name = sc_consensus_grandpa::protocol_standard_name(
+		&client.block_hash(0).ok().flatten().expect("Genesis block exists; qed"),
+		&config.chain_spec,
+	);
 	let (grandpa_protocol_config, grandpa_notification_service) =
-		sc_consensus_grandpa::grandpa_peers_set_config::<_, Network>(
+		sc_consensus_grandpa::grandpa_peers_set_config::<_, N>(
 			grandpa_protocol_name.clone(),
 			metrics.clone(),
-			Arc::clone(&peer_store_handle),
+			peer_store_handle,
 		);
-
 	net_config.add_notification_protocol(grandpa_protocol_config);
 
 	let warp_sync = Arc::new(sc_consensus_grandpa::warp_proof::NetworkProvider::new(
@@ -225,6 +209,30 @@ pub fn new_full_base<
 			.boxed(),
 		);
 	}
+
+	// [CF] Required for Grandpa RPC.
+	let (shared_voter_state, shared_authority_set, justification_stream, finality_provider) = {
+		let (_grandpa_block_import, grandpa_link) = sc_consensus_grandpa::block_import(
+			client.clone(),
+			GRANDPA_JUSTIFICATION_PERIOD,
+			&(client.clone() as Arc<_>),
+			select_chain.clone(),
+			telemetry.as_ref().map(|x| x.handle()),
+		)?;
+
+		(
+			sc_consensus_grandpa::SharedVoterState::empty(),
+			grandpa_link.shared_authority_set().clone(),
+			grandpa_link.justification_stream(),
+			sc_consensus_grandpa::FinalityProofProvider::new_for_service(
+				backend.clone(),
+				Some(grandpa_link.shared_authority_set().clone()),
+			),
+		)
+	};
+
+	// [CF] Required for Chainspec RPC.
+	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
 
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
@@ -407,14 +415,4 @@ pub fn new_full_base<
 
 	network_starter.start_network();
 	Ok(task_manager)
-}
-
-/// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
-	match config.network.network_backend {
-		sc_network::config::NetworkBackendType::Libp2p =>
-			new_full_base::<sc_network::NetworkWorker<_, _>>(config),
-		sc_network::config::NetworkBackendType::Litep2p =>
-			new_full_base::<sc_network::Litep2pNetworkBackend>(config),
-	}
 }
