@@ -253,10 +253,10 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 			// activating its first vault, we dont have to wait for anything and we can activate the
 			// key mark jey rotation as complete.
 			if request_ids.is_empty() &&
-				!start_key_activation_results
-					.into_iter()
-					.any(|result| result == StartKeyActivationResult::FirstVault)
-			{
+				!start_key_activation_results.into_iter().any(|result| {
+					result == StartKeyActivationResult::FirstVault ||
+						result == StartKeyActivationResult::ActivationTxFailed
+				}) {
 				Self::mark_key_rotation_complete();
 			} else {
 				PendingKeyRotation::<T, I>::put(

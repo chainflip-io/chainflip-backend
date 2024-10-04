@@ -63,11 +63,6 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 					vec![StartKeyActivationResult::ActivationTxNotRequired]
 				},
 				Err(err) => {
-					log_or_panic!(
-						"Unexpected failure during {} vault activation. Error: {:?}",
-						<T::Chain as cf_chains::Chain>::NAME,
-						err,
-					);
 					PendingVaultActivation::<T, I>::put(
 						VaultActivationStatus::<T, I>::ActivationFailedAwaitingGovernance {
 							new_public_key,

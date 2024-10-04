@@ -4,13 +4,15 @@ use crate::{
 	HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 };
 
+use cf_chains::dot::PolkadotAccountId;
 use frame_support::{assert_err, assert_ok};
+use pallet_cf_threshold_signature::Keys;
 use sp_runtime::AccountId32;
 use std::collections::{BTreeSet, HashMap};
 
 use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
 use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
-use pallet_cf_environment::SafeModeUpdate;
+use pallet_cf_environment::{PolkadotVaultAccountId, SafeModeUpdate};
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
 	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip, PolkadotInstance,
@@ -550,5 +552,29 @@ fn cant_rotate_if_previous_rotation_is_pending() {
 			witness_rotation_broadcasts([2, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			assert_eq!(epoch_index + 1, Validator::epoch_index());
+		});
+}
+
+#[test]
+fn waits_for_governance_when_apicall_fails() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.blocks_per_epoch(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
+			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
+
+ 			PolkadotVaultAccountId::<Runtime>::take();
+			testnet.move_to_the_end_of_epoch();
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+
+			System::assert_last_event(state_chain_runtime::RuntimeEvent::PolkadotVault(
+				pallet_cf_vaults::Event::<Runtime, PolkadotInstance>::ActivationTxFailedAwaitingGovernance { new_public_key: Keys::<Runtime, PolkadotInstance>::get(Validator::epoch_index()).unwrap() },
+			));
 		});
 }
