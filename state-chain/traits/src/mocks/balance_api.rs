@@ -101,6 +101,6 @@ impl LpRegistration for MockLpRegistration {
 		_who: &Self::AccountId,
 		_asset: Asset,
 	) -> Option<ForeignChainAddress> {
-		None
+		Some(ForeignChainAddress::Eth([1; 20].into()))
 	}
 }

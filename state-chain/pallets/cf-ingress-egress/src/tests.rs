@@ -7,7 +7,7 @@ use crate::{
 	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
 	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
 	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer, TaintedTransactionDetails,
+	ScheduledEgressFetchOrTransfer, TaintedTransactionDetails, TaintedTransactions,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -2031,7 +2031,7 @@ fn detect_tainted_transaction_for_liquidity_provision() {
 					ChannelAction::LiquidityProvision { lp_account: BROKER }
 				),
 			),
-			Err(TaintedTransactionDetails { broker: BROKER, refund_address: None })
+			Some(TaintedTransactionDetails { broker: BROKER, refund_address: None })
 		);
 	});
 }
@@ -2059,7 +2059,7 @@ fn detect_tainted_transaction_for_ccm_transfer() {
 					dca_params: None,
 				}),
 			),
-			Err(TaintedTransactionDetails {
+			Some(TaintedTransactionDetails {
 				broker: BROKER,
 				refund_address: Some(ForeignChainAddress::Eth([2; 20].into()))
 			})
@@ -2085,7 +2085,7 @@ fn detect_tainted_transaction_for_swap() {
 					dca_params: None,
 				}),
 			),
-			Err(TaintedTransactionDetails {
+			Some(TaintedTransactionDetails {
 				broker: BROKER,
 				refund_address: Some(ForeignChainAddress::Eth([2; 20].into()))
 			})
@@ -2111,7 +2111,7 @@ fn ignore_tainted_transaction_if_marked_by_other_broker() {
 					dca_params: None,
 				}),
 			),
-			Ok(())
+			None
 		);
 	});
 }
@@ -2122,6 +2122,8 @@ fn process_tainted_transaction_and_expect_refund() {
 		let (_, address) = request_address_and_deposit(BROKER, eth::Asset::Eth);
 		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
 
+		let deposit_details: cf_chains::evm::DepositDetails = Default::default();
+
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
 			&BROKER,
 		));
@@ -2131,15 +2133,30 @@ fn process_tainted_transaction_and_expect_refund() {
 			Default::default(),
 		));
 
-		assert_noop!(
-			IngressEgress::process_single_deposit(
-				address,
-				eth::Asset::Eth,
-				DEFAULT_DEPOSIT_AMOUNT,
-				Default::default(),
-				Default::default()
-			),
-			crate::Error::<Test, _>::TransactionTainted
+		assert_ok!(IngressEgress::process_single_deposit(
+			address,
+			eth::Asset::Eth,
+			DEFAULT_DEPOSIT_AMOUNT,
+			deposit_details,
+			Default::default()
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
+				deposit_address: _address,
+				asset: eth::Asset::Eth,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: _,
+				reason: DepositIgnoredReason::TransactionTainted,
+			})
 		);
+
+		let tainted_transaction =
+			TaintedTransactions::<Test, ()>::get::<DepositDetails>(Default::default())
+				.expect("To have an tainted transaction");
+
+		assert_eq!(tainted_transaction.broker, BROKER);
+		assert!(tainted_transaction.refund_address.is_some());
 	});
 }

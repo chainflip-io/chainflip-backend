@@ -121,6 +121,7 @@ pub enum DepositIgnoredReason {
 	/// The deposit was ignored because the amount provided was not high enough to pay for the fees
 	/// required to process the requisite transactions.
 	NotEnoughToPayFees,
+	TransactionTainted,
 }
 
 /// Holds information about a tainted transaction.
@@ -1820,7 +1821,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn check_if_tx_is_tainted(
 		maybe_tainted_transaction: Option<TaintedTransactionDetails<T::AccountId>>,
 		deposit_channel_details: &DepositChannelDetails<T, I>,
-	) -> Result<(), TaintedTransactionDetails<T::AccountId>> {
+	) -> Option<TaintedTransactionDetails<T::AccountId>> {
 		if let Some(tainted_transaction) = maybe_tainted_transaction {
 			if tainted_transaction.broker == deposit_channel_details.owner {
 				let maybe_refund_address = match &deposit_channel_details.action {
@@ -1836,15 +1837,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							deposit_channel_details.deposit_channel.asset.into(),
 						),
 				};
-				Err(TaintedTransactionDetails {
+				Some(TaintedTransactionDetails {
 					broker: tainted_transaction.broker,
 					refund_address: maybe_refund_address,
 				})
 			} else {
-				Ok(())
+				None
 			}
 		} else {
-			Ok(())
+			None
 		}
 	}
 
@@ -1867,12 +1868,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
 
-		if let Err(tainted_transaction_details) = Self::check_if_tx_is_tainted(
+		if let Some(tainted_transaction_details) = Self::check_if_tx_is_tainted(
 			TaintedTransactions::<T, I>::take(&deposit_details),
 			&deposit_channel_details,
 		) {
-			TaintedTransactions::<T, I>::insert(deposit_details, tainted_transaction_details);
-			return Err(Error::<T, I>::TransactionTainted.into())
+			TaintedTransactions::<T, I>::insert(
+				deposit_details.clone(),
+				tainted_transaction_details,
+			);
+			Self::deposit_event(Event::<T, I>::DepositIgnored {
+				deposit_address,
+				asset,
+				amount: deposit_amount,
+				deposit_details,
+				reason: DepositIgnoredReason::TransactionTainted,
+			});
+			return Ok(())
 		}
 
 		if DepositChannelPool::<T, I>::get(channel_id).is_some() {
