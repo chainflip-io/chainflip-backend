@@ -20,6 +20,8 @@ mod boost_pool;
 use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
 
+use frame_support::error::BadOrigin;
+
 use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
@@ -1261,7 +1263,7 @@ pub mod pallet {
 				&account_id,
 				AccountRole::LiquidityProvider,
 			);
-			ensure!(is_broker || is_lp, Error::<T, I>::Unauthorized);
+			ensure!(is_broker || is_lp, BadOrigin);
 			let tainted_transaction =
 				TaintedTransactionDetails { broker: account_id.clone(), refund_address: None };
 			TaintedTransactions::<T, I>::insert(account_id, tx_id, tainted_transaction);

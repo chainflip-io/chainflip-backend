@@ -47,7 +47,7 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::{H160, U256};
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, DispatchError::BadOrigin};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -2158,5 +2158,38 @@ fn process_tainted_transaction_and_expect_refund() {
 
 		assert_eq!(tainted_transaction.broker, BROKER);
 		assert!(tainted_transaction.refund_address.is_some());
+	});
+}
+
+#[test]
+fn only_broker_and_lps_can_mark_transaction_as_tainted() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			IngressEgress::mark_transaction_as_tainted(
+				RuntimeOrigin::signed(ALICE),
+				Default::default(),
+			),
+			BadOrigin
+		);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+			RuntimeOrigin::signed(BROKER),
+			Default::default(),
+		));
+
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+				&ALICE,
+			)
+		);
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+			RuntimeOrigin::signed(ALICE),
+			Default::default(),
+		));
 	});
 }
