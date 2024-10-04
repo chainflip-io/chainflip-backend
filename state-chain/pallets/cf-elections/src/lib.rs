@@ -721,156 +721,168 @@ pub mod pallet {
 
 			fn check_consensus(
 				&mut self,
+				election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
 			) -> Result<
 				CompositeConsensusStatus<
 					<T::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus,
 				>,
 				CorruptStorageError,
 			> {
-				todo!("check consensus");
-				// let epoch_index = T::EpochInfo::epoch_index();
-				// let unique_monotonic_identifier = self.unique_monotonic_identifier();
-				// let option_consensus_history =
-				// 	ElectionConsensusHistory::<T, I>::get(unique_monotonic_identifier);
-				// Ok(
-				// 	if ElectionConsensusHistoryUpToDate::<T, I>::get(unique_monotonic_identifier) ==
-				// 		Some(epoch_index)
-				// 	{
-				// 		match option_consensus_history {
-				// 			Some(ConsensusHistory { most_recent, lost_since }) if !lost_since =>
-				// 				ConsensusStatus::Unchanged { current: most_recent },
-				// 			_ => ConsensusStatus::None,
-				// 		}
-				// 	} else {
-				// 		let current_authorities = T::EpochInfo::current_authorities();
-				// 		let current_authorities_count: AuthorityCount = current_authorities
-				// 			.len()
-				// 			.try_into()
-				// 			.map_err(|_| CorruptStorageError::new())?;
+				let epoch_index = T::EpochInfo::epoch_index();
+				let unique_monotonic_identifier = election_identifier.unique_monotonic();
+				let option_consensus_history =
+					ElectionConsensusHistory::<T, I>::get(unique_monotonic_identifier);
+				Ok(
+					if ElectionConsensusHistoryUpToDate::<T, I>::get(unique_monotonic_identifier) ==
+						Some(epoch_index)
+					{
+						match option_consensus_history {
+							Some(ConsensusHistory { most_recent, lost_since }) if !lost_since =>
+								CompositeConsensusStatus::Unchanged { current: most_recent },
+							_ => CompositeConsensusStatus::None,
+						}
+					} else {
+						let current_authorities = T::EpochInfo::current_authorities();
+						let current_authorities_count: AuthorityCount = current_authorities
+							.len()
+							.try_into()
+							.map_err(|_| CorruptStorageError::new())?;
 
-				// 		let bitmap_components = ElectionBitmapComponents::<T, I>::with(
-				// 			epoch_index,
-				// 			unique_monotonic_identifier,
-				// 			|election_bitmap_components| {
-				// 				election_bitmap_components.get_all(&current_authorities)
-				// 			},
-				// 		)?;
-				// 		let mut individual_components =
-				// 			IndividualComponents::<T, I>::iter_prefix(unique_monotonic_identifier)
-				// 				.collect::<BTreeMap<_, _>>();
+						let bitmap_components = ElectionBitmapComponents::<T, I>::with(
+							epoch_index,
+							*unique_monotonic_identifier,
+							|election_bitmap_components| {
+								election_bitmap_components.get_all(&current_authorities)
+							},
+						)?;
+						let mut individual_components =
+							IndividualComponents::<T, I>::iter_prefix(unique_monotonic_identifier)
+								.collect::<BTreeMap<_, _>>();
 
-				// 		let votes = current_authorities.into_iter().map(|validator_id|
-				// 			(
-				// 				VoteComponents {
-				// 					bitmap_component: bitmap_components.get(&validator_id).cloned(),
-				// 					individual_component: individual_components.remove(&validator_id),
-				// 				},
-				// 				validator_id,
-				// 			)
-				// 		).map(|(vote_components, validator_id)| {
-				// 			if ContributingAuthorities::<T, I>::contains_key(&validator_id) {
-				// 				match <<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as
-				// VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash|
-				// { 					// We don't bother to check if the reference has expired, as if we have the
-				// data we may as well use it, even if it was provided after the shared data
-				// reference expired (But before the reference was cleaned up `on_finalize`).
-				// 					Ok(SharedData::<T, I>::get(shared_data_hash))
-				// 				}) {
-				// 					// Only a full vote can count towards consensus.
-				// 					Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties,
-				// vote))), 					Ok(Some((_properties, AuthorityVote::PartialVote(_)))) => Ok(None),
-				// 					Ok(None) => Ok(None),
-				// 					Err(e) => Err(e),
-				// 				}
-				// 			} else {
-				// 				Ok(None)
-				// 			}.map(|props_and_vote|
-				// 				CompositeConsensusVote {
-				// 					vote: props_and_vote,
-				// 					validator_id
-				// 				}
-				// 			)
-				// 		}).collect::<Result<Vec<_>, _>>()?;
+						let votes = current_authorities
+							.into_iter()
+							.map(|validator_id| {
+								(
+									VoteComponents {
+										bitmap_component: bitmap_components
+											.get(&validator_id)
+											.cloned(),
+										individual_component: individual_components
+											.remove(&validator_id),
+									},
+									validator_id,
+								)
+							})
+							.map(|(vote_components, validator_id)| {
+								if ContributingAuthorities::<T, I>::contains_key(&validator_id) {
+									match <<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as
+								VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash|
+							{
+								 	// We don't bother to check if the reference has expired, as if we have the
+									// data we may as well use it, even if it was provided after the shared data
+									// reference expired (But before the reference was cleaned up `on_finalize`).
+									Ok(SharedData::<T, I>::get(shared_data_hash))
+								}) {
+									// Only a full vote can count towards consensus.
+									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties,
+				vote))), 					Ok(Some((_properties, AuthorityVote::PartialVote(_)))) => Ok(None),
+									Ok(None) => Ok(None),
+									Err(e) => Err(e),
+								}
+								} else {
+									Ok(None)
+								}
+								.map(|props_and_vote| CompositeConsensusVote {
+									vote: props_and_vote,
+									validator_id,
+								})
+							})
+							.collect::<Result<Vec<_>, _>>()?;
 
-				// 		debug_assert!(votes.len() == current_authorities_count as usize);
+						debug_assert!(votes.len() == current_authorities_count as usize);
 
-				// 		// Remove individual components from non-authorities
-				// 		for (validator_id, (_, individual_component)) in individual_components {
-				// 			<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as
-				// VoteStorage>::visit_shared_data_references_in_individual_component(
-				// 				&individual_component,
-				// 				|shared_data_hash| {
-				// 					Pallet::<T, I>::remove_shared_data_reference(shared_data_hash,
-				// unique_monotonic_identifier); 				},
-				// 			);
-				// 			IndividualComponents::<T, I>::remove(
-				// 				unique_monotonic_identifier,
-				// 				&validator_id,
-				// 			);
-				// 		}
+						// Remove individual components from non-authorities
+						for (validator_id, (_, individual_component)) in individual_components {
+							<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as
+				VoteStorage>::visit_shared_data_references_in_individual_component(
+								&individual_component,
+								|shared_data_hash| {
+									Pallet::<T, I>::remove_shared_data_reference(shared_data_hash,
+				*unique_monotonic_identifier); 				},
+							);
+							IndividualComponents::<T, I>::remove(
+								unique_monotonic_identifier,
+								&validator_id,
+							);
+						}
 
-				// 		let option_new_consensus =
-				// 			<T::ElectoralSystemRunner as ElectoralSystemRunner>::check_consensus(
-				// 				self.election_identifier,
-				// 				&*self, /* Disallow recursive calls to this function */
-				// 				option_consensus_history.as_ref().and_then(|consensus_history| {
-				// 					if consensus_history.lost_since {
-				// 						None
-				// 					} else {
-				// 						Some(&consensus_history.most_recent)
-				// 					}
-				// 				}),
-				// 				CompositeConsensusVotes { votes },
-				// 			)?;
+						let option_new_consensus =
+							<T::ElectoralSystemRunner as ElectoralSystemRunner>::check_consensus(
+								election_identifier,
+								&*self, /* Disallow recursive calls to this function */
+								option_consensus_history.as_ref().and_then(|consensus_history| {
+									if consensus_history.lost_since {
+										None
+									} else {
+										Some(&consensus_history.most_recent)
+									}
+								}),
+								CompositeConsensusVotes { votes },
+							)?;
 
-				// 		ElectionConsensusHistory::<T, I>::set(
-				// 			unique_monotonic_identifier,
-				// 			match &option_new_consensus {
-				// 				Some(new) => Some(ConsensusHistory {
-				// 					most_recent: new.clone(),
-				// 					lost_since: false,
-				// 				}),
-				// 				None =>
-				// 					option_consensus_history.as_ref().map(|consensus_history| {
-				// 						ConsensusHistory {
-				// 							most_recent: consensus_history.most_recent.clone(),
-				// 							lost_since: true,
-				// 						}
-				// 					}),
-				// 			},
-				// 		);
-				// 		ElectionConsensusHistoryUpToDate::<T, I>::insert(
-				// 			unique_monotonic_identifier,
-				// 			epoch_index,
-				// 		);
+						ElectionConsensusHistory::<T, I>::set(
+							unique_monotonic_identifier,
+							match &option_new_consensus {
+								Some(new) => Some(ConsensusHistory {
+									most_recent: new.clone(),
+									lost_since: false,
+								}),
+								None =>
+									option_consensus_history.as_ref().map(|consensus_history| {
+										ConsensusHistory {
+											most_recent: consensus_history.most_recent.clone(),
+											lost_since: true,
+										}
+									}),
+							},
+						);
+						ElectionConsensusHistoryUpToDate::<T, I>::insert(
+							unique_monotonic_identifier,
+							epoch_index,
+						);
 
-				// 		if let Some(new_consensus) = option_new_consensus {
-				// 			if let Some(consensus_history) = option_consensus_history {
-				// 				if consensus_history.lost_since {
-				// 					ConsensusStatus::Gained {
-				// 						most_recent: Some(consensus_history.most_recent),
-				// 						new: new_consensus,
-				// 					}
-				// 				} else if consensus_history.most_recent != new_consensus {
-				// 					ConsensusStatus::Changed {
-				// 						previous: consensus_history.most_recent,
-				// 						new: new_consensus,
-				// 					}
-				// 				} else {
-				// 					ConsensusStatus::Unchanged { current: new_consensus }
-				// 				}
-				// 			} else {
-				// 				ConsensusStatus::Gained { most_recent: None, new: new_consensus }
-				// 			}
-				// 		} else if let Some(consensus_history) = option_consensus_history
-				// 			.filter(|consensus_history| !consensus_history.lost_since)
-				// 		{
-				// 			ConsensusStatus::Lost { previous: consensus_history.most_recent }
-				// 		} else {
-				// 			ConsensusStatus::None
-				// 		}
-				// 	},
-				// )
+						if let Some(new_consensus) = option_new_consensus {
+							if let Some(consensus_history) = option_consensus_history {
+								if consensus_history.lost_since {
+									CompositeConsensusStatus::Gained {
+										most_recent: Some(consensus_history.most_recent),
+										new: new_consensus,
+									}
+								} else if consensus_history.most_recent != new_consensus {
+									CompositeConsensusStatus::Changed {
+										previous: consensus_history.most_recent,
+										new: new_consensus,
+									}
+								} else {
+									CompositeConsensusStatus::Unchanged { current: new_consensus }
+								}
+							} else {
+								CompositeConsensusStatus::Gained {
+									most_recent: None,
+									new: new_consensus,
+								}
+							}
+						} else if let Some(consensus_history) = option_consensus_history
+							.filter(|consensus_history| !consensus_history.lost_since)
+						{
+							CompositeConsensusStatus::Lost {
+								previous: consensus_history.most_recent,
+							}
+						} else {
+							CompositeConsensusStatus::None
+						}
+					},
+				)
 			}
 
 			// Not storage related

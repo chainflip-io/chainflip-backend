@@ -334,6 +334,7 @@ mod access {
 		/// the last call to `check_consensus`.
 		fn check_consensus(
 			&mut self,
+			election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
 		) -> Result<
 			CompositeConsensusStatus<
 				<Self::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus,
