@@ -8,7 +8,7 @@ use cf_chains::{
 	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
-	Chain,
+	Chain, DepositChannel,
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
@@ -24,6 +24,7 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use order_fills::OrderFills;
+use pallet_cf_ingress_egress;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_pools::{AskBidMap, PoolInfo, PoolLiquidity, PoolPriceV1, UnidirectionalPoolDepth};
 use pallet_cf_swapping::SwapLegInfo;
@@ -902,6 +903,9 @@ pub trait CustomApi {
 		proposed_votes: Vec<u8>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "open_btc_deposit_channels")]
+	fn cf_open_btc_deposit_channels(&self) -> RpcResult<Vec<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1955,6 +1959,18 @@ where
 			proposed_votes,
 		)
 		.map_err(to_rpc_error)
+	}
+
+	fn cf_open_btc_deposit_channels(&self) -> RpcResult<Vec<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>>
+	{
+		let info = self.client.info();
+		let res : Vec<_> = StorageQueryApi::new(&self.client)
+			.collect_from_storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<state_chain_runtime::Runtime,state_chain_runtime::BitcoinInstance>, _, _, _>
+			(info.best_hash)?;
+		let res = res.iter().map(|(_key,val)| {
+			val.deposit_channel.address.clone()
+		}).collect();
+		Ok(res)
 	}
 }
 

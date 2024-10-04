@@ -29,6 +29,7 @@ pallet-cf-governance = { path = "../pallets/cf-governance" }
 pallet-cf-pools = { path = "../pallets/cf-pools" }
 pallet-cf-witnesser = { path = "../pallets/cf-witnesser" }
 pallet-cf-swapping = { path = "../pallets/cf-swapping" }
+pallet-cf-ingress-egress = { path = "../pallets/cf-ingress-egress" }
 
 sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }

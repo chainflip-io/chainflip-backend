@@ -2821,6 +2821,7 @@ dependencies = [
  "jsonrpsee 0.16.3",
  "log",
  "pallet-cf-governance",
+ "pallet-cf-ingress-egress",
  "pallet-cf-pools",
  "pallet-cf-swapping",
  "pallet-cf-witnesser",
