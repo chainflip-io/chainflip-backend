@@ -39,6 +39,7 @@ import SwapEndpointIdl from '../../contract-interfaces/sol-program-idls/v1.0.0/s
 import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0/types/swap_endpoint';
 import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0/types/vault';
 
+// Workaround because of anchor issue
 const { BN } = anchor.default;
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
@@ -116,8 +117,8 @@ export async function executeSolContractSwap(
   process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
 
   const connection = getSolConnection();
-  const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(SwapEndpointIdl);
-  const vaultProgram = new anchor.Program<Vault>(VaultIdl);
+  const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(SwapEndpointIdl as SwapEndpoint);
+  const vaultProgram = new anchor.Program<Vault>(VaultIdl as Vault);
 
   const newEventAccountKeypair = Keypair.generate();
   const fetchedDataAccount = await vaultProgram.account.dataAccount.fetch(solanaVaultDataAccount);
@@ -159,17 +160,13 @@ export async function executeSolContractSwap(
             dstChain: Number(destChain),
             dstAddress: Buffer.from(destAddress),
             dstToken: Number(stateChainAssetFromAsset(destAsset)),
-            ccmParameters:
-              messageMetadata === undefined
-                ? null
-                : {
-                    message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
-                    gasAmount: new BN(messageMetadata.gasBudget),
-                  },
-            cfParameters:
-              messageMetadata === undefined
-                ? Buffer.from([])
-                : Buffer.from(messageMetadata.cfParameters.slice(2), 'hex'),
+            ccmParameters: messageMetadata
+              ? {
+                  message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
+                  gasAmount: new BN(messageMetadata.gasBudget),
+                }
+              : null,
+            cfParameters: Buffer.from(messageMetadata?.cfParameters?.slice(2) ?? '', 'hex'),
             decimals: assetDecimals(srcAsset),
           })
           .accountsPartial({
