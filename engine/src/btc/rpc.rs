@@ -114,7 +114,6 @@ impl BtcRpcClient {
 			.collect::<Result<_>>()
 	}
 
-
 	async fn call_rpc_vectorized<T: for<'a> serde::de::Deserialize<'a>>(
 		&self,
 		method: &str,
@@ -123,10 +122,13 @@ impl BtcRpcClient {
 		let res = call_rpc_raw_vectorized(&self.client, &self.endpoint, method, params)
 			.await?
 			.into_iter()
-			.map(|v| v.map_err(anyhow::Error::msg).and_then(|v| T::deserialize(v).map_err(anyhow::Error::msg)))
+			.map(|v| {
+				v.map_err(anyhow::Error::msg)
+					.and_then(|v| T::deserialize(v).map_err(anyhow::Error::msg))
+			})
 			.collect();
 		Ok(res)
-			// .collect::<Result<_>>()
+		// .collect::<Result<_>>()
 	}
 }
 
@@ -203,7 +205,6 @@ async fn call_rpc_raw(
 		.collect::<Result<_, Error>>()
 }
 
-
 async fn call_rpc_raw_vectorized(
 	client: &Client,
 	endpoint: &HttpBasicAuthEndpoint,
@@ -271,7 +272,7 @@ async fn call_rpc_raw_vectorized(
 		.collect();
 
 	Ok(res)
-		// .collect::<Result<_, Error>>()
+	// .collect::<Result<_, Error>>()
 }
 
 /// Get the BitcoinNetwork by calling the `getblockchaininfo` RPC.
@@ -434,7 +435,10 @@ pub trait BtcRpcApi {
 
 	async fn get_raw_mempool(&self) -> anyhow::Result<Vec<Txid>>;
 
-	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> anyhow::Result<Vec<anyhow::Result<Transaction>>>;
+	async fn get_raw_transactions(
+		&self,
+		tx_hashes: Vec<Txid>,
+	) -> anyhow::Result<Vec<anyhow::Result<Transaction>>>;
 }
 
 #[async_trait::async_trait]
@@ -558,8 +562,10 @@ impl BtcRpcApi for BtcRpcClient {
 			.ok_or_else(|| anyhow!("Response missing raw mempool"))?)
 	}
 
-
-	async fn get_raw_transactions(&self, tx_hashes: Vec<Txid>) -> Result<Vec<anyhow::Result<Transaction>>> {
+	async fn get_raw_transactions(
+		&self,
+		tx_hashes: Vec<Txid>,
+	) -> Result<Vec<anyhow::Result<Transaction>>> {
 		let params = tx_hashes
 			.iter()
 			.map(|tx_hash| json!([json!(tx_hash), json!(false)]))
@@ -569,8 +575,8 @@ impl BtcRpcApi for BtcRpcClient {
 
 		// let mut failed = 0;
 		// for tx in params {
-		// 	if let Ok(x) = self.call_rpc("getrawtransaction", ReqParams::Batch(vec![tx.clone()])).await {
-		// 		hex_txs.push(x)
+		// 	if let Ok(x) = self.call_rpc("getrawtransaction",
+		// ReqParams::Batch(vec![tx.clone()])).await { 		hex_txs.push(x)
 		// 	} else {
 		// 		failed += 1;
 		// 	}
@@ -578,25 +584,27 @@ impl BtcRpcApi for BtcRpcClient {
 
 		// println!("could not get data for {failed} transactions");
 
-
 		let hex_txs: Vec<Result<String>> =
 			self.call_rpc_vectorized("getrawtransaction", ReqParams::Batch(params)).await?;
 
 		let pre_res = hex_txs
 			.into_iter()
-			.map(|hex| hex.and_then(|hex| hex::decode(hex).map_err(|e| anyhow!("Response not valid hex ({e})."))))
+			.map(|hex| {
+				hex.and_then(|hex| {
+					hex::decode(hex).map_err(|e| anyhow!("Response not valid hex ({e})."))
+				})
+			})
 			.collect::<Vec<Result<Vec<u8>>>>()
 			.into_iter()
 			.map(|bytes| {
-				bytes.and_then(|bytes|
-				bitcoin::consensus::encode::deserialize(&bytes)
-					.map_err(|_| anyhow!("Failed to deserialize transaction"))
-				)
+				bytes.and_then(|bytes| {
+					bitcoin::consensus::encode::deserialize(&bytes)
+						.map_err(|_| anyhow!("Failed to deserialize transaction"))
+				})
 			});
 
-		let myres : Vec<Result<_>> = pre_res.collect();
+		let myres: Vec<Result<_>> = pre_res.collect();
 		Ok(myres)
-
 	}
 }
 
