@@ -1802,6 +1802,7 @@ name = "chainflip-broker-api"
 version = "1.7.0"
 dependencies = [
  "anyhow",
+ "cf-chains",
  "chainflip-api",
  "clap 3.2.25",
  "custom-rpc",

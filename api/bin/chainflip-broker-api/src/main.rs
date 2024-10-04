@@ -3,11 +3,7 @@ use cf_utilities::{
 	task_scope::{task_scope, Scope},
 };
 use chainflip_api::{
-	self,
-	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
-	settings::StateChain,
-	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
-	SwapDepositAddress, WithdrawFeesDetail,
+	self, primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters}, queries::SwapChannelInfo, settings::StateChain, AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi, SwapDepositAddress, WithdrawFeesDetail
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -47,6 +43,9 @@ pub trait Rpc {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "open_btc_deposit_channels")]
+	async fn cf_open_btc_deposit_channels(&self) -> RpcResult<Vec<SwapChannelInfo<cf_chains::Bitcoin>>>;
 }
 
 pub struct RpcServerImpl {
@@ -111,6 +110,11 @@ impl RpcServer for RpcServerImpl {
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
+	}
+
+	async fn cf_open_btc_deposit_channels(&self) -> RpcResult<Vec<SwapChannelInfo<cf_chains::Bitcoin>>> {
+		let channels = self.api.query_api().get_open_swap_channels(None).await?;
+		Ok(channels)
 	}
 }
 

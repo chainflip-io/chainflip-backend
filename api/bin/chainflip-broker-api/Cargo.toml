@@ -24,6 +24,7 @@ workspace = true
 [dependencies]
 chainflip-api = { path = "../../lib" }
 cf-utilities = { package = "utilities", path = "../../../utilities" }
+cf-chains = { path = "../../../state-chain/chains" }
 custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
 anyhow = "1.0.66"
