@@ -16,7 +16,7 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		self,
 		change::OnChangeHook,
-		composite::{tuple_5_impls::Hooks, Composite, Translator},
+		composite::{tuple_5_impls::Hooks, CompositeRunner, Translator},
 		egress_success::OnEgressSuccess,
 		monotonic_median::MedianChangeHook,
 	},
@@ -33,7 +33,7 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 
 type Instance = <Solana as ChainInstanceAlias>::Instance;
 
-pub type SolanaElectoralSystem = Composite<
+pub type SolanaElectoralSystem = CompositeRunner<
 	(
 		SolanaBlockHeightTracking,
 		SolanaFeeTracking,
@@ -225,6 +225,7 @@ impl
 				>,
 			>,
 		),
+		// TODO: We should be able to delete this
 		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		let block_height = SolanaBlockHeightTracking::on_finalize(
@@ -306,6 +307,8 @@ impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
 		})
 	}
 }
+
+// We have to manually transalte the access...?
 impl SolanaChainTrackingProvider {
 	pub fn priority_fee() -> Option<<Solana as Chain>::ChainAmount> {
 		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
