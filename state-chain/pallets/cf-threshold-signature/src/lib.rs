@@ -1221,19 +1221,36 @@ where
 			.composite(
 				Fields::named()
 					.field(|f| {
-						f.ty::<RequestContext<T, I>>().name(append_chain_to_name!(RequestContext))
+						f.ty::<RequestContext<T, I>>()
+							.type_name(append_chain_to_name!(RequestContext))
+							.name("request_context")
 					})
-					.field(|f| f.ty::<BTreeSet<T::ValidatorId>>().name("remaining_respondents"))
 					.field(|f| {
-						f.ty::<BTreeMap<T::ValidatorId, AuthorityCount>>().name("blame_counts")
+						f.ty::<BTreeSet<T::ValidatorId>>()
+							.type_name("BTreeSet<T::ValidatorId>")
+							.name("remaining_respondents")
 					})
-					.field(|f| f.ty::<BTreeSet<T::ValidatorId>>().name("candidates"))
-					.field(|f| f.ty::<EpochIndex>().name("epoch"))
+					.field(|f| {
+						f.ty::<BTreeMap<T::ValidatorId, AuthorityCount>>()
+							.type_name("BTreeMap<T::ValidatorId, AuthorityCount>")
+							.name("blame_counts")
+					})
+					.field(|f| {
+						f.ty::<BTreeSet<T::ValidatorId>>()
+							.type_name("BTreeSet<T::ValidatorId>")
+							.name("candidates")
+					})
+					.field(|f| f.ty::<EpochIndex>().type_name("EpochIndex").name("epoch"))
 					.field(|f| {
 						f.ty::<<T::TargetChainCrypto as ChainCrypto>::AggKey>()
-							.name(append_chain_to_name!(Key))
+							.type_name(append_chain_to_name!(Key))
+							.name("key")
 					})
-					.field(|f| f.ty::<ThresholdCeremonyType>().name("threshold_ceremony_type")),
+					.field(|f| {
+						f.ty::<ThresholdCeremonyType>()
+							.type_name("ThresholdCeremonyType")
+							.name("threshold_ceremony_type")
+					}),
 			)
 	}
 }
@@ -1249,9 +1266,15 @@ where
 			.path(Path::new(append_chain_to_name!(RequestContext), module_path!()))
 			.composite(
 				Fields::named()
-					.field(|f| f.ty::<RequestId>().name("request_id"))
-					.field(|f| f.ty::<AttemptCount>().name("attempt_count"))
-					.field(|f| f.ty::<PayloadFor<T, I>>().name(append_chain_to_name!(PayloadFor))),
+					.field(|f| f.ty::<RequestId>().type_name("RequestId").name("request_id"))
+					.field(|f| {
+						f.ty::<AttemptCount>().type_name("AttemptCount").name("attempt_count")
+					})
+					.field(|f| {
+						f.ty::<PayloadFor<T, I>>()
+							.type_name(append_chain_to_name!(PayloadFor))
+							.name("payload")
+					}),
 			)
 	}
 }
