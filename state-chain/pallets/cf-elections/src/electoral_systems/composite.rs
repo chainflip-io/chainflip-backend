@@ -204,64 +204,62 @@ macro_rules! generate_electoral_system_tuple_impls {
                         AuthorityVoteOf<Self>,
                     )>,
                 ) -> Result<bool, CorruptStorageError> {
-                    todo!()
-                    // match *election_identifier.extra() {
-                    //     $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
-                    //         <$electoral_system as ElectoralSystem>::is_vote_desired(
-                    //             election_identifier.with_extra(extra),
-                    //             &CompositeElectionAccess::<tags::$electoral_system, _, StorageAccess>::new(storage_access),
-                    //             current_vote.map(|(properties, vote)| {
-                    //                 Ok((
-                    //                     match properties {
-                    //                         CompositeVoteProperties::$electoral_system(properties) => properties,
-                    //                         _ => return Err(CorruptStorageError::new()),
-                    //                     },
-                    //                     match vote {
-                    //                         AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
-                    //                         AuthorityVote::Vote(CompositeVote::$electoral_system(vote)) => AuthorityVote::Vote(vote),
-                    //                         _ => return Err(CorruptStorageError::new()),
-                    //                     },
-                    //                 ))
-                    //             }).transpose()?,
-                    //         )
-                    //     },)*
-                    // }
+                    match *election_identifier.extra() {
+                        $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
+                            <$electoral_system as ElectoralSystem>::is_vote_desired(
+                                election_identifier.with_extra(extra),
+                                &CompositeElectionAccess::<tags::$electoral_system, $electoral_system,  _, StorageAccess>::new(storage_access),
+                                current_vote.map(|(properties, vote)| {
+                                    Ok((
+                                        match properties {
+                                            CompositeVoteProperties::$electoral_system(properties) => properties,
+                                            _ => return Err(CorruptStorageError::new()),
+                                        },
+                                        match vote {
+                                            AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
+                                            AuthorityVote::Vote(CompositeVote::$electoral_system(vote)) => AuthorityVote::Vote(vote),
+                                            _ => return Err(CorruptStorageError::new()),
+                                        },
+                                    ))
+                                }).transpose()?,
+                            )
+                        },)*
+                    }
                 }
 
                 fn is_vote_needed(
                     (current_vote_properties, current_partial_vote, current_authority_vote): (VotePropertiesOf<Self>, <Self::Vote as VoteStorage>::PartialVote, AuthorityVoteOf<Self>),
                     (proposed_partial_vote, proposed_vote): (<Self::Vote as VoteStorage>::PartialVote, <Self::Vote as VoteStorage>::Vote),
                 ) -> bool {
-                    todo!()
-                    // match (current_vote_properties, current_partial_vote, current_authority_vote, proposed_partial_vote, proposed_vote) {
-                    //     $(
-                    //         (
-                    //             CompositeVoteProperties::$electoral_system(current_vote_properties),
-                    //             CompositePartialVote::$electoral_system(current_partial_vote),
-                    //             AuthorityVote::Vote(CompositeVote::$electoral_system(current_authority_vote)),
-                    //             CompositePartialVote::$electoral_system(proposed_partial_vote),
-                    //             CompositeVote::$electoral_system(proposed_vote),
-                    //         ) => {
-                    //             <$electoral_system as ElectoralSystem>::is_vote_needed(
-                    //                 (current_vote_properties, current_partial_vote, AuthorityVote::Vote(current_authority_vote)),
-                    //                 (proposed_partial_vote, proposed_vote),
-                    //             )
-                    //         },
-                    //         (
-                    //             CompositeVoteProperties::$electoral_system(current_vote_properties),
-                    //             CompositePartialVote::$electoral_system(current_partial_vote),
-                    //             AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(current_authority_partial_vote)),
-                    //             CompositePartialVote::$electoral_system(proposed_partial_vote),
-                    //             CompositeVote::$electoral_system(proposed_vote),
-                    //         ) => {
-                    //             <$electoral_system as ElectoralSystem>::is_vote_needed(
-                    //                 (current_vote_properties, current_partial_vote, AuthorityVote::PartialVote(current_authority_partial_vote)),
-                    //                 (proposed_partial_vote, proposed_vote),
-                    //             )
-                    //         },
-                    //     )*
-                    //     _ => true,
-                    // }
+                    match (current_vote_properties, current_partial_vote, current_authority_vote, proposed_partial_vote, proposed_vote) {
+                        $(
+                            (
+                                CompositeVoteProperties::$electoral_system(current_vote_properties),
+                                CompositePartialVote::$electoral_system(current_partial_vote),
+                                AuthorityVote::Vote(CompositeVote::$electoral_system(current_authority_vote)),
+                                CompositePartialVote::$electoral_system(proposed_partial_vote),
+                                CompositeVote::$electoral_system(proposed_vote),
+                            ) => {
+                                <$electoral_system as ElectoralSystem>::is_vote_needed(
+                                    (current_vote_properties, current_partial_vote, AuthorityVote::Vote(current_authority_vote)),
+                                    (proposed_partial_vote, proposed_vote),
+                                )
+                            },
+                            (
+                                CompositeVoteProperties::$electoral_system(current_vote_properties),
+                                CompositePartialVote::$electoral_system(current_partial_vote),
+                                AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(current_authority_partial_vote)),
+                                CompositePartialVote::$electoral_system(proposed_partial_vote),
+                                CompositeVote::$electoral_system(proposed_vote),
+                            ) => {
+                                <$electoral_system as ElectoralSystem>::is_vote_needed(
+                                    (current_vote_properties, current_partial_vote, AuthorityVote::PartialVote(current_authority_partial_vote)),
+                                    (proposed_partial_vote, proposed_vote),
+                                )
+                            },
+                        )*
+                        _ => true,
+                    }
                 }
 
 
@@ -270,15 +268,14 @@ macro_rules! generate_electoral_system_tuple_impls {
                     election_access: &ElectionAccess,
                     partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
                 ) -> Result<bool, CorruptStorageError> {
-                    todo!()
-                    // Ok(match (*election_identifier.extra(), partial_vote) {
-                    //     $((CompositeElectionIdentifierExtra::$electoral_system(extra), CompositePartialVote::$electoral_system(partial_vote)) => <$electoral_system as ElectoralSystem>::is_vote_valid(
-                    //         election_identifier.with_extra(extra),
-                    //         &CompositeElectionAccess::<tags::$electoral_system, _, ElectionAccess>::new(election_access),
-                    //         partial_vote,
-                    //     )?,)*
-                    //     _ => false,
-                    // })
+                    Ok(match (*election_identifier.extra(), partial_vote) {
+                        $((CompositeElectionIdentifierExtra::$electoral_system(extra), CompositePartialVote::$electoral_system(partial_vote)) => <$electoral_system as ElectoralSystem>::is_vote_valid(
+                            election_identifier.with_extra(extra),
+                            &CompositeElectionAccess::<tags::$electoral_system, $electoral_system, _, ElectionAccess>::new(election_access),
+                            partial_vote,
+                        )?,)*
+                        _ => false,
+                    })
                 }
 
                 fn generate_vote_properties(
