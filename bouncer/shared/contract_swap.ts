@@ -133,17 +133,13 @@ export async function executeSolContractSwap(
             dstChain: Number(destChain),
             dstAddress: Buffer.from(destAddress),
             dstToken: Number(stateChainAssetFromAsset(destAsset)),
-            ccmParameters:
-              messageMetadata === undefined
-                ? null
-                : {
-                    message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
-                    gasAmount: new BN(messageMetadata.gasBudget),
-                  },
-            cfParameters:
-              messageMetadata === undefined
-                ? Buffer.from([])
-                : Buffer.from(messageMetadata.cfParameters.slice(2), 'hex'),
+            ccmParameters: messageMetadata
+              ? {
+                  message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
+                  gasAmount: new BN(messageMetadata.gasBudget),
+                }
+              : null,
+            cfParameters: Buffer.from(messageMetadata?.cfParameters?.slice(2) ?? '', 'hex'),
           })
           .accountsPartial({
             dataAccount: solanaVaultDataAccount,
