@@ -12,13 +12,14 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use cf_chains::sol::SolAddress;
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
+use tracing::warn;
 
 const MAXIMUM_CONCURRENT_RPCS: usize = 16;
 const SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR: [u8; 8] = [79, 152, 191, 225, 128, 108, 11, 139];
 const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; 8] = [150, 251, 114, 94, 200, 113, 248, 70];
-// TODO: Look into how many we can bundle into one request by checking the max length.
-// Not querying 100 (technical max) as those accounts can be quite big
-// Max length ~ 1300 bytes per account
+// Querying less than 100 (rpc call max) as those event accounts can be quite big.
+// Max length ~ 1300 bytes per account. We set it to 10 as an arbitrary number to
+// avoid large queries.
 const MAX_MULTIPLE_EVENT_ACCOUNTS_QUERY: usize = 10;
 
 #[derive(BorshDeserialize, BorshSerialize, Debug)]
@@ -47,16 +48,12 @@ pub struct CcmParams {
 	gas_amount: u64,
 }
 
-// 1. Query opened accounts on chain
-// 2. Check the returned accounts against the SC opened_accounts
-// 3. If they are already seen in the SC we do nothing with them
-// 4. If they are not seen in the SC we query the account data. Then we parse the account data and
+// 1. Query the on-chain list of opened accounts from SwapEndpointDataAccount.
+// 2. Check the returned accounts against the SC opened_accounts.
+// 3. If they are already seen in the SC we do nothing with them and skip the query.
+// 4. If an account is in the SC but not see in the engine we report it as closed.
+// 5. If they are not seen in the SC we query the account data. Then we parse the account data and
 //    ensure it's a valid a program swap. The new program swap needs to be reported to the SC.
-// 5. If an account is in the SC but not see in the engine we report it as closed.
-
-// NOTE: Be aware that it can be that we query the open accounts, we get a list and then one
-// of the accounts get closed while we query for a particular account. This is not a problem
-// but we should handle correctly.
 
 pub async fn get_program_swaps(
 	sol_rpc: &SolRetryRpcClient,
@@ -78,16 +75,24 @@ pub async fn get_program_swaps(
 		})
 		.buffered(MAXIMUM_CONCURRENT_RPCS)
 		.map_ok(|program_swap_account_data_chunk| {
-			stream::iter(
-				program_swap_account_data_chunk
-					.into_iter()
-					// For now we filter accounts that we have seen as open but we get no data
-					// back. It should mean closed but we wait for next querty to see it closed
-					// in the SwapEventDataAcccount but we want to be sure. TBD depending on how
-					// the voting is to be done.
-					.flatten()
-					.map(Ok),
-			)
+			stream::iter(program_swap_account_data_chunk.into_iter().filter_map(
+				|program_swap_account_data| match program_swap_account_data {
+					Some(data) => Some(Ok(data)),
+					// It could happen that some account is closed between the queries.
+					// Case A: A new account (no consensus) is opened and closed before we query it.
+					// That should never happen as we need to reach consensus before we send the
+					// close transaction.
+					// Case B: An account has consensus and is closed between queries. That
+					// account won't be included in new_program_swap_accounts and therefore
+					// won't be queried here anyway. Therefore, this shouldn't be a problem.
+					// Case C: If due to rpc load management the get event accounts rpc
+					// is executed at a slot < get swap endpoint data rpc.
+					None => {
+						warn!("Event account not found for solana event account");
+						None
+					},
+				},
+			))
 		})
 		.try_flatten()
 		.try_collect()
@@ -104,7 +109,7 @@ async fn get_changed_program_swap_accounts(
 	sc_opened_accounts: Vec<SolAddress>,
 	swap_endpoint_data_account_address: SolAddress,
 ) -> Result<(Vec<SolAddress>, Vec<SolAddress>), anyhow::Error> {
-	let (_historical_number_event_accounts, open_event_accounts) =
+	let (_historical_number_event_accounts, open_event_accounts, _slot) =
 		get_swap_endpoint_data(sol_rpc, swap_endpoint_data_account_address)
 			.await
 			.expect("Failed to get the event accounts");
@@ -117,6 +122,16 @@ async fn get_changed_program_swap_accounts(
 	let sc_opened_accounts_hashset: HashSet<_> = sc_opened_accounts.iter().collect();
 	let mut new_program_swap_accounts = Vec::new();
 	let mut closed_accounts = Vec::new();
+
+	// TODO: In the scenario where consensus is reached but an engine is far behind (account not
+	// seen in the list) the engine will see that channel as closed (NOT GOOD!). Should we compare
+	// slots to double check? We could also do that on the voting pallet rejecting the votes
+	// (similar to the new nonce system). Otherwise, if the SC stores the slot when the consensus
+	// was reached that the account was opened, we can simply remove accounts where the slot is
+	// lower than the consensus so we don't even bother querying them.
+	// While the pallet handling it is nice, we'd like to avoid querying accounts unnecessarily
+	// so similar to the sol_deposits we can probably add a small optimization here.
+	// However, this will depend on whether the sc_opened_accounts stores the slot.
 
 	for account in &open_event_accounts {
 		if !sc_opened_accounts_hashset.contains(account) {
@@ -137,8 +152,8 @@ async fn get_changed_program_swap_accounts(
 async fn get_swap_endpoint_data(
 	sol_rpc: &SolRetryRpcClient,
 	swap_endpoint_data_account_address: SolAddress,
-) -> Result<(u128, Vec<SolAddress>), anyhow::Error> {
-	let accounts_info = sol_rpc
+) -> Result<(u128, Vec<SolAddress>, u64), anyhow::Error> {
+	let accounts_info_response = sol_rpc
 		.get_multiple_accounts(
 			&[swap_endpoint_data_account_address],
 			RpcAccountInfoConfig {
@@ -148,7 +163,10 @@ async fn get_swap_endpoint_data(
 				min_context_slot: None,
 			},
 		)
-		.await
+		.await;
+
+	let slot = accounts_info_response.context.slot;
+	let accounts_info = accounts_info_response
 		.value
 		.into_iter()
 		.exactly_one()
@@ -163,7 +181,7 @@ async fn get_swap_endpoint_data(
 				.decode(base64_string)
 				.expect("Failed to decode base64 string");
 
-			// 8 Discriminator + 16 Historical Number Event Accounts + 4 bytes length + optional
+			// 8 Discriminator + 16 Historical Number Event Accounts + 4 bytes vector length + data
 			if bytes.len() < 28 {
 				return Err(anyhow!("Expected account to have at least 28 bytes"));
 			}
@@ -174,12 +192,14 @@ async fn get_swap_endpoint_data(
 
 			ensure!(
 				deserialized_data.discriminator == SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR,
-				"Discriminator does not match the SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR"
+				"Discriminator does not match. Found: {:?}",
+				deserialized_data.discriminator
 			);
 
 			Ok((
 				deserialized_data.historical_number_event_accounts,
 				deserialized_data.open_event_accounts.into_iter().map(SolAddress).collect(),
+				slot,
 			))
 		},
 		Some(_) =>
@@ -237,7 +257,8 @@ async fn get_program_swap_event_accounts_data(
 
 				ensure!(
 					deserialized_data.discriminator == SWAP_EVENT_ACCOUNT_DISCRIMINATOR,
-					"Discriminator does not match the SWAP_EVENT_ACCOUNT_DISCRIMINATOR"
+					"Discriminator does not match. Found: {:?}",
+					deserialized_data.discriminator
 				);
 
 				Ok(Some(deserialized_data))
@@ -282,7 +303,7 @@ mod tests {
 				.await
 				.unwrap();
 
-				let (historical_number_event_accounts, open_event_accounts) =
+				let (historical_number_event_accounts, open_event_accounts, _) =
 					get_swap_endpoint_data(
 						&client,
 						// Swap Endpoint Data Account Address with no opened accounts
@@ -295,7 +316,7 @@ mod tests {
 				assert_eq!(historical_number_event_accounts, 0_u128);
 				assert_eq!(open_event_accounts.len(), 0);
 
-				let (historical_number_event_accounts, open_event_accounts) =
+				let (historical_number_event_accounts, open_event_accounts, _) =
 					get_swap_endpoint_data(
 						&client,
 						// Swap Endpoint Data Account Address with two opened accounts
