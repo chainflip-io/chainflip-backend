@@ -694,29 +694,32 @@ pub mod pallet {
 				>,
 			) {
 				let unique_monotonic_identifier = composite_election_identifier.unique_monotonic();
-				// remove Clone?
-				self.clear_election_votes(unique_monotonic_identifier.clone());
+				self.clear_election_votes(*unique_monotonic_identifier);
 				ElectionProperties::<T, I>::remove(composite_election_identifier);
 				ElectionState::<T, I>::remove(unique_monotonic_identifier);
 				ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
 			}
 
 			// Mut? how is this going to work, we don't actually want to modify the thing?
+			// for now I'm just returning out the new one - check that we actually need this later.
 			fn refresh(
 				&mut self,
+				election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
 				extra: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionIdentifierExtra,
 				properties: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
-			) -> Result<(), CorruptStorageError> {
-				todo!()
-				// if extra <= *election_identifier.extra() {
-				// 	Err(CorruptStorageError::new())
-				// } else {
-				// 	ElectionProperties::<T, I>::remove(self.election_identifier);
-				// 	election_identifier =
-				// 		ElectionIdentifier::new(self.unique_monotonic_identifier(), extra);
-				// 	ElectionProperties::<T, I>::insert(self.election_identifier, properties);
-				// 	Ok(())
-				// }
+			) -> Result<
+				CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
+				CorruptStorageError,
+			> {
+				if extra <= *election_identifier.extra() {
+					Err(CorruptStorageError::new())
+				} else {
+					ElectionProperties::<T, I>::remove(election_identifier);
+					let new_election_identifier =
+						ElectionIdentifier::new(*election_identifier.unique_monotonic(), extra);
+					ElectionProperties::<T, I>::insert(new_election_identifier, properties);
+					Ok(new_election_identifier)
+				}
 			}
 
 			fn check_consensus(

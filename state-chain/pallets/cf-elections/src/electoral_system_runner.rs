@@ -325,9 +325,10 @@ mod access {
 		/// will be invalidated by this.
 		fn refresh(
 			&mut self,
+			election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
 			extra: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionIdentifierExtra,
 			properties: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
-		) -> Result<(), CorruptStorageError>;
+		) -> Result<CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>, CorruptStorageError>;
 
 		/// This returns the current consensus which will always be up to date with the latest
 		/// votes/state. This also returns information about the difference in the consensus between
