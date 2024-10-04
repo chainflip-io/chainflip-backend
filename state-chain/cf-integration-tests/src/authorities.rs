@@ -4,9 +4,8 @@ use crate::{
 	HEARTBEAT_BLOCK_INTERVAL, VAULT_ROTATION_BLOCKS,
 };
 
-use cf_chains::dot::PolkadotAccountId;
 use frame_support::{assert_err, assert_ok};
-use pallet_cf_threshold_signature::Keys;
+use pallet_cf_vaults::{PendingVaultActivation, VaultActivationStatus};
 use sp_runtime::AccountId32;
 use std::collections::{BTreeSet, HashMap};
 
@@ -569,12 +568,39 @@ fn waits_for_governance_when_apicall_fails() {
 			testnet.move_to_the_next_epoch();
 			witness_ethereum_rotation_broadcast(1);
 
- 			PolkadotVaultAccountId::<Runtime>::take();
+			let epoch_index = Validator::epoch_index();
+
+			PolkadotVaultAccountId::<Runtime>::set(None);
 			testnet.move_to_the_end_of_epoch();
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
-			System::assert_last_event(state_chain_runtime::RuntimeEvent::PolkadotVault(
-				pallet_cf_vaults::Event::<Runtime, PolkadotInstance>::ActivationTxFailedAwaitingGovernance { new_public_key: Keys::<Runtime, PolkadotInstance>::get(Validator::epoch_index()).unwrap() },
+			// we are still in old epoch
+			assert_eq!(Validator::epoch_index(), epoch_index);
+			// rotation has not completed
+			assert!(matches!(
+				CurrentRotationPhase::<Runtime>::get(),
+				RotationPhase::ActivatingKeys(..)
+			));
+
+			assert!(matches!(
+				PendingVaultActivation::<Runtime, PolkadotInstance>::get().unwrap(),
+				VaultActivationStatus::ActivationFailedAwaitingGovernance { .. }
+			));
+
+			// move forward a few blocks
+			testnet.move_forward_blocks(10);
+
+			assert!(matches!(
+				PendingVaultActivation::<Runtime, PolkadotInstance>::get().unwrap(),
+				VaultActivationStatus::ActivationFailedAwaitingGovernance { .. }
+			));
+
+			// we are still in old epoch
+			assert_eq!(Validator::epoch_index(), epoch_index);
+			// rotation is still stalled
+			assert!(matches!(
+				CurrentRotationPhase::<Runtime>::get(),
+				RotationPhase::ActivatingKeys(..)
 			));
 		});
 }
