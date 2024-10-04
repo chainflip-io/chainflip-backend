@@ -112,7 +112,8 @@ export async function executeSolContractSwap(
   // const vaultProgram = new anchor.Program<Vault>(VaultIdl, provider);
 
   // The current workaround requires having the wallet in a id.json and then set the ANCHOR_WALLET env.
-  // export ANCHOR_WALLET=./id.json
+  // TODO: Depending on how the SDK is implemented we can remove this.
+  process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
 
   const connection = getSolConnection();
   const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(SwapEndpointIdl);
