@@ -608,45 +608,44 @@ pub mod pallet {
 		impl<T: Config<I>, I: 'static> RunnerStorageAccessTrait for RunnerStorageAccess<T, I> {
 			type ElectoralSystemRunner = T::ElectoralSystemRunner;
 
-			fn settings(
+			fn electoral_settings_for_election(
 				&self,
+				unique_monotonic_identifier: UniqueMonotonicIdentifier,
 			) -> Result<
 				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
 				CorruptStorageError,
 			> {
-				todo!();
-				// let mut settings_boundaries =
-				// 	ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
-				// settings_boundaries.sort();
-				// let settings_boundary = settings_boundaries
-				// 	.iter()
-				// 	.rev()
-				// 	.find(|settings_boundary| {
-				// 		**settings_boundary <= self.unique_monotonic_identifier()
-				// 	})
-				// 	.ok_or_else(CorruptStorageError::new)?;
-				// ElectoralSettings::<T, I>::get(settings_boundary)
-				// 	.ok_or_else(CorruptStorageError::new)
+				let mut settings_boundaries =
+					ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
+				settings_boundaries.sort();
+				let settings_boundary = settings_boundaries
+					.iter()
+					.rev()
+					.find(|settings_boundary| **settings_boundary <= unique_monotonic_identifier)
+					.ok_or_else(CorruptStorageError::new)?;
+				ElectoralSettings::<T, I>::get(settings_boundary)
+					.ok_or_else(CorruptStorageError::new)
 			}
-			fn properties(
+			fn election_properties(
 				&self,
+				election_identifier: CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
 			) -> Result<
 				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 				CorruptStorageError,
 			> {
-				todo!();
-				// ElectionProperties::<T, I>::get(self.election_identifier)
-				// 	.ok_or_else(CorruptStorageError::new)
+				ElectionProperties::<T, I>::get(election_identifier)
+					.ok_or_else(CorruptStorageError::new)
 			}
-			fn state(
+			// Do we need to take a ref self?
+			fn election_state(
 				&self,
+				unique_monotonic_identifier: UniqueMonotonicIdentifier,
 			) -> Result<
 				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
 				CorruptStorageError,
 			> {
-				// ElectionState::<T, I>::get(self.unique_monotonic_identifier())
-				// 	.ok_or_else(CorruptStorageError::new)
-				todo!();
+				ElectionState::<T, I>::get(unique_monotonic_identifier)
+					.ok_or_else(CorruptStorageError::new)
 			}
 			#[cfg(test)]
 			fn election_identifier(
@@ -672,20 +671,21 @@ pub mod pallet {
 
 				Ok(())
 			}
-			fn clear_votes(&mut self) {
-				todo!();
-				// let unique_monotonic_identifier = self.unique_monotonic_identifier();
-				// ElectionBitmapComponents::<T, I>::clear(unique_monotonic_identifier);
-				// for (_, (_, individual_component)) in
-				// 	IndividualComponents::<T, I>::drain_prefix(unique_monotonic_identifier)
-				// {
-				// 	<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as
-				// VoteStorage>::visit_shared_data_references_in_individual_component(&
-				// individual_component, |shared_data_hash| { 		Pallet::<T,
-				// I>::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier);
-				// 	});
-				// }
-				// ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
+			fn clear_election_votes(
+				&mut self,
+				unique_monotonic_identifier: UniqueMonotonicIdentifier,
+			) {
+				ElectionBitmapComponents::<T, I>::clear(unique_monotonic_identifier);
+				for (_, (_, individual_component)) in
+					IndividualComponents::<T, I>::drain_prefix(unique_monotonic_identifier)
+				{
+					<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as
+				VoteStorage>::visit_shared_data_references_in_individual_component(&
+				individual_component, |shared_data_hash| { 		Pallet::<T,
+				I>::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier);
+					});
+				}
+				ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
 			}
 			fn delete(mut self) {
 				todo!();

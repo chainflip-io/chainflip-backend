@@ -9,6 +9,7 @@ use crate::{
 	CorruptStorageError, ElectionIdentifier,
 };
 
+// ?? Does this make sense, using ElectionIdentifer here and not some different composite type?
 // An election identifer that the runner uses, as it may contain several ElectoralSystems
 #[allow(type_alias_bounds)]
 pub type CompositeElectionIdentifierOf<E: ElectoralSystemRunner> =
@@ -205,6 +206,8 @@ mod access {
 	//! to allow the pallet to at restrict write access when it should be done, to help ensure
 	//! correct ElectoralSystem implementation.
 
+	use crate::UniqueMonotonicIdentifier;
+
 	use super::{CompositeElectionIdentifierOf, CorruptStorageError, ElectoralSystemRunner};
 
 	/// Represents the current consensus, and how it has changed since it was last checked (i.e.
@@ -265,21 +268,23 @@ mod access {
 	pub trait RunnerStorageAccessTrait {
 		type ElectoralSystemRunner: ElectoralSystemRunner;
 
-		/// Get the ElectoralSettings that are active for this election.
-		fn settings(
+		fn electoral_settings_for_election(
 			&self,
+			unique_monotonic_identifier: UniqueMonotonicIdentifier,
 		) -> Result<
 			<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
 			CorruptStorageError,
 		>;
-		fn properties(
+		fn election_properties(
 			&self,
+			election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
 		) -> Result<
 			<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 			CorruptStorageError,
 		>;
-		fn state(
+		fn election_state(
 			&self,
+			unique_monotonic_identifier: UniqueMonotonicIdentifier,
 		) -> Result<
 			<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
 			CorruptStorageError,
@@ -297,7 +302,10 @@ mod access {
 			&mut self,
 			state: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
 		) -> Result<(), CorruptStorageError>;
-		fn clear_votes(&mut self);
+
+		// Clear the votes of a particular election
+		fn clear_election_votes(&mut self, unique_monotonic_identifier: UniqueMonotonicIdentifier);
+
 		fn delete(self);
 		/// This will change the `ElectionIdentifierExtra` value of the election, and allows you to
 		/// optionally change the properties. Note the `extra` must be strictly greater than the
