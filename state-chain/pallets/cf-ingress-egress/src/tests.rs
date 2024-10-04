@@ -2153,7 +2153,7 @@ fn process_tainted_transaction_and_expect_refund() {
 		);
 
 		let tainted_transaction =
-			TaintedTransactions::<Test, ()>::get::<DepositDetails>(Default::default())
+			TaintedTransactions::<Test, ()>::get::<u64, DepositDetails>(BROKER, Default::default())
 				.expect("To have an tainted transaction");
 
 		assert_eq!(tainted_transaction.broker, BROKER);

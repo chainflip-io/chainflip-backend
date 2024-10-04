@@ -539,10 +539,12 @@ pub mod pallet {
 	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
 
-	/// Stores the details of tainted transactions against the deposit details.
+	/// Stores the tainted transaction details for an account.
 	#[pallet::storage]
-	pub type TaintedTransactions<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub(crate) type TaintedTransactions<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
+		Identity,
+		T::AccountId,
 		Twox64Concat,
 		<T::TargetChain as Chain>::DepositDetails,
 		TaintedTransactionDetails<T::AccountId>,
@@ -1261,8 +1263,8 @@ pub mod pallet {
 			);
 			ensure!(is_broker || is_lp, Error::<T, I>::Unauthorized);
 			let tainted_transaction =
-				TaintedTransactionDetails { broker: account_id, refund_address: None };
-			TaintedTransactions::<T, I>::insert(tx_id, tainted_transaction);
+				TaintedTransactionDetails { broker: account_id.clone(), refund_address: None };
+			TaintedTransactions::<T, I>::insert(account_id, tx_id, tainted_transaction);
 			Ok(())
 		}
 	}
@@ -1869,10 +1871,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
 
 		if let Some(tainted_transaction_details) = Self::check_if_tx_is_tainted(
-			TaintedTransactions::<T, I>::take(&deposit_details),
+			TaintedTransactions::<T, I>::take(
+				deposit_channel_details.owner.clone(),
+				&deposit_details,
+			),
 			&deposit_channel_details,
 		) {
 			TaintedTransactions::<T, I>::insert(
+				deposit_channel_details.owner,
 				deposit_details.clone(),
 				tainted_transaction_details,
 			);
