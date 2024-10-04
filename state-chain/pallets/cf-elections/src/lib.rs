@@ -687,26 +687,32 @@ pub mod pallet {
 				}
 				ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
 			}
-			fn delete(mut self) {
-				todo!();
-				// self.clear_votes();
-				// ElectionProperties::<T, I>::remove(self.election_identifier);
-				// let unique_monotonic_identifier = self.unique_monotonic_identifier();
-				// ElectionState::<T, I>::remove(unique_monotonic_identifier);
-				// ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
+			fn delete_election(
+				mut self,
+				composite_election_identifier: CompositeElectionIdentifierOf<
+					Self::ElectoralSystemRunner,
+				>,
+			) {
+				let unique_monotonic_identifier = composite_election_identifier.unique_monotonic();
+				// remove Clone?
+				self.clear_election_votes(unique_monotonic_identifier.clone());
+				ElectionProperties::<T, I>::remove(composite_election_identifier);
+				ElectionState::<T, I>::remove(unique_monotonic_identifier);
+				ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
 			}
 
+			// Mut? how is this going to work, we don't actually want to modify the thing?
 			fn refresh(
 				&mut self,
 				extra: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionIdentifierExtra,
 				properties: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 			) -> Result<(), CorruptStorageError> {
 				todo!()
-				// if extra <= *self.election_identifier.extra() {
+				// if extra <= *election_identifier.extra() {
 				// 	Err(CorruptStorageError::new())
 				// } else {
 				// 	ElectionProperties::<T, I>::remove(self.election_identifier);
-				// 	self.election_identifier =
+				// 	election_identifier =
 				// 		ElectionIdentifier::new(self.unique_monotonic_identifier(), extra);
 				// 	ElectionProperties::<T, I>::insert(self.election_identifier, properties);
 				// 	Ok(())

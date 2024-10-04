@@ -306,7 +306,12 @@ mod access {
 		// Clear the votes of a particular election
 		fn clear_election_votes(&mut self, unique_monotonic_identifier: UniqueMonotonicIdentifier);
 
-		fn delete(self);
+		fn delete_election(
+			self,
+			composite_election_identifier: CompositeElectionIdentifierOf<
+				Self::ElectoralSystemRunner,
+			>,
+		);
 		/// This will change the `ElectionIdentifierExtra` value of the election, and allows you to
 		/// optionally change the properties. Note the `extra` must be strictly greater than the
 		/// previous value of this election, this function will return `Err` if it is not. This
