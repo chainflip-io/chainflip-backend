@@ -602,5 +602,15 @@ fn waits_for_governance_when_apicall_fails() {
 				CurrentRotationPhase::<Runtime>::get(),
 				RotationPhase::ActivatingKeys(..)
 			));
+
+			// manually setting the activation status to complete completes the rotation.
+			PendingVaultActivation::<Runtime, PolkadotInstance>::put(
+				VaultActivationStatus::Complete,
+			);
+			testnet.move_forward_blocks(5);
+
+			// we have moved to the new epoch
+			assert_eq!(Validator::epoch_index(), epoch_index + 1);
+			assert!(matches!(CurrentRotationPhase::<Runtime>::get(), RotationPhase::Idle));
 		});
 }
