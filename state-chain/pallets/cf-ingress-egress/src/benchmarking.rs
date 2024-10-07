@@ -72,6 +72,7 @@ mod benchmarks {
 					.unwrap(),
 				action: ChannelAction::<T::AccountId>::LiquidityProvision {
 					lp_account: account("doogle", 0, 0),
+					refund_address: None,
 				},
 				boost_fee: 0,
 				boost_status: BoostStatus::NotBoosted,
@@ -112,6 +113,7 @@ mod benchmarks {
 					.unwrap(),
 					action: ChannelAction::<T::AccountId>::LiquidityProvision {
 						lp_account: account("doogle", 0, 0),
+						refund_address: None,
 					},
 					boost_fee: 0,
 					boost_status: BoostStatus::NotBoosted,
@@ -229,7 +231,10 @@ mod benchmarks {
 		let (_channel_id, deposit_address, ..) = Pallet::<T, I>::open_channel(
 			lp_account,
 			asset,
-			ChannelAction::LiquidityProvision { lp_account: lp_account.clone() },
+			ChannelAction::LiquidityProvision {
+				lp_account: lp_account.clone(),
+				refund_address: None,
+			},
 			fee_tier,
 		)
 		.unwrap();
@@ -399,7 +404,10 @@ mod benchmarks {
 		let (_channel_id, deposit_address, ..) = Pallet::<T, I>::open_channel(
 			&boosters[0],
 			asset,
-			ChannelAction::LiquidityProvision { lp_account: boosters[0].clone() },
+			ChannelAction::LiquidityProvision {
+				lp_account: boosters[0].clone(),
+				refund_address: None,
+			},
 			TIER_5_BPS,
 		)
 		.unwrap();

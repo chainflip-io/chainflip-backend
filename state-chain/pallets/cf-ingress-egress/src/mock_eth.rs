@@ -20,7 +20,7 @@ use cf_traits::{
 		api_call::{MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
-		balance_api::{MockBalance, MockLpRegistration},
+		balance_api::MockBalance,
 		broadcaster::MockBroadcaster,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
@@ -136,7 +136,6 @@ impl crate::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
-	type LpRefundAddress = MockLpRegistration;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
@@ -249,7 +248,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 				.cloned()
 				.map(|request| match request {
 					DepositRequest::Liquidity { lp_account, asset } =>
-						IngressEgress::request_liquidity_deposit_address(lp_account, asset, 0)
+						IngressEgress::request_liquidity_deposit_address(lp_account, asset, 0, None)
 							.map(|(id, addr, ..)| {
 								(request, id, TestChainAccount::try_from(addr).unwrap())
 							})

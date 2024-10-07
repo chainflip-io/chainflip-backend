@@ -96,11 +96,4 @@ impl LpRegistration for MockLpRegistration {
 	) -> DispatchResult {
 		Ok(())
 	}
-
-	fn get_liquidity_refund_address(
-		_who: &Self::AccountId,
-		_asset: Asset,
-	) -> Option<ForeignChainAddress> {
-		Some(ForeignChainAddress::Eth([1; 20].into()))
-	}
 }

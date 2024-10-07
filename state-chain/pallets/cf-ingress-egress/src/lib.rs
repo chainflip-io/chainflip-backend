@@ -44,7 +44,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
 	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
 	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
-	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit, PoolApi,
+	IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit, PoolApi,
 	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
@@ -305,6 +305,7 @@ pub mod pallet {
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
+			refund_address: Option<ForeignChainAddress>,
 		},
 		CcmTransfer {
 			destination_asset: Asset,
@@ -435,9 +436,6 @@ pub mod pallet {
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
-
-		/// For accessing the LP refund address.
-		type LpRefundAddress: LpRegistration<AccountId = Self::AccountId>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -1825,22 +1823,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(action)
 	}
 
-	fn get_refund_address(
-		deposit_channel_details: &DepositChannelDetails<T, I>,
-	) -> Option<ForeignChainAddress> {
-		match &deposit_channel_details.action {
-			ChannelAction::Swap { refund_params, .. } =>
-				refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
-			ChannelAction::CcmTransfer { refund_params, .. } =>
-				refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
-			ChannelAction::LiquidityProvision { .. } =>
-				T::LpRefundAddress::get_liquidity_refund_address(
-					&deposit_channel_details.owner,
-					deposit_channel_details.deposit_channel.asset.into(),
-				),
-		}
-	}
-
 	/// Completes a single deposit request.
 	#[transactional]
 	fn process_single_deposit(
@@ -1865,9 +1847,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
 		{
 			if tainted_tx.broker == channel_owner {
+				let refund_address = match deposit_channel_details.action {
+					ChannelAction::Swap { refund_params, .. } => refund_params
+						.as_ref()
+						.map(|refund_params| refund_params.refund_address.clone()),
+					ChannelAction::CcmTransfer { refund_params, .. } => refund_params
+						.as_ref()
+						.map(|refund_params| refund_params.refund_address.clone()),
+					ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
+				};
 				let tainted_transaction_details = TaintedTransactionDetails {
 					broker: channel_owner.clone(),
-					refund_address: Self::get_refund_address(&deposit_channel_details),
+					refund_address,
 					deposit_witness: Some(DepositWitness {
 						deposit_address: deposit_address.clone(),
 						asset: deposit_channel_details.deposit_channel.asset,
@@ -2294,6 +2285,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 		boost_fee: BasisPoints,
+		refund_address: Option<ForeignChainAddress>,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
@@ -2301,7 +2293,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
 			&lp_account,
 			source_asset,
-			ChannelAction::LiquidityProvision { lp_account: lp_account.clone() },
+			ChannelAction::LiquidityProvision { lp_account: lp_account.clone(), refund_address },
 			boost_fee,
 		)?;
 

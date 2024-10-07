@@ -16,7 +16,7 @@ use cf_traits::{
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
-		balance_api::{MockBalance, MockLpRegistration},
+		balance_api::MockBalance,
 		broadcaster::MockBroadcaster,
 		chain_tracking::ChainTracker,
 		fee_payment::MockFeePayment,
@@ -130,7 +130,6 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
-	type LpRefundAddress = MockLpRegistration;
 }
 
 impl_test_helpers! {
