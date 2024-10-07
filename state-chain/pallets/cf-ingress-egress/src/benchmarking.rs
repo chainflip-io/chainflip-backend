@@ -516,12 +516,15 @@ mod benchmarks {
 	fn mark_transaction_as_tainted() {
 		let caller =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
-		let tx_id = BenchmarkValue::benchmark_value();
+		let tx_id = <<T as Config<I>>::TargetChain as Chain>::DepositDetails::benchmark_value();
 
 		#[extrinsic_call]
-		mark_transaction_as_tainted(RawOrigin::Signed(caller), tx_id);
+		mark_transaction_as_tainted(RawOrigin::Signed(caller.clone()), tx_id.clone());
 
-		assert_eq!(TaintedTransactions::<T, I>::iter().count(), 1);
+		assert!(
+			TaintedTransactions::<T, I>::get(caller, tx_id).is_some(),
+			"No tainted transactions found"
+		);
 	}
 
 	#[cfg(test)]
