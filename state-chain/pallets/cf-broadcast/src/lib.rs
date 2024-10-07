@@ -1035,6 +1035,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// insert items.
 		FailedBroadcasters::<T, I>::decode_non_dedup_len(broadcast_id).unwrap_or_default() as u32
 	}
+
+	/// Returns the ApiCall from a `transaction_out_id`.
+	pub fn pending_api_call_from_out_id(
+		tx_out_id: TransactionOutIdFor<T, I>,
+	) -> Option<(BroadcastId, ApiCallFor<T, I>)> {
+		TransactionOutIdToBroadcastId::<T, I>::get(tx_out_id).and_then(|(broadcast_id, _)| {
+			PendingApiCalls::<T, I>::get(broadcast_id).map(|api_call| (broadcast_id, api_call))
+		})
+	}
 }
 
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {

@@ -449,6 +449,7 @@ fn solana_ccm_fails_with_invalid_input() {
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
 							SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: false },
 						],
+						fallback_address: SolPubkey([0xf0; 32]),
 					}
 					.encode()
 					.try_into()
