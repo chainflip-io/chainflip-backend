@@ -6,6 +6,7 @@ use crate::{
 
 use crate::vote_storage::change::MonotonicChangeVote;
 use cf_primitives::AuthorityCount;
+use cf_utilities::assert_panics;
 
 thread_local! {
 	pub static HOOK_CALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -181,23 +182,26 @@ fn minority_cannot_prevent_consensus() {
 
 #[test]
 fn finalization_only_on_consensus_change() {
+	if cfg!(debug_assertions) {
+		assert_panics!(with_default_state()
+			.expect_consensus(
+				generate_votes(
+					AUTHORITY_COUNT,
+					MonotonicChangeVote { value: 0, block: 0 },
+					0,
+					MonotonicChangeVote { value: 0, block: 0 },
+				),
+				Some((0, 0)),
+			)
+			.test_on_finalize(
+				&(),
+				|_| {
+					assert!(!MockHook::called());
+				},
+				vec![Check::<SimpleMonotonicChange>::hook_not_called(), Check::assert_unchanged()],
+			));
+	}
 	with_default_state()
-		.expect_consensus(
-			generate_votes(
-				AUTHORITY_COUNT,
-				MonotonicChangeVote { value: 0, block: 0 },
-				0,
-				MonotonicChangeVote { value: 0, block: 0 },
-			),
-			Some((0, 0)),
-		)
-		.test_on_finalize(
-			&(),
-			|_| {
-				assert!(!MockHook::called());
-			},
-			vec![Check::<SimpleMonotonicChange>::hook_not_called(), Check::assert_unchanged()],
-		)
 		.expect_consensus(
 			generate_votes(
 				AUTHORITY_COUNT,
