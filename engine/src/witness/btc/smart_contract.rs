@@ -1,7 +1,4 @@
-use bitcoin::{
-	opcodes::all::{OP_PUSHDATA1, OP_RETURN},
-	ScriptBuf,
-};
+use bitcoin::{opcodes::all::OP_RETURN, ScriptBuf};
 use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{btc::ScriptPubkey, ForeignChainAddress};
 use cf_primitives::{Asset, AssetAmount, Price};
@@ -10,6 +7,10 @@ use itertools::Itertools;
 use utilities::SliceToArray;
 
 use crate::btc::rpc::VerboseTransaction;
+
+const MAX_UTXO_DATA_LEN: u8 = 80;
+const OP_PUSHBYTES_75: u8 = 0x4b;
+const OP_PUSHDATA1: u8 = 0x4c;
 
 #[derive(PartialEq, Debug)]
 pub struct BtcContractCall {
@@ -49,17 +50,21 @@ struct SharedCfParameters {
 
 #[allow(dead_code)]
 fn encode_data_in_nulldata_utxo(data: &[u8]) -> Option<ScriptBuf> {
-	const MAX_LEN: u8 = 80;
-
 	let len = data.len() as u8;
-	if len > MAX_LEN {
-		return None
-	}
 
-	let script_bytes: Vec<_> = [OP_RETURN.to_u8(), OP_PUSHDATA1.to_u8(), len]
-		.into_iter()
-		.chain(data.iter().copied())
-		.collect();
+	let mut script_bytes = Vec::with_capacity((MAX_UTXO_DATA_LEN + 2).into());
+
+	script_bytes.push(OP_RETURN.to_u8());
+
+	match len {
+		0..=OP_PUSHBYTES_75 => script_bytes.push(len),
+		OP_PUSHDATA1..=MAX_UTXO_DATA_LEN => script_bytes.extend([OP_PUSHDATA1, len]),
+		_ => {
+			return None;
+		},
+	};
+
+	script_bytes.extend(data);
 
 	Some(bitcoin::ScriptBuf::from_bytes(script_bytes))
 }
@@ -67,14 +72,21 @@ fn encode_data_in_nulldata_utxo(data: &[u8]) -> Option<ScriptBuf> {
 fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 	let bytes = script.as_script().as_bytes();
 
-	// First opcode must be OP_RETURN and second opcode must be OP_PUSHDATA1
-	if bytes[0] != OP_RETURN.to_u8() || bytes[1] != OP_PUSHDATA1.to_u8() {
+	// First opcode must be OP_RETURN
+	if bytes[0] != OP_RETURN.to_u8() {
 		return None;
 	}
 
-	// The next byte encodes the length of the remaining data blob:
-	let data_len = bytes[2];
-	let data_bytes = &bytes[3..];
+	// Second opcode must be either OP_PUSHBYTES_X (1..=75) or OP_PUSHDATA1 (76):
+	let (data_len, data_bytes) = match bytes[1] {
+		// Opcode encodes the length directly
+		data_len @ 1..=OP_PUSHBYTES_75 => (data_len, &bytes[2..]),
+		// The length is encoded in the following byte:
+		OP_PUSHDATA1 => (bytes[2], &bytes[3..]),
+		_ => {
+			return None;
+		},
+	};
 
 	// Sanity check:
 	if data_bytes.len() != data_len as usize {
@@ -305,12 +317,30 @@ mod tests {
 
 	#[test]
 	fn extract_nulldata_utxo() {
-		const LEN: u8 = 80;
-		let data = [0x3u8; LEN as usize];
+		// Small buffers (<= 75 bytes) use OP_PUSHBYTES_X opcode:
+		{
+			let data = [0x3u8; 75_usize];
 
-		let script = encode_data_in_nulldata_utxo(&data).unwrap();
+			let script = encode_data_in_nulldata_utxo(&data).unwrap();
 
-		assert_eq!(try_extract_utxo_encoded_data(&script), Some(&data[..]));
+			assert_eq!(&script.as_bytes()[..2], &[OP_RETURN.to_u8(), 75]);
+
+			assert_eq!(try_extract_utxo_encoded_data(&script), Some(&data[..]));
+		}
+
+		// Larger buffers use OP_PUSHDATA1 opcode:
+		{
+			let data = [0x3u8; MAX_UTXO_DATA_LEN as usize];
+
+			let script = encode_data_in_nulldata_utxo(&data).unwrap();
+
+			assert_eq!(
+				&script.as_bytes()[..3],
+				&[OP_RETURN.to_u8(), OP_PUSHDATA1, MAX_UTXO_DATA_LEN]
+			);
+
+			assert_eq!(try_extract_utxo_encoded_data(&script), Some(&data[..]));
+		}
 	}
 
 	#[test]
