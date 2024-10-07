@@ -512,6 +512,18 @@ mod benchmarks {
 		assert_eq!(BoostPools::<T, I>::iter().count(), 1);
 	}
 
+	#[benchmark]
+	fn mark_transaction_as_tainted() {
+		let caller =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+		let tx_id = BenchmarkValue::benchmark_value();
+
+		#[extrinsic_call]
+		mark_transaction_as_tainted(RawOrigin::Signed(caller), tx_id);
+
+		assert_eq!(TaintedTransactions::<T, I>::iter().count(), 1);
+	}
+
 	#[cfg(test)]
 	use crate::mock_eth::*;
 
@@ -555,6 +567,9 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_contract_ccm_swap_request::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_mark_transaction_as_tainted::<Test, ()>(true);
 		});
 	}
 }

@@ -131,7 +131,6 @@ pub enum DepositIgnoredReason {
 pub struct TaintedTransactionDetails<AccountId, C: Chain> {
 	/// The broker that created the tainted transaction.
 	pub broker: AccountId,
-	/// The address we use for refunding.
 	pub refund_address: Option<ForeignChainAddress>,
 	pub deposit_witness: Option<DepositWitness<C>>,
 }
@@ -1250,6 +1249,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(12)]
+		// #[pallet::weight(T::WeightInfo::mark_transaction_as_tainted())]
 		#[pallet::weight(10_000)]
 		pub fn mark_transaction_as_tainted(
 			origin: OriginFor<T>,
