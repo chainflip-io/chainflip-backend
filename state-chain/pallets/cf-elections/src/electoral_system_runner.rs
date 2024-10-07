@@ -165,7 +165,7 @@ pub trait ElectoralSystemRunner: 'static + Sized {
 	/// This is called during the pallet's `on_finalize` callback, if elections aren't paused and
 	/// the CorruptStorage error hasn't occurred.
 	fn on_finalize(
-		&self,
+		&mut self,
 		election_identifiers: Vec<CompositeElectionIdentifierOf<Self>>,
 	) -> Result<(), CorruptStorageError>;
 
