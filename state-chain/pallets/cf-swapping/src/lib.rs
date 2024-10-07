@@ -363,6 +363,9 @@ pub enum PalletConfigUpdate<T: Config> {
 	SetMaxSwapRetryDuration { blocks: BlockNumber },
 	/// Set the max allowed total duration of a DCA swap request.
 	SetMaxSwapRequestDuration { blocks: BlockNumber },
+	/// Set the minimum chunk size for DCA swaps. The number of chunks of a DCA swap will be
+	/// reduced to meet this requirement.
+	SetMinimumChunkSize { asset: Asset, size: AssetAmount },
 }
 
 impl_pallet_safe_mode! {
@@ -505,6 +508,14 @@ pub mod pallet {
 		ConstU32<DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS>,
 	>;
 
+	/// The minimum chunk size for DCA swaps. The number of chunks of a DCA swap will be reduced
+	/// so that the chunk size is greater than or equal to this value. Setting to zero will disable
+	/// the check for that asset.
+	#[pallet::storage]
+	#[pallet::getter(fn minimum_chunk_size)]
+	pub type MinimumChunkSize<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -628,6 +639,10 @@ pub mod pallet {
 		},
 		MaxSwapRequestDurationSet {
 			blocks: BlockNumber,
+		},
+		MinimumChunkSizeSet {
+			asset: Asset,
+			amount: AssetAmount,
 		},
 	}
 	#[pallet::error]
@@ -896,6 +911,10 @@ pub mod pallet {
 						);
 						MaxSwapRequestDurationBlocks::<T>::set(blocks);
 						Self::deposit_event(Event::<T>::MaxSwapRequestDurationSet { blocks });
+					},
+					PalletConfigUpdate::SetMinimumChunkSize { asset, size: amount } => {
+						MinimumChunkSize::<T>::set(asset, amount);
+						Self::deposit_event(Event::<T>::MinimumChunkSizeSet { asset, amount });
 					},
 				}
 			}
@@ -1963,6 +1982,18 @@ pub mod pallet {
 				}
 				swap_amount
 			};
+
+			// Restrict the number of chunks based on the minimum chunk size.
+			let dca_params = dca_params.map(|mut dca_params| {
+				let minimum_chunk_size = MinimumChunkSize::<T>::get(input_asset);
+				if minimum_chunk_size > 0 {
+					dca_params.number_of_chunks = core::cmp::min(
+						max((input_amount / minimum_chunk_size) as u32, 1),
+						dca_params.number_of_chunks,
+					);
+				}
+				dca_params
+			});
 
 			Self::deposit_event(Event::<T>::SwapRequested {
 				swap_request_id: request_id,
