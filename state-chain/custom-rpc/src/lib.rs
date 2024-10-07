@@ -1000,8 +1000,8 @@ pub fn str_to_rpc_error(e: &str) -> ErrorObjectOwned {
 	ErrorObject::owned(jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE, e, Option::<()>::None)
 }
 
-pub fn to_rpc_error<E: std::fmt::Debug + Send + Sync + 'static>(e: E) -> ErrorObjectOwned {
-	str_to_rpc_error(&format!("{:?}", e)[..])
+pub fn to_rpc_error<E: core::fmt::Display + Send + Sync + 'static>(e: E) -> ErrorObjectOwned {
+	str_to_rpc_error(&format!("{}", e)[..])
 }
 
 fn map_dispatch_error(e: DispatchErrorWithMessage) -> ErrorObjectOwned {
