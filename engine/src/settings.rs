@@ -270,7 +270,7 @@ pub struct SolOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct P2POptions {
-	#[clap(long = "p2p.node_key_file", value_parser(clap::value_parser!(PathBuf)))]
+	#[clap(long = "p2p.node_key_file")]
 	node_key_file: Option<PathBuf>,
 	#[clap(long = "p2p.ip_address")]
 	ip_address: Option<IpAddr>,
@@ -321,7 +321,7 @@ pub struct CommandLineOptions {
 	pub prometheus_port: Option<Port>,
 
 	// Signing Settings
-	#[clap(long = "signing.db_file", value_parser(clap::value_parser!(PathBuf)))]
+	#[clap(long = "signing.db_file")]
 	pub signing_db_file: Option<PathBuf>,
 
 	// Logging settings
