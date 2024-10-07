@@ -128,11 +128,12 @@ pub enum DepositIgnoredReason {
 
 /// Holds information about a tainted transaction.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
-pub struct TaintedTransactionDetails<AccountId> {
+pub struct TaintedTransactionDetails<AccountId, C: Chain> {
 	/// The broker that created the tainted transaction.
 	pub broker: AccountId,
 	/// The address we use for refunding.
 	pub refund_address: Option<ForeignChainAddress>,
+	pub deposit_witness: Option<DepositWitness<C>>,
 }
 
 /// Cross-chain messaging requests.
@@ -549,7 +550,7 @@ pub mod pallet {
 		T::AccountId,
 		Twox64Concat,
 		<T::TargetChain as Chain>::DepositDetails,
-		TaintedTransactionDetails<T::AccountId>,
+		TaintedTransactionDetails<T::AccountId, T::TargetChain>,
 		OptionQuery,
 	>;
 
@@ -1264,8 +1265,11 @@ pub mod pallet {
 				AccountRole::LiquidityProvider,
 			);
 			ensure!(is_broker || is_lp, BadOrigin);
-			let tainted_transaction =
-				TaintedTransactionDetails { broker: account_id.clone(), refund_address: None };
+			let tainted_transaction = TaintedTransactionDetails {
+				broker: account_id.clone(),
+				refund_address: None,
+				deposit_witness: None,
+			};
 			TaintedTransactions::<T, I>::insert(account_id, tx_id, tainted_transaction);
 			Ok(())
 		}
@@ -1821,35 +1825,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(action)
 	}
 
-	/// Checks if the transaction is tainted and returns the refund details if it is.
-	fn check_if_tx_is_tainted(
-		maybe_tainted_transaction: Option<TaintedTransactionDetails<T::AccountId>>,
+	fn get_refund_address(
 		deposit_channel_details: &DepositChannelDetails<T, I>,
-	) -> Option<TaintedTransactionDetails<T::AccountId>> {
-		if let Some(tainted_transaction) = maybe_tainted_transaction {
-			if tainted_transaction.broker == deposit_channel_details.owner {
-				let maybe_refund_address = match &deposit_channel_details.action {
-					ChannelAction::Swap { refund_params, .. } => refund_params
-						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone()),
-					ChannelAction::CcmTransfer { refund_params, .. } => refund_params
-						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone()),
-					ChannelAction::LiquidityProvision { .. } =>
-						T::LpRefundAddress::get_liquidity_refund_address(
-							&deposit_channel_details.owner,
-							deposit_channel_details.deposit_channel.asset.into(),
-						),
-				};
-				Some(TaintedTransactionDetails {
-					broker: tainted_transaction.broker,
-					refund_address: maybe_refund_address,
-				})
-			} else {
-				None
-			}
-		} else {
-			None
+	) -> Option<ForeignChainAddress> {
+		match &deposit_channel_details.action {
+			ChannelAction::Swap { refund_params, .. } =>
+				refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
+			ChannelAction::CcmTransfer { refund_params, .. } =>
+				refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
+			ChannelAction::LiquidityProvision { .. } =>
+				T::LpRefundAddress::get_liquidity_refund_address(
+					&deposit_channel_details.owner,
+					deposit_channel_details.deposit_channel.asset.into(),
+				),
 		}
 	}
 
@@ -1871,27 +1859,39 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
+		let channel_owner = deposit_channel_details.clone().owner;
 
-		if let Some(tainted_transaction_details) = Self::check_if_tx_is_tainted(
-			TaintedTransactions::<T, I>::take(
-				deposit_channel_details.owner.clone(),
-				&deposit_details,
-			),
-			&deposit_channel_details,
-		) {
-			TaintedTransactions::<T, I>::insert(
-				deposit_channel_details.owner,
-				deposit_details.clone(),
-				tainted_transaction_details,
-			);
-			Self::deposit_event(Event::<T, I>::DepositIgnored {
-				deposit_address,
-				asset,
-				amount: deposit_amount,
-				deposit_details,
-				reason: DepositIgnoredReason::TransactionTainted,
-			});
-			return Ok(())
+		if let Some(tainted_tx) =
+			TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
+		{
+			if tainted_tx.broker == channel_owner {
+				let tainted_transaction_details = TaintedTransactionDetails {
+					broker: channel_owner.clone(),
+					refund_address: Self::get_refund_address(&deposit_channel_details),
+					deposit_witness: Some(DepositWitness {
+						deposit_address: deposit_address.clone(),
+						asset: deposit_channel_details.deposit_channel.asset,
+						amount: deposit_amount,
+						deposit_details: deposit_details.clone(),
+					}),
+				};
+
+				TaintedTransactions::<T, I>::insert(
+					channel_owner,
+					deposit_details.clone(),
+					tainted_transaction_details,
+				);
+
+				Self::deposit_event(Event::<T, I>::DepositIgnored {
+					deposit_address: deposit_address.clone(),
+					asset,
+					amount: deposit_amount,
+					deposit_details: deposit_details.clone(),
+					reason: DepositIgnoredReason::TransactionTainted,
+				});
+
+				return Ok(())
+			}
 		}
 
 		if DepositChannelPool::<T, I>::get(channel_id).is_some() {
