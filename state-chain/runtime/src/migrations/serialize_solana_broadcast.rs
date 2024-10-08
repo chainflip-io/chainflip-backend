@@ -3,7 +3,6 @@ use pallet_cf_broadcast::BroadcastData;
 
 use crate::*;
 use frame_support::pallet_prelude::Weight;
-#[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
 use cf_chains::sol::{SolTransaction, SolanaTransactionData};
@@ -68,12 +67,10 @@ impl OnRuntimeUpgrade for SerializeSolanaBroadcastMigration {
 	}
 }
 
-#[cfg(any(test, feature = "try-runtime"))]
 pub fn pre_upgrade_check() -> Result<Vec<u8>, DispatchError> {
 	Ok((old::AwaitingBroadcast::iter().count() as u64).encode())
 }
 
-#[cfg(any(test, feature = "try-runtime"))]
 pub fn post_upgrade_check(state: Vec<u8>) -> Result<(), DispatchError> {
 	let pre_awaiting_broadcast_count = <u64>::decode(&mut state.as_slice())
 		.map_err(|_| DispatchError::from("Failed to decode state"))?;
