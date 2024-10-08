@@ -268,11 +268,6 @@ pub(super) trait SwapDirection {
 
 	/// Increases a valid sqrt_price by a specified number of ticks
 	fn increase_sqrt_price(sqrt_price: SqrtPriceQ64F96, delta: Tick) -> SqrtPriceQ64F96;
-
-	/// Returns the equivalent saturated amount in the output asset to a given amount of the input
-	/// asset at a specific tick, will return None iff the tick is invalid
-	#[allow(dead_code)]
-	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount>;
 }
 impl SwapDirection for BaseToQuote {
 	const INPUT_SIDE: Pairs = Pairs::Base;
@@ -288,19 +283,6 @@ impl SwapDirection for BaseToQuote {
 
 	fn increase_sqrt_price(sqrt_price: SqrtPriceQ64F96, delta: Tick) -> SqrtPriceQ64F96 {
 		sqrt_price_at_tick(tick_at_sqrt_price(sqrt_price).saturating_sub(delta).max(MIN_TICK))
-	}
-
-	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount> {
-		if is_tick_valid(tick) {
-			Some(
-				(U256::full_mul(amount, sqrt_price_to_price(sqrt_price_at_tick(tick))) /
-					(U256::one() << PRICE_FRACTIONAL_BITS))
-					.try_into()
-					.unwrap_or(U256::MAX),
-			)
-		} else {
-			None
-		}
 	}
 }
 impl SwapDirection for QuoteToBase {
@@ -322,19 +304,6 @@ impl SwapDirection for QuoteToBase {
 				.saturating_add(delta)
 				.min(MAX_TICK),
 		)
-	}
-
-	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount> {
-		if is_tick_valid(tick) {
-			Some(
-				(U256::full_mul(amount, U256::one() << PRICE_FRACTIONAL_BITS) /
-					sqrt_price_to_price(sqrt_price_at_tick(tick)))
-				.try_into()
-				.unwrap_or(U256::MAX),
-			)
-		} else {
-			None
-		}
 	}
 }
 
