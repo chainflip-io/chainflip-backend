@@ -9,9 +9,6 @@ pub const ETHEREUM_MAX_ABORTED_BROADCAST_PERSEVERANCE: BroadcastId = 1609;
 pub const ARBITRUM_MAX_ABORTED_BROADCAST_PERSEVERANCE: BroadcastId = 665;
 pub const POLKADOT_MAX_ABORTED_BROADCAST_PERSEVERANCE: BroadcastId = 634;
 
-pub struct EthereumMigration;
-pub struct ArbitrumMigration;
-
 pub fn remove_stale_and_all_older<T: Config<I>, I: 'static>(latest_stale_broadcast: BroadcastId) {
 	AbortedBroadcasts::<T, I>::mutate(|aborted| {
 		aborted.retain(|id| id > &latest_stale_broadcast);
