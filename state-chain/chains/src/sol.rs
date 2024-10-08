@@ -24,7 +24,7 @@ use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
 	consts::{
 		LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT,
-		RENT_TOKEN_ACCOUNT,
+		TOKEN_ACCOUNT_RENT,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
@@ -202,7 +202,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 
 		match asset {
 			assets::sol::Asset::Sol => gas_fee,
-			assets::sol::Asset::SolUsdc => gas_fee.saturating_add(RENT_TOKEN_ACCOUNT),
+			assets::sol::Asset::SolUsdc => gas_fee.saturating_add(TOKEN_ACCOUNT_RENT),
 		}
 	}
 	fn estimate_ingress_fee(
