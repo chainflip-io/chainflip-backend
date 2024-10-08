@@ -228,9 +228,8 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 
 					// if activation tx is not required, we immediately rotate to the next vault.
 
-					// if Activation tx fails to construct, we still rotate to the next vault (Todo:
-					// we should probably handle the case where the tx fails to construct
-					// differently)
+					// if Activation tx fails to construct, we emit an Event and pause the rotation,
+					// awaiting governance intervention.
 
 					// If we are activating the chain and it is the first vault for the chain, we
 					// need to wait for governance to activate the chain. This case is handled
@@ -249,9 +248,8 @@ impl<T: Config<I>, I: 'static> KeyRotator for Pallet<T, I> {
 				new_public_key,
 			);
 
-			// If there are no request_ids to wait for and there is no chain for this key that is
-			// activating its first vault, we dont have to wait for anything and we can activate the
-			// key mark jey rotation as complete.
+			// If there are no request_ids to wait for and there are no chains needing governance
+			// intervention, we mark the key rotation as complete.
 			if request_ids.is_empty() &&
 				!start_key_activation_results.into_iter().any(|result| {
 					result == StartKeyActivationResult::FirstVault ||
