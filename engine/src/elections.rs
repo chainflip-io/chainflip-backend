@@ -12,9 +12,9 @@ use anyhow::anyhow;
 use cf_primitives::MILLISECONDS_PER_BLOCK;
 use futures::{stream, StreamExt, TryStreamExt};
 use pallet_cf_elections::{
-	electoral_system::ElectionIdentifierOf,
 	vote_storage::{AuthorityVote, VoteStorage},
-	ElectoralSystemRunner, SharedDataHash, MAXIMUM_VOTES_PER_EXTRINSIC,
+	CompositeElectionIdentifierOf, ElectoralSystemRunner, SharedDataHash,
+	MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use rand::Rng;
 use std::{
@@ -23,7 +23,7 @@ use std::{
 };
 use tracing::{error, info, warn};
 use utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
-use voter_api::VoterApi;
+use voter_api::{CompositeVoterApi, VoterApi};
 
 const MAXIMUM_CONCURRENT_FILTER_REQUESTS: usize = 16;
 const LIFETIME_OF_SHARED_DATA_IN_CACHE: std::time::Duration = std::time::Duration::from_secs(90);
@@ -34,7 +34,7 @@ const INITIAL_VOTER_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::
 pub struct Voter<
 	Instance: 'static,
 	StateChainClient: ElectoralApi<Instance> + SignedExtrinsicApi + ChainApi,
-	VoterClient: VoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner> + Send + Sync + 'static,
+	VoterClient: CompositeVoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner> + Send + Sync + 'static,
 > where
 	state_chain_runtime::Runtime:
 		pallet_cf_elections::Config<Instance>,
@@ -47,7 +47,7 @@ pub struct Voter<
 impl<
 		Instance: Send + Sync + 'static,
 		StateChainClient: ElectoralApi<Instance> + SignedExtrinsicApi + ChainApi,
-		VoterClient: VoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner> + Clone + Send + Sync + 'static,
+		VoterClient: CompositeVoterApi<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner> + Clone + Send + Sync + 'static,
 	> Voter<Instance, StateChainClient, VoterClient>
 where
 	state_chain_runtime::Runtime:
@@ -111,7 +111,7 @@ where
 			std::time::Duration::from_millis(MILLISECONDS_PER_BLOCK);
 		let mut submit_interval = tokio::time::interval(BLOCK_TIME);
 		let mut pending_submissions = BTreeMap::<
-			ElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
+			CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
 			(
 				<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::PartialVote,
 				<<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
