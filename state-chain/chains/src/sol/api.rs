@@ -380,9 +380,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let agg_key = Environment::current_agg_key()?;
 		let sol_api_environment = Environment::api_environment()?;
 		let compute_price = Environment::compute_price()?;
-		// TODO: As we do for other fetches we should have checked before that we still
-		// leave 1 nonce account available for a potential rotation (and potentially more).
-		// That should be done as part of PRO-1520.
 		let durable_nonce = Environment::nonce_account()?;
 
 		// Build the transaction
