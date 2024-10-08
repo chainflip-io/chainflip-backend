@@ -23,7 +23,7 @@ use std::{
 };
 use tracing::{error, info, warn};
 use utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
-use voter_api::{CompositeVoterApi, VoterApi};
+use voter_api::CompositeVoterApi;
 
 const MAXIMUM_CONCURRENT_FILTER_REQUESTS: usize = 16;
 const LIFETIME_OF_SHARED_DATA_IN_CACHE: std::time::Duration = std::time::Duration::from_secs(90);

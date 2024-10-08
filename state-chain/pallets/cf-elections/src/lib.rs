@@ -1803,7 +1803,7 @@ pub mod pallet {
 
 					Some(ElectoralData {
 						current_elections: Self::with_electoral_access_and_identifiers(
-							|electoral_access, election_identifiers| {
+							|storage_access, election_identifiers| {
 								election_identifiers
 									.into_iter()
 									.map(|election_identifier| {
@@ -1833,31 +1833,24 @@ pub mod pallet {
 												},
 											)?;
 
-										todo!("Implement this");
-
-										// 	let election_access =
-										// 		electoral_access.election(election_identifier)?;
-
-										// 	Ok((
-										// 	election_identifier,
-										// 	AuthorityElectionData {
-										// 		settings: election_access.settings()?,
-										// 		properties: election_access.properties()?,
-										// 		// We report the vote to the engine even though it is
-										// timeouted so the engine 		// knows to delete it. As it may
-										// still later to reconstructed if the right 		// `SharedData`
-										// is provided, unless it is delete. 		option_existing_vote:
-										// option_current_authority_vote.as_ref().map(|(_,
-										// authority_vote)| { 			authority_vote.clone()
-										// 		}),
-										// 		is_vote_desired: <T::ElectoralSystemRunner as
-										// ElectoralSystemRunner>::is_vote_desired(
-										// 			election_identifier,
-										// 			&election_access,
-										// 			option_current_authority_vote.filter(|_|
-										// !contains_timed_out_shared_data_references), 		)?,
-										// 	},
-										// ))
+										Ok((
+												election_identifier,
+												AuthorityElectionData {
+													settings: storage_access.electoral_settings_for_election(*election_identifier.unique_monotonic())?,
+													properties: storage_access.election_properties(election_identifier)?,
+													// We report the vote to the engine even though it is timeouted so the engine
+													// knows to delete it. As it may still later to reconstructed if the right
+													// `SharedData` is provided, unless it is delete.
+													option_existing_vote: option_current_authority_vote.as_ref().map(|(_, authority_vote)| {
+														authority_vote.clone()
+													}),
+													is_vote_desired: <T::ElectoralSystemRunner as ElectoralSystemRunner>::is_vote_desired(
+														election_identifier,
+														storage_access,
+														option_current_authority_vote.filter(|_| !contains_timed_out_shared_data_references),
+													)?,
+												},
+											))
 									})
 									.collect::<Result<BTreeMap<_, _>, _>>()
 							},
