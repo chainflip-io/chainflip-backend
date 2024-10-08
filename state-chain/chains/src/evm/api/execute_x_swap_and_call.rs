@@ -86,11 +86,12 @@ mod test_execute_x_swap_and_execute {
 	fn test_payload() {
 		use crate::evm::tests::asymmetrise;
 		use ethabi::Token;
+
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 		const FAKE_VAULT_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 9;
-		const GAS_BUDGET: <Ethereum as Chain>::ChainGas = U256::from(100_000);
+		const GAS_BUDGET: <Ethereum as Chain>::ChainGas = U256([100_000, 0, 0, 0]);
 
 		let dummy_transfer_asset_param = EncodableTransferAssetParams {
 			asset: Address::from_slice(&[5; 20]),

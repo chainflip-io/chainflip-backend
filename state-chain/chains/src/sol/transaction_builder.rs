@@ -666,17 +666,16 @@ mod test {
 	#[test]
 	fn can_calculate_gas_limit() {
 		const TEST_EGRESS_BUDGET: SolComputeLimit = 80_000u32;
-		const TEST_COMPUTE_PRICE: SolAmount = 2_000_000;
 
 		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
-			let mut tx_compute_limit =
-				SolanaTransactionBuilder::calculate_ccm_gas_limit(TEST_EGRESS_BUDGET, *asset);
-			assert_eq!(tx_compute_limit, TEST_EGRESS_BUDGET);
-
 			let default_compute_limit = match asset {
 				SolAsset::Sol => DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
 				SolAsset::SolUsdc => DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
 			};
+
+			let mut tx_compute_limit =
+				SolanaTransactionBuilder::calculate_ccm_gas_limit(TEST_EGRESS_BUDGET, *asset);
+			assert_eq!(tx_compute_limit, TEST_EGRESS_BUDGET + default_compute_limit);
 
 			// Test SolComputeLimit saturation
 			assert_eq!(
@@ -695,10 +694,7 @@ mod test {
 			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
 
 			// Test lower cap
-			let mut tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_gas_limit(
-				default_compute_limit - 1,
-				*asset,
-			);
+			let tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_gas_limit(0, *asset);
 			assert_eq!(tx_compute_limit, default_compute_limit);
 		}
 	}
