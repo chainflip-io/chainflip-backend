@@ -17,9 +17,9 @@ use crate::{
 		SolAsset, SolHash, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, Chain, ChainCrypto, ChainEnvironment,
-	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
-	FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, SetGovKeyWithAggKey, Solana,
-	TransferAssetParams, TransferFallback, TransferFallbackError,
+	CloseSolanaContractSwapAccounts, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall,
+	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey,
+	SetGovKeyWithAggKey, Solana, TransferAssetParams, TransferFallback, TransferFallbackError,
 };
 
 use cf_primitives::{EgressId, ForeignChain};
@@ -507,6 +507,14 @@ impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
 		_transfer_param: TransferAssetParams<Solana>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)
+	}
+}
+
+impl<Env: 'static> CloseSolanaContractSwapAccounts for SolanaApi<Env> {
+	fn new_unsigned(
+		accounts: Vec<EventAccountAndSender>,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		Self::batch_close_event_accounts(accounts)
 	}
 }
 

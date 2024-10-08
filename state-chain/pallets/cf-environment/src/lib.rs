@@ -228,6 +228,19 @@ pub mod pallet {
 	#[pallet::getter(fn solana_api_environment)]
 	pub type SolanaApiEnvironment<T> = StorageValue<_, SolApiEnvironment, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn solana_open_contract_swap_accounts)]
+	pub type SolanaOpenContractSwapAccounts<T> = StorageValue<_, Vec<SolAddress>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn solana_closed_contract_swap_accounts)]
+	pub type SolanaClosedContractSwapAccounts<T> = StorageMap<_, Blake2_128Concat, SolAddress, ()>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn solana_last_closed_contract_swap_accounts_at)]
+	pub type SolanaLastClosedContractSwapAccountsAt<T> =
+		StorageValue<_, BlockNumberFor<T>, OptionQuery>;
+
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
@@ -244,6 +257,15 @@ pub mod pallet {
 	#[pallet::getter(fn network_environment)]
 	/// Contains the network environment for this runtime.
 	pub type ChainflipNetworkEnvironment<T> = StorageValue<_, NetworkEnvironment, ValueQuery>;
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_idle(block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			if (SolanaOpenContractSwapAccounts::<T>::decode_len() >= MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES || SolanaLastClosedContractSwapAccountsAt::<T>::get().is_some_and(|n| block_number.checked_sub(n).expect("current block number should always be greater than the block number at which last account closure apicall was created.") >= MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS) ) && Self::get_number_of_available_sol_nonce_accounts() > 4 {
+				
+			}
+		}
+	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -744,6 +766,22 @@ impl<T: Config> Pallet<T> {
 		} else {
 			log::error!("Nonce account {nonce_account} not found in unavailable nonce accounts");
 		}
+	}
+
+	pub fn report_sol_contract_swap_accounts(
+		new_accounts: Vec<SolAddress>,
+		confirm_closed_accounts: Vec<SolAddress>,
+	) {
+		SolanaOpenContractSwapAccounts::<T>::mutate(|accts| accts.extend(new_accounts));
+		confirm_closed_accounts
+			.into_iter()
+			.for_each(SolanaClosedContractSwapAccounts::<T>::remove);
+	}
+
+	fn get_all_sol_contract_swap_accounts() -> Vec<SolAddress> {
+		let mut all_accounts = SolanaOpenContractSwapAccounts::<T>::get();
+		all_accounts.extend(SolanaClosedContractSwapAccounts::<T>::iter_keys().collect::<Vec<_>>());
+		all_accounts
 	}
 }
 
