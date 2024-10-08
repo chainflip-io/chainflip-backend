@@ -599,6 +599,8 @@ pub mod pallet {
 			_phantom: core::marker::PhantomData<(T, I)>,
 		}
 
+		// Doesn't actually store anything?
+
 		impl<T: Config<I>, I: 'static> RunnerStorageAccess<T, I> {
 			pub(crate) fn new() -> Self {
 				Self { _phantom: Default::default() }
@@ -608,6 +610,7 @@ pub mod pallet {
 		impl<T: Config<I>, I: 'static> RunnerStorageAccessTrait for RunnerStorageAccess<T, I> {
 			type ElectoralSystemRunner = T::ElectoralSystemRunner;
 
+			// Why do we even take &self, if we have nothing inside to call onto?
 			fn electoral_settings_for_election(
 				&self,
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,

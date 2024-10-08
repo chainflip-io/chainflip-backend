@@ -43,6 +43,8 @@ pub struct CompositeConsensusVotes<ES: ElectoralSystemRunner> {
 pub trait ElectoralSystemRunner: 'static + Sized {
 	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
 
+	type StorageAccess: RunnerStorageAccessTrait;
+
 	/// This is intended for storing any internal state of the ElectoralSystem. It is not
 	/// synchronised and therefore should only be used by the ElectoralSystem, and not be consumed
 	/// by the engine.
@@ -105,9 +107,9 @@ pub trait ElectoralSystemRunner: 'static + Sized {
 	/// This is not used by the pallet, but is used to tell a validator that it should attempt
 	/// to vote in a given Election. Validators are expected to call this indirectly via RPC once
 	/// per state-chain block, for each active election.
-	fn is_vote_desired<ElectionAccess: RunnerStorageAccessTrait>(
+	fn is_vote_desired<StorageAccess: RunnerStorageAccessTrait>(
 		_election_identifier_with_extra: CompositeElectionIdentifierOf<Self>,
-		_election_access: &ElectionAccess,
+		_election_access: &StorageAccess,
 		current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(current_vote.is_none())

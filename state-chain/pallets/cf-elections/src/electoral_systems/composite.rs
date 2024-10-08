@@ -1,25 +1,31 @@
-use crate::electoral_system::{ElectoralSystem, ElectoralWriteAccess};
+use crate::{
+	electoral_system::{ElectoralSystem, ElectoralWriteAccess},
+	electoral_system_runner::RunnerStorageAccessTrait,
+};
 
 /// Allows the composition of multiple ElectoralSystems while allowing the ability to configure the
 /// `on_finalize` behaviour without exposing the internal composite types.
-pub struct CompositeRunner<T, ValidatorId, H = DefaultHooks<()>> {
+pub struct CompositeRunner<T, ValidatorId, StorageAccess, H = DefaultHooks<(), StorageAccess>> {
+	storage_access: StorageAccess,
 	_phantom: core::marker::PhantomData<(T, ValidatorId, H)>,
 }
 
-pub struct DefaultHooks<OnFinalizeContext> {
-	_phantom: core::marker::PhantomData<OnFinalizeContext>,
+pub struct DefaultHooks<OnFinalizeContext, StorageAccess> {
+	_phantom: core::marker::PhantomData<(OnFinalizeContext, StorageAccess)>,
 }
 
-pub trait Translator<GenericElectoralAccess> {
+/// Takes a generic storage access type and then can translate into an election access type for a
+/// specific electoral system.
+pub trait Translator {
+	type StorageAccess: RunnerStorageAccessTrait;
 	type ElectoralSystem: ElectoralSystem;
 	type ElectionAccess<'a>: ElectoralWriteAccess<ElectoralSystem = Self::ElectoralSystem>
 	where
-		Self: 'a,
-		GenericElectoralAccess: 'a;
+		Self: 'a;
 
 	fn translate_electoral_access<'a>(
 		&'a self,
-		generic_electoral_access: &'a mut GenericElectoralAccess,
+		storage_access: &'a mut Self::StorageAccess,
 	) -> Self::ElectionAccess<'a>;
 }
 
@@ -82,17 +88,24 @@ macro_rules! generate_electoral_system_tuple_impls {
 
             /// This trait specifies the behaviour of the composite's `ElectoralSystem::on_finalize` without that code being exposed to the internals of the composite by using the Translator trait to obtain ElectoralAccess objects that abstract those details.
             pub trait Hooks<$($electoral_system: ElectoralSystem,)*> {
-                fn on_finalize<GenericElectoralAccess, $($electoral_system_alt_name_0: Translator<GenericElectoralAccess, ElectoralSystem = $electoral_system>),*>(
-                    generic_electoral_access: &mut GenericElectoralAccess,
+
+                type StorageAccess: RunnerStorageAccessTrait;
+
+                // we could pass in another generic, and have the translator take the storage, but why?
+                fn on_finalize<$($electoral_system_alt_name_0: Translator<StorageAccess = Self::StorageAccess, ElectoralSystem = $electoral_system>),*>(
+                    // What do we actually need this for?
+                    generic_electoral_access: &mut Self::StorageAccess,
                     electoral_access_translators: ($($electoral_system_alt_name_0,)*),
                     election_identifiers: ($(Vec<ElectionIdentifierOf<$electoral_system>>,)*),
                 ) -> Result<(), CorruptStorageError>;
             }
 
-            impl<$($electoral_system: ElectoralSystem<OnFinalizeContext = ()>,)*> Hooks<$($electoral_system,)*> for DefaultHooks<()> {
+            impl<$($electoral_system: ElectoralSystem<OnFinalizeContext = ()>,)* StorageAccess: RunnerStorageAccessTrait> Hooks<$($electoral_system,)*> for DefaultHooks<(), StorageAccess> {
 
-                fn on_finalize<GenericElectoralAccess, $($electoral_system_alt_name_0: Translator<GenericElectoralAccess, ElectoralSystem = $electoral_system>),*>(
-                    generic_electoral_access: &mut GenericElectoralAccess,
+                type StorageAccess = StorageAccess;
+
+                fn on_finalize<$($electoral_system_alt_name_0: Translator<StorageAccess = Self::StorageAccess, ElectoralSystem = $electoral_system>),*>(
+                    generic_electoral_access: &mut Self::StorageAccess,
                     electoral_access_translators: ($($electoral_system_alt_name_0,)*),
                     election_identifiers: ($(Vec<ElectionIdentifier<$electoral_system::ElectionIdentifierExtra>>,)*),
                 ) -> Result<(), CorruptStorageError> {
@@ -133,9 +146,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                 $($electoral_system($electoral_system),)*
             }
 
-
-            // TODO: Merge this trait into the Runner trait.
-            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static> CompositeRunner<($($electoral_system,)*), ValidatorId, H> {
+            // We need to pass a storage access here.
+            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StorageAccess: RunnerStorageAccessTrait + 'static, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static> CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H> {
                 pub fn with_identifiers<R, F: for<'a> FnOnce(
                     ($(
                         Vec<ElectionIdentifierOf<$electoral_system>>,
@@ -161,18 +173,18 @@ macro_rules! generate_electoral_system_tuple_impls {
 
                 pub fn with_access_translators<R, F: for<'a> FnOnce(
                     ($(
-                        ElectoralAccessTranslator<tags::$electoral_system, $electoral_system, Self>,
+                        ElectoralAccessTranslator<tags::$electoral_system, $electoral_system, StorageAccess>,
                     )*)
                 ) -> R>(
                     f: F,
                 ) -> R {
                     f((
-                        $(ElectoralAccessTranslator::<tags::$electoral_system, $electoral_system, Self>::new(),)*
+                        $(ElectoralAccessTranslator::<tags::$electoral_system, $electoral_system, StorageAccess>::new(),)*
                     ))
                 }
             }
 
-            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*> + 'static> ElectoralSystemRunner for CompositeRunner<($($electoral_system,)*), ValidatorId, H> {
+            impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StorageAccess: RunnerStorageAccessTrait + 'static, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static> ElectoralSystemRunner for CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H> {
                 type ValidatorId = ValidatorId;
                 type ElectoralUnsynchronisedState = ($(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedState,)*);
                 type ElectoralUnsynchronisedStateMapKey = CompositeElectoralUnsynchronisedStateMapKey<$(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,)*>;
@@ -186,9 +198,9 @@ macro_rules! generate_electoral_system_tuple_impls {
                 type Vote = ($(<$electoral_system as ElectoralSystem>::Vote,)*);
                 type Consensus = CompositeConsensus<$(<$electoral_system as ElectoralSystem>::Consensus,)*>;
 
-                fn is_vote_desired<StorageAccess: RunnerStorageAccessTrait>(
+                fn is_vote_desired<SA: RunnerStorageAccessTrait>(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
-                    storage_access: &StorageAccess,
+                    storage_access: &SA,
                     current_vote: Option<(
                         VotePropertiesOf<Self>,
                         AuthorityVoteOf<Self>,
@@ -304,10 +316,11 @@ macro_rules! generate_electoral_system_tuple_impls {
                     &mut self,
                     election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
                 ) -> Result<(), CorruptStorageError> {
+                    // We call this *on* the CompositeRunner, and so Self is the CompositerRunner, but the translators are on the Storage.
                     Self::with_access_translators(|access_translators| {
                         Self::with_identifiers(election_identifiers, |election_identifiers| {
                             H::on_finalize(
-                                self,
+                                &mut self.storage_access,
                                 access_translators,
                                 election_identifiers,
                             )
@@ -601,14 +614,17 @@ macro_rules! generate_electoral_system_tuple_impls {
         }
 
         // We don't need a runner, we need a Storage access layer i.e. something that impls this trait. - should rename that here and above.
-        impl<$current: ElectoralSystem, Runner: RunnerStorageAccessTrait> Translator<Runner> for ElectoralAccessTranslator<tags::$current, $current, Runner> {
-            type ElectoralSystem = $current;
-            type ElectionAccess<'a> = CompositeElectoralAccess<'a, tags::$current, $current, Runner>
-            where
-                Self: 'a, Runner: 'a;
+        impl<$current: ElectoralSystem, StorageAccess: RunnerStorageAccessTrait> Translator for ElectoralAccessTranslator<tags::$current, $current, StorageAccess> {
 
-            fn translate_electoral_access<'a>(&'a self, runner: &'a mut Runner) -> Self::ElectionAccess<'a> {
-                Self::ElectionAccess::<'a>::new(runner)
+            type StorageAccess = StorageAccess;
+            type ElectoralSystem = $current;
+            type ElectionAccess<'a> = CompositeElectoralAccess<'a, tags::$current, $current, Self::StorageAccess>
+            where
+                Self: 'a;
+
+            // What do we actually need to be able to t
+            fn translate_electoral_access<'a>(&'a self, storage_access: &'a mut Self::StorageAccess) -> Self::ElectionAccess<'a> {
+                Self::ElectionAccess::<'a>::new(storage_access)
             }
         }
 

@@ -357,8 +357,6 @@ mod access {
 		>;
 	}
 
-	// This trait has no implementations???
-
 	/// A trait allowing read access to the details about the electoral system and its elections
 	pub trait ElectoralReadAccess {
 		type ElectoralSystem: ElectoralSystem;
