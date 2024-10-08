@@ -49,8 +49,8 @@ mod test_missed_authorship_slots {
 	use super::*;
 	use codec::Encode;
 	use frame_support::{
-		construct_runtime, derive_impl, parameter_types,
-		sp_runtime::{testing::UintAuthorityId, traits::IdentityLookup, BuildStorage, Digest},
+		construct_runtime, derive_impl,
+		sp_runtime::{testing::UintAuthorityId, BuildStorage, Digest},
 		traits::{ConstU32, ConstU64, OnInitialize},
 	};
 	use sp_consensus_aura::ed25519::AuthorityId;
@@ -71,40 +71,9 @@ mod test_missed_authorship_slots {
 		}
 	);
 
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-	}
-
 	#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 	impl frame_system::Config for Test {
-		type BaseCallFilter = frame_support::traits::Everything;
-		type BlockWeights = ();
-		type BlockLength = ();
-		type DbWeight = ();
-		type RuntimeOrigin = RuntimeOrigin;
-		type Nonce = u64;
-		type RuntimeCall = RuntimeCall;
-		type Hash = sp_core::H256;
-		type Hashing = ::sp_runtime::traits::BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Block = Block;
-		type RuntimeEvent = RuntimeEvent;
-		type BlockHashCount = BlockHashCount;
-		type Version = ();
-		type PalletInfo = PalletInfo;
-		type AccountData = ();
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
-		type SystemWeightInfo = ();
-		type SS58Prefix = ();
-		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<5>;
-		type SingleBlockMigrations = ();
-		type MultiBlockMigrator = ();
-		type PreInherents = ();
-		type PostInherents = ();
-		type PostTransactions = ();
 	}
 
 	const SLOT_DURATION: u64 = 6;
