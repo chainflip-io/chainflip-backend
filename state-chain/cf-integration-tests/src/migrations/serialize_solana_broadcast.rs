@@ -10,7 +10,7 @@ use sp_runtime::AccountId32;
 use frame_support::traits::OnRuntimeUpgrade;
 use pallet_cf_broadcast::BroadcastData;
 use state_chain_runtime::{
-	migrations::serialize_solana_broadcast::{old, SerializeSolanaBroadcastMigration, self},
+	migrations::serialize_solana_broadcast::{self, old, SerializeSolanaBroadcastMigration},
 	SolanaInstance,
 };
 
