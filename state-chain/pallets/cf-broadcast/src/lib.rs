@@ -688,6 +688,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.ok_or(Error::<T, I>::InvalidPayload)?;
 
 		Self::remove_pending_broadcast(&broadcast_id);
+		AbortedBroadcasts::<T, I>::mutate(|aborted| {
+			aborted.remove(&broadcast_id);
+		});
 
 		if IncomingKeyAndBroadcastId::<T, I>::exists() {
 			let (incoming_key, rotation_broadcast_id) =
@@ -1089,7 +1092,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	}
 
 	fn expire_broadcast(broadcast_id: BroadcastId) {
-		// These would otherwise be cleaned up when the broadacst succeeds or aborts.
+		// These would otherwise be cleaned up when the broadcast succeeds or aborts.
 		RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
 		RequestFailureCallbacks::<T, I>::remove(broadcast_id);
 		Self::clean_up_broadcast_storage(broadcast_id);
