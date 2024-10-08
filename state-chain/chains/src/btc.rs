@@ -1,6 +1,7 @@
 pub mod api;
 pub mod benchmarking;
 pub mod deposit_address;
+pub mod smart_contract_encoding;
 pub mod utxo_selection;
 
 extern crate alloc;
@@ -40,6 +41,9 @@ pub const CHANGE_ADDRESS_SALT: u32 = 0;
 // The bitcoin script generated from the bitcoin address should not exceed this value according to
 // our construction
 pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
+
+// Bitcion does not support push operations of data larger than this size:
+const MAX_PUSHABLE_BYTES: u32 = 520;
 
 // We must send strictly greater than this amount to avoid hitting the Bitcoin dust
 // limit
@@ -579,7 +583,12 @@ impl ScriptPubkey {
 			]),
 			ScriptPubkey::OtherSegwit { version, program } => BitcoinScript::new(&[
 				BitcoinOp::PushVersion { version: *version },
-				BitcoinOp::PushBytes { bytes: program.clone() },
+				BitcoinOp::PushBytes {
+					bytes: program
+						.to_vec()
+						.try_into()
+						.expect("MAX_SEGWIT_PROGRAM_BYTES < MAX_PUSHABLE_BYTES"),
+				},
 			]),
 		}
 	}
@@ -921,7 +930,7 @@ impl BitcoinTransaction {
 	}
 }
 
-trait SerializeBtc {
+pub trait SerializeBtc {
 	/// Encodes this item to a byte buffer.
 	fn btc_encode_to(&self, buf: &mut Vec<u8>);
 	/// The exact size this object will have once serialized.
@@ -954,7 +963,7 @@ impl<T: SerializeBtc> SerializeBtc for &[T] {
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum BitcoinOp {
 	PushUint { value: u32 },
-	PushBytes { bytes: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
+	PushBytes { bytes: BoundedVec<u8, ConstU32<MAX_PUSHABLE_BYTES>> },
 	Drop,
 	CheckSig,
 	Dup,
@@ -965,6 +974,7 @@ pub enum BitcoinOp {
 	PushArray20 { bytes: [u8; 20] },
 	PushArray32 { bytes: [u8; 32] },
 	PushVersion { version: u8 },
+	Return,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -1057,6 +1067,7 @@ impl SerializeBtc for BitcoinOp {
 				} else {
 					buf.push(0x50 + *version);
 				},
+			BitcoinOp::Return => buf.push(0x6a),
 		}
 	}
 
@@ -1085,6 +1096,7 @@ impl SerializeBtc for BitcoinOp {
 			BitcoinOp::Dup |
 			BitcoinOp::Hash160 |
 			BitcoinOp::EqualVerify |
+			BitcoinOp::Return |
 			BitcoinOp::Equal => 1,
 			BitcoinOp::PushArray20 { .. } => 21,
 			BitcoinOp::PushArray32 { .. } => 33,

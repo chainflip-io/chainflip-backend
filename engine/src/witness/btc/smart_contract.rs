@@ -1,14 +1,16 @@
 use bitcoin::{opcodes::all::OP_RETURN, ScriptBuf};
 use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
-use cf_chains::{btc::ScriptPubkey, ForeignChainAddress};
+use cf_chains::{
+	btc::{smart_contract_encoding::UtxoEncodedData, ScriptPubkey},
+	ForeignChainAddress,
+};
 use cf_primitives::{Asset, AssetAmount, Price};
-use codec::{Decode, Encode};
+use codec::Decode;
 use itertools::Itertools;
 use utilities::SliceToArray;
 
 use crate::btc::rpc::VerboseTransaction;
 
-const MAX_UTXO_DATA_LEN: u8 = 80;
 const OP_PUSHBYTES_75: u8 = 0x4b;
 const OP_PUSHDATA1: u8 = 0x4c;
 
@@ -26,47 +28,6 @@ pub struct BtcContractCall {
 	chunk_interval: u16,
 	// --- Boost ---
 	boost_fee: u8,
-}
-
-#[derive(Encode, Decode, Clone)]
-struct UtxoEncodedData {
-	output_asset: Asset,
-	output_address: ForeignChainAddress,
-	parameters: SharedCfParameters,
-}
-
-// The encoding of these parameters is the same across chains
-#[derive(Encode, Decode, Clone)]
-struct SharedCfParameters {
-	// FoK fields (refund address is stored externally):
-	retry_duration: u16,
-	min_output_amount: AssetAmount,
-	// DCA fields:
-	number_of_chunks: u16,
-	chunk_interval: u16,
-	// Boost fields:
-	boost_fee: u8,
-}
-
-#[allow(dead_code)]
-fn encode_data_in_nulldata_utxo(data: &[u8]) -> Option<ScriptBuf> {
-	let len = data.len() as u8;
-
-	let mut script_bytes = Vec::with_capacity((MAX_UTXO_DATA_LEN + 2).into());
-
-	script_bytes.push(OP_RETURN.to_u8());
-
-	match len {
-		0..=OP_PUSHBYTES_75 => script_bytes.push(len),
-		OP_PUSHDATA1..=MAX_UTXO_DATA_LEN => script_bytes.extend([OP_PUSHDATA1, len]),
-		_ => {
-			return None;
-		},
-	};
-
-	script_bytes.extend(data);
-
-	Some(bitcoin::ScriptBuf::from_bytes(script_bytes))
 }
 
 fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
@@ -94,11 +55,6 @@ fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 	}
 
 	Some(data_bytes)
-}
-
-#[allow(dead_code)]
-fn encode_swap_params_in_nulldata_utxo(params: UtxoEncodedData) -> Option<ScriptBuf> {
-	encode_data_in_nulldata_utxo(&params.encode())
 }
 
 fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
@@ -198,6 +154,8 @@ mod tests {
 
 	use super::*;
 
+	use cf_chains::btc::smart_contract_encoding::*;
+
 	const MOCK_DOT_ADDRESS: [u8; 32] = [9u8; 32];
 
 	static MOCK_SWAP_PARAMS: LazyLock<UtxoEncodedData> = LazyLock::new(|| {
@@ -283,8 +241,11 @@ mod tests {
 				VerboseTxOut {
 					value: Amount::from_sat(0),
 					n: 1,
-					script_pubkey: encode_swap_params_in_nulldata_utxo(MOCK_SWAP_PARAMS.clone())
-						.expect("params should fit in utxo"),
+					script_pubkey: ScriptBuf::from_bytes(
+						encode_swap_params_in_nulldata_utxo(MOCK_SWAP_PARAMS.clone())
+							.expect("params should fit in utxo")
+							.raw(),
+					),
 				},
 				// A UTXO containing refund address:
 				VerboseTxOut {
@@ -317,52 +278,18 @@ mod tests {
 
 	#[test]
 	fn extract_nulldata_utxo() {
-		// Small buffers (<= 75 bytes) use OP_PUSHBYTES_X opcode:
-		{
-			let data = [0x3u8; 75_usize];
+		for data in [vec![0x3u8; 1_usize], vec![0x3u8; 75_usize], vec![0x3u8; 80_usize]] {
+			let script_buf =
+				ScriptBuf::from_bytes(encode_data_in_nulldata_utxo(&data).unwrap().raw());
 
-			let script = encode_data_in_nulldata_utxo(&data).unwrap();
-
-			assert_eq!(&script.as_bytes()[..2], &[OP_RETURN.to_u8(), 75]);
-
-			assert_eq!(try_extract_utxo_encoded_data(&script), Some(&data[..]));
-		}
-
-		// Larger buffers use OP_PUSHDATA1 opcode:
-		{
-			let data = [0x3u8; MAX_UTXO_DATA_LEN as usize];
-
-			let script = encode_data_in_nulldata_utxo(&data).unwrap();
-
-			assert_eq!(
-				&script.as_bytes()[..3],
-				&[OP_RETURN.to_u8(), OP_PUSHDATA1, MAX_UTXO_DATA_LEN]
-			);
-
-			assert_eq!(try_extract_utxo_encoded_data(&script), Some(&data[..]));
+			assert_eq!(try_extract_utxo_encoded_data(&script_buf), Some(&data[..]));
 		}
 	}
+}
 
-	#[test]
-	fn check_utxo_encoding() {
-		// The following encoding is expected for MOCK_SWAP_PARAMS:
-		// (not using "insta" because we want to be precise about how the data
-		// is encoded exactly, rather than simply that the encoding doesn't change)
-		let expected_encoding: Vec<u8> = [0x05] // Asset
-			.into_iter()
-			.chain([0x01]) // Tag for polkadot address
-			.chain(MOCK_DOT_ADDRESS) // Polkadot address
-			.chain([0x05, 0x00]) // Retry duration
-			.chain([
-				0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-				0xff, 0xff,
-			]) // min output amount
-			.chain([0xff, 0xff]) // Number of chunks
-			.chain([0x02, 0x00]) // Chunk interval
-			.chain([0x5]) // Boost fee
-			.collect();
-
-		assert_eq!(MOCK_SWAP_PARAMS.encode(), expected_encoding);
-		assert_eq!(expected_encoding.len(), 57);
-	}
+#[test]
+fn foo() {
+	let price = sqrt_price_to_price(bounded_sqrt_price(1.into(), 240000000000u128.into()));
+	// dbg!(price);
+	println!("{}", serde_json::to_string(&price).unwrap());
 }
