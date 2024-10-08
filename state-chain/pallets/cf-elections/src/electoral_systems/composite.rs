@@ -314,14 +314,14 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
 
                 fn on_finalize(
-                    &mut self,
+                    storage_access: &mut Self::StorageAccess,
                     election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
                 ) -> Result<(), CorruptStorageError> {
                     // We call this *on* the CompositeRunner, and so Self is the CompositerRunner, but the translators are on the Storage.
                     Self::with_access_translators(|access_translators| {
                         Self::with_identifiers(election_identifiers, |election_identifiers| {
                             H::on_finalize(
-                                &mut self.storage_access,
+                                storage_access,
                                 access_translators,
                                 election_identifiers,
                             )

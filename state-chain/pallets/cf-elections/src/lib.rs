@@ -362,6 +362,7 @@ pub mod pallet {
 
 		type ElectoralSystemRunner: ElectoralSystemRunner<
 			ValidatorId = <Self as Chainflip>::ValidatorId,
+			StorageAccess = RunnerStorageAccess<Self, I>,
 		>;
 
 		/// The weights for the pallet
@@ -1683,13 +1684,12 @@ pub mod pallet {
 									}
 								}
 
-								todo!("Do this");
-								// T::ElectoralSystemRunner::on_finalize(
-								// 	// do we really need to pass this in?
-								// 	// why would it not be a feature of the runner?
-								// 	electoral_access,
-								// 	election_identifiers,
-								// )?;
+								T::ElectoralSystemRunner::on_finalize(
+									// do we really need to pass this in?
+									// why would it not be a feature of the runner?
+									electoral_access,
+									election_identifiers,
+								)?;
 
 								Ok(())
 							},
