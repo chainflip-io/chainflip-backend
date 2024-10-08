@@ -17,8 +17,8 @@ pub struct ExecutexSwapAndCall {
 	source_chain: u32,
 	/// The source address of the transfer.
 	source_address: Vec<u8>,
-	/// Amount of funds that can be used as gas used to execute this call on the target chain.
-	gas_budget: <Ethereum as Chain>::ChainAmount,
+	/// Gas units that can be used by this call on the target chain.
+	gas_budget: <Ethereum as Chain>::ChainGas,
 	/// Message that needs to be passed through.
 	message: Vec<u8>,
 }
@@ -28,7 +28,7 @@ impl ExecutexSwapAndCall {
 		transfer_param: EncodableTransferAssetParams,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Ethereum as Chain>::ChainAmount,
+		gas_budget: <Ethereum as Chain>::ChainGas,
 		message: Vec<u8>,
 	) -> Self {
 		Self {
@@ -63,7 +63,7 @@ impl EvmCall for ExecutexSwapAndCall {
 		]
 	}
 
-	fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+	fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainGas> {
 		Some(self.gas_budget)
 	}
 }
@@ -90,7 +90,7 @@ mod test_execute_x_swap_and_execute {
 		const FAKE_VAULT_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 9;
-		const GAS_BUDGET: <Ethereum as Chain>::ChainAmount = 100_000u128;
+		const GAS_BUDGET: <Ethereum as Chain>::ChainGas = U256::from(100_000);
 
 		let dummy_transfer_asset_param = EncodableTransferAssetParams {
 			asset: Address::from_slice(&[5; 20]),

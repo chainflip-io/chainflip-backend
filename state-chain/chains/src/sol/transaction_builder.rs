@@ -5,8 +5,8 @@
 //! This avoids the need to deal with low level Solana core types.
 
 use sol_prim::consts::{
-	LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT, SOL_USDC_DECIMAL,
-	SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS, TOKEN_PROGRAM_ID,
+	MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
+	TOKEN_PROGRAM_ID,
 };
 
 use crate::{
@@ -33,8 +33,8 @@ use crate::{
 use sp_std::{vec, vec::Vec};
 
 use super::compute_units_costs::{
-	MAX_COMPUTE_UNITS_PER_CCM_TRANSFER, MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
-	MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER, MIN_COMPUTE_PRICE,
+	DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER, DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
+	MAX_COMPUTE_UNITS_PER_CCM_TRANSFER, MIN_COMPUTE_PRICE,
 };
 
 fn system_program_id() -> SolAddress {
@@ -300,7 +300,7 @@ impl SolanaTransactionBuilder {
 		agg_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
-		gas_budget: SolAmount,
+		gas_budget: SolComputeLimit,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![
 			SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount),
@@ -325,7 +325,7 @@ impl SolanaTransactionBuilder {
 			durable_nonce,
 			agg_key.into(),
 			compute_price,
-			Self::calculate_ccm_gas_limit(gas_budget, compute_price, SolAsset::Sol),
+			Self::calculate_ccm_gas_limit(gas_budget, SolAsset::Sol),
 		)
 	}
 
@@ -346,7 +346,7 @@ impl SolanaTransactionBuilder {
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
 		token_decimals: u8,
-		gas_budget: SolAmount,
+		gas_budget: SolComputeLimit,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![
 		AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
@@ -385,32 +385,17 @@ impl SolanaTransactionBuilder {
 			durable_nonce,
 			agg_key.into(),
 			compute_price,
-			Self::calculate_ccm_gas_limit(gas_budget, compute_price, SolAsset::SolUsdc),
+			Self::calculate_ccm_gas_limit(gas_budget, SolAsset::SolUsdc),
 		)
 	}
 
-	fn calculate_ccm_gas_limit(
-		gas_budget: SolAmount,
-		compute_price: SolAmount,
-		asset: SolAsset,
-	) -> SolComputeLimit {
-		let gas_budget_after_signature = gas_budget.saturating_sub(LAMPORTS_PER_SIGNATURE);
-
-		let compute_limit_from_budget =
-			// Budget is in lamports, compute price is in microlamports/CU.
-			// A minimum compute price is set when building a transaction.
-			sp_std::cmp::min(
-				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u128,
-				(gas_budget_after_signature as u128 * MICROLAMPORTS_PER_LAMPORT as u128)
-					/ sp_std::cmp::max(compute_price as u128, MIN_COMPUTE_PRICE as u128),
-			) as SolComputeLimit;
-
-		sp_std::cmp::max(
-			compute_limit_from_budget,
-			match asset {
-				SolAsset::Sol => MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
-				SolAsset::SolUsdc => MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
-			},
+	fn calculate_ccm_gas_limit(gas_budget: SolComputeLimit, asset: SolAsset) -> SolComputeLimit {
+		sp_std::cmp::min(
+			MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as SolComputeLimit,
+			gas_budget.saturating_add(match asset {
+				SolAsset::Sol => DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
+				SolAsset::SolUsdc => DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
+			}),
 		)
 	}
 
@@ -680,52 +665,23 @@ mod test {
 
 	#[test]
 	fn can_calculate_gas_limit() {
-		const TEST_EGRESS_BUDGET: SolAmount = 500_000;
+		const TEST_EGRESS_BUDGET: SolComputeLimit = 80_000u32;
 		const TEST_COMPUTE_PRICE: SolAmount = 2_000_000;
 
-		let compute_price_lamports = TEST_COMPUTE_PRICE.div_ceil(MICROLAMPORTS_PER_LAMPORT.into());
 		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
-			let mut tx_compute_limit: u32 = SolanaTransactionBuilder::calculate_ccm_gas_limit(
-				TEST_EGRESS_BUDGET * compute_price_lamports + LAMPORTS_PER_SIGNATURE,
-				TEST_COMPUTE_PRICE,
-				*asset,
-			);
-			assert_eq!(tx_compute_limit as u64, TEST_EGRESS_BUDGET);
+			let mut tx_compute_limit =
+				SolanaTransactionBuilder::calculate_ccm_gas_limit(TEST_EGRESS_BUDGET, *asset);
+			assert_eq!(tx_compute_limit, TEST_EGRESS_BUDGET);
 
-			// Rounded down
-			assert_eq!(
-				SolanaTransactionBuilder::calculate_ccm_gas_limit(
-					(TEST_EGRESS_BUDGET + 1) as SolAmount + LAMPORTS_PER_SIGNATURE,
-					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
-					*asset,
-				),
-				SolanaTransactionBuilder::calculate_ccm_gas_limit(
-					(TEST_EGRESS_BUDGET + 9) as SolAmount + LAMPORTS_PER_SIGNATURE,
-					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
-					*asset,
-				)
-			);
-			assert_eq!(
-				SolanaTransactionBuilder::calculate_ccm_gas_limit(
-					(TEST_EGRESS_BUDGET + 1) as SolAmount * compute_price_lamports +
-						LAMPORTS_PER_SIGNATURE,
-					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
-					*asset,
-				),
-				SolanaTransactionBuilder::calculate_ccm_gas_limit(
-					TEST_EGRESS_BUDGET as SolAmount * compute_price_lamports +
-						LAMPORTS_PER_SIGNATURE,
-					(MICROLAMPORTS_PER_LAMPORT * 10) as SolAmount,
-					*asset,
-				)
-			);
+			let default_compute_limit = match asset {
+				SolAsset::Sol => DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
+				SolAsset::SolUsdc => DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
+			};
 
 			// Test SolComputeLimit saturation
 			assert_eq!(
 				SolanaTransactionBuilder::calculate_ccm_gas_limit(
-					(SolComputeLimit::MAX as SolAmount) * 2 * compute_price_lamports +
-						LAMPORTS_PER_SIGNATURE,
-					TEST_COMPUTE_PRICE,
+					MAX_COMPUTE_UNITS_PER_CCM_TRANSFER - default_compute_limit + 1,
 					*asset,
 				),
 				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER
@@ -733,25 +689,18 @@ mod test {
 
 			// Test upper cap
 			tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_gas_limit(
-				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u64 * compute_price_lamports * 2,
-				TEST_COMPUTE_PRICE,
+				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER - 1,
 				*asset,
 			);
 			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
 
-			tx_compute_limit =
-				SolanaTransactionBuilder::calculate_ccm_gas_limit(TEST_EGRESS_BUDGET, 0, *asset);
-			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
+			// Test lower cap
+			let mut tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_gas_limit(
+				default_compute_limit - 1,
+				*asset,
+			);
+			assert_eq!(tx_compute_limit, default_compute_limit);
 		}
-
-		// Test lower cap
-		let mut tx_compute_limit =
-			SolanaTransactionBuilder::calculate_ccm_gas_limit(10u64, 1, SolAsset::Sol);
-		assert_eq!(tx_compute_limit, MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER);
-
-		tx_compute_limit =
-			SolanaTransactionBuilder::calculate_ccm_gas_limit(10u64, 1, SolAsset::SolUsdc);
-		assert_eq!(tx_compute_limit, MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER);
 	}
 
 	#[test]
@@ -776,9 +725,7 @@ mod test {
 			agg_key(),
 			durable_nonce(),
 			compute_price(),
-			(TEST_COMPUTE_LIMIT as u128 * compute_price() as u128)
-				.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()) as u64 +
-				LAMPORTS_PER_SIGNATURE,
+			TEST_COMPUTE_LIMIT,
 		)
 		.unwrap();
 
@@ -816,9 +763,7 @@ mod test {
 			durable_nonce(),
 			compute_price(),
 			SOL_USDC_DECIMAL,
-			(TEST_COMPUTE_LIMIT as u128 * compute_price() as u128)
-				.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()) as u64 +
-				LAMPORTS_PER_SIGNATURE,
+			TEST_COMPUTE_LIMIT,
 		)
 		.unwrap();
 

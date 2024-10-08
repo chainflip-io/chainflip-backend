@@ -258,7 +258,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Solana as Chain>::ChainAmount,
+		gas_budget: <Solana as Chain>::ChainGas,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
@@ -438,7 +438,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: cf_primitives::ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Solana as Chain>::ChainAmount,
+		gas_budget: <Solana as Chain>::ChainGas,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {

@@ -62,6 +62,7 @@ impl Chain for Solana {
 	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = SlotNumber;
 	type ChainAmount = SolAmount;
+	type ChainGas = SolComputeLimit;
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = SolTrackedData;
 	type ChainAsset = assets::sol::Asset;
@@ -155,8 +156,8 @@ pub mod compute_units_costs {
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
 	pub const MAX_COMPUTE_UNITS_PER_CCM_TRANSFER: SolComputeLimit = 600_000u32;
 	// Minimum compute units required for CCM transfers to ensure their inclusion
-	pub const MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER: SolComputeLimit = 20_000u32;
-	pub const MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER: SolComputeLimit = 50_000u32;
+	pub const DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER: SolComputeLimit = 20_000u32;
+	pub const DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER: SolComputeLimit = 60_000u32;
 }
 
 #[derive(

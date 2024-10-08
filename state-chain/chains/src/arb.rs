@@ -33,6 +33,7 @@ impl Chain for Arbitrum {
 	type ChainCrypto = EvmCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
+	type ChainGas = EthGasUnits;
 	type TransactionFee = evm::TransactionFee;
 	type TrackedData = ArbitrumTrackedData;
 	type ChainAsset = assets::arb::Asset;
