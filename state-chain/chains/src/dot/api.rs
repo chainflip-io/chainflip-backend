@@ -148,7 +148,6 @@ where
 #[macro_export]
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
-		#[allow(unreachable_patterns)]
 		match $self {
 			PolkadotApi::BatchFetchAndTransfer($var) => $var_method,
 			PolkadotApi::RotateVaultProxy($var) => $var_method,

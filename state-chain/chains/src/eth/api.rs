@@ -295,7 +295,6 @@ impl<E> From<EvmTransactionBuilder<transfer_fallback::TransferFallback>> for Eth
 
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
-		#[allow(unreachable_patterns)]
 		match $self {
 			EthereumApi::SetAggKeyWithAggKey($var) => $var_method,
 			EthereumApi::RegisterRedemption($var) => $var_method,

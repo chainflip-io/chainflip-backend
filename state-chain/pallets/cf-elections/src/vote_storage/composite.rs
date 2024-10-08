@@ -72,7 +72,6 @@ macro_rules! generate_vote_storage_tuple_impls {
                     properties: Self::Properties,
                     partial_vote: Self::PartialVote,
                 ) -> Result<VoteComponents<Self>, CorruptStorageError> {
-                    #[allow(unreachable_patterns)]
                     match (properties, partial_vote) {
                         $(
                             (
@@ -95,7 +94,6 @@ macro_rules! generate_vote_storage_tuple_impls {
                     vote_components: VoteComponents<Self>,
                     mut get_shared_data: GetSharedData,
                 ) -> Result<Option<(Self::Properties, AuthorityVote<Self::PartialVote, Self::Vote>)>, CorruptStorageError> {
-                    #[allow(unreachable_patterns)]
                     match vote_components {
                         $(
                             VoteComponents {
@@ -108,7 +106,6 @@ macro_rules! generate_vote_storage_tuple_impls {
                                         bitmap_component: Some(bitmap_component)
                                     },
                                     |shared_data_hash| {
-                                        #[allow(unreachable_patterns)]
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeSharedData::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),

@@ -152,7 +152,6 @@ impl<E> From<EvmTransactionBuilder<transfer_fallback::TransferFallback>> for Arb
 
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
-		#[allow(unreachable_patterns)]
 		match $self {
 			ArbitrumApi::SetAggKeyWithAggKey($var) => $var_method,
 			ArbitrumApi::AllBatch($var) => $var_method,
