@@ -434,9 +434,10 @@ macro_rules! generate_electoral_system_tuple_impls {
             type ElectoralSystem = $current;
 
             fn settings(&self) -> Result<$current::ElectoralSettings, CorruptStorageError> {
-                // let ($($previous,)* settings, $($remaining,)*) =self.runner.borrow().settings()?;
-                // Ok(settings)
-                todo!()
+
+
+                let ($($previous,)* settings, $($remaining,)*) =self.runner.borrow().settings()?;
+                Ok(settings)
             }
             fn properties(&self) -> Result<$current::ElectionProperties, CorruptStorageError> {
                 todo!()

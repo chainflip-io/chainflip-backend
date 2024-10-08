@@ -407,6 +407,9 @@ mod access {
 			self.set_unsynchronised_state(unsynchronised_state)?;
 			Ok(t)
 		}
+
+		// We need to impl a settings function to pull all the settings from storage -> pulls
+		// CompositeSettings and then can be translated in the various read access trait things.
 	}
 }
 
