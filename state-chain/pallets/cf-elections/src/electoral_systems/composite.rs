@@ -329,49 +329,49 @@ macro_rules! generate_electoral_system_tuple_impls {
                     })
                 }
 
-                fn check_consensus<ElectionAccess: RunnerStorageAccessTrait>(
+                // TODO:
+                fn check_consensus<SA: RunnerStorageAccessTrait>(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
-                    election_access: &ElectionAccess,
+                    election_access: &SA,
                     previous_consensus: Option<&Self::Consensus>,
                     consensus_votes: CompositeConsensusVotes<Self>,
                 ) -> Result<Option<Self::Consensus>, CorruptStorageError> {
-                    // Ok(match *election_identifier.extra() {
-                    //     $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
-                    //         <$electoral_system as ElectoralSystem>::check_consensus(
-                    //             election_identifier.with_extra(extra),
-                    //             &CompositeElectionAccess::<tags::$electoral_system, _, ElectionAccess>::new(election_access),
-                    //             previous_consensus.map(|previous_consensus| {
-                    //                 match previous_consensus {
-                    //                     CompositeConsensus::$electoral_system(previous_consensus) => Ok(previous_consensus),
-                    //                     _ => Err(CorruptStorageError::new()),
-                    //                 }
-                    //             }).transpose()?,
-                    //             ConsensusVotes {
-                    //                 votes: consensus_votes.votes.into_iter().map(|CompositeConsensusVote { vote, validator_id }| {
-                    //                     if let Some((properties, vote)) = vote {
-                    //                         match (properties, vote) {
-                    //                             (
-                    //                                 CompositeVoteProperties::$electoral_system(properties),
-                    //                                 CompositeVote::$electoral_system(vote),
-                    //                             ) => Ok(ConsensusVote {
-                    //                                 vote: Some((properties, vote)),
-                    //                                 validator_id
-                    //                             }),
-                    //                             _ => Err(CorruptStorageError::new()),
-                    //                         }
-                    //                     } else {
-                    //                         Ok(ConsensusVote {
-                    //                             vote: None,
-                    //                             validator_id
-                    //                         })
-                    //                     }
+                    Ok(match *election_identifier.extra() {
+                        $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
+                            <$electoral_system as ElectoralSystem>::check_consensus(
+                                election_identifier.with_extra(extra),
+                                &CompositeElectionAccess::<tags::$electoral_system, _, _, SA>::new(election_access),
+                                previous_consensus.map(|previous_consensus| {
+                                    match previous_consensus {
+                                        CompositeConsensus::$electoral_system(previous_consensus) => Ok(previous_consensus),
+                                        _ => Err(CorruptStorageError::new()),
+                                    }
+                                }).transpose()?,
+                                ConsensusVotes {
+                                    votes: consensus_votes.votes.into_iter().map(|CompositeConsensusVote { vote, validator_id }| {
+                                        if let Some((properties, vote)) = vote {
+                                            match (properties, vote) {
+                                                (
+                                                    CompositeVoteProperties::$electoral_system(properties),
+                                                    CompositeVote::$electoral_system(vote),
+                                                ) => Ok(ConsensusVote {
+                                                    vote: Some((properties, vote)),
+                                                    validator_id
+                                                }),
+                                                _ => Err(CorruptStorageError::new()),
+                                            }
+                                        } else {
+                                            Ok(ConsensusVote {
+                                                vote: None,
+                                                validator_id
+                                            })
+                                        }
 
-                    //                 }).collect::<Result<Vec<_>, _>>()?
-                    //             }
-                    //         )?.map(CompositeConsensus::$electoral_system)
-                    //     },)*
-                    // })
-                    todo!()
+                                    }).collect::<Result<Vec<_>, _>>()?
+                                }
+                            )?.map(CompositeConsensus::$electoral_system)
+                        },)*
+                    })
                 }
             }
 
