@@ -49,7 +49,8 @@ pub struct CcmParams {
 }
 
 // 1. Query the on-chain list of opened accounts from SwapEndpointDataAccount.
-// 2. Check the returned accounts against the SC opened_accounts.
+// 2. Check the returned accounts against the SC opened_accounts. The SC is the source of truth for
+//    the opened channels we can rely on that to not query the same accounts multiple times.
 // 3. If they are already seen in the SC we do nothing with them and skip the query.
 // 4. If an account is in the SC but not see in the engine we report it as closed.
 // 5. If they are not seen in the SC we query the account data. Then we parse the account data and
@@ -61,7 +62,7 @@ pub async fn get_program_swaps(
 	sc_opened_accounts: Vec<SolAddress>,
 	_token_pubkey: SolAddress,
 ) -> Result<Vec<SwapEvent>, anyhow::Error> {
-	let (new_program_swap_accounts, _closed_accounts) = get_changed_program_swap_accounts(
+	let (new_program_swap_accounts, _closed_accounts, slot) = get_changed_program_swap_accounts(
 		sol_rpc,
 		sc_opened_accounts,
 		swap_endpoint_data_account_address,
@@ -71,22 +72,25 @@ pub async fn get_program_swaps(
 	stream::iter(new_program_swap_accounts)
 		.chunks(MAX_MULTIPLE_EVENT_ACCOUNTS_QUERY)
 		.map(|new_program_swap_accounts_chunk| {
-			get_program_swap_event_accounts_data(sol_rpc, new_program_swap_accounts_chunk)
+			get_program_swap_event_accounts_data(sol_rpc, new_program_swap_accounts_chunk, slot)
 		})
 		.buffered(MAXIMUM_CONCURRENT_RPCS)
 		.map_ok(|program_swap_account_data_chunk| {
 			stream::iter(program_swap_account_data_chunk.into_iter().filter_map(
 				|program_swap_account_data| match program_swap_account_data {
 					Some(data) => Some(Ok(data)),
-					// It could happen that some account is closed between the queries.
-					// Case A: A new account (no consensus) is opened and closed before we query it.
-					// That should never happen as we need to reach consensus before we send the
-					// close transaction.
-					// Case B: An account has consensus and is closed between queries. That
-					// account won't be included in new_program_swap_accounts and therefore
-					// won't be queried here anyway. Therefore, this shouldn't be a problem.
-					// Case C: If due to rpc load management the get event accounts rpc
-					// is executed at a slot < get swap endpoint data rpc.
+					// It could happen that some account is closed between the queries. This should
+					// not happen because:
+					// 1. Accounts in `new_program_swap_accounts` can only be accounts that have
+					//    newly been opened and they won't be closed until consensus is reached.
+					// 2. If due to rpc load management the get event accounts rpc is queried at a
+					//    slot < get swap endpoint data rpc slot, the min_context_slot will prevent
+					//    it from being executed before that.
+					// This could only happen if an engine is behind and were to see the account
+					// opened and closed between queries. That's not reallistic as it takes minutes
+					// for an account to be closed and even if it were to happen it's not
+					// problematic as we'd have reached consensus and the engine would just filter
+					// it out.
 					None => {
 						warn!("Event account not found for solana event account");
 						None
@@ -102,36 +106,25 @@ pub async fn get_program_swaps(
 	// step required is checking the SwapEvent's src_token. If empty, submit it as native. Otherwise
 	// it should match token_pubkey. A token not matching the token_pubkey should never happen.
 	// The submission might be done in a layer above (sol.rs).
+
+	// TODO: When submitting data we could technically submit the slot when the SwapEvent was
+	// queried for the new opened accounts. However, it's just easier to submit the slot when the
+	// SwapEndpointDataAccount was queried for both closed accounts and new opened accounts.
 }
 
 async fn get_changed_program_swap_accounts(
 	sol_rpc: &SolRetryRpcClient,
 	sc_opened_accounts: Vec<SolAddress>,
 	swap_endpoint_data_account_address: SolAddress,
-) -> Result<(Vec<SolAddress>, Vec<SolAddress>), anyhow::Error> {
-	let (_historical_number_event_accounts, open_event_accounts, _slot) =
+) -> Result<(Vec<SolAddress>, Vec<SolAddress>, u64), anyhow::Error> {
+	let (_historical_number_event_accounts, open_event_accounts, slot) =
 		get_swap_endpoint_data(sol_rpc, swap_endpoint_data_account_address)
 			.await
 			.expect("Failed to get the event accounts");
 
-	// NOTE: With the current architecture where the SC is the source of truth for the opened
-	// channels we can rely on that to not query the same accounts multiple times. The pallet should
-	// also filter votes when voting multiple times while consensus is not reached. Therefore,
-	// we don't use the historical_number_event_accounts for now. Even if that number remains the
-	// same we might need to report closed accounts.
 	let sc_opened_accounts_hashset: HashSet<_> = sc_opened_accounts.iter().collect();
 	let mut new_program_swap_accounts = Vec::new();
 	let mut closed_accounts = Vec::new();
-
-	// TODO: In the scenario where consensus is reached but an engine is far behind (account not
-	// seen in the list) the engine will see that channel as closed (NOT GOOD!). Should we compare
-	// slots to double check? We could also do that on the voting pallet rejecting the votes
-	// (similar to the new nonce system). Otherwise, if the SC stores the slot when the consensus
-	// was reached that the account was opened, we can simply remove accounts where the slot is
-	// lower than the consensus so we don't even bother querying them.
-	// While the pallet handling it is nice, we'd like to avoid querying accounts unnecessarily
-	// so similar to the sol_deposits we can probably add a small optimization here.
-	// However, this will depend on whether the sc_opened_accounts stores the slot.
 
 	for account in &open_event_accounts {
 		if !sc_opened_accounts_hashset.contains(account) {
@@ -146,9 +139,11 @@ async fn get_changed_program_swap_accounts(
 		}
 	}
 
-	Ok((new_program_swap_accounts, closed_accounts))
+	Ok((new_program_swap_accounts, closed_accounts, slot))
 }
 
+// Query the list of opened accounts from SwapEndpointDataAccount. The Swap Endpoint program ensures
+// that the list is updated atomically whenever a swap event account is opened or closed.
 async fn get_swap_endpoint_data(
 	sol_rpc: &SolRetryRpcClient,
 	swap_endpoint_data_account_address: SolAddress,
@@ -214,6 +209,7 @@ async fn get_swap_endpoint_data(
 async fn get_program_swap_event_accounts_data(
 	sol_rpc: &SolRetryRpcClient,
 	program_swap_event_accounts: Vec<SolAddress>,
+	min_context_slot: u64,
 ) -> Result<Vec<Option<SwapEvent>>, anyhow::Error> {
 	let accounts_info_response = sol_rpc
 		.get_multiple_accounts(
@@ -222,16 +218,11 @@ async fn get_program_swap_event_accounts_data(
 				encoding: Some(UiAccountEncoding::Base64),
 				data_slice: None,
 				commitment: Some(CommitmentConfig::finalized()),
-				min_context_slot: None,
+				min_context_slot: Some(min_context_slot),
 			},
 		)
 		.await;
 
-	// TODO: We might want to submit the getAccountInfo from the SwapEndpointDataAccount to the SC
-	// instead, especially if we don't submit in the scenario where an account is open
-	// when we query the SwapEndpointDataAccount but it's empty when we query the account.
-	// Or maybe in that case we should submit it as closed and move on. If the former then
-	// we can filter out all the None values here already. TBD.
 	let _slot = accounts_info_response.context.slot;
 	let accounts_info = accounts_info_response.value;
 
@@ -285,7 +276,7 @@ mod tests {
 	use super::*;
 
 	#[tokio::test]
-	// #[ignore]
+	#[ignore]
 	async fn test_get_swap_endpoint_data() {
 		task_scope::task_scope(|scope| {
 			async {
@@ -346,7 +337,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	// #[ignore]
+	#[ignore]
 	async fn test_get_changed_program_swap_accounts() {
 		task_scope::task_scope(|scope| {
 			async {
@@ -364,7 +355,7 @@ mod tests {
 				.await
 				.unwrap();
 
-				let (new_program_swap_accounts, closed_accounts) =
+				let (new_program_swap_accounts, closed_accounts, _) =
 					get_changed_program_swap_accounts(
 						&client,
 						vec![SolAddress::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
@@ -383,7 +374,7 @@ mod tests {
 						.unwrap()]
 				);
 
-				let (new_program_swap_accounts, closed_accounts) =
+				let (new_program_swap_accounts, closed_accounts, _) =
 					get_changed_program_swap_accounts(
 						&client,
 						vec![SolAddress::from_str("HhxGAt8THMtsW97Zuo5ZrhKgqsdD5EBgCx9vZ4n62xpf")
@@ -440,6 +431,7 @@ mod tests {
 						SolAddress::from_str("Dd1k91cWt84qJoQr3FT7EXQpSaMtZtwPwdho7RbMWtEV")
 							.unwrap(),
 					],
+					123,
 				)
 				.await
 				.unwrap();
