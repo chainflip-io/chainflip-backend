@@ -448,6 +448,7 @@ pub struct SwappingEnvironment {
 	swap_retry_delay_blocks: u32,
 	max_swap_retry_duration_blocks: u32,
 	max_swap_request_duration_blocks: u32,
+	minimum_chunk_size: any::AssetMap<NumberOrHex>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1605,6 +1606,12 @@ where
 				.map_err(to_rpc_error)?,
 			max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
 			max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
+			minimum_chunk_size: any::AssetMap::try_from_fn(|asset| {
+				runtime_api
+					.cf_minimum_chunk_size(hash, asset)
+					.map_err(to_rpc_error)
+					.map(Into::into)
+			})?,
 		})
 	}
 
@@ -2255,6 +2262,18 @@ mod test {
 				swap_retry_delay_blocks: 5,
 				max_swap_retry_duration_blocks: 600,
 				max_swap_request_duration_blocks: 14400,
+				minimum_chunk_size: any::AssetMap {
+					eth: eth::AssetMap {
+						eth: 123_u32.into(),
+						flip: 0u32.into(),
+						usdc: 456_u32.into(),
+						usdt: 0u32.into(),
+					},
+					btc: btc::AssetMap { btc: 789_u32.into() },
+					dot: dot::AssetMap { dot: 0u32.into() },
+					arb: arb::AssetMap { eth: 0u32.into(), usdc: 101112_u32.into() },
+					sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
+				},
 			},
 			ingress_egress: IngressEgressEnvironment {
 				minimum_deposit_amounts: any::AssetMap {

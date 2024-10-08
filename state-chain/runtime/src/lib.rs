@@ -1806,6 +1806,10 @@ impl_runtime_apis! {
 			pallet_cf_swapping::Pallet::<Runtime>::get_swap_limits()
 		}
 
+		fn cf_minimum_chunk_size(asset: Asset) -> AssetAmount {
+			Swapping::minimum_chunk_size(asset)
+		}
+
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
 		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
 		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Side) -> Vec<AssetAmount> {

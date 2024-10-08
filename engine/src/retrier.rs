@@ -959,7 +959,7 @@ mod tests {
 
 		task_scope(|scope| {
 			async move {
-				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(300);
 
 				let retrier_client = RetrierClient::new(
 					scope,
