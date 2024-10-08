@@ -139,7 +139,7 @@ pub mod pallet {
 	use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
 
 	use crate::electoral_system::{ConsensusVote, ElectoralSystem};
-	use access_impls::RunnerStorageAccess;
+	pub use access_impls::RunnerStorageAccess;
 
 	use crate::electoral_system_runner::{
 		CompositeConsensusVote, CompositeConsensusVotes, RunnerStorageAccessTrait,

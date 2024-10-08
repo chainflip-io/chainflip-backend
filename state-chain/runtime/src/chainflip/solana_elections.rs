@@ -1,6 +1,6 @@
 use crate::{Environment, Runtime, SolanaBroadcaster, SolanaChainTracking, SolanaThresholdSigner};
 use cf_chains::{
-	instances::ChainInstanceAlias,
+	instances::{ChainInstanceAlias, SolanaInstance},
 	sol::{SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto},
 	Chain, FeeEstimationApi, Solana,
 };
@@ -13,6 +13,7 @@ use cf_traits::{
 use codec::{Decode, Encode};
 use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
+	electoral_system_runner::RunnerStorageAccessTrait,
 	electoral_systems::{
 		self,
 		change::OnChangeHook,
@@ -20,7 +21,7 @@ use pallet_cf_elections::{
 		egress_success::OnEgressSuccess,
 		monotonic_median::MedianChangeHook,
 	},
-	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
+	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
 
 use scale_info::TypeInfo;
@@ -33,7 +34,7 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 
 type Instance = <Solana as ChainInstanceAlias>::Instance;
 
-pub type SolanaElectoralSystem = CompositeRunner<
+pub type SolanaElectoralSystemRunner = CompositeRunner<
 	(
 		SolanaBlockHeightTracking,
 		SolanaFeeTracking,
@@ -42,7 +43,8 @@ pub type SolanaElectoralSystem = CompositeRunner<
 		SolanaEgressWitnessing,
 	),
 	<Runtime as Chainflip>::ValidatorId,
-	SolanaElectionHooks,
+	RunnerStorageAccess<Runtime, SolanaInstance>,
+	SolanaElectionHooks<RunnerStorageAccess<Runtime, SolanaInstance>>,
 >;
 
 /// Creates an initial state to initialize the pallet with.
@@ -158,29 +160,32 @@ impl MedianChangeHook<<Solana as Chain>::ChainBlockNumber> for SolanaBlockHeight
 	}
 }
 
-pub struct SolanaElectionHooks;
+pub struct SolanaElectionHooks<StorageAccess> {
+	_phantom: core::marker::PhantomData<StorageAccess>,
+}
 
-impl
+impl<StorageAccess: RunnerStorageAccessTrait>
 	Hooks<
 		SolanaBlockHeightTracking,
 		SolanaFeeTracking,
 		SolanaIngressTracking,
 		SolanaNonceTracking,
 		SolanaEgressWitnessing,
-	> for SolanaElectionHooks
+	> for SolanaElectionHooks<StorageAccess>
 {
-	type OnFinalizeContext = ();
-	type OnFinalizeReturn = ();
+	type StorageAccess = StorageAccess;
 
 	fn on_finalize<
-		GenericElectoralAccess,
-		BlockHeightTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaBlockHeightTracking>,
-		FeeTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaFeeTracking>,
-		IngressTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaIngressTracking>,
-		NonceTrackingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaNonceTracking>,
-		EgressWitnessingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaEgressWitnessing>,
+		BlockHeightTranslator: Translator<
+			StorageAccess = Self::StorageAccess,
+			ElectoralSystem = SolanaBlockHeightTracking,
+		>,
+		FeeTranslator: Translator<StorageAccess = Self::StorageAccess, ElectoralSystem = SolanaFeeTracking>,
+		IngressTranslator: Translator<StorageAccess = Self::StorageAccess, ElectoralSystem = SolanaIngressTracking>,
+		NonceTrackingTranslator: Translator<StorageAccess = Self::StorageAccess, ElectoralSystem = SolanaNonceTracking>,
+		EgressWitnessingTranslator: Translator<StorageAccess = Self::StorageAccess, ElectoralSystem = SolanaEgressWitnessing>,
 	>(
-		generic_electoral_access: &mut GenericElectoralAccess,
+		generic_electoral_access: &mut Self::StorageAccess,
 		(
 			block_height_translator,
 			fee_translator,
@@ -225,9 +230,7 @@ impl
 				>,
 			>,
 		),
-		// TODO: We should be able to delete this
-		_context: &Self::OnFinalizeContext,
-	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
+	) -> Result<(), CorruptStorageError> {
 		let block_height = SolanaBlockHeightTracking::on_finalize(
 			&mut block_height_translator.translate_electoral_access(generic_electoral_access),
 			block_height_identifiers,
@@ -290,7 +293,7 @@ impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
 	fn get_block_height() -> <Solana as Chain>::ChainBlockNumber {
 		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
 			|electoral_access| {
-				SolanaElectoralSystem::with_access_translators(|access_translators| {
+				SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
 					let (access_translator, ..) = &access_translators;
 					access_translator
 						.translate_electoral_access(electoral_access)
@@ -313,7 +316,7 @@ impl SolanaChainTrackingProvider {
 	pub fn priority_fee() -> Option<<Solana as Chain>::ChainAmount> {
 		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
 			|electoral_access| {
-				SolanaElectoralSystem::with_access_translators(|access_translators| {
+				SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
 					let (_, access_translator, ..) = &access_translators;
 					let electoral_access =
 						access_translator.translate_electoral_access(electoral_access);
@@ -331,7 +334,7 @@ impl SolanaChainTrackingProvider {
 	) -> <Solana as Chain>::ChainAmount {
 		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
 			|electoral_access| {
-				SolanaElectoralSystem::with_access_translators(|access_translators| {
+				SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
 					let (_, access_translator, ..) = &access_translators;
 					let electoral_access =
 						access_translator.translate_electoral_access(electoral_access);
@@ -377,10 +380,10 @@ impl IngressSource for SolanaIngress {
 	) -> DispatchResult {
 		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access_and_identifiers(
 			|electoral_access, election_identifiers| {
-				SolanaElectoralSystem::with_identifiers(
+				SolanaElectoralSystemRunner::with_identifiers(
 					election_identifiers,
 					|election_identifiers| {
-						SolanaElectoralSystem::with_access_translators(|access_translators| {
+						SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
 							let (_, _, access_translator, ..) = &access_translators;
 							let (_, _, election_identifiers, ..) = election_identifiers;
 							SolanaIngressTracking::open_channel(
@@ -407,7 +410,7 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 	) -> DispatchResult {
 		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
 			|electoral_access| {
-				SolanaElectoralSystem::with_access_translators(|access_translators| {
+				SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
 					let (_, _, _, access_translator, ..) = &access_translators;
 					let mut electoral_access =
 						access_translator.translate_electoral_access(electoral_access);
@@ -431,7 +434,7 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 	fn watch_for_egress_success(signature: SolSignature) -> DispatchResult {
 		pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
 			|electoral_access| {
-				SolanaElectoralSystem::with_access_translators(|access_translators| {
+				SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
 					let (_, _, _, _, access_translator) = &access_translators;
 					let mut electoral_access =
 						access_translator.translate_electoral_access(electoral_access);

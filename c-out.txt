@@ -1,0 +1,342 @@
+    Updating git repository `https://github.com/chainflip-io/polkadot-sdk.git`
+    Updating git repository `https://github.com/chainflip-io/rust-zmq.git`
+    Blocking waiting for file lock on package cache
+warning: unused imports: `CompositeConsensusStatus`, `CompositeConsensusVote`, `ConsensusVote`, `ConsensusVotes`
+   --> state-chain/pallets/cf-elections/src/electoral_systems/composite.rs:63:21
+    |
+63  |                     ConsensusVote,
+    |                     ^^^^^^^^^^^^^
+...
+68  |                     ConsensusVotes,
+    |                     ^^^^^^^^^^^^^^
+...
+73  |                     VotePropertiesOf, CompositeConsensusVotes, CompositeConsensusStatus, CompositeElectionIdentifierOf, CompositeConsensusVote},
+    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^                                 ^^^^^^^^^^^^^^^^^^^^^^
+...
+636 | generate_electoral_system_tuple_impls!(tuple_5_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0)));
+    | ----------------------------------------------------------------------------------------------------- in this macro invocation
+    |
+    = note: `#[warn(unused_imports)]` on by default
+    = note: this warning originates in the macro `generate_electoral_system_tuple_impls` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused import: `ConsensusVote`
+   --> state-chain/pallets/cf-elections/src/lib.rs:141:32
+    |
+141 |     use crate::electoral_system::{ConsensusVote, ElectoralSystem};
+    |                                   ^^^^^^^^^^^^^
+
+warning: unreachable expression
+   --> state-chain/pallets/cf-elections/src/lib.rs:675:5
+    |
+667 |                 todo!();
+    |                 ------- any code following this expression is unreachable
+...
+675 |                 Ok(())
+    |                 ^^^^^^ unreachable expression
+    |
+    = note: `#[warn(unreachable_code)]` on by default
+
+warning: unreachable expression
+    --> state-chain/pallets/cf-elections/src/lib.rs:1515:4
+     |
+1512 |             todo!("storage accessor");
+     |             ------------------------- any code following this expression is unreachable
+...
+1515 |             Ok(())
+     |             ^^^^^^ unreachable expression
+
+warning: unreachable expression
+    --> state-chain/pallets/cf-elections/src/lib.rs:1694:9
+     |
+1686 | ...                   todo!("Do this");
+     |                       ---------------- any code following this expression is unreachable
+...
+1694 | ...                   Ok(())
+     |                       ^^^^^^ unreachable expression
+
+warning: unused import: `ElectoralSystem`
+   --> state-chain/pallets/cf-elections/src/lib.rs:141:47
+    |
+141 |     use crate::electoral_system::{ConsensusVote, ElectoralSystem};
+    |                                                  ^^^^^^^^^^^^^^^
+
+warning: unused import: `RunnerStorageAccessTrait`
+   --> state-chain/pallets/cf-elections/src/lib.rs:145:52
+    |
+145 |         CompositeConsensusVote, CompositeConsensusVotes, RunnerStorageAccessTrait,
+    |                                                          ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `state`
+   --> state-chain/pallets/cf-elections/src/lib.rs:665:5
+    |
+665 |                 state: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
+    |                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `electoral_access`
+    --> state-chain/pallets/cf-elections/src/lib.rs:1651:9
+     |
+1651 | ...                   |electoral_access, election_identifiers| {
+     |                        ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_electoral_access`
+
+warning: unused variable: `electoral_access`
+    --> state-chain/pallets/cf-elections/src/lib.rs:1806:9
+     |
+1806 | ...                   |electoral_access, election_identifiers| {
+     |                        ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_electoral_access`
+
+warning: unused variable: `option_current_authority_vote`
+    --> state-chain/pallets/cf-elections/src/lib.rs:1814:15
+     |
+1814 | ...                   let option_current_authority_vote =
+     |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_option_current_authority_vote`
+
+warning: `pallet-cf-elections` (lib) generated 11 warnings (run `cargo fix --lib -p pallet-cf-elections` to apply 6 suggestions)
+   Compiling state-chain-runtime v1.7.0 (/Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/runtime)
+error: failed to run custom build command for `state-chain-runtime v1.7.0 (/Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/runtime)`
+
+Caused by:
+  process didn't exit successfully: `/Users/kylezs/Documents/cf-repos/chainflip-backend/target/debug/build/state-chain-runtime-185aca8e9086cd76/build-script-build` (exit status: 101)
+  --- stdout
+  Information that should be included in a bug report.
+  Executing build command: env -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR="/Users/kylezs/Documents/cf-repos/chainflip-backend/target/debug/wbuild/state-chain-runtime/target" RUSTFLAGS="-C target-cpu=mvp -C target-feature=-sign-ext -C link-arg=--export-table -Clink-arg=--export=__heap_base -C link-arg=--import-memory  " SKIP_WASM_BUILD="" "/Users/kylezs/.rustup/toolchains/nightly-2024-02-04-aarch64-apple-darwin/bin/cargo" "rustc" "--target=wasm32-unknown-unknown" "--manifest-path=/Users/kylezs/Documents/cf-repos/chainflip-backend/target/debug/wbuild/state-chain-runtime/Cargo.toml" "--color=always" "--profile" "release" "-Z" "build-std"
+  Using rustc version: rustc 1.78.0-nightly (b11fbfbf3 2024-02-03)
+
+
+  --- stderr
+      Updating git repository `https://github.com/chainflip-io/polkadot-sdk.git`
+      Blocking waiting for file lock on package cache
+      Blocking waiting for file lock on package cache
+      Blocking waiting for file lock on package cache
+  warning: unstable feature specified for `-Ctarget-feature`: `sign-ext`
+    |
+    = note: this feature is not stably supported; its behavior can change in the future
+
+  warning: `utilities` (lib) generated 1 warning
+  warning: `cf-primitives` (lib) generated 1 warning (1 duplicate)
+  warning: `sol-prim` (lib) generated 1 warning (1 duplicate)
+  warning: `cf-runtime-utilities` (lib) generated 1 warning (1 duplicate)
+  warning: `cf-amm` (lib) generated 1 warning (1 duplicate)
+  warning: `cf-runtime-upgrade-utilities` (lib) generated 1 warning (1 duplicate)
+  warning: `cf-chains` (lib) generated 1 warning (1 duplicate)
+  warning: `cfe-events` (lib) generated 1 warning (1 duplicate)
+  warning: `cf-traits` (lib) generated 1 warning (1 duplicate)
+     Compiling state-chain-runtime v1.7.0 (/Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/runtime)
+  warning: `pallet-cf-chain-tracking` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-funding` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-swapping` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-account-roles` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-pools` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-broadcast` (lib) generated 1 warning (1 duplicate)
+  warning: unused imports: `CompositeConsensusStatus`, `CompositeConsensusVote`, `ConsensusVote`, `ConsensusVotes`
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/electoral_systems/composite.rs:63:21
+      |
+  63  |                     ConsensusVote,
+      |                     ^^^^^^^^^^^^^
+  ...
+  68  |                     ConsensusVotes,
+      |                     ^^^^^^^^^^^^^^
+  ...
+  73  |                     VotePropertiesOf, CompositeConsensusVotes, CompositeConsensusStatus, CompositeElectionIdentifierOf, CompositeConsensusVot...
+      |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^                                 ^^^^^^^^^^^^^^^^^^^^^^
+  ...
+  636 | generate_electoral_system_tuple_impls!(tuple_5_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0)));
+      | ----------------------------------------------------------------------------------------------------- in this macro invocation
+      |
+      = note: `#[warn(unused_imports)]` on by default
+      = note: this warning originates in the macro `generate_electoral_system_tuple_impls` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+  warning: unused import: `ConsensusVote`
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/lib.rs:141:32
+      |
+  141 |     use crate::electoral_system::{ConsensusVote, ElectoralSystem};
+      |                                   ^^^^^^^^^^^^^
+
+  warning: unreachable expression
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/lib.rs:675:5
+      |
+  667 |                 todo!();
+      |                 ------- any code following this expression is unreachable
+  ...
+  675 |                 Ok(())
+      |                 ^^^^^^ unreachable expression
+      |
+      = note: `#[warn(unreachable_code)]` on by default
+
+  warning: unreachable expression
+      --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/lib.rs:1515:4
+       |
+  1512 |             todo!("storage accessor");
+       |             ------------------------- any code following this expression is unreachable
+  ...
+  1515 |             Ok(())
+       |             ^^^^^^ unreachable expression
+
+  warning: unreachable expression
+      --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/lib.rs:1694:9
+       |
+  1686 | ...                   todo!("Do this");
+       |                       ---------------- any code following this expression is unreachable
+  ...
+  1694 | ...                   Ok(())
+       |                       ^^^^^^ unreachable expression
+
+  warning: unused import: `ElectoralSystem`
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/lib.rs:141:47
+      |
+  141 |     use crate::electoral_system::{ConsensusVote, ElectoralSystem};
+      |                                                  ^^^^^^^^^^^^^^^
+
+  warning: unused import: `RunnerStorageAccessTrait`
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/lib.rs:145:52
+      |
+  145 |         CompositeConsensusVote, CompositeConsensusVotes, RunnerStorageAccessTrait,
+      |                                                          ^^^^^^^^^^^^^^^^^^^^^^^^
+
+  warning: unused variable: `state`
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/lib.rs:665:5
+      |
+  665 |                 state: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
+      |                 ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+      |
+      = note: `#[warn(unused_variables)]` on by default
+
+  warning: unused variable: `electoral_access`
+      --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/lib.rs:1651:9
+       |
+  1651 | ...                   |electoral_access, election_identifiers| {
+       |                        ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_electoral_access`
+
+  warning: unused variable: `electoral_access`
+      --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/lib.rs:1806:9
+       |
+  1806 | ...                   |electoral_access, election_identifiers| {
+       |                        ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_electoral_access`
+
+  warning: unused variable: `option_current_authority_vote`
+      --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/lib.rs:1814:15
+       |
+  1814 | ...                   let option_current_authority_vote =
+       |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_option_current_authority_vote`
+
+  warning: `pallet-cf-cfe-interface` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-environment` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-threshold-signature` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-ingress-egress` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-reputation` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-elections` (lib) generated 12 warnings (1 duplicate) (run `cargo fix --lib -p pallet-cf-elections` to apply 6 suggestions)
+  warning: `pallet-cf-asset-balances` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-validator` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-witnesser` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-governance` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-lp` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-vaults` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-flip` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-tokenholder-governance` (lib) generated 1 warning (1 duplicate)
+  warning: `pallet-cf-emissions` (lib) generated 1 warning (1 duplicate)
+  error[E0308]: mismatched types
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/runtime/src/chainflip/solana_elections.rs:232:60
+      |
+  167 | impl<StorageAccess: RunnerStorageAccessTrait>
+      |      ------------- found this type parameter
+  ...
+  232 |             &mut block_height_translator.translate_electoral_access(generic_electoral_access),
+      |                                          -------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^ expected `&mut <... as Translator>::StorageAccess`, found `&mut StorageAccess`
+      |                                          |
+      |                                          arguments to this method are incorrect
+      |
+      = note: expected mutable reference `&mut <BlockHeightTranslator as Translator>::StorageAccess`
+                 found mutable reference `&mut StorageAccess`
+      = note: you might be missing a type parameter or trait bound
+  note: method defined here
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/electoral_systems/composite.rs:26:5
+      |
+  26  |     fn translate_electoral_access<'a>(
+      |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  error[E0308]: mismatched types
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/runtime/src/chainflip/solana_elections.rs:237:51
+      |
+  167 | impl<StorageAccess: RunnerStorageAccessTrait>
+      |      ------------- found this type parameter
+  ...
+  237 |             &mut fee_translator.translate_electoral_access(generic_electoral_access),
+      |                                 -------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^ expected `&mut <... as Translator>::StorageAccess`, found `&mut StorageAccess`
+      |                                 |
+      |                                 arguments to this method are incorrect
+      |
+      = note: expected mutable reference `&mut <FeeTranslator as Translator>::StorageAccess`
+                 found mutable reference `&mut StorageAccess`
+      = note: you might be missing a type parameter or trait bound
+  note: method defined here
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/electoral_systems/composite.rs:26:5
+      |
+  26  |     fn translate_electoral_access<'a>(
+      |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  error[E0308]: mismatched types
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/runtime/src/chainflip/solana_elections.rs:242:62
+      |
+  167 | impl<StorageAccess: RunnerStorageAccessTrait>
+      |      ------------- found this type parameter
+  ...
+  242 |             &mut nonce_tracking_translator.translate_electoral_access(generic_electoral_access),
+      |                                            -------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^ expected `&mut <... as Translator>::StorageAccess`, found `&mut StorageAccess`
+      |                                            |
+      |                                            arguments to this method are incorrect
+      |
+      = note: expected mutable reference `&mut <NonceTrackingTranslator as Translator>::StorageAccess`
+                 found mutable reference `&mut StorageAccess`
+      = note: you might be missing a type parameter or trait bound
+  note: method defined here
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/electoral_systems/composite.rs:26:5
+      |
+  26  |     fn translate_electoral_access<'a>(
+      |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  error[E0308]: mismatched types
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/runtime/src/chainflip/solana_elections.rs:247:65
+      |
+  167 | impl<StorageAccess: RunnerStorageAccessTrait>
+      |      ------------- found this type parameter
+  ...
+  247 |             &mut egress_witnessing_translator.translate_electoral_access(generic_electoral_access),
+      |                                               -------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^ expected `&mut <... as Translator>::StorageAccess`, found `&mut StorageAccess`
+      |                                               |
+      |                                               arguments to this method are incorrect
+      |
+      = note: expected mutable reference `&mut <EgressWitnessingTranslator as Translator>::StorageAccess`
+                 found mutable reference `&mut StorageAccess`
+      = note: you might be missing a type parameter or trait bound
+  note: method defined here
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/electoral_systems/composite.rs:26:5
+      |
+  26  |     fn translate_electoral_access<'a>(
+      |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  error[E0308]: mismatched types
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/runtime/src/chainflip/solana_elections.rs:252:55
+      |
+  167 | impl<StorageAccess: RunnerStorageAccessTrait>
+      |      ------------- found this type parameter
+  ...
+  252 |             &mut ingress_translator.translate_electoral_access(generic_electoral_access),
+      |                                     -------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^ expected `&mut <... as Translator>::StorageAccess`, found `&mut StorageAccess`
+      |                                     |
+      |                                     arguments to this method are incorrect
+      |
+      = note: expected mutable reference `&mut <IngressTranslator as Translator>::StorageAccess`
+                 found mutable reference `&mut StorageAccess`
+      = note: you might be missing a type parameter or trait bound
+  note: method defined here
+     --> /Users/kylezs/Documents/cf-repos/chainflip-backend/state-chain/pallets/cf-elections/src/electoral_systems/composite.rs:26:5
+      |
+  26  |     fn translate_electoral_access<'a>(
+      |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  For more information about this error, try `rustc --explain E0308`.
+  error: could not compile `state-chain-runtime` (lib) due to 5 previous errors
+  thread 'main' panicked at /Users/kylezs/.cargo/git/checkouts/polkadot-sdk-7161c691d806b563/ffae046/substrate/utils/wasm-builder/src/wasm_project.rs:822:37:
+  Copying the bloaty file to the project dir.: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

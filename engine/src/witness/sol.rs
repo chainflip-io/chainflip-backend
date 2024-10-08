@@ -19,7 +19,7 @@ use futures::FutureExt;
 use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
 use state_chain_runtime::{
 	chainflip::solana_elections::{
-		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystem,
+		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystemRunner,
 		SolanaFeeTracking, SolanaIngressTracking, SolanaNonceTracking, TransactionSuccessDetails,
 	},
 	SolanaInstance,
@@ -160,7 +160,7 @@ where
 				crate::elections::Voter::new(
 					scope,
 					state_chain_client,
-					CompositeVoter::<SolanaElectoralSystem, _>::new((
+					CompositeVoter::<SolanaElectoralSystemRunner, _>::new((
 						SolanaBlockHeightTrackingVoter { client: client.clone() },
 						SolanaFeeTrackingVoter { client: client.clone() },
 						SolanaIngressTrackingVoter { client: client.clone() },

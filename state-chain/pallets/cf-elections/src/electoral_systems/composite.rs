@@ -185,6 +185,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
 
             impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, StorageAccess: RunnerStorageAccessTrait + 'static, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static> ElectoralSystemRunner for CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H> {
+                type StorageAccess = StorageAccess;
                 type ValidatorId = ValidatorId;
                 type ElectoralUnsynchronisedState = ($(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedState,)*);
                 type ElectoralUnsynchronisedStateMapKey = CompositeElectoralUnsynchronisedStateMapKey<$(<$electoral_system as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,)*>;
@@ -210,7 +211,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                         $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
                             <$electoral_system as ElectoralSystem>::is_vote_desired(
                                 election_identifier.with_extra(extra),
-                                &CompositeElectionAccess::<tags::$electoral_system, $electoral_system,  _, StorageAccess>::new(storage_access),
+                                &CompositeElectionAccess::<tags::$electoral_system, $electoral_system,  _, SA>::new(storage_access),
                                 current_vote.map(|(properties, vote)| {
                                     Ok((
                                         match properties {
