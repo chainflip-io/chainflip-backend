@@ -6,11 +6,11 @@ use frame_support::sp_runtime::{
 	DispatchError, DispatchResult,
 };
 
-use cf_chains::ForeignChainAddress;
-
 use super::{MockPallet, MockPalletStorage};
 
 use crate::LpRegistration;
+
+use cf_chains::ForeignChainAddress;
 
 pub struct MockBalance;
 

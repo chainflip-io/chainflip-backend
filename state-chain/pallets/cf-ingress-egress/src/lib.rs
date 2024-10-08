@@ -1249,8 +1249,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(12)]
-		// #[pallet::weight(T::WeightInfo::mark_transaction_as_tainted())]
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::mark_transaction_as_tainted())]
 		pub fn mark_transaction_as_tainted(
 			origin: OriginFor<T>,
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
