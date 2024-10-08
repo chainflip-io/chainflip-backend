@@ -84,7 +84,7 @@ where
 				.into_iter()
 				.filter_map(move |(deposit_channel, amount)| {
 					let amount: SolAmount = amount.saturated_into(); // TODO: Change the DeltaBasedIngress to not use the Chains Amount type but
-												 // instead use u256 or u128 or some generic.
+													  // instead use u256 or u128 or some generic.
 					let (deposit_details, current_total_ingressed) =
 						deposit_channels.get(deposit_channel.address()).unwrap();
 					if amount != current_total_ingressed.amount ||

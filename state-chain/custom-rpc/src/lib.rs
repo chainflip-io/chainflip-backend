@@ -1814,10 +1814,7 @@ where
 		})
 	}
 
-	fn cf_subscribe_lp_order_fills(
-		&self,
-		sink: PendingSubscriptionSink,
-	) {
+	fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink) {
 		self.new_subscription_with_state(
 			false, /* only_on_changes */
 			true,  /* end_on_error */
@@ -1831,13 +1828,11 @@ where
 						let pools_events =
 							client.runtime_api().cf_lp_events(hash).map_err(to_rpc_error)?;
 
-						RpcResult::Ok(
-							order_fills::order_fills_from_block_updates(
-								prev_pools,
-								&pools,
-								pools_events,
-							),
-						)
+						RpcResult::Ok(order_fills::order_fills_from_block_updates(
+							prev_pools,
+							&pools,
+							pools_events,
+						))
 					})
 					.transpose()?
 					.unwrap_or_default();

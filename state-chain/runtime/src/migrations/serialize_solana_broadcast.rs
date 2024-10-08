@@ -69,21 +69,20 @@ impl OnRuntimeUpgrade for SerializeSolanaBroadcastMigration {
 }
 
 #[cfg(any(test, feature = "try-runtime"))]
-pub fn pre_upgrade_check()  -> Result<Vec<u8>, DispatchError> {
+pub fn pre_upgrade_check() -> Result<Vec<u8>, DispatchError> {
 	Ok((old::AwaitingBroadcast::iter().count() as u64).encode())
 }
 
 #[cfg(any(test, feature = "try-runtime"))]
 pub fn post_upgrade_check(state: Vec<u8>) -> Result<(), DispatchError> {
 	let pre_awaiting_broadcast_count = <u64>::decode(&mut state.as_slice())
-			.map_err(|_| DispatchError::from("Failed to decode state"))?;
+		.map_err(|_| DispatchError::from("Failed to decode state"))?;
 
-		let post_awaiting_broadcast_count =
-			pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::iter().count()
-				as u64;
+	let post_awaiting_broadcast_count =
+		pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::iter().count() as u64;
 
-		assert_eq!(pre_awaiting_broadcast_count, post_awaiting_broadcast_count);
-		Ok(())
+	assert_eq!(pre_awaiting_broadcast_count, post_awaiting_broadcast_count);
+	Ok(())
 }
 
 pub struct NoopUpgrade;
