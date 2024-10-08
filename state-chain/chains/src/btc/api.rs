@@ -4,7 +4,7 @@ use super::{
 	deposit_address::DepositAddress, AggKey, Bitcoin, BitcoinCrypto, BitcoinOutput, BtcAmount,
 	Utxo, BITCOIN_DUST_LIMIT, CHANGE_ADDRESS_SALT,
 };
-use crate::*;
+use crate::{btc::UtxoId, *};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
@@ -23,6 +23,7 @@ pub type SelectedUtxosAndChangeAmount = (Vec<Utxo>, BtcAmount);
 pub enum UtxoSelectionType {
 	SelectForConsolidation,
 	Some { output_amount: BtcAmount, number_of_outputs: u64 },
+	TakeUtxo(UtxoId),
 }
 
 impl<E> ConsolidateCall<Bitcoin> for BitcoinApi<E>
@@ -143,6 +144,40 @@ impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for Bitc
 		_cf_parameters: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		Err(ExecutexSwapAndCallError::Unsupported)
+	}
+}
+
+impl<E: ReplayProtectionProvider<Bitcoin>> RejectCall<Bitcoin> for BitcoinApi<E>
+where
+	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>
+		+ ChainEnvironment<(), AggKey>,
+{
+	type TxId = <Bitcoin as Chain>::DepositDetails;
+	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError> {
+		let utxo = E::lookup(UtxoSelectionType::TakeUtxo(tx_id));
+
+		if let Some(utxo) = E::lookup(UtxoSelectionType::TakeUtxo(tx_id)) {
+			if utxo.0.len() != 1 {
+				return Err(RejectError::UnexpectedLengthOfSelectedUtxos);
+			}
+			let utxo = utxo.0.get(0).ok_or(RejectError::UnexpectedLengthOfSelectedUtxos)?;
+			let agg_key @ AggKey { current, .. } =
+				<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(RejectError::Other)?;
+			let bitcoin_change_script =
+				DepositAddress::new(current, CHANGE_ADDRESS_SALT).script_pubkey();
+
+			let btc_outputs =
+				vec![BitcoinOutput { amount: utxo.amount, script_pubkey: bitcoin_change_script }];
+
+			Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
+				&agg_key,
+				agg_key.current,
+				vec![utxo.clone()],
+				btc_outputs,
+			)))
+		} else {
+			Err(RejectError::UtxoUnavailable)
+		}
 	}
 }
 

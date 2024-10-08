@@ -521,8 +521,21 @@ pub enum ConsolidationError {
 	Other,
 }
 
+#[derive(Debug)]
+pub enum RejectError {
+	NotSupportedForAsset,
+	UtxoUnavailable,
+	UnexpectedLengthOfSelectedUtxos,
+	Other,
+}
+
 pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
+}
+
+pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
+	type TxId: Member + Parameter + Unpin + BenchmarkValue;
+	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError>;
 }
 
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {

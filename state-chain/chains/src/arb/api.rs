@@ -150,6 +150,16 @@ impl<E> From<EvmTransactionBuilder<transfer_fallback::TransferFallback>> for Arb
 	}
 }
 
+impl<E> RejectCall<Arbitrum> for ArbitrumApi<E>
+where
+	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
+{
+	type TxId = <Arbitrum as Chain>::DepositDetails;
+	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError> {
+		Err(RejectError::NotSupportedForAsset)
+	}
+}
+
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
 		match $self {

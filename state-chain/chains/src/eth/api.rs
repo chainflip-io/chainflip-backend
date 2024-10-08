@@ -237,6 +237,16 @@ where
 	}
 }
 
+impl<E> RejectCall<Ethereum> for EthereumApi<E>
+where
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
+{
+	type TxId = <Ethereum as Chain>::DepositDetails;
+	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError> {
+		Err(RejectError::NotSupportedForAsset)
+	}
+}
+
 impl<E> From<EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>>
 	for EthereumApi<E>
 {

@@ -145,6 +145,16 @@ where
 	}
 }
 
+impl<E> RejectCall<Polkadot> for PolkadotApi<E>
+where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
+{
+	type TxId = <Polkadot as Chain>::DepositDetails;
+	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError> {
+		Err(RejectError::NotSupportedForAsset)
+	}
+}
+
 #[macro_export]
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {

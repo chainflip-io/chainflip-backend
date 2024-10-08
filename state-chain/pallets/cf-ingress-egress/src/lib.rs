@@ -31,7 +31,7 @@ use cf_chains::{
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata,
 	CcmFailReason, CcmMessage, Chain, ChannelLifecycleHooks, ChannelRefundParameters,
 	ConsolidateCall, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
-	SwapOrigin, TransferAssetParams,
+	RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId,
@@ -395,7 +395,8 @@ pub mod pallet {
 		type ChainApiCall: AllBatch<Self::TargetChain>
 			+ ExecutexSwapAndCall<Self::TargetChain>
 			+ TransferFallback<Self::TargetChain>
-			+ ConsolidateCall<Self::TargetChain>;
+			+ ConsolidateCall<Self::TargetChain>
+			+ RejectCall<Self::TargetChain, TxId = <Self::TargetChain as Chain>::DepositDetails>;
 
 		/// Get the latest chain state of the target chain.
 		type ChainTracking: GetBlockHeight<Self::TargetChain>
@@ -853,6 +854,16 @@ pub mod pallet {
 							call.broadcast_id,
 						);
 					},
+				}
+			}
+
+			for (_, tx_id, _) in TaintedTransactions::<T, I>::drain() {
+				if let Ok(api_call) =
+					<T::ChainApiCall as RejectCall<T::TargetChain>>::reject_call(tx_id)
+				{
+					T::Broadcaster::threshold_sign_and_broadcast(api_call);
+				} else {
+					log_or_panic!("Failed to reject call. This is unexpected.");
 				}
 			}
 		}
