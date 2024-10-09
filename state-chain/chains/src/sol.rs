@@ -150,6 +150,7 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
 
+	/// This is equivalent to a priority fee
 	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
 
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
@@ -223,7 +224,7 @@ fn calculate_gas_fee(
 ) -> <Solana as crate::Chain>::ChainAmount {
 	use compute_units_costs::*;
 
-	// Match the minimum broadcast prio fee
+	// Match the minimum compute price that will be set on broadcast.
 	let priority_fee = sp_std::cmp::max(priority_fee, MIN_COMPUTE_PRICE);
 
 	LAMPORTS_PER_SIGNATURE.saturating_add(
