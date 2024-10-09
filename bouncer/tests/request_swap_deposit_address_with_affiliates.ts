@@ -252,4 +252,4 @@ const main = async () => {
   }
 };
 
-export const testRotatesThroughBtcSwap = new ExecutableTest('Deposit-Channel-Creation', main, 360);
+export const depositChannelCreation = new ExecutableTest('Deposit-Channel-Creation', main, 360);
