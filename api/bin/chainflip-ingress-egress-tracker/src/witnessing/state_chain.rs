@@ -60,13 +60,15 @@ enum TransactionId {
 
 #[derive(Serialize)]
 #[serde(untagged)]
-enum WitnessInformation {
+enum WitnessInformation<C: cf_chains::Chain> {
 	Deposit {
 		deposit_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
 		#[serde(skip_serializing)]
 		deposit_address: String,
 		amount: NumberOrHex,
 		asset: cf_chains::assets::any::Asset,
+		#[serde(skip_serializing)]
+		deposit_details: <C as Chain>::DepositDetails,
 	},
 	Broadcast {
 		#[serde(skip_serializing)]
@@ -76,7 +78,7 @@ enum WitnessInformation {
 	},
 }
 
-impl WitnessInformation {
+impl<C: cf_chains::Chain> WitnessInformation<C> {
 	fn to_foreign_chain(&self) -> ForeignChain {
 		match self {
 			Self::Deposit { asset, .. } => (*asset).into(),
@@ -90,7 +92,7 @@ impl WitnessInformation {
 	}
 }
 
-impl Storable for WitnessInformation {
+impl<C: cf_chains::Chain> Storable for WitnessInformation<C> {
 	fn get_key(&self) -> String {
 		let chain = self.to_foreign_chain().to_string();
 
@@ -114,46 +116,50 @@ impl Storable for WitnessInformation {
 
 type DepositInfo<T> = (DepositWitness<T>, <T as Chain>::ChainBlockNumber, NetworkEnvironment);
 
-impl From<DepositInfo<Ethereum>> for WitnessInformation {
+impl From<DepositInfo<Ethereum>> for WitnessInformation<Ethereum> {
 	fn from((value, height, _): DepositInfo<Ethereum>) -> Self {
 		Self::Deposit {
 			deposit_chain_block_height: height,
 			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			deposit_details: value.deposit_details,
 		}
 	}
 }
 
-impl From<DepositInfo<Bitcoin>> for WitnessInformation {
+impl From<DepositInfo<Bitcoin>> for WitnessInformation<Bitcoin> {
 	fn from((value, height, network): DepositInfo<Bitcoin>) -> Self {
 		Self::Deposit {
 			deposit_chain_block_height: height,
 			deposit_address: value.deposit_address.to_humanreadable(network),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			deposit_details: value.deposit_details,
 		}
 	}
 }
 
-impl From<DepositInfo<Polkadot>> for WitnessInformation {
+impl From<DepositInfo<Polkadot>> for WitnessInformation<Polkadot> {
 	fn from((value, height, _): DepositInfo<Polkadot>) -> Self {
 		Self::Deposit {
 			deposit_chain_block_height: height as u64,
 			deposit_address: hex_encode_bytes(value.deposit_address.aliased_ref()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			deposit_details: value.deposit_details,
 		}
 	}
 }
 
-impl From<DepositInfo<Arbitrum>> for WitnessInformation {
+impl From<DepositInfo<Arbitrum>> for WitnessInformation<Arbitrum> {
 	fn from((value, height, _): DepositInfo<Arbitrum>) -> Self {
 		Self::Deposit {
 			deposit_chain_block_height: height,
 			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			deposit_details: value.deposit_details,
 		}
 	}
 }
@@ -165,7 +171,7 @@ async fn save_deposit_witnesses<S: Store, C: Chain>(
 	chainflip_network: NetworkEnvironment,
 ) -> anyhow::Result<()>
 where
-	WitnessInformation:
+	WitnessInformation<C>:
 		From<(DepositWitness<C>, <C as Chain>::ChainBlockNumber, NetworkEnvironment)>,
 {
 	for witness in deposit_witnesses {
@@ -208,15 +214,8 @@ where
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		ArbitrumIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
@@ -238,7 +237,7 @@ where
 
 			if let Some(broadcast_id) = broadcast_id {
 				store
-					.save_singleton(&WitnessInformation::Broadcast {
+					.save_singleton(&WitnessInformation::<Ethereum>::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Ethereum { signature: tx_out_id },
 						tx_ref: TransactionRef::Ethereum { hash: transaction_ref },
@@ -256,7 +255,7 @@ where
 
 			if let Some(broadcast_id) = broadcast_id {
 				store
-					.save_singleton(&WitnessInformation::Broadcast {
+					.save_singleton(&WitnessInformation::<Bitcoin>::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Bitcoin { hash: BitcoinHash(tx_out_id) },
 						tx_ref: TransactionRef::Bitcoin { hash: BitcoinHash(transaction_ref) },
@@ -276,7 +275,7 @@ where
 
 			if let Some(broadcast_id) = broadcast_id {
 				store
-					.save_singleton(&WitnessInformation::Broadcast {
+					.save_singleton(&WitnessInformation::<Polkadot>::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Polkadot {
 							signature: DotSignature(*tx_out_id.aliased_ref()),
@@ -297,7 +296,7 @@ where
 
 			if let Some(broadcast_id) = broadcast_id {
 				store
-					.save_singleton(&WitnessInformation::Broadcast {
+					.save_singleton(&WitnessInformation::<Arbitrum>::Broadcast {
 						broadcast_id,
 						tx_out_id: TransactionId::Arbitrum { signature: tx_out_id },
 						tx_ref: TransactionRef::Arbitrum { hash: transaction_ref },
