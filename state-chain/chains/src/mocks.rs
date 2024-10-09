@@ -98,7 +98,6 @@ impl Chain for MockEthereum {
 
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
-	type ChainGas = EthGasUnits;
 	type TransactionFee = TransactionFee;
 	type TrackedData = MockTrackedData;
 	type ChainAsset = assets::eth::Asset;

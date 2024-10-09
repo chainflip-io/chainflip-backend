@@ -87,8 +87,6 @@ pub type EgressId = (ForeignChain, EgressCounter);
 
 pub type EthAmount = u128;
 
-pub type EthGasUnits = U256;
-
 pub type AssetAmount = u128;
 
 pub type GasAmount = u128;

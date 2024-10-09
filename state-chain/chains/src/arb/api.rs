@@ -68,7 +68,7 @@ where
 		transfer_param: TransferAssetParams<Arbitrum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Arbitrum as Chain>::ChainGas,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		_cf_parameters: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -209,7 +209,7 @@ impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> A
 }
 
 impl<E> ArbitrumApi<E> {
-	pub fn gas_budget(&self) -> Option<<Arbitrum as Chain>::ChainGas> {
+	pub fn gas_budget(&self) -> Option<GasAmount> {
 		map_over_api_variants!(self, call, call.gas_budget())
 	}
 }

@@ -16,8 +16,8 @@ use address::{
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, EthGasUnits, Price,
-	TransactionHash, GasAmount
+	Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, Price,
+	TransactionHash,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -198,9 +198,6 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ BenchmarkValue;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
-
-	// TODO: Check that these traits are correct
-	type ChainGas: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
 	type TrackedData: Default
 		+ MaybeSerializeDeserialize
@@ -551,7 +548,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: C::ChainGas,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError>;

@@ -1,10 +1,8 @@
 #[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
-	chains::Ethereum,
 	chains::assets::{any::AssetMap, arb, btc, dot, eth, sol},
 	Asset,
 };
-use crate::Chain;
 #[cfg(feature = "runtime-benchmarks")]
 use core::str::FromStr;
 
@@ -64,13 +62,6 @@ impl BenchmarkValue for Asset {
 impl BenchmarkValue for eth::Asset {
 	fn benchmark_value() -> Self {
 		eth::Asset::Eth
-	}
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for <Ethereum as Chain>::ChainGas {
-	fn benchmark_value() -> Self {
-		<Ethereum as Chain>::ChainGas::default()
 	}
 }
 

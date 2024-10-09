@@ -21,7 +21,6 @@ impl Chain for AnyChain {
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = AssetAmount;
-	type ChainGas = u128;
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = ();
 	type ChainAsset = assets::any::Asset;

@@ -16,13 +16,13 @@ use crate::{
 		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
 		SolAsset, SolHash, SolTransaction, SolanaCrypto,
 	},
-	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, Chain, ChainCrypto, ChainEnvironment,
+	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
 	FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, SetGovKeyWithAggKey, Solana,
 	TransferAssetParams, TransferFallback, TransferFallbackError,
 };
 
-use cf_primitives::{EgressId, ForeignChain};
+use cf_primitives::{EgressId, ForeignChain, GasAmount};
 
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct ComputePrice;
@@ -258,7 +258,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Solana as Chain>::ChainGas,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
@@ -438,7 +438,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: cf_primitives::ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Solana as Chain>::ChainGas,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		cf_parameters: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {

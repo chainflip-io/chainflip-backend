@@ -62,7 +62,6 @@ impl Chain for Solana {
 	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = SlotNumber;
 	type ChainAmount = SolAmount;
-	type ChainGas = SolComputeLimit;
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = SolTrackedData;
 	type ChainAsset = assets::sol::Asset;

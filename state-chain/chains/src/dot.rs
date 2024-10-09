@@ -325,7 +325,6 @@ impl Chain for Polkadot {
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
-	type ChainGas = ();
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = PolkadotTrackedData;
 	type ChainAsset = assets::dot::Asset;

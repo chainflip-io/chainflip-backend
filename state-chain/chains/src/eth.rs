@@ -38,7 +38,6 @@ impl Chain for Ethereum {
 	type ChainCrypto = evm::EvmCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
-	type ChainGas = EthGasUnits;
 	type TransactionFee = evm::TransactionFee;
 	type TrackedData = EthereumTrackedData;
 	type ChainAsset = assets::eth::Asset;

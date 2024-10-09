@@ -33,8 +33,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
-	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS, GasAmount
+	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, GasAmount,
+	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -2110,7 +2111,8 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			match maybe_ccm_with_gas_budget {
 				Some((
 					CcmDepositMetadata {
-						channel_metadata: CcmChannelMetadata { message, gas_budget, cf_parameters, .. },
+						channel_metadata:
+							CcmChannelMetadata { message, gas_budget, cf_parameters, .. },
 						source_chain,
 						source_address,
 						..
@@ -2129,8 +2131,8 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						source_address,
 						// Use the "gas limit" provided by the caller
 						// TODO: Either we convert it here to a C::ChainAmount or we just pass along
-						// the GasAmount and we only convert it at the edges - for fee/preswap calculation
-						// and on the transaction builder to build the transaction
+						// the GasAmount and we only convert it at the edges - for fee/preswap
+						// calculation and on the transaction builder to build the transaction
 						gas_budget,
 					});
 

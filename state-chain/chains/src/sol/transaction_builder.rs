@@ -300,7 +300,7 @@ impl SolanaTransactionBuilder {
 		agg_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
-		gas_budget: SolComputeLimit,
+		gas_budget: cf_primitives::GasAmount,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![
 			SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount),
@@ -325,7 +325,7 @@ impl SolanaTransactionBuilder {
 			durable_nonce,
 			agg_key.into(),
 			compute_price,
-			Self::calculate_ccm_gas_limit(gas_budget, SolAsset::Sol),
+			Self::calculate_ccm_compute_limit(gas_budget, SolAsset::Sol),
 		)
 	}
 
@@ -346,7 +346,7 @@ impl SolanaTransactionBuilder {
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
 		token_decimals: u8,
-		gas_budget: SolComputeLimit,
+		gas_budget: cf_primitives::GasAmount,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![
 		AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
@@ -385,17 +385,27 @@ impl SolanaTransactionBuilder {
 			durable_nonce,
 			agg_key.into(),
 			compute_price,
-			Self::calculate_ccm_gas_limit(gas_budget, SolAsset::SolUsdc),
+			Self::calculate_ccm_compute_limit(gas_budget, SolAsset::SolUsdc),
 		)
 	}
 
-	fn calculate_ccm_gas_limit(gas_budget: SolComputeLimit, asset: SolAsset) -> SolComputeLimit {
+	fn calculate_ccm_compute_limit(
+		gas_budget: cf_primitives::GasAmount,
+		asset: SolAsset,
+	) -> SolComputeLimit {
+		let compute_limit: SolComputeLimit =
+			gas_budget.try_into().unwrap_or(MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
+
+		let compute_limit_with_overhead = compute_limit.saturating_add(match asset {
+			// TODO: Potentially rename to overhead. Double check this values, we could just
+			// increase them to be sure we don't cause any issues for the integrators as
+			// gas is very cheap anyway.
+			SolAsset::Sol => DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
+			SolAsset::SolUsdc => DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
+		});
 		sp_std::cmp::min(
 			MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as SolComputeLimit,
-			gas_budget.saturating_add(match asset {
-				SolAsset::Sol => DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
-				SolAsset::SolUsdc => DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
-			}),
+			compute_limit_with_overhead,
 		)
 	}
 
@@ -445,7 +455,7 @@ mod test {
 	};
 
 	// Arbitrary number used for testing
-	const TEST_COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
+	const TEST_COMPUTE_LIMIT: u128 = 300_000u128;
 
 	fn get_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -665,7 +675,7 @@ mod test {
 
 	#[test]
 	fn can_calculate_gas_limit() {
-		const TEST_EGRESS_BUDGET: SolComputeLimit = 80_000u32;
+		const TEST_EGRESS_BUDGET: u128 = 80_000u128;
 
 		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
 			let default_compute_limit = match asset {
@@ -674,12 +684,12 @@ mod test {
 			};
 
 			let mut tx_compute_limit =
-				SolanaTransactionBuilder::calculate_ccm_gas_limit(TEST_EGRESS_BUDGET, *asset);
+				SolanaTransactionBuilder::calculate_ccm_compute_limit(TEST_EGRESS_BUDGET, *asset);
 			assert_eq!(tx_compute_limit, TEST_EGRESS_BUDGET + default_compute_limit);
 
 			// Test SolComputeLimit saturation
 			assert_eq!(
-				SolanaTransactionBuilder::calculate_ccm_gas_limit(
+				SolanaTransactionBuilder::calculate_ccm_compute_limit(
 					MAX_COMPUTE_UNITS_PER_CCM_TRANSFER - default_compute_limit + 1,
 					*asset,
 				),
@@ -687,14 +697,14 @@ mod test {
 			);
 
 			// Test upper cap
-			tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_gas_limit(
+			tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_compute_limit(
 				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER - 1,
 				*asset,
 			);
 			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
 
 			// Test lower cap
-			let tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_gas_limit(0, *asset);
+			let tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_compute_limit(0, *asset);
 			assert_eq!(tx_compute_limit, default_compute_limit);
 		}
 	}

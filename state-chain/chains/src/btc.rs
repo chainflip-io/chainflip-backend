@@ -227,7 +227,6 @@ impl Chain for Bitcoin {
 	type ChainCrypto = BitcoinCrypto;
 	type ChainBlockNumber = BlockNumber;
 	type ChainAmount = BtcAmount;
-	type ChainGas = ();
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = BitcoinTrackedData;
 	type ChainAsset = assets::btc::Asset;

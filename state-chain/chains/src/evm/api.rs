@@ -148,7 +148,7 @@ pub trait EvmCall {
 				.collect::<Vec<_>>(),
 		))
 	}
-	fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainGas> {
+	fn gas_budget(&self) -> Option<GasAmount> {
 		None
 	}
 }
@@ -173,7 +173,7 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		self.replay_protection.chain_id
 	}
 
-	pub fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainGas> {
+	pub fn gas_budget(&self) -> Option<GasAmount> {
 		self.call.gas_budget()
 	}
 

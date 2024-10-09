@@ -14,7 +14,6 @@ impl Chain for NoneChain {
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = u64;
-	type ChainGas = u128;
 	type TransactionFee = u64;
 	type TrackedData = ();
 	type ChainAsset = assets::any::Asset;
