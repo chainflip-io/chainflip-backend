@@ -67,6 +67,9 @@ use sp_std::{
 };
 pub use weights::WeightInfo;
 
+// 1 hour.
+const TAINTED_TX_EXPIRATION_BLOCKS: u32 = 600;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
 	// If a (pre-witnessed) deposit on a channel has been boosted, we record
@@ -127,12 +130,15 @@ pub enum DepositIgnoredReason {
 }
 
 /// Holds information about a tainted transaction.
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
-pub struct TaintedTransactionDetails<AccountId, C: Chain> {
+#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
+#[scale_info(skip_type_params(T, I))]
+pub struct TaintedTransactionDetails<T: Config<I>, I: 'static> {
 	/// The broker that created the tainted transaction.
-	pub broker: AccountId,
+	pub broker: T::AccountId,
 	pub refund_address: Option<ForeignChainAddress>,
-	pub deposit_witness: Option<DepositWitness<C>>,
+	pub deposit_witness: Option<DepositWitness<T::TargetChain>>,
+	pub expires_at: BlockNumberFor<T>,
+	pub marked_for_refund: bool,
 }
 
 /// Cross-chain messaging requests.
@@ -547,7 +553,7 @@ pub mod pallet {
 		T::AccountId,
 		Twox64Concat,
 		<T::TargetChain as Chain>::DepositDetails,
-		TaintedTransactionDetails<T::AccountId, T::TargetChain>,
+		TaintedTransactionDetails<T, I>,
 		OptionQuery,
 	>;
 
@@ -684,6 +690,10 @@ pub mod pallet {
 			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
 		},
+		TaintedTransactionExpired {
+			account_id: T::AccountId,
+			tx_id: <T::TargetChain as Chain>::DepositDetails,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -743,7 +753,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// Recycle addresses if we can
-		fn on_idle(_n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+		fn on_idle(now: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
 
 			// Approximate weight calculation: r/w DepositChannelLookup + w DepositChannelPool
@@ -784,6 +794,21 @@ pub mod pallet {
 				for address in addresses_to_recycle {
 					Self::recycle_channel(&mut used_weight, address);
 				}
+			}
+
+			// Collect expired transactions
+			let expired_transactions: Vec<_> = TaintedTransactions::<T, I>::iter()
+				.filter(|(_, _, details)| details.expires_at <= now && !details.marked_for_refund)
+				.map(|(account_id, tx_id, _)| (account_id, tx_id))
+				.collect();
+
+			// Remove expired transactions and emit events
+			for (account_id, tx_id) in expired_transactions {
+				TaintedTransactions::<T, I>::remove(&account_id, &tx_id);
+				Self::deposit_event(Event::TaintedTransactionExpired {
+					account_id: account_id.clone(),
+					tx_id: tx_id.clone(),
+				});
 			}
 			used_weight
 		}
@@ -1315,6 +1340,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			broker: account_id.clone(),
 			refund_address: None,
 			deposit_witness: None,
+			expires_at: <frame_system::Pallet<T>>::block_number()
+				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS)),
+			marked_for_refund: false,
 		};
 		TaintedTransactions::<T, I>::insert(account_id, tx_id, tainted_transaction);
 		Ok(())
@@ -1874,6 +1902,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						amount: deposit_amount,
 						deposit_details: deposit_details.clone(),
 					}),
+					expires_at: tainted_tx.expires_at,
+					marked_for_refund: true,
 				};
 
 				TaintedTransactions::<T, I>::insert(

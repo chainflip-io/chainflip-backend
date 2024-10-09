@@ -7,6 +7,7 @@ use crate::{
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TaintedTransactions,
+	TAINTED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -2100,6 +2101,52 @@ fn only_broker_and_lps_can_mark_transaction_as_tainted() {
 		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
 			RuntimeOrigin::signed(ALICE),
 			Default::default(),
+		));
+	});
+}
+
+#[test]
+fn tainted_transactions_expire_if_not_witnessed() {
+	new_test_ext().execute_with(|| {
+		// Register BROKER as a broker
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		// Mark a transaction as tainted
+		let deposit_details: cf_chains::evm::DepositDetails = Default::default();
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
+			RuntimeOrigin::signed(BROKER),
+			deposit_details.clone(),
+		));
+
+		// Verify the transaction is marked as tainted
+		assert!(TaintedTransactions::<Test, ()>::contains_key(BROKER, deposit_details.clone()));
+
+		// Get the current block number
+		let current_block = System::block_number();
+
+		// Calculate the expiry block
+		let expiry_block = current_block + TAINTED_TX_EXPIRATION_BLOCKS as u64;
+
+		// Verify the transaction is still marked as tainted
+		assert!(TaintedTransactions::<Test, ()>::contains_key(BROKER, deposit_details.clone()));
+
+		// Advance the block number to the expiry block
+		System::set_block_number(expiry_block);
+
+		// Run on_initialize to trigger housekeeping
+		IngressEgress::on_idle(expiry_block, Weight::MAX);
+
+		// Verify the transaction is no longer marked as tainted
+		assert!(!TaintedTransactions::<Test, ()>::contains_key(BROKER, deposit_details.clone()));
+
+		// Check for the expiry event
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
+			crate::Event::TaintedTransactionExpired {
+				account_id: BROKER,
+				tx_id: deposit_details.clone(),
+			},
 		));
 	});
 }
