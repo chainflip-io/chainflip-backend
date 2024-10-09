@@ -177,6 +177,29 @@ pub struct SolTrackedData {
 	pub priority_fee: <Solana as Chain>::ChainAmount,
 }
 
+impl SolTrackedData {
+	// Calculate the estimated fee for broadcasting a transaction given its compute units
+	// and the current priority fee.
+	pub fn calculate_transaction_fee(
+		&self,
+		compute_units: SolComputeLimit,
+	) -> <Solana as crate::Chain>::ChainAmount {
+		use compute_units_costs::*;
+
+		// Match the minimum compute price that will be set on broadcast.
+		let priority_fee = sp_std::cmp::max(self.priority_fee, MIN_COMPUTE_PRICE);
+
+		LAMPORTS_PER_SIGNATURE.saturating_add(
+			// It should never approach overflow but just in case
+			sp_std::cmp::min(
+				SolAmount::MAX as u128,
+				(priority_fee as u128 * compute_units as u128)
+					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
+			) as SolAmount,
+		)
+	}
+}
+
 impl FeeEstimationApi<Solana> for SolTrackedData {
 	fn estimate_egress_fee(
 		&self,
@@ -192,7 +215,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		let gas_fee = calculate_gas_fee(self.priority_fee, compute_units_per_transfer);
+		let gas_fee = self.calculate_transaction_fee(compute_units_per_transfer);
 
 		match asset {
 			assets::sol::Asset::Sol => gas_fee,
@@ -213,28 +236,8 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		calculate_gas_fee(self.priority_fee, compute_units_per_fetch)
+		self.calculate_transaction_fee(compute_units_per_fetch)
 	}
-}
-
-// Calculate the gas fee for a transaction given its compute units and a priority fee.
-fn calculate_gas_fee(
-	priority_fee: <Solana as crate::Chain>::ChainAmount,
-	compute_units: SolComputeLimit,
-) -> <Solana as crate::Chain>::ChainAmount {
-	use compute_units_costs::*;
-
-	// Match the minimum compute price that will be set on broadcast.
-	let priority_fee = sp_std::cmp::max(priority_fee, MIN_COMPUTE_PRICE);
-
-	LAMPORTS_PER_SIGNATURE.saturating_add(
-		// It should never approach overflow but just in case
-		sp_std::cmp::min(
-			SolAmount::MAX as u128,
-			(priority_fee as u128 * compute_units as u128)
-				.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
-		) as SolAmount,
-	)
 }
 
 impl FeeRefundCalculator<Solana> for SolanaTransactionData {
