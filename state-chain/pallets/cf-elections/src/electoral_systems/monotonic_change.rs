@@ -64,7 +64,8 @@ impl<
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: OnChangeHook<Identifier, Value> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
-	> ElectoralSystem for MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId>
+	> ElectoralSystem
+	for MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId>
 {
 	type ValidatorId = ValidatorId;
 	type ElectoralUnsynchronisedState = ();
