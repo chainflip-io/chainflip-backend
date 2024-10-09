@@ -2,17 +2,14 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
-use cf_primitives::{AccountId, Asset, AssetAmount};
+use cf_primitives::{accounting::AssetBalance, AccountId, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AssetWithholding, BalanceApi, Chainflip, EgressApi, KeyProvider,
 	LiabilityTracker, ScheduledEgressDetails,
 };
 use frame_support::{
-	pallet_prelude::*,
-	sp_runtime::traits::Saturating,
-	storage::transactional::with_storage_layer,
-	traits::{DefensiveSaturating, OnKilledAccount},
+	pallet_prelude::*, storage::transactional::with_storage_layer, traits::OnKilledAccount,
 };
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
@@ -140,12 +137,12 @@ pub mod pallet {
 	/// Liabilities are funds that are owed to some external party.
 	#[pallet::storage]
 	pub type Liabilities<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, BTreeMap<ExternalOwner, AssetAmount>, ValueQuery>;
+		StorageMap<_, Twox64Concat, Asset, BTreeMap<ExternalOwner, AssetBalance>, OptionQuery>;
 
 	/// Funds that have been set aside to refund external [Liabilities].
 	#[pallet::storage]
 	pub type WithheldAssets<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+		StorageMap<_, Twox64Concat, Asset, AssetBalance, OptionQuery>;
 
 	#[pallet::storage]
 	/// Storage for user's free balances.
@@ -155,8 +152,8 @@ pub mod pallet {
 		T::AccountId,
 		Twox64Concat,
 		Asset,
-		AssetAmount,
-		ValueQuery,
+		AssetBalance,
+		OptionQuery,
 	>;
 }
 
@@ -208,24 +205,24 @@ impl<T: Config> Pallet<T> {
 	fn reconcile(
 		chain: ForeignChain,
 		owner: &ExternalOwner,
-		amount_owed: &mut AssetAmount,
-		available: &mut AssetAmount,
+		amount_owed: &mut AssetBalance,
+		available: &mut AssetBalance,
 	) -> Result<(), DispatchError> {
-		if *amount_owed > *available {
+		if amount_owed > available {
 			Self::deposit_event(Event::VaultDeficitDetected {
 				chain,
-				amount_owed: *amount_owed,
-				available: *available,
+				amount_owed: amount_owed.amount(),
+				available: available.amount(),
 			});
 		}
 		let amount_reconciled = match chain {
 			ForeignChain::Ethereum | ForeignChain::Arbitrum => match owner {
 				ExternalOwner::Account(address) =>
-					if *amount_owed > *available {
+					if amount_owed > available {
 						0
 					} else {
-						Self::refund_via_egress(chain, address.clone(), *amount_owed)?;
-						*amount_owed
+						Self::refund_via_egress(chain, address.clone(), amount_owed.amount())?;
+						amount_owed.amount()
 					},
 				other => {
 					log_or_panic!(
@@ -238,7 +235,8 @@ impl<T: Config> Pallet<T> {
 			ForeignChain::Polkadot => match owner {
 				ExternalOwner::AggKey => {
 					if let Some(active_key) = T::PolkadotKeyProvider::active_epoch_key() {
-						let refund_amount = core::cmp::min(*amount_owed, *available);
+						let refund_amount =
+							core::cmp::min(amount_owed.amount(), available.amount());
 						Self::refund_via_egress(
 							chain,
 							ForeignChainAddress::Dot(active_key.key),
@@ -260,7 +258,7 @@ impl<T: Config> Pallet<T> {
 				},
 			},
 			ForeignChain::Bitcoin | ForeignChain::Solana => match owner {
-				ExternalOwner::Vault => core::cmp::min(*amount_owed, *available),
+				ExternalOwner::Vault => core::cmp::min(amount_owed.amount(), available.amount()),
 				other => {
 					log_or_panic!(
 						"{:?} Liabilities are not supported for chain {:?}.",
@@ -272,8 +270,8 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		available.defensive_saturating_reduce(amount_reconciled);
-		amount_owed.defensive_saturating_reduce(amount_reconciled);
+		available.saturating_sub_amount(amount_reconciled);
+		amount_owed.saturating_sub_amount(amount_reconciled);
 
 		Ok(())
 	}
@@ -288,33 +286,44 @@ impl<T: Config> Pallet<T> {
 		}
 
 		for chain in ForeignChain::iter() {
-			WithheldAssets::<T>::mutate(chain.gas_asset(), |total_withheld| {
-				let mut owed_assets =
-					Liabilities::<T>::take(chain.gas_asset()).into_iter().collect::<Vec<_>>();
-				owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(*amount));
+			WithheldAssets::<T>::mutate(chain.gas_asset(), |maybe_total_withheld| {
+				let maybe_liabilities = Liabilities::<T>::take(chain.gas_asset());
 
-				for (destination, amount) in owed_assets.iter_mut() {
-					debug_assert!(*amount > 0);
-					let _ = Self::reconcile(chain, destination, amount, total_withheld);
-					if *total_withheld == 0 {
-						break;
+				if let (Some(total_withheld), Some(liabilities)) =
+					(maybe_total_withheld, maybe_liabilities)
+				{
+					let mut owed_assets = liabilities.into_iter().collect::<Vec<_>>();
+
+					owed_assets.sort_by_key(|(_, amount)| core::cmp::Reverse(amount.amount()));
+
+					for (destination, amount) in owed_assets.iter_mut() {
+						debug_assert!(amount.amount() > 0);
+						let _ = Self::reconcile(chain, destination, amount, total_withheld);
+						if total_withheld.is_zero() {
+							break;
+						}
 					}
-				}
 
-				owed_assets.retain(|(_, amount)| *amount > 0);
-				if !owed_assets.is_empty() {
-					Liabilities::<T>::insert(
-						chain.gas_asset(),
-						owed_assets.into_iter().collect::<BTreeMap<_, _>>(),
-					);
+					owed_assets.retain(|(_, amount)| amount.amount() > 0);
+					if !owed_assets.is_empty() {
+						Liabilities::<T>::insert(
+							chain.gas_asset(),
+							owed_assets.into_iter().collect::<BTreeMap<_, _>>(),
+						);
+					}
 				}
 			});
 		}
 	}
 
 	pub fn vault_imbalance(asset: Asset) -> VaultImbalance<AssetAmount> {
-		let owed = Liabilities::<T>::get(asset).values().sum::<u128>();
-		let withheld = WithheldAssets::<T>::get(asset);
+		let owed: AssetAmount = if let Some(liabilities) = Liabilities::<T>::get(asset) {
+			liabilities.values().map(AssetBalance::amount).sum()
+		} else {
+			0
+		};
+		let withheld: AssetAmount =
+			WithheldAssets::<T>::get(asset).map_or(0, |amount| amount.amount());
 		if owed > withheld {
 			VaultImbalance::Deficit(owed - withheld)
 		} else {
@@ -343,22 +352,39 @@ impl<A> VaultImbalance<A> {
 impl<T: Config> LiabilityTracker for Pallet<T> {
 	fn record_liability(address: ForeignChainAddress, asset: Asset, amount: AssetAmount) {
 		debug_assert_eq!(ForeignChain::from(asset), address.chain());
-		Liabilities::<T>::mutate(asset, |fees| {
-			fees.entry(match ForeignChain::from(asset) {
-				ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
-				ForeignChain::Polkadot => ExternalOwner::AggKey,
-				ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
-			})
-			.and_modify(|fee| fee.saturating_accrue(amount))
-			.or_insert(amount);
+		Liabilities::<T>::mutate(asset, |maybe_fees| {
+			if let Some(fees) = maybe_fees {
+				fees.entry(match ForeignChain::from(asset) {
+					ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
+					ForeignChain::Polkadot => ExternalOwner::AggKey,
+					ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
+				})
+				.and_modify(|fee| fee.saturating_accrue(AssetBalance::new(asset, amount)))
+				.or_insert(AssetBalance::new(asset, amount));
+			} else {
+				let mut map = BTreeMap::new();
+				map.insert(
+					match ForeignChain::from(asset) {
+						ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
+						ForeignChain::Polkadot => ExternalOwner::AggKey,
+						ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
+					},
+					AssetBalance::new(asset, amount),
+				);
+				*maybe_fees = Some(map);
+			}
 		});
 	}
 }
 
 impl<T: Config> AssetWithholding for Pallet<T> {
 	fn withhold_assets(asset: Asset, amount: AssetAmount) {
-		WithheldAssets::<T>::mutate(asset, |fees| {
-			fees.saturating_accrue(amount);
+		WithheldAssets::<T>::mutate(asset, |maybe_fees| {
+			if let Some(fees) = maybe_fees {
+				fees.saturating_accrue(AssetBalance::new(asset, amount));
+			} else {
+				*maybe_fees = Some(AssetBalance::new(asset, amount));
+			}
 		});
 	}
 }
@@ -375,13 +401,18 @@ where
 		asset: Asset,
 		amount: AssetAmount,
 	) -> DispatchResult {
+		let asset_amount = AssetBalance::new(asset, amount);
 		if amount == 0 {
 			return Ok(())
 		}
-
-		let new_balance = FreeBalances::<T>::try_mutate(account_id, asset, |balance| {
-			*balance = balance.checked_add(amount).ok_or(Error::<T>::BalanceOverflow)?;
-			Ok::<_, Error<T>>(*balance)
+		let new_balance = FreeBalances::<T>::try_mutate(account_id, asset, |maybe_balance| {
+			if let Some(balance) = maybe_balance {
+				*balance = balance.checked_add(asset_amount).ok_or(Error::<T>::BalanceOverflow)?;
+				Ok::<_, Error<T>>(balance.amount())
+			} else {
+				*maybe_balance = Some(asset_amount);
+				Ok::<_, Error<T>>(amount)
+			}
 		})?;
 
 		Self::deposit_event(Event::AccountCredited {
@@ -402,16 +433,19 @@ where
 			return Ok(())
 		}
 
+		let asset_amount = AssetBalance::new(asset, amount);
+
 		let new_balance = FreeBalances::<T>::try_mutate_exists(account_id, asset, |balance| {
 			let new_balance = match balance.take() {
 				None => Err(Error::<T>::InsufficientBalance),
 				Some(balance) =>
-					Ok(balance.checked_sub(amount).ok_or(Error::<T>::InsufficientBalance)?),
+					Ok(balance.checked_sub(asset_amount).ok_or(Error::<T>::InsufficientBalance)?),
 			}?;
-			if new_balance > 0 {
+			let new_amount = new_balance.amount();
+			if new_balance.amount() > 0 {
 				*balance = Some(new_balance);
 			}
-			Ok::<_, Error<T>>(new_balance)
+			Ok::<_, Error<T>>(new_amount)
 		})?;
 
 		Self::deposit_event(Event::AccountDebited {
@@ -425,11 +459,13 @@ where
 	}
 
 	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
-		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
+		AssetMap::from_fn(|asset| {
+			FreeBalances::<T>::get(who, asset).map_or(0, |balance| balance.amount())
+		})
 	}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
-		FreeBalances::<T>::get(who, asset)
+		FreeBalances::<T>::get(who, asset).map_or(0, |balance| balance.amount())
 	}
 }
 
