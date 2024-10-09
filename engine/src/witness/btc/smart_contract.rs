@@ -33,6 +33,10 @@ pub struct BtcContractCall {
 fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 	let bytes = script.as_script().as_bytes();
 
+	if bytes.len() < 2 {
+		return None;
+	}
+
 	// First opcode must be OP_RETURN
 	if bytes[0] != OP_RETURN.to_u8() {
 		return None;
@@ -100,19 +104,26 @@ pub fn try_extract_contract_call(
 
 	// Second output must be a nulldata UTXO (with 0 amount):
 	if nulldata_utxo.value.to_sat() != 0 {
+		tracing::warn!(
+			"Observed a tx into our vault's change address, but the value of the second UTXO is non-zero (tx_hash: {})",
+			tx.hash
+		);
 		return None;
 	}
 
 	let mut data = try_extract_utxo_encoded_data(&nulldata_utxo.script_pubkey)?;
 
 	let Ok(data) = UtxoEncodedData::decode(&mut data) else {
-		tracing::warn!("Failed to decode UTXO encoded data targeting our vault");
+		tracing::warn!(
+			"Failed to decode UTXO encoded data targeting our vault (tx_hash: {})",
+			tx.hash
+		);
 		return None;
 	};
 
 	// Third output must be a "change utxo" whose address we assume to also be the refund address:
 	let Some(refund_address) = script_buf_to_script_pubkey(&change_utxo.script_pubkey) else {
-		tracing::error!("Failed to extract refund address");
+		tracing::error!("Failed to extract refund address (tx_hash: {})", tx.hash);
 		return None;
 	};
 
@@ -283,6 +294,18 @@ mod tests {
 				ScriptBuf::from_bytes(encode_data_in_nulldata_utxo(&data).unwrap().raw());
 
 			assert_eq!(try_extract_utxo_encoded_data(&script_buf), Some(&data[..]));
+		}
+
+		// Some degenerate cases:
+		for data in [
+			vec![],                                   // too few bytes
+			vec![OP_RETURN.to_u8()],                  // too few bytes
+			vec![OP_RETURN.to_u8(), OP_PUSHBYTES_75], // no bytes follow "pushbytes"
+		] {
+			let script_buf =
+				ScriptBuf::from_bytes(encode_data_in_nulldata_utxo(&data).unwrap().raw());
+
+			assert_eq!(try_extract_utxo_encoded_data(&script_buf), None);
 		}
 	}
 }

@@ -1,13 +1,14 @@
 use crate::ForeignChainAddress;
 use cf_primitives::{Asset, AssetAmount};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 
 use super::{BitcoinOp, BitcoinScript};
 
 // The maximum length of data that can be encoded in a nulldata utxo
-const MAX_NULLDATA_UTXO_LENGTH: usize = 80;
+const MAX_NULLDATA_LENGTH: usize = 80;
 
-#[derive(Encode, Decode, Clone)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone)]
 pub struct UtxoEncodedData {
 	pub output_asset: Asset,
 	pub output_address: ForeignChainAddress,
@@ -15,7 +16,7 @@ pub struct UtxoEncodedData {
 }
 
 // The encoding of these parameters is the same across chains
-#[derive(Encode, Decode, Clone)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone)]
 pub struct SharedCfParameters {
 	// FoK fields (refund address is stored externally):
 	pub retry_duration: u16,
@@ -29,7 +30,7 @@ pub struct SharedCfParameters {
 
 #[allow(dead_code)]
 pub fn encode_data_in_nulldata_utxo(data: &[u8]) -> Option<BitcoinScript> {
-	if data.len() > MAX_NULLDATA_UTXO_LENGTH {
+	if data.len() > MAX_NULLDATA_LENGTH {
 		return None;
 	}
 

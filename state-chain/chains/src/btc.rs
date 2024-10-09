@@ -970,11 +970,11 @@ pub enum BitcoinOp {
 	Hash160,
 	EqualVerify,
 	Equal,
-	// Not part of the bitcoin spec, implemented for convenience
+	Return,
+	// The following are not part of the bitcoin spec, implemented for convenience:
 	PushArray20 { bytes: [u8; 20] },
 	PushArray32 { bytes: [u8; 32] },
 	PushVersion { version: u8 },
-	Return,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
