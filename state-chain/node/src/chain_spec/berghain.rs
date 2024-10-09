@@ -106,6 +106,12 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 			const_hash("AEzmj9wq8jp7wF46Lrr3Jc2K7xRP58V5Y3cYRVEqtE5J"),
 		),
 	],
+	sol_swap_endpoint_program: SolAddress(bs58_array(
+		"BnECXbsDFYPmhxcV57dodaWtJJjtGPE8Le3LAR7qieYb",
+	)),
+	sol_swap_endpoint_program_data_account: SolAddress(bs58_array(
+		"5mFsKrqCH5v9Q9uF5o6qrsUi1GV2myuhc23NAi5YFs4M",
+	)),
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;

@@ -32,3 +32,6 @@ export const getSolanaVaultIdl = loadContractCached(
 export const getCfTesterIdl = loadContractCached(
   `../contract-interfaces/sol-program-idls/${CF_SOL_PROGRAM_IDL_TAG}/cf_tester.json`,
 );
+export const getSolanaSwapEndpointIdl = loadContractCached(
+  `../contract-interfaces/sol-program-idls/${CF_SOL_PROGRAM_IDL_TAG}/swap_endpoint.json`,
+);
