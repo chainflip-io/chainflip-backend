@@ -170,12 +170,6 @@ const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
 const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
 const ARBITRUM_MAX_GAS_LIMIT: u128 = 25_000_000;
 
-// TODO: Calculate these numbers
-const ETHEREUM_DEFAULT_GAS_CCM_NATIVE_TRANSFER: U256 = U256::from(1234);
-const ETHEREUM_DEFAULT_GAS_CCM_TOKEN_TRANSFER: U256 = U256::from(1234);
-const ARBITRUM_DEFAULT_GAS_CCM_NATIVE_TRANSFER: U256 = U256::from(1234);
-const ARBITRUM_DEFAULT_GAS_CCM_TOKEN_TRANSFER: U256 = U256::from(1234);
-
 pub trait EvmPriorityFee<C: Chain> {
 	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
 		None
@@ -257,31 +251,15 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 			/// Calculate the gas limit for a this evm chain's call.
 			fn calculate_gas_limit(call: &$chain_api<$env>) -> Option<U256> {
 				if let Some(gas_budget) = call.gas_budget() {
-					let gas_limit = match call.chain() {
-						ForeignChain::Ethereum => match call.asset() {
-							Asset::Eth => gas_budget.saturating_add(ETHEREUM_DEFAULT_GAS_CCM_NATIVE_TRANSFER),
-							_ => gas_budget.saturating_add(ETHEREUM_DEFAULT_GAS_CCM_TOKEN_TRANSFER),
-						},
-						ForeignChain::Arbitrum => {
-							let arbitrum_gas_limit_multiplier = $chain_tracking::chain_state()
-							.or_else(||{
-								log::warn!("No chain data for {}. This should never happen. Please check Chain Tracking data.", $chain::NAME);
-								None
-							})?
-							.tracked_data.gas_limit_multiplier;
+					let gas_limit = $chain_tracking::chain_state()
+						.or_else(||{
+							log::warn!("No chain data for {}. This should never happen. Please check Chain Tracking data.", $chain::NAME);
+							None
+						})?
+						.tracked_data
+						.calculate_ccm_gas_limit(gas_budget);
 
-							let default_gas = match call.asset() {
-								Asset::ArbEth => ARBITRUM_DEFAULT_GAS_CCM_NATIVE_TRANSFER,
-								_ => ARBITRUM_DEFAULT_GAS_CCM_TOKEN_TRANSFER,
-							}
-							// TODO: Do we potentially want to multiply also the gas budget by the multiplier? Then we will be paying
-							//  for fluctuations but we will simplify the integrator's job as they won't have to worry about it.
-							gas_budget.saturating_add((default_gas * arbitrum_gas_limit_multiplier) >> 64) },
-						_ => return None,
-					};
-
-					Some(gas_limit.min($max_gas_limit)
-						.into())
+					Some(std::cmp::min(gas_limit, $max_gas_limit.into()))
 				} else {
 					None
 				}

@@ -6,7 +6,7 @@ use cf_chains::{
 	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
 	TransferFallback, TransferFallbackError,
 };
-use cf_primitives::{chains::assets, EgressId, ForeignChain};
+use cf_primitives::{chains::assets, EgressId, ForeignChain, GasAmount};
 use codec::{Decode, Encode};
 use frame_support::{sp_runtime::DispatchError, CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;

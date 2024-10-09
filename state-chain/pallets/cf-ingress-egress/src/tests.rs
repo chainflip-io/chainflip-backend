@@ -601,7 +601,7 @@ fn can_egress_ccm() {
 				cf_parameters: vec![].try_into().unwrap(),
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-				gas_budget: GAS_BUDGET.into(),
+				gas_budget: GAS_BUDGET,
 			}
 		]);
 
@@ -617,7 +617,7 @@ fn can_egress_ccm() {
 			},
 			ccm.source_chain,
 			ccm.source_address,
-			GAS_BUDGET.into(),
+			GAS_BUDGET,
 			ccm.channel_metadata.message.to_vec(),
 			vec![],
 		).unwrap()]);

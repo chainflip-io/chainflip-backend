@@ -393,9 +393,10 @@ impl SolanaTransactionBuilder {
 		gas_budget: cf_primitives::GasAmount,
 		asset: SolAsset,
 	) -> SolComputeLimit {
-		let compute_limit: SolComputeLimit =
-			gas_budget.try_into().unwrap_or(MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
-
+		let compute_limit: SolComputeLimit = match gas_budget.try_into() {
+			Ok(limit) => limit,
+			Err(_) => return MAX_COMPUTE_UNITS_PER_CCM_TRANSFER,
+		};
 		let compute_limit_with_overhead = compute_limit.saturating_add(match asset {
 			// TODO: Potentially rename to overhead. Double check this values, we could just
 			// increase them to be sure we don't cause any issues for the integrators as
@@ -683,14 +684,14 @@ mod test {
 				SolAsset::SolUsdc => DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
 			};
 
-			let mut tx_compute_limit =
+			let mut tx_compute_limit: u32 =
 				SolanaTransactionBuilder::calculate_ccm_compute_limit(TEST_EGRESS_BUDGET, *asset);
-			assert_eq!(tx_compute_limit, TEST_EGRESS_BUDGET + default_compute_limit);
+			assert_eq!(tx_compute_limit, TEST_EGRESS_BUDGET as u32 + default_compute_limit);
 
 			// Test SolComputeLimit saturation
 			assert_eq!(
 				SolanaTransactionBuilder::calculate_ccm_compute_limit(
-					MAX_COMPUTE_UNITS_PER_CCM_TRANSFER - default_compute_limit + 1,
+					MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u128 - default_compute_limit as u128 + 1,
 					*asset,
 				),
 				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER
@@ -698,7 +699,7 @@ mod test {
 
 			// Test upper cap
 			tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_compute_limit(
-				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER - 1,
+				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u128 - 1,
 				*asset,
 			);
 			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);

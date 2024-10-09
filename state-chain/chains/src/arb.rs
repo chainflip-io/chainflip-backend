@@ -10,13 +10,11 @@ use crate::{
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Arbitrum;
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{
-	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint, Word,
-};
+pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 use sp_std::{cmp::min, str};
 
 use self::evm::EvmCrypto;
@@ -83,6 +81,20 @@ impl ArbitrumTrackedData {
 	) -> <Ethereum as Chain>::ChainAmount {
 		base_fee_multiplier.saturating_mul_int(self.base_fee)
 	}
+
+	pub fn calculate_ccm_gas_limit(&self, gas_budget: GasAmount) -> U256 {
+		use crate::arb::fees::*;
+
+		let gas_limit: U256 = U256::from(gas_budget);
+
+		// TODO: For now we don't differentiate egress native or token. It adds quite some
+		// complexity for very little gain.
+		// TODO: Do we potentially want to multiply also the gas budget by the multiplier? Then we
+		// will be paying for fluctuations but we will simplify the integrator's job as they won't
+		// have to worry about it.
+		let gas_overhead: u128 = self.gas_limit_multiplier.saturating_mul_int(CCM_GAS_OVERHEAD);
+		gas_limit.saturating_add(gas_overhead.into())
+	}
 }
 
 pub mod fees {
@@ -90,6 +102,7 @@ pub mod fees {
 	pub const GAS_COST_PER_FETCH: u128 = 30_000;
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+	pub const CCM_GAS_OVERHEAD: u128 = 123; // TODO: To estimate
 }
 
 impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {

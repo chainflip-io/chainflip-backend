@@ -12,14 +12,12 @@ use crate::{
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Ethereum;
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{
-	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint, Word,
-};
+pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
 use evm::api::EvmReplayProtection;
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 use sp_std::{cmp::min, convert::TryInto, str};
 
 // Reference constants for the chain spec
@@ -83,6 +81,13 @@ impl EthereumTrackedData {
 			.saturating_mul_int(self.base_fee)
 			.saturating_add(self.priority_fee)
 	}
+
+	pub fn calculate_ccm_gas_limit(&self, gas_budget: GasAmount) -> U256 {
+		use crate::eth::fees::*;
+
+		let gas_limit: U256 = U256::from(gas_budget);
+		gas_limit.saturating_add(CCM_GAS_OVERHEAD.into())
+	}
 }
 
 pub mod fees {
@@ -90,6 +95,7 @@ pub mod fees {
 	pub const GAS_COST_PER_FETCH: u128 = 30_000;
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+	pub const CCM_GAS_OVERHEAD: u128 = 123; // TODO: To estimate
 }
 
 impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
