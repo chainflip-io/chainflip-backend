@@ -280,6 +280,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: ChainCryptoInstanceAlias {
+	const NAME: &'static str;
 	type UtxoChain: Get<bool>;
 
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
