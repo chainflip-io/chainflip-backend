@@ -736,6 +736,8 @@ pub mod pallet {
 		DepositChannelTainted,
 		/// Transaction tainted
 		TransactionTainted,
+		/// Unsupported chain
+		UnsupportedChain,
 	}
 
 	#[pallet::hooks]
@@ -1254,20 +1256,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
-			let is_broker =
-				T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Broker);
-			let is_lp = T::AccountRoleRegistry::has_account_role(
-				&account_id,
-				AccountRole::LiquidityProvider,
+			ensure!(
+				T::TargetChain::get() == ForeignChain::Bitcoin,
+				Error::<T, I>::UnsupportedChain
 			);
-			ensure!(is_broker || is_lp, BadOrigin);
-			let tainted_transaction = TaintedTransactionDetails {
-				broker: account_id.clone(),
-				refund_address: None,
-				deposit_witness: None,
-			};
-			TaintedTransactions::<T, I>::insert(account_id, tx_id, tainted_transaction);
+			Self::mark_transaction_as_tainted_inner(origin, tx_id)?;
 			Ok(())
 		}
 	}
@@ -1309,6 +1302,23 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn mark_transaction_as_tainted_inner(
+		origin: OriginFor<T>,
+		tx_id: <T::TargetChain as Chain>::DepositDetails,
+	) -> DispatchResult {
+		let account_id = ensure_signed(origin)?;
+		let is_broker = T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Broker);
+		let is_lp =
+			T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::LiquidityProvider);
+		ensure!(is_broker || is_lp, BadOrigin);
+		let tainted_transaction = TaintedTransactionDetails {
+			broker: account_id.clone(),
+			refund_address: None,
+			deposit_witness: None,
+		};
+		TaintedTransactions::<T, I>::insert(account_id, tx_id, tainted_transaction);
+		Ok(())
+	}
 	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {
 		if let Some(DepositChannelDetails { deposit_channel, boost_status, .. }) =
 			DepositChannelLookup::<T, I>::take(address)

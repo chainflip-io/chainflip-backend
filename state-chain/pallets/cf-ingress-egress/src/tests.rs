@@ -2038,7 +2038,7 @@ fn process_tainted_transaction_and_expect_refund() {
 			&BROKER,
 		));
 
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
 			RuntimeOrigin::signed(BROKER),
 			Default::default(),
 		));
@@ -2075,7 +2075,7 @@ fn process_tainted_transaction_and_expect_refund() {
 fn only_broker_and_lps_can_mark_transaction_as_tainted() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(
+			IngressEgress::mark_transaction_as_tainted_inner(
 				RuntimeOrigin::signed(ALICE),
 				Default::default(),
 			),
@@ -2086,7 +2086,7 @@ fn only_broker_and_lps_can_mark_transaction_as_tainted() {
 			&BROKER,
 		));
 
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
 			RuntimeOrigin::signed(BROKER),
 			Default::default(),
 		));
@@ -2097,7 +2097,7 @@ fn only_broker_and_lps_can_mark_transaction_as_tainted() {
 			)
 		);
 
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
 			RuntimeOrigin::signed(ALICE),
 			Default::default(),
 		));
