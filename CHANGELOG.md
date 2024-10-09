@@ -2,11 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [1.6.8] - 2024-10-02
+## [1.6.8] - 2024-10-09
 
 ### Features
 
 - Remove swap and retry batch on price limit breach ([#5285](https://github.com/chainflip-io/chainflip-backend/issues/5285))
+- Add egress fee for token account rent ([#5315](https://github.com/chainflip-io/chainflip-backend/issues/5315))
 
 ## [1.6.7] - 2024-09-25
 
