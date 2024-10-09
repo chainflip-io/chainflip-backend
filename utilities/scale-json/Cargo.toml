@@ -12,17 +12,17 @@ version = '0.1.0'
 workspace = true
 
 [dependencies]
-hex = "0.4"
+hex = "0.4.3"
 scale-decode = "0.13"
 scale-type-resolver = "0.2"
-serde = { version = "1.0.195", features = ["derive"] }
+serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.111"
 
 [dev-dependencies]
 insta = { version = "1.38.0", features = ["json"] }
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
     'derive',
 ] }
-scale-info = { version = '2.10.0', default-features = false, features = [
+scale-info = { version = "2.11.1", default-features = false, features = [
     'derive',
 ] }

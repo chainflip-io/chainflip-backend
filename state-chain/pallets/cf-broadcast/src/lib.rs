@@ -2,7 +2,6 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 #![feature(extract_if)]
-#![feature(is_sorted)]
 
 mod benchmarking;
 mod mock;
@@ -437,10 +436,8 @@ pub mod pallet {
 
 				// Retry broadcast (allowed by broadcast barrier)
 				let next_block = block_number.saturating_add(One::one());
-				let id_limit = BroadcastBarriers::<T, I>::get()
-					.first()
-					.copied()
-					.unwrap_or(BroadcastId::max_value());
+				let id_limit =
+					BroadcastBarriers::<T, I>::get().first().copied().unwrap_or(BroadcastId::MAX);
 				delayed_retries.retain(|broadcast_id| {
 					if *broadcast_id <= id_limit {
 						// If retry is allowed by the barrier - start the retry.
@@ -688,6 +685,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.ok_or(Error::<T, I>::InvalidPayload)?;
 
 		Self::remove_pending_broadcast(&broadcast_id);
+		AbortedBroadcasts::<T, I>::mutate(|aborted| {
+			aborted.remove(&broadcast_id);
+		});
 
 		if IncomingKeyAndBroadcastId::<T, I>::exists() {
 			let (incoming_key, rotation_broadcast_id) =
@@ -773,9 +773,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) -> Option<ApiCallFor<T, I>> {
 		AwaitingBroadcast::<T, I>::remove(broadcast_id);
 		TransactionMetadata::<T, I>::remove(broadcast_id);
-		PendingApiCalls::<T, I>::take(broadcast_id).map(|api_call| {
+		PendingApiCalls::<T, I>::take(broadcast_id).inspect(|api_call| {
 			TransactionOutIdToBroadcastId::<T, I>::remove(api_call.transaction_out_id());
-			api_call
 		})
 	}
 
@@ -1098,7 +1097,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	}
 
 	fn expire_broadcast(broadcast_id: BroadcastId) {
-		// These would otherwise be cleaned up when the broadacst succeeds or aborts.
+		// These would otherwise be cleaned up when the broadcast succeeds or aborts.
 		RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
 		RequestFailureCallbacks::<T, I>::remove(broadcast_id);
 		Self::clean_up_broadcast_storage(broadcast_id);

@@ -7,16 +7,16 @@ use crate::{address::Address, consts, AccountBump, PdaAndBump};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "std-error", derive(thiserror::Error))]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum PdaError {
-	#[cfg_attr(feature = "std-error", error("not a valid point"))]
+	#[cfg_attr(feature = "std", error("not a valid point"))]
 	NotAValidPoint,
-	#[cfg_attr(feature = "std-error", error("too many seeds"))]
+	#[cfg_attr(feature = "std", error("too many seeds"))]
 	TooManySeeds,
-	#[cfg_attr(feature = "std-error", error("seed too large"))]
+	#[cfg_attr(feature = "std", error("seed too large"))]
 	SeedTooLarge,
 	// TODO: choose a better name
-	#[cfg_attr(feature = "std-error", error("bad luck bumping seed"))]
+	#[cfg_attr(feature = "std", error("bad luck bumping seed"))]
 	BumpSeedBadLuck,
 }
 

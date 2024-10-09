@@ -51,6 +51,7 @@ const PREFIX_BYTE: u8 = 0xff;
 pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = H160([0xEE; 20]);
 
 /// Derives the CREATE2 Ethereum address for a given asset, vault, and channel id.
+///
 /// @param vault_address The address of the Ethereum Vault
 /// @param token_address The token address if this is a token deposit
 /// @param channel_id The numerical channel id

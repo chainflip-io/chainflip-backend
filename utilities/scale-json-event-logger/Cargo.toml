@@ -10,6 +10,6 @@ log = "0.4.16"
 subxt = { version = "0.33", features = ["substrate-compat"] }
 tokio = { version = "1.22", features = ["full"] }
 cf-utilities = { package = "utilities", path = ".." }
-hex = "0.4"
-hex-literal = "0.4"
+hex = "0.4.3"
+hex-literal = "0.4.1"
 anyhow = "1.0"

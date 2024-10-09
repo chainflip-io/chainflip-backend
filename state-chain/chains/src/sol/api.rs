@@ -73,6 +73,7 @@ pub trait SolanaEnvironment:
 }
 
 /// IMPORTANT: This should only be used if the nonce has not been used to sign a transaction.
+///
 /// Once a nonce is actually used, it should ONLY be recovered via Witnessing.
 /// Only use this if you know what you are doing.
 pub trait RecoverDurableNonce {
@@ -230,7 +231,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			durable_nonce,
 			compute_price,
 		)
-		.map_err(|e| {
+		.inspect_err(|e| {
 			// Vault Rotation call building NOT transactional - meaning when this fails,
 			// storage is not rolled back. We must recover the durable nonce here,
 			// since it has been taken from storage but not actually used.
@@ -243,7 +244,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				durable_nonce
 			);
 			Environment::recover_durable_nonce(durable_nonce.0);
-			e
 		})?;
 
 		Ok(Self {
@@ -353,7 +353,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				)
 			},
 		}
-		.map_err(|e| {
+		.inspect_err(|e| {
 			// CCM call building is NOT transactional - meaning when this fails,
 			// storage is not rolled back. We must recover the durable nonce here,
 			// since it has been taken from storage but not actually used.
@@ -366,7 +366,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				durable_nonce
 			);
 			Environment::recover_durable_nonce(durable_nonce.0);
-			e
 		})?;
 
 		Ok(Self {

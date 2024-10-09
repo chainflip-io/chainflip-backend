@@ -3,7 +3,6 @@ use pallet_cf_broadcast::BroadcastData;
 
 use crate::*;
 use frame_support::pallet_prelude::Weight;
-#[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
 use cf_chains::sol::{SolTransaction, SolanaTransactionData};
@@ -37,7 +36,7 @@ pub struct SerializeSolanaBroadcastMigration;
 impl OnRuntimeUpgrade for SerializeSolanaBroadcastMigration {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		Ok((old::AwaitingBroadcast::iter().count() as u64).encode())
+		pre_upgrade_check()
 	}
 
 	fn on_runtime_upgrade() -> Weight {
@@ -64,16 +63,23 @@ impl OnRuntimeUpgrade for SerializeSolanaBroadcastMigration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let pre_awaiting_broadcast_count = <u64>::decode(&mut state.as_slice())
-			.map_err(|_| DispatchError::from("Failed to decode state"))?;
-
-		let post_awaiting_broadcast_count =
-			pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::iter().count()
-				as u64;
-
-		assert_eq!(pre_awaiting_broadcast_count, post_awaiting_broadcast_count);
-		Ok(())
+		post_upgrade_check(state)
 	}
+}
+
+pub fn pre_upgrade_check() -> Result<Vec<u8>, DispatchError> {
+	Ok((old::AwaitingBroadcast::iter().count() as u64).encode())
+}
+
+pub fn post_upgrade_check(state: Vec<u8>) -> Result<(), DispatchError> {
+	let pre_awaiting_broadcast_count = <u64>::decode(&mut state.as_slice())
+		.map_err(|_| DispatchError::from("Failed to decode state"))?;
+
+	let post_awaiting_broadcast_count =
+		pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::iter().count() as u64;
+
+	assert_eq!(pre_awaiting_broadcast_count, post_awaiting_broadcast_count);
+	Ok(())
 }
 
 pub struct NoopUpgrade;

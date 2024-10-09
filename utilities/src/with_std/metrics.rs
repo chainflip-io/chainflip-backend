@@ -1,5 +1,6 @@
 //! Metric monitoring for the CFE
-//! allowing prometheus server to query metrics from the CFE
+//!
+//! Allowing prometheus server to query metrics from the CFE
 //! Returns the metrics encoded in a prometheus format
 //! Method returns a Sender, allowing graceful termination of the infinite loop
 use super::{super::Port, task_scope};

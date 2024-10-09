@@ -116,7 +116,11 @@ pub struct BitcoinTrackedData {
 impl Default for BitcoinTrackedData {
 	#[track_caller]
 	fn default() -> Self {
-		panic!("You should not use the default chain tracking, as it's meaningless.");
+		frame_support::print("You should not use the default chain tracking, as it's meaningless.");
+
+		BitcoinTrackedData {
+			btc_fee_info: BitcoinFeeInfo { sats_per_kilobyte: Default::default() },
+		}
 	}
 }
 

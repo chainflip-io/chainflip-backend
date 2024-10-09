@@ -131,7 +131,9 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 impl Default for EthereumTrackedData {
 	#[track_caller]
 	fn default() -> Self {
-		panic!("You should not use the default chain tracking, as it's meaningless.")
+		frame_support::print("You should not use the default chain tracking, as it's meaningless.");
+
+		EthereumTrackedData { base_fee: Default::default(), priority_fee: Default::default() }
 	}
 }
 

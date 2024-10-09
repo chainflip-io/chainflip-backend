@@ -10,6 +10,7 @@ use chainflip_api::{
 	SwapDepositAddress, WithdrawFeesDetail,
 };
 use clap::Parser;
+use custom_rpc::to_rpc_error;
 use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
@@ -73,7 +74,8 @@ impl RpcServer for RpcServerImpl {
 			.operator_api()
 			.register_account_role(AccountRole::Broker)
 			.await
-			.map(|tx_hash| format!("{tx_hash:#x}"))?)
+			.map(|tx_hash| format!("{tx_hash:#x}"))
+			.map_err(to_rpc_error)?)
 	}
 
 	async fn request_swap_deposit_address(
@@ -102,7 +104,8 @@ impl RpcServer for RpcServerImpl {
 				refund_parameters,
 				dca_parameters,
 			)
-			.await?)
+			.await
+			.map_err(to_rpc_error)?)
 	}
 
 	async fn withdraw_fees(
@@ -110,12 +113,17 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
-		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
+		Ok(self
+			.api
+			.broker_api()
+			.withdraw_fees(asset, destination_address)
+			.await
+			.map_err(to_rpc_error)?)
 	}
 }
 
 #[derive(Parser, Debug, Clone, Default)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct BrokerOptions {
 	#[clap(
 		long = "port",
@@ -168,9 +176,11 @@ async fn main() -> anyhow::Result<()> {
 			let server = ServerBuilder::default()
 				.max_connections(opts.max_connections)
 				.build(format!("0.0.0.0:{}", opts.port))
-				.await?;
+				.await
+				.map_err(to_rpc_error)?;
 			let server_addr = server.local_addr()?;
-			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
+			let server = server
+				.start(RpcServerImpl::new(scope, opts).await.map_err(to_rpc_error)?.into_rpc());
 
 			log::info!("🎙 Server is listening on {server_addr}.");
 

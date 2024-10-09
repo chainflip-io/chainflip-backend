@@ -40,7 +40,7 @@ macro_rules! generate_electoral_system_tuple_impls {
         // We use the type names as variable names.
         #[allow(non_snake_case)]
         // In the 1/identity case, no invalid combinations are possible, so error cases are unreachable.
-        #[allow(unreachable_patterns)]
+
         // Macro expands tuples, but only uses 1 element in some cases.
         #[allow(unused_variables)]
         pub mod $module {
