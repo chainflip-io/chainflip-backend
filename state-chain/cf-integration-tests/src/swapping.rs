@@ -30,7 +30,7 @@ use cf_traits::{AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo,
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
-	traits::{OnFinalize, OnIdle},
+	traits::{OnFinalize, OnIdle, Time},
 };
 use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls, RequestFailureCallbacks,

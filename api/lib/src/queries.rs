@@ -7,6 +7,7 @@ use chainflip_engine::state_chain_observer::client::{
 use codec::Decode;
 use custom_rpc::CustomApiClient;
 use frame_support::sp_runtime::DigestItem;
+use jsonrpsee::core::RpcResult;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use pallet_cf_validator::RotationPhase;
 use serde::Deserialize;
@@ -15,6 +16,7 @@ use state_chain_runtime::runtime_apis::FailingWitnessValidators;
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use tracing::log;
 use utilities::task_scope;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo<C: Chain> {
 	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
@@ -56,7 +58,7 @@ impl QueryApi {
 	pub async fn get_open_swap_channels<C: Chain>(
 		&self,
 		block_hash: Option<state_chain_runtime::Hash>,
-	) -> Result<Vec<SwapChannelInfo<C>>, anyhow::Error>
+	) -> RpcResult<Vec<SwapChannelInfo<C>>>
 	where
 		state_chain_runtime::Runtime:
 			pallet_cf_ingress_egress::Config<ChainInstanceFor<C>, TargetChain = C>,
@@ -64,23 +66,20 @@ impl QueryApi {
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_block().hash);
 
-		let (channel_details, network_environment) = tokio::try_join!(
-			self.state_chain_client
-				.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
-					state_chain_runtime::Runtime,
-					ChainInstanceFor<C>,
-				>, Vec<_>>(block_hash)
-				.map(|result| {
-					result.map(|channels| channels.into_iter().collect::<BTreeMap<_, _>>())
-				}),
-			self.state_chain_client
-				.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
-					block_hash
-				),
-		)?;
+		let (channels, network_environment) = tokio::try_join!(
+				self.state_chain_client
+					.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
+						state_chain_runtime::Runtime,
+						ChainInstanceFor<C>,
+					>, Vec<_>>(block_hash),
+				self.state_chain_client
+					.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<
+						state_chain_runtime::Runtime,
+					>>(block_hash),
+			)?;
 
-		Ok(channel_details
-			.iter()
+		Ok(channels
+			.into_iter()
 			.filter_map(|(_, DepositChannelDetails { action, deposit_channel, .. })| match action {
 				pallet_cf_ingress_egress::ChannelAction::Swap { destination_asset, .. } |
 				pallet_cf_ingress_egress::ChannelAction::CcmTransfer {
@@ -88,7 +87,7 @@ impl QueryApi {
 				} => Some(SwapChannelInfo {
 					deposit_address: deposit_channel.address.to_humanreadable(network_environment),
 					source_asset: deposit_channel.asset.into(),
-					destination_asset: *destination_asset,
+					destination_asset,
 				}),
 				_ => None,
 			})

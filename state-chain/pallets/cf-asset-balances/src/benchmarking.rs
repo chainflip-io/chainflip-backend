@@ -1,5 +1,3 @@
-#![cfg(feature = "runtime-benchmarks")]
-
 use crate::{Config, Pallet};
 use frame_benchmarking::v2::*;
 

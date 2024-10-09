@@ -62,7 +62,7 @@ pub struct ValidatorInfo {
 	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BoostPoolDepth {
 	#[cfg_attr(feature = "std", serde(flatten))]
@@ -162,7 +162,7 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 	}
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct FailingWitnessValidators {
 	pub failing_count: u32,
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,

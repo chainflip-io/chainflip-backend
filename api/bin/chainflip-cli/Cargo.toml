@@ -11,11 +11,11 @@ workspace = true
 [dependencies]
 anyhow = "1.0"
 bigdecimal = "0.4.5"
-clap = { version = "3.2.16", features = ["derive", "env"] }
+clap = { version = "4.5.3", features = ["derive", "env"] }
 config = "0.13.1"
-futures = "0.3.14"
+futures = "0.3.30"
 hex = { version = "0.4.3", features = ["serde"] }
-serde = { version = "1.0", features = ["derive", "rc"] }
+serde = { version = "1.0.197", features = ["derive", "rc"] }
 tokio = { version = "1.13.1", features = ["full"] }
 serde_json = "1.0"
 
@@ -27,4 +27,4 @@ utilities = { path = "../../../utilities" }
 custom-rpc = { path = "../../../state-chain/custom-rpc" }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
