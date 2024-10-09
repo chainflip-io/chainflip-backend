@@ -137,7 +137,7 @@ pub struct MockEthExecutexSwapAndCall<MockEvmEnvironment> {
 	transfer_param: TransferAssetParams<Ethereum>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
-	gas_budget: <Ethereum as Chain>::ChainAmount,
+	gas_budget: <Ethereum as Chain>::ChainGas,
 	message: Vec<u8>,
 	_phantom: PhantomData<MockEvmEnvironment>,
 }
@@ -147,7 +147,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Ethereum as Chain>::ChainAmount,
+		gas_budget: <Ethereum as Chain>::ChainGas,
 		message: Vec<u8>,
 		_cf_parameters: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -273,7 +273,7 @@ pub struct MockBtcExecutexSwapAndCall<MockBtcEnvironment> {
 	transfer_param: TransferAssetParams<Bitcoin>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
-	gas_budget: <Bitcoin as Chain>::ChainAmount,
+	gas_budget: <Bitcoin as Chain>::ChainGas,
 	message: Vec<u8>,
 	_phantom: PhantomData<MockBtcEnvironment>,
 }
@@ -283,7 +283,7 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		transfer_param: TransferAssetParams<Bitcoin>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: <Bitcoin as Chain>::ChainAmount,
+		gas_budget: <Bitcoin as Chain>::ChainGas,
 		message: Vec<u8>,
 		_cf_parameters: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {

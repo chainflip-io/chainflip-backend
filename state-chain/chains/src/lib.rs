@@ -17,7 +17,7 @@ use address::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, EthGasUnits, Price,
-	TransactionHash,
+	TransactionHash, GasAmount
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -199,7 +199,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	// TODO: Check that these trairs are correct
+	// TODO: Check that these traits are correct
 	type ChainGas: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
 	type TrackedData: Default
@@ -634,7 +634,7 @@ pub struct CcmChannelMetadata {
 	pub message: CcmMessage,
 	/// User funds designated to be used for gas.
 	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::number_or_hex"))]
-	pub gas_budget: AssetAmount,
+	pub gas_budget: GasAmount,
 	/// Additional parameters for the cross chain message.
 	#[cfg_attr(
 		feature = "std",
@@ -646,7 +646,7 @@ pub struct CcmChannelMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct CcmSwapAmounts {
 	pub principal_swap_amount: AssetAmount,
-	pub gas_budget: AssetAmount,
+	pub gas_budget: GasAmount,
 	// if the gas asset is different to the input asset, it will require a swap
 	pub other_gas_asset: Option<Asset>,
 }
@@ -654,7 +654,6 @@ pub struct CcmSwapAmounts {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum CcmFailReason {
 	UnsupportedForTargetChain,
-	InsufficientDepositAmount,
 	InvalidMetadata,
 	InvalidDestinationAddress,
 }
@@ -675,13 +674,9 @@ impl<Address> CcmDepositMetadataGeneric<Address> {
 	) -> Result<CcmSwapMetadataGeneric<Address>, CcmFailReason> {
 		let gas_budget = self.channel_metadata.gas_budget;
 
-		let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
-
 		let destination_chain: ForeignChain = destination_asset.into();
 		if !destination_chain.ccm_support() {
 			return Err(CcmFailReason::UnsupportedForTargetChain)
-		} else if deposit_amount < gas_budget {
-			return Err(CcmFailReason::InsufficientDepositAmount)
 		}
 
 		// Return gas asset only if it is different from the input asset (and thus requires a swap)
@@ -690,7 +685,7 @@ impl<Address> CcmDepositMetadataGeneric<Address> {
 		Ok(CcmSwapMetadataGeneric {
 			deposit_metadata: self,
 			swap_amounts: CcmSwapAmounts {
-				principal_swap_amount,
+				principal_swap_amount: deposit_amount,
 				gas_budget,
 				other_gas_asset: if source_asset == output_gas_asset || gas_budget == 0 {
 					None

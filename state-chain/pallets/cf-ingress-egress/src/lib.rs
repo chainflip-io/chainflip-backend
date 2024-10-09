@@ -34,7 +34,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
 	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS,
+	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS, GasAmount
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -135,7 +135,7 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
 	pub cf_parameters: CcmCfParameters,
-	pub gas_budget: C::ChainAmount,
+	pub gas_budget: GasAmount,
 }
 
 impl<C: Chain> CrossChainMessage<C> {
@@ -2110,12 +2110,13 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			match maybe_ccm_with_gas_budget {
 				Some((
 					CcmDepositMetadata {
-						channel_metadata: CcmChannelMetadata { message, cf_parameters, .. },
+						channel_metadata: CcmChannelMetadata { message, gas_budget, cf_parameters, .. },
 						source_chain,
 						source_address,
 						..
 					},
-					gas_budget,
+					// Don't use the output of the swap
+					swap_output_amount,
 				)) => {
 					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 						egress_id,
@@ -2126,11 +2127,15 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						cf_parameters,
 						source_chain,
 						source_address,
+						// Use the "gas limit" provided by the caller
+						// TODO: Either we convert it here to a C::ChainAmount or we just pass along
+						// the GasAmount and we only convert it at the edges - for fee/preswap calculation
+						// and on the transaction builder to build the transaction
 						gas_budget,
 					});
 
 					// The ccm gas budget is already in terms of the swap asset.
-					Ok(ScheduledEgressDetails::new(*id_counter, amount, gas_budget))
+					Ok(ScheduledEgressDetails::new(*id_counter, amount, swap_output_amount))
 				},
 				None => {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
