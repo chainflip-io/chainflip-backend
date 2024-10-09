@@ -4,7 +4,7 @@ use crate::{
 		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
-	CorruptStorageError,
+	CorruptStorageError, SharedDataHash,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_utilities::{success_threshold_from_share_count, threshold_from_share_count};
@@ -114,7 +114,8 @@ impl<
 		partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
 	) -> Result<bool, CorruptStorageError> {
 		let (_, previous_value, previous_slot) = election_access.properties()?;
-		Ok(partial_vote.value != previous_value && partial_vote.block > previous_slot)
+		let shared_data_hash = SharedDataHash::of(&previous_value);
+		Ok(partial_vote.value != shared_data_hash && partial_vote.block > previous_slot)
 	}
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,

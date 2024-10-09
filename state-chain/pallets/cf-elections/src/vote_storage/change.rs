@@ -19,16 +19,16 @@ pub struct MonotonicChange<T: Parameter + Member, S: Parameter + Member> {
 impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for MonotonicChange<T, S> {
 	type Properties = ();
 	type Vote = MonotonicChangeVote<T, S>;
-	type PartialVote = MonotonicChangeVote<T, S>;
+	type PartialVote = MonotonicChangeVote<SharedDataHash, S>;
 	type IndividualComponent = S;
-	type BitmapComponent = T;
-	type SharedData = ();
+	type BitmapComponent = SharedDataHash;
+	type SharedData = T;
 
 	fn vote_into_partial_vote<H: FnMut(Self::SharedData) -> SharedDataHash>(
 		vote: &Self::Vote,
-		mut _h: H,
+		mut h: H,
 	) -> Self::PartialVote {
-		(*vote).clone()
+		MonotonicChangeVote { value: h((vote.value).clone()), block: vote.block.clone() }
 	}
 	fn partial_vote_into_components(
 		_properties: Self::Properties,
@@ -43,7 +43,7 @@ impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for MonotonicChan
 		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
 	>(
 		vote_components: VoteComponents<Self>,
-		mut _get_shared_data: GetSharedData,
+		mut get_shared_data: GetSharedData,
 	) -> Result<
 		Option<(Self::Properties, AuthorityVote<Self::PartialVote, Self::Vote>)>,
 		CorruptStorageError,
@@ -54,18 +54,25 @@ impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for MonotonicChan
 				individual_component: Some((_properties, individual_component)),
 			} => Some((
 				(),
-				AuthorityVote::Vote(MonotonicChangeVote {
-					value: bitmap_component,
-					block: individual_component,
-				}),
+				match get_shared_data(bitmap_component)? {
+					Some(vote) => AuthorityVote::Vote(MonotonicChangeVote {
+						value: vote,
+						block: individual_component,
+					}),
+					None => AuthorityVote::PartialVote(MonotonicChangeVote {
+						value: bitmap_component,
+						block: individual_component,
+					}),
+				},
 			)),
 			_ => None,
 		})
 	}
 	fn visit_shared_data_in_vote<E, F: Fn(Self::SharedData) -> Result<(), E>>(
-		_vote: Self::Vote,
-		_f: F,
+		vote: Self::Vote,
+		f: F,
 	) -> Result<(), E> {
+		f(vote.value)?;
 		Ok(())
 	}
 	fn visit_shared_data_references_in_individual_component<F: Fn(SharedDataHash)>(
@@ -74,9 +81,10 @@ impl<T: Parameter + Member, S: Parameter + Member> VoteStorage for MonotonicChan
 	) {
 	}
 	fn visit_shared_data_references_in_bitmap_component<F: Fn(SharedDataHash)>(
-		_bitmap_component: &Self::BitmapComponent,
-		_f: F,
+		bitmap_component: &Self::BitmapComponent,
+		f: F,
 	) {
+		f(*bitmap_component)
 	}
 }
 impl<T: Parameter + Member, S: Parameter + Member> super::private::Sealed
