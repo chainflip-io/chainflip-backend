@@ -150,6 +150,7 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
 
+	/// This is equivalent to a priority fee
 	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
 
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
@@ -176,6 +177,29 @@ pub struct SolTrackedData {
 	pub priority_fee: <Solana as Chain>::ChainAmount,
 }
 
+impl SolTrackedData {
+	// Calculate the estimated fee for broadcasting a transaction given its compute units
+	// and the current priority fee.
+	pub fn calculate_transaction_fee(
+		&self,
+		compute_units: SolComputeLimit,
+	) -> <Solana as crate::Chain>::ChainAmount {
+		use compute_units_costs::*;
+
+		// Match the minimum compute price that will be set on broadcast.
+		let priority_fee = sp_std::cmp::max(self.priority_fee, MIN_COMPUTE_PRICE);
+
+		LAMPORTS_PER_SIGNATURE.saturating_add(
+			// It should never approach overflow but just in case
+			sp_std::cmp::min(
+				SolAmount::MAX as u128,
+				(priority_fee as u128 * compute_units as u128)
+					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
+			) as SolAmount,
+		)
+	}
+}
+
 impl FeeEstimationApi<Solana> for SolTrackedData {
 	fn estimate_egress_fee(
 		&self,
@@ -191,14 +215,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		let gas_fee = LAMPORTS_PER_SIGNATURE.saturating_add(
-			// It should never approach overflow but just in case
-			sp_std::cmp::min(
-				SolAmount::MAX as u128,
-				(self.priority_fee as u128 * compute_units_per_transfer as u128)
-					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
-			) as SolAmount,
-		);
+		let gas_fee = self.calculate_transaction_fee(compute_units_per_transfer);
 
 		match asset {
 			assets::sol::Asset::Sol => gas_fee,
@@ -219,14 +236,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		LAMPORTS_PER_SIGNATURE.saturating_add(
-			// It should never approach overflow but just in case
-			sp_std::cmp::min(
-				SolAmount::MAX as u128,
-				(self.priority_fee as u128 * compute_units_per_fetch as u128)
-					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
-			) as SolAmount,
-		)
+		self.calculate_transaction_fee(compute_units_per_fetch)
 	}
 }
 
