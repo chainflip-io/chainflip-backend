@@ -1,8 +1,8 @@
 use bitcoin::{opcodes::all::OP_RETURN, ScriptBuf};
 use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
+	address::EncodedAddress,
 	btc::{smart_contract_encoding::UtxoEncodedData, ScriptPubkey},
-	ForeignChainAddress,
 };
 use cf_primitives::{Asset, AssetAmount, Price};
 use codec::Decode;
@@ -18,7 +18,7 @@ const OP_PUSHDATA1: u8 = 0x4c;
 pub struct BtcContractCall {
 	output_asset: Asset,
 	deposit_amount: AssetAmount,
-	output_address: ForeignChainAddress,
+	output_address: EncodedAddress,
 	// --- FoK ---
 	retry_duration: u16,
 	refund_address: ScriptPubkey,
@@ -151,13 +151,11 @@ pub fn try_extract_contract_call(
 #[cfg(test)]
 mod tests {
 
-	use std::sync::LazyLock;
-
 	use bitcoin::{
 		address::WitnessProgram, key::TweakedPublicKey, PubkeyHash, ScriptHash, WPubkeyHash,
 		WScriptHash,
 	};
-	use cf_chains::dot::PolkadotAccountId;
+	use cf_chains::address::EncodedAddress;
 	use secp256k1::{hashes::Hash, XOnlyPublicKey};
 	use sp_core::bounded_vec;
 
@@ -169,23 +167,17 @@ mod tests {
 
 	const MOCK_DOT_ADDRESS: [u8; 32] = [9u8; 32];
 
-	static MOCK_SWAP_PARAMS: LazyLock<UtxoEncodedData> = LazyLock::new(|| {
-		let output_address = ForeignChainAddress::Dot(
-			PolkadotAccountId::try_from(Vec::from(&MOCK_DOT_ADDRESS)).unwrap(),
-		);
-
-		UtxoEncodedData {
-			output_asset: Asset::Btc,
-			output_address,
-			parameters: SharedCfParameters {
-				retry_duration: 5,
-				min_output_amount: u128::MAX,
-				number_of_chunks: 0x0ffff,
-				chunk_interval: 2,
-				boost_fee: 5,
-			},
-		}
-	});
+	const MOCK_SWAP_PARAMS: UtxoEncodedData = UtxoEncodedData {
+		output_asset: Asset::Btc,
+		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
+		parameters: SharedCfParameters {
+			retry_duration: 5,
+			min_output_amount: u128::MAX,
+			number_of_chunks: 0x0ffff,
+			chunk_interval: 2,
+			boost_fee: 5,
+		},
+	};
 
 	#[test]
 	fn script_buf_to_script_pubkey_conversion() {
@@ -253,9 +245,7 @@ mod tests {
 					value: Amount::from_sat(0),
 					n: 1,
 					script_pubkey: ScriptBuf::from_bytes(
-						encode_swap_params_in_nulldata_utxo(MOCK_SWAP_PARAMS.clone())
-							.expect("params should fit in utxo")
-							.raw(),
+						encode_swap_params_in_nulldata_utxo(MOCK_SWAP_PARAMS.clone()).raw(),
 					),
 				},
 				// A UTXO containing refund address:

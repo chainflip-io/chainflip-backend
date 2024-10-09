@@ -82,34 +82,27 @@ pub fn encode_data_in_nulldata_utxo(data: &[u8]) -> Option<BitcoinScript> {
 	]))
 }
 
-pub fn encode_swap_params_in_nulldata_utxo(params: UtxoEncodedData) -> Option<BitcoinScript> {
-	encode_data_in_nulldata_utxo(&params.encode())
+pub fn encode_swap_params_in_nulldata_utxo(params: UtxoEncodedData) -> BitcoinScript {
+	encode_data_in_nulldata_utxo(&params.encode()).expect("params must always fit in utxo")
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	use core::ops::Deref;
-	use std::sync::LazyLock;
-
 	const MOCK_DOT_ADDRESS: [u8; 32] = [9u8; 32];
 
-	static MOCK_SWAP_PARAMS: LazyLock<UtxoEncodedData> = LazyLock::new(|| {
-		let output_address = EncodedAddress::Dot(MOCK_DOT_ADDRESS.clone());
-
-		UtxoEncodedData {
-			output_asset: Asset::Dot,
-			output_address,
-			parameters: SharedCfParameters {
-				retry_duration: 5,
-				min_output_amount: u128::MAX,
-				number_of_chunks: 0x0ffff,
-				chunk_interval: 2,
-				boost_fee: 5,
-			},
-		}
-	});
+	const MOCK_SWAP_PARAMS: UtxoEncodedData = UtxoEncodedData {
+		output_asset: Asset::Dot,
+		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
+		parameters: SharedCfParameters {
+			retry_duration: 5,
+			min_output_amount: u128::MAX,
+			number_of_chunks: 0x0ffff,
+			chunk_interval: 2,
+			boost_fee: 5,
+		},
+	};
 
 	#[test]
 	fn check_utxo_encoding() {
@@ -132,9 +125,6 @@ mod tests {
 		assert_eq!(MOCK_SWAP_PARAMS.encode(), expected_encoding);
 		assert_eq!(expected_encoding.len(), 56);
 
-		assert_eq!(
-			UtxoEncodedData::decode(&mut expected_encoding.as_ref()).as_ref(),
-			Ok(MOCK_SWAP_PARAMS.deref())
-		);
+		assert_eq!(UtxoEncodedData::decode(&mut expected_encoding.as_ref()), Ok(MOCK_SWAP_PARAMS));
 	}
 }

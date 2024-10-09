@@ -2,9 +2,6 @@
 #![feature(step_trait)]
 #![feature(extract_if)]
 #![feature(split_array)]
-// lazy_cell has been stabilized in a newer version of rust
-// (feature directive can be removed once we upgrade)
-#![feature(lazy_cell)]
 
 use core::{fmt::Display, iter::Step};
 use sp_std::marker::PhantomData;
