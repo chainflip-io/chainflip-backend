@@ -191,11 +191,14 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
+		// Match the minimum broadcast prio fee
+		let min_priority_fee = sp_std::cmp::max(self.priority_fee, MIN_COMPUTE_PRICE);
+
 		let gas_fee = LAMPORTS_PER_SIGNATURE.saturating_add(
 			// It should never approach overflow but just in case
 			sp_std::cmp::min(
 				SolAmount::MAX as u128,
-				(self.priority_fee as u128 * compute_units_per_transfer as u128)
+				(min_priority_fee as u128 * compute_units_per_transfer as u128)
 					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
 			) as SolAmount,
 		);
@@ -219,11 +222,14 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
+		// Match the minimum broadcast prio fee
+		let min_priority_fee = sp_std::cmp::max(self.priority_fee, MIN_COMPUTE_PRICE);
+
 		LAMPORTS_PER_SIGNATURE.saturating_add(
 			// It should never approach overflow but just in case
 			sp_std::cmp::min(
 				SolAmount::MAX as u128,
-				(self.priority_fee as u128 * compute_units_per_fetch as u128)
+				(min_priority_fee as u128 * compute_units_per_fetch as u128)
 					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
 			) as SolAmount,
 		)
