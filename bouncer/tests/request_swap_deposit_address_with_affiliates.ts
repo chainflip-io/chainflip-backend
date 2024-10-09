@@ -226,8 +226,6 @@ const main = async () => {
   await using api = await getChainflipApi();
   let nonce = (await api.rpc.system.accountNextIndex(account.address)).toJSON() as number;
 
-  console.log({ nonce });
-
   const allCases = [...baseCases, ...refundCases, dcaCase, withCommission, withAffiliates, ccmCase];
   const results = await Promise.allSettled(
     allCases.map((params) => requestSwapDepositAddress(api, params, () => nonce++)),
@@ -238,11 +236,16 @@ const main = async () => {
 
   results.forEach((result, i) => {
     if (result.status === 'fulfilled') {
-      console.log('✅', i);
+      console.log('✅', `request swap deposit address with affiliates ${i} passed`);
     } else {
       // realism 😔
       success = false;
-      console.error('❌', i, (result.reason as Error).message, allCases[i]);
+      console.error(
+        '❌',
+        `request swap deposit address with affiliates ${i} failed`,
+        (result.reason as Error).message,
+        allCases[i],
+      );
     }
   });
 
