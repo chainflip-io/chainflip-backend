@@ -22,7 +22,10 @@ pub mod transaction_builder;
 pub use crate::assets::sol::Asset as SolAsset;
 use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
-	consts::{LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT},
+	consts::{
+		LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT,
+		TOKEN_ACCOUNT_RENT,
+	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
 	Signature as SolSignature, SlotNumber as SolBlockNumber,
@@ -182,14 +185,19 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		LAMPORTS_PER_SIGNATURE.saturating_add(
+		let gas_fee = LAMPORTS_PER_SIGNATURE.saturating_add(
 			// It should never approach overflow but just in case
 			sp_std::cmp::min(
 				SolAmount::MAX as u128,
 				(self.priority_fee as u128 * compute_units_per_transfer as u128)
 					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
 			) as SolAmount,
-		)
+		);
+
+		match asset {
+			assets::sol::Asset::Sol => gas_fee,
+			assets::sol::Asset::SolUsdc => gas_fee.saturating_add(TOKEN_ACCOUNT_RENT),
+		}
 	}
 	fn estimate_ingress_fee(
 		&self,
