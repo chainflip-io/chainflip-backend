@@ -738,12 +738,6 @@ pub mod pallet {
 		InvalidDcaParameters,
 		/// CCM parameters from a contract swap failed validity check.
 		InvalidCcm,
-		/// The deposit channel does not exist.
-		DepositChannelDoesNotExist,
-		/// Unauthorized call
-		Unauthorized,
-		/// The deposit channel has been tainted and is no longer usable.
-		DepositChannelTainted,
 		/// Transaction tainted
 		TransactionTainted,
 		/// Unsupported chain
