@@ -199,11 +199,15 @@ pub mod pallet {
 				Error::<T>::NoLiquidityRefundAddressRegistered
 			);
 
+			let refund_address =
+				LiquidityRefundAddress::<T>::get(&account_id, ForeignChain::from(asset));
+
 			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
 				T::DepositHandler::request_liquidity_deposit_address(
 					account_id.clone(),
 					asset,
 					boost_fee,
+					refund_address,
 				)?;
 
 			Self::deposit_event(Event::LiquidityDepositAddressReady {

@@ -6,7 +6,8 @@ use crate::{
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TaintedTransactionDetails,
+	TaintedTransactions, TAINTED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -23,6 +24,7 @@ use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_
 use cf_traits::{
 	mocks::{
 		self,
+		account_role_registry::MockAccountRoleRegistry,
 		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
@@ -34,8 +36,9 @@ use cf_traits::{
 		funding_info::MockFundingInfo,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
-	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestType,
+	AccountRoleRegistry, BalanceApi, DepositApi, EgressApi, EpochInfo,
+	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode, ScheduledEgressDetails,
+	SwapLimitsProvider, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -43,7 +46,7 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::H160;
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, DispatchError::BadOrigin};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -225,8 +228,12 @@ fn request_address_and_deposit(
 	who: ChannelId,
 	asset: eth::Asset,
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
+	let refund_address = match asset {
+		eth::Asset::Eth => Some(ForeignChainAddress::Eth(Default::default())),
+		_ => None,
+	};
 	let (id, address, ..) =
-		IngressEgress::request_liquidity_deposit_address(who, asset, 0).unwrap();
+		IngressEgress::request_liquidity_deposit_address(who, asset, 0, refund_address).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::process_single_deposit(
 		address,
@@ -458,7 +465,7 @@ fn reused_address_channel_id_matches() {
 		let (reused_channel_id, reused_address, ..) = IngressEgress::open_channel(
 			&ALICE,
 			eth::Asset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0 },
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
 			0,
 		)
 		.unwrap();
@@ -633,7 +640,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 	new_test_ext()
 		.then_execute_at_next_block(|_| {
 			let (_, address, ..) =
-				IngressEgress::request_liquidity_deposit_address(ALICE, ETH, 0).unwrap();
+				IngressEgress::request_liquidity_deposit_address(ALICE, ETH, 0, None).unwrap();
 			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 			let recycles_at = IngressEgress::expiry_and_recycle_block_height().2;
 			(address, recycles_at)
@@ -644,7 +651,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 		})
 		.then_execute_at_next_block(|address| {
 			let (_, address2, ..) =
-				IngressEgress::request_liquidity_deposit_address(ALICE, ETH, 0).unwrap();
+				IngressEgress::request_liquidity_deposit_address(ALICE, ETH, 0, None).unwrap();
 			let address2: <Ethereum as Chain>::ChainAccount = address2.try_into().unwrap();
 			(address, address2)
 		})
@@ -946,7 +953,7 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		ChainTracker::<Ethereum>::set_fee(HIGH_FEE);
 
 		let (_id, address, ..) =
-			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0).unwrap();
+			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0, None).unwrap();
 		let deposit_address = address.try_into().unwrap();
 
 		// Swap a low enough amount such that it gets swallowed by fees
@@ -1495,7 +1502,10 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 		assert_ok!(IngressEgress::open_channel(
 			&CHANNEL_REQUESTER,
 			eth::Asset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: CHANNEL_REQUESTER },
+			ChannelAction::LiquidityProvision {
+				lp_account: CHANNEL_REQUESTER,
+				refund_address: None,
+			},
 			0
 		));
 		assert_eq!(MockFundingInfo::<Test>::total_balance_of(&CHANNEL_REQUESTER), 0);
@@ -1509,7 +1519,10 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 			IngressEgress::open_channel(
 				&CHANNEL_REQUESTER,
 				eth::Asset::Eth,
-				ChannelAction::LiquidityProvision { lp_account: CHANNEL_REQUESTER },
+				ChannelAction::LiquidityProvision {
+					lp_account: CHANNEL_REQUESTER,
+					refund_address: None,
+				},
 				0
 			),
 			mocks::fee_payment::ERROR_INSUFFICIENT_LIQUIDITY
@@ -1667,7 +1680,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 		assert_ok!(IngressEgress::open_channel(
 			&ALICE,
 			eth::Asset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0 },
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
 			0,
 		));
 
@@ -1684,7 +1697,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 			IngressEgress::open_channel(
 				&ALICE,
 				eth::Asset::Eth,
-				ChannelAction::LiquidityProvision { lp_account: 0 },
+				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
 				0,
 			),
 			crate::Error::<Test, _>::DepositChannelCreationDisabled
@@ -1747,9 +1760,13 @@ fn do_not_batch_more_fetches_than_the_limit_allows() {
 		let fetch_limits = MockFetchesTransfersLimitProvider::maybe_fetches_limit().unwrap();
 
 		for i in 1..=fetch_limits + EXCESS_FETCHES {
-			let (_, address, ..) =
-				IngressEgress::request_liquidity_deposit_address(i.try_into().unwrap(), ASSET, 0)
-					.unwrap();
+			let (_, address, ..) = IngressEgress::request_liquidity_deposit_address(
+				i.try_into().unwrap(),
+				ASSET,
+				0,
+				None,
+			)
+			.unwrap();
 			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 
 			assert_ok!(IngressEgress::process_single_deposit(
@@ -2007,5 +2024,117 @@ fn failed_ccm_deposit_can_deposit_event() {
 				..
 			})
 		);
+	});
+}
+
+#[test]
+fn process_tainted_transaction_and_expect_refund() {
+	new_test_ext().execute_with(|| {
+		let (_, address) = request_address_and_deposit(BROKER, eth::Asset::Eth);
+		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
+
+		let deposit_details: cf_chains::evm::DepositDetails = Default::default();
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
+			RuntimeOrigin::signed(BROKER),
+			Default::default(),
+		));
+
+		assert_ok!(IngressEgress::process_single_deposit(
+			address,
+			eth::Asset::Eth,
+			DEFAULT_DEPOSIT_AMOUNT,
+			deposit_details,
+			Default::default()
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
+				deposit_address: _address,
+				asset: eth::Asset::Eth,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: _,
+				reason: DepositIgnoredReason::TransactionTainted,
+			})
+		);
+
+		let tainted_transaction =
+			TaintedTransactions::<Test, ()>::get::<u64, DepositDetails>(BROKER, Default::default())
+				.expect("To have an tainted transaction");
+
+		assert!(tainted_transaction.refund_address.is_some());
+	});
+}
+
+#[test]
+fn only_broker_can_mark_transaction_as_tainted() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			IngressEgress::mark_transaction_as_tainted_inner(
+				RuntimeOrigin::signed(ALICE),
+				Default::default(),
+			),
+			BadOrigin
+		);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
+			RuntimeOrigin::signed(BROKER),
+			Default::default(),
+		));
+	});
+}
+
+#[test]
+fn tainted_transactions_expire_if_not_witnessed() {
+	new_test_ext().execute_with(|| {
+		let tx_id = DepositDetails::default();
+		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
+
+		let tainted_tx = TaintedTransactionDetails {
+			refund_address: None,
+			deposit_witness: None,
+			expires_at: expiry_at,
+			marked_for_refund: false,
+		};
+
+		TaintedTransactions::<Test>::insert(BROKER, tx_id.clone(), tainted_tx);
+
+		IngressEgress::on_idle(expiry_at, Weight::MAX);
+
+		assert!(!TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id.clone()));
+
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
+			crate::Event::TaintedTransactionExpired { account_id: BROKER, tx_id },
+		));
+	});
+}
+
+#[test]
+fn tainted_transactions_do_not_expire_if_marked_for_refund() {
+	new_test_ext().execute_with(|| {
+		let tx_id = DepositDetails::default();
+		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
+
+		let tainted_tx = TaintedTransactionDetails {
+			refund_address: None,
+			deposit_witness: None,
+			expires_at: expiry_at,
+			marked_for_refund: true,
+		};
+
+		TaintedTransactions::<Test>::insert(BROKER, tx_id.clone(), tainted_tx);
+
+		Pallet::<Test>::on_idle(expiry_at, Weight::MAX);
+
+		assert!(TaintedTransactions::<Test>::contains_key(BROKER, tx_id));
 	});
 }
