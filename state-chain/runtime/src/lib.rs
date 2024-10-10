@@ -61,13 +61,13 @@ use core::ops::Range;
 use frame_support::instances::*;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{ChannelAction, IngressOrEgress, OwedAmount, TargetChainAsset};
+use pallet_cf_ingress_egress::{
+	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
+};
 use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
-
-use cf_chains::DepositWitness;
 
 use crate::chainflip::EvmLimit;
 

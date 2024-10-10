@@ -6,12 +6,13 @@ use cf_chains::{
 	address::ToHumanreadableAddress,
 	dot::PolkadotTransactionId,
 	evm::{SchnorrVerificationComponents, H256},
-	AnyChain, Arbitrum, Bitcoin, Chain, DepositWitness, Ethereum, Polkadot,
+	AnyChain, Arbitrum, Bitcoin, Chain, Ethereum, Polkadot,
 };
 use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
+use pallet_cf_ingress_egress::DepositWitness;
 use serde::{Serialize, Serializer};
 use utilities::{rpc::NumberOrHex, ArrayCollect};
 

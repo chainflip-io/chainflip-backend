@@ -65,9 +65,6 @@ use sp_std::{
 	vec,
 	vec::Vec,
 };
-
-use cf_chains::DepositWitness;
-
 pub use weights::WeightInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -257,6 +254,14 @@ pub mod pallet {
 	pub(crate) type TargetChainBlockNumber<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
 
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	pub struct DepositWitness<C: Chain> {
+		pub deposit_address: C::ChainAccount,
+		pub asset: C::ChainAsset,
+		pub amount: C::ChainAmount,
+		pub deposit_details: C::DepositDetails,
+	}
+
 	#[derive(CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
@@ -391,11 +396,7 @@ pub mod pallet {
 			+ ExecutexSwapAndCall<Self::TargetChain>
 			+ TransferFallback<Self::TargetChain>
 			+ ConsolidateCall<Self::TargetChain>
-			+ RejectCall<
-				Self::TargetChain,
-				TxId = <Self::TargetChain as Chain>::DepositDetails,
-				DepositWitness = DepositWitness<Self::TargetChain>,
-			>;
+			+ RejectCall<Self::TargetChain, TxId = <Self::TargetChain as Chain>::DepositDetails>;
 
 		/// Get the latest chain state of the target chain.
 		type ChainTracking: GetBlockHeight<Self::TargetChain>
@@ -856,11 +857,10 @@ pub mod pallet {
 				}
 			}
 
-			for (_, tx_id, details) in TaintedTransactions::<T, I>::drain() {
-				if let Ok(api_call) = <T::ChainApiCall as RejectCall<T::TargetChain>>::reject_call(
-					tx_id,
-					details.deposit_witness.clone().expect("deposit witness missing"),
-				) {
+			for (_, tx_id, _) in TaintedTransactions::<T, I>::drain() {
+				if let Ok(api_call) =
+					<T::ChainApiCall as RejectCall<T::TargetChain>>::reject_call(tx_id)
+				{
 					T::Broadcaster::threshold_sign_and_broadcast(api_call);
 				} else {
 					log_or_panic!("Failed to reject call. This is unexpected.");

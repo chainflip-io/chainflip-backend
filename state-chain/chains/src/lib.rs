@@ -535,11 +535,7 @@ pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 
 pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	type TxId: Member + Parameter + Unpin + BenchmarkValue;
-	type DepositWitness: Member + Parameter + Unpin + BenchmarkValue;
-	fn reject_call(
-		tx_id: Self::TxId,
-		deposit_witness: Self::DepositWitness,
-	) -> Result<Self, RejectError>;
+	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError>;
 }
 
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -831,12 +827,4 @@ pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 	True(Option<Api>),
 	False,
 	_Phantom(PhantomData<C>, Never),
-}
-
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct DepositWitness<C: Chain> {
-	pub deposit_address: C::ChainAccount,
-	pub asset: C::ChainAsset,
-	pub amount: C::ChainAmount,
-	pub deposit_details: C::DepositDetails,
 }

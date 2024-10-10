@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
-use cf_chains::{evm::DepositDetails, instances::ChainInstanceFor, Chain, DepositWitness};
+use cf_chains::{evm::DepositDetails, instances::ChainInstanceFor, Chain};
 use cf_primitives::EpochIndex;
 use ethers::types::{Bloom, H160};
 use futures_core::Future;
+use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::{H256, U256};
 
 use crate::{

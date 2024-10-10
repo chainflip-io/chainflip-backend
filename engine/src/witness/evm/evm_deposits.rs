@@ -14,8 +14,6 @@ use crate::witness::{
 	evm::vault::VaultEvents,
 };
 
-use cf_chains::DepositWitness;
-
 use std::collections::BTreeMap;
 
 use cf_chains::evm::DepositDetails;
@@ -124,7 +122,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 									deposit_witnesses: ingresses
 										.into_iter()
 										.map(|(to_addr, value, tx_hashes)| {
-											DepositWitness {
+											pallet_cf_ingress_egress::DepositWitness {
 												deposit_address: to_addr,
 												asset: native_asset,
 												amount:
