@@ -1864,6 +1864,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
+
+		if DepositChannelPool::<T, I>::get(channel_id).is_some() {
+			log_or_panic!(
+				"Deposit channel {} should not be in the recycled address pool if it's active",
+				channel_id
+			);
+			#[cfg(not(debug_assertions))]
+			return Err(Error::<T, I>::InvalidDepositAddress.into())
+		}
+
+		// TODO: only apply this check if the deposit hasn't been boosted
+		// already (in case MinimumDeposit increases after some small deposit
+		// is boosted)?
+
+		if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
+			// If the deposit amount is below the minimum allowed, the deposit is ignored.
+			// TODO: track these funds somewhere, for example add them to the withheld fees.
+			Self::deposit_event(Event::<T, I>::DepositIgnored {
+				deposit_address,
+				asset,
+				amount: deposit_amount,
+				deposit_details,
+				reason: DepositIgnoredReason::BelowMinimumDeposit,
+			});
+			return Ok(())
+		}
+
 		let channel_owner = deposit_channel_details.owner.clone();
 
 		if let Some(tainted_tx) =
@@ -1902,32 +1929,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				reason: DepositIgnoredReason::TransactionTainted,
 			});
 
-			return Ok(())
-		}
-
-		if DepositChannelPool::<T, I>::get(channel_id).is_some() {
-			log_or_panic!(
-				"Deposit channel {} should not be in the recycled address pool if it's active",
-				channel_id
-			);
-			#[cfg(not(debug_assertions))]
-			return Err(Error::<T, I>::InvalidDepositAddress.into())
-		}
-
-		// TODO: only apply this check if the deposit hasn't been boosted
-		// already (in case MinimumDeposit increases after some small deposit
-		// is boosted)?
-
-		if deposit_amount < MinimumDeposit::<T, I>::get(asset) {
-			// If the deposit amount is below the minimum allowed, the deposit is ignored.
-			// TODO: track these funds somewhere, for example add them to the withheld fees.
-			Self::deposit_event(Event::<T, I>::DepositIgnored {
-				deposit_address,
-				asset,
-				amount: deposit_amount,
-				deposit_details,
-				reason: DepositIgnoredReason::BelowMinimumDeposit,
-			});
 			return Ok(())
 		}
 
