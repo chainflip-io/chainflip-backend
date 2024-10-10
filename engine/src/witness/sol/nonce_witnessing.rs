@@ -9,7 +9,6 @@ use crate::sol::{
 	},
 };
 use anyhow::{anyhow, Result};
-use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
 use serde_json::Value;
 use sol_prim::SlotNumber;
 use std::str::FromStr;
@@ -17,7 +16,7 @@ pub async fn get_durable_nonce<SolRetryRpcClient>(
 	sol_client: &SolRetryRpcClient,
 	nonce_account: SolAddress,
 	previous_slot: SlotNumber,
-) -> Result<Option<MonotonicChangeVote<SolHash, SlotNumber>>>
+) -> Result<Option<(SolHash, SlotNumber)>>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
@@ -64,7 +63,7 @@ where
 					.and_then(Value::as_str)
 					.ok_or_else(|| anyhow!("Blockhash not found"))?,
 			)?;
-			Ok(Some(MonotonicChangeVote { value: hash, block: response.context.slot }))
+			Ok(Some((hash, response.context.slot)))
 		},
 		Some(_) => Err(anyhow!("Expected UiAccountData::Json(ParsedAccount)")),
 		None => Ok(None),
@@ -113,7 +112,7 @@ mod tests {
 
 				println!("Durable Nonce Info: {:?}", nonce_account);
 				assert_eq!(
-					nonce_account.value,
+					nonce_account.0,
 					SolHash::from_str("F9X2sMsGGJUGrVPs42vQc3fyi9rGqd7NFUWKT8SQTkCW").unwrap(),
 				);
 

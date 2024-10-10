@@ -166,7 +166,7 @@ impl<
 			for vote in active_votes.clone() {
 				counts
 					.entry(vote.value)
-					.and_modify(|slots| slots.push(vote.block))
+					.and_modify(|blocks_height| blocks_height.push(vote.block))
 					.or_insert(vec![vote.block]);
 			}
 
@@ -175,8 +175,9 @@ impl<
 				if num_votes >= success_threshold {
 					let mut blocks_height = blocks_height.clone();
 					let (_, consensus_block_height, _) = {
-						blocks_height
-							.select_nth_unstable(threshold_from_share_count(num_votes) as usize)
+						blocks_height.select_nth_unstable(threshold_from_share_count(
+							num_authorities,
+						) as usize)
 					};
 					Some((vote.clone(), *consensus_block_height))
 				} else {
