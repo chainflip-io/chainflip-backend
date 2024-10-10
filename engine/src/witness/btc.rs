@@ -1,5 +1,6 @@
 mod chain_tracking;
 mod deposits;
+mod smart_contract;
 pub mod source;
 
 use crate::{
