@@ -212,4 +212,7 @@ impl<E> ArbitrumApi<E> {
 	pub fn gas_budget(&self) -> Option<GasAmount> {
 		map_over_api_variants!(self, call, call.gas_budget())
 	}
+	pub fn message_length(&self) -> Option<usize> {
+		map_over_api_variants!(self, call, call.message_length())
+	}
 }

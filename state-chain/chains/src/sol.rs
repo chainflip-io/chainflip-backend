@@ -178,6 +178,8 @@ pub struct SolTrackedData {
 }
 
 impl SolTrackedData {
+	// TODO: Does the DEFAULT_COMPUTE_LIMIT change if more calldata is passed? So basically
+	// depending on the length of the message?
 	pub fn calculate_ccm_compute_limit(
 		gas_budget: cf_primitives::GasAmount,
 		asset: SolAsset,
@@ -266,7 +268,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		&self,
 		asset: <Solana as Chain>::ChainAsset,
 		gas_budget: cf_primitives::GasAmount,
-		_message_length: u128,
+		_message_length: usize,
 	) -> Option<<Solana as Chain>::ChainAmount> {
 		let gas_limit = SolTrackedData::calculate_ccm_compute_limit(gas_budget, asset);
 		Some(self.calculate_transaction_fee(gas_limit))

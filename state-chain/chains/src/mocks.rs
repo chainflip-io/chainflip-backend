@@ -214,7 +214,7 @@ impl FeeEstimationApi<MockEthereum> for MockTrackedData {
 		&self,
 		_asset: <MockEthereum as Chain>::ChainAsset,
 		_gas_budget: GasAmount,
-		_message_length: u128,
+		_message_length: usize,
 	) -> Option<<MockEthereum as Chain>::ChainAmount> {
 		unimplemented!("Unused for now.")
 	}

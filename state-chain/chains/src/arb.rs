@@ -86,11 +86,13 @@ impl ArbitrumTrackedData {
 		base_fee_multiplier.saturating_mul_int(self.base_fee)
 	}
 
+	// TODO: Does the CCM_GAS_OVERHEAD change if more calldata is passed? So basically
+	// depending on the length of the message?
 	// TODO: Add unit tests for this.
 	pub fn calculate_ccm_gas_limit(
 		&self,
 		gas_budget: GasAmount,
-		message_length: u128,
+		message_length: usize,
 	) -> GasAmount {
 		use crate::arb::fees::*;
 
@@ -103,7 +105,7 @@ impl ArbitrumTrackedData {
 		let p = self.base_fee;
 		// We can't accurately know L1S without engine consensus so we do our best to estimate it.
 		let l1s = CCM_VAULT_BYTES_OVERHEAD +
-			message_length +
+			message_length as u128 +
 			CCM_ARBITRUM_BYTES_OVERHEAD +
 			CCM_BUFFER_BYTES_OVERHEAD;
 
@@ -174,7 +176,7 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 		&self,
 		_asset: <Arbitrum as Chain>::ChainAsset,
 		gas_budget: GasAmount,
-		message_length: u128,
+		message_length: usize,
 	) -> Option<<Arbitrum as Chain>::ChainAmount> {
 		let gas_limit = self.calculate_ccm_gas_limit(gas_budget, message_length);
 		Some(self.calculate_transaction_fee(gas_limit))

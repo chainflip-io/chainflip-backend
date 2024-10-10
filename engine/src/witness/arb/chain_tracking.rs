@@ -8,7 +8,6 @@ use ethers::types::Bloom;
 
 use super::super::common::chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData;
 use ethers::types::{Bytes, H256};
-use frame_support::sp_runtime::FixedU64;
 use sp_core::H160;
 
 #[async_trait::async_trait]

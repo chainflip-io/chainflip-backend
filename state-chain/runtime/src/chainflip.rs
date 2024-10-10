@@ -253,7 +253,7 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 							None
 						})?
 						.tracked_data
-						.calculate_ccm_gas_limit(gas_budget, call.message_length() as u128);
+						.calculate_ccm_gas_limit(gas_budget,message_length);
 
 						Some(gas_limit.into())
 					} else {
