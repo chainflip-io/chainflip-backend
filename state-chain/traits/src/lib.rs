@@ -676,6 +676,10 @@ pub trait HistoricalEpoch {
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount;
 	/// Returns the number of active epochs a authority is still active in
 	fn number_of_active_epochs_for_authority(id: &Self::ValidatorId) -> u32;
+	/// Is the validator a keyholder for an active epoch?
+	fn is_keyholder(id: &Self::ValidatorId) -> bool {
+		Self::number_of_active_epochs_for_authority(id) > 0
+	}
 }
 
 /// Handles the bonding logic

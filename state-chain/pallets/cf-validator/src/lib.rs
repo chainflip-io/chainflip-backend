@@ -751,11 +751,7 @@ pub mod pallet {
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
 
-			ensure!(
-				(LastExpiredEpoch::<T>::get() + 1..=CurrentEpoch::<T>::get())
-					.all(|epoch| !HistoricalAuthorities::<T>::get(epoch).contains(validator_id)),
-				Error::<T>::StillKeyHolder
-			);
+			ensure!(!EpochHistory::<T>::is_keyholder(validator_id), Error::<T>::StillKeyHolder);
 
 			// This can only error if the validator didn't register any keys, in which case we want
 			// to continue with the deregistration anyway.

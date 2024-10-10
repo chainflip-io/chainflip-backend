@@ -1232,6 +1232,7 @@ fn validator_deregistration_after_expired_epoch() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE),));
 		ValidatorPallet::transition_to_next_epoch(vec![1, ALICE], 100);
+		let first_epoch_to_expire = ValidatorPallet::current_epoch();
 
 		// Can't deregister
 		assert_noop!(
@@ -1239,9 +1240,12 @@ fn validator_deregistration_after_expired_epoch() {
 			Error::<Test>::StillKeyHolder
 		);
 
-		let epoch_to_expire = ValidatorPallet::current_epoch();
+		ValidatorPallet::transition_to_next_epoch(vec![1, ALICE], 100);
+		let second_epoch_to_expire = ValidatorPallet::current_epoch();
 		ValidatorPallet::transition_to_next_epoch(vec![1, 2], 100);
-		ValidatorPallet::expire_epoch(epoch_to_expire);
+
+		ValidatorPallet::expire_epoch(second_epoch_to_expire);
+		ValidatorPallet::expire_epoch(first_epoch_to_expire);
 
 		// Now you can deregister
 		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),));
