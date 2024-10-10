@@ -1864,7 +1864,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
-		let channel_owner = deposit_channel_details.clone().owner;
+		let channel_owner = deposit_channel_details.owner.clone();
 
 		if let Some(tainted_tx) =
 			TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
