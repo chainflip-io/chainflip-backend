@@ -40,7 +40,7 @@ pub const CHANGE_ADDRESS_SALT: u32 = 0;
 
 // The bitcoin script generated from the bitcoin address should not exceed this value according to
 // our construction
-pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
+pub const MAX_BITCOIN_SCRIPT_LENGTH: usize = 128;
 
 // Bitcion does not support push operations of data larger than this size:
 const MAX_PUSHABLE_BYTES: u32 = 520;
@@ -981,9 +981,18 @@ pub enum BitcoinOp {
 	PushVersion { version: u8 },
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinScript {
-	bytes: BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>,
+	bytes: Vec<u8>,
+}
+
+// We only store (spendable) BitcoinScripts that we authored ourselves.
+// For these, the max encoded length is MAX_BITCOIN_SCRIPT_LENGTH.
+// For anything else, we don't need MaxEncodedLen.
+impl MaxEncodedLen for BitcoinScript {
+	fn max_encoded_len() -> usize {
+		MAX_BITCOIN_SCRIPT_LENGTH
+	}
 }
 
 impl BitcoinScript {
@@ -992,11 +1001,11 @@ impl BitcoinScript {
 		for op in ops.iter() {
 			op.btc_encode_to(&mut bytes);
 		}
-		Self { bytes: bytes.try_into().unwrap() }
+		Self { bytes }
 	}
 
 	pub fn raw(self) -> Vec<u8> {
-		self.bytes.into_inner()
+		self.bytes
 	}
 }
 
