@@ -1,10 +1,10 @@
 import { BN } from '@polkadot/util';
+import { AugmentedEvent, SubmittableExtrinsicFunction } from '@polkadot/api/types';
 import { aliceKeyringPair } from '../shared/polkadot_keyring';
 import { Event, polkadotSigningMutex, sleep } from '../shared/utils';
 import { getPolkadotApi } from './utils/substrate';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function handleDispatchError(result: any) {
+export async function handleDispatchError(result: { dispatchError?: string }) {
   await using polkadot = await getPolkadotApi();
   if (result.dispatchError) {
     const dispatchError = JSON.parse(result.dispatchError);
@@ -21,8 +21,10 @@ export async function handleDispatchError(result: any) {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function submitAndGetEvent(call: any, eventMatch: any): Promise<Event> {
+export async function submitAndGetEvent(
+  call: ReturnType<SubmittableExtrinsicFunction<'promise'>>,
+  eventMatch: AugmentedEvent<'promise'>,
+): Promise<Event> {
   const alice = await aliceKeyringPair();
   let done = false;
   let event: Event = { name: '', data: [], block: 0, event_index: 0 };

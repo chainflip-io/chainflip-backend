@@ -67,7 +67,7 @@ async function main(): Promise<void> {
       .createPure(polkadot.createType('ProxyType', 'Any'), 0, 0)
       .signAndSend(alice, { nonce: -1 }, (result) => {
         if (result.isError) {
-          handleSubstrateError(result);
+          handleSubstrateError(polkadot)(result);
         }
         if (result.isInBlock) {
           console.log('Polkadot Vault created');
@@ -117,7 +117,7 @@ async function main(): Promise<void> {
       ])
       .signAndSend(alice, { nonce: -1 }, (result) => {
         if (result.isError) {
-          handleSubstrateError(result);
+          handleSubstrateError(polkadot)(result);
         }
         if (result.isInBlock) {
           unsubscribe();

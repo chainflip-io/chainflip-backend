@@ -42,7 +42,11 @@ async function testDCASwap(inputAsset: Asset, amount: number, numberOfChunks: nu
     0, // brokerCommissionBps
     false, // log
     0, // boostFeeBps
-    undefined, // FoK parameters
+    {
+      refundAddress: '0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF',
+      minPriceX128: '1',
+      retryDurationBlocks: 100,
+    }, // FoK parameters
     dcaParameters,
   );
 

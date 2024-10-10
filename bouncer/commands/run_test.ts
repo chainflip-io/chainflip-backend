@@ -39,6 +39,7 @@ import { testBoostingSwap } from '../tests/boost';
 import { ConsoleColors, ConsoleLogColors } from '../shared/utils';
 import { testDeltaBasedIngress } from '../tests/delta_based_ingress';
 import { testCancelOrdersBatch } from '../tests/create_and_delete_multiple_orders';
+import { depositChannelCreation } from '../tests/request_swap_deposit_address_with_affiliates';
 
 async function main() {
   const testName = process.argv[2];
@@ -65,6 +66,7 @@ async function main() {
     testSwapAfterDisconnection,
     testDeltaBasedIngress,
     testCancelOrdersBatch,
+    depositChannelCreation,
   ];
 
   // Help message

@@ -32,6 +32,7 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
       get(target, prop, receiver) {
         if (prop === Symbol.asyncDispose) {
           return () => {
+            connections -= 1;
             setTimeout(() => {
               if (connections === 0) {
                 const dispose = Reflect.get(
