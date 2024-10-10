@@ -168,7 +168,7 @@ mod tests {
 	const MOCK_DOT_ADDRESS: [u8; 32] = [9u8; 32];
 
 	const MOCK_SWAP_PARAMS: UtxoEncodedData = UtxoEncodedData {
-		output_asset: Asset::Btc,
+		output_asset: Asset::Dot,
 		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
 		parameters: SharedCfParameters {
 			retry_duration: 5,

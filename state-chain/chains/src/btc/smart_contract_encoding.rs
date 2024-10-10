@@ -2,6 +2,7 @@ use crate::address::EncodedAddress;
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use sp_std::vec::Vec;
 
 use super::{BitcoinOp, BitcoinScript};
 
