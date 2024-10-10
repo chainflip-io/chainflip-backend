@@ -5,6 +5,7 @@ use frame_support::{pallet_prelude::Member, Parameter};
 use scale_info::TypeInfo;
 
 pub(crate) mod bitmap;
+pub mod change;
 pub mod composite;
 pub(crate) mod individual;
 

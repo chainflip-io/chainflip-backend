@@ -19,10 +19,10 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
 	electoral_systems::{
 		self,
-		change::OnChangeHook,
 		composite::{tuple_6_impls::Hooks, Composite, Translator},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
+		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
@@ -35,6 +35,7 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
+use sol_prim::SlotNumber;
 
 type Instance = <Solana as ChainInstanceAlias>::Instance;
 
@@ -108,9 +109,10 @@ pub type SolanaIngressTracking =
 		<Runtime as Chainflip>::ValidatorId,
 	>;
 
-pub type SolanaNonceTracking = electoral_systems::change::Change<
+pub type SolanaNonceTracking = electoral_systems::monotonic_change::MonotonicChange<
 	SolAddress,
 	SolHash,
+	SlotNumber,
 	(),
 	SolanaNonceTrackingHook,
 	<Runtime as Chainflip>::ValidatorId,
@@ -452,7 +454,6 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 					let (_, _, _, access_translator, ..) = &access_translators;
 					let mut electoral_access =
 						access_translator.translate_electoral_access(electoral_access);
-
 					SolanaNonceTracking::watch_for_change(
 						&mut electoral_access,
 						nonce_account,
