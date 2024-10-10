@@ -114,7 +114,8 @@ pub mod fees {
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 	pub const MAX_GAS_LIMIT: u128 = 25_000_000;
-	pub const CCM_GAS_OVERHEAD: u128 = 123; // TODO: To estimate
+	// TODO: Might need to tweak more.
+	pub const CCM_GAS_OVERHEAD: u128 = 80_000;
 }
 
 impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {

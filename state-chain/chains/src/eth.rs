@@ -100,7 +100,8 @@ pub mod fees {
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 	pub const MAX_GAS_LIMIT: u128 = 10_000_000;
-	pub const CCM_GAS_OVERHEAD: u128 = 123; // TODO: To estimate
+	// For native we'd only need ~100k but we're using the same for now
+	pub const CCM_GAS_OVERHEAD: u128 = 125_000;
 }
 
 impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
