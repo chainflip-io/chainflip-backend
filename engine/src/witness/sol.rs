@@ -117,7 +117,9 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 		let (nonce_account, previous_nonce, previous_slot) = properties;
 
 		let nonce_and_slot =
-			nonce_witnessing::get_durable_nonce(&self.client, nonce_account, previous_slot).await?;
+			nonce_witnessing::get_durable_nonce(&self.client, nonce_account, previous_slot)
+				.await?
+				.map(|(nonce, slot)| MonotonicChangeVote { value: nonce, block: slot });
 		// If the nonce is not found, we default to the previous nonce and slot.
 		// The `MonotonicChange` electoral system ensure this vote is filtered.
 		Ok(nonce_and_slot
