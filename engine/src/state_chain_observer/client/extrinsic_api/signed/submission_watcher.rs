@@ -31,6 +31,7 @@ use crate::state_chain_observer::client::{
 	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
 };
+use jsonrpsee::types::ErrorObjectOwned;
 
 use super::signer;
 
@@ -50,7 +51,7 @@ pub enum ExtrinsicError<OtherError> {
 #[derive(Error, Debug)]
 pub enum DryRunError {
 	#[error(transparent)]
-	RpcCallError(#[from] jsonrpsee::core::Error),
+	RpcCallError(#[from] ErrorObjectOwned),
 	#[error("Unable to decode dry_run RPC result: {0}")]
 	CannotDecodeReply(#[from] codec::Error),
 	#[error("The transaction is invalid: {0}")]
@@ -239,23 +240,17 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						// This occurs when a transaction with the same nonce is in the
 						// transaction pool (and the priority is <= priority of that
 						// existing tx)
-						jsonrpsee::core::Error::Call(
-							jsonrpsee::types::error::CallError::Custom(ref obj),
-						) if obj.code() == 1014 => {
+						obj if obj.code() == 1014 => {
 							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as transaction with same nonce found in transaction pool: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
 						// This occurs when the nonce has already been *consumed* i.e a
 						// transaction with that nonce is in a block
-						jsonrpsee::core::Error::Call(
-							jsonrpsee::types::error::CallError::Custom(ref obj),
-						) if obj == &invalid_err_obj(InvalidTransaction::Stale) => {
+						obj if obj == invalid_err_obj(InvalidTransaction::Stale) => {
 							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as the transaction is stale: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
-						jsonrpsee::core::Error::Call(
-							jsonrpsee::types::error::CallError::Custom(ref obj),
-						) if obj == &invalid_err_obj(InvalidTransaction::BadProof) => {
+						obj if obj == invalid_err_obj(InvalidTransaction::BadProof) => {
 							warn!(target: "state_chain_client", request_id = request.id, "Submission failed due to a bad proof: {obj:?}. Refetching the runtime version.");
 
 							// TODO: Check if hash and block number should also be updated
@@ -271,7 +266,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 							self.runtime_version = new_runtime_version;
 						},
-						err => break Err(err.into()),
+						obj => break Err(obj.into()),
 					}
 				},
 			}
@@ -522,7 +517,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					_ => None,
 				})
 				.sorted_by_key(|(extrinsic_index, _)| *extrinsic_index)
-				.group_by(|(extrinsic_index, _)| *extrinsic_index)
+				.chunk_by(|(extrinsic_index, _)| *extrinsic_index)
 				.into_iter()
 				.map(|(extrinsic_index, extrinsic_events)| {
 					(extrinsic_index, extrinsic_events.map(|(_extrinsics_index, event)| event))

@@ -41,7 +41,9 @@ use crate::common::{
 pub type Liquidity = u128;
 type FeeGrowthQ128F128 = U256;
 
-/// This is the maximum Liquidity that can be associated with a given tick. Note this doesn't mean
+/// This is the maximum Liquidity that can be associated with a given tick.
+///
+/// Note this doesn't mean
 /// the maximum amount of Liquidity a tick can have, but is the maximum allowed value of the sum of
 /// the liquidity associated with all range orders that start or end at this tick.
 /// This does indirectly limit the maximum liquidity at any price/tick, due to the fact there is

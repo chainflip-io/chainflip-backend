@@ -104,8 +104,10 @@ impl Display for AggKeyVerificationError {
 	}
 }
 
+/// Implementation of a Parity Bit.
+///
 /// A parity bit can be either odd or even, but can have different representations depending on its
-/// use. EVM generaly assumes `0` or `1` but the standard serialization format used in most
+/// use. EVM generally assumes `0` or `1` but the standard serialization format used in most
 /// libraries assumes `2` or `3`.
 #[derive(
 	Encode,

@@ -13,7 +13,7 @@ where
 	Iter: Iterator<Item = T>,
 {
 	iter.sorted_unstable()
-		.group_by(|x| x.clone())
+		.chunk_by(|x| x.clone())
 		.into_iter()
 		.map(|(_, mut group)| {
 			let first = group.next().expect("must have at least one element");
