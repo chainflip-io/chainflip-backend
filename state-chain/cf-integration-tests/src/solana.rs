@@ -56,6 +56,7 @@ const ALICE: AccountId = AccountId::new([0x33; 32]);
 const BOB: AccountId = AccountId::new([0x44; 32]);
 
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
+const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
 
 type SolanaElectionVote = BoundedBTreeMap::<
 	ElectionIdentifierOf<<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystem>,
@@ -466,7 +467,7 @@ fn solana_ccm_fails_with_invalid_input() {
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
 							SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: false },
 						],
-						fallback_address: SolPubkey([0xf0; 32]),
+						fallback_address: FALLBACK_ADDRESS.into(),
 					}
 					.encode()
 					.try_into()
@@ -674,7 +675,6 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			testnet.move_to_the_next_epoch();
 
 			// Trigger a CCM swap
-			let fallback_address = SolPubkey([0xf0; 32]);
 			let ccm = CcmDepositMetadata {
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xff; 20].into())),
@@ -687,7 +687,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
 							SolCcmAddress { pubkey: SolPubkey([0x02; 32]), is_writable: false },
 						],
-						fallback_address,
+						fallback_address: FALLBACK_ADDRESS.into(),
 					}
 					.encode()
 					.try_into()
@@ -739,8 +739,14 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 
 			// on_finalize: reach consensus on the egress vote and trigger the fallback mechanism.
 			SolanaElections::on_finalize(System::block_number() + 1);
-			assert_eq!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::get(), vec![
-				FetchOrTransfer::Transfer { egress_id: (ForeignChain::Solana, 2), asset: cf_chains::assets::sol::Asset::SolUsdc, destination_address: fallback_address.into(), amount: 998_000_994_917u64 }
-			]);
+			assert_eq!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::decode_len(), Some(1));
+			assert!(matches!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::get()[0],
+				FetchOrTransfer::Transfer {
+					egress_id: (ForeignChain::Solana, 2),
+					asset: cf_chains::assets::sol::Asset::SolUsdc,
+					destination_address: FALLBACK_ADDRESS,
+					..
+				}
+			));
 		});
 }

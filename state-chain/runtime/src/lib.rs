@@ -1221,6 +1221,9 @@ type AllMigrations = (
 	// This ClearEvents should only be run at the start of all migrations. This is in case another
 	// migration needs to trigger an event like a Broadcast for example.
 	pallet_cf_cfe_interface::migrations::ClearEvents<Runtime>,
+	// For clearing all Solana Egress Success election votes, and migrating Solana ApiCall to the
+	// newer version.
+	migrations::solana_egress_success_witness::SolanaEgressSuccessWitnessMigration,
 	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFES EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
