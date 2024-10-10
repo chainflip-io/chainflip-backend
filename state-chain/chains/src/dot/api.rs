@@ -150,7 +150,11 @@ where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
 	type TxId = <Polkadot as Chain>::DepositDetails;
-	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError> {
+	type DepositWitness = DepositWitness<Polkadot>;
+	fn reject_call(
+		tx_id: Self::TxId,
+		deposit_witness: Self::DepositWitness,
+	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
 }

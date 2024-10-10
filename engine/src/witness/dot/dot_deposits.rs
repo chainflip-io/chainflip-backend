@@ -1,6 +1,7 @@
+use cf_chains::DepositWitness;
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use pallet_cf_ingress_egress::DepositChannelDetails;
 use state_chain_runtime::PolkadotInstance;
 
 use super::super::common::chunked_chain_source::chunked_by_vault::{

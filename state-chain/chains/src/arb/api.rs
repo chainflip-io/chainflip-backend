@@ -155,7 +155,11 @@ where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
 	type TxId = <Arbitrum as Chain>::DepositDetails;
-	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError> {
+	type DepositWitness = DepositWitness<Arbitrum>;
+	fn reject_call(
+		tx_id: Self::TxId,
+		deposit_witness: Self::DepositWitness,
+	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
 }

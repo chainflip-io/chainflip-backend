@@ -242,7 +242,11 @@ where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
 	type TxId = <Ethereum as Chain>::DepositDetails;
-	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError> {
+	type DepositWitness = DepositWitness<Ethereum>;
+	fn reject_call(
+		tx_id: Self::TxId,
+		deposit_witness: Self::DepositWitness,
+	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
 }

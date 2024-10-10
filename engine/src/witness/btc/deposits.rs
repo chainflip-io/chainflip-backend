@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 use itertools::Itertools;
-use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use pallet_cf_ingress_egress::DepositChannelDetails;
 use secp256k1::hashes::Hash as secp256k1Hash;
 use state_chain_runtime::BitcoinInstance;
+
+use cf_chains::DepositWitness;
 
 use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,

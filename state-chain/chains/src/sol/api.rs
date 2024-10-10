@@ -1,4 +1,4 @@
-use crate::{RejectCall, RejectError};
+use crate::{DepositWitness, RejectCall, RejectError};
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
@@ -525,7 +525,11 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 
 impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {
 	type TxId = <Solana as Chain>::DepositDetails;
-	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError> {
+	type DepositWitness = DepositWitness<Solana>;
+	fn reject_call(
+		tx_id: Self::TxId,
+		deposit_witness: Self::DepositWitness,
+	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
 }
