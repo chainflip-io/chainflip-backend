@@ -153,7 +153,7 @@ where
 		+ ChainEnvironment<(), AggKey>,
 {
 	type TxId = <Bitcoin as Chain>::DepositDetails;
-	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError> {
+	fn reject_call(tx_id: Self::TxId, refund_params: RefundParams) -> Result<Self, RejectError> {
 		let utxo = E::lookup(UtxoSelectionType::TakeUtxo(tx_id));
 
 		if let Some(utxo) = E::lookup(UtxoSelectionType::TakeUtxo(tx_id)) {

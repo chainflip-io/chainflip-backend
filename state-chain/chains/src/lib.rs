@@ -535,7 +535,7 @@ pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 
 pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	type TxId: Member + Parameter + Unpin + BenchmarkValue;
-	fn reject_call(tx_id: Self::TxId) -> Result<Self, RejectError>;
+	fn reject_call(tx_id: Self::TxId, refund_params: RefundParams) -> Result<Self, RejectError>;
 }
 
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -827,4 +827,11 @@ pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 	True(Option<Api>),
 	False,
 	_Phantom(PhantomData<C>, Never),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct RefundParams {
+	pub asset: Asset,
+	pub amount: AssetAmount,
+	pub refund_address: ForeignChainAddress,
 }

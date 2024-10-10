@@ -31,7 +31,7 @@ use cf_chains::{
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata,
 	CcmFailReason, CcmMessage, Chain, ChannelLifecycleHooks, ChannelRefundParameters,
 	ConsolidateCall, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
-	RejectCall, SwapOrigin, TransferAssetParams,
+	RefundParams, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId,
@@ -857,10 +857,16 @@ pub mod pallet {
 				}
 			}
 
-			for (_, tx_id, _) in TaintedTransactions::<T, I>::drain() {
-				if let Ok(api_call) =
-					<T::ChainApiCall as RejectCall<T::TargetChain>>::reject_call(tx_id)
-				{
+			for (_, tx_id, details) in TaintedTransactions::<T, I>::drain() {
+				let deposit_details = details.deposit_witness.unwrap();
+				if let Ok(api_call) = <T::ChainApiCall as RejectCall<T::TargetChain>>::reject_call(
+					tx_id,
+					RefundParams {
+						asset: deposit_details.asset.into(),
+						amount: deposit_details.amount.into(),
+						refund_address: details.refund_address.unwrap(),
+					},
+				) {
 					T::Broadcaster::threshold_sign_and_broadcast(api_call);
 				} else {
 					log_or_panic!("Failed to reject call. This is unexpected.");
