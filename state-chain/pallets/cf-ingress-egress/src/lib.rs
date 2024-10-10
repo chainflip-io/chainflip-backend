@@ -131,8 +131,6 @@ pub enum DepositIgnoredReason {
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
 #[scale_info(skip_type_params(T, I))]
 pub struct TaintedTransactionDetails<T: Config<I>, I: 'static> {
-	/// The broker that created the tainted transaction.
-	pub broker: T::AccountId,
 	pub refund_address: Option<ForeignChainAddress>,
 	pub deposit_witness: Option<DepositWitness<T::TargetChain>>,
 	pub expires_at: BlockNumberFor<T>,
@@ -1326,7 +1324,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 		let tainted_transaction = TaintedTransactionDetails {
-			broker: account_id.clone(),
 			refund_address: None,
 			deposit_witness: None,
 			expires_at: <frame_system::Pallet<T>>::block_number()
@@ -1872,45 +1869,40 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(tainted_tx) =
 			TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
 		{
-			if tainted_tx.broker == channel_owner {
-				let refund_address = match deposit_channel_details.action {
-					ChannelAction::Swap { refund_params, .. } => refund_params
-						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone()),
-					ChannelAction::CcmTransfer { refund_params, .. } => refund_params
-						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone()),
-					ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
-				};
-				let tainted_transaction_details = TaintedTransactionDetails {
-					broker: channel_owner.clone(),
-					refund_address,
-					deposit_witness: Some(DepositWitness {
-						deposit_address: deposit_address.clone(),
-						asset: deposit_channel_details.deposit_channel.asset,
-						amount: deposit_amount,
-						deposit_details: deposit_details.clone(),
-					}),
-					expires_at: tainted_tx.expires_at,
-					marked_for_refund: true,
-				};
-
-				TaintedTransactions::<T, I>::insert(
-					channel_owner,
-					deposit_details.clone(),
-					tainted_transaction_details,
-				);
-
-				Self::deposit_event(Event::<T, I>::DepositIgnored {
+			let refund_address = match deposit_channel_details.action {
+				ChannelAction::Swap { refund_params, .. } =>
+					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
+				ChannelAction::CcmTransfer { refund_params, .. } =>
+					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
+				ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
+			};
+			let tainted_transaction_details = TaintedTransactionDetails {
+				refund_address,
+				deposit_witness: Some(DepositWitness {
 					deposit_address: deposit_address.clone(),
-					asset,
+					asset: deposit_channel_details.deposit_channel.asset,
 					amount: deposit_amount,
 					deposit_details: deposit_details.clone(),
-					reason: DepositIgnoredReason::TransactionTainted,
-				});
+				}),
+				expires_at: tainted_tx.expires_at,
+				marked_for_refund: true,
+			};
 
-				return Ok(())
-			}
+			TaintedTransactions::<T, I>::insert(
+				channel_owner,
+				deposit_details.clone(),
+				tainted_transaction_details,
+			);
+
+			Self::deposit_event(Event::<T, I>::DepositIgnored {
+				deposit_address: deposit_address.clone(),
+				asset,
+				amount: deposit_amount,
+				deposit_details: deposit_details.clone(),
+				reason: DepositIgnoredReason::TransactionTainted,
+			});
+
+			return Ok(())
 		}
 
 		if DepositChannelPool::<T, I>::get(channel_id).is_some() {

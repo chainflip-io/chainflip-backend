@@ -2067,7 +2067,6 @@ fn process_tainted_transaction_and_expect_refund() {
 			TaintedTransactions::<Test, ()>::get::<u64, DepositDetails>(BROKER, Default::default())
 				.expect("To have an tainted transaction");
 
-		assert_eq!(tainted_transaction.broker, BROKER);
 		assert!(tainted_transaction.refund_address.is_some());
 	});
 }
@@ -2101,7 +2100,6 @@ fn tainted_transactions_expire_if_not_witnessed() {
 		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
 
 		let tainted_tx = TaintedTransactionDetails {
-			broker: BROKER,
 			refund_address: None,
 			deposit_witness: None,
 			expires_at: expiry_at,
@@ -2127,7 +2125,6 @@ fn tainted_transactions_do_not_expire_if_marked_for_refund() {
 		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
 
 		let tainted_tx = TaintedTransactionDetails {
-			broker: BROKER,
 			refund_address: None,
 			deposit_witness: None,
 			expires_at: expiry_at,
