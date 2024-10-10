@@ -1,10 +1,13 @@
 use crate::{
 	Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
-	SolanaThresholdSigner,
+	SolanaIngressEgress, SolanaThresholdSigner,
 };
 use cf_chains::{
 	instances::ChainInstanceAlias,
-	sol::{SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto},
+	sol::{
+		api::SolanaTransactionType, SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData,
+		SolanaCrypto,
+	},
 	Chain, FeeEstimationApi, ForeignChain, Solana,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -143,6 +146,9 @@ impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHoo
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
 	pub tx_fee: u64,
+	// It is possible for a contract call to be reverted due to contract's internal error.
+	// This field is set to `true` if the contract call executed successfully without error.
+	pub contract_call_successful: bool,
 }
 
 pub struct SolanaEgressWitnessingHook;
@@ -150,21 +156,39 @@ pub struct SolanaEgressWitnessingHook;
 impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
 	fn on_egress_success(
 		signature: SolSignature,
-		TransactionSuccessDetails { tx_fee }: TransactionSuccessDetails,
+		TransactionSuccessDetails { tx_fee, contract_call_successful }: TransactionSuccessDetails,
 	) {
 		use cf_traits::KeyProvider;
-
-		if let Err(err) = SolanaBroadcaster::egress_success(
-			pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-			signature,
-			// Assign any owed fees to the current key.
-			SolanaThresholdSigner::active_epoch_key().map(|e| e.key).unwrap_or_default(),
-			tx_fee,
-			(),
-			signature,
-		) {
-			log::error!("Failed to execute egress success: {:?}", err);
-		}
+		match contract_call_successful {
+			true =>
+				if let Err(err) = SolanaBroadcaster::egress_success(
+					pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+					signature,
+					// Assign any owed fees to the current key.
+					SolanaThresholdSigner::active_epoch_key().map(|e| e.key).unwrap_or_default(),
+					tx_fee,
+					(),
+					signature,
+				) {
+					log::error!(
+						"Failed to execute egress success: TxOutId: {:?}, Error: {:?}",
+						signature,
+						err
+					)
+				},
+			false =>
+			// On CCM failure, we need to refund the user using their fallback info.
+				if let Some((broadcast_id, ccm_tx)) =
+					SolanaBroadcaster::pending_api_call_from_out_id(signature)
+				{
+					// Only Ccm calls support fallback.
+					if let SolanaTransactionType::CcmTransfer { fallback } = ccm_tx.call_type {
+						SolanaIngressEgress::do_ccm_fallback(broadcast_id, fallback);
+					}
+				} else {
+					log::error!("Ccm fallback failed: Reported Solana contract call revert, but the ApiCall does not exist in storage. Tx_out_id: : {:?}", signature);
+				},
+		};
 	}
 }
 
