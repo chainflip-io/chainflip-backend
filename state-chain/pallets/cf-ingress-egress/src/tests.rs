@@ -2073,7 +2073,7 @@ fn process_tainted_transaction_and_expect_refund() {
 }
 
 #[test]
-fn only_broker_and_lps_can_mark_transaction_as_tainted() {
+fn only_broker_can_mark_transaction_as_tainted() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			IngressEgress::mark_transaction_as_tainted_inner(
@@ -2089,17 +2089,6 @@ fn only_broker_and_lps_can_mark_transaction_as_tainted() {
 
 		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
 			RuntimeOrigin::signed(BROKER),
-			Default::default(),
-		));
-
-		assert_ok!(
-			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
-				&ALICE,
-			)
-		);
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
-			RuntimeOrigin::signed(ALICE),
 			Default::default(),
 		));
 	});

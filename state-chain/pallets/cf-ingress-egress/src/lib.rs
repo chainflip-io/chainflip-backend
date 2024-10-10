@@ -20,8 +20,6 @@ mod boost_pool;
 use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
 
-use frame_support::error::BadOrigin;
-
 use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
@@ -1325,11 +1323,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		origin: OriginFor<T>,
 		tx_id: <T::TargetChain as Chain>::DepositDetails,
 	) -> DispatchResult {
-		let account_id = ensure_signed(origin)?;
-		let is_broker = T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Broker);
-		let is_lp =
-			T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::LiquidityProvider);
-		ensure!(is_broker || is_lp, BadOrigin);
+		let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
 		let tainted_transaction = TaintedTransactionDetails {
 			broker: account_id.clone(),
 			refund_address: None,
