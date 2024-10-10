@@ -166,9 +166,6 @@ impl cf_traits::WaivedFees for WaivedFees {
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 /// Arbitrum has smaller variability so we are willing to pay at most 1.5x the base fee.
 const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
-// We arbitrarily set the MAX_GAS_LIMIT
-const ETHEREUM_MAX_GAS_LIMIT: u128 = 10_000_000;
-const ARBITRUM_MAX_GAS_LIMIT: u128 = 25_000_000;
 
 pub trait EvmPriorityFee<C: Chain> {
 	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
@@ -196,21 +193,19 @@ impl_transaction_builder_for_evm_chain!(
 	EthTransactionBuilder,
 	EthereumApi<EvmEnvironment>,
 	EthereumChainTracking,
-	ETHEREUM_BASE_FEE_MULTIPLIER,
-	ETHEREUM_MAX_GAS_LIMIT
+	ETHEREUM_BASE_FEE_MULTIPLIER
 );
 impl_transaction_builder_for_evm_chain!(
 	Arbitrum,
 	ArbTransactionBuilder,
 	ArbitrumApi<EvmEnvironment>,
 	ArbitrumChainTracking,
-	ARBITRUM_BASE_FEE_MULTIPLIER,
-	ARBITRUM_MAX_GAS_LIMIT
+	ARBITRUM_BASE_FEE_MULTIPLIER
 );
 
 #[macro_export]
 macro_rules! impl_transaction_builder_for_evm_chain {
-	( $chain: ident, $transaction_builder: ident, $chain_api: ident <$env: ident>, $chain_tracking: ident, $base_fee_multiplier: expr, $max_gas_limit: expr ) => {
+	( $chain: ident, $transaction_builder: ident, $chain_api: ident <$env: ident>, $chain_tracking: ident, $base_fee_multiplier: expr ) => {
 		impl TransactionBuilder<$chain, $chain_api<$env>> for $transaction_builder {
 			fn build_transaction(
 				signed_call: &$chain_api<$env>,
@@ -259,7 +254,7 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 						.tracked_data
 						.calculate_ccm_gas_limit(gas_budget);
 
-					Some(std::cmp::min(gas_limit, $max_gas_limit.into()))
+					Some(gas_limit.into())
 				} else {
 					None
 				}

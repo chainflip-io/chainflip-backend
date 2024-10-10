@@ -746,6 +746,12 @@ pub trait FeeEstimationApi<C: Chain> {
 	fn estimate_ingress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
 
 	fn estimate_egress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
+
+	fn estimate_ccm_fee(
+		&self,
+		asset: C::ChainAsset,
+		gas_budget: GasAmount,
+	) -> Option<C::ChainAmount>;
 }
 
 impl<C: Chain> FeeEstimationApi<C> for () {
@@ -755,6 +761,14 @@ impl<C: Chain> FeeEstimationApi<C> for () {
 
 	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
 		Default::default()
+	}
+
+	fn estimate_ccm_fee(
+		&self,
+		_asset: C::ChainAsset,
+		_gas_budget: GasAmount,
+	) -> Option<C::ChainAmount> {
+		None
 	}
 }
 

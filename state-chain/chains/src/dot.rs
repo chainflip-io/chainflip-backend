@@ -309,6 +309,14 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 
 		self.median_tip + transfer::EXTRINSIC_FEE
 	}
+
+	fn estimate_ccm_fee(
+		&self,
+		_asset: <Polkadot as Chain>::ChainAsset,
+		_gas_budget: GasAmount,
+	) -> Option<<Polkadot as Chain>::ChainAmount> {
+		None
+	}
 }
 
 #[derive(

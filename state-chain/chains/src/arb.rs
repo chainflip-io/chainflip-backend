@@ -14,7 +14,6 @@ pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Wor
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::U256;
 use sp_std::{cmp::min, str};
 
 use self::evm::EvmCrypto;
@@ -83,22 +82,29 @@ impl ArbitrumTrackedData {
 	pub fn max_fee_per_gas(
 		&self,
 		base_fee_multiplier: FixedU64,
-	) -> <Ethereum as Chain>::ChainAmount {
+	) -> <Arbitrum as Chain>::ChainAmount {
 		base_fee_multiplier.saturating_mul_int(self.base_fee)
 	}
 
-	pub fn calculate_ccm_gas_limit(&self, gas_budget: GasAmount) -> U256 {
+	pub fn calculate_ccm_gas_limit(&self, gas_budget: GasAmount) -> GasAmount {
 		use crate::arb::fees::*;
 
-		let gas_limit: U256 = U256::from(gas_budget);
-
-		// TODO: For now we don't differentiate egress native or token. It adds quite some
-		// complexity for very little gain.
+		// TODO: For now we don't differentiate egress native or token as there's little gain
+		// but it adds quite some complexity when called from the macro's calculate_gas_limit
+		// as we'd need to get the asset from the EvmTransactionBuilder's call
 		// TODO: Do we potentially want to multiply also the gas budget by the multiplier? Then we
 		// will be paying for fluctuations but we will simplify the integrator's job as they won't
 		// have to worry about it.
 		let gas_overhead: u128 = self.gas_limit_multiplier.saturating_mul_int(CCM_GAS_OVERHEAD);
-		gas_limit.saturating_add(gas_overhead.into())
+		gas_budget.saturating_add(gas_overhead).min(MAX_GAS_LIMIT)
+	}
+
+	pub fn calculate_transaction_fee(
+		&self,
+		gas_limit: GasAmount,
+	) -> <Arbitrum as crate::Chain>::ChainAmount {
+		self.base_fee
+			.saturating_mul(self.gas_limit_multiplier.saturating_mul_int(gas_limit))
 	}
 }
 
@@ -107,6 +113,7 @@ pub mod fees {
 	pub const GAS_COST_PER_FETCH: u128 = 30_000;
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+	pub const MAX_GAS_LIMIT: u128 = 25_000_000;
 	pub const CCM_GAS_OVERHEAD: u128 = 123; // TODO: To estimate
 }
 
@@ -125,8 +132,7 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 				assets::arb::Asset::ArbUsdc => GAS_COST_PER_FETCH,
 			};
 
-		self.base_fee
-			.saturating_mul(self.gas_limit_multiplier.saturating_mul_int(gas_cost_per_fetch))
+		self.calculate_transaction_fee(gas_cost_per_fetch)
 	}
 
 	fn estimate_egress_fee(
@@ -141,8 +147,16 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 				assets::arb::Asset::ArbUsdc => GAS_COST_PER_TRANSFER_TOKEN,
 			};
 
-		self.base_fee
-			.saturating_mul(self.gas_limit_multiplier.saturating_mul_int(gas_cost_per_transfer))
+		self.calculate_transaction_fee(gas_cost_per_transfer)
+	}
+
+	fn estimate_ccm_fee(
+		&self,
+		_asset: <Arbitrum as Chain>::ChainAsset,
+		gas_budget: GasAmount,
+	) -> Option<<Arbitrum as Chain>::ChainAmount> {
+		let gas_limit = self.calculate_ccm_gas_limit(gas_budget);
+		Some(self.calculate_transaction_fee(gas_limit))
 	}
 }
 

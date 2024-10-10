@@ -17,7 +17,6 @@ use evm::api::EvmReplayProtection;
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::U256;
 use sp_std::{cmp::min, convert::TryInto, str};
 
 // Reference constants for the chain spec
@@ -82,11 +81,16 @@ impl EthereumTrackedData {
 			.saturating_add(self.priority_fee)
 	}
 
-	pub fn calculate_ccm_gas_limit(&self, gas_budget: GasAmount) -> U256 {
+	pub fn calculate_ccm_gas_limit(&self, gas_budget: GasAmount) -> GasAmount {
 		use crate::eth::fees::*;
+		gas_budget.saturating_add(CCM_GAS_OVERHEAD).min(MAX_GAS_LIMIT)
+	}
 
-		let gas_limit: U256 = U256::from(gas_budget);
-		gas_limit.saturating_add(CCM_GAS_OVERHEAD.into())
+	pub fn calculate_transaction_fee(
+		&self,
+		gas_limit: GasAmount,
+	) -> <Ethereum as crate::Chain>::ChainAmount {
+		(self.base_fee + self.priority_fee).saturating_mul(gas_limit)
 	}
 }
 
@@ -95,6 +99,7 @@ pub mod fees {
 	pub const GAS_COST_PER_FETCH: u128 = 30_000;
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+	pub const MAX_GAS_LIMIT: u128 = 10_000_000;
 	pub const CCM_GAS_OVERHEAD: u128 = 123; // TODO: To estimate
 }
 
@@ -114,7 +119,7 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 					GAS_COST_PER_FETCH,
 			};
 
-		(self.base_fee + self.priority_fee).saturating_mul(gas_cost_per_fetch)
+		self.calculate_transaction_fee(gas_cost_per_fetch)
 	}
 
 	fn estimate_egress_fee(
@@ -130,7 +135,16 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 					GAS_COST_PER_TRANSFER_TOKEN,
 			};
 
-		(self.base_fee + self.priority_fee).saturating_mul(gas_cost_per_transfer)
+		self.calculate_transaction_fee(gas_cost_per_transfer)
+	}
+
+	fn estimate_ccm_fee(
+		&self,
+		_asset: <Ethereum as Chain>::ChainAsset,
+		gas_budget: GasAmount,
+	) -> Option<<Ethereum as Chain>::ChainAmount> {
+		let gas_limit = self.calculate_ccm_gas_limit(gas_budget);
+		Some(self.calculate_transaction_fee(gas_limit))
 	}
 }
 

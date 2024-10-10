@@ -32,11 +32,6 @@ use crate::{
 };
 use sp_std::{vec, vec::Vec};
 
-use super::compute_units_costs::{
-	DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER, DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
-	MAX_COMPUTE_UNITS_PER_CCM_TRANSFER, MIN_COMPUTE_PRICE,
-};
-
 fn system_program_id() -> SolAddress {
 	SYSTEM_PROGRAM_ID
 }
@@ -77,7 +72,7 @@ impl SolanaTransactionBuilder {
 
 		// Set a minimum priority fee to maximize chances of inclusion
 		final_instructions.push(ComputeBudgetInstruction::set_compute_unit_price(
-			sp_std::cmp::max(compute_price, MIN_COMPUTE_PRICE),
+			sp_std::cmp::max(compute_price, super::compute_units_costs::MIN_COMPUTE_PRICE),
 		));
 
 		final_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(compute_limit));
@@ -300,7 +295,7 @@ impl SolanaTransactionBuilder {
 		agg_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
-		gas_budget: cf_primitives::GasAmount,
+		compute_limit: SolComputeLimit,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![
 			SystemProgramInstruction::transfer(&agg_key.into(), &to.into(), amount),
@@ -320,13 +315,7 @@ impl SolanaTransactionBuilder {
 				.with_remaining_accounts(ccm_accounts.remaining_account_metas()),
 		];
 
-		Self::build(
-			instructions,
-			durable_nonce,
-			agg_key.into(),
-			compute_price,
-			Self::calculate_ccm_compute_limit(gas_budget, SolAsset::Sol),
-		)
+		Self::build(instructions, durable_nonce, agg_key.into(), compute_price, compute_limit)
 	}
 
 	pub fn ccm_transfer_token(
@@ -346,7 +335,7 @@ impl SolanaTransactionBuilder {
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
 		token_decimals: u8,
-		gas_budget: cf_primitives::GasAmount,
+		compute_limit: SolComputeLimit,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
 		let instructions = vec![
 		AssociatedTokenAccountInstruction::create_associated_token_account_idempotent_instruction(
@@ -380,34 +369,7 @@ impl SolanaTransactionBuilder {
 			sys_var_instructions(),
 		).with_remaining_accounts(ccm_accounts.remaining_account_metas())];
 
-		Self::build(
-			instructions,
-			durable_nonce,
-			agg_key.into(),
-			compute_price,
-			Self::calculate_ccm_compute_limit(gas_budget, SolAsset::SolUsdc),
-		)
-	}
-
-	fn calculate_ccm_compute_limit(
-		gas_budget: cf_primitives::GasAmount,
-		asset: SolAsset,
-	) -> SolComputeLimit {
-		let compute_limit: SolComputeLimit = match gas_budget.try_into() {
-			Ok(limit) => limit,
-			Err(_) => return MAX_COMPUTE_UNITS_PER_CCM_TRANSFER,
-		};
-		let compute_limit_with_overhead = compute_limit.saturating_add(match asset {
-			// TODO: Potentially rename to overhead. Double check this values, we could just
-			// increase them to be sure we don't cause any issues for the integrators as
-			// gas is very cheap anyway.
-			SolAsset::Sol => DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
-			SolAsset::SolUsdc => DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
-		});
-		sp_std::cmp::min(
-			MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as SolComputeLimit,
-			compute_limit_with_overhead,
-		)
+		Self::build(instructions, durable_nonce, agg_key.into(), compute_price, compute_limit)
 	}
 
 	/// Create an instruction set to set the current GovKey with the agg key.
@@ -456,7 +418,7 @@ mod test {
 	};
 
 	// Arbitrary number used for testing
-	const TEST_COMPUTE_LIMIT: u128 = 300_000u128;
+	const TEST_COMPUTE_LIMIT: SolComputeLimit = 300_000u32;
 
 	fn get_fetch_params(
 		channel_id: Option<ChannelId>,
@@ -672,42 +634,6 @@ mod test {
 		let expected_serialized_tx = hex_literal::hex!("0180d9ae78d86dbf0895772b959d27110d09d8cb0f9bb388cbc84a53372b568ea56cb9f235f05bf59446a18b9e9babdf61e7194cd6f838d6fd6a741e6f60cc300d01000411f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0917eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1926744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900448541f57201f277c5f3ffb631d0212e26e7f47749c26c4808718174a0ab2a09a18cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adbcd644e45426a41a7cb8369b8a0c1c89bb3f86cf278fdd9cc38b0f69784ad5667e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864e5e1869817a4fd88ddf7ab7a5f7252d7c345b39721769888608592912e8ca9acf0f13460b3fd04b7d53d7421fc874ec00eec769cf36480895e1a407bf1249475f2b2e24122be016983be9369965246cc45e1f621d40fba300c56c7ac50c3874df4f83bd213a59c9785110cf83c718f9486c3484f918593bce20c61dc6a96036afecc89e3b031824af6363174d19bbec12d3a13c4a173e5aeb349b63042bc138f00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000e0d03020f0004040000000e00090340420f00000000000e000502e02e000010040100030d094e518fabdda5d68b000d02020024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020b0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02090024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020a0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02070024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02060024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02040024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020c0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02080024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02050024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
-	}
-
-	#[test]
-	fn can_calculate_gas_limit() {
-		const TEST_EGRESS_BUDGET: u128 = 80_000u128;
-
-		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
-			let default_compute_limit = match asset {
-				SolAsset::Sol => DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
-				SolAsset::SolUsdc => DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
-			};
-
-			let mut tx_compute_limit: u32 =
-				SolanaTransactionBuilder::calculate_ccm_compute_limit(TEST_EGRESS_BUDGET, *asset);
-			assert_eq!(tx_compute_limit, TEST_EGRESS_BUDGET as u32 + default_compute_limit);
-
-			// Test SolComputeLimit saturation
-			assert_eq!(
-				SolanaTransactionBuilder::calculate_ccm_compute_limit(
-					MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u128 - default_compute_limit as u128 + 1,
-					*asset,
-				),
-				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER
-			);
-
-			// Test upper cap
-			tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_compute_limit(
-				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u128 - 1,
-				*asset,
-			);
-			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
-
-			// Test lower cap
-			let tx_compute_limit = SolanaTransactionBuilder::calculate_ccm_compute_limit(0, *asset);
-			assert_eq!(tx_compute_limit, default_compute_limit);
-		}
 	}
 
 	#[test]

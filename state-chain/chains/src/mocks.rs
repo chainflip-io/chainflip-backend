@@ -209,6 +209,14 @@ impl FeeEstimationApi<MockEthereum> for MockTrackedData {
 	) -> <MockEthereum as Chain>::ChainAmount {
 		unimplemented!("Unused for now.")
 	}
+
+	fn estimate_ccm_fee(
+		&self,
+		_asset: <MockEthereum as Chain>::ChainAsset,
+		_gas_budget: GasAmount,
+	) -> Option<<MockEthereum as Chain>::ChainAmount> {
+		unimplemented!("Unused for now.")
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]

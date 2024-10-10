@@ -14,7 +14,7 @@ use crate::{
 	},
 	sol::{
 		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
-		SolAsset, SolHash, SolTransaction, SolanaCrypto,
+		SolAsset, SolHash, SolTrackedData, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, ChainCrypto, ChainEnvironment,
 	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
@@ -302,6 +302,9 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 		let durable_nonce = Environment::nonce_account()?;
 
+		let compute_limit =
+			SolTrackedData::calculate_ccm_compute_limit(gas_budget, transfer_param.asset);
+
 		// Build the transaction
 		let transaction = match transfer_param.asset {
 			SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
@@ -316,7 +319,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				agg_key,
 				durable_nonce,
 				compute_price,
-				gas_budget,
+				compute_limit,
 			),
 			SolAsset::SolUsdc => {
 				let ata =
@@ -343,7 +346,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					durable_nonce,
 					compute_price,
 					SOL_USDC_DECIMAL,
-					gas_budget,
+					compute_limit,
 				)
 			},
 		}

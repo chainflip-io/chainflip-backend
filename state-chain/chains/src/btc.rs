@@ -14,8 +14,9 @@ use arrayref::array_ref;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE, INPUT_UTXO_SIZE_IN_BYTES,
-	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES, VAULT_UTXO_SIZE_IN_BYTES,
+	chains::assets, GasAmount, NetworkEnvironment, DEFAULT_FEE_SATS_PER_KILOBYTE,
+	INPUT_UTXO_SIZE_IN_BYTES, MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
+	VAULT_UTXO_SIZE_IN_BYTES,
 };
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -149,6 +150,15 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 			.saturating_add(self.btc_fee_info.fee_per_vault_utxo())
 			.saturating_add(self.btc_fee_info.fee_per_output_utxo())
 			.saturating_add(self.btc_fee_info.fee_per_output_utxo())
+	}
+
+	// CCM not supported for Bitcoin
+	fn estimate_ccm_fee(
+		&self,
+		_asset: <Bitcoin as Chain>::ChainAsset,
+		_gas_budget: GasAmount,
+	) -> Option<<Bitcoin as Chain>::ChainAmount> {
+		None
 	}
 }
 
