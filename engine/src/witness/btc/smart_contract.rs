@@ -292,17 +292,9 @@ mod tests {
 			vec![OP_RETURN.to_u8()],                  // too few bytes
 			vec![OP_RETURN.to_u8(), OP_PUSHBYTES_75], // no bytes follow "pushbytes"
 		] {
-			let script_buf =
-				ScriptBuf::from_bytes(encode_data_in_nulldata_utxo(&data).unwrap().raw());
+			let script_buf = ScriptBuf::from_bytes(data);
 
 			assert_eq!(try_extract_utxo_encoded_data(&script_buf), None);
 		}
 	}
-}
-
-#[test]
-fn foo() {
-	let price = sqrt_price_to_price(bounded_sqrt_price(1.into(), 240000000000u128.into()));
-	// dbg!(price);
-	println!("{}", serde_json::to_string(&price).unwrap());
 }

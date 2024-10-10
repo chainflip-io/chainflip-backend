@@ -1,5 +1,5 @@
 use crate::address::EncodedAddress;
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -41,14 +41,12 @@ impl Decode for UtxoEncodedData {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let output_asset = Asset::decode(input)?;
 
-		let output_address = match output_asset {
-			Asset::Eth | Asset::Flip | Asset::Usdc | Asset::Usdt =>
-				EncodedAddress::Eth(<[u8; 20]>::decode(input)?),
-			Asset::Dot => EncodedAddress::Dot(<[u8; 32]>::decode(input)?),
-			Asset::Btc => EncodedAddress::Btc(Vec::<u8>::decode(input)?),
-			Asset::ArbEth | Asset::ArbUsdc => EncodedAddress::Arb(<[u8; 20]>::decode(input)?),
-			Asset::Sol | Asset::SolUsdc =>
-				EncodedAddress::Sol(<[u8; sol_prim::consts::SOLANA_ADDRESS_LEN]>::decode(input)?),
+		let output_address = match ForeignChain::from(output_asset) {
+			ForeignChain::Ethereum => EncodedAddress::Eth(Decode::decode(input)?),
+			ForeignChain::Polkadot => EncodedAddress::Dot(Decode::decode(input)?),
+			ForeignChain::Bitcoin => EncodedAddress::Btc(Decode::decode(input)?),
+			ForeignChain::Arbitrum => EncodedAddress::Arb(Decode::decode(input)?),
+			ForeignChain::Solana => EncodedAddress::Sol(Decode::decode(input)?),
 		};
 
 		let parameters = SharedCfParameters::decode(input)?;
