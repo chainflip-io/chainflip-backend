@@ -8,6 +8,7 @@ use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
+#[allow(clippy::multiple_bound_locations)]
 #[benchmarks(
 	where <T::FeePayment as cf_traits::FeePayment>::Amount: From<u128>
 )]

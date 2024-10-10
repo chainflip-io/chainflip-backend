@@ -16,21 +16,28 @@ use super::{
 	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, PolkadotTrackedData, TxId,
 };
 
-const SIGNATURE: PolkadotSignature = PolkadotSignature::from_aliased([1u8; 64]);
-const ACCOUNT_ID_1: PolkadotAccountId = PolkadotAccountId::from_aliased([2u8; 32]);
-const ACCOUNT_ID_2: PolkadotAccountId = PolkadotAccountId::from_aliased([3u8; 32]);
+const SIGNATURE: [u8; 64] = [1u8; 64];
+const ACCOUNT_ID_1: [u8; 32] = [2u8; 32];
+const ACCOUNT_ID_2: [u8; 32] = [3u8; 32];
 const NONCE: u32 = 5;
 const ENCODED_EXTRINSIC: [u8; 100] = [3u8; 100];
+
+fn account(inner: [u8; 32]) -> PolkadotAccountId {
+	PolkadotAccountId::from_aliased(inner)
+}
+fn signature(inner: [u8; 64]) -> PolkadotSignature {
+	PolkadotSignature::from_aliased(inner)
+}
 
 impl BenchmarkValue for PolkadotUncheckedExtrinsic {
 	fn benchmark_value() -> Self {
 		PolkadotUncheckedExtrinsic::new_signed(
 			PolkadotRuntimeCall::Balances(BalancesCall::transfer_all {
-				dest: PolkadotAccountIdLookup::from(ACCOUNT_ID_1),
+				dest: PolkadotAccountIdLookup::from(account(ACCOUNT_ID_1)),
 				keep_alive: true,
 			}),
-			ACCOUNT_ID_2,
-			SIGNATURE,
+			account(ACCOUNT_ID_2),
+			signature(SIGNATURE),
 			PolkadotSignedExtra((
 				(),
 				(),
@@ -49,7 +56,7 @@ impl BenchmarkValue for PolkadotUncheckedExtrinsic {
 
 impl BenchmarkValue for PolkadotSignature {
 	fn benchmark_value() -> Self {
-		SIGNATURE
+		signature(SIGNATURE)
 	}
 }
 

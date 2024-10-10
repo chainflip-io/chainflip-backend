@@ -1740,7 +1740,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		orders: u32,
 	) -> Result<PoolOrderbook, DispatchError> {
-		let orders = sp_std::cmp::max(sp_std::cmp::min(orders, 16384), 1);
+		let orders = orders.clamp(1, 16384);
 
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		let pool_state =

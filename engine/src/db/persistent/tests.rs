@@ -92,7 +92,7 @@ fn can_update_key() {
 
 	let keys_before = p_db.load_keys::<Scheme>();
 	// there should be no key [0; 33] yet
-	assert!(keys_before.get(&key_id).is_none());
+	assert!(!keys_before.contains_key(&key_id));
 
 	p_db.update_key::<Scheme>(
 		&key_id,
@@ -100,7 +100,7 @@ fn can_update_key() {
 	);
 
 	let keys_before = p_db.load_keys::<Scheme>();
-	assert!(keys_before.get(&key_id).is_some());
+	assert!(keys_before.contains_key(&key_id));
 }
 
 fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Result<Vec<PathBuf>, std::io::Error> {
@@ -151,7 +151,7 @@ fn can_load_key_from_backup() {
 		let p_db =
 			PersistentKeyDB::open_and_migrate_to_latest(backups.first().unwrap(), None).unwrap();
 
-		assert!(p_db.load_keys::<Scheme>().get(&key_id).is_some());
+		assert!(p_db.load_keys::<Scheme>().contains_key(&key_id));
 	}
 }
 

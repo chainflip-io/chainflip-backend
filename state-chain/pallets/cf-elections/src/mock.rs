@@ -82,6 +82,7 @@ impl TestSetup {
 
 #[derive(Clone, Debug)]
 pub struct TestContext {
+	#[allow(dead_code)]
 	pub setup: TestSetup,
 	pub umis: Vec<UniqueMonotonicIdentifier>,
 }

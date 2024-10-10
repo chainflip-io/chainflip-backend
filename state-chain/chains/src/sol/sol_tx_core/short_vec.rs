@@ -8,6 +8,8 @@ use serde::{
 };
 use sp_std::{convert::TryFrom, fmt, marker::PhantomData, vec::Vec};
 
+/// Represents a ShortU16.
+///
 /// Same as u16, but serialized with 1 to 3 bytes. If the value is above
 /// 0x7f, the top bit is set and the remaining value is stored in the next
 /// bytes. Each byte follows the same pattern until the 3rd byte. The 3rd

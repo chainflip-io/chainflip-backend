@@ -25,6 +25,7 @@ pub enum UpgradeableLoaderInstruction {
 	/// # Account references
 	///   0. `[writable]` Buffer account to write program data to.
 	///   1. `[signer]` Buffer authority
+	///
 	/// Simplified since we don't use it anyway
 	Write,
 

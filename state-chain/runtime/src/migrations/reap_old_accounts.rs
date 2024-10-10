@@ -25,7 +25,7 @@ impl OnRuntimeUpgrade for Migration {
 		log::info!("🪓 Reaping old accounts.");
 		for (account_id, account) in pallet_cf_flip::Account::<Runtime>::iter() {
 			if account.total() == 0u128 {
-				let account_id_hex = hex::encode(&account_id.encode());
+				let account_id_hex = hex::encode(account_id.encode());
 				if let Some(PendingRedemptionInfo { total, .. }) =
 					pallet_cf_funding::PendingRedemptions::<Runtime>::get(&account_id)
 				{

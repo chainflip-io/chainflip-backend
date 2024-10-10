@@ -1,4 +1,3 @@
-#![feature(absolute_path)]
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
 	LiquidityProviderSubcommands, ValidatorSubcommands,

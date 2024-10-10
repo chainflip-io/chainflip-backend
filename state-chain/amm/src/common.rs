@@ -10,13 +10,18 @@ pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
 /// therefore an `Amount` with the literal value of `1` would represent 10^-18 Ethereum.
 pub type Amount = U256;
+
 /// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
 /// in units of asset One.
 pub type Tick = i32;
-/// The square root of the price, represented as a fixed point integer with 96 fractional bits and
+
+/// The square root of the price.
+///
+/// Represented as a fixed point integer with 96 fractional bits and
 /// 64 integer bits (The higher bits past 96+64 th aren't used). [SqrtPriceQ64F96] is always in sqrt
 /// units of asset one.
 pub type SqrtPriceQ64F96 = U256;
+
 /// The number of fractional bits used by `SqrtPriceQ64F96`.
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 
@@ -263,10 +268,6 @@ pub(super) trait SwapDirection {
 
 	/// Increases a valid sqrt_price by a specified number of ticks
 	fn increase_sqrt_price(sqrt_price: SqrtPriceQ64F96, delta: Tick) -> SqrtPriceQ64F96;
-
-	/// Returns the equivalent saturated amount in the output asset to a given amount of the input
-	/// asset at a specific tick, will return None iff the tick is invalid
-	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount>;
 }
 impl SwapDirection for BaseToQuote {
 	const INPUT_SIDE: Pairs = Pairs::Base;
@@ -282,19 +283,6 @@ impl SwapDirection for BaseToQuote {
 
 	fn increase_sqrt_price(sqrt_price: SqrtPriceQ64F96, delta: Tick) -> SqrtPriceQ64F96 {
 		sqrt_price_at_tick(tick_at_sqrt_price(sqrt_price).saturating_sub(delta).max(MIN_TICK))
-	}
-
-	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount> {
-		if is_tick_valid(tick) {
-			Some(
-				(U256::full_mul(amount, sqrt_price_to_price(sqrt_price_at_tick(tick))) /
-					(U256::one() << PRICE_FRACTIONAL_BITS))
-					.try_into()
-					.unwrap_or(U256::MAX),
-			)
-		} else {
-			None
-		}
 	}
 }
 impl SwapDirection for QuoteToBase {
@@ -316,19 +304,6 @@ impl SwapDirection for QuoteToBase {
 				.saturating_add(delta)
 				.min(MAX_TICK),
 		)
-	}
-
-	fn input_to_output_amount_floor(amount: Amount, tick: Tick) -> Option<Amount> {
-		if is_tick_valid(tick) {
-			Some(
-				(U256::full_mul(amount, U256::one() << PRICE_FRACTIONAL_BITS) /
-					sqrt_price_to_price(sqrt_price_at_tick(tick)))
-				.try_into()
-				.unwrap_or(U256::MAX),
-			)
-		} else {
-			None
-		}
 	}
 }
 

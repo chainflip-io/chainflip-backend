@@ -43,6 +43,7 @@ fn is_header_ready<Inner: ChunkedByVault>(
 ///   the same SC block 50.
 /// - The SC progresses to block 51, revealing that an address is to be witnessed.
 /// - There is a deposit at block 10 of X, which CFE B witnesses, but CFE A does not.
+///
 /// If CFE A does not wait until the block is ready to process it can miss witnesses and be out
 /// of sync with the other CFEs.
 #[derive(Clone)]

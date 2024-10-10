@@ -136,7 +136,7 @@ To start debugging build the node with benchmark features enabled as well as deb
 
 Benchmarking in general has a very slow cycle time, you can speed it up by running the benchmarks in a test environment though. Add the following line to the end of your benchmark to execute your benchmark with the test suite and **against the mock** of your pallet:
 
-```rust
+```rust,ignore
 impl_benchmark_test_suite!(
     Pallet,
     crate::mock::new_test_ext(Default::default(), Default::default()),

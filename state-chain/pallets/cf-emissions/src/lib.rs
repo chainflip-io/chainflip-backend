@@ -321,13 +321,15 @@ impl<T: Config> Pallet<T> {
 				None,
 			)
 			.map_err(Into::into)
-			.and_then(|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
-				if egress_amount < BURN_FEE_MULTIPLE * fee_withheld {
-					Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
-				} else {
-					Ok(result)
-				}
-			})
+			.and_then(
+				|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
+					if egress_amount < BURN_FEE_MULTIPLE * fee_withheld {
+						Err(Error::<T>::FlipBalanceBelowBurnThreshold.into())
+					} else {
+						Ok(result)
+					}
+				},
+			)
 		}) {
 			Ok(ScheduledEgressDetails { egress_id, egress_amount, .. }) => {
 				T::Issuance::burn_offchain(egress_amount.into());

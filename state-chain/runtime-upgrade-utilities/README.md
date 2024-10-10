@@ -25,7 +25,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
 
 2. Add a migrations module and pallet `StorageVersion` to the pallet's `lib.rs` file if you haven't done so already:
 
-   ```rust
+   ```rust,ignore
    mod migrations; // <--- We will create this module file next
 
    // These imports are required if not already present.
@@ -49,7 +49,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
 
 3. Create `migrations.rs` based on the following template:
 
-   ```rust
+   ```rust,ignore
    pub mod my_migration;
 
    use cf_runtime_upgrade_utilities::VersionedMigration;
@@ -62,7 +62,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
 
 5. If this is the first migration for this pallet, ensure that the `PalletMigration` for this pallet is added to the tuple of PalletMigrations in `state-chain/runtime/src/lib.rs`. Remember to add all the pallet's instances!
 
-   ```rust
+   ```rust,ignore
    type PalletMigrations = (
      pallet_cf_environment::migrations::PalletMigration<Runtime>,
         pallet_cf_funding::migrations::PalletMigration<Runtime>,
@@ -91,7 +91,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
 
 6. Additional migrations can be added to the `PalletMigration` tuple. For example, the following defines migrations from version 0 through 4. Only the required migrations will be applied on-chain. For example, if the on-chain storage version is 2 and the pallet version is 4, the migrations `change_storage_type_b` and `purge_old_values` would be run, and the on-chain storage version would be updated to 4.
 
-   ```rust
+   ```rust,ignore
    pub mod rename_pallet_storage;
    pub mod change_storage_type_a;
    pub mod change_storage_type_b;
@@ -107,7 +107,7 @@ This crate provides a `VersionedMigration` type that can be used to structure su
 
 7. When removing migrations, it can be helpful to leave a placeholder migration to avoid deleting the boilerplate. For example, if the above migrations were no longer needed, we could remove them and leave a placeholder at the latest pallet version, like this:
 
-   ```rust
+   ```rust,ignore
    use cf_runtime_upgrade_utilities::PlaceholderMigration;
 
    type PalletMigration<T> = PlaceholderMigration<crate::Pallet<T>, 4>;

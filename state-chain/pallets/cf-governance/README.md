@@ -26,18 +26,18 @@ Every Proposal has an expiry date. If a Proposal is not able to raise enough App
 
 To secure an extrinsic via Governance, add the following to your pallet's Config.
 
-```rust(ignore)
+```rust,ignore
 type EnsureGovernance: EnsureOrigin<<Self as pallet::Config>::Origin>;
 ```
 
 You must also configure the EnsureGovernance struct for your pallet in the runtime configuration:
 
-```rust(ignore)
+```rust,ignore
 type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 ```
 
 To ensure extrinsics you need to make use of the EnsureGovernance struct. Pass the calling origin like in this example to ensure an extrinsic is only executable via the Governance origin:
 
-```rust(ignore)
+```rust,ignore
 T::EnsureGovernance::ensure_origin(origin)?;
 ```

@@ -1562,3 +1562,27 @@ fn changing_broadcast_timeout() {
 		);
 	});
 }
+
+#[test]
+fn aborted_broadcast_is_cleaned_up_on_success() {
+	new_test_ext().execute_with(|| {
+		// Abort a broadcast
+		let (broadcast_id, tx_id) = start_mock_broadcast();
+		let nominee = ready_to_abort_broadcast(broadcast_id);
+		assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(nominee), broadcast_id));
+		assert!(AbortedBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+
+		// Witness a successful broadcast as if it was manually broadcast
+		assert_ok!(Broadcaster::transaction_succeeded(
+			RuntimeOrigin::root(),
+			tx_id,
+			Default::default(),
+			ETH_TX_FEE,
+			MOCK_TX_METADATA,
+			Default::default(),
+		));
+
+		// Storage should be cleaned, event emitted.
+		assert!(AbortedBroadcasts::<Test, Instance1>::get().is_empty());
+	});
+}

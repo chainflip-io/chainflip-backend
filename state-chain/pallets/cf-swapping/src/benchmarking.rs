@@ -12,6 +12,7 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 
+#[allow(clippy::multiple_bound_locations)]
 #[benchmarks(
 	where <T::FeePayment as cf_traits::FeePayment>::Amount: From<u128>
 )]

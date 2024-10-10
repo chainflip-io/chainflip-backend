@@ -1,5 +1,3 @@
-#![cfg(feature = "runtime-benchmarks")]
-
 use crate::{
 	bitmap_components::ElectionBitmapComponents,
 	electoral_system::{
@@ -24,6 +22,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
 use crate::Call;
 
+#[allow(clippy::multiple_bound_locations)]
 #[instance_benchmarks(
 	where
 	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote: BenchmarkValue,

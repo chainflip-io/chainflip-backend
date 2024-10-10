@@ -13,7 +13,7 @@ fn assert_command_arg_for_latest_version(arg: &str) {
 #[test]
 fn version_should_return_for_latest_version() {
 	assert_command_arg_for_latest_version("--version");
-	assert_command_arg_for_latest_version("-v");
+	assert_command_arg_for_latest_version("-V");
 }
 
 #[test]

@@ -30,7 +30,9 @@ cargo cf-test-ci
 > **_NOTE:_**  cf-test-ci is an alias for cargo test with additional flags. These aliases are defined in [.cargo/config.toml](.cargo/config.toml).
 
 ## Contributing
+
 ### Setup
+
 Make sure you have the following packages and tools installed. The following is for debian-like systems (e.g. Ubuntu). You may need to adjust for your system.
 
 ```bash
@@ -114,9 +116,11 @@ commit.
 ### Prerequisites
 
 #### Hardware
+
 We recommend at least 16GB of RAM and 4 CPU cores to handle all the containers and binaries running locally.
 
 #### Software and Tools
+
 You will need to download [Docker](https://docs.docker.com/get-docker/). Make sure you use a recent version that has `docker-compose` plugin included. Otherwise, you might need to modify the `./localnet/manage.sh` script to use `docker-compose` instead of `docker compose`.
 
 ### Creating a Localnet
@@ -129,6 +133,7 @@ From the repo root, run the following:
 cargo build
 ./localnet/manage.sh
 ```
+
 You'll be prompted with the following:
 
 ```shell
@@ -155,7 +160,7 @@ You'll be prompted with the following:
 These commands can be used to control which logs the engine outputs at runtime.
 
 - `curl -X GET 127.0.0.1:36079/tracing` (Returns the current filtering directives)
-- `curl --json '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"` (Sets the filter directives so the default is DEBUG, and the logging in modules warp, hyper, jsonrpc, web3, and reqwest is turned off)
+- `curl --json '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing` (Sets the filter directives so the default is DEBUG, and the logging in modules warp, hyper, jsonrpc, web3, and reqwest is turned off)
 - `curl -X POST -H 'Content-Type: application/json' -d '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing` (Equivalent to the above, but without using the --json short-hand)
 
 The `RUST_LOG` environment variable controls the initial filtering directives if specified at engine startup.

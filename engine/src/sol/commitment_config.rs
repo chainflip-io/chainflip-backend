@@ -127,8 +127,8 @@ pub enum CommitmentLevel {
 	/// This differs from `single` in that:
 	/// 1) It incorporates votes from gossip and replay.
 	/// 2) It does not count votes on descendants of a block, only direct votes on that block.
-	/// 3) This confirmation level also upholds "optimistic confirmation" guarantees in
-	/// release 1.3 and onwards.
+	/// 3) This confirmation level also upholds "optimistic confirmation" guarantees in release 1.3
+	///    and onwards.
 	#[deprecated(since = "1.5.5", note = "Please use CommitmentLevel::Confirmed instead")]
 	SingleGossip,
 

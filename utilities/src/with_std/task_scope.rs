@@ -39,7 +39,7 @@
 //! task_scope system has no method to force spawn_blocking tasks to end/cancel, so they must handle
 //! exiting themselves. For example:
 //!
-//! ```rust(ignore)
+//! ```rust,ignore
 //! {
 //!     let (sender, receiver) = std::sync::mpsc::channel(10);
 //!
@@ -73,7 +73,7 @@
 //! If you don't do the above when an error occurs the scope will not ever exit, and will wait for
 //! the spawn_blocking to exit forever i.e. if the spawn_blocking was like this instead:
 //!
-//! ```rust(ignore)
+//! ```rust,ignore
 //! {
 //!     scope.spawn_blocking(|| {
 //!         loop {
@@ -175,6 +175,8 @@ pub trait UnwrapOrCancel {
 }
 impl<T: ?Sized> UnwrapOrCancel for T where T: Future {}
 
+/// Creates a top level tasks that spawns other tasks.
+///
 /// This function allows a top level task to spawn tasks such that if any tasks panic or error,
 /// all other tasks will be cancelled, and the panic or error will be propagated by this function.
 /// It guarantees all tasks spawned using its scope object will finish before this function exits.

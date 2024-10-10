@@ -100,7 +100,7 @@ fn deposit_witnesses(
 					})
 				})
 				.sorted_by_key(|deposit_witness| deposit_witness.deposit_address.clone())
-				.group_by(|deposit_witness| deposit_witness.deposit_address.clone())
+				.chunk_by(|deposit_witness| deposit_witness.deposit_address.clone())
 				.into_iter()
 				.map(|(_deposit_address, deposit_witnesses)| {
 					// We only take the largest output of a tx as a deposit witness. This is to

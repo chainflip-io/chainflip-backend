@@ -1,4 +1,4 @@
-#![cfg_attr(not(feature = "std-error"), no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 pub use crate::{address::Address, digest::Digest, signature::Signature};
 use codec::{Decode, Encode};

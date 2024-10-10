@@ -44,7 +44,7 @@ pub mod genesis_hashes {
 /// As long as both conditions are met, the upgrade `U` will run and then the pallet's stored
 /// version is set to `TO`.
 pub struct VersionedMigration<
-	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+	P: PalletInfoAccess + GetStorageVersion<InCodeStorageVersion = StorageVersion>,
 	U: OnRuntimeUpgrade,
 	const FROM: u16,
 	const TO: u16,
@@ -53,13 +53,13 @@ pub struct VersionedMigration<
 /// A placeholder migration that does nothing. Useful too allow us to keep the boilerplate in the
 /// runtime consistent.
 pub struct PlaceholderMigration<
-	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+	P: PalletInfoAccess + GetStorageVersion<InCodeStorageVersion = StorageVersion>,
 	const AT: u16,
 >(PhantomData<P>);
 
 impl<P, const AT: u16> OnRuntimeUpgrade for PlaceholderMigration<P, AT>
 where
-	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+	P: PalletInfoAccess + GetStorageVersion<InCodeStorageVersion = StorageVersion>,
 {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		if <P as GetStorageVersion>::on_chain_storage_version() == AT {
@@ -99,12 +99,12 @@ pub enum VersionedPostUpgradeData {
 }
 
 fn should_upgrade<
-	P: GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+	P: GetStorageVersion<InCodeStorageVersion = StorageVersion>,
 	const FROM: u16,
 	const TO: u16,
 >() -> bool {
 	<P as GetStorageVersion>::on_chain_storage_version() == FROM &&
-		<P as GetStorageVersion>::current_storage_version() >= TO
+		<P as GetStorageVersion>::in_code_storage_version() >= TO
 }
 
 // TODO: Replace this with the `VersionedMigration` that will be merged to polkadot-sdk soon.
@@ -113,7 +113,7 @@ fn should_upgrade<
 impl<P, Inner, const FROM: u16, const TO: u16> OnRuntimeUpgrade
 	for VersionedMigration<P, Inner, FROM, TO>
 where
-	P: PalletInfoAccess + GetStorageVersion<CurrentStorageVersion = StorageVersion>,
+	P: PalletInfoAccess + GetStorageVersion<InCodeStorageVersion = StorageVersion>,
 	Inner: OnRuntimeUpgrade,
 {
 	#[cfg(feature = "try-runtime")]
@@ -215,9 +215,9 @@ mod test_versioned_upgrade {
 	}
 
 	impl GetStorageVersion for Pallet {
-		type CurrentStorageVersion = StorageVersion;
+		type InCodeStorageVersion = StorageVersion;
 
-		fn current_storage_version() -> StorageVersion {
+		fn in_code_storage_version() -> StorageVersion {
 			PALLET_VERSION
 		}
 

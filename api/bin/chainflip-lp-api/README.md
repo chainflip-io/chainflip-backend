@@ -16,26 +16,16 @@ The `signing_key_file` should be the broker's private key for their on-chain acc
 ```sh
 chainflip-lp-api
 
-USAGE:
-    chainflip-lp-api [OPTIONS]
+Usage: chainflip-lp-api [OPTIONS]
 
-OPTIONS:
-    -h, --help
-            Print help information
-
-        --port <PORT>
-            The port number on which the LP server will listen for connections. Use 0 to assign a
-            random port. [default: 80]
-
-        --state_chain.signing_key_file <SIGNING_KEY_FILE>
-            A path to a file that contains the LPs secret key for signing extrinsics. 
-            [default: /etc/chainflip/keys/signing_key_file]
-
-        --state_chain.ws_endpoint <WS_ENDPOINT>
-            The state chain nodes RPC endpoint. [default: ws://localhost:9944]
-
-    -v, --version 
-        Print the version of the API
+Options:
+      --port <PORT>                                      The port number on which the LP server will listen for connections. Use 0 to assign a random port. [default: 80]
+      --state_chain.ws_endpoint <WS_ENDPOINT>            The state chain node's RPC endpoint. [default: ws://localhost:9944]
+      --state_chain.signing_key_file <SIGNING_KEY_FILE>  A path to a file that contains the LP's secret key for signing extrinsics. [default: /etc/chainflip/keys/signing_key_file]
+      --health_check.hostname <HEALTH_CHECK_HOSTNAME>    Hostname for this server's healthcheck. Requires the <HEALTH_CHECK_PORT> parameter to be given as well.
+      --health_check.port <HEALTH_CHECK_PORT>            Port for this server's healthcheck. Requires the <HEALTH_CHECK_HOSTNAME> parameter to be given as well.
+  -h, --help                                             Print help
+  -V, --version                                          Print version
 ```
 
 ## Working Example

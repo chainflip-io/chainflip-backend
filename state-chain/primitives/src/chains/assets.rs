@@ -256,7 +256,7 @@ macro_rules! assets {
 					impl TryFrom<any::Asset> for SerdeImplicitChainAsset {
 						type Error = ();
 
-						#[allow(unreachable_patterns)]
+
 						#[allow(unused_variables)]
 						fn try_from(value: any::Asset) -> Result<Self, Self::Error> {
 							match value {

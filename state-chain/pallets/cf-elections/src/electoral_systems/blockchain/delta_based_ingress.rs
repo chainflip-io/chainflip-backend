@@ -198,9 +198,9 @@ where
 								None => (None, Some(*consensus_ingress_total)),
 								Some(pending_ingress_total) => {
 									if pending_ingress_total.block_number <
-										consensus_ingress_total.block_number && pending_ingress_total
-										.amount <
-										consensus_ingress_total.amount
+										consensus_ingress_total.block_number &&
+										pending_ingress_total.amount <
+											consensus_ingress_total.amount
 									{
 										if pending_ingress_total.block_number <= *chain_tracking {
 											(
