@@ -69,7 +69,6 @@ const requestSwapDepositAddress = async (
 
   const eventMatcher = chainflip.events.swapping.SwapDepositAddressReady;
 
-  // queue = queue.then(async () => {
   const unsubscribe = await chainflip.tx.swapping
     .requestSwapDepositAddressWithAffiliates(...broker.buildExtrinsicPayload(params, 'backspin'))
     .signAndSend(account, { nonce: getNonce() }, (result) => {
@@ -90,9 +89,7 @@ const requestSwapDepositAddress = async (
     });
 
   const event = await promise.finally(unsubscribe);
-  // });
 
-  // const event = await promise;
   const sourceAsset = getInternalAsset({ chain: params.srcChain, asset: params.srcAsset });
   const destinationAsset = getInternalAsset({ chain: params.destChain, asset: params.destAsset });
 
@@ -137,14 +134,14 @@ const requestSwapDepositAddress = async (
   }
 
   if (params.dcaParams) {
-    assert.deepStrictEqual(event.dcaParameters?.numberOfChunks, params.dcaParams.numberOfChunks);
-    assert.deepStrictEqual(event.dcaParameters.chunkInterval, params.dcaParams.chunkIntervalBlocks);
+    assert.strictEqual(event.dcaParameters?.numberOfChunks, params.dcaParams.numberOfChunks);
+    assert.strictEqual(event.dcaParameters.chunkInterval, params.dcaParams.chunkIntervalBlocks);
   }
 
   if (params.ccmParams) {
-    assert.deepStrictEqual(event.channelMetadata?.message, params.ccmParams.message);
-    assert.deepStrictEqual(event.channelMetadata.gasBudget, BigInt(params.ccmParams.gasBudget));
-    assert.deepStrictEqual(event.channelMetadata.cfParameters, params.ccmParams.cfParameters);
+    assert.strictEqual(event.channelMetadata?.message, params.ccmParams.message);
+    assert.strictEqual(event.channelMetadata.gasBudget, BigInt(params.ccmParams.gasBudget));
+    assert.strictEqual(event.channelMetadata.cfParameters, params.ccmParams.cfParameters);
   }
 };
 
@@ -195,7 +192,7 @@ const refundCases = entries(addresses).flatMap(([srcChain, addrs]) =>
   ),
 );
 
-const dcaCase: NewSwapRequest = {
+const withDca: NewSwapRequest = {
   ...refundCases[0],
   dcaParams: {
     numberOfChunks: 7200,
@@ -213,7 +210,7 @@ const withAffiliates: NewSwapRequest = {
   affiliates: [{ account: account2.address, commissionBps: 100 }],
 };
 
-const ccmCase: NewSwapRequest = {
+const withCcm: NewSwapRequest = {
   ...baseCases.find((c) => c.destChain === 'Arbitrum')!,
   ccmParams: {
     message: '0xcafebabe',
@@ -226,7 +223,7 @@ const main = async () => {
   await using api = await getChainflipApi();
   let nonce = (await api.rpc.system.accountNextIndex(account.address)).toJSON() as number;
 
-  const allCases = [...baseCases, ...refundCases, dcaCase, withCommission, withAffiliates, ccmCase];
+  const allCases = [...baseCases, ...refundCases, withDca, withCommission, withAffiliates, withCcm];
   const results = await Promise.allSettled(
     allCases.map((params) => requestSwapDepositAddress(api, params, () => nonce++)),
   );
@@ -236,13 +233,13 @@ const main = async () => {
 
   results.forEach((result, i) => {
     if (result.status === 'fulfilled') {
-      console.log('✅', `request swap deposit address with affiliates ${i} passed`);
+      console.log('✅', `swap channel ${i} opened successfully`);
     } else {
       // realism 😔
       success = false;
       console.error(
         '❌',
-        `request swap deposit address with affiliates ${i} failed`,
+        `swap channel ${i} couldn't be opened`,
         (result.reason as Error).message,
         allCases[i],
       );
