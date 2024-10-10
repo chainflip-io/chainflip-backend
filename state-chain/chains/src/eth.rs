@@ -81,7 +81,11 @@ impl EthereumTrackedData {
 			.saturating_add(self.priority_fee)
 	}
 
-	pub fn calculate_ccm_gas_limit(&self, gas_budget: GasAmount) -> GasAmount {
+	pub fn calculate_ccm_gas_limit(
+		&self,
+		gas_budget: GasAmount,
+		_message_length: u128,
+	) -> GasAmount {
 		use crate::eth::fees::*;
 		gas_budget.saturating_add(CCM_GAS_OVERHEAD).min(MAX_GAS_LIMIT)
 	}
@@ -143,8 +147,9 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 		&self,
 		_asset: <Ethereum as Chain>::ChainAsset,
 		gas_budget: GasAmount,
+		message_length: u128,
 	) -> Option<<Ethereum as Chain>::ChainAmount> {
-		let gas_limit = self.calculate_ccm_gas_limit(gas_budget);
+		let gas_limit = self.calculate_ccm_gas_limit(gas_budget, message_length);
 		Some(self.calculate_transaction_fee(gas_limit))
 	}
 }

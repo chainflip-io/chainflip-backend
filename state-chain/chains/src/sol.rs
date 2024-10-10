@@ -266,6 +266,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		&self,
 		asset: <Solana as Chain>::ChainAsset,
 		gas_budget: cf_primitives::GasAmount,
+		_message_length: u128,
 	) -> Option<<Solana as Chain>::ChainAmount> {
 		let gas_limit = SolTrackedData::calculate_ccm_compute_limit(gas_budget, asset);
 		Some(self.calculate_transaction_fee(gas_limit))

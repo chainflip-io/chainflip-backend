@@ -751,6 +751,7 @@ pub trait FeeEstimationApi<C: Chain> {
 		&self,
 		asset: C::ChainAsset,
 		gas_budget: GasAmount,
+		message_length: u128
 	) -> Option<C::ChainAmount>;
 }
 
@@ -767,6 +768,7 @@ impl<C: Chain> FeeEstimationApi<C> for () {
 		&self,
 		_asset: C::ChainAsset,
 		_gas_budget: GasAmount,
+		_message_length: u128
 	) -> Option<C::ChainAmount> {
 		None
 	}

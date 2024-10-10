@@ -157,6 +157,7 @@ impl FeeEstimationApi<Bitcoin> for BitcoinTrackedData {
 		&self,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 		_gas_budget: GasAmount,
+		_message_length: u128,
 	) -> Option<<Bitcoin as Chain>::ChainAmount> {
 		None
 	}

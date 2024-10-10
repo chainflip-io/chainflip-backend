@@ -246,15 +246,20 @@ macro_rules! impl_transaction_builder_for_evm_chain {
 			/// Calculate the gas limit for a this evm chain's call.
 			fn calculate_gas_limit(call: &$chain_api<$env>) -> Option<U256> {
 				if let Some(gas_budget) = call.gas_budget() {
-					let gas_limit = $chain_tracking::chain_state()
+					if let Some(message_length) = call.message_length() {
+						let gas_limit = $chain_tracking::chain_state()
 						.or_else(||{
 							log::warn!("No chain data for {}. This should never happen. Please check Chain Tracking data.", $chain::NAME);
 							None
 						})?
 						.tracked_data
-						.calculate_ccm_gas_limit(gas_budget);
+						.calculate_ccm_gas_limit(gas_budget, call.message_length() as u128);
 
-					Some(gas_limit.into())
+						Some(gas_limit.into())
+					} else {
+						log::warn!("CCM calls should have a message length");
+						None
+					}
 				} else {
 					None
 				}

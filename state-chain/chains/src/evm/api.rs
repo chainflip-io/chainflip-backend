@@ -151,6 +151,10 @@ pub trait EvmCall {
 	fn gas_budget(&self) -> Option<GasAmount> {
 		None
 	}
+
+	fn message_length(&self) -> Option<usize> {
+		None
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -175,6 +179,10 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 
 	pub fn gas_budget(&self) -> Option<GasAmount> {
 		self.call.gas_budget()
+	}
+
+	pub fn message_length(&self) -> Option<usize> {
+		self.call.message_length()
 	}
 
 	pub fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {

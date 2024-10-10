@@ -314,6 +314,7 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 		&self,
 		_asset: <Polkadot as Chain>::ChainAsset,
 		_gas_budget: GasAmount,
+		_message_length: u128,
 	) -> Option<<Polkadot as Chain>::ChainAmount> {
 		None
 	}

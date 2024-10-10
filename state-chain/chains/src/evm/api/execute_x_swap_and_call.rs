@@ -66,6 +66,10 @@ impl EvmCall for ExecutexSwapAndCall {
 	fn gas_budget(&self) -> Option<GasAmount> {
 		Some(self.gas_budget)
 	}
+
+	fn message_length(&self) -> Option<usize> {
+		Some(self.message.len())
+	}
 }
 
 #[cfg(test)]
