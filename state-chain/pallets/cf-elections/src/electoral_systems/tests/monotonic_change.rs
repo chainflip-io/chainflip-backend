@@ -140,10 +140,10 @@ fn consensus_when_all_votes_the_same_but_different_blocks() {
 		generate_votes_with_different_slots(
 			SUCCESS_THRESHOLD,
 			MonotonicChangeVote { value: 1, block: 0 },
-			0,
+			3,
 			MonotonicChangeVote { value: 0, block: 0 },
 		),
-		Some((1, 4)),
+		Some((1, 6)),
 	);
 	with_default_state().expect_consensus(
 		generate_votes_with_different_slots(
