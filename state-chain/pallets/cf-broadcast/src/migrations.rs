@@ -7,5 +7,5 @@ mod migrate_timeouts;
 pub type PalletMigration<T, I> = (
 	VersionedMigration<Pallet<T, I>, initialize_broadcast_timeout_storage::Migration<T, I>, 6, 7>,
 	VersionedMigration<Pallet<T, I>, migrate_timeouts::Migration<T, I>, 7, 8>,
-	PlaceholderMigration<Pallet<T, I>, 8>,
+	PlaceholderMigration<Pallet<T, I>, 9>,
 );
