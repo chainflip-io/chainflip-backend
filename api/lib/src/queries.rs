@@ -17,7 +17,7 @@ use tracing::log;
 use utilities::task_scope;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo<C: Chain> {
-	deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
+	pub deposit_address: <C::ChainAccount as ToHumanreadableAddress>::Humanreadable,
 	source_asset: any::Asset,
 	destination_asset: any::Asset,
 }

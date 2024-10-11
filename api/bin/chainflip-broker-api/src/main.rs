@@ -1,7 +1,7 @@
 use cf_utilities::task_scope::{task_scope, Scope};
 use chainflip_api::{
 	self,
-	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
+	primitives::{self, AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
 	settings::StateChain,
 	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
 	SwapDepositAddress, WithdrawFeesDetail,
@@ -41,6 +41,11 @@ pub trait Rpc {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "get_open_btc_swap_addresses", aliases = ["broker_getOpenBtcSwapAddresses"])]
+	async fn get_open_btc_swap_addresses(
+		&self,
+	) -> RpcResult<Vec<String>>;
 }
 
 pub struct RpcServerImpl {
@@ -105,6 +110,13 @@ impl RpcServer for RpcServerImpl {
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
+	}
+
+	async fn get_open_btc_swap_addresses(
+		&self,
+	) -> RpcResult<Vec<String>> {
+		let result = self.api.query_api().get_open_swap_channels::<primitives::chains::Bitcoin>(None).await?;
+		Ok(result.iter().map(|channel| channel.deposit_address.clone()).collect())
 	}
 }
 
