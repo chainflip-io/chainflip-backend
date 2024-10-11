@@ -8,6 +8,7 @@ use crate::{
 	sol::{
 		commitment_config::CommitmentConfig,
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
+		rpc_client_api::RpcBlockConfig,
 	},
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
@@ -15,17 +16,19 @@ use crate::{
 	},
 };
 use anyhow::Result;
+use cf_chains::sol::SolHash;
 use futures::FutureExt;
 use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
 use state_chain_runtime::{
 	chainflip::solana_elections::{
 		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystem,
-		SolanaFeeTracking, SolanaIngressTracking, SolanaNonceTracking, TransactionSuccessDetails,
+		SolanaFeeTracking, SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking,
+		TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use utilities::{task_scope, task_scope::Scope};
 
 #[derive(Clone)]
@@ -140,6 +143,25 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 	}
 }
 
+#[derive(Clone)]
+struct SolanaLivenessVoter {
+	client: SolRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
+	async fn vote(
+		&self,
+		_settings: <SolanaLiveness as ElectoralSystem>::ElectoralSettings,
+		slot: <SolanaLiveness as ElectoralSystem>::ElectionProperties,
+	) -> Result<<<SolanaLiveness as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error> {
+		Ok(SolHash::from_str(
+			&self.client.get_block(slot, RpcBlockConfig::default()).await.blockhash,
+		)
+		.map_err(|e| anyhow::anyhow!("Failed to convert blockhash String to SolHash: {e}"))?)
+	}
+}
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: SolRetryRpcClient,
@@ -165,7 +187,8 @@ where
 						SolanaFeeTrackingVoter { client: client.clone() },
 						SolanaIngressTrackingVoter { client: client.clone() },
 						SolanaNonceTrackingVoter { client: client.clone() },
-						SolanaEgressWitnessingVoter { client },
+						SolanaEgressWitnessingVoter { client: client.clone() },
+						SolanaLivenessVoter { client },
 					)),
 				)
 				.continuously_vote()

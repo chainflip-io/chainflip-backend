@@ -34,8 +34,9 @@ macro_rules! assert_err {
 	};
 }
 
-/// Note that the resulting `threshold` is the maximum number
-/// of parties *not* enough to generate a signature,
+/// Note that the resulting `threshold` is the maximum number of parties *not* enough to generate a
+/// signature,
+///
 /// i.e. at least `t+1` parties are required.
 /// This follows the notation in the multisig library that
 /// we are using and in the corresponding literature.

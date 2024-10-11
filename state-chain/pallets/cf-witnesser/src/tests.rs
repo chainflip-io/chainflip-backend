@@ -489,10 +489,9 @@ fn setup_witness_authorities(
 ) -> (Box<RuntimeCall>, CallHash) {
 	// Setup authorities and variables.
 	let authorities = authority_ids
-		.map(|v| {
+		.inspect(|v| {
 			let _ =
-				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&v);
-			v
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(v);
 		})
 		.collect::<Vec<_>>();
 	MockEpochInfo::next_epoch(authorities.clone());

@@ -3,7 +3,7 @@ use cf_primitives::PolkadotBlockNumber;
 use futures_core::Future;
 use http::uri::Uri;
 use jsonrpsee::{
-	core::{client::ClientT, traits::ToRpcParams, Error as JsonRpseeError},
+	core::{client::ClientT, traits::ToRpcParams},
 	http_client::{HttpClient, HttpClientBuilder},
 };
 use serde_json::value::RawValue;
@@ -41,7 +41,7 @@ impl PolkadotHttpClient {
 struct Params(Option<Box<RawValue>>);
 
 impl ToRpcParams for Params {
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, JsonRpseeError> {
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 		Ok(self.0)
 	}
 }

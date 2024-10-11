@@ -108,19 +108,18 @@ where
 									// Note if the processed indices loaded from the database are not aligned to the `witness_period`, we will skip blocks.
 									// For example: If the `witness_period` is 5, and the database states 0..3 are witnessed. Then blocks 3..5 will not be
 									// witnessed as we cannot partially witness a `witness_period`, but we will witness 5..10 etc.
-
-									for unprocessed_root in itertools::unfold(
-										if processed_indices.is_empty() {
-											Some(epoch.info.1)
-										} else if let Some(next_unprocessed) = <Inner::Chain as Chain>::checked_block_witness_next(processed_indices.iter(true).last().unwrap()) {
-											Some(std::cmp::max(next_unprocessed, epoch.info.1))
-										} else {
-											None
-										},
-										|optional_next_unprocessed_root| {
+									let mut optional_next_unprocessed_root = if processed_indices.is_empty() {
+										Some(epoch.info.1)
+									} else if let Some(next_unprocessed) = <Inner::Chain as Chain>::checked_block_witness_next(processed_indices.iter(true).last().unwrap()) {
+										Some(std::cmp::max(next_unprocessed, epoch.info.1))
+									} else {
+										None
+									};
+									for unprocessed_root in std::iter::from_fn(
+										move || {
 											if let Some(next_unprocessed_root) = optional_next_unprocessed_root.as_mut().filter(|next_unprocessed_root| **next_unprocessed_root < header.index) {
 												let next_unprocessed_root = *next_unprocessed_root;
-												*optional_next_unprocessed_root = <Inner::Chain as Chain>::checked_block_witness_next(next_unprocessed_root);
+												optional_next_unprocessed_root = <Inner::Chain as Chain>::checked_block_witness_next(next_unprocessed_root);
 												Some(next_unprocessed_root)
 											} else {
 												None

@@ -145,6 +145,7 @@ jobs:
           echo $MAIN_VERSION
 
       - name: Install solana ☀️
+        if: inputs.run-job
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
 

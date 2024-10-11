@@ -178,7 +178,7 @@ pub mod pallet {
 		pub call: Call<T>,
 	}
 
-	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
 		/// A cache of all the range orders that exist in the pool. This must be kept up to date
@@ -1740,7 +1740,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		orders: u32,
 	) -> Result<PoolOrderbook, DispatchError> {
-		let orders = sp_std::cmp::max(sp_std::cmp::min(orders, 16384), 1);
+		let orders = orders.clamp(1, 16384);
 
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		let pool_state =

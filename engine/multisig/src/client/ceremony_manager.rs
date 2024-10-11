@@ -711,7 +711,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 	}
 
 	/// Process ceremony data arriving from a peer,
-	fn process_data<Chain: ChainSigning>(
+	fn process_data<Chain>(
 		&mut self,
 		sender_id: AccountId,
 		ceremony_id: CeremonyId,
@@ -763,7 +763,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 
 	/// Returns the state for the given ceremony id if it exists,
 	/// otherwise creates a new unauthorized one
-	fn get_state_or_create_unauthorized<Chain: ChainSigning>(
+	fn get_state_or_create_unauthorized<Chain>(
 		&mut self,
 		ceremony_id: CeremonyId,
 		scope: &Scope<'_, anyhow::Error>,
@@ -844,7 +844,7 @@ enum CeremonyRequestState<Ceremony: CeremonyTrait> {
 }
 
 impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
-	fn spawn<Chain: ChainSigning>(
+	fn spawn<Chain>(
 		ceremony_id: CeremonyId,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 		scope: &Scope<'_, anyhow::Error>,

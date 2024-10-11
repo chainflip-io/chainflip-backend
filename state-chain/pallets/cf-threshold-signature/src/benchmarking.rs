@@ -54,6 +54,7 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 	authority_set
 }
 
+#[allow(clippy::multiple_bound_locations)]
 #[instance_benchmarks( where
 	T: frame_system::Config
 	+ pallet_cf_validator::Config
@@ -113,11 +114,13 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn set_threshold_signature_timeout() {
-		let old_timeout: BlockNumberFor<T> = 5u32.into();
-		ThresholdSignatureResponseTimeout::<T, I>::put(old_timeout);
-		let new_timeout: BlockNumberFor<T> = old_timeout + 1u32.into();
-		let call = Call::<T, I>::set_threshold_signature_timeout { new_timeout };
+	fn update_pallet_config() {
+		let old_timeout = 5u32;
+		ThresholdSignatureResponseTimeout::<T, I>::put(BlockNumberFor::<T>::from(old_timeout));
+		let new_timeout = old_timeout + 1u32;
+		let call = Call::<T, I>::update_pallet_config {
+			update: PalletConfigUpdate::ThresholdSignatureResponseTimeout { new_timeout },
+		};
 
 		#[block]
 		{
@@ -126,7 +129,10 @@ mod benchmarks {
 			));
 		}
 
-		assert_eq!(ThresholdSignatureResponseTimeout::<T, I>::get(), new_timeout);
+		assert_eq!(
+			ThresholdSignatureResponseTimeout::<T, I>::get(),
+			BlockNumberFor::<T>::from(new_timeout)
+		);
 	}
 
 	#[benchmark]
@@ -323,21 +329,5 @@ mod benchmarks {
 		))
 	}
 
-	#[benchmark]
-	fn set_keygen_response_timeout() {
-		let old_timeout: BlockNumberFor<T> = 5u32.into();
-		KeygenResponseTimeout::<T, I>::put(old_timeout);
-		let new_timeout: BlockNumberFor<T> = old_timeout + 1u32.into();
-		// ensure it's a different value for most expensive path.
-		let call = Call::<T, I>::set_keygen_response_timeout { new_timeout };
-		#[block]
-		{
-			assert_ok!(
-				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
-			);
-		}
-
-		assert_eq!(KeygenResponseTimeout::<T, I>::get(), new_timeout);
-	}
 	// NOTE: Test suite not included because of dependency mismatch between benchmarks and mocks.
 }

@@ -18,7 +18,6 @@ fn extract_slot_from_digest_item(item: &DigestItem) -> Option<Slot> {
 		}
 	})
 }
-
 pub struct MissedAuraSlots;
 
 impl MissedAuthorshipSlots for MissedAuraSlots {
@@ -50,14 +49,18 @@ mod test_missed_authorship_slots {
 	use super::*;
 	use codec::Encode;
 	use frame_support::{
-		construct_runtime, derive_impl, parameter_types,
-		sp_runtime::{testing::UintAuthorityId, traits::IdentityLookup, BuildStorage, Digest},
+		construct_runtime, derive_impl,
+		sp_runtime::{testing::UintAuthorityId, BuildStorage, Digest},
 		traits::{ConstU32, ConstU64, OnInitialize},
 	};
 	use sp_consensus_aura::ed25519::AuthorityId;
 	use sp_core::ConstBool;
 
 	type Block = frame_system::mocking::MockBlock<Test>;
+
+	fn current_aura_slot() -> Slot {
+		pallet_aura::CurrentSlot::<crate::Runtime>::get()
+	}
 
 	construct_runtime!(
 		pub enum Test
@@ -68,35 +71,9 @@ mod test_missed_authorship_slots {
 		}
 	);
 
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-	}
-
 	#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 	impl frame_system::Config for Test {
-		type BaseCallFilter = frame_support::traits::Everything;
-		type BlockWeights = ();
-		type BlockLength = ();
-		type DbWeight = ();
-		type RuntimeOrigin = RuntimeOrigin;
-		type Nonce = u64;
-		type RuntimeCall = RuntimeCall;
-		type Hash = sp_core::H256;
-		type Hashing = ::sp_runtime::traits::BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
 		type Block = Block;
-		type RuntimeEvent = RuntimeEvent;
-		type BlockHashCount = BlockHashCount;
-		type Version = ();
-		type PalletInfo = PalletInfo;
-		type AccountData = ();
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
-		type SystemWeightInfo = ();
-		type SS58Prefix = ();
-		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<5>;
 	}
 
 	const SLOT_DURATION: u64 = 6;
@@ -113,6 +90,7 @@ mod test_missed_authorship_slots {
 		type DisabledValidators = ();
 		type MaxAuthorities = ConstU32<10>;
 		type AllowMultipleBlocksPerSlot = ConstBool<false>;
+		type SlotDuration = ConstU64<SLOT_DURATION>;
 	}
 
 	pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
@@ -180,19 +158,19 @@ mod test_missed_authorship_slots {
 			simulate_block_authorship(3, |missed_slots| {
 				assert_eq!(missed_slots, [2].map(to_slot));
 			});
-			assert_eq!(Aura::current_slot(), to_slot(3));
+			assert_eq!(current_aura_slot(), to_slot(3));
 
 			// Author for the next slot, assert we haven't missed a slot.
 			simulate_block_authorship(4, |missed_slots| {
 				assert!(missed_slots.is_empty());
 			});
-			assert_eq!(Aura::current_slot(), to_slot(4));
+			assert_eq!(current_aura_slot(), to_slot(4));
 
 			// Author for slot 7, assert we missed slots 5 and 6.
 			simulate_block_authorship(7, |missed_slots| {
 				assert_eq!(missed_slots, [5, 6].map(to_slot));
 			});
-			assert_eq!(Aura::current_slot(), to_slot(7));
+			assert_eq!(current_aura_slot(), to_slot(7));
 		});
 	}
 }

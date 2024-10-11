@@ -1,5 +1,8 @@
 use crate::{chainflip::Offence, ValidatorInfo};
-use cf_chains::dot::PolkadotAccountId;
+use cf_chains::{
+	dot::PolkadotAccountId,
+	sol::{api::DurableNonceAndAccount, SolAddress, SolSignature},
+};
 use cf_primitives::AssetAmount;
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::AccountId32;
@@ -11,7 +14,7 @@ use sp_api::decl_runtime_apis;
 use sp_runtime::BoundedVec;
 use sp_std::vec::Vec;
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct ExternalChainsBlockHeight {
 	pub bitcoin: u64,
 	pub ethereum: u64,
@@ -19,13 +22,13 @@ pub struct ExternalChainsBlockHeight {
 	pub solana: u64,
 	pub arbitrum: u64,
 }
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct BtcUtxos {
 	pub total_balance: u64,
 	pub count: u32,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct EpochState {
 	pub blocks_per_epoch: u32,
 	pub current_epoch_started_at: u32,
@@ -34,12 +37,12 @@ pub struct EpochState {
 	pub rotation_phase: String,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct RedemptionsInfo {
 	pub total_balance: u128,
 	pub count: u32,
 }
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct PendingBroadcasts {
 	pub ethereum: u32,
 	pub bitcoin: u32,
@@ -47,14 +50,14 @@ pub struct PendingBroadcasts {
 	pub arbitrum: u32,
 	pub solana: u32,
 }
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct PendingTssCeremonies {
 	pub evm: u32,
 	pub bitcoin: u32,
 	pub polkadot: u32,
 	pub solana: u32,
 }
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct OpenDepositChannels {
 	pub ethereum: u32,
 	pub bitcoin: u32,
@@ -62,7 +65,7 @@ pub struct OpenDepositChannels {
 	pub arbitrum: u32,
 	pub solana: u32,
 }
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct FeeImbalance<A> {
 	pub ethereum: VaultImbalance<A>,
 	pub polkadot: VaultImbalance<A>,
@@ -83,7 +86,7 @@ impl<A> FeeImbalance<A> {
 	}
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct AuthoritiesInfo {
 	pub authorities: u32,
 	pub online_authorities: u32,
@@ -91,19 +94,34 @@ pub struct AuthoritiesInfo {
 	pub online_backups: u32,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct LastRuntimeUpgradeInfo {
 	pub spec_version: u32,
 	pub spec_name: sp_runtime::RuntimeString,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct FlipSupply {
 	pub total_supply: u128,
 	pub offchain_supply: u128,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug)]
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct SolanaNonces {
+	pub available: Vec<DurableNonceAndAccount>,
+	pub unavailable: Vec<SolAddress>,
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct ActivateKeysBroadcastIds {
+	pub ethereum: Option<u32>,
+	pub bitcoin: Option<u32>,
+	pub polkadot: Option<u32>,
+	pub arbitrum: Option<u32>,
+	pub solana: (Option<u32>, Option<SolSignature>),
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct MonitoringData {
 	pub external_chains_height: ExternalChainsBlockHeight,
 	pub btc_utxos: BtcUtxos,
@@ -119,6 +137,10 @@ pub struct MonitoringData {
 	pub pending_swaps: u32,
 	pub dot_aggkey: PolkadotAccountId,
 	pub flip_supply: FlipSupply,
+	pub sol_aggkey: SolAddress,
+	pub sol_onchain_key: SolAddress,
+	pub sol_nonces: SolanaNonces,
+	pub activating_key_broadcast_ids: ActivateKeysBroadcastIds,
 }
 
 decl_runtime_apis!(
@@ -136,6 +158,10 @@ decl_runtime_apis!(
 		fn cf_open_deposit_channels_count() -> OpenDepositChannels;
 		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount>;
 		fn cf_build_version() -> LastRuntimeUpgradeInfo;
+		fn cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds;
+		fn cf_sol_nonces() -> SolanaNonces;
+		fn cf_sol_aggkey() -> SolAddress;
+		fn cf_sol_onchain_key() -> SolAddress;
 		fn cf_monitoring_data() -> MonitoringData;
 		fn cf_accounts_info(
 			accounts: BoundedVec<AccountId32, sp_core::ConstU32<10>>,

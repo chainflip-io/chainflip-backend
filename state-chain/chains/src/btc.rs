@@ -1,6 +1,7 @@
 pub mod api;
 pub mod benchmarking;
 pub mod deposit_address;
+pub mod smart_contract_encoding;
 pub mod utxo_selection;
 
 extern crate alloc;
@@ -39,7 +40,10 @@ pub const CHANGE_ADDRESS_SALT: u32 = 0;
 
 // The bitcoin script generated from the bitcoin address should not exceed this value according to
 // our construction
-pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
+pub const MAX_BITCOIN_SCRIPT_LENGTH: usize = 128;
+
+// Bitcion does not support push operations of data larger than this size:
+const MAX_PUSHABLE_BYTES: u32 = 520;
 
 // We must send strictly greater than this amount to avoid hitting the Bitcoin dust
 // limit
@@ -116,7 +120,11 @@ pub struct BitcoinTrackedData {
 impl Default for BitcoinTrackedData {
 	#[track_caller]
 	fn default() -> Self {
-		panic!("You should not use the default chain tracking, as it's meaningless.");
+		frame_support::print("You should not use the default chain tracking, as it's meaningless.");
+
+		BitcoinTrackedData {
+			btc_fee_info: BitcoinFeeInfo { sats_per_kilobyte: Default::default() },
+		}
 	}
 }
 
@@ -579,7 +587,12 @@ impl ScriptPubkey {
 			]),
 			ScriptPubkey::OtherSegwit { version, program } => BitcoinScript::new(&[
 				BitcoinOp::PushVersion { version: *version },
-				BitcoinOp::PushBytes { bytes: program.clone() },
+				BitcoinOp::PushBytes {
+					bytes: program
+						.to_vec()
+						.try_into()
+						.expect("MAX_SEGWIT_PROGRAM_BYTES < MAX_PUSHABLE_BYTES"),
+				},
 			]),
 		}
 	}
@@ -691,6 +704,7 @@ pub struct BitcoinTransaction {
 	pub outputs: Vec<BitcoinOutput>,
 	pub signer_and_signatures: Option<(AggKey, Vec<Signature>)>,
 	pub transaction_bytes: Vec<u8>,
+	/// utxos controlled by the previous epoch key:
 	pub old_utxo_input_indices: VecDeque<u32>,
 }
 
@@ -920,7 +934,7 @@ impl BitcoinTransaction {
 	}
 }
 
-trait SerializeBtc {
+pub trait SerializeBtc {
 	/// Encodes this item to a byte buffer.
 	fn btc_encode_to(&self, buf: &mut Vec<u8>);
 	/// The exact size this object will have once serialized.
@@ -953,22 +967,32 @@ impl<T: SerializeBtc> SerializeBtc for &[T] {
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum BitcoinOp {
 	PushUint { value: u32 },
-	PushBytes { bytes: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
+	PushBytes { bytes: BoundedVec<u8, ConstU32<MAX_PUSHABLE_BYTES>> },
 	Drop,
 	CheckSig,
 	Dup,
 	Hash160,
 	EqualVerify,
 	Equal,
-	// Not part of the bitcoin spec, implemented for convenience
+	Return,
+	// The following are not part of the bitcoin spec, implemented for convenience:
 	PushArray20 { bytes: [u8; 20] },
 	PushArray32 { bytes: [u8; 32] },
 	PushVersion { version: u8 },
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinScript {
-	bytes: BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>,
+	bytes: Vec<u8>,
+}
+
+// We only store (spendable) BitcoinScripts that we authored ourselves.
+// For these, the max encoded length is MAX_BITCOIN_SCRIPT_LENGTH.
+// For anything else, we don't need MaxEncodedLen.
+impl MaxEncodedLen for BitcoinScript {
+	fn max_encoded_len() -> usize {
+		MAX_BITCOIN_SCRIPT_LENGTH
+	}
 }
 
 impl BitcoinScript {
@@ -977,11 +1001,11 @@ impl BitcoinScript {
 		for op in ops.iter() {
 			op.btc_encode_to(&mut bytes);
 		}
-		Self { bytes: bytes.try_into().unwrap() }
+		Self { bytes }
 	}
 
 	pub fn raw(self) -> Vec<u8> {
-		self.bytes.into_inner()
+		self.bytes
 	}
 }
 
@@ -1056,6 +1080,7 @@ impl SerializeBtc for BitcoinOp {
 				} else {
 					buf.push(0x50 + *version);
 				},
+			BitcoinOp::Return => buf.push(0x6a),
 		}
 	}
 
@@ -1084,6 +1109,7 @@ impl SerializeBtc for BitcoinOp {
 			BitcoinOp::Dup |
 			BitcoinOp::Hash160 |
 			BitcoinOp::EqualVerify |
+			BitcoinOp::Return |
 			BitcoinOp::Equal => 1,
 			BitcoinOp::PushArray20 { .. } => 21,
 			BitcoinOp::PushArray32 { .. } => 33,

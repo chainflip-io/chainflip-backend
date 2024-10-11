@@ -76,7 +76,8 @@ where
 		Self { initial_election_state: Some((extra, properties, state)), ..self }
 	}
 
-	pub fn build(self) -> TestContext<ES> {
+	// Useful for testing check_consensus since we already have an election.
+	pub fn build_with_initial_election(self) -> TestContext<ES> {
 		let setup = self.clone();
 		let mut electoral_access = MockAccess::<ES>::new(
 			self.unsynchronised_state,
@@ -95,6 +96,19 @@ where
 		assert_eq!(election.check_consensus(None, ConsensusVotes { votes: vec![] }).unwrap(), None);
 
 		TestContext { setup, electoral_access }
+	}
+
+	// We may want to test initialisation of elections within on finalise, so *don't* want to
+	// initialise an election in the utilities.
+	pub fn build(self) -> TestContext<ES> {
+		TestContext {
+			setup: self.clone(),
+			electoral_access: MockAccess::<ES>::new(
+				self.unsynchronised_state,
+				self.unsynchronised_settings,
+				self.electoral_settings,
+			),
+		}
 	}
 }
 
@@ -122,7 +136,8 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 			.check_consensus(None, consensus_votes)
 			.unwrap();
 
-		assert_eq!(new_consensus, expected_consensus);
+		// Should assert on some condition about the consensus.
+		assert_eq!(new_consensus.clone(), expected_consensus);
 
 		self.inner_force_consensus_update(
 			current_election_id,

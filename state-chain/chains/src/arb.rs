@@ -72,7 +72,12 @@ pub struct ArbitrumTrackedData {
 impl Default for ArbitrumTrackedData {
 	#[track_caller]
 	fn default() -> Self {
-		panic!("You should not use the default chain tracking, as it's meaningless.")
+		frame_support::print("You should not use the default chain tracking, as it's meaningless.");
+
+		ArbitrumTrackedData {
+			base_fee: Default::default(),
+			gas_limit_multiplier: Default::default(),
+		}
 	}
 }
 

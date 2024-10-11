@@ -1683,7 +1683,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			// Only boost on non-zero fee and if the channel isn't already boosted:
 			if T::SafeMode::get().boost_deposits_enabled &&
-				boost_fee > 0 && !matches!(boost_status, BoostStatus::Boosted { .. })
+				boost_fee > 0 &&
+				!matches!(boost_status, BoostStatus::Boosted { .. })
 			{
 				match Self::try_boosting(asset, amount, boost_fee, prewitnessed_deposit_id) {
 					Ok(BoostOutput { used_pools, total_fee: boost_fee_amount }) => {

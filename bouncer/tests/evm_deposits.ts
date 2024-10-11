@@ -174,18 +174,13 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
   }
 }
 
-async function main(numberOfNodes: 1 | 3 = 1) {
-  // There is some issue in CI with 3-nodes and these swaps.
-  // To investigate in PRO-1591
-  const depositTests = [];
-  if (numberOfNodes === 1) {
-    depositTests.push(
-      testSuccessiveDepositEvm('Eth', 'Dot'),
-      testSuccessiveDepositEvm('Flip', 'Btc'),
-      testSuccessiveDepositEvm('ArbEth', 'Dot'),
-      testSuccessiveDepositEvm('ArbUsdc', 'Btc'),
-    );
-  }
+async function main() {
+  const depositTests = Promise.all([
+    testSuccessiveDepositEvm('Eth', 'Dot'),
+    testSuccessiveDepositEvm('Flip', 'Btc'),
+    testSuccessiveDepositEvm('ArbEth', 'Dot'),
+    testSuccessiveDepositEvm('ArbUsdc', 'Btc'),
+  ]);
 
   const noDuplicatedWitnessingTest = Promise.all([
     testNoDuplicateWitnessing('Eth', 'Dot'),

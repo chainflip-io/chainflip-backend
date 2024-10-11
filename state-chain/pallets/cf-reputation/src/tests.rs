@@ -258,6 +258,7 @@ fn suspensions() {
 
 #[test]
 fn forgiveness() {
+	#[allow(non_local_definitions)]
 	impl OffenceList<Test> for AllOffences {
 		const OFFENCES: &'static [Self] = &[
 			AllOffences::ForgettingYourYubiKey,

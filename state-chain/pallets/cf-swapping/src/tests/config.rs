@@ -9,6 +9,7 @@ fn can_update_all_config_items() {
 		let new_flip_buy_interval = BlockNumberFor::<Test>::from(5678u32);
 		const NEW_MAX_SWAP_RETRY_DURATION: u32 = 69_u32;
 		const MAX_SWAP_REQUEST_DURATION: u32 = 420_u32;
+		const NEW_MINIMUM_CHUNK_SIZE: AssetAmount = 1;
 
 		// Check that the default values are different from the new ones
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
@@ -17,6 +18,7 @@ fn can_update_all_config_items() {
 		assert_ne!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
 		assert_ne!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_ne!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
+		assert_ne!(MinimumChunkSize::<Test>::get(Asset::Eth), NEW_MINIMUM_CHUNK_SIZE);
 
 		// Update all config items at the same time, and updates 2 separate max swap amounts.
 		assert_ok!(Swapping::update_pallet_config(
@@ -34,6 +36,10 @@ fn can_update_all_config_items() {
 				PalletConfigUpdate::FlipBuyInterval { interval: new_flip_buy_interval },
 				PalletConfigUpdate::SetMaxSwapRetryDuration { blocks: NEW_MAX_SWAP_RETRY_DURATION },
 				PalletConfigUpdate::SetMaxSwapRequestDuration { blocks: MAX_SWAP_REQUEST_DURATION },
+				PalletConfigUpdate::SetMinimumChunkSize {
+					asset: Asset::Eth,
+					size: NEW_MINIMUM_CHUNK_SIZE
+				},
 			]
 			.try_into()
 			.unwrap()
@@ -46,6 +52,7 @@ fn can_update_all_config_items() {
 		assert_eq!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
 		assert_eq!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_eq!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
+		assert_eq!(MinimumChunkSize::<Test>::get(Asset::Eth), NEW_MINIMUM_CHUNK_SIZE);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -69,7 +76,11 @@ fn can_update_all_config_items() {
 			}),
 			RuntimeEvent::Swapping(crate::Event::MaxSwapRequestDurationSet {
 				blocks: MAX_SWAP_REQUEST_DURATION
-			})
+			}),
+			RuntimeEvent::Swapping(crate::Event::MinimumChunkSizeSet {
+				asset: Asset::Eth,
+				amount: NEW_MINIMUM_CHUNK_SIZE
+			}),
 		);
 
 		// Make sure that only governance can update the config
@@ -124,9 +135,9 @@ fn max_swap_amount_can_be_removed() {
 		assert_eq!(
 			SwapQueue::<Test>::get(execute_at),
 			vec![
-				Swap::new(1, 1, from, to, max_swap, None, [FeeType::NetworkFee]),
+				Swap::new(1.into(), 1.into(), from, to, max_swap, None, [FeeType::NetworkFee]),
 				// New swap takes the full amount.
-				Swap::new(2, 2, from, to, amount, None, [FeeType::NetworkFee]),
+				Swap::new(2.into(), 2.into(), from, to, amount, None, [FeeType::NetworkFee]),
 			]
 		);
 		// No no funds are confiscated.
@@ -188,7 +199,7 @@ fn can_swap_below_max_amount() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS)),
-			vec![Swap::new(1, 1, from, to, amount, None, [FeeType::NetworkFee]),]
+			vec![Swap::new(1.into(), 1.into(), from, to, amount, None, [FeeType::NetworkFee]),]
 		);
 	});
 }
