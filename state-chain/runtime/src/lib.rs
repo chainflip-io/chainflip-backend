@@ -47,7 +47,7 @@ use cf_chains::{
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	sol::SolanaCrypto,
+	sol::{api::SolanaApi, SolanaCrypto},
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
@@ -270,6 +270,8 @@ impl pallet_cf_environment::Config for Runtime {
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
 	type SolanaVaultKeyWitnessedHandler = SolanaVault;
 	type SolanaNonceWatch = SolanaNonceTrackingTrigger;
+	type CloseSolanaContractSwapAccounts = SolanaApi<SolEnvironment>;
+	type SolanaBroadcaster = SolanaBroadcaster;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type BitcoinKeyProvider = BitcoinThresholdSigner;
 	type RuntimeSafeMode = RuntimeSafeMode;

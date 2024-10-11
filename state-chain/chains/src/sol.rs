@@ -22,7 +22,11 @@ pub mod transaction_builder;
 pub use crate::assets::sol::Asset as SolAsset;
 use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
-	consts::{LAMPORTS_PER_SIGNATURE, MAX_TRANSACTION_LENGTH, MICROLAMPORTS_PER_LAMPORT},
+	consts::{
+		LAMPORTS_PER_SIGNATURE, MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
+		MAX_TRANSACTION_LENGTH, MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
+		MICROLAMPORTS_PER_LAMPORT,
+	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
 	Signature as SolSignature, SlotNumber as SolBlockNumber,
@@ -146,7 +150,7 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
-	pub const COMPUTE_UNITS_PER_CLOSE_EVENT_ACCOUNTS: SolComputeLimit = 10_000u32;
+	pub const COMPUTE_UNITS_PER_CLOSE_CONTRACT_SWAP_ACCOUNTS: SolComputeLimit = 10_000u32;
 	pub const COMPUTE_UNITS_PER_CLOSE_ACCOUNT: SolComputeLimit = 10_000u32;
 
 	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
