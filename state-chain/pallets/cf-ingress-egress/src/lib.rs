@@ -1187,6 +1187,13 @@ pub mod pallet {
 				deposit_amount,
 				source_asset,
 				destination_asset,
+				Self::estimate_ccm_egress_fee(
+					source_asset,
+					destination_asset,
+					deposit_metadata.clone().channel_metadata.gas_budget,
+					deposit_metadata.clone().channel_metadata.clone().message.len(),
+				)
+				.into(),
 			) {
 				Ok(metadata) => metadata,
 				Err(reason) => {
@@ -1729,6 +1736,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount_after_fees.into(),
 					asset.into(),
 					destination_asset,
+					Self::estimate_ccm_egress_fee(
+						asset,
+						destination_asset.into(),
+						deposit_metadata.clone().channel_metadata.gas_budget,
+						deposit_metadata.clone().channel_metadata.clone().message.len(),
+					)
+					.into(),
 				) {
 					Ok(ccm_swap_metadata) => {
 						let swap_request_id = T::SwapRequestHandler::init_swap_request(
@@ -2093,6 +2107,41 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			amount_after_fees: available_amount.saturating_sub(fees_withheld),
 			fees_withheld,
 		}
+	}
+
+	/// Calculate the ingress amount to that needs to be swapped for egress gas.
+	///
+	/// Returns the amount of ingress asset that needs to be swapped for the gas asset.
+	/// That substraction will be done in `into_swap_metadata`.
+	pub fn estimate_ccm_egress_fee(
+		source_asset: TargetChainAsset<T, I>,
+		destination_asset: TargetChainAsset<C, I>,
+		gas_budget: GasAmount,
+		message_length: usize,
+	) -> <T::TargetChain as Chain>::ChainAmount {
+		// Fee estimate in destination chain's gas asset
+		let fee_estimate =
+			C::ChainTracking::estimate_ccm_fee(destination_asset, gas_budget, message_length)
+				.unwrap_or_else(|| {
+					log::warn!("Unable to get the ccm fee estimate for ${gas_budget:?} ${destination_asset:?}. Ignoring ccm egress fees.");
+					<C::TargetChain as Chain>::ChainAmount::zero()
+				});
+
+		// Check if destination chain's gas asset is the same as the source asset. It will only
+		// be the case for Sol->Sol, Eth->Eth, and ArbEth->ArbEth.
+		let fee_estimate_ccm = if source_asset == <C::TargetChain as Chain>::GAS_ASSET {
+			fee_estimate
+		} else {
+			T::AssetConverter::calculate_input_for_gas_output::<T::TargetChain>(
+					destination_asset,
+					fee_estimate,
+				)
+				.unwrap_or_else(|| {
+					log::warn!("Unable to convert input to gas for input of ${gas_budget:?} ${source_asset:?}->${destination_asset:?}. Ignoring ccm egress fees.");
+					<T::TargetChain as Chain>::ChainAmount::zero()
+				})
+		};
+		fee_estimate_ccm
 	}
 }
 

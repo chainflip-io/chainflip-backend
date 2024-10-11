@@ -651,6 +651,7 @@ pub struct CcmSwapAmounts {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum CcmFailReason {
 	UnsupportedForTargetChain,
+	InsufficientDepositAmount,
 	InvalidMetadata,
 	InvalidDestinationAddress,
 }
@@ -668,13 +669,16 @@ impl<Address> CcmDepositMetadataGeneric<Address> {
 		deposit_amount: AssetAmount,
 		source_asset: Asset,
 		destination_asset: Asset,
+		gas_budget: AssetAmount,
 	) -> Result<CcmSwapMetadataGeneric<Address>, CcmFailReason> {
-		let gas_budget = self.channel_metadata.gas_budget;
-
 		let destination_chain: ForeignChain = destination_asset.into();
 		if !destination_chain.ccm_support() {
 			return Err(CcmFailReason::UnsupportedForTargetChain)
+		} else if deposit_amount < gas_budget {
+			return Err(CcmFailReason::InsufficientDepositAmount)
 		}
+
+		let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
 
 		// Return gas asset only if it is different from the input asset (and thus requires a swap)
 		let output_gas_asset = destination_chain.gas_asset();
@@ -682,7 +686,7 @@ impl<Address> CcmDepositMetadataGeneric<Address> {
 		Ok(CcmSwapMetadataGeneric {
 			deposit_metadata: self,
 			swap_amounts: CcmSwapAmounts {
-				principal_swap_amount: deposit_amount,
+				principal_swap_amount,
 				gas_budget,
 				other_gas_asset: if source_asset == output_gas_asset || gas_budget == 0 {
 					None
