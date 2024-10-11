@@ -18,6 +18,7 @@ import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
 import BigNumber from 'bignumber.js';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
+import { ISubmittableResult } from '@polkadot/types/types';
 import { base58Decode, base58Encode } from '../polkadot/util-crypto';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
@@ -112,7 +113,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
   }
 }
 
-export function shortChainFromAsset(asset: Asset): string {
+export function shortChainFromAsset(asset: Asset) {
   switch (asset) {
     case 'Dot':
       return 'Dot';
@@ -897,10 +898,8 @@ export function getEncodedSolAddress(address: string): string {
   return /^0x[a-fA-F0-9]+$/.test(address) ? encodeSolAddress(address) : address;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function handleSubstrateError(api: any) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (arg: any) => {
+export function handleSubstrateError(api: ApiPromise, exit = true) {
+  return (arg: ISubmittableResult) => {
     const { dispatchError } = arg;
     if (dispatchError) {
       let error;
@@ -910,8 +909,12 @@ export function handleSubstrateError(api: any) {
       } else {
         error = dispatchError.toString();
       }
-      console.log('Dispatch error:' + error);
-      process.exit(-1);
+      if (exit) {
+        console.log('Dispatch error:' + error);
+        process.exit(-1);
+      } else {
+        throw new Error('Dispatch error: ' + error);
+      }
     }
   };
 }
