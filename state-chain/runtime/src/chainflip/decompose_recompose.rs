@@ -390,8 +390,7 @@ mod tests {
 			.collect::<Vec<_>>();
 
 		let actual = arb_select_median_base_and_multiplier(&mut votes).unwrap();
-		let expected =
-			ArbitrumTrackedData { base_fee: 7, l1_base_fee_estimate: 1u128 };
+		let expected = ArbitrumTrackedData { base_fee: 7, l1_base_fee_estimate: 1u128 };
 
 		assert_eq!(actual, expected);
 	}

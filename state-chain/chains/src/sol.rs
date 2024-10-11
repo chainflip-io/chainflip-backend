@@ -156,8 +156,8 @@ pub mod compute_units_costs {
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
 	pub const MAX_COMPUTE_UNITS_PER_CCM_TRANSFER: SolComputeLimit = 600_000u32;
 	// Minimum compute units required for CCM transfers to ensure their inclusion
-	pub const DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER: SolComputeLimit = 20_000u32;
-	pub const DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER: SolComputeLimit = 60_000u32;
+	pub const CCM_GAS_OVERHEAD_NATIVE: SolComputeLimit = 20_000u32;
+	pub const CCM_GAS_OVERHEAD_TOKEN: SolComputeLimit = 60_000u32;
 }
 
 #[derive(
@@ -194,8 +194,8 @@ impl SolTrackedData {
 			// TODO: Potentially rename to overhead. Double check this values, we could just
 			// increase them to be sure we don't cause any issues for the integrators as
 			// gas is very cheap anyway.
-			SolAsset::Sol => DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
-			SolAsset::SolUsdc => DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
+			SolAsset::Sol => CCM_GAS_OVERHEAD_NATIVE,
+			SolAsset::SolUsdc => CCM_GAS_OVERHEAD_TOKEN,
 		});
 		sp_std::cmp::min(
 			MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as SolComputeLimit,
@@ -433,8 +433,8 @@ mod test {
 
 		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
 			let default_compute_limit = match asset {
-				SolAsset::Sol => DEFAULT_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER,
-				SolAsset::SolUsdc => DEFAULT_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER,
+				SolAsset::Sol => CCM_GAS_OVERHEAD_NATIVE,
+				SolAsset::SolUsdc => CCM_GAS_OVERHEAD_TOKEN,
 			};
 
 			let mut tx_compute_limit: u32 =

@@ -81,15 +81,19 @@ impl EthereumTrackedData {
 			.saturating_add(self.priority_fee)
 	}
 
-	// TODO: Does the CCM_GAS_OVERHEAD change if more calldata is passed? So basically
-	// depending on the length of the message?
 	pub fn calculate_ccm_gas_limit(
 		&self,
 		gas_budget: GasAmount,
-		_message_length: usize,
+		message_length: usize,
 	) -> GasAmount {
 		use crate::eth::fees::*;
-		gas_budget.saturating_add(CCM_GAS_OVERHEAD).min(MAX_GAS_LIMIT)
+		// Adding one extra gas per message byte for the extra gas overhead of passing the message
+		// through the Vault. The extra gas per byte should be encapsulated in the user's gas
+		// budget.
+		(gas_budget
+			.saturating_add(CCM_GAS_OVERHEAD)
+			.saturating_add(message_length as u128))
+		.min(MAX_GAS_LIMIT)
 	}
 
 	pub fn calculate_transaction_fee(
