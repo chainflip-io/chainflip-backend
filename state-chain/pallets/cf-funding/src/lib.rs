@@ -270,7 +270,7 @@ pub mod pallet {
 		/// The account is already bound to an executor address.
 		ExecutorAddressAlreadyBound,
 
-		/// The account cannot be reaped before it is unregstered.
+		/// The account cannot be reaped before it is unregistered.
 		AccountMustBeUnregistered,
 	}
 
