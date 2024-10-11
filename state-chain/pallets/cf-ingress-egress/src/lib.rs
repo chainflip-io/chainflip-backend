@@ -32,10 +32,9 @@ use cf_chains::{
 	SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId,
-	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
-	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
-	SWAP_DELAY_BLOCKS,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
+	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
+	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
