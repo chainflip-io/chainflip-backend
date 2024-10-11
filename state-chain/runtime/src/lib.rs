@@ -59,7 +59,10 @@ use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
 use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
-use migrations::add_liveness_electoral_system_solana::LivenessSettingsMigration;
+use migrations::{
+	add_liveness_electoral_system_solana::LivenessSettingsMigration,
+	solana_egress_success_witness::SolanaEgressSuccessWitnessMigration,
+};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
@@ -1221,9 +1224,6 @@ type AllMigrations = (
 	// This ClearEvents should only be run at the start of all migrations. This is in case another
 	// migration needs to trigger an event like a Broadcast for example.
 	pallet_cf_cfe_interface::migrations::ClearEvents<Runtime>,
-	// For clearing all Solana Egress Success election votes, and migrating Solana ApiCall to the
-	// newer version.
-	migrations::solana_egress_success_witness::SolanaEgressSuccessWitnessMigration,
 	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFES EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
@@ -1280,10 +1280,18 @@ type MigrationsForV1_7 = (
 		8,
 		9,
 	>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 8, 9>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 9>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 9>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 9>,
+	// For clearing all Solana Egress Success election votes, and migrating Solana ApiCall to the
+	// newer version.
+	VersionedMigration<
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		SolanaEgressSuccessWitnessMigration,
+		9,
+		10,
+	>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 8, 10>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 10>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 10>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 10>,
 	VersionedMigration<
 		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
 		LivenessSettingsMigration,

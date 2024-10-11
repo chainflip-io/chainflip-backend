@@ -71,7 +71,7 @@ mod old {
 
 impl OnRuntimeUpgrade for SolanaEgressSuccessWitnessMigration {
 	fn on_runtime_upgrade() -> Weight {
-		log::info!("☀️ Running Solana Success witnessing migration.");
+		log::info!("🥮 Running Solana Success witnessing migration.");
 
 		// Clear Solana's egress-success votes.
 		let _ =
