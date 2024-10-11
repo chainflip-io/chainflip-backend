@@ -16,7 +16,7 @@ use cf_primitives::SemVer;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
 	mocks::{broadcaster::MockBroadcaster, key_provider::MockKeyProvider},
-	GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	GetBitcoinFeeInfo, SolanaContractSwap, VaultKeyWitnessedHandler,
 };
 use frame_support::{derive_impl, parameter_types};
 use sp_core::{H160, H256};
@@ -216,6 +216,19 @@ impl ApiCall<SolanaCrypto> for MockCloseSolanaContractSwapAccounts {
 	}
 }
 
+pub struct MockSolanaContractSwapper;
+impl SolanaContractSwap for MockSolanaContractSwapper {
+	fn initiate_contract_swap(
+		_from: cf_primitives::Asset,
+		_to: cf_primitives::Asset,
+		_deposit_amount: cf_primitives::AssetAmount,
+		_destination_address: cf_chains::address::EncodedAddress,
+		_tx_hash: cf_primitives::TransactionHash,
+	) {
+		unimplemented!()
+	}
+}
+
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
@@ -225,6 +238,7 @@ impl pallet_cf_environment::Config for Test {
 	type SolanaNonceWatch = ();
 	type CloseSolanaContractSwapAccounts = MockCloseSolanaContractSwapAccounts;
 	type SolanaBroadcaster = MockBroadcaster<(MockCloseSolanaContractSwapAccounts, RuntimeCall)>;
+	type SolanaContractSwapper = MockSolanaContractSwapper;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type BitcoinKeyProvider = MockBitcoinKeyProvider;
 	type RuntimeSafeMode = MockRuntimeSafeMode;

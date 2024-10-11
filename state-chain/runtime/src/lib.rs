@@ -17,7 +17,7 @@ use crate::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
 			SolanaNonceTrackingTrigger,
 		},
-		Offence,
+		Offence, SolanaContractSwapper,
 	},
 	migrations::serialize_solana_broadcast::{NoopUpgrade, SerializeSolanaBroadcastMigration},
 	monitoring_apis::{
@@ -272,6 +272,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type SolanaNonceWatch = SolanaNonceTrackingTrigger;
 	type CloseSolanaContractSwapAccounts = SolanaApi<SolEnvironment>;
 	type SolanaBroadcaster = SolanaBroadcaster;
+	type SolanaContractSwapper = SolanaContractSwapper;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type BitcoinKeyProvider = BitcoinThresholdSigner;
 	type RuntimeSafeMode = RuntimeSafeMode;

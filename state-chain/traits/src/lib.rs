@@ -1100,3 +1100,13 @@ impl<C: ChainCrypto> ElectionEgressWitnesser for DummyEgressSuccessWitnesser<C> 
 pub trait RotationBroadcastsPending {
 	fn rotation_broadcasts_pending() -> bool;
 }
+
+pub trait SolanaContractSwap {
+	fn initiate_contract_swap(
+		from: Asset,
+		to: Asset,
+		deposit_amount: AssetAmount,
+		destination_address: cf_chains::address::EncodedAddress,
+		tx_hash: cf_primitives::TransactionHash,
+	);
+}
