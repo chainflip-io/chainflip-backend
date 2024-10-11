@@ -171,7 +171,6 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 	) -> Self {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.signed(threshold_signature, signer).into(),
-
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}

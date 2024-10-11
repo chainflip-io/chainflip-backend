@@ -44,7 +44,7 @@ macro_rules! generate_vote_storage_tuple_impls {
             }
 
             // In the 1/identity case, no invalid combinations are possible, so error cases are unreachable.
-            #[allow(unreachable_patterns)]
+
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
             impl<$($t: VoteStorage),*> VoteStorage for ($($t,)*) {
@@ -109,7 +109,7 @@ macro_rules! generate_vote_storage_tuple_impls {
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeSharedData::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),
-                                            _ => Err(CorruptStorageError::new()),
+                                            _ => Err(CorruptStorageError::new())
                                         }
                                     },
                                 )?.map(|(properties, authority_vote)| {
@@ -274,8 +274,4 @@ macro_rules! generate_vote_storage_tuple_impls {
     }
 }
 
-generate_vote_storage_tuple_impls!(tuple_1_impls: (A));
-generate_vote_storage_tuple_impls!(tuple_2_impls: (A, B));
-generate_vote_storage_tuple_impls!(tuple_3_impls: (A, B, C));
-generate_vote_storage_tuple_impls!(tuple_4_impls: (A, B, C, D));
-generate_vote_storage_tuple_impls!(tuple_5_impls: (A, B, C, D, EE));
+generate_vote_storage_tuple_impls!(tuple_6_impls: (A, B, C, D, EE, FF));

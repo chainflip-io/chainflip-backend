@@ -101,6 +101,7 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
 }
 
+#[allow(clippy::multiple_bound_locations)]
 #[benchmarks(where T: RuntimeConfig)]
 mod benchmarks {
 	use super::*;

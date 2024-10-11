@@ -1,7 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
-#![feature(is_sorted)]
 
 mod mock;
 mod tests;
@@ -752,11 +751,7 @@ pub mod pallet {
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
 
-			ensure!(
-				(LastExpiredEpoch::<T>::get() + 1..=CurrentEpoch::<T>::get())
-					.all(|epoch| !HistoricalAuthorities::<T>::get(epoch).contains(validator_id)),
-				Error::<T>::StillKeyHolder
-			);
+			ensure!(!EpochHistory::<T>::is_keyholder(validator_id), Error::<T>::StillKeyHolder);
 
 			// This can only error if the validator didn't register any keys, in which case we want
 			// to continue with the deregistration anyway.
@@ -1399,10 +1394,11 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	/// These Validators' keys must be registered as part of the session pallet genesis.
 	fn new_session_genesis(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		let genesis_authorities = Self::current_authorities();
-		assert!(
-			!genesis_authorities.is_empty(),
-			"No genesis authorities found! Make sure the Validator pallet is initialised before the Session pallet."
-		);
+		if !genesis_authorities.is_empty() {
+			frame_support::print(
+				"No genesis authorities found! Make sure the Validator pallet is initialised before the Session pallet."
+			);
+		};
 		Some(genesis_authorities.into_iter().collect())
 	}
 
