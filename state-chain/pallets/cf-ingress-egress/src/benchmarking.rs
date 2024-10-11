@@ -7,6 +7,7 @@ use cf_chains::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	DepositChannel,
 };
+use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{

@@ -1,7 +1,6 @@
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 
 use crate::*;
-
 mod old {
 	use super::*;
 
@@ -48,27 +47,17 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		let number_of_old_channels =
-			old::DepositChannelLookup::<T, I>::iter().collect::<Vec<_>>().len();
+		let number_of_old_channels: u32 =
+			old::DepositChannelLookup::<T, I>::iter().collect::<Vec<_>>().len() as u32;
 		Ok(number_of_old_channels.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let number_of_old_channels = Vec::<u8>::decode(&mut &state[..]).unwrap();
-		let number_of_new_channels = DepositChannelLookup::<T, I>::iter().collect::<Vec<_>>().len();
-		ensure!(number_of_old_channels == number_of_new_channels, Error::<T, I>::MigrationFailed);
+		let number_of_old_channels = u32::decode(&mut &state[..]).unwrap();
+		let number_of_new_channels =
+			DepositChannelLookup::<T, I>::iter().collect::<Vec<_>>().len() as u32;
+		assert_eq!(number_of_old_channels, number_of_new_channels);
 		Ok(())
-	}
-}
-
-#[cfg(test)]
-mod migration_tests {
-	#[test]
-	fn test_migration() {
-		use super::*;
-		use crate::mock::*;
-
-		new_test_ext().execute_with(|| {});
 	}
 }

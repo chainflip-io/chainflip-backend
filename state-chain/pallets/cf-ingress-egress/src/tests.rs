@@ -6,8 +6,8 @@ use crate::{
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, TaintedTransactionDetails,
-	TaintedTransactions, TAINTED_TX_EXPIRATION_BLOCKS,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject, TaintedTransactions,
+	TAINTED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -2063,11 +2063,7 @@ fn process_tainted_transaction_and_expect_refund() {
 			})
 		);
 
-		let tainted_transaction =
-			TaintedTransactions::<Test, ()>::get::<u64, DepositDetails>(BROKER, Default::default())
-				.expect("To have an tainted transaction");
-
-		assert!(tainted_transaction.refund_address.is_some());
+		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), Some(1));
 	});
 }
 
@@ -2099,14 +2095,7 @@ fn tainted_transactions_expire_if_not_witnessed() {
 		let tx_id = DepositDetails::default();
 		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
 
-		let tainted_tx = TaintedTransactionDetails {
-			refund_address: None,
-			deposit_witness: None,
-			expires_at: expiry_at,
-			marked_for_refund: false,
-		};
-
-		TaintedTransactions::<Test>::insert(BROKER, tx_id.clone(), tainted_tx);
+		TaintedTransactions::<Test>::insert(BROKER, tx_id.clone(), expiry_at);
 
 		IngressEgress::on_idle(expiry_at, Weight::MAX);
 
@@ -2115,26 +2104,5 @@ fn tainted_transactions_expire_if_not_witnessed() {
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::TaintedTransactionExpired { account_id: BROKER, tx_id },
 		));
-	});
-}
-
-#[test]
-fn tainted_transactions_do_not_expire_if_marked_for_refund() {
-	new_test_ext().execute_with(|| {
-		let tx_id = DepositDetails::default();
-		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
-
-		let tainted_tx = TaintedTransactionDetails {
-			refund_address: None,
-			deposit_witness: None,
-			expires_at: expiry_at,
-			marked_for_refund: true,
-		};
-
-		TaintedTransactions::<Test>::insert(BROKER, tx_id.clone(), tainted_tx);
-
-		Pallet::<Test>::on_idle(expiry_at, Weight::MAX);
-
-		assert!(TaintedTransactions::<Test>::contains_key(BROKER, tx_id));
 	});
 }

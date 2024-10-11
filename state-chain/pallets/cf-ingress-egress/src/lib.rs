@@ -130,10 +130,10 @@ pub enum DepositIgnoredReason {
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
 #[scale_info(skip_type_params(T, I))]
 pub struct TaintedTransactionDetails<T: Config<I>, I: 'static> {
-	pub refund_address: Option<ForeignChainAddress>,
-	pub deposit_witness: Option<DepositWitness<T::TargetChain>>,
-	pub expires_at: BlockNumberFor<T>,
-	pub marked_for_refund: bool,
+	pub refund_address: ForeignChainAddress,
+	pub asset: TargetChainAsset<T, I>,
+	pub amount: TargetChainAmount<T, I>,
+	pub tx_id: <T::TargetChain as Chain>::DepositDetails,
 }
 
 /// Cross-chain messaging requests.
@@ -540,7 +540,7 @@ pub mod pallet {
 	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
 
-	/// Stores the tainted transaction details for an account.
+	/// Stores the reporter and the tx_id against the BlockNumber when the report expires.
 	#[pallet::storage]
 	pub(crate) type TaintedTransactions<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
@@ -548,9 +548,14 @@ pub mod pallet {
 		T::AccountId,
 		Twox64Concat,
 		<T::TargetChain as Chain>::DepositDetails,
-		TaintedTransactionDetails<T, I>,
+		BlockNumberFor<T>,
 		OptionQuery,
 	>;
+
+	/// Stores the details of the tainted transactions that are scheduled for rejecting.
+	#[pallet::storage]
+	pub(crate) type ScheduledTxForReject<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -785,20 +790,16 @@ pub mod pallet {
 				}
 			}
 
-			// Collect expired transactions
-			let expired_transactions: Vec<_> = TaintedTransactions::<T, I>::iter()
-				.filter(|(_, _, details)| details.expires_at <= now && !details.marked_for_refund)
-				.map(|(account_id, tx_id, _)| (account_id, tx_id))
-				.collect();
-
-			// Remove expired transactions and emit events
-			for (account_id, tx_id) in expired_transactions {
-				TaintedTransactions::<T, I>::remove(&account_id, &tx_id);
-				Self::deposit_event(Event::TaintedTransactionExpired {
-					account_id: account_id.clone(),
-					tx_id: tx_id.clone(),
-				});
+			for (account, tx_id, expire_block) in TaintedTransactions::<T, I>::iter() {
+				if expire_block <= now {
+					TaintedTransactions::<T, I>::remove(account.clone(), tx_id.clone());
+					Self::deposit_event(Event::<T, I>::TaintedTransactionExpired {
+						account_id: account,
+						tx_id,
+					});
+				}
 			}
+
 			used_weight
 		}
 
@@ -1321,15 +1322,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tx_id: <T::TargetChain as Chain>::DepositDetails,
 	) -> DispatchResult {
 		let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-
-		let tainted_transaction = TaintedTransactionDetails {
-			refund_address: None,
-			deposit_witness: None,
-			expires_at: <frame_system::Pallet<T>>::block_number()
+		TaintedTransactions::<T, I>::insert(
+			account_id,
+			tx_id,
+			<frame_system::Pallet<T>>::block_number()
 				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS)),
-			marked_for_refund: false,
-		};
-		TaintedTransactions::<T, I>::insert(account_id, tx_id, tainted_transaction);
+		);
 		Ok(())
 	}
 	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {
@@ -1893,8 +1891,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let channel_owner = deposit_channel_details.owner.clone();
 
-		if let Some(tainted_tx) =
-			TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
+		if TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
+			.is_some()
 		{
 			let refund_address = match deposit_channel_details.action {
 				ChannelAction::Swap { refund_params, .. } =>
@@ -1903,23 +1901,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
 				ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
 			};
+
 			let tainted_transaction_details = TaintedTransactionDetails {
-				refund_address,
-				deposit_witness: Some(DepositWitness {
-					deposit_address: deposit_address.clone(),
-					asset: deposit_channel_details.deposit_channel.asset,
-					amount: deposit_amount,
-					deposit_details: deposit_details.clone(),
-				}),
-				expires_at: tainted_tx.expires_at,
-				marked_for_refund: true,
+				refund_address: refund_address.expect("Refund address must be set"),
+				amount: deposit_amount,
+				asset,
+				tx_id: deposit_details.clone(),
 			};
 
-			TaintedTransactions::<T, I>::insert(
-				channel_owner,
-				deposit_details.clone(),
-				tainted_transaction_details,
-			);
+			ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
 
 			Self::deposit_event(Event::<T, I>::DepositIgnored {
 				deposit_address: deposit_address.clone(),
