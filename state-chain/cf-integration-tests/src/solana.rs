@@ -708,6 +708,10 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			// Wait for the swaps to complete and call broadcasted.
 			testnet.move_forward_blocks(5);
 
+			// Get the broadcast ID for the ccm. There should be only one broadcast pending.
+			assert_eq!(pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get().len(), 1);
+			let ccm_broadcast_id = pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get().into_iter().next().unwrap();
+
 			// Get the election identifier of the Solana egress.
 			let election_id = SolanaElections::with_electoral_access_and_identifiers(
 				|_, election_identifiers| {
@@ -748,5 +752,11 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 					..
 				}
 			));
+
+			// Ensure the previous broadcast data has been cleaned up.
+			assert!(!pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get().contains(&ccm_broadcast_id));
+			assert!(!pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::contains_key(ccm_broadcast_id));
+			assert!(!pallet_cf_broadcast::TransactionOutIdToBroadcastId::<Runtime, SolanaInstance>::iter_values().any(|(broadcast_id, _)|broadcast_id == ccm_broadcast_id));
+			assert!(!pallet_cf_broadcast::PendingApiCalls::<Runtime, SolanaInstance>::contains_key(ccm_broadcast_id));
 		});
 }

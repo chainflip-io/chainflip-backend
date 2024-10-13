@@ -159,36 +159,35 @@ impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWi
 		TransactionSuccessDetails { tx_fee, contract_call_successful }: TransactionSuccessDetails,
 	) {
 		use cf_traits::KeyProvider;
-		match contract_call_successful {
-			true =>
-				if let Err(err) = SolanaBroadcaster::egress_success(
-					pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-					signature,
-					// Assign any owed fees to the current key.
-					SolanaThresholdSigner::active_epoch_key().map(|e| e.key).unwrap_or_default(),
-					tx_fee,
-					(),
-					signature,
-				) {
-					log::error!(
-						"Failed to execute egress success: TxOutId: {:?}, Error: {:?}",
-						signature,
-						err
-					)
-				},
-			false =>
+		if !contract_call_successful {
 			// On CCM failure, we need to refund the user using their fallback info.
-				if let Some((broadcast_id, ccm_tx)) =
-					SolanaBroadcaster::pending_api_call_from_out_id(signature)
-				{
-					// Only Ccm calls support fallback.
-					if let SolanaTransactionType::CcmTransfer { fallback } = ccm_tx.call_type {
-						SolanaIngressEgress::do_ccm_fallback(broadcast_id, fallback);
-					}
-				} else {
-					log::error!("Ccm fallback failed: Reported Solana contract call revert, but the ApiCall does not exist in storage. Tx_out_id: : {:?}", signature);
-				},
-		};
+			if let Some((broadcast_id, ccm_tx)) =
+				SolanaBroadcaster::pending_api_call_from_out_id(signature)
+			{
+				// Only Ccm calls support fallback.
+				if let SolanaTransactionType::CcmTransfer { fallback } = ccm_tx.call_type {
+					SolanaIngressEgress::do_ccm_fallback(broadcast_id, fallback);
+				}
+			} else {
+				log::error!("Ccm fallback failed: Reported Solana contract call revert, but the ApiCall does not exist in storage. Tx_out_id: : {:?}", signature);
+			}
+		}
+
+		if let Err(err) = SolanaBroadcaster::egress_success(
+			pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+			signature,
+			// Assign any owed fees to the current key.
+			SolanaThresholdSigner::active_epoch_key().map(|e| e.key).unwrap_or_default(),
+			tx_fee,
+			(),
+			signature,
+		) {
+			log::error!(
+				"Failed to execute egress success: TxOutId: {:?}, Error: {:?}",
+				signature,
+				err
+			)
+		}
 	}
 }
 
