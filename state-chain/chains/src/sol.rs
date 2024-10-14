@@ -26,6 +26,7 @@ pub use sol_prim::{
 		LAMPORTS_PER_SIGNATURE, MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
 		MAX_TRANSACTION_LENGTH, MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
 		MICROLAMPORTS_PER_LAMPORT,
+		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,

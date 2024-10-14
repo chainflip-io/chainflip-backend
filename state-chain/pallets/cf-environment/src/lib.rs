@@ -19,6 +19,7 @@ use cf_chains::{
 		SolAddress, SolApiEnvironment, SolHash, Solana,
 		MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
 		MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
+		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
 	},
 	Chain, CloseSolanaContractSwapAccounts,
 };
@@ -276,7 +277,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(block_number: BlockNumberFor<T>, _remaining_weight: Weight) -> Weight {
-			if Self::get_number_of_available_sol_nonce_accounts() > 4 &&
+			if Self::get_number_of_available_sol_nonce_accounts() > NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
 				(SolanaOpenContractSwapAccounts::<T>::decode_len().is_some_and(
 					|open_accounts| {
 						open_accounts >= MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES
