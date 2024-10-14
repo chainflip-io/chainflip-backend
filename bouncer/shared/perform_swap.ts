@@ -130,7 +130,7 @@ export async function doPerformSwap(
     sourceAsset,
     destAsset,
     channelId,
-    messageMetadata ? SwapRequestType.Ccm : SwapRequestType.Regular,
+    SwapRequestType.Regular,
   );
 
   const ccmEventEmitted = messageMetadata

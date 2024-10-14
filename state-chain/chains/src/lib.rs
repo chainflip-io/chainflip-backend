@@ -662,47 +662,6 @@ pub struct CcmDepositMetadataGeneric<Address> {
 	pub source_address: Option<Address>,
 }
 
-// impl<Address> CcmDepositMetadataGeneric<Address> {
-// 	pub fn into_swap_metadata(
-// 		self,
-// 		deposit_amount: AssetAmount,
-// 		source_asset: Asset,
-// 		destination_asset: Asset,
-// 	) -> Result<CcmSwapMetadataGeneric<Address>, CcmFailReason> {
-// 		let gas_budget = self.channel_metadata.gas_budget;
-
-// 		let destination_chain: ForeignChain = destination_asset.into();
-// 		if !destination_chain.ccm_support() {
-// 			return Err(CcmFailReason::UnsupportedForTargetChain)
-// 		}
-
-// 		// Return gas asset only if it is different from the input asset (and thus requires a swap)
-// 		let output_gas_asset = destination_chain.gas_asset();
-
-// 		Ok(CcmSwapMetadataGeneric {
-// 			deposit_metadata: self,
-// 			swap_amounts: CcmSwapAmounts {
-// 				principal_swap_amount: deposit_amount,
-// 				gas_budget,
-// 				other_gas_asset: if source_asset == output_gas_asset || gas_budget == 0 {
-// 					None
-// 				} else {
-// 					Some(output_gas_asset)
-// 				},
-// 			},
-// 		})
-// 	}
-// }
-
-// #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
-// pub struct CcmSwapMetadataGeneric<Address> {
-// 	pub deposit_metadata: CcmDepositMetadataGeneric<Address>,
-// 	pub swap_amounts: CcmSwapAmounts,
-// }
-
-// pub type CcmSwapMetadata = CcmSwapMetadataGeneric<ForeignChainAddress>;
-// pub type CcmSwapMetadataEncoded = CcmSwapMetadataGeneric<EncodedAddress>;
-
 pub type CcmDepositMetadata = CcmDepositMetadataGeneric<ForeignChainAddress>;
 pub type CcmDepositMetadataEncoded = CcmDepositMetadataGeneric<EncodedAddress>;
 
@@ -715,15 +674,6 @@ impl CcmDepositMetadata {
 		}
 	}
 }
-
-// impl CcmSwapMetadata {
-// 	pub fn to_encoded<Converter: AddressConverter>(self) -> CcmSwapMetadataEncoded {
-// 		CcmSwapMetadataEncoded {
-// 			deposit_metadata: self.deposit_metadata.to_encoded::<Converter>(),
-// 			swap_amounts: self.swap_amounts,
-// 		}
-// 	}
-// }
 
 #[derive(
 	PartialEqNoBound,

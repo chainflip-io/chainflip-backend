@@ -1383,7 +1383,7 @@ pub mod pallet {
 
 			let request_completed = match &mut request.state {
 				SwapRequestState::UserSwap {
-					ccm_deposit_metadata: _,
+					ccm_deposit_metadata,
 					output_address,
 					dca_state,
 					broker_fees,
@@ -1413,8 +1413,8 @@ pub mod pallet {
 							dca_state.accumulated_output_amount,
 							swap.output_asset(),
 							output_address.clone(),
-							None,  /* ccm */
-							false, /* refund */
+							ccm_deposit_metadata.clone(), /* ccm */
+							false,                        /* refund */
 						);
 
 						true

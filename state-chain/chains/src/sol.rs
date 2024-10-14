@@ -178,8 +178,6 @@ pub struct SolTrackedData {
 }
 
 impl SolTrackedData {
-	// TODO: Does the DEFAULT_COMPUTE_LIMIT change if more calldata is passed? So basically
-	// depending on the length of the message?
 	pub fn calculate_ccm_compute_limit(
 		gas_budget: cf_primitives::GasAmount,
 		asset: SolAsset,
@@ -191,9 +189,6 @@ impl SolTrackedData {
 			Err(_) => return MAX_COMPUTE_UNITS_PER_CCM_TRANSFER,
 		};
 		let compute_limit_with_overhead = compute_limit.saturating_add(match asset {
-			// TODO: Potentially rename to overhead. Double check this values, we could just
-			// increase them to be sure we don't cause any issues for the integrators as
-			// gas is very cheap anyway.
 			SolAsset::Sol => CCM_GAS_OVERHEAD_NATIVE,
 			SolAsset::SolUsdc => CCM_GAS_OVERHEAD_TOKEN,
 		});

@@ -141,7 +141,7 @@ pub mod fees {
 	pub const CCM_ARBITRUM_BYTES_OVERHEAD: u128 = 140;
 	pub const CCM_VAULT_BYTES_OVERHEAD: u128 = 356;
 	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 50;
-	pub const CCM_GAS_OVERHEAD: u128 = 125_000;
+	pub const CCM_GAS_OVERHEAD: u128 = 110_000;
 }
 
 impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
