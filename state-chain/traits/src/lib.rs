@@ -863,7 +863,7 @@ pub trait EgressApi<C: Chain> {
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
-		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, C::ChainAmount)>,
+		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
 	) -> Result<ScheduledEgressDetails<C>, Self::EgressError>;
 }
 

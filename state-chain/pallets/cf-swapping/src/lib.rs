@@ -1671,12 +1671,12 @@ pub mod pallet {
 			amount: AssetAmount,
 			asset: Asset,
 			address: ForeignChainAddress,
-			ccm_gas_and_metadata: Option<(CcmDepositMetadata, AssetAmount)>,
+			maybe_ccm_metadata: Option<CcmDepositMetadata>,
 			is_refund: bool,
 		) {
-			let is_ccm_swap = ccm_gas_and_metadata.is_some();
+			let is_ccm_swap = maybe_ccm_metadata.is_some();
 
-			match T::EgressHandler::schedule_egress(asset, amount, address, ccm_gas_and_metadata) {
+			match T::EgressHandler::schedule_egress(asset, amount, address, maybe_ccm_metadata) {
 				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
 					if is_refund {
 						Self::deposit_event(Event::<T>::RefundEgressScheduled {
@@ -1785,20 +1785,14 @@ pub mod pallet {
 				request_type: match &request_type {
 					SwapRequestType::NetworkFee => SwapRequestTypeEncoded::NetworkFee,
 					SwapRequestType::IngressEgressFee => SwapRequestTypeEncoded::IngressEgressFee,
-					SwapRequestType::Regular { output_address } =>
+					SwapRequestType::Regular { output_address, ccm_deposit_metadata } =>
 						SwapRequestTypeEncoded::Regular {
-							output_address: T::AddressConverter::to_encoded_address(
-								output_address.clone(),
-							),
-						},
-					SwapRequestType::Ccm { output_address, ccm_deposit_metadata } =>
-						SwapRequestTypeEncoded::Ccm {
 							output_address: T::AddressConverter::to_encoded_address(
 								output_address.clone(),
 							),
 							ccm_deposit_metadata: ccm_deposit_metadata
 								.clone()
-								.to_encoded::<T::AddressConverter>(),
+								.map(|metadata| metadata.to_encoded::<T::AddressConverter>()),
 						},
 				},
 				origin: origin.clone(),
@@ -1855,7 +1849,7 @@ pub mod pallet {
 						},
 					);
 				},
-				SwapRequestType::Regular { output_address } => {
+				SwapRequestType::Regular { output_address, ccm_deposit_metadata } => {
 					let (mut dca_state, chunk_input_amount) =
 						DcaState::create_with_first_chunk(net_amount, dca_params);
 
@@ -1880,51 +1874,10 @@ pub mod pallet {
 							output_asset,
 							refund_params,
 							state: SwapRequestState::UserSwap {
-								ccm_deposit_metadata: None,
+								ccm_deposit_metadata,
 								output_address: output_address.clone(),
 								broker_fees,
 								dca_state,
-							},
-						},
-					);
-				},
-				// TODO: This is the same logic as a regular swap. Should we refactor so we can
-				// reuse the same logic? (e.g. having "ccm_deposit_metadata" as an option in Regular
-				// swaps)
-				SwapRequestType::Ccm { ccm_deposit_metadata, output_address } => {
-					// Caller should ensure that assets and addresses are compatible.
-					debug_assert!(output_address.chain() == ForeignChain::from(output_asset));
-
-					let (mut dca_state, chunk_input_amount) =
-						DcaState::create_with_first_chunk(net_amount, dca_params);
-
-					let swap_id = Self::schedule_swap(
-						input_asset,
-						output_asset,
-						chunk_input_amount,
-						refund_params.as_ref(),
-						// TODO: Should we just have CCM and treat gas swaps simply as an
-						// egress fee?
-						SwapType::CcmPrincipal,
-						broker_fees.clone(),
-						request_id,
-						SWAP_DELAY_BLOCKS.into(),
-					);
-
-					dca_state.status = DcaStatus::ChunkScheduled(swap_id);
-
-					SwapRequests::<T>::insert(
-						request_id,
-						SwapRequest {
-							id: request_id,
-							input_asset,
-							output_asset,
-							refund_params: refund_params.clone(),
-							state: SwapRequestState::UserSwap {
-								ccm_deposit_metadata: Some(ccm_deposit_metadata),
-								output_address: output_address.clone(),
-								dca_state,
-								broker_fees,
 							},
 						},
 					);

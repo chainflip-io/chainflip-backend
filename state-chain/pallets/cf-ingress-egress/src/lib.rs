@@ -1124,7 +1124,10 @@ pub mod pallet {
 				from,
 				deposit_amount,
 				to,
-				SwapRequestType::Regular { output_address: destination_address_internal.clone() },
+				SwapRequestType::Regular {
+					output_address: destination_address_internal.clone(),
+					ccm_deposit_metadata: None,
+				},
 				Default::default(),
 				// NOTE: FoK not yet supported for swaps from the contract
 				None,
@@ -1194,8 +1197,8 @@ pub mod pallet {
 				source_asset,
 				deposit_amount,
 				destination_asset,
-				SwapRequestType::Ccm {
-					ccm_deposit_metadata: deposit_metadata,
+				SwapRequestType::Regular {
+					ccm_deposit_metadata: Some(deposit_metadata),
 					output_address: destination_address_internal.clone(),
 				},
 				Default::default(),
@@ -1699,7 +1702,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset.into(),
 					amount_after_fees.into(),
 					destination_asset,
-					SwapRequestType::Regular { output_address: destination_address },
+					SwapRequestType::Regular {
+						output_address: destination_address,
+						ccm_deposit_metadata: None,
+					},
 					broker_fees,
 					refund_params,
 					dca_params,
@@ -1739,8 +1745,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						asset.into(),
 						amount_after_fees.into(),
 						destination_asset,
-						SwapRequestType::Ccm {
-							ccm_deposit_metadata: deposit_metadata,
+						SwapRequestType::Regular {
+							ccm_deposit_metadata: Some(deposit_metadata),
 							output_address: destination_address,
 						},
 						broker_fees,
@@ -2099,24 +2105,19 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
-		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, TargetChainAmount<T, I>)>,
+		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
 			let egress_id = (<T as Config<I>>::TargetChain::get(), *id_counter);
 
-			match maybe_ccm_with_gas_budget {
-				Some((
-					CcmDepositMetadata {
-						channel_metadata:
-							CcmChannelMetadata { message, gas_budget, cf_parameters, .. },
-						source_chain,
-						source_address,
-						..
-					},
-					// TODO: Isn't this now exactly the same as "amount"?
-					swap_output_amount,
-				)) => {
+			match maybe_ccm_deposit_metadata {
+				Some(CcmDepositMetadata {
+					channel_metadata: CcmChannelMetadata { message, gas_budget, cf_parameters, .. },
+					source_chain,
+					source_address,
+					..
+				}) => {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
 						Self::withhold_ingress_or_egress_fee(
 							IngressOrEgress::EgressCcm {
