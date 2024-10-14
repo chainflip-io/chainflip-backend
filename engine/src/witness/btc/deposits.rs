@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use cf_chains::ForeignChainAddress;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 use itertools::Itertools;
@@ -168,6 +167,7 @@ pub mod tests {
 	fn fake_details(
 		address: ScriptPubkey,
 	) -> DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance> {
+		use cf_chains::ForeignChainAddress;
 		DepositChannelDetails::<_, BitcoinInstance> {
 			owner: AccountId32::new([0xab; 32]),
 			opened_at: 1,
