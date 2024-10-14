@@ -3,61 +3,52 @@ use super::*;
 #[test]
 fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
-		const NEW_MAX_SWAP_AMOUNT_BTC: Option<AssetAmount> = Some(100);
-		const NEW_MAX_SWAP_AMOUNT_DOT: Option<AssetAmount> = Some(69);
 		let new_swap_retry_delay = BlockNumberFor::<Test>::from(1234u32);
 		let new_flip_buy_interval = BlockNumberFor::<Test>::from(5678u32);
 		const NEW_MAX_SWAP_RETRY_DURATION: u32 = 69_u32;
 		const MAX_SWAP_REQUEST_DURATION: u32 = 420_u32;
+		const NEW_MINIMUM_CHUNK_SIZE_ETH: AssetAmount = 1;
+		const NEW_MINIMUM_CHUNK_SIZE_BTC: AssetAmount = 2;
 
 		// Check that the default values are different from the new ones
-		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
-		assert!(MaximumSwapAmount::<Test>::get(Asset::Dot).is_none());
 		assert_ne!(SwapRetryDelay::<Test>::get(), new_swap_retry_delay);
 		assert_ne!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
 		assert_ne!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_ne!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
+		assert_ne!(MinimumChunkSize::<Test>::get(Asset::Eth), NEW_MINIMUM_CHUNK_SIZE_ETH);
+		assert_ne!(MinimumChunkSize::<Test>::get(Asset::Btc), NEW_MINIMUM_CHUNK_SIZE_BTC);
 
-		// Update all config items at the same time, and updates 2 separate max swap amounts.
 		assert_ok!(Swapping::update_pallet_config(
 			OriginTrait::root(),
 			vec![
-				PalletConfigUpdate::MaximumSwapAmount {
-					asset: Asset::Btc,
-					amount: NEW_MAX_SWAP_AMOUNT_BTC
-				},
-				PalletConfigUpdate::MaximumSwapAmount {
-					asset: Asset::Dot,
-					amount: NEW_MAX_SWAP_AMOUNT_DOT
-				},
 				PalletConfigUpdate::SwapRetryDelay { delay: new_swap_retry_delay },
 				PalletConfigUpdate::FlipBuyInterval { interval: new_flip_buy_interval },
 				PalletConfigUpdate::SetMaxSwapRetryDuration { blocks: NEW_MAX_SWAP_RETRY_DURATION },
 				PalletConfigUpdate::SetMaxSwapRequestDuration { blocks: MAX_SWAP_REQUEST_DURATION },
+				PalletConfigUpdate::SetMinimumChunkSize {
+					asset: Asset::Eth,
+					amount: Some(NEW_MINIMUM_CHUNK_SIZE_ETH)
+				},
+				PalletConfigUpdate::SetMinimumChunkSize {
+					asset: Asset::Btc,
+					amount: Some(NEW_MINIMUM_CHUNK_SIZE_BTC)
+				},
 			]
 			.try_into()
 			.unwrap()
 		));
 
 		// Check that the new values were set
-		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Btc), NEW_MAX_SWAP_AMOUNT_BTC);
-		assert_eq!(MaximumSwapAmount::<Test>::get(Asset::Dot), NEW_MAX_SWAP_AMOUNT_DOT);
 		assert_eq!(SwapRetryDelay::<Test>::get(), new_swap_retry_delay);
 		assert_eq!(FlipBuyInterval::<Test>::get(), new_flip_buy_interval);
 		assert_eq!(MaxSwapRetryDurationBlocks::<Test>::get(), NEW_MAX_SWAP_RETRY_DURATION);
 		assert_eq!(MaxSwapRequestDurationBlocks::<Test>::get(), MAX_SWAP_REQUEST_DURATION);
+		assert_eq!(MinimumChunkSize::<Test>::get(Asset::Eth), NEW_MINIMUM_CHUNK_SIZE_ETH);
+		assert_eq!(MinimumChunkSize::<Test>::get(Asset::Btc), NEW_MINIMUM_CHUNK_SIZE_BTC);
 
 		// Check that the events were emitted
 		assert_events_eq!(
 			Test,
-			RuntimeEvent::Swapping(crate::Event::MaximumSwapAmountSet {
-				asset: Asset::Btc,
-				amount: NEW_MAX_SWAP_AMOUNT_BTC,
-			}),
-			RuntimeEvent::Swapping(crate::Event::MaximumSwapAmountSet {
-				asset: Asset::Dot,
-				amount: NEW_MAX_SWAP_AMOUNT_DOT,
-			}),
 			RuntimeEvent::Swapping(crate::Event::SwapRetryDelaySet {
 				swap_retry_delay: new_swap_retry_delay
 			}),
@@ -69,7 +60,7 @@ fn can_update_all_config_items() {
 			}),
 			RuntimeEvent::Swapping(crate::Event::MaxSwapRequestDurationSet {
 				blocks: MAX_SWAP_REQUEST_DURATION
-			})
+			}),
 		);
 
 		// Make sure that only governance can update the config
@@ -129,34 +120,6 @@ fn max_swap_amount_can_be_removed() {
 		);
 		// No no funds are confiscated.
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
-	});
-}
-
-#[test]
-fn can_set_maximum_swap_amount() {
-	new_test_ext().execute_with(|| {
-		let asset = Asset::Eth;
-		let amount = Some(1_000u128);
-		assert!(MaximumSwapAmount::<Test>::get(asset).is_none());
-
-		// Set the new maximum swap_amount
-		set_maximum_swap_amount(asset, amount);
-
-		assert_eq!(MaximumSwapAmount::<Test>::get(asset), amount);
-		assert_eq!(Swapping::maximum_swap_amount(asset), amount);
-
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MaximumSwapAmountSet {
-			asset,
-			amount,
-		}));
-
-		// Can remove maximum swap amount
-		set_maximum_swap_amount(asset, None);
-		assert!(MaximumSwapAmount::<Test>::get(asset).is_none());
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MaximumSwapAmountSet {
-			asset,
-			amount: None,
-		}));
 	});
 }
 

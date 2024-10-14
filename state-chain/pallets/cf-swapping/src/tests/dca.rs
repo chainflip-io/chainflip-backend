@@ -1001,3 +1001,57 @@ mod ccm_tests {
 			});
 	}
 }
+
+#[test]
+fn test_minimum_chunk_size() {
+	#[track_caller]
+	fn set_and_test_chunk_size(
+		asset_amount: AssetAmount,
+		number_of_chunks: u32,
+		expected_number_of_chunks: u32,
+		minimum_chunk_size: AssetAmount,
+	) {
+		// Update the minimum chunk size
+		assert_ok!(Swapping::update_pallet_config(
+			OriginTrait::root(),
+			vec![PalletConfigUpdate::SetMinimumChunkSize {
+				asset: Asset::Eth,
+				amount: Some(minimum_chunk_size)
+			},]
+			.try_into()
+			.unwrap()
+		));
+
+		// Init a swap, this is where the minimum chunk size will kick in
+		let dca_params = DcaParameters { number_of_chunks, chunk_interval: CHUNK_INTERVAL };
+		let expected_swap_request_id = Swapping::init_swap_request(
+			Asset::Eth,
+			asset_amount,
+			Asset::Btc,
+			SwapRequestType::Regular { output_address: ForeignChainAddress::Eth([1; 20].into()) },
+			vec![].try_into().unwrap(),
+			None,
+			Some(dca_params),
+			SwapOrigin::Vault { tx_hash: Default::default() },
+		);
+
+		// Check that the swap was initiated with the updated number of chunks
+		let expected_dca_params = DcaParameters {
+			number_of_chunks: expected_number_of_chunks,
+			chunk_interval: CHUNK_INTERVAL,
+		};
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Swapping(Event::SwapRequested {swap_request_id, dca_parameters, .. })
+				if dca_parameters == &Some(expected_dca_params.clone()) && Ok(*swap_request_id) == expected_swap_request_id
+		);
+	}
+
+	new_test_ext().execute_with(|| {
+		set_and_test_chunk_size(100, 10, 10, 9);
+		set_and_test_chunk_size(100, 10, 10, 10);
+		set_and_test_chunk_size(100, 10, 9, 11);
+		set_and_test_chunk_size(1, 10, 1, 10);
+		set_and_test_chunk_size(1, 1000, 1000, 0);
+	});
+}

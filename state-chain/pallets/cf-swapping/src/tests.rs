@@ -52,12 +52,7 @@ static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
 	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
 
 fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
-	assert_ok!(Swapping::update_pallet_config(
-		OriginTrait::root(),
-		vec![PalletConfigUpdate::MaximumSwapAmount { asset, amount }]
-			.try_into()
-			.unwrap()
-	));
+	MaximumSwapAmount::<Test>::set(asset, amount);
 }
 
 struct TestSwapParams {
