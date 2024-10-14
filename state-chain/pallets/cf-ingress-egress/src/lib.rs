@@ -790,14 +790,20 @@ pub mod pallet {
 				}
 			}
 
+			let mut expired_transactions = Vec::new();
+
 			for (account, tx_id, expire_block) in TaintedTransactions::<T, I>::iter() {
 				if expire_block <= now {
-					TaintedTransactions::<T, I>::remove(account.clone(), tx_id.clone());
-					Self::deposit_event(Event::<T, I>::TaintedTransactionExpired {
-						account_id: account,
-						tx_id,
-					});
+					expired_transactions.push((account.clone(), tx_id.clone()));
 				}
+			}
+
+			for (account, tx_id) in expired_transactions {
+				TaintedTransactions::<T, I>::remove(account.clone(), tx_id.clone());
+				Self::deposit_event(Event::<T, I>::TaintedTransactionExpired {
+					account_id: account,
+					tx_id,
+				});
 			}
 
 			used_weight
