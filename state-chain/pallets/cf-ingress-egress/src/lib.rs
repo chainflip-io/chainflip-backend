@@ -1104,7 +1104,9 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			tx_hash: TransactionHash,
 		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
+			// This extrinsic can either be witnessed called or called from within the runtime (for
+			// solana contract swaps).
+			ensure_root(origin.clone()).or(T::EnsureWitnessed::ensure_origin(origin).map(|_| ()))?;
 
 			let destination_address_internal =
 				match T::AddressConverter::decode_and_validate_address_for_asset(
