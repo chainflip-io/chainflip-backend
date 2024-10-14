@@ -112,6 +112,7 @@ pub mod electoral_systems;
 mod mock;
 mod tests;
 pub mod vote_storage;
+pub mod migrations;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
