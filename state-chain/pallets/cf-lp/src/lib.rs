@@ -194,33 +194,31 @@ pub mod pallet {
 
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			ensure!(
-				LiquidityRefundAddress::<T>::contains_key(&account_id, ForeignChain::from(asset)),
-				Error::<T>::NoLiquidityRefundAddressRegistered
-			);
+			if let Some(refund_address) =
+				LiquidityRefundAddress::<T>::get(&account_id, ForeignChain::from(asset))
+			{
+				let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
+					T::DepositHandler::request_liquidity_deposit_address(
+						account_id.clone(),
+						asset,
+						boost_fee,
+						refund_address,
+					)?;
 
-			let refund_address =
-				LiquidityRefundAddress::<T>::get(&account_id, ForeignChain::from(asset));
-
-			let (channel_id, deposit_address, expiry_block, channel_opening_fee) =
-				T::DepositHandler::request_liquidity_deposit_address(
-					account_id.clone(),
+				Self::deposit_event(Event::LiquidityDepositAddressReady {
+					channel_id,
 					asset,
+					deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+					account_id,
+					deposit_chain_expiry_block: expiry_block,
 					boost_fee,
-					refund_address,
-				)?;
+					channel_opening_fee,
+				});
 
-			Self::deposit_event(Event::LiquidityDepositAddressReady {
-				channel_id,
-				asset,
-				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
-				account_id,
-				deposit_chain_expiry_block: expiry_block,
-				boost_fee,
-				channel_opening_fee,
-			});
-
-			Ok(())
+				Ok(())
+			} else {
+				Err(Error::<T>::NoLiquidityRefundAddressRegistered.into())
+			}
 		}
 
 		/// Withdraw some amount of an asset from the free balance to an external address.

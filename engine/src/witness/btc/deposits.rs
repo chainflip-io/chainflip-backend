@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use cf_chains::ForeignChainAddress;
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 use itertools::Itertools;
@@ -179,7 +180,7 @@ pub mod tests {
 			},
 			action: ChannelAction::<AccountId32>::LiquidityProvision {
 				lp_account: AccountId32::new([0xab; 32]),
-				refund_address: None,
+				refund_address: ForeignChainAddress::Btc(ScriptPubkey::P2PKH([0; 20])),
 			},
 			boost_fee: 0,
 			boost_status: BoostStatus::NotBoosted,

@@ -228,12 +228,13 @@ fn request_address_and_deposit(
 	who: ChannelId,
 	asset: eth::Asset,
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
-	let refund_address = match asset {
-		eth::Asset::Eth => Some(ForeignChainAddress::Eth(Default::default())),
-		_ => None,
-	};
-	let (id, address, ..) =
-		IngressEgress::request_liquidity_deposit_address(who, asset, 0, refund_address).unwrap();
+	let (id, address, ..) = IngressEgress::request_liquidity_deposit_address(
+		who,
+		asset,
+		0,
+		ForeignChainAddress::Eth(Default::default()),
+	)
+	.unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::process_single_deposit(
 		address,
@@ -465,7 +466,10 @@ fn reused_address_channel_id_matches() {
 		let (reused_channel_id, reused_address, ..) = IngressEgress::open_channel(
 			&ALICE,
 			eth::Asset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			ChannelAction::LiquidityProvision {
+				lp_account: 0,
+				refund_address: ForeignChainAddress::Eth([0u8; 20].into()),
+			},
 			0,
 		)
 		.unwrap();
@@ -639,8 +643,13 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext()
 		.then_execute_at_next_block(|_| {
-			let (_, address, ..) =
-				IngressEgress::request_liquidity_deposit_address(ALICE, ETH, 0, None).unwrap();
+			let (_, address, ..) = IngressEgress::request_liquidity_deposit_address(
+				ALICE,
+				ETH,
+				0,
+				ForeignChainAddress::Eth(Default::default()),
+			)
+			.unwrap();
 			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 			let recycles_at = IngressEgress::expiry_and_recycle_block_height().2;
 			(address, recycles_at)
@@ -650,8 +659,13 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			address
 		})
 		.then_execute_at_next_block(|address| {
-			let (_, address2, ..) =
-				IngressEgress::request_liquidity_deposit_address(ALICE, ETH, 0, None).unwrap();
+			let (_, address2, ..) = IngressEgress::request_liquidity_deposit_address(
+				ALICE,
+				ETH,
+				0,
+				ForeignChainAddress::Eth(Default::default()),
+			)
+			.unwrap();
 			let address2: <Ethereum as Chain>::ChainAccount = address2.try_into().unwrap();
 			(address, address2)
 		})
@@ -952,8 +966,13 @@ fn deposits_ingress_fee_exceeding_deposit_amount_rejected() {
 		// Set fee to be higher than the deposit value.
 		ChainTracker::<Ethereum>::set_fee(HIGH_FEE);
 
-		let (_id, address, ..) =
-			IngressEgress::request_liquidity_deposit_address(ALICE, ASSET, 0, None).unwrap();
+		let (_id, address, ..) = IngressEgress::request_liquidity_deposit_address(
+			ALICE,
+			ASSET,
+			0,
+			ForeignChainAddress::Eth(Default::default()),
+		)
+		.unwrap();
 		let deposit_address = address.try_into().unwrap();
 
 		// Swap a low enough amount such that it gets swallowed by fees
@@ -1504,7 +1523,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: CHANNEL_REQUESTER,
-				refund_address: None,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
 			},
 			0
 		));
@@ -1521,7 +1540,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 				eth::Asset::Eth,
 				ChannelAction::LiquidityProvision {
 					lp_account: CHANNEL_REQUESTER,
-					refund_address: None,
+					refund_address: ForeignChainAddress::Eth(Default::default()),
 				},
 				0
 			),
@@ -1680,7 +1699,10 @@ fn safe_mode_prevents_deposit_channel_creation() {
 		assert_ok!(IngressEgress::open_channel(
 			&ALICE,
 			eth::Asset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+			ChannelAction::LiquidityProvision {
+				lp_account: 0,
+				refund_address: ForeignChainAddress::Eth(Default::default())
+			},
 			0,
 		));
 
@@ -1697,7 +1719,10 @@ fn safe_mode_prevents_deposit_channel_creation() {
 			IngressEgress::open_channel(
 				&ALICE,
 				eth::Asset::Eth,
-				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+				ChannelAction::LiquidityProvision {
+					lp_account: 0,
+					refund_address: ForeignChainAddress::Eth(Default::default())
+				},
 				0,
 			),
 			crate::Error::<Test, _>::DepositChannelCreationDisabled
@@ -1764,7 +1789,7 @@ fn do_not_batch_more_fetches_than_the_limit_allows() {
 				i.try_into().unwrap(),
 				ASSET,
 				0,
-				None,
+				ForeignChainAddress::Eth(Default::default()),
 			)
 			.unwrap();
 			let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();

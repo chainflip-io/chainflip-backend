@@ -667,7 +667,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				lp_account: Self::AccountId,
 				source_asset: Asset,
 				boost_fee: BasisPoints,
-				refund_address: Option<ForeignChainAddress>,
+				refund_address: ForeignChainAddress,
 			) -> Result<(ChannelId, ForeignChainAddress, <AnyChain as cf_chains::Chain>::ChainBlockNumber, FlipBalance), DispatchError> {
 				match source_asset.into() {
 					$(

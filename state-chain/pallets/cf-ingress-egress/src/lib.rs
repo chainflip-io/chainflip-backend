@@ -130,7 +130,7 @@ pub enum DepositIgnoredReason {
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
 #[scale_info(skip_type_params(T, I))]
 pub struct TaintedTransactionDetails<T: Config<I>, I: 'static> {
-	pub refund_address: ForeignChainAddress,
+	pub refund_address: Option<ForeignChainAddress>,
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
 	pub tx_id: <T::TargetChain as Chain>::DepositDetails,
@@ -305,7 +305,7 @@ pub mod pallet {
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
-			refund_address: Option<ForeignChainAddress>,
+			refund_address: ForeignChainAddress,
 		},
 		CcmTransfer {
 			destination_asset: Asset,
@@ -1899,11 +1899,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
 				ChannelAction::CcmTransfer { refund_params, .. } =>
 					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
-				ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
+				ChannelAction::LiquidityProvision { refund_address, .. } => Some(refund_address),
 			};
 
 			let tainted_transaction_details = TaintedTransactionDetails {
-				refund_address: refund_address.expect("Refund address must be set"),
+				refund_address,
 				amount: deposit_amount,
 				asset,
 				tx_id: deposit_details.clone(),
@@ -2296,7 +2296,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 		boost_fee: BasisPoints,
-		refund_address: Option<ForeignChainAddress>,
+		refund_address: ForeignChainAddress,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
