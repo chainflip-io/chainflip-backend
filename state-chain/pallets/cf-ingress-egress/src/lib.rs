@@ -272,6 +272,7 @@ pub mod pallet {
 	pub enum IngressOrEgress {
 		Ingress,
 		Egress,
+		EgressCcm { gas_budget: GasAmount, message_length: usize },
 	}
 
 	pub struct AmountAndFeesWithheld<T: Config<I>, I: 'static> {
@@ -1183,23 +1184,10 @@ pub mod pallet {
 					},
 				};
 
-			let ccm_swap_metadata = match deposit_metadata.clone().into_swap_metadata(
-				deposit_amount,
-				source_asset,
-				destination_asset,
-				Self::estimate_ccm_egress_fee(
-					source_asset,
-					destination_asset,
-					deposit_metadata.clone().channel_metadata.gas_budget,
-					deposit_metadata.clone().channel_metadata.clone().message.len(),
-				)
-				.into(),
-			) {
-				Ok(metadata) => metadata,
-				Err(reason) => {
-					ccm_failed(reason);
-					return Ok(())
-				},
+			let destination_chain: ForeignChain = destination_asset.into();
+			if !destination_chain.ccm_support() {
+				ccm_failed(CcmFailReason::UnsupportedForTargetChain);
+				return Ok(());
 			};
 
 			T::SwapRequestHandler::init_swap_request(
@@ -1207,7 +1195,7 @@ pub mod pallet {
 				deposit_amount,
 				destination_asset,
 				SwapRequestType::Ccm {
-					ccm_swap_metadata,
+					ccm_deposit_metadata: deposit_metadata,
 					output_address: destination_address_internal.clone(),
 				},
 				Default::default(),
@@ -1732,47 +1720,35 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					source_chain: asset.into(),
 					source_address: None,
 				};
-				match deposit_metadata.clone().into_swap_metadata(
-					amount_after_fees.into(),
-					asset.into(),
-					destination_asset,
-					Self::estimate_ccm_egress_fee(
-						asset,
-						destination_asset.into(),
-						deposit_metadata.clone().channel_metadata.gas_budget,
-						deposit_metadata.clone().channel_metadata.clone().message.len(),
-					)
-					.into(),
-				) {
-					Ok(ccm_swap_metadata) => {
-						let swap_request_id = T::SwapRequestHandler::init_swap_request(
-							asset.into(),
-							amount_after_fees.into(),
-							destination_asset,
-							SwapRequestType::Ccm {
-								ccm_swap_metadata,
-								output_address: destination_address,
-							},
-							broker_fees,
-							refund_params,
-							dca_params,
-							swap_origin,
-						);
-						DepositAction::CcmTransfer { swap_request_id }
-					},
-					Err(reason) => {
-						Self::deposit_event(Event::<T, I>::CcmFailed {
-							reason,
-							destination_address: T::AddressConverter::to_encoded_address(
-								destination_address,
-							),
-							deposit_metadata: deposit_metadata
-								.clone()
-								.to_encoded::<T::AddressConverter>(),
-							origin: swap_origin.clone(),
-						});
-						DepositAction::NoAction
-					},
+
+				let destination_chain: ForeignChain = destination_asset.into();
+				if !destination_chain.ccm_support() {
+					Self::deposit_event(Event::<T, I>::CcmFailed {
+						reason: CcmFailReason::UnsupportedForTargetChain,
+						destination_address: T::AddressConverter::to_encoded_address(
+							destination_address,
+						),
+						deposit_metadata: deposit_metadata
+							.clone()
+							.to_encoded::<T::AddressConverter>(),
+						origin: swap_origin.clone(),
+					});
+					DepositAction::NoAction
+				} else {
+					let swap_request_id = T::SwapRequestHandler::init_swap_request(
+						asset.into(),
+						amount_after_fees.into(),
+						destination_asset,
+						SwapRequestType::Ccm {
+							ccm_deposit_metadata: deposit_metadata,
+							output_address: destination_address,
+						},
+						broker_fees,
+						refund_params,
+						dca_params,
+						swap_origin,
+					);
+					DepositAction::CcmTransfer { swap_request_id }
 				}
 			},
 		};
@@ -2071,6 +2047,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let fee_estimate = match ingress_or_egress {
 			IngressOrEgress::Ingress => T::ChainTracking::estimate_ingress_fee(asset),
 			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
+			IngressOrEgress::EgressCcm{gas_budget, message_length} =>
+			T::ChainTracking::estimate_ccm_fee(asset, gas_budget, message_length)
+			.unwrap_or_else(|| {
+				log::warn!("Unable to get the ccm fee estimate for ${gas_budget:?} ${asset:?}. Ignoring ccm egress fees.");
+				<T::TargetChain as Chain>::ChainAmount::zero()
+			})
 		};
 
 		let fees_withheld = if asset == <T::TargetChain as Chain>::GAS_ASSET {
@@ -2108,41 +2090,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			fees_withheld,
 		}
 	}
-
-	/// Calculate the ingress amount to that needs to be swapped for egress gas.
-	///
-	/// Returns the amount of ingress asset that needs to be swapped for the gas asset.
-	/// That substraction will be done in `into_swap_metadata`.
-	pub fn estimate_ccm_egress_fee(
-		source_asset: TargetChainAsset<T, I>,
-		destination_asset: TargetChainAsset<C, I>,
-		gas_budget: GasAmount,
-		message_length: usize,
-	) -> <T::TargetChain as Chain>::ChainAmount {
-		// Fee estimate in destination chain's gas asset
-		let fee_estimate =
-			C::ChainTracking::estimate_ccm_fee(destination_asset, gas_budget, message_length)
-				.unwrap_or_else(|| {
-					log::warn!("Unable to get the ccm fee estimate for ${gas_budget:?} ${destination_asset:?}. Ignoring ccm egress fees.");
-					<C::TargetChain as Chain>::ChainAmount::zero()
-				});
-
-		// Check if destination chain's gas asset is the same as the source asset. It will only
-		// be the case for Sol->Sol, Eth->Eth, and ArbEth->ArbEth.
-		let fee_estimate_ccm = if source_asset == <C::TargetChain as Chain>::GAS_ASSET {
-			fee_estimate
-		} else {
-			T::AssetConverter::calculate_input_for_gas_output::<T::TargetChain>(
-					destination_asset,
-					fee_estimate,
-				)
-				.unwrap_or_else(|| {
-					log::warn!("Unable to convert input to gas for input of ${gas_budget:?} ${source_asset:?}->${destination_asset:?}. Ignoring ccm egress fees.");
-					<T::TargetChain as Chain>::ChainAmount::zero()
-				})
-		};
-		fee_estimate_ccm
-	}
 }
 
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
@@ -2167,9 +2114,19 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						source_address,
 						..
 					},
-					// Don't use the output of the swap
+					// TODO: Isn't this now exactly the same as "amount"?
 					swap_output_amount,
 				)) => {
+					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
+						Self::withhold_ingress_or_egress_fee(
+							IngressOrEgress::EgressCcm {
+								gas_budget,
+								message_length: message.len(),
+							},
+							asset,
+							amount,
+						);
+
 					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 						egress_id,
 						asset,
@@ -2179,15 +2136,11 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						cf_parameters,
 						source_chain,
 						source_address,
-						// Use the "gas limit" provided by the caller
-						// TODO: Either we convert it here to a C::ChainAmount or we just pass along
-						// the GasAmount and we only convert it at the edges - for fee/preswap
-						// calculation and on the transaction builder to build the transaction
 						gas_budget,
 					});
 
 					// The ccm gas budget is already in terms of the swap asset.
-					Ok(ScheduledEgressDetails::new(*id_counter, amount, swap_output_amount))
+					Ok(ScheduledEgressDetails::new(*id_counter, amount_after_fees, fees_withheld))
 				},
 				None => {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
