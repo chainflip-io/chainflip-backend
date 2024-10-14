@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.6.9] - 2024-10-14
+
+### Features
+
+- Minimum chunk size setting ([#5314](https://github.com/chainflip-io/chainflip-backend/issues/5314))
+
 ## [1.6.8] - 2024-10-09
 
 ### Features
