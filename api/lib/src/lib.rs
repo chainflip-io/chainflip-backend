@@ -4,13 +4,21 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
 	address::{try_from_encoded_address, EncodedAddress},
+	btc::{
+		smart_contract_encoding::{
+			encode_swap_params_in_nulldata_utxo, SharedCfParameters, UtxoEncodedData,
+		},
+		BitcoinScript,
+	},
 	dot::PolkadotAccountId,
 	evm::to_evm_address,
 	sol::SolAddress,
 	CcmChannelMetadata, ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{BlockNumber, DcaParameters, NetworkEnvironment, Price};
+use cf_primitives::{
+	AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment, Price, SWAP_DELAY_BLOCKS,
+};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -321,8 +329,8 @@ impl AddressString {
 			.map_err(|_| anyhow!("Failed to parse address"))
 	}
 
-	pub fn from_encoded_address(address: &EncodedAddress) -> Self {
-		Self(address.to_string())
+	pub fn from_encoded_address<T: std::borrow::Borrow<EncodedAddress>>(address: T) -> Self {
+		Self(address.borrow().to_string())
 	}
 }
 
@@ -514,6 +522,72 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	async fn deregister_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
 			.await
+	}
+
+	async fn encode_btc_smart_contract_call(
+		&self,
+		output_asset: Asset,
+		output_address: AddressString,
+		retry_duration: BlockNumber,
+		min_output_amount: AssetAmount,
+		boost_fee: Option<BasisPoints>,
+		dca_parameters: Option<DcaParameters>,
+	) -> Result<BitcoinScript> {
+		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;
+		let max_swap_retry_duration_blocks = self
+			.storage_value::<pallet_cf_swapping::MaxSwapRetryDurationBlocks<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await?;
+		let max_swap_request_duration_blocks = self
+			.storage_value::<pallet_cf_swapping::MaxSwapRequestDurationBlocks<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await?;
+
+		if retry_duration > max_swap_retry_duration_blocks {
+			bail!("Retry duration must be <= {max_swap_retry_duration_blocks} blocks");
+		}
+		if let Some(params) = &dca_parameters {
+			if params.number_of_chunks != 1 {
+				if params.number_of_chunks == 0 {
+					bail!("Number of chunks must be greater than 0");
+				}
+				if params.chunk_interval < SWAP_DELAY_BLOCKS {
+					bail!("Chunk interval must be >= {SWAP_DELAY_BLOCKS} blocks");
+				}
+				let total_swap_request_duration = params
+					.number_of_chunks
+					.saturating_sub(1)
+					.checked_mul(params.chunk_interval)
+					.ok_or(anyhow!("Invalid DCA parameters"))?;
+
+				if total_swap_request_duration > max_swap_request_duration_blocks {
+					bail!("Invalid DCA parameters: Total swap request duration must be <= {max_swap_request_duration_blocks} blocks");
+				}
+			}
+		}
+
+		let params = UtxoEncodedData {
+			output_asset,
+			output_address: output_address.try_parse_to_encoded_address(output_asset.into())?,
+			parameters: SharedCfParameters {
+				retry_duration: retry_duration.try_into()?,
+				min_output_amount,
+				number_of_chunks: dca_parameters
+					.as_ref()
+					.map(|params| params.number_of_chunks)
+					.unwrap_or(1)
+					.try_into()?,
+				chunk_interval: dca_parameters
+					.as_ref()
+					.map(|params| params.chunk_interval)
+					.unwrap_or(2)
+					.try_into()?,
+				boost_fee: boost_fee.unwrap_or_default().try_into()?,
+			},
+		};
+		Ok(encode_swap_params_in_nulldata_utxo(params))
 	}
 }
 

@@ -48,6 +48,17 @@ pub trait Rpc {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "encode_btc_smart_contract_call", aliases = ["broker_encodeBtcSmartContractCall"])]
+	async fn encode_btc_smart_contract_call(
+		&self,
+		output_asset: Asset,
+		output_address: AddressString,
+		retry_duration: u32,
+		min_output_amount: u128,
+		boost_fee: Option<BasisPoints>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<Vec<u8>>;
 }
 
 pub struct RpcServerImpl {
@@ -119,6 +130,31 @@ impl RpcServer for RpcServerImpl {
 			.withdraw_fees(asset, destination_address)
 			.await
 			.map_err(to_rpc_error)?)
+	}
+
+	async fn encode_btc_smart_contract_call(
+		&self,
+		output_asset: Asset,
+		output_address: AddressString,
+		retry_duration: u32,
+		min_output_amount: u128,
+		boost_fee: Option<BasisPoints>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<Vec<u8>> {
+		Ok(self
+			.api
+			.broker_api()
+			.encode_btc_smart_contract_call(
+				output_asset,
+				output_address,
+				retry_duration,
+				min_output_amount,
+				boost_fee,
+				dca_parameters,
+			)
+			.await
+			.map_err(to_rpc_error)?
+			.raw())
 	}
 }
 
