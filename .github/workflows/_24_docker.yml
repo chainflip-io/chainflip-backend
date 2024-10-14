@@ -242,6 +242,7 @@ jobs:
   merge-artefacts:
     needs: [private-images, public-images]
     runs-on: ubuntu-latest
+    if: inputs.save_tags != ''
     strategy:
       fail-fast: false
       matrix:
