@@ -4,6 +4,8 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
+	address::EncodedAddress,
+	assets::any::Asset,
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
@@ -12,18 +14,24 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	eth::Address as EvmAddress,
-	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, Solana},
-	Chain,
+	sol::{
+		api::{ContractSwapAccountAndSender, DurableNonceAndAccount},
+		SolAddress, SolApiEnvironment, SolHash, Solana,
+		MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
+		MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
+		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
+	},
+	Chain, CloseSolanaContractSwapAccounts,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	NetworkEnvironment, SemVer,
+	AssetAmount, NetworkEnvironment, SemVer, TransactionHash,
 };
 use cf_traits::{
 	CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
-	SolanaNonceWatch,
+	SolanaContractSwap, SolanaNonceWatch,
 };
-use frame_support::{pallet_prelude::*, traits::StorageVersion};
+use frame_support::{pallet_prelude::*, sp_runtime::traits::CheckedSub, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::{vec, vec::Vec};
@@ -65,8 +73,8 @@ pub enum SafeModeUpdate<T: Config> {
 pub mod pallet {
 	use super::*;
 	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
-	use cf_primitives::TxId;
-	use cf_traits::VaultKeyWitnessedHandler;
+	use cf_primitives::{BroadcastId, TxId};
+	use cf_traits::{Broadcaster, VaultKeyWitnessedHandler};
 	use frame_support::DefaultNoBound;
 
 	#[pallet::config]
@@ -94,6 +102,12 @@ pub mod pallet {
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
 
 		type SolanaNonceWatch: SolanaNonceWatch;
+
+		type CloseSolanaContractSwapAccounts: cf_chains::CloseSolanaContractSwapAccounts;
+
+		type SolanaBroadcaster: Broadcaster<Solana, ApiCall = Self::CloseSolanaContractSwapAccounts>;
+
+		type SolanaContractSwapper: SolanaContractSwap;
 
 		/// Used to access the current Chainflip runtime's release version (distinct from the
 		/// substrate RuntimeVersion)
@@ -228,6 +242,21 @@ pub mod pallet {
 	#[pallet::getter(fn solana_api_environment)]
 	pub type SolanaApiEnvironment<T> = StorageValue<_, SolApiEnvironment, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn solana_open_contract_swap_accounts)]
+	pub type SolanaOpenContractSwapAccounts<T> =
+		StorageValue<_, Vec<ContractSwapAccountAndSender>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn solana_closed_contract_swap_accounts)]
+	pub type SolanaClosedContractSwapAccounts<T> =
+		StorageMap<_, Blake2_128Concat, ContractSwapAccountAndSender, ()>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn solana_last_closed_contract_swap_accounts_at)]
+	pub type SolanaLastClosedContractSwapAccountsAt<T> =
+		StorageValue<_, BlockNumberFor<T>, OptionQuery>;
+
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
@@ -244,6 +273,47 @@ pub mod pallet {
 	#[pallet::getter(fn network_environment)]
 	/// Contains the network environment for this runtime.
 	pub type ChainflipNetworkEnvironment<T> = StorageValue<_, NetworkEnvironment, ValueQuery>;
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_idle(block_number: BlockNumberFor<T>, _remaining_weight: Weight) -> Weight {
+			if Self::get_number_of_available_sol_nonce_accounts() > NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
+				(SolanaOpenContractSwapAccounts::<T>::decode_len().is_some_and(
+					|open_accounts| {
+						open_accounts >= MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES
+					},
+				) || SolanaLastClosedContractSwapAccountsAt::<T>::get().is_some_and(|n| {
+					block_number.checked_sub(&n).expect("current block number should always be greater than the block number at which last account closure apicall was created.") >=
+						MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS.into()
+				})) {
+				SolanaOpenContractSwapAccounts::<T>::try_mutate(|accounts| {
+					let accounts_to_close: Vec<_> = if accounts.len() >
+						MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES
+					{
+						accounts.drain(..MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES).collect()
+					} else {
+						sp_std::mem::take(accounts)
+					};
+					match T::CloseSolanaContractSwapAccounts::new_unsigned(accounts_to_close.clone()) {
+						Ok(apicall) => {
+							let (broadcast_id, _) =
+								T::SolanaBroadcaster::threshold_sign_and_broadcast(apicall);
+							Self::deposit_event(Event::<T>::SolanaCloseContractSwapAccounts {
+								broadcast_id,
+							});
+							accounts_to_close.into_iter().for_each(|acct| SolanaClosedContractSwapAccounts::<T>::insert(acct, ()));
+							SolanaLastClosedContractSwapAccountsAt::<T>::put(block_number);
+							Ok(Weight::zero())
+						},
+						Err(_) => Err(Weight::zero()),
+					}
+				})
+				.unwrap_or_else(|weight| weight)
+			} else {
+				Weight::zero()
+			}
+		}
+	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -272,6 +342,8 @@ pub mod pallet {
 		StaleUtxosDiscarded { utxos: Vec<Utxo> },
 		/// Solana durable nonce is updated to a new nonce for the corresponding nonce account.
 		DurableNonceSetForAccount { nonce_account: SolAddress, durable_nonce: SolHash },
+		/// apicall to close Solana Contract Swap Accounts has been initiated.
+		SolanaCloseContractSwapAccounts { broadcast_id: BroadcastId },
 	}
 
 	#[pallet::call]
@@ -745,6 +817,39 @@ impl<T: Config> Pallet<T> {
 			log::error!("Nonce account {nonce_account} not found in unavailable nonce accounts");
 		}
 	}
+
+	pub fn report_sol_contract_swap_accounts(
+		new_contract_swaps: Vec<(ContractSwapAccountAndSender, SolanaContractSwapDetails)>,
+		confirm_closed_accounts: Vec<ContractSwapAccountAndSender>,
+	) {
+		SolanaOpenContractSwapAccounts::<T>::mutate(|accts| {
+			accts.extend(
+				new_contract_swaps
+					.into_iter()
+					.map(|(contract_swap_account, swap_details)| {
+						T::SolanaContractSwapper::initiate_contract_swap(
+							swap_details.from,
+							swap_details.to,
+							swap_details.deposit_amount,
+							swap_details.destination_address,
+							swap_details.tx_hash,
+						);
+						contract_swap_account
+					})
+					.collect::<Vec<_>>(),
+			)
+		});
+		confirm_closed_accounts
+			.into_iter()
+			.for_each(SolanaClosedContractSwapAccounts::<T>::remove);
+	}
+
+	#[allow(dead_code)]
+	fn get_all_sol_contract_swap_accounts() -> Vec<ContractSwapAccountAndSender> {
+		let mut all_accounts = SolanaOpenContractSwapAccounts::<T>::get();
+		all_accounts.extend(SolanaClosedContractSwapAccounts::<T>::iter_keys().collect::<Vec<_>>());
+		all_accounts
+	}
 }
 
 impl<T: Config> CompatibleCfeVersions for Pallet<T> {
@@ -757,4 +862,12 @@ impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 	fn get_network_environment() -> NetworkEnvironment {
 		Self::network_environment()
 	}
+}
+
+pub struct SolanaContractSwapDetails {
+	from: Asset,
+	to: Asset,
+	deposit_amount: AssetAmount,
+	destination_address: EncodedAddress,
+	tx_hash: TransactionHash,
 }
