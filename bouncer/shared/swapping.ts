@@ -158,6 +158,8 @@ function newCcmMessage(destAsset: Asset): string {
 
 const EVM_GAS_PER_BYTE = 16;
 const EVM_GAS_PER_EVENT_BYTE = 8;
+
+// Minimum overhead to ensure simple CCM transactions succeed
 const OVERHEAD_GAS = 10000;
 const OVERHEAD_COMPUTE_UNITS = 10000;
 

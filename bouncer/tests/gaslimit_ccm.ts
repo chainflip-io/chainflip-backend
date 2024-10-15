@@ -209,7 +209,7 @@ async function testGasLimitSwapToSolana(
 
 const usedNumbers = new Set<number>();
 // Minimum and maximum gas consumption values to be in a useful range for testing.
-const MIN_TEST_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 200000, Arbitrum: 1000000 };
+const MIN_TEST_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 100000, Arbitrum: 1000000 };
 const MAX_TEST_GAS_CONSUMPTION: Record<string, number> = {
   Ethereum: 4000000,
   Arbitrum: 6000000,
