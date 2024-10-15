@@ -57,7 +57,7 @@ pub mod old {
 	use crate::Weight;
 	use frame_support::{traits::OnRuntimeUpgrade, Twox64Concat};
 	use pallet_cf_elections::electoral_system::ElectionIdentifierOf;
-	// use sp_runtime::DispatchError;
+	use sp_runtime::DispatchError;
 
 	pub type SolanaNonceTrackingOld = pallet_cf_elections::migrations::change_old::Change<
 		SolAddress,
