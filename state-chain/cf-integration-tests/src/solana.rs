@@ -723,7 +723,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			let vote: SolanaElectionVote = BTreeMap::from_iter([(election_id,
 				AuthorityVote::Vote(CompositeVote::EE(TransactionSuccessDetails {
 					tx_fee: 1_000,
-					contract_call_successful: false,
+					transaction_successful: false,
 				}))
 			)]).try_into().unwrap();
 

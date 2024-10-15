@@ -148,7 +148,7 @@ pub struct TransactionSuccessDetails {
 	pub tx_fee: u64,
 	// It is possible for a contract call to be reverted due to contract's internal error.
 	// This field is set to `true` if the contract call executed successfully without error.
-	pub contract_call_successful: bool,
+	pub transaction_successful: bool,
 }
 
 pub struct SolanaEgressWitnessingHook;
@@ -156,10 +156,10 @@ pub struct SolanaEgressWitnessingHook;
 impl OnEgressSuccess<SolSignature, TransactionSuccessDetails> for SolanaEgressWitnessingHook {
 	fn on_egress_success(
 		signature: SolSignature,
-		TransactionSuccessDetails { tx_fee, contract_call_successful }: TransactionSuccessDetails,
+		TransactionSuccessDetails { tx_fee, transaction_successful }: TransactionSuccessDetails,
 	) {
 		use cf_traits::KeyProvider;
-		if !contract_call_successful {
+		if !transaction_successful {
 			// On CCM failure, we need to refund the user using their fallback info.
 			if let Some((broadcast_id, ccm_tx)) =
 				SolanaBroadcaster::pending_api_call_from_out_id(signature)

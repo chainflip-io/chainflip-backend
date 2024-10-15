@@ -139,9 +139,9 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 	> {
 		egress_witnessing::get_finalized_fee_and_success_status(&self.client, signature)
 			.await
-			.map(|(tx_fee, contract_call_successful)| TransactionSuccessDetails {
+			.map(|(tx_fee, transaction_successful)| TransactionSuccessDetails {
 				tx_fee,
-				contract_call_successful,
+				transaction_successful,
 			})
 	}
 }
