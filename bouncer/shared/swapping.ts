@@ -156,25 +156,31 @@ function newCcmMessage(destAsset: Asset): string {
   }
 }
 
+const EVM_GAS_PER_BYTE = 16;
+const EVM_GAS_PER_EVENT_BYTE = 8;
+
 export function newCcmMetadata(
-  sourceAsset: Asset,
   destAsset: Asset,
   ccmMessage?: string,
-  gasBudgetFraction?: number,
+  gasBudget?: number,
   cfParamsArray?: string,
 ): CcmDepositMetadata {
-  const message = ccmMessage ?? newCcmMessage(destAsset);
-  const cfParameters = cfParamsArray ?? newCfParameters(destAsset, message);
-  const gasDiv = gasBudgetFraction ?? 2;
+  let message = ccmMessage ?? newCcmMessage(destAsset);
+  let cfParameters = cfParamsArray ?? newCfParameters(destAsset, message);
 
-  const gasBudget = Math.floor(
-    Number(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) /
-      gasDiv,
-  ).toString();
+  const destChain = chainFromAsset(destAsset);
+  let userLogicGasBudget;
+  if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
+    userLogicGasBudget = (10000 + (EVM_GAS_PER_BYTE + EVM_GAS_PER_EVENT_BYTE) * (message.slice(2).length / 2)).toString();
+  } else if (destChain === 'Solana') {
+    userLogicGasBudget = '10000';
+  } else {
+    throw new Error(`Unsupported chain: ${destChain}`);
+  }
 
   return {
     message,
-    gasBudget,
+    gasBudget: gasBudget?.toString() ?? userLogicGasBudget,
     cfParameters,
   };
 }
@@ -263,7 +269,7 @@ export async function testSwapViaContract(
     destAsset,
     addressType,
     messageMetadata,
-    (tagSuffix ?? '') + ' Contract',
+    (tagSuffix ?? '') + 'Contract',
     log,
     swapContext,
   );

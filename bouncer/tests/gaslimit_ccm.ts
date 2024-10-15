@@ -214,7 +214,7 @@ async function testGasLimitSwapToSolana(
   sourceAsset: Asset,
   destAsset: Asset,
   testTag?: string,
-  gasBudgetFraction?: number,
+  gasBudget?: number,
 ) {
   const destChain = chainFromAsset(destAsset);
 
@@ -222,7 +222,7 @@ async function testGasLimitSwapToSolana(
     throw new Error(`Destination chain ${destChain} is not Solana`);
   }
 
-  const ccmMetadata = newCcmMetadata(sourceAsset, destAsset, undefined, gasBudgetFraction);
+  const ccmMetadata = newCcmMetadata(destAsset, undefined, gasBudget);
 
   const { tag, destAddress, egressBudgetAmount } = await trackGasLimitSwap(
     sourceAsset,
@@ -334,7 +334,7 @@ async function testGasLimitSwapToEvm(
   sourceAsset: Asset,
   destAsset: Asset,
   testTag?: string,
-  gasBudgetFraction?: number,
+  gasBudget?: number,
   gasToConsume?: number,
 ) {
   const destChain = chainFromAsset(destAsset);
@@ -349,10 +349,9 @@ async function testGasLimitSwapToEvm(
   const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
 
   const ccmMetadata = newCcmMetadata(
-    sourceAsset,
     destAsset,
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
-    gasBudgetFraction,
+    gasBudget,
   );
 
   const { tag, destAddress, egressBudgetAmount, broadcastId, txPayload } = await trackGasLimitSwap(
@@ -478,6 +477,7 @@ async function testGasLimitSwapToEvm(
 }
 
 async function testRandomConsumptionTestEvm(sourceAsset: Asset, destAsset: Asset) {
+  // TODO: Update gas related values
   function getRandomGasConsumption(chain: Chain): number {
     const range = MAX_TEST_GAS_CONSUMPTION[chain] - MIN_TEST_GAS_CONSUMPTION[chain] + 1;
     let randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION[chain];
@@ -559,6 +559,7 @@ export async function main() {
   ];
 
   // Gas budget to 10% of the default swap amount, which should be enough
+  // TODO: Update gas related values
   const gasLimitSwapsSufBudget = [
     testGasLimitSwapToEvm('Dot', 'Usdc', 'sufBudget', 10),
     testGasLimitSwapToEvm('Usdc', 'Eth', 'sufBudget', 10),
@@ -582,6 +583,7 @@ export async function main() {
 
   // This amount of gasLimitBudget will be swapped into very little gasLimitBudget. Not into zero as that will cause a debug_assert to
   // panic when not in release due to zero swap input amount. So for now we provide the minimum so it gets swapped to just > 0.
+  // TODO: Update gas related values
   const gasLimitSwapsInsufBudget = [
     testGasLimitSwapToEvm('Dot', 'Flip', 'insufBudget', 10 ** 6),
     testGasLimitSwapToEvm('Eth', 'Usdc', 'insufBudget', 10 ** 8),

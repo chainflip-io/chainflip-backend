@@ -70,6 +70,10 @@ impl EvmCall for ExecutexSwapAndCall {
 	fn message_length(&self) -> Option<usize> {
 		Some(self.message.len())
 	}
+
+	fn transfer_asset(&self) -> Option<Address> {
+		Some(self.transfer_param.asset)
+	}
 }
 
 #[cfg(test)]

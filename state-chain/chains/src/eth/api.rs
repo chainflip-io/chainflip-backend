@@ -359,6 +359,9 @@ impl<E> EthereumApi<E> {
 	pub fn message_length(&self) -> Option<usize> {
 		map_over_api_variants!(self, call, call.message_length())
 	}
+	pub fn transfer_asset(&self) -> Option<Address> {
+		map_over_api_variants!(self, call, call.transfer_asset())
+	}
 }
 
 pub trait StateChainGatewayAddressProvider {

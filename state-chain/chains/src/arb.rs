@@ -89,24 +89,22 @@ impl ArbitrumTrackedData {
 	// TODO: Add unit tests for this.
 	pub fn calculate_ccm_gas_limit(
 		&self,
+		is_native_asset: bool,
 		gas_budget: GasAmount,
 		message_length: usize,
 	) -> GasAmount {
 		use crate::arb::fees::*;
 
-		// TODO: For now we don't differentiate egress native or token as there's little gain
-		// but it adds quite some complexity when called from the macro's calculate_gas_limit
-		// as we'd need to get the asset from the EvmTransactionBuilder's call.
-
-		// Estimating gas as described in:
-		// https://docs.arbitrum.io/build-decentralized-apps/how-to-estimate-gas
+		let base_overhead =
+			if is_native_asset { CCM_NATIVE_GAS_OVERHEAD } else { CCM_TOKEN_OVERHEAD };
 
 		// Adding one extra gas per message byte for the extra gas overhead of passing the message
 		// through the Vault. The extra l2 gas per byte should be encapsulated in the user's gas
 		// budget.
-		let l2g = CCM_GAS_OVERHEAD
-			.saturating_add(message_length as u128)
-			.saturating_add(gas_budget);
+		let l2g = base_overhead.saturating_add(message_length as u128).saturating_add(gas_budget);
+
+		// Estimating gas as described in:
+		// https://docs.arbitrum.io/build-decentralized-apps/how-to-estimate-gas
 		let l1p = self.l1_base_fee_estimate * L1_GAS_PER_BYTES;
 		let p = self.base_fee;
 		// We can't accurately know L1S without engine consensus so we do our best to estimate it.
@@ -136,12 +134,13 @@ pub mod fees {
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 	pub const MAX_GAS_LIMIT: u128 = 25_000_000;
-	// Arb ccm gas limit calculation constants
+	pub const CCM_NATIVE_GAS_OVERHEAD: u128 = 90_000;
+	pub const CCM_TOKEN_OVERHEAD: u128 = 120_000;
+	// Arbitrum specific ccm gas limit calculation constants
 	pub const L1_GAS_PER_BYTES: u128 = 16;
 	pub const CCM_ARBITRUM_BYTES_OVERHEAD: u128 = 140;
 	pub const CCM_VAULT_BYTES_OVERHEAD: u128 = 356;
 	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 50;
-	pub const CCM_GAS_OVERHEAD: u128 = 110_000;
 }
 
 impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
@@ -179,11 +178,15 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 
 	fn estimate_ccm_fee(
 		&self,
-		_asset: <Arbitrum as Chain>::ChainAsset,
+		asset: <Arbitrum as Chain>::ChainAsset,
 		gas_budget: GasAmount,
 		message_length: usize,
 	) -> Option<<Arbitrum as Chain>::ChainAmount> {
-		let gas_limit = self.calculate_ccm_gas_limit(gas_budget, message_length);
+		let gas_limit = self.calculate_ccm_gas_limit(
+			asset == <Arbitrum as Chain>::GAS_ASSET,
+			gas_budget,
+			message_length,
+		);
 		Some(self.calculate_transaction_fee(gas_limit))
 	}
 }
@@ -233,12 +236,15 @@ mod test {
 			l1_base_fee_estimate: L1_BASE_FEE_ESTIMATE,
 		};
 
-		let gas_limit = arb_tracked_data.calculate_ccm_gas_limit(GAS_BUDGET, MESSAGE_LENGTH);
+		let gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET, MESSAGE_LENGTH);
 		assert_eq!(gas_limit, 2561102u128);
 
 		let gas_budget_extra = 1_000_000u128;
-		let gas_limit_extra =
-			arb_tracked_data.calculate_ccm_gas_limit(GAS_BUDGET + gas_budget_extra, MESSAGE_LENGTH);
+		let gas_limit_extra = arb_tracked_data.calculate_ccm_gas_limit(
+			false,
+			GAS_BUDGET + gas_budget_extra,
+			MESSAGE_LENGTH,
+		);
 
 		assert_eq!(gas_limit + gas_budget_extra, gas_limit_extra);
 	}
@@ -253,12 +259,13 @@ mod test {
 			l1_base_fee_estimate: 26_920_712_879u128,
 		};
 
-		let mut gas_limit = arb_tracked_data.calculate_ccm_gas_limit(GAS_BUDGET, 1);
+		let mut gas_limit = arb_tracked_data.calculate_ccm_gas_limit(false, GAS_BUDGET, 1);
 		let gas_limit_diff = MAX_GAS_LIMIT - gas_limit;
-		gas_limit = arb_tracked_data.calculate_ccm_gas_limit(GAS_BUDGET + gas_limit_diff, 1);
+		gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET + gas_limit_diff, 1);
 		assert_eq!(gas_limit, MAX_GAS_LIMIT);
 
-		gas_limit = arb_tracked_data.calculate_ccm_gas_limit(GAS_BUDGET + gas_limit_diff + 1, 1);
+		gas_limit =
+			arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET + gas_limit_diff + 1, 1);
 		assert_eq!(gas_limit, MAX_GAS_LIMIT);
 	}
 }

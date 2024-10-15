@@ -9,7 +9,7 @@ use evm::api::{all_batch, set_agg_key_with_agg_key};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
-use self::evm::{api::transfer_fallback, EvmCrypto};
+use self::evm::{api::transfer_fallback, Address, EvmCrypto};
 
 /// Chainflip api calls available on Arbitrum.
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
@@ -214,5 +214,8 @@ impl<E> ArbitrumApi<E> {
 	}
 	pub fn message_length(&self) -> Option<usize> {
 		map_over_api_variants!(self, call, call.message_length())
+	}
+	pub fn transfer_asset(&self) -> Option<Address> {
+		map_over_api_variants!(self, call, call.transfer_asset())
 	}
 }

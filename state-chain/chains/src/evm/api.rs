@@ -155,6 +155,10 @@ pub trait EvmCall {
 	fn message_length(&self) -> Option<usize> {
 		None
 	}
+
+	fn transfer_asset(&self) -> Option<Address> {
+		None
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -183,6 +187,10 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 
 	pub fn message_length(&self) -> Option<usize> {
 		self.call.message_length()
+	}
+
+	pub fn transfer_asset(&self) -> Option<Address> {
+		self.call.transfer_asset()
 	}
 
 	pub fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {

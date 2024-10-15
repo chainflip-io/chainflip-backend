@@ -83,6 +83,7 @@ impl EthereumTrackedData {
 
 	pub fn calculate_ccm_gas_limit(
 		&self,
+		is_native_asset: bool,
 		gas_budget: GasAmount,
 		message_length: usize,
 	) -> GasAmount {
@@ -91,7 +92,11 @@ impl EthereumTrackedData {
 		// through the Vault. The extra gas per byte should be encapsulated in the user's gas
 		// budget.
 		(gas_budget
-			.saturating_add(CCM_GAS_OVERHEAD)
+			.saturating_add(if is_native_asset {
+				CCM_NATIVE_GAS_OVERHEAD
+			} else {
+				CCM_TOKEN_OVERHEAD
+			})
 			.saturating_add(message_length as u128))
 		.min(MAX_GAS_LIMIT)
 	}
@@ -110,8 +115,8 @@ pub mod fees {
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 	pub const MAX_GAS_LIMIT: u128 = 10_000_000;
-	// For native we'd only need ~100k but we're using the same for tokens for now
-	pub const CCM_GAS_OVERHEAD: u128 = 110_000;
+	pub const CCM_NATIVE_GAS_OVERHEAD: u128 = 90_000;
+	pub const CCM_TOKEN_OVERHEAD: u128 = 120_000;
 }
 
 impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
@@ -151,11 +156,15 @@ impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
 
 	fn estimate_ccm_fee(
 		&self,
-		_asset: <Ethereum as Chain>::ChainAsset,
+		asset: <Ethereum as Chain>::ChainAsset,
 		gas_budget: GasAmount,
 		message_length: usize,
 	) -> Option<<Ethereum as Chain>::ChainAmount> {
-		let gas_limit = self.calculate_ccm_gas_limit(gas_budget, message_length);
+		let gas_limit = self.calculate_ccm_gas_limit(
+			asset == <Ethereum as Chain>::GAS_ASSET,
+			gas_budget,
+			message_length,
+		);
 		Some(self.calculate_transaction_fee(gas_limit))
 	}
 }
