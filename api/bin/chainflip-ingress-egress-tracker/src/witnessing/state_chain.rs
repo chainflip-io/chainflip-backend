@@ -62,9 +62,9 @@ enum TransactionId {
 #[serde(untagged)]
 enum DepositDetails {
 	Bitcoin { tx_id: H256, vout: u32 },
-	Ethereum { tx_hashes: Option<Vec<H256>> },
+	Ethereum { tx_hashes: Vec<H256> },
 	Polkadot { extrinsic_index: PolkadotExtrinsicIndex },
-	Arbitrum { tx_hashes: Option<Vec<H256>> },
+	Arbitrum { tx_hashes: Vec<H256> },
 }
 
 #[derive(Serialize)]
@@ -76,7 +76,7 @@ enum WitnessInformation {
 		deposit_address: String,
 		amount: NumberOrHex,
 		asset: cf_chains::assets::any::Asset,
-		deposit_details: DepositDetails,
+		deposit_details: Option<DepositDetails>,
 	},
 	Broadcast {
 		#[serde(skip_serializing)]
@@ -131,9 +131,10 @@ impl From<DepositInfo<Ethereum>> for WitnessInformation {
 			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
-			deposit_details: DepositDetails::Ethereum {
-				tx_hashes: value.deposit_details.tx_hashes,
-			},
+			deposit_details: value
+				.deposit_details
+				.tx_hashes
+				.map(|tx_hashes| DepositDetails::Ethereum { tx_hashes }),
 		}
 	}
 }
@@ -145,10 +146,10 @@ impl From<DepositInfo<Bitcoin>> for WitnessInformation {
 			deposit_address: value.deposit_address.to_humanreadable(network),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
-			deposit_details: DepositDetails::Bitcoin {
+			deposit_details: Some(DepositDetails::Bitcoin {
 				tx_id: value.deposit_details.tx_id,
 				vout: value.deposit_details.vout,
-			},
+			}),
 		}
 	}
 }
@@ -160,7 +161,9 @@ impl From<DepositInfo<Polkadot>> for WitnessInformation {
 			deposit_address: hex_encode_bytes(value.deposit_address.aliased_ref()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
-			deposit_details: DepositDetails::Polkadot { extrinsic_index: value.deposit_details },
+			deposit_details: Some(DepositDetails::Polkadot {
+				extrinsic_index: value.deposit_details,
+			}),
 		}
 	}
 }
@@ -172,9 +175,10 @@ impl From<DepositInfo<Arbitrum>> for WitnessInformation {
 			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
-			deposit_details: DepositDetails::Arbitrum {
-				tx_hashes: value.deposit_details.tx_hashes,
-			},
+			deposit_details: value
+				.deposit_details
+				.tx_hashes
+				.map(|tx_hashes| DepositDetails::Arbitrum { tx_hashes }),
 		}
 	}
 }
