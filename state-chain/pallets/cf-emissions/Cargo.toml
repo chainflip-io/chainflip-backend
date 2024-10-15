@@ -22,14 +22,14 @@ cf-primitives = { path = '../../primitives', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 
-log = { version = '0.4.16', default-features = false }
+log = { workspace = true }
 
 # Parity deps
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
   'derive',
 ] }
 
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
   'derive',
 ] }
 
@@ -38,10 +38,7 @@ frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag 
 sp-arithmetic = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true, default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-serde = { default-features = false, version = '1.0.197', features = [
-  'alloc',
-  'derive',
-] }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 [dev-dependencies]
 pallet-cf-flip = { path = '../cf-flip' }

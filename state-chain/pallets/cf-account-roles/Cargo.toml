@@ -21,13 +21,13 @@ cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
-log = { version = '0.4.16', default-features = false }
+log = { workspace = true }
 
 # Parity deps
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
   'derive',
 ] }
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
   'derive',
 ] }
 

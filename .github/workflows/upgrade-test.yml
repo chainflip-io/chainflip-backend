@@ -77,7 +77,7 @@ jobs:
 
       - name: Download try-runtime binary 📥
         if: inputs.run-job
-        uses: jaxxstorm/action-install-gh-release@25d5e2dd555cd74f1fab9ac1e6ea117acde2c0c4
+        uses: jaxxstorm/action-install-gh-release@v1.10.0
         with:
           repo: paritytech/try-runtime-cli
           tag: v0.7.0

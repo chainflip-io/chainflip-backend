@@ -19,19 +19,16 @@ workspace = true
 cf-chains = { path = '../../chains', default-features = false }
 cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
-serde = { default-features = false, version = '1.0.197', features = [
-  'alloc',
-  'derive',
-] }
-hex-literal = { version = '0.4.1', default-features = false }
-log = { version = '0.4.16', default-features = false }
+serde = { workspace = true, features = ["derive", "alloc"] }
+hex-literal = { workspace = true }
+log = { workspace = true }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 # Parity deps
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
   'derive',
 ] }
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
   'derive',
 ] }
 

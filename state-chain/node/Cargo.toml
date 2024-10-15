@@ -32,14 +32,14 @@ utilities = { package = "utilities", path = "../../utilities" }
 sol-prim = { path = "../../foreign-chains/solana/sol-prim" }
 
 # Added by Chainflip
-hex = "0.4.3"
-hex-literal = "0.4.1"
-log = "0.4.16"
+hex = { workspace = true }
+hex-literal = { workspace = true }
+log = { workspace = true }
 
 # Substrate-node-template dependencies
-clap = { version = "4.5.3", features = ["derive"] }
-futures = { version = "0.3.30", features = ["thread-pool"] }
-serde_json = { version = "1.0.111", features = ["arbitrary_precision"] }
+clap = { workspace = true, features = ["derive"] }
+futures = { workspace = true, features = ["thread-pool"] }
+serde_json = { workspace = true, features = ["arbitrary_precision"] }
 
 sc-cli = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
@@ -68,7 +68,7 @@ frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag =
 pallet-transaction-payment = { default-features = false, git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
 
 # These dependencies are used for the node template's RPCs
-jsonrpsee = { version = "0.23.2", features = ["full"] }
+jsonrpsee = { workspace = true, features = ["full"] }
 sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
 sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
 sp-blockchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }

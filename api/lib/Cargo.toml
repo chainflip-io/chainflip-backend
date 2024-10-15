@@ -7,23 +7,23 @@ edition = "2021"
 workspace = true
 
 [dependencies]
-anyhow = "1.0"
-async-trait = "0.1.49"
-bs58 = "0.5.1"
-ed25519-dalek = "2.1.1"
-futures = "0.3.30"
-hex = "0.4.3"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bs58 = { workspace = true }
+ed25519-dalek = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
 hmac-sha512 = "1.1.4"
-libsecp256k1 = { version = '0.7' }
-rand = "0.8.5"
-serde = { version = "1.0.197", features = ["derive"] }
+libsecp256k1 = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 tiny-bip39 = "1.0.0"
-tokio = "1.28"
-tracing = "0.1"
-zeroize = "1.5.4"
-libp2p-identity = { version = "0.2", features = ["ed25519", "peerid"] }
-lazy_static = "1.4"
-jsonrpsee = { version = "0.23.2", features = ["full"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+zeroize = { workspace = true }
+libp2p-identity = { workspace = true, features = ["ed25519", "peerid"] }
+lazy_static = { workspace = true }
+jsonrpsee = { workspace = true, features = ["full"] }
 
 # Local
 chainflip-engine = { path = "../../engine/" }
@@ -54,4 +54,4 @@ frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag 
 sp-consensus-aura = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+2' }
 sp-core = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+2' }
 sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+2' }
-codec = { package = "parity-scale-codec", version = "3.6.12" }
+codec = { workspace = true }

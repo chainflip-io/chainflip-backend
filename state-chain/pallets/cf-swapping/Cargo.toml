@@ -24,13 +24,13 @@ cf-runtime-utilities = { path = '../../runtime-utilities', default-features = fa
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 
-log = { version = '0.4.16', default-features = false }
+log = { workspace = true }
 
 # Parity deps
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
   'derive',
 ] }
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
   "derive",
 ] }
 
@@ -41,10 +41,7 @@ frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag =
 sp-arithmetic = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-serde = { default-features = false, version = '1.0.197', features = [
-  'alloc',
-  'derive',
-] }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 [dev-dependencies]
 cf-test-utilities = { path = '../../test-utilities' }
@@ -52,7 +49,7 @@ pallet-cf-account-roles = { path = '../cf-account-roles' }
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-itertools = "0.13"
+itertools = { workspace = true }
 
 [features]
 default = ['std']

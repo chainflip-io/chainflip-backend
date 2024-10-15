@@ -26,20 +26,17 @@ cf-runtime-utilities = { path = '../../runtime-utilities', default-features = fa
 cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
 cfe-events = { path = '../../cfe-events', default-features = false }
 
-log = { version = '0.4.16', default-features = false }
-serde = { default-features = false, version = '1.0.197', features = [
-  'alloc',
-  'derive',
-] }
+log = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
 # Required for bechmarking
 pallet-cf-validator = { path = '../cf-validator', optional = true, default-features = false }
 pallet-cf-reputation = { path = '../cf-reputation', optional = true, default-features = false }
 
 # Parity deps
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
   'derive',
 ] }
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
   'derive',
 ] }
 
@@ -49,7 +46,7 @@ frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag =
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 
 [dev-dependencies]
-hex-literal = { version = '0.4.1' }
+hex-literal = { workspace = true }
 cf-test-utilities = { path = '../../test-utilities' }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }

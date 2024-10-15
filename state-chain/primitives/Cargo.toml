@@ -9,33 +9,30 @@ description = 'Common primitive types used across Chainflip'
 workspace = true
 
 [dependencies]
-serde = { default-features = false, version = '1.0.197', features = [
-  'alloc',
-  'derive',
-] }
-hex = { optional = true, version = '0.4.3' }
+serde = { workspace = true, features = ["derive", "alloc"] }
+hex = { workspace = true, optional = true }
 ethabi = { default-features = false, version = '18.0' }
-strum = { default-features = false, version = '0.24' }
-strum_macros = { default-features = false, version = '0.24' }
+strum = { workspace = true }
+strum_macros = { workspace = true }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-arithmetic = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-lazy_format = "2.0"
+lazy_format = { workspace = true }
 
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
   'derive',
 ] }
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
   "derive",
 ] }
 
 [dev-dependencies]
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-serde_json = "1.0"
+serde_json = { workspace = true }
 
 [features]
 default = ['std']

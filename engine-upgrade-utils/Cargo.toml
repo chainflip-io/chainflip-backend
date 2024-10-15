@@ -5,5 +5,5 @@ name = "engine-upgrade-utils"
 version = "1.0.0"
 
 [dependencies]
-anyhow = "1.0"
+anyhow = { workspace = true }
 toml = "0.8.10"

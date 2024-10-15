@@ -9,10 +9,10 @@ description = 'Utilities for interacting with substrate runtimes.'
 workspace = true
 
 [dependencies]
-log = { version = '0.4.16', default-features = false }
+log = { workspace = true }
 cf-runtime-macros = { path = './macros', optional = true }
 
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
   'derive',
 ] }
 

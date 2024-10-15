@@ -8,14 +8,14 @@ version = "0.1.0"
 workspace = true
 
 [dependencies]
-anyhow = "1.0"
-hex = "0.4.3"
-bincode = "1.3.3"
-csv = "1.1.6"
-serde_json = "1.0"
-serde = { version = "1.0.197", features = ["derive"] }
+anyhow = { workspace = true }
+hex = { workspace = true }
+bincode = { workspace = true }
+csv = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
-rand = "0.8.5"
+rand = { workspace = true }
 
 # Local deps
 cf-primitives = { path = "../../state-chain/primitives" }
@@ -23,14 +23,7 @@ chainflip-engine = { path = "../../engine" }
 chainflip-node = { path = "../../state-chain/node" }
 multisig = { path = "../../engine/multisig" }
 state-chain-runtime = { path = "../../state-chain/runtime" }
-
-[dependencies.rocksdb]
-version = "0.21.0"
-# Disabling of default features, and using lz4 compression is primarily to avoid linker issues
-# resulting from the default compression using libs that conflict with the system libs
-# https://github.com/rust-rocksdb/rust-rocksdb/pull/555
-default-features = false
-features = ["lz4"]
+rocksdb = { version = "0.21.0", default-features = false, features = ["lz4"] }
 
 [dev-dependencies]
-tempfile = "3.7.0"
+tempfile = { workspace = true }

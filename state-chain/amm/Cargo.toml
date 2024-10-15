@@ -11,16 +11,13 @@ workspace = true
 [dependencies]
 cf-primitives = { path = '../primitives', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
-serde = { version = "1.0.197", default-features = false, features = [
-	'alloc',
-	'derive',
-] }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Parity deps
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
 	'derive',
 ] }
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
 	'derive',
 ] }
 
@@ -28,7 +25,7 @@ sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "cha
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 
 [dev-dependencies]
-rand = "0.8"
+rand = { workspace = true }
 
 [features]
 default = ['std']

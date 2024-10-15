@@ -9,7 +9,7 @@ description = 'Common traits used in the Chainflip runtime'
 workspace = true
 
 [dependencies]
-log = { version = '0.4.16', default-features = false }
+log = { workspace = true }
 
 # Internal
 cf-chains = { path = '../chains', default-features = false }
@@ -18,10 +18,10 @@ cfe-events = { path = '../cfe-events', default-features = false }
 cf-amm = { path = "../amm", default-features = false }
 
 # Parity deps
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
   'derive',
 ] }
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
   'derive',
 ] }
 
@@ -33,10 +33,7 @@ sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chai
 [dev-dependencies]
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-serde = { default-features = false, version = '1.0.197', features = [
-  'alloc',
-  'derive',
-] }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 [features]
 default = ['std']

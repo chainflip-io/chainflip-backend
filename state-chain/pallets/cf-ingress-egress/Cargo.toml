@@ -22,22 +22,17 @@ cf-runtime-utilities = { path = '../../runtime-utilities', default-features = fa
 ] }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
-log = { version = '0.4.16', default-features = false }
-strum = { default-features = false, version = '0.24' }
-strum_macros = { default-features = false, version = '0.24' }
-nanorand = { version = '0.7.0', default-features = false, features = [
-  'wyrand',
-] }
-serde = { default-features = false, version = '1.0.197', features = [
-  'alloc',
-  'derive',
-] }
+log = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+nanorand = { workspace = true, features = ['wyrand'] }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 # ==== Parity deps ====
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
   'derive',
 ] }
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
   'derive',
 ] }
 
@@ -48,7 +43,7 @@ sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 
 [dev-dependencies]
-hex-literal = { version = '0.4.1' }
+hex-literal = { workspace = true }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 pallet-cf-governance = { path = '../cf-governance' }

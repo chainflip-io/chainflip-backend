@@ -22,10 +22,10 @@ cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', defau
 cf-traits = { path = '../../traits', default-features = false }
 
 # Parity deps
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
     'derive',
 ] }
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
     'derive',
 ] }
 

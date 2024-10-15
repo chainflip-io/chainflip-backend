@@ -24,18 +24,15 @@ cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', defau
 cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false }
 cf-utilities = { package = "utilities", path = '../../../utilities', default-features = false }
 
-log = { version = '0.4.16', default-features = false }
+log = { workspace = true }
 
-serde = { version = '1.0.197', default-features = false, features = [
-    'alloc',
-    'derive',
-] }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Parity deps
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
+codec = { workspace = true, features = [
     'derive',
 ] }
-scale-info = { version = "2.11.1", default-features = false, features = [
+scale-info = { workspace = true, features = [
     'derive',
 ] }
 
