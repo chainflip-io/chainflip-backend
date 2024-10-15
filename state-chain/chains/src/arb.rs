@@ -86,7 +86,6 @@ impl ArbitrumTrackedData {
 		base_fee_multiplier.saturating_mul_int(self.base_fee)
 	}
 
-	// TODO: Add unit tests for this.
 	pub fn calculate_ccm_gas_limit(
 		&self,
 		is_native_asset: bool,
@@ -224,6 +223,7 @@ impl FeeRefundCalculator<Arbitrum> for evm::Transaction {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use crate::arb::fees::*;
 
 	#[test]
 	fn calculate_gas_limit() {
@@ -237,21 +237,29 @@ mod test {
 		};
 
 		let gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET, MESSAGE_LENGTH);
-		assert_eq!(gas_limit, 2561102u128);
+		assert_eq!(gas_limit, 2526102u128);
 
 		let gas_budget_extra = 1_000_000u128;
 		let gas_limit_extra = arb_tracked_data.calculate_ccm_gas_limit(
+			true,
+			GAS_BUDGET + gas_budget_extra,
+			MESSAGE_LENGTH,
+		);
+		assert_eq!(gas_limit + gas_budget_extra, gas_limit_extra);
+
+		let gas_limit_token =
+			arb_tracked_data.calculate_ccm_gas_limit(false, GAS_BUDGET, MESSAGE_LENGTH);
+		assert_eq!(gas_limit_token, gas_limit + CCM_TOKEN_OVERHEAD - CCM_NATIVE_GAS_OVERHEAD);
+		let gas_limit_token_extra = arb_tracked_data.calculate_ccm_gas_limit(
 			false,
 			GAS_BUDGET + gas_budget_extra,
 			MESSAGE_LENGTH,
 		);
-
-		assert_eq!(gas_limit + gas_budget_extra, gas_limit_extra);
+		assert_eq!(gas_limit_token + gas_budget_extra, gas_limit_token_extra);
 	}
 
 	#[test]
 	fn gas_limit_cap() {
-		use crate::arb::fees::MAX_GAS_LIMIT;
 		const GAS_BUDGET: u128 = 80_000u128;
 
 		let arb_tracked_data = ArbitrumTrackedData {
@@ -259,13 +267,24 @@ mod test {
 			l1_base_fee_estimate: 26_920_712_879u128,
 		};
 
-		let mut gas_limit = arb_tracked_data.calculate_ccm_gas_limit(false, GAS_BUDGET, 1);
-		let gas_limit_diff = MAX_GAS_LIMIT - gas_limit;
-		gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET + gas_limit_diff, 1);
-		assert_eq!(gas_limit, MAX_GAS_LIMIT);
+		// loop over bool
+		for is_native_asset in [true, false].iter() {
+			let mut gas_limit =
+				arb_tracked_data.calculate_ccm_gas_limit(*is_native_asset, GAS_BUDGET, 1);
+			let gas_limit_diff = MAX_GAS_LIMIT - gas_limit;
+			gas_limit = arb_tracked_data.calculate_ccm_gas_limit(
+				*is_native_asset,
+				GAS_BUDGET + gas_limit_diff,
+				1,
+			);
+			assert_eq!(gas_limit, MAX_GAS_LIMIT);
 
-		gas_limit =
-			arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET + gas_limit_diff + 1, 1);
-		assert_eq!(gas_limit, MAX_GAS_LIMIT);
+			gas_limit = arb_tracked_data.calculate_ccm_gas_limit(
+				*is_native_asset,
+				GAS_BUDGET + gas_limit_diff + 1,
+				1,
+			);
+			assert_eq!(gas_limit, MAX_GAS_LIMIT);
+		}
 	}
 }

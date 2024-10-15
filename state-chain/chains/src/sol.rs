@@ -157,7 +157,7 @@ pub mod compute_units_costs {
 	pub const MAX_COMPUTE_UNITS_PER_CCM_TRANSFER: SolComputeLimit = 600_000u32;
 	// Compute units overhead for Ccm transfers. These also act as minimum compute units
 	// to ensure transaction inclusion.
-	pub const CCM_COMPUTE_UNITS_OVERHEAD_NATIVE: SolComputeLimit = 30_000u32;
+	pub const CCM_COMPUTE_UNITS_OVERHEAD_NATIVE: SolComputeLimit = 40_000u32;
 	pub const CCM_COMPUTE_UNITS_OVERHEAD_TOKEN: SolComputeLimit = 80_000u32;
 }
 

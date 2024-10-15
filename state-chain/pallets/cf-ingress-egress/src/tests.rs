@@ -127,13 +127,13 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 			asset,
 			1_000,
 			ALICE_ETH_ADDRESS,
-			Some((ccm.clone(), gas_budget)),
+			Some(ccm.clone()),
 		));
 		assert_ok!(IngressEgress::schedule_egress(
 			ETH_FLIP,
 			1_000,
 			ALICE_ETH_ADDRESS,
-			Some((ccm.clone(), gas_budget)),
+			Some(ccm.clone()),
 		));
 
 		IngressEgress::on_finalize(1);
@@ -587,7 +587,7 @@ fn can_egress_ccm() {
 			destination_asset,
 			amount,
 			destination_address,
-			Some((ccm.clone(), GAS_BUDGET))
+			Some(ccm.clone())
 		).expect("Egress should succeed");
 
 		assert!(ScheduledEgressFetchOrTransfer::<Test, ()>::get().is_empty());
@@ -1791,7 +1791,6 @@ fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 		const EXCESS_CCMS: usize = 1;
 		let ccm_limits = MockFetchesTransfersLimitProvider::maybe_ccm_limit().unwrap();
 
-		let gas_budget = 1000u128;
 		let ccm = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
 			source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
@@ -1807,7 +1806,7 @@ fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 				ETH_ETH,
 				1_000,
 				ALICE_ETH_ADDRESS,
-				Some((ccm.clone(), gas_budget))
+				Some(ccm.clone())
 			));
 		}
 
@@ -1859,7 +1858,7 @@ fn can_request_swap_via_extrinsic() {
 				input_asset: INPUT_ASSET,
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Regular { output_address },
+				swap_type: SwapRequestType::Regular { output_address, ccm_deposit_metadata: None },
 				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
 			},]
 		);
@@ -1903,11 +1902,9 @@ fn can_request_ccm_swap_via_extrinsic() {
 				input_asset: INPUT_ASSET,
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
-				swap_type: SwapRequestType::Ccm {
+				swap_type: SwapRequestType::Regular {
 					output_address,
-					ccm_swap_metadata: ccm_deposit_metadata
-						.into_swap_metadata(INPUT_AMOUNT, INPUT_ASSET, OUTPUT_ASSET)
-						.unwrap()
+					ccm_deposit_metadata: Some(ccm_deposit_metadata)
 				},
 				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
 			},]
