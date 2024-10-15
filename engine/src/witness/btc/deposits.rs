@@ -100,7 +100,7 @@ fn deposit_witnesses(
 					})
 				})
 				.sorted_by_key(|deposit_witness| deposit_witness.deposit_address.clone())
-				.group_by(|deposit_witness| deposit_witness.deposit_address.clone())
+				.chunk_by(|deposit_witness| deposit_witness.deposit_address.clone())
 				.into_iter()
 				.map(|(_deposit_address, deposit_witnesses)| {
 					// We only take the largest output of a tx as a deposit witness. This is to
@@ -167,6 +167,7 @@ pub mod tests {
 	fn fake_details(
 		address: ScriptPubkey,
 	) -> DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance> {
+		use cf_chains::ForeignChainAddress;
 		DepositChannelDetails::<_, BitcoinInstance> {
 			owner: AccountId32::new([0xab; 32]),
 			opened_at: 1,
@@ -179,7 +180,7 @@ pub mod tests {
 			},
 			action: ChannelAction::<AccountId32>::LiquidityProvision {
 				lp_account: AccountId32::new([0xab; 32]),
-				refund_address: None,
+				refund_address: ForeignChainAddress::Btc(ScriptPubkey::P2PKH([0; 20])),
 			},
 			boost_fee: 0,
 			boost_status: BoostStatus::NotBoosted,

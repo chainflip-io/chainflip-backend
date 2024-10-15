@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use rand::{prelude::Distribution, Rng, SeedableRng};
 
 #[cfg(feature = "slow-tests")]
@@ -52,7 +50,8 @@ fn r_non_zero() {
 				0x5d6af8dedb81196699c329225ee604u128.ilog2() +
 				0x2216e584f5fa1ea926041bedfe98u128.ilog2() +
 				0x48a170391f7dc42444e8fa2u128.ilog2()) as i32 -
-			(128 * 19)) > 0
+			(128 * 19)) >
+			0
 	);
 }
 

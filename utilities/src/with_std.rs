@@ -93,9 +93,10 @@ pub fn assert_stream_send<'u, R>(
 	stream
 }
 
-/// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for
-/// some time) it will immediately output a single tick on the next call to tick() and resume
-/// ticking every duration.
+/// Makes a tick that outputs every duration.
+///
+/// If ticks are "missed" (as tick() wasn't called for some time) it will immediately output a
+/// single tick on the next call to tick() and resume ticking every duration.
 ///
 /// The supplied duration should be >> 5ms due to the underlying implementation of
 /// [Interval::poll_tick].

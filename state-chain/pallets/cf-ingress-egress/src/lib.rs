@@ -20,8 +20,6 @@ mod boost_pool;
 use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
 
-use frame_support::error::BadOrigin;
-
 use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, IntoForeignChainAddress,
@@ -34,10 +32,9 @@ use cf_chains::{
 	RefundParams, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId,
-	ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain,
-	PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
-	SWAP_DELAY_BLOCKS,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
+	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
+	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -66,6 +63,9 @@ use sp_std::{
 	vec::Vec,
 };
 pub use weights::WeightInfo;
+
+// 1 hour.
+const TAINTED_TX_EXPIRATION_BLOCKS: u32 = 600;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
@@ -127,12 +127,13 @@ pub enum DepositIgnoredReason {
 }
 
 /// Holds information about a tainted transaction.
-#[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
-pub struct TaintedTransactionDetails<AccountId, C: Chain> {
-	/// The broker that created the tainted transaction.
-	pub broker: AccountId,
+#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
+#[scale_info(skip_type_params(T, I))]
+pub struct TaintedTransactionDetails<T: Config<I>, I: 'static> {
 	pub refund_address: Option<ForeignChainAddress>,
-	pub deposit_witness: Option<DepositWitness<C>>,
+	pub asset: TargetChainAsset<T, I>,
+	pub amount: TargetChainAmount<T, I>,
+	pub tx_id: <T::TargetChain as Chain>::DepositDetails,
 }
 
 /// Cross-chain messaging requests.
@@ -157,7 +158,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(15);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(16);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -304,7 +305,7 @@ pub mod pallet {
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
-			refund_address: Option<ForeignChainAddress>,
+			refund_address: ForeignChainAddress,
 		},
 		CcmTransfer {
 			destination_asset: Asset,
@@ -540,7 +541,7 @@ pub mod pallet {
 	pub type PrewitnessedDepositIdCounter<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, PrewitnessedDepositId, ValueQuery>;
 
-	/// Stores the tainted transaction details for an account.
+	/// Stores the reporter and the tx_id against the BlockNumber when the report expires.
 	#[pallet::storage]
 	pub(crate) type TaintedTransactions<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
@@ -548,9 +549,14 @@ pub mod pallet {
 		T::AccountId,
 		Twox64Concat,
 		<T::TargetChain as Chain>::DepositDetails,
-		TaintedTransactionDetails<T::AccountId, T::TargetChain>,
+		BlockNumberFor<T>,
 		OptionQuery,
 	>;
+
+	/// Stores the details of the tainted transactions that are scheduled for rejecting.
+	#[pallet::storage]
+	pub(crate) type ScheduledTxForReject<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -685,6 +691,10 @@ pub mod pallet {
 			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
 		},
+		TaintedTransactionExpired {
+			account_id: T::AccountId,
+			tx_id: <T::TargetChain as Chain>::DepositDetails,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -729,20 +739,16 @@ pub mod pallet {
 		InvalidDcaParameters,
 		/// CCM parameters from a contract swap failed validity check.
 		InvalidCcm,
-		/// The deposit channel does not exist.
-		DepositChannelDoesNotExist,
-		/// Unauthorized call
-		Unauthorized,
-		/// The deposit channel has been tainted and is no longer usable.
-		DepositChannelTainted,
 		/// Transaction tainted
 		TransactionTainted,
+		/// Unsupported chain
+		UnsupportedChain,
 	}
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// Recycle addresses if we can
-		fn on_idle(_n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+		fn on_idle(now: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut used_weight = Weight::zero();
 
 			// Approximate weight calculation: r/w DepositChannelLookup + w DepositChannelPool
@@ -784,6 +790,23 @@ pub mod pallet {
 					Self::recycle_channel(&mut used_weight, address);
 				}
 			}
+
+			let mut expired_transactions = Vec::new();
+
+			for (account, tx_id, expire_block) in TaintedTransactions::<T, I>::iter() {
+				if expire_block <= now {
+					expired_transactions.push((account.clone(), tx_id.clone()));
+				}
+			}
+
+			for (account, tx_id) in expired_transactions {
+				TaintedTransactions::<T, I>::remove(account.clone(), tx_id.clone());
+				Self::deposit_event(Event::<T, I>::TaintedTransactionExpired {
+					account_id: account,
+					tx_id,
+				});
+			}
+
 			used_weight
 		}
 
@@ -1271,20 +1294,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		) -> DispatchResult {
-			let account_id = ensure_signed(origin)?;
-			let is_broker =
-				T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::Broker);
-			let is_lp = T::AccountRoleRegistry::has_account_role(
-				&account_id,
-				AccountRole::LiquidityProvider,
+			ensure!(
+				T::TargetChain::get() == ForeignChain::Bitcoin,
+				Error::<T, I>::UnsupportedChain
 			);
-			ensure!(is_broker || is_lp, BadOrigin);
-			let tainted_transaction = TaintedTransactionDetails {
-				broker: account_id.clone(),
-				refund_address: None,
-				deposit_witness: None,
-			};
-			TaintedTransactions::<T, I>::insert(account_id, tx_id, tainted_transaction);
+			Self::mark_transaction_as_tainted_inner(origin, tx_id)?;
 			Ok(())
 		}
 	}
@@ -1326,6 +1340,19 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn mark_transaction_as_tainted_inner(
+		origin: OriginFor<T>,
+		tx_id: <T::TargetChain as Chain>::DepositDetails,
+	) -> DispatchResult {
+		let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+		TaintedTransactions::<T, I>::insert(
+			account_id,
+			tx_id,
+			<frame_system::Pallet<T>>::block_number()
+				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS)),
+		);
+		Ok(())
+	}
 	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {
 		if let Some(DepositChannelDetails { deposit_channel, boost_status, .. }) =
 			DepositChannelLookup::<T, I>::take(address)
@@ -1676,7 +1703,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			// Only boost on non-zero fee and if the channel isn't already boosted:
 			if T::SafeMode::get().boost_deposits_enabled &&
-				boost_fee > 0 && !matches!(boost_status, BoostStatus::Boosted { .. })
+				boost_fee > 0 &&
+				!matches!(boost_status, BoostStatus::Boosted { .. })
 			{
 				match Self::try_boosting(asset, amount, boost_fee, prewitnessed_deposit_id) {
 					Ok(BoostOutput { used_pools, total_fee: boost_fee_amount }) => {
@@ -1857,49 +1885,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
-		let channel_owner = deposit_channel_details.clone().owner;
-
-		if let Some(tainted_tx) =
-			TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
-		{
-			if tainted_tx.broker == channel_owner {
-				let refund_address = match deposit_channel_details.action {
-					ChannelAction::Swap { refund_params, .. } => refund_params
-						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone()),
-					ChannelAction::CcmTransfer { refund_params, .. } => refund_params
-						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone()),
-					ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
-				};
-				let tainted_transaction_details = TaintedTransactionDetails {
-					broker: channel_owner.clone(),
-					refund_address,
-					deposit_witness: Some(DepositWitness {
-						deposit_address: deposit_address.clone(),
-						asset: deposit_channel_details.deposit_channel.asset,
-						amount: deposit_amount,
-						deposit_details: deposit_details.clone(),
-					}),
-				};
-
-				TaintedTransactions::<T, I>::insert(
-					channel_owner,
-					deposit_details.clone(),
-					tainted_transaction_details,
-				);
-
-				Self::deposit_event(Event::<T, I>::DepositIgnored {
-					deposit_address: deposit_address.clone(),
-					asset,
-					amount: deposit_amount,
-					deposit_details: deposit_details.clone(),
-					reason: DepositIgnoredReason::TransactionTainted,
-				});
-
-				return Ok(())
-			}
-		}
 
 		if DepositChannelPool::<T, I>::get(channel_id).is_some() {
 			log_or_panic!(
@@ -1924,6 +1909,39 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_details,
 				reason: DepositIgnoredReason::BelowMinimumDeposit,
 			});
+			return Ok(())
+		}
+
+		let channel_owner = deposit_channel_details.owner.clone();
+
+		if TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
+			.is_some()
+		{
+			let refund_address = match deposit_channel_details.action {
+				ChannelAction::Swap { refund_params, .. } =>
+					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
+				ChannelAction::CcmTransfer { refund_params, .. } =>
+					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
+				ChannelAction::LiquidityProvision { refund_address, .. } => Some(refund_address),
+			};
+
+			let tainted_transaction_details = TaintedTransactionDetails {
+				refund_address,
+				amount: deposit_amount,
+				asset,
+				tx_id: deposit_details.clone(),
+			};
+
+			ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
+
+			Self::deposit_event(Event::<T, I>::DepositIgnored {
+				deposit_address: deposit_address.clone(),
+				asset,
+				amount: deposit_amount,
+				deposit_details: deposit_details.clone(),
+				reason: DepositIgnoredReason::TransactionTainted,
+			});
+
 			return Ok(())
 		}
 
@@ -2301,7 +2319,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 		boost_fee: BasisPoints,
-		refund_address: Option<ForeignChainAddress>,
+		refund_address: ForeignChainAddress,
 	) -> Result<
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,

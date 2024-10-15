@@ -7,6 +7,7 @@ use cf_chains::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	DepositChannel,
 };
+use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -72,7 +73,7 @@ mod benchmarks {
 					.unwrap(),
 				action: ChannelAction::<T::AccountId>::LiquidityProvision {
 					lp_account: account("doogle", 0, 0),
-					refund_address: None,
+					refund_address: ForeignChainAddress::Eth(Default::default()),
 				},
 				boost_fee: 0,
 				boost_status: BoostStatus::NotBoosted,
@@ -113,7 +114,7 @@ mod benchmarks {
 					.unwrap(),
 					action: ChannelAction::<T::AccountId>::LiquidityProvision {
 						lp_account: account("doogle", 0, 0),
-						refund_address: None,
+						refund_address: ForeignChainAddress::Eth(Default::default()),
 					},
 					boost_fee: 0,
 					boost_status: BoostStatus::NotBoosted,
@@ -233,7 +234,7 @@ mod benchmarks {
 			asset,
 			ChannelAction::LiquidityProvision {
 				lp_account: lp_account.clone(),
-				refund_address: None,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
 			},
 			fee_tier,
 		)
@@ -406,7 +407,7 @@ mod benchmarks {
 			asset,
 			ChannelAction::LiquidityProvision {
 				lp_account: boosters[0].clone(),
-				refund_address: None,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
 			},
 			TIER_5_BPS,
 		)
@@ -518,8 +519,13 @@ mod benchmarks {
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
 		let tx_id = <<T as Config<I>>::TargetChain as Chain>::DepositDetails::benchmark_value();
 
-		#[extrinsic_call]
-		mark_transaction_as_tainted(RawOrigin::Signed(caller.clone()), tx_id.clone());
+		#[block]
+		{
+			assert_ok!(Pallet::<T, I>::mark_transaction_as_tainted_inner(
+				RawOrigin::Signed(caller.clone()).into(),
+				tx_id.clone(),
+			));
+		}
 
 		assert!(
 			TaintedTransactions::<T, I>::get(caller, tx_id).is_some(),

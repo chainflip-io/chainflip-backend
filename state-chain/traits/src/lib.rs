@@ -334,6 +334,7 @@ pub trait EmissionsTrigger {
 }
 
 /// A representation of the current network state for this heartbeat interval.
+///
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
@@ -608,6 +609,7 @@ pub trait QualifyNode<Id: Ord + Clone> {
 }
 
 /// Qualify if the node has registered
+#[allow(dead_code)]
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
 impl<T: Chainflip, R: frame_support::traits::ValidatorRegistration<T::ValidatorId>>
@@ -674,6 +676,10 @@ pub trait HistoricalEpoch {
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount;
 	/// Returns the number of active epochs a authority is still active in
 	fn number_of_active_epochs_for_authority(id: &Self::ValidatorId) -> u32;
+	/// Is the validator a keyholder for an active epoch?
+	fn is_keyholder(id: &Self::ValidatorId) -> bool {
+		Self::number_of_active_epochs_for_authority(id) > 0
+	}
 }
 
 /// Handles the bonding logic
@@ -724,7 +730,7 @@ pub trait DepositApi<C: Chain> {
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
 		boost_fee: BasisPoints,
-		refund_address: Option<ForeignChainAddress>,
+		refund_address: ForeignChainAddress,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
