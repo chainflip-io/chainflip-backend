@@ -880,14 +880,13 @@ pub mod pallet {
 				}
 			}
 
-			for (_, tx_id, details) in TaintedTransactions::<T, I>::drain() {
-				let deposit_details = details.deposit_witness.unwrap();
+			for tx in ScheduledTxForReject::<T, I>::take() {
 				if let Ok(api_call) = <T::ChainApiCall as RejectCall<T::TargetChain>>::reject_call(
-					tx_id,
+					tx.tx_id,
 					RefundParams {
-						asset: deposit_details.asset.into(),
-						amount: deposit_details.amount.into(),
-						refund_address: details.refund_address.unwrap(),
+						asset: tx.asset.into(),
+						amount: tx.amount.into(),
+						refund_address: tx.refund_address.unwrap(),
 					},
 				) {
 					T::Broadcaster::threshold_sign_and_broadcast(api_call);
