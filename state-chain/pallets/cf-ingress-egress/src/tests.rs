@@ -1851,6 +1851,10 @@ fn can_request_swap_via_extrinsic() {
 			INPUT_AMOUNT,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			TX_HASH,
+			DepositDetails { tx_hashes: None },
+			None,
+			None,
+			0,
 		));
 
 		assert_eq!(
@@ -1935,18 +1939,27 @@ fn rejects_invalid_swap_by_witnesser() {
 			10000,
 			btc_encoded_address,
 			Default::default(),
+			DepositDetails { tx_hashes: None },
+			None,
+			None,
+			0
 		),);
 
 		// No swap request created -> the call was ignored
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
+		// Invalid BTC address:
 		assert_ok!(IngressEgress::contract_swap_request(
 			RuntimeOrigin::root(),
 			Asset::Eth,
 			Asset::Btc,
 			10000,
 			EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
-			Default::default()
+			Default::default(),
+			DepositDetails { tx_hashes: None },
+			None,
+			None,
+			0
 		),);
 
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());

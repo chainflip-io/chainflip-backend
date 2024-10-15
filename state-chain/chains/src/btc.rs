@@ -227,6 +227,12 @@ impl BitcoinFeeInfo {
 	}
 }
 
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
+pub struct BtcDepositDetails {
+	pub utxo_id: UtxoId,
+	pub deposit_address: DepositAddress,
+}
+
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
@@ -244,7 +250,7 @@ impl Chain for Bitcoin {
 	type ChainAccount = ScriptPubkey;
 	type DepositFetchId = BitcoinFetchId;
 	type DepositChannelState = DepositAddress;
-	type DepositDetails = UtxoId;
+	type DepositDetails = BtcDepositDetails;
 	type Transaction = BitcoinTransactionData;
 	type TransactionMetadata = ();
 	type TransactionRef = Hash;
