@@ -54,20 +54,23 @@ pub type SolanaElectoralSystem = Composite<
 
 mod old {
 	use super::*;
-	use frame_support::traits::OnRuntimeUpgrade;
-	use cf_chains::instances::SolanaInstance;
 	use crate::Weight;
-	use pallet_cf_elections::electoral_system::ElectoralWriteAccess;
+	use cf_chains::instances::SolanaInstance;
 	use core::marker::PhantomData;
-	use frame_support::{CloneNoBound, EqNoBound, PartialEqNoBound};
+	use frame_support::{
+		pallet_prelude::IsType, traits::OnRuntimeUpgrade, CloneNoBound, EqNoBound,
+		PartialEqNoBound, Twox64Concat,
+	};
 	use frame_system::Config;
-	use frame_support::pallet_prelude::IsType;
+	use pallet_cf_elections::electoral_system::{ElectionIdentifierOf, ElectoralWriteAccess};
 
-	pub type SolanaNonceTrackingOld = pallet_cf_elections::migrations::change_old::Change<SolAddress,
+	pub type SolanaNonceTrackingOld = pallet_cf_elections::migrations::change_old::Change<
+		SolAddress,
 		SolHash,
 		(),
 		SolanaNonceTrackingHook,
-		<Runtime as Chainflip>::ValidatorId>;
+		<Runtime as Chainflip>::ValidatorId,
+	>;
 	pub type SolanaElectoralSystem = Composite<
 		(
 			SolanaBlockHeightTracking,
@@ -80,194 +83,56 @@ mod old {
 		<Runtime as Chainflip>::ValidatorId,
 		SolanaElectionHooksOld,
 	>;
-
 	pub struct SolanaElectionHooksOld;
 
-	impl
-	Hooks<
-		SolanaBlockHeightTracking,
-		SolanaFeeTracking,
-		SolanaIngressTracking,
-		SolanaNonceTrackingOld,
-		SolanaEgressWitnessing,
-		SolanaLiveness,
-	> for SolanaElectionHooksOld
-	{
-		type OnFinalizeContext = ();
-		type OnFinalizeReturn = ();
-
-		fn on_finalize<
-			GenericElectoralAccess,
-			BlockHeightTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaBlockHeightTracking>,
-			FeeTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaFeeTracking>,
-			IngressTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaIngressTracking>,
-			OldNonceTrackingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = old::SolanaNonceTrackingOld>,
-			EgressWitnessingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaEgressWitnessing>,
-			LivenessTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaLiveness>,
-		>(
-			generic_electoral_access: &mut GenericElectoralAccess,
-			(
-				block_height_translator,
-				fee_translator,
-				ingress_translator,
-				old_nonce_translator,
-				egress_witnessing_translator,
-				liveness_translator,
-			): (
-				BlockHeightTranslator,
-				FeeTranslator,
-				IngressTranslator,
-				OldNonceTrackingTranslator,
-				EgressWitnessingTranslator,
-				LivenessTranslator,
-			),
-			(
-				block_height_identifiers,
-				fee_identifiers,
-				ingress_identifiers,
-				old_nonce_identifiers,
-				egress_witnessing_identifiers,
-				liveness_identifiers,
-			): (
-				Vec<
-					ElectionIdentifier<
-						<SolanaBlockHeightTracking as ElectoralSystem>::ElectionIdentifierExtra,
-					>,
-				>,
-				Vec<
-					ElectionIdentifier<<SolanaFeeTracking as ElectoralSystem>::ElectionIdentifierExtra>,
-				>,
-				Vec<
-					ElectionIdentifier<
-						<SolanaIngressTracking as ElectoralSystem>::ElectionIdentifierExtra,
-					>,
-				>,
-				Vec<
-					ElectionIdentifier<
-						<old::SolanaNonceTrackingOld as ElectoralSystem>::ElectionIdentifierExtra,
-					>,
-				>,
-				Vec<
-					ElectionIdentifier<
-						<SolanaEgressWitnessing as ElectoralSystem>::ElectionIdentifierExtra,
-					>,
-				>,
-				Vec<ElectionIdentifier<<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra>>,
-			),
-			_context: &Self::OnFinalizeContext,
-		) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
-			let block_height = SolanaBlockHeightTracking::on_finalize(
-				&mut block_height_translator.translate_electoral_access(generic_electoral_access),
-				block_height_identifiers,
-				&(),
-			)?;
-			SolanaLiveness::on_finalize(
-				&mut liveness_translator.translate_electoral_access(generic_electoral_access),
-				liveness_identifiers,
-				&(crate::System::block_number(), block_height),
-			)?;
-			SolanaFeeTracking::on_finalize(
-				&mut fee_translator.translate_electoral_access(generic_electoral_access),
-				fee_identifiers,
-				&(),
-			)?;
-			SolanaEgressWitnessing::on_finalize(
-				&mut egress_witnessing_translator.translate_electoral_access(generic_electoral_access),
-				egress_witnessing_identifiers,
-				&(),
-			)?;
-			SolanaIngressTracking::on_finalize(
-				&mut ingress_translator.translate_electoral_access(generic_electoral_access),
-				ingress_identifiers,
-				&block_height,
-			)?;
-			old::SolanaNonceTrackingOld::on_finalize(
-				&mut old_nonce_translator.translate_electoral_access(generic_electoral_access),
-				old_nonce_identifiers,
-				&(),
-			)?;
-			Ok(())
-		}
-	}
-
-	pub struct Migration;
-	#[derive(CloneNoBound, EqNoBound, PartialEqNoBound)]
-	pub struct OldConfig<T>(PhantomData<T>);
-	impl<Runtime: 'static + cf_traits::Chainflip> Chainflip for OldConfig<Runtime> where <Runtime as cf_traits::Chainflip>::RuntimeCall: IsType<crate::RuntimeCall> {
-		type RuntimeCall = <Runtime as cf_traits::Chainflip>::RuntimeCall;
-		type AccountRoleRegistry = <Runtime as cf_traits::Chainflip>::AccountRoleRegistry;
-		type Amount = <Runtime as cf_traits::Chainflip>::Amount;
-		type EnsureGovernance = <Runtime as cf_traits::Chainflip>::EnsureGovernance;
-		type EnsurePrewitnessed = <Runtime as cf_traits::Chainflip>::EnsurePrewitnessed;
-		type EnsureWitnessed = <Runtime as cf_traits::Chainflip>::EnsureWitnessed;
-		type EnsureWitnessedAtCurrentEpoch = <Runtime as cf_traits::Chainflip>::EnsureWitnessedAtCurrentEpoch;
-		type EpochInfo = <Runtime as cf_traits::Chainflip>::EpochInfo;
-		type FundingInfo = <Runtime as cf_traits::Chainflip>::FundingInfo;
-		type ValidatorId = <Runtime as cf_traits::Chainflip>::ValidatorId;
-	}
-	impl<Runtime> frame_system::Config for OldConfig<Runtime> {
-		type AccountId = <Runtime as frame_system::Config>::AccountId;
-		type RuntimeEvent = crate::RuntimeEvent;
-		type AccountData = <Runtime as frame_system::Config>::AccountData;
-		type BaseCallFilter = <Runtime as frame_system::Config>::BaseCallFilter;
-		type Block = <Runtime as frame_system::Config>::Block;
-		type BlockHashCount = <Runtime as frame_system::Config>::BlockHashCount;
-		type BlockLength = <Runtime as frame_system::Config>::BlockLength;
-		type BlockWeights = <Runtime as frame_system::Config>::BlockWeights;
-		type DbWeight = <Runtime as frame_system::Config>::DbWeight;
-		type Hash = <Runtime as frame_system::Config>::Hash;
-		type Hashing = <Runtime as frame_system::Config>::Hashing;
-		type Lookup = <Runtime as frame_system::Config>::Lookup;
-		type MaxConsumers = <Runtime as frame_system::Config>::MaxConsumers;
-		type Nonce = <Runtime as frame_system::Config>::Nonce;
-		type OnKilledAccount = <Runtime as frame_system::Config>::OnKilledAccount;
-		type OnNewAccount = <Runtime as frame_system::Config>::OnNewAccount;
-		type OnSetCode = <Runtime as frame_system::Config>::OnSetCode;
-		type PalletInfo = <Runtime as frame_system::Config>::PalletInfo;
-		type RuntimeCall = crate::RuntimeCall;
-		type RuntimeOrigin = <Runtime as frame_system::Config>::RuntimeOrigin;
-		type RuntimeTask = <Runtime as frame_system::Config>::RuntimeTask;
-		type SS58Prefix = <Runtime as frame_system::Config>::SS58Prefix;
-		type SystemWeightInfo = <Runtime as frame_system::Config>::SystemWeightInfo;
-		type Version = <Runtime as frame_system::Config>::Version;
-	}
-	impl pallet_cf_elections::Config<SolanaInstance> for OldConfig<Runtime> {
-		type ElectoralSystem = SolanaElectoralSystem;
-		type RuntimeEvent = crate::RuntimeEvent;
-		type WeightInfo = ();
-	}
-
-	impl OnRuntimeUpgrade for Migration{
+	impl OnRuntimeUpgrade for Migration {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			pallet_cf_elections::Pallet::<OldConfig<Runtime>, Instance>::with_electoral_access_and_identifiers(
-				|electoral_access, identifiers| {
-					SolanaElectoralSystem::with_access_translators(|access_translators| {
-						let (_, _, _, access_translator, ..) = &access_translators;
-						let mut electoral_access =
-							access_translator.translate_electoral_access(electoral_access);
-						for id in identifiers {
-							electoral_access.election_mut(id)?.delete();
-						}
-					})
-				},
-			);
+			let election_identifiers = frame_support::migration::storage_key_iter::<
+				ElectionIdentifierOf<old::SolanaElectoralSystem>,
+				<old::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
+				Twox64Concat
+			>(b"SolanaElections", b"ElectionProperties")
+				.map(|(key, value)| {
+					if matches!(value, pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::D(
+						_
+					)) {
+						Some(key)
+					} else {
+						None
+					}
+				})
+				.collect::<Vec<ElectionIdentifierOf<old::SolanaElectoralSystem>>>();
 
-			let _ = pallet_cf_elections::Pallet::<Runtime, Instance>::with_electoral_access(
-				|electoral_access| {
-					pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter().map(|(key, value)| {
-						super::SolanaElectoralSystem::with_access_translators(|access_translators| {
-							let (_, _, _, access_translator, ..) = &access_translators;
-							let mut electoral_access =
-								access_translator.translate_electoral_access(electoral_access);
-							SolanaNonceTracking::watch_for_change(&mut electoral_access, key, value);
-						})
-					});
-					Ok(())
-				},
-			);
+			for election_identifier in election_identifiers {
+				let unique_monotonic_identifier = election_identifier.unique_monotonic();
+				// ElectionBitmapComponents::<T, I>::clear(unique_monotonic_identifier);
+				let _ = frame_support::storage::migration::take_storage_item::<
+					_,
+					Vec<u8>,
+					Twox64Concat,
+				>(
+					b"SolanaElections",
+					b"ElectionBitmapComponents",
+					unique_monotonic_identifier,
+				);
+				// No individual components to migrate:
+				// for (_, (_, individual_component)) in
+				// 	IndividualComponents::<T, I>::drain_prefix(unique_monotonic_identifier)
+				// {
+				// 	<<T::ElectoralSystem as ElectoralSystem>::Vote as
+				// VoteStorage>::visit_shared_data_references_in_individual_component(&
+				// individual_component, |shared_data_hash| { 		Pallet::<T,
+				// I>::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier);
+				// 	});
+				// }
+				// ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
+				frame_support::storage::unhashed::kill();
+				ElectionProperties::<T, I>::remove(election_identifier);
+				ElectionState::<T, I>::remove(unique_monotonic_identifier);
+				ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
+			}
 			Weight::zero()
 		}
-
 	}
 }
 const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;

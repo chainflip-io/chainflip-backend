@@ -109,10 +109,10 @@
 
 pub mod electoral_system;
 pub mod electoral_systems;
+pub mod migrations;
 mod mock;
 mod tests;
 pub mod vote_storage;
-pub mod migrations;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -230,7 +230,7 @@ pub mod pallet {
 			ElectionIdentifier::new(*self.unique_monotonic(), other_extra)
 		}
 
-		pub(crate) fn unique_monotonic(&self) -> &UniqueMonotonicIdentifier {
+		pub fn unique_monotonic(&self) -> &UniqueMonotonicIdentifier {
 			&self.0
 		}
 
