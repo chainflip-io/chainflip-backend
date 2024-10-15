@@ -441,18 +441,14 @@ export async function observeSwapEvents(
   return broadcastId;
 }
 
-// TODO: To import from the SDK once it's exported
 export enum SwapType {
   Swap = 'Swap',
-  CcmPrincipal = 'CcmPrincipal',
-  CcmGas = 'CcmGas',
   NetworkFee = 'NetworkFee',
   IngressEgressFee = 'IngressEgressFee',
 }
 
 export enum SwapRequestType {
   Regular = 'Regular',
-  Ccm = 'Ccm',
   NetworkFee = 'NetworkFee',
   IngressEgressFee = 'IngressEgressFee',
 }
@@ -686,6 +682,27 @@ export async function observeEVMEvent(
           ) {
             break;
           } else if (k === parameterNames.length - 1) {
+            const txHash = events[j].transactionHash;
+            // Print the gas limit for that transaction
+            const tx = await web3.eth.getTransaction(txHash);
+            const receipt = await web3.eth.getTransactionReceipt(txHash);
+            const message = eventParametersExpected[2];
+            console.log(
+              'Chain',
+              chain,
+              'Gas limit,',
+              tx.gas,
+              'Gas used',
+              receipt.gasUsed,
+              'message length',
+              message!.slice(2).length / 2,
+              'transaction fee',
+              receipt.gasUsed * receipt.effectiveGasPrice,
+              'maxFeePerGas',
+              tx.maxFeePerGas,
+              'maxPriorityFeePerGas',
+              tx.maxPriorityFeePerGas,
+            );
             return {
               name: events[j].event,
               address: events[j].address,
@@ -799,6 +816,7 @@ export async function observeSolanaCcmEvent(
                 `Unexpected source address: ${event.data.source_address}, expecting empty ${Buffer.from([0])}`,
               );
             }
+            console.log('Solana CCM event observed', txSignature.signature);
             return {
               name: event.name,
               address: cfTesterAddress.toString(),

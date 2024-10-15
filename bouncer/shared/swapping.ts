@@ -158,6 +158,8 @@ function newCcmMessage(destAsset: Asset): string {
 
 const EVM_GAS_PER_BYTE = 16;
 const EVM_GAS_PER_EVENT_BYTE = 8;
+const OVERHEAD_GAS = 10000;
+const OVERHEAD_COMPUTE_UNITS = 10000;
 
 export function newCcmMetadata(
   destAsset: Asset,
@@ -171,9 +173,12 @@ export function newCcmMetadata(
   const destChain = chainFromAsset(destAsset);
   let userLogicGasBudget;
   if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
-    userLogicGasBudget = (10000 + (EVM_GAS_PER_BYTE + EVM_GAS_PER_EVENT_BYTE) * (message.slice(2).length / 2)).toString();
+    userLogicGasBudget = (
+      OVERHEAD_GAS +
+      (EVM_GAS_PER_BYTE + EVM_GAS_PER_EVENT_BYTE) * (message.slice(2).length / 2)
+    ).toString();
   } else if (destChain === 'Solana') {
-    userLogicGasBudget = '10000';
+    userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
   } else {
     throw new Error(`Unsupported chain: ${destChain}`);
   }
