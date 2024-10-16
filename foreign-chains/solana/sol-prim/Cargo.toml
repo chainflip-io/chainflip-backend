@@ -13,7 +13,7 @@ curve25519-dalek = { version = "^2.1", optional = true, default-features = false
 
 cf-utilities = { package = "utilities", path = "../../../utilities", default-features = false }
 bs58 = { workspace = true, optional = true }
-digest = { version = "^0.10", optional = true, default-features = false }
+digest = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 sha2 = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }

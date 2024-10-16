@@ -27,7 +27,7 @@ cf-traits = { path = '../../traits', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
 
 # Non-substrate external deps
-bitvec = { default-features = false, version = '1.0', features = ['alloc'] }
+bitvec = { workspace = true, features = ['alloc'] }
 
 # Parity deps
 codec = { workspace = true, features = [

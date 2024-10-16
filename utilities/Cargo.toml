@@ -19,7 +19,7 @@ async-channel = { workspace = true, optional = true }
 bs58 = { workspace = true }
 clap = { workspace = true, features = ["derive"], optional = true }
 futures = { workspace = true, optional = true }
-futures-util = { version = "0.3.14", optional = true }
+futures-util = { workspace = true, optional = true }
 hex = { workspace = true }
 itertools = { workspace = true }
 lazy_format = { workspace = true }
@@ -28,11 +28,11 @@ log = { workspace = true }
 mockall = { workspace = true, optional = true }
 num-traits = { workspace = true, optional = true }
 pin-project = { workspace = true, optional = true }
-predicates = { version = "3.0", optional = true }
-prometheus = { version = "0.13.0", default-features = false, optional = true }
+predicates = { workspace = true, optional = true }
+prometheus = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 scale-info = { workspace = true, optional = true }
-scopeguard = { version = "1.2.0" }
+scopeguard = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive", "alloc"] }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true }
 sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true }

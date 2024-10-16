@@ -37,8 +37,8 @@ sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chai
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 
 [dev-dependencies]
-quickcheck = '1'
-quickcheck_macros = '1'
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 cf-test-utilities = { path = '../../test-utilities' }

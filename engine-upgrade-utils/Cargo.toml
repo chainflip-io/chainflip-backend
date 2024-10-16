@@ -6,4 +6,4 @@ version = "1.0.0"
 
 [dependencies]
 anyhow = { workspace = true }
-toml = "0.8.10"
+toml = { workspace = true }

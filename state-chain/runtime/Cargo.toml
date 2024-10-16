@@ -23,7 +23,7 @@ log = { workspace = true }
 nanorand = { workspace = true, features = ['wyrand'] }
 serde = { workspace = true, features = ["derive", "alloc"] }
 
-ethabi = { default-features = false, version = '18.0' }
+ethabi = { workspace = true }
 
 # Chainflip local dependencies
 cf-amm = { path = '../amm', default-features = false }

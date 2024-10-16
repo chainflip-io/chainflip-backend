@@ -11,7 +11,7 @@ workspace = true
 [dependencies]
 serde = { workspace = true, features = ["derive", "alloc"] }
 hex = { workspace = true, optional = true }
-ethabi = { default-features = false, version = '18.0' }
+ethabi = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }

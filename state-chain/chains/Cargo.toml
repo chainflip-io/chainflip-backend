@@ -14,7 +14,7 @@ cf-utilities = { package = 'utilities', path = '../../utilities', default-featur
 cf-runtime-utilities = { path = '../runtime-utilities', default-features = false }
 
 # Cryptography
-digest = { version = "0.10" }
+digest = { workspace = true }
 libsecp256k1 = { workspace = true, features = [
   'static-context',
 ] }
@@ -29,33 +29,35 @@ sol-prim = { path = "../../foreign-chains/solana/sol-prim", default-features = f
 ] }
 
 # Ethereum
-ethabi = { default-features = false, version = '18.0' }
-ethereum-types = { default-features = false, version = '0.14.1' }
+ethabi = { workspace = true }
+ethereum-types = { workspace = true }
 ethereum = { workspace = true }
 rlp = { workspace = true }
 
 # Bitcoin
-bech32 = { default-features = false, version = '0.9.1' }
+bech32 ={ workspace = true }
 
 # Solana
-borsh = { version = "1.2.1", default-features = false, features = [
+borsh = { workspace = true, features = [
   "derive",
   "unstable__schema",
   "hashbrown",
 ] }
-serde_with = { version = "2.3.3", default-features = false, features = [
+serde_with = { workspace = true, features = [
   "macros",
 ] }
 generic-array = { workspace = true, features = [
   "serde",
 ] }
 bs58 = { workspace = true, features = ["alloc"] }
+
+# Special case for Solana: We use bincode 2 for its no-std support.
 bincode = { version = "2.0.0-rc.3", default-features = false, features = [
   "alloc",
   "serde",
 ] }
 curve25519-dalek = { workspace = true, optional = true }
-sha2-const = { version = "0.1.2", default-features = false }
+sha2-const = { workspace = true }
 ed25519-dalek = { workspace = true, optional = true }
 
 # Other
@@ -72,7 +74,7 @@ thiserror = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 
 # Substrate packages
-ss58-registry = { version = "1.41", optional = true }
+ss58-registry = { workspace = true, optional = true }
 codec = { workspace = true, features = [
   "derive",
 ] }
@@ -88,7 +90,7 @@ sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "
 [dev-dependencies]
 cf-test-utilities = { path = '../test-utilities' }
 serde_json = { workspace = true }
-heck = "0.5.0"
+heck = { workspace = true }
 rand = { workspace = true }
 ed25519-dalek = { workspace = true, features = ["rand_core"] }
 

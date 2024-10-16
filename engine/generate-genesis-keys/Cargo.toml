@@ -23,7 +23,7 @@ chainflip-engine = { path = "../../engine" }
 chainflip-node = { path = "../../state-chain/node" }
 multisig = { path = "../../engine/multisig" }
 state-chain-runtime = { path = "../../state-chain/runtime" }
-rocksdb = { version = "0.21.0", default-features = false, features = ["lz4"] }
+rocksdb = { workspace = true, features = ["lz4"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

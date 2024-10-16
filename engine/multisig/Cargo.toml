@@ -30,7 +30,7 @@ secp256k1 = { workspace = true, features = [
 	"global-context",
 ] }
 serde = { workspace = true, features = ["derive", "rc"]}
-sha2 = "0.9.5"
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-stream = { workspace = true, features = ["sync"] }
@@ -45,7 +45,7 @@ curve25519-dalek = { workspace = true, features = [
 ] }
 typenum = { workspace = true }
 schnorrkel = { workspace = true }
-rayon = "1.7.0"
+rayon = { workspace = true }
 rand = { workspace = true }
 tracing = { workspace = true }
 strum = { workspace = true }

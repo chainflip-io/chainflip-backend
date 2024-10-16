@@ -122,7 +122,7 @@ frame-metadata = { workspace = true, features = ["current"] }
 serde_bytes = { workspace = true }
 bs58 = { workspace = true }
 base64 = { workspace = true }
-rocksdb = { version = "0.21.0", default-features = false, features = ["lz4"] }
+rocksdb = { workspace = true, features = ["lz4"] }
 
 [dev-dependencies]
 csv = { workspace = true }
