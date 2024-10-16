@@ -77,7 +77,6 @@ fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 type BtcIngressEgressCall =
 	pallet_cf_ingress_egress::Call<state_chain_runtime::Runtime, BitcoinInstance>;
 
-// Currently unused, but will be used by the deposit wintesser:
 pub fn try_extract_contract_call(
 	tx: &VerboseTransaction,
 	vault_address: &DepositAddress,

@@ -144,9 +144,9 @@ fn deposit_witnesses(
 }
 
 fn map_script_addresses(
-	addresses: Vec<DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance>>,
+	deposit_channels: Vec<DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance>>,
 ) -> HashMap<Vec<u8>, DepositAddress> {
-	addresses
+	deposit_channels
 		.into_iter()
 		.map(|channel| {
 			assert_eq!(channel.deposit_channel.asset, btc::Asset::Btc);
