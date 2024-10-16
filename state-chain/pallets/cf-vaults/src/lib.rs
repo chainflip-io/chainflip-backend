@@ -47,6 +47,9 @@ pub enum VaultActivationStatus<T: Config<I>, I: 'static = ()> {
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new
 	/// key.
 	Complete,
+	/// The activation tx has failed to construct. The rotation is now paused and awaiting
+	/// governance.
+	ActivationFailedAwaitingGovernance { new_public_key: AggKeyFor<T, I> },
 }
 
 #[frame_support::pallet]
@@ -119,6 +122,9 @@ pub mod pallet {
 		/// The new key has been generated, we must activate the new key on the external
 		/// chain via governance.
 		AwaitingGovernanceActivation {
+			new_public_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+		},
+		ActivationTxFailedAwaitingGovernance {
 			new_public_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		},
 		ChainInitialized,
