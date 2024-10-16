@@ -324,10 +324,10 @@ mod access {
 		/// to ensure that in situations where `check_consensus` depends on the `state` that we will
 		/// correctly recalculate the consensus if needed.
 		fn set_state(
-			&mut self,
+			&self,
 			state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
 		) -> Result<(), CorruptStorageError>;
-		fn clear_votes(&mut self);
+		fn clear_votes(&self);
 		fn delete(self);
 		/// This will change the `ElectionIdentifierExtra` value of the election, and allows you to
 		/// optionally change the properties. Note the `extra` must be strictly greater than the
@@ -350,7 +350,7 @@ mod access {
 		/// votes/state. This also returns information about the difference in the consensus between
 		/// the last call to `check_consensus`.
 		fn check_consensus(
-			&mut self,
+			&self,
 		) -> Result<
 			ConsensusStatus<<Self::ElectoralSystem as ElectoralSystem>::Consensus>,
 			CorruptStorageError,
@@ -406,15 +406,15 @@ mod access {
 		fn election_mut(
 			&mut self,
 			id: ElectionIdentifierOf<Self::ElectoralSystem>,
-		) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError>;
+		) -> Self::ElectionWriteAccess<'_>;
 		fn set_unsynchronised_state(
-			&mut self,
+			&self,
 			unsynchronised_state: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 		) -> Result<(), CorruptStorageError>;
 
 		/// Inserts or removes a value from the unsynchronised state map of the electoral system.
 		fn set_unsynchronised_state_map(
-			&mut self,
+			&self,
 			key: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
 			value: Option<
 				<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,

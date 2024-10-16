@@ -108,7 +108,7 @@ impl<
 			.at_most_one()
 			.map_err(|_| CorruptStorageError::new())?
 		{
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
+			let election_access = electoral_access.election_mut(election_identifier);
 
 			// Is the block the election started at + the duration we want the check to stay open
 			// for less than or equal to the current SC block?

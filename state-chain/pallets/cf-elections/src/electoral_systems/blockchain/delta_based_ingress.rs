@@ -71,7 +71,7 @@ where
 			),
 		);
 		if let Some(election_identifier) = election_identifiers.last() {
-			let mut election_access = electoral_access.election_mut(*election_identifier)?;
+			let mut election_access = electoral_access.election_mut(*election_identifier);
 			let mut channels = election_access.properties()?;
 			if channels.len() < MAXIMUM_CHANNELS_PER_ELECTION as usize {
 				channels.insert(channel, channel_details);
@@ -175,7 +175,7 @@ where
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
 			let (mut channels, mut pending_ingress_totals, option_consensus) = {
-				let mut election_access = electoral_access.election_mut(election_identifier)?;
+				let election_access = electoral_access.election_mut(election_identifier);
 				(
 					election_access.properties()?,
 					election_access.state()?,
@@ -261,7 +261,7 @@ where
 				}
 			}
 
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
+			let mut election_access = electoral_access.election_mut(election_identifier);
 			if !closed_channels.is_empty() {
 				for closed_channel in closed_channels {
 					pending_ingress_totals.remove(&closed_channel);

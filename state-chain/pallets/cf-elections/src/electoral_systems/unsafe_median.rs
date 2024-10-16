@@ -68,7 +68,7 @@ impl<
 			.at_most_one()
 			.map_err(|_| CorruptStorageError::new())?
 		{
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
+			let election_access = electoral_access.election_mut(election_identifier);
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
 				election_access.delete();
 				electoral_access.set_unsynchronised_state(consensus)?;

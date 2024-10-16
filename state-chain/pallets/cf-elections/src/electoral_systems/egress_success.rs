@@ -85,7 +85,7 @@ impl<
 		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
+			let election_access = electoral_access.election_mut(election_identifier);
 			if let Some(egress_data) = election_access.check_consensus()?.has_consensus() {
 				let identifier = election_access.properties()?;
 				election_access.delete();
