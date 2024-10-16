@@ -7,7 +7,7 @@ use chainflip_api::{
 	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
 	settings::StateChain,
 	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
-	SwapDepositAddress, WithdrawFeesDetail,
+	SwapDepositAddress, SwapPayload, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::to_rpc_error;
@@ -49,16 +49,17 @@ pub trait Rpc {
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
 
-	#[method(name = "encode_btc_smart_contract_call", aliases = ["broker_encodeBtcSmartContractCall"])]
-	async fn encode_btc_smart_contract_call(
+	#[method(name = "request_swap_parameter_encoding", aliases = ["broker_requestSwapParameterEncoding"])]
+	async fn request_swap_parameter_encoding(
 		&self,
+		input_asset: Asset,
 		output_asset: Asset,
 		output_address: AddressString,
 		retry_duration: u32,
 		min_output_amount: u128,
 		boost_fee: Option<BasisPoints>,
 		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<Vec<u8>>;
+	) -> RpcResult<SwapPayload>;
 }
 
 pub struct RpcServerImpl {
@@ -132,19 +133,21 @@ impl RpcServer for RpcServerImpl {
 			.map_err(to_rpc_error)?)
 	}
 
-	async fn encode_btc_smart_contract_call(
+	async fn request_swap_parameter_encoding(
 		&self,
+		input_asset: Asset,
 		output_asset: Asset,
 		output_address: AddressString,
 		retry_duration: u32,
 		min_output_amount: u128,
 		boost_fee: Option<BasisPoints>,
 		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<Vec<u8>> {
+	) -> RpcResult<SwapPayload> {
 		Ok(self
 			.api
 			.broker_api()
-			.encode_btc_smart_contract_call(
+			.request_swap_parameter_encoding(
+				input_asset,
 				output_asset,
 				output_address,
 				retry_duration,
@@ -153,8 +156,7 @@ impl RpcServer for RpcServerImpl {
 				dca_parameters,
 			)
 			.await
-			.map_err(to_rpc_error)?
-			.raw())
+			.map_err(to_rpc_error)?)
 	}
 }
 
