@@ -546,10 +546,19 @@ pub mod pallet {
 		_,
 		Identity,
 		T::AccountId,
-		Twox64Concat,
+		Blake2_128Concat,
 		<T::TargetChain as Chain>::DepositDetails,
-		BlockNumberFor<T>,
+		(),
 		OptionQuery,
+	>;
+
+	#[pallet::storage]
+	pub(crate) type TxExpiresAt<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		BlockNumberFor<T>,
+		Vec<(T::AccountId, <T::TargetChain as Chain>::DepositDetails)>,
+		ValueQuery,
 	>;
 
 	/// Stores the details of the tainted transactions that are scheduled for rejecting.
@@ -790,13 +799,7 @@ pub mod pallet {
 				}
 			}
 
-			let mut expired_transactions = Vec::new();
-
-			for (account, tx_id, expire_block) in TaintedTransactions::<T, I>::iter() {
-				if expire_block <= now {
-					expired_transactions.push((account.clone(), tx_id.clone()));
-				}
-			}
+			let expired_transactions = TxExpiresAt::<T, I>::take(now);
 
 			for (account, tx_id) in expired_transactions {
 				TaintedTransactions::<T, I>::remove(account.clone(), tx_id.clone());
@@ -1328,12 +1331,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tx_id: <T::TargetChain as Chain>::DepositDetails,
 	) -> DispatchResult {
 		let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-		TaintedTransactions::<T, I>::insert(
-			account_id,
-			tx_id,
+		TxExpiresAt::<T, I>::mutate(
 			<frame_system::Pallet<T>>::block_number()
 				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS)),
+			|txs| {
+				txs.push((account_id.clone(), tx_id.clone()));
+			},
 		);
+		TaintedTransactions::<T, I>::insert(account_id, tx_id, ());
 		Ok(())
 	}
 	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {

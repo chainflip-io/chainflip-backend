@@ -7,7 +7,7 @@ use crate::{
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject, TaintedTransactions,
-	TAINTED_TX_EXPIRATION_BLOCKS,
+	TxExpiresAt, TAINTED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -2120,7 +2120,8 @@ fn tainted_transactions_expire_if_not_witnessed() {
 		let tx_id = DepositDetails::default();
 		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
 
-		TaintedTransactions::<Test>::insert(BROKER, tx_id.clone(), expiry_at);
+		TaintedTransactions::<Test>::insert(BROKER, tx_id.clone(), ());
+		TxExpiresAt::<Test>::insert(expiry_at, vec![(BROKER, tx_id.clone())]);
 
 		IngressEgress::on_idle(expiry_at, Weight::MAX);
 
