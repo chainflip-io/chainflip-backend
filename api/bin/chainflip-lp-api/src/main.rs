@@ -24,13 +24,14 @@ use chainflip_api::{
 use clap::Parser;
 use custom_rpc::{
 	order_fills::{order_fills_from_block_updates, OrderFills},
-	to_rpc_error, CustomApiClient,
+	CustomApiClient,
 };
 use futures::{try_join, FutureExt, StreamExt};
 use jsonrpsee::{
-	core::{async_trait, RpcResult},
+	core::{async_trait, ClientError, RpcResult},
 	proc_macros::rpc,
 	server::ServerBuilder,
+	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
 	PendingSubscriptionSink,
 };
 use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
@@ -229,9 +230,31 @@ impl RpcServerImpl {
 		Ok(Self {
 			api: StateChainApi::connect(scope, StateChain { ws_endpoint, signing_key_file })
 				.await
-				.map_err(to_rpc_error)?,
+				.map_err(to_error_object)?,
 		})
 	}
+}
+
+fn unwrap_client_error(err: ClientError) -> ErrorObjectOwned {
+	match err {
+		ClientError::Call(obj) => obj,
+		internal => {
+			log::error!("Internal rpc client error: {internal:?}");
+			ErrorObject::owned(
+				ErrorCode::InternalError.code(),
+				"Internal rpc client error",
+				None::<()>,
+			)
+		},
+	}
+}
+
+fn to_error_object(error: impl core::fmt::Display) -> jsonrpsee::types::error::ErrorObjectOwned {
+	jsonrpsee::types::error::ErrorObjectOwned::owned(
+		ErrorCode::ServerError(0xcf).code(),
+		error.to_string(),
+		None::<()>,
+	)
 }
 
 #[async_trait]
@@ -249,7 +272,7 @@ impl RpcServer for RpcServerImpl {
 			.request_liquidity_deposit_address(asset, wait_for.unwrap_or_default(), boost_fee)
 			.await
 			.map(|result| result.map_details(|address| address.to_string()))
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	async fn register_liquidity_refund_address(
@@ -262,7 +285,7 @@ impl RpcServer for RpcServerImpl {
 			.lp_api()
 			.register_liquidity_refund_address(chain, address)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	/// Returns an egress id
@@ -277,13 +300,13 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.lp_api()
 			.withdraw_asset(
-				try_parse_number_or_hex(amount).map_err(to_rpc_error)?,
+				try_parse_number_or_hex(amount).map_err(to_error_object)?,
 				asset,
 				destination_address,
 				wait_for.unwrap_or_default(),
 			)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	/// Returns an egress id
@@ -300,12 +323,12 @@ impl RpcServer for RpcServerImpl {
 				amount
 					.try_into()
 					.map_err(|_| anyhow!("Failed to convert amount to u128"))
-					.map_err(to_rpc_error)?,
+					.map_err(to_error_object)?,
 				asset,
 				destination_account,
 			)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	/// Returns a list of all assets and their free balance in json format
@@ -319,7 +342,7 @@ impl RpcServer for RpcServerImpl {
 				Some(self.api.state_chain_client.latest_finalized_block().hash),
 			)
 			.await
-			.map_err(to_rpc_error)
+			.map_err(to_error_object)
 	}
 
 	async fn update_range_order(
@@ -337,13 +360,13 @@ impl RpcServer for RpcServerImpl {
 			.update_range_order(
 				base_asset,
 				quote_asset,
-				id.try_into().map_err(to_rpc_error)?,
+				id.try_into().map_err(to_error_object)?,
 				tick_range,
-				size_change.try_map(|size| size.try_into()).map_err(to_rpc_error)?,
+				size_change.try_map(|size| size.try_into()).map_err(to_error_object)?,
 				wait_for.unwrap_or_default(),
 			)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	async fn set_range_order(
@@ -361,13 +384,13 @@ impl RpcServer for RpcServerImpl {
 			.set_range_order(
 				base_asset,
 				quote_asset,
-				id.try_into().map_err(to_rpc_error)?,
+				id.try_into().map_err(to_error_object)?,
 				tick_range,
-				size.try_into().map_err(to_rpc_error)?,
+				size.try_into().map_err(to_error_object)?,
 				wait_for.unwrap_or_default(),
 			)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	async fn update_limit_order(
@@ -388,14 +411,14 @@ impl RpcServer for RpcServerImpl {
 				base_asset,
 				quote_asset,
 				side,
-				id.try_into().map_err(to_rpc_error)?,
+				id.try_into().map_err(to_error_object)?,
 				tick,
-				amount_change.try_map(try_parse_number_or_hex).map_err(to_rpc_error)?,
+				amount_change.try_map(try_parse_number_or_hex).map_err(to_error_object)?,
 				dispatch_at,
 				wait_for.unwrap_or_default(),
 			)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	async fn set_limit_order(
@@ -416,14 +439,14 @@ impl RpcServer for RpcServerImpl {
 				base_asset,
 				quote_asset,
 				side,
-				id.try_into().map_err(to_rpc_error)?,
+				id.try_into().map_err(to_error_object)?,
 				tick,
-				try_parse_number_or_hex(sell_amount).map_err(to_rpc_error)?,
+				try_parse_number_or_hex(sell_amount).map_err(to_error_object)?,
 				dispatch_at,
 				wait_for.unwrap_or_default(),
 			)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	/// Returns the tx hash that the account role was set
@@ -433,7 +456,7 @@ impl RpcServer for RpcServerImpl {
 			.operator_api()
 			.register_account_role(AccountRole::LiquidityProvider)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	async fn get_open_swap_channels(&self) -> RpcResult<OpenSwapChannels> {
@@ -443,7 +466,8 @@ impl RpcServer for RpcServerImpl {
 			api.get_open_swap_channels::<Ethereum>(None),
 			api.get_open_swap_channels::<Bitcoin>(None),
 			api.get_open_swap_channels::<Polkadot>(None),
-		)?;
+		)
+		.map_err(unwrap_client_error)?;
 		Ok(OpenSwapChannels { ethereum, bitcoin, polkadot })
 	}
 
@@ -454,7 +478,9 @@ impl RpcServer for RpcServerImpl {
 		executor_address: Option<EthereumAddress>,
 	) -> RpcResult<Hash> {
 		let redeem_amount = if let Some(number_or_hex) = exact_amount {
-			RedemptionAmount::Exact(try_parse_number_or_hex(number_or_hex).map_err(to_rpc_error)?)
+			RedemptionAmount::Exact(
+				try_parse_number_or_hex(number_or_hex).map_err(to_error_object)?,
+			)
 		} else {
 			RedemptionAmount::Max
 		};
@@ -464,7 +490,7 @@ impl RpcServer for RpcServerImpl {
 			.operator_api()
 			.request_redemption(redeem_amount, redeem_address, executor_address)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	fn subscribe_order_fills(&self, pending_sink: PendingSubscriptionSink) {
@@ -494,12 +520,12 @@ impl RpcServer for RpcServerImpl {
 		let state_chain_client = &self.api.state_chain_client;
 
 		let block = if let Some(at) = at {
-			state_chain_client.block(at).await.map_err(to_rpc_error)?
+			state_chain_client.block(at).await.map_err(to_error_object)?
 		} else {
 			state_chain_client.latest_finalized_block()
 		};
 
-		Ok(order_fills(state_chain_client.clone(), block).await.map_err(to_rpc_error)?)
+		Ok(order_fills(state_chain_client.clone(), block).await.map_err(to_error_object)?)
 	}
 
 	async fn cancel_all_orders(
@@ -514,7 +540,7 @@ impl RpcServer for RpcServerImpl {
 			.raw_rpc_client
 			.cf_available_pools(None)
 			.await
-			.map_err(to_rpc_error)?;
+			.map_err(to_error_object)?;
 		for pool in pool_pairs {
 			let orders = self
 				.api
@@ -529,7 +555,7 @@ impl RpcServer for RpcServerImpl {
 					None,
 				)
 				.await
-				.map_err(to_rpc_error)?;
+				.map_err(to_error_object)?;
 			for order in orders.range_orders {
 				orders_to_delete.push(CloseOrder::Range {
 					base_asset: pool.base,
@@ -570,7 +596,7 @@ impl RpcServer for RpcServerImpl {
 						wait_for.unwrap_or_default(),
 					)
 					.await
-					.map_err(to_rpc_error)?,
+					.map_err(to_error_object)?,
 			);
 		}
 
@@ -587,7 +613,7 @@ impl RpcServer for RpcServerImpl {
 			.lp_api()
 			.cancel_orders_batch(orders, wait_for.unwrap_or_default())
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 }
 
@@ -604,7 +630,8 @@ where
 		state_chain_client
 			.storage_map::<pallet_cf_pools::Pools<Runtime>, BTreeMap<_, _>>(block.hash),
 		state_chain_client.storage_value::<frame_system::Events<Runtime>>(block.hash)
-	)?;
+	)
+	.map_err(unwrap_client_error)?;
 
 	let lp_events = events
 		.into_iter()
@@ -674,15 +701,15 @@ async fn main() -> anyhow::Result<()> {
 				has_completed_initialising.clone(),
 			)
 			.await
-			.map_err(to_rpc_error)?;
+			.map_err(to_error_object)?;
 
 			let server = ServerBuilder::default()
 				.build(format!("0.0.0.0:{}", opts.port))
 				.await
-				.map_err(to_rpc_error)?;
+				.map_err(to_error_object)?;
 			let server_addr = server.local_addr()?;
 			let server = server
-				.start(RpcServerImpl::new(scope, opts).await.map_err(to_rpc_error)?.into_rpc());
+				.start(RpcServerImpl::new(scope, opts).await.map_err(to_error_object)?.into_rpc());
 
 			log::info!("🎙 Server is listening on {server_addr}.");
 
