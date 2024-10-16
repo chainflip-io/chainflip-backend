@@ -1,5 +1,5 @@
+use super::RpcResult;
 use async_trait::async_trait;
-use jsonrpsee::core::RpcResult;
 
 use super::stream_api::{StreamApi, FINALIZED, UNFINALIZED};
 

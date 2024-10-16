@@ -1,8 +1,7 @@
-use crate::{
-	to_rpc_error, BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringData,
-};
+use super::pass_through;
+use crate::{BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringData, RpcResult};
 use cf_chains::{dot::PolkadotAccountId, sol::SolAddress};
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use jsonrpsee::proc_macros::rpc;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
 use state_chain_runtime::{
@@ -85,20 +84,6 @@ pub trait MonitoringApi {
 	) -> RpcResult<Vec<RpcAccountInfoV2>>;
 }
 
-macro_rules! pass_through {
-	($( $name:ident -> $result_type:ty ),+) => {
-
-		$(
-			fn $name(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<$result_type> {
-				self.client
-					.runtime_api()
-					.$name(self.unwrap_or_best(at))
-					.map_err(to_rpc_error)
-			}
-		)+
-	};
-}
-
 impl<C, B> MonitoringApiServer for CustomRpc<C, B>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
@@ -111,55 +96,46 @@ where
 	C::Api: MonitoringRuntimeApi<B>,
 {
 	pass_through! {
-		cf_authorities -> AuthoritiesInfo,
-		cf_external_chains_block_height -> ExternalChainsBlockHeight,
-		cf_btc_utxos -> BtcUtxos,
-		cf_dot_aggkey -> PolkadotAccountId,
-		cf_suspended_validators -> Vec<(Offence, u32)>,
-		cf_epoch_state -> EpochState,
-		cf_redemptions -> RedemptionsInfo,
-		cf_pending_broadcasts_count -> PendingBroadcasts,
-		cf_pending_tss_ceremonies_count -> PendingTssCeremonies,
-		cf_pending_swaps_count -> u32,
-		cf_open_deposit_channels_count -> OpenDepositChannels,
-		cf_build_version -> LastRuntimeUpgradeInfo,
-		cf_rotation_broadcast_ids -> ActivateKeysBroadcastIds,
-		cf_sol_nonces -> SolanaNonces,
-		cf_sol_aggkey -> SolAddress,
-		cf_sol_onchain_key -> SolAddress
+		cf_authorities() -> AuthoritiesInfo,
+		cf_external_chains_block_height() -> ExternalChainsBlockHeight,
+		cf_btc_utxos() -> BtcUtxos,
+		cf_dot_aggkey() -> PolkadotAccountId,
+		cf_suspended_validators() -> Vec<(Offence, u32)>,
+		cf_epoch_state() -> EpochState,
+		cf_redemptions() -> RedemptionsInfo,
+		cf_pending_broadcasts_count() -> PendingBroadcasts,
+		cf_pending_tss_ceremonies_count() -> PendingTssCeremonies,
+		cf_pending_swaps_count() -> u32,
+		cf_open_deposit_channels_count() -> OpenDepositChannels,
+		cf_build_version() -> LastRuntimeUpgradeInfo,
+		cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds,
+		cf_sol_nonces() -> SolanaNonces,
+		cf_sol_aggkey() -> SolAddress,
+		cf_sol_onchain_key() -> SolAddress
 	}
 
 	fn cf_fee_imbalance(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcFeeImbalance> {
-		self.client
-			.runtime_api()
-			.cf_fee_imbalance(self.unwrap_or_best(at))
+		self.with_runtime_api::<_, _>(at, |api, hash| api.cf_fee_imbalance(hash))
 			.map(|imbalance| imbalance.map(|i| (*i).into()))
-			.map_err(to_rpc_error)
 	}
 
 	fn cf_monitoring_data(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcMonitoringData> {
-		self.client
-			.runtime_api()
-			.cf_monitoring_data(self.unwrap_or_best(at))
+		self.with_runtime_api(at, |api, hash| api.cf_monitoring_data(hash))
 			.map(Into::into)
-			.map_err(to_rpc_error)
 	}
 	fn cf_accounts_info(
 		&self,
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>> {
-		let accounts_info = self
-			.client
-			.runtime_api()
-			.cf_accounts_info(self.unwrap_or_best(at), accounts)
-			.map_err(to_rpc_error)?;
+		let accounts_info =
+			self.with_runtime_api(at, |api, hash| api.cf_accounts_info(hash, accounts))?;
 		Ok(accounts_info
 			.into_iter()
 			.map(|account_info| RpcAccountInfoV2 {

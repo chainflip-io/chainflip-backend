@@ -39,6 +39,7 @@ cf-primitives = { workspace = true, default-features = true }
 custom-rpc = { workspace = true }
 frame-system = { workspace = true, default-features = true }
 sc-rpc = { workspace = true, default-features = true }
+thiserror = { workspace = true, default-features = true }
 
 # Local
 chainflip-api = { workspace = true }
