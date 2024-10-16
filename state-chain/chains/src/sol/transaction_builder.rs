@@ -457,9 +457,13 @@ impl SolanaTransactionBuilder {
 		let number_of_accounts = event_accounts.len();
 		let event_and_sender_vec: Vec<AccountMeta> = event_accounts
 			.into_iter()
-			.flat_map(|(event_account, payee)| vec![event_account, payee])
 			// Both event account and payee should be writable and non-signers
-			.map(|address| AccountMeta::new(address.into(), false))
+			.flat_map(|(event_account, payee)| {
+				vec![
+					AccountMeta::new(event_account.into(), false),
+					AccountMeta::new(payee.into(), false),
+				]
+			})
 			.collect();
 
 		let instructions = vec![SwapEndpointProgram::with_id(swap_endpoint_program)
