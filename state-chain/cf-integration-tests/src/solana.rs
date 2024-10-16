@@ -374,7 +374,7 @@ fn solana_ccm_fails_with_invalid_input() {
 				channel_metadata: CcmChannelMetadata {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 0u128,
-					cf_parameters: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
+					ccm_cf_parameters: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 				},
 			};
 
@@ -416,6 +416,9 @@ fn solana_ccm_fails_with_invalid_input() {
 					destination_address: EncodedAddress::Sol([1u8; 32]),
 					deposit_metadata: invalid_ccm,
 					tx_hash: Default::default(),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: None,
 				}
 			)
 			.dispatch_bypass_filter(
@@ -443,7 +446,7 @@ fn solana_ccm_fails_with_invalid_input() {
 				channel_metadata: CcmChannelMetadata {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 0u128,
-					cf_parameters: SolCcmAccounts {
+					ccm_cf_parameters: SolCcmAccounts {
 						cf_receiver: SolCcmAddress { pubkey: receiver.into(), is_writable: true },
 						remaining_accounts: vec![
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
@@ -464,6 +467,9 @@ fn solana_ccm_fails_with_invalid_input() {
 					destination_address: EncodedAddress::Sol([1u8; 32]),
 					deposit_metadata: ccm,
 					tx_hash: Default::default(),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: None,
 				},
 			));
 			// Setting the current agg key will invalidate the CCM.

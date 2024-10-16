@@ -44,7 +44,7 @@ impl CcmValidityCheck for CcmValidityChecker {
 	) -> Result<DecodedCfParameters, CcmValidityError> {
 		if ForeignChain::from(egress_asset) == ForeignChain::Solana {
 			// Check if the cf_parameter can be decoded
-			let ccm_accounts = SolCcmAccounts::decode(&mut &ccm.cf_parameters.clone()[..])
+			let ccm_accounts = SolCcmAccounts::decode(&mut &ccm.ccm_cf_parameters.clone()[..])
 				.map_err(|_| CcmValidityError::CannotDecodeCfParameters)?;
 			let asset: SolAsset = egress_asset
 				.try_into()
@@ -107,7 +107,7 @@ mod test {
 		let ccm = CcmChannelMetadata {
 			message: vec![0x01, 0x02, 0x03, 0x04, 0x05].try_into().unwrap(),
 			gas_budget: 1,
-			cf_parameters: vec![0x01, 0x02, 0x03, 0x04, 0x05].try_into().unwrap(),
+			ccm_cf_parameters: vec![0x01, 0x02, 0x03, 0x04, 0x05].try_into().unwrap(),
 		};
 
 		assert_err!(
@@ -121,7 +121,7 @@ mod test {
 		let ccm = || CcmChannelMetadata {
 			message: vec![0x01; MAX_CCM_BYTES_SOL].try_into().unwrap(),
 			gas_budget: 0,
-			cf_parameters: SolCcmAccounts {
+			ccm_cf_parameters: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 				remaining_accounts: vec![],
 			}
@@ -140,7 +140,7 @@ mod test {
 		);
 
 		let mut invalid_ccm = ccm();
-		invalid_ccm.cf_parameters = SolCcmAccounts {
+		invalid_ccm.ccm_cf_parameters = SolCcmAccounts {
 			cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 			remaining_accounts: vec![SolCcmAddress {
 				pubkey: SolPubkey([0x01; 32]),
@@ -161,7 +161,7 @@ mod test {
 		let ccm = || CcmChannelMetadata {
 			message: vec![0x01; MAX_CCM_BYTES_USDC].try_into().unwrap(),
 			gas_budget: 0,
-			cf_parameters: SolCcmAccounts {
+			ccm_cf_parameters: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 				remaining_accounts: vec![],
 			}
@@ -180,7 +180,7 @@ mod test {
 		);
 
 		let mut invalid_ccm = ccm();
-		invalid_ccm.cf_parameters = SolCcmAccounts {
+		invalid_ccm.ccm_cf_parameters = SolCcmAccounts {
 			cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 			remaining_accounts: vec![SolCcmAddress {
 				pubkey: SolPubkey([0x01; 32]),

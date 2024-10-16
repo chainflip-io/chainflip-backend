@@ -374,7 +374,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 		let message = CcmChannelMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 			gas_budget: GAS_BUDGET,
-			cf_parameters: Default::default(),
+			ccm_cf_parameters: Default::default(),
 		};
 
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
@@ -559,7 +559,7 @@ fn ccm_deposit_metadata_mock() -> CcmDepositMetadata {
 		channel_metadata: CcmChannelMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 			gas_budget: 100_000_000,
-			cf_parameters: Default::default(),
+			ccm_cf_parameters: Default::default(),
 		},
 	}
 }
@@ -579,6 +579,9 @@ fn can_process_ccm_via_direct_deposit() {
 				destination_address: EncodedAddress::Eth([0x02; 20]),
 				deposit_metadata: ccm_deposit_metadata_mock(),
 				tx_hash: Default::default(),
+				refund_params: None,
+				dca_params: None,
+				boost_fee: None,
 			},
 		));
 
@@ -785,6 +788,9 @@ fn can_resign_failed_ccm() {
 					deposit_metadata: ccm_deposit_metadata_mock(),
 					// deposit_metadata,
 					tx_hash: Default::default(),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: None,
 				},
 			));
 

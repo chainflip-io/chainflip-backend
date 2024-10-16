@@ -549,7 +549,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
-		cf_parameters: Vec<u8>,
+		ccm_cf_parameters: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
@@ -636,7 +636,7 @@ pub struct CcmChannelMetadata {
 		feature = "std",
 		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
 	)]
-	pub cf_parameters: CcmCfParameters,
+	pub ccm_cf_parameters: CcmCfParameters,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]

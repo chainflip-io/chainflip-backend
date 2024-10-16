@@ -70,7 +70,7 @@ where
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Arbitrum as Chain>::ChainAmount,
 		message: Vec<u8>,
-		_cf_parameters: Vec<u8>,
+		_ccm_cf_parameters: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		let transfer_param = EncodableTransferAssetParams {
 			asset: E::token_address(transfer_param.asset)

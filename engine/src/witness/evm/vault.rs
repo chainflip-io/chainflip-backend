@@ -1,8 +1,12 @@
+use codec::Decode;
 use ethers::types::Bloom;
-use sp_core::H256;
+use sp_core::{ConstU32, H256};
 use std::collections::HashMap;
 
-use crate::evm::retry_rpc::EvmRetryRpcApi;
+use crate::{
+	evm::retry_rpc::EvmRetryRpcApi,
+	witness::eth::{ChannellessCfParameters, SharedCfParametersContract},
+};
 
 use super::{
 	super::common::{
@@ -19,13 +23,17 @@ use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
-	CcmChannelMetadata, CcmDepositMetadata, Chain,
+	CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 };
-use cf_primitives::{Asset, ForeignChain};
+use cf_primitives::{Asset, BasisPoints, DcaParameters, ForeignChain};
 use ethers::prelude::*;
+use frame_support::sp_runtime::BoundedVec;
 use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
+
+pub const MAX_CF_PARAM_LENGTH: u32 = 1_000;
+pub type CfParameters = BoundedVec<u8, ConstU32<MAX_CF_PARAM_LENGTH>>;
 
 pub fn call_from_event<
 	C: cf_chains::Chain<ChainAccount = EthereumAddress>,
@@ -56,6 +64,69 @@ where
 		})
 	}
 
+	fn decode_shared_cf_parameters(
+		cf_parameters_vec: CfParameters,
+	) -> Result<(Option<ChannelRefundParameters>, Option<DcaParameters>, Option<BasisPoints>)> {
+		println!("DEBUGDEBUG cf_parameters_vec {:?}", cf_parameters_vec);
+
+		if cf_parameters_vec.is_empty() {
+			println!("DEBUGDEBUG Emtpy cf_parameters_vec");
+
+			Ok((None, None, None))
+		} else {
+			let shared_cf_parameters: SharedCfParametersContract =
+				SharedCfParametersContract::decode(&mut &cf_parameters_vec[..])
+					.map_err(|_| anyhow!("Failed to decode to `SharedCfParametersContract`"))?;
+
+			println!("DEBUGDEBUG shared_cf_parameters {:?}", shared_cf_parameters);
+
+			Ok((
+				shared_cf_parameters.refund_params,
+				shared_cf_parameters.dca_params,
+				shared_cf_parameters.boost_fee,
+			))
+		}
+	}
+
+	fn decode_channelless_cf_parameters(
+		cf_parameters_vec: CfParameters,
+	) -> Result<(
+		CcmCfParameters,
+		(Option<ChannelRefundParameters>, Option<DcaParameters>, Option<BasisPoints>),
+	)> {
+		println!("DEBUGDEBUG cf_parameters_vec {:?}", cf_parameters_vec);
+
+		if cf_parameters_vec.is_empty() {
+			println!("DEBUGDEBUG Emtpy cf_parameters_vec");
+
+			Ok((cf_parameters_vec, (None, None, None)))
+		} else {
+			let channelless_cf_parameters: ChannellessCfParameters =
+				ChannellessCfParameters::decode(&mut &cf_parameters_vec[..])
+					.map_err(|_| anyhow!("Failed to decode to `ChannellessCfParameters`"))?;
+
+			println!("DEBUGDEBUG channelless_cf_parameters {:?}", channelless_cf_parameters);
+
+			let (refund_params, dca_params, boost_fee) = if let Some(shared_cf_parameters) =
+				channelless_cf_parameters.shared_cf_parameters
+			{
+				(
+					shared_cf_parameters.refund_params,
+					shared_cf_parameters.dca_params,
+					shared_cf_parameters.boost_fee,
+				)
+			} else {
+				(None, None, None)
+			};
+
+			Ok((
+				// Default to empty CcmCfParameters if not present
+				channelless_cf_parameters.ccm_cf_parameters.unwrap_or_default(),
+				(refund_params, dca_params, boost_fee),
+			))
+		}
+	}
+
 	Ok(match event.event_parameters {
 		VaultEvents::SwapNativeFilter(SwapNativeFilter {
 			dst_chain,
@@ -63,15 +134,28 @@ where
 			dst_token,
 			amount,
 			sender: _,
-			cf_parameters: _,
-		}) => Some(CallBuilder::contract_swap_request(
-			native_asset,
-			try_into_primitive(amount)?,
-			try_into_primitive(dst_token)?,
-			try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-			None,
-			event.tx_hash.into(),
-		)),
+			cf_parameters,
+		}) => {
+			println!("DEBUGDEBUG cf_parameters {:?}", cf_parameters);
+			let cf_parameters_vec: CfParameters = cf_parameters
+				.to_vec()
+				.try_into()
+				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
+			let (refund_params, dca_params, boost_fee) =
+				decode_shared_cf_parameters(cf_parameters_vec)?;
+
+			Some(CallBuilder::contract_swap_request(
+				native_asset,
+				try_into_primitive(amount)?,
+				try_into_primitive(dst_token)?,
+				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				None,
+				event.tx_hash.into(),
+				refund_params,
+				dca_params,
+				boost_fee,
+			))
+		},
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
 			dst_chain,
 			dst_address,
@@ -79,17 +163,31 @@ where
 			src_token,
 			amount,
 			sender: _,
-			cf_parameters: _,
-		}) => Some(CallBuilder::contract_swap_request(
-			*(supported_assets
-				.get(&src_token)
-				.ok_or(anyhow!("Source token {src_token:?} not found"))?),
-			try_into_primitive(amount)?,
-			try_into_primitive(dst_token)?,
-			try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-			None,
-			event.tx_hash.into(),
-		)),
+			cf_parameters,
+		}) => {
+			println!("DEBUGDEBUG cf_parameters {:?}", cf_parameters);
+
+			let cf_parameters_vec: CfParameters = cf_parameters
+				.to_vec()
+				.try_into()
+				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
+			let (refund_params, dca_params, boost_fee) =
+				decode_shared_cf_parameters(cf_parameters_vec)?;
+
+			Some(CallBuilder::contract_swap_request(
+				*(supported_assets
+					.get(&src_token)
+					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
+				try_into_primitive(amount)?,
+				try_into_primitive(dst_token)?,
+				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				None,
+				event.tx_hash.into(),
+				refund_params,
+				dca_params,
+				boost_fee,
+			))
+		},
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
 			dst_chain,
 			dst_address,
@@ -99,7 +197,16 @@ where
 			message,
 			gas_amount,
 			cf_parameters,
-		}) =>
+		}) => {
+			println!("DEBUGDEBUG cf_parameters {:?}", cf_parameters);
+
+			let cf_parameters_vec: CfParameters = cf_parameters
+				.to_vec()
+				.try_into()
+				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
+			let (ccm_cf_parameters, (refund_params, dca_params, boost_fee)) =
+				decode_channelless_cf_parameters(cf_parameters_vec)?;
+
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
 				try_into_primitive(amount)?,
@@ -118,13 +225,15 @@ where
 							.try_into()
 							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
-						cf_parameters: cf_parameters.0.to_vec().try_into().map_err(|_| {
-							anyhow!("Failed to deposit CCM: `cf_parameters` too long.")
-						})?,
+						ccm_cf_parameters,
 					},
 				}),
 				event.tx_hash.into(),
-			)),
+				refund_params,
+				dca_params,
+				boost_fee,
+			))
+		},
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
 			dst_chain,
 			dst_address,
@@ -135,7 +244,16 @@ where
 			message,
 			gas_amount,
 			cf_parameters,
-		}) =>
+		}) => {
+			println!("DEBUGDEBUG cf_parameters {:?}", cf_parameters);
+
+			let cf_parameters_vec: CfParameters = cf_parameters
+				.to_vec()
+				.try_into()
+				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
+			let (ccm_cf_parameters, (refund_params, dca_params, boost_fee)) =
+				decode_channelless_cf_parameters(cf_parameters_vec)?;
+
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
 					.get(&src_token)
@@ -156,13 +274,15 @@ where
 							.try_into()
 							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
-						cf_parameters: cf_parameters.0.to_vec().try_into().map_err(|_| {
-							anyhow!("Failed to deposit CCM. cf_parameters too long.")
-						})?,
+						ccm_cf_parameters,
 					},
 				}),
 				event.tx_hash.into(),
-			)),
+				refund_params,
+				dca_params,
+				boost_fee,
+			))
+		},
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
 			recipient,
 			amount,
@@ -204,6 +324,9 @@ pub trait IngressCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: cf_primitives::TransactionHash,
+		refund_params: Option<ChannelRefundParameters>,
+		dca_params: Option<DcaParameters>,
+		boost_fee: Option<BasisPoints>,
 	) -> state_chain_runtime::RuntimeCall;
 
 	fn vault_transfer_failed(

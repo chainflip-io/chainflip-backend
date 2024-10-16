@@ -1,6 +1,8 @@
 mod chain_tracking;
 mod state_chain_gateway;
 
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{evm::DepositDetails, Ethereum};
@@ -219,8 +221,29 @@ where
 	Ok(())
 }
 
-use cf_chains::{address::EncodedAddress, CcmDepositMetadata};
-use cf_primitives::{Asset, AssetAmount, TransactionHash};
+use cf_chains::{
+	address::EncodedAddress, CcmCfParameters, CcmDepositMetadata, ChannelRefundParameters,
+};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, DcaParameters, TransactionHash};
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+pub struct ChannellessCfParameters {
+	pub ccm_cf_parameters: Option<CcmCfParameters>,
+	// TODO: Consider if we want use the BTC SharedCfParameters. It's done like that to save on
+	// bytes but in EVM/SOL we have more bytes to work with. At the same time the optional types
+	// allow the user to not have to pass an unnecessary amount of bytes as parameters on-chain.
+	// We might have to do it if we need to convert internal parameters such as foreign addresses
+	// either in order to decode properly or to pass them correctly to the ingress pallet's
+	// contract_swap_request.
+	pub shared_cf_parameters: Option<SharedCfParametersContract>,
+}
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+pub struct SharedCfParametersContract {
+	pub refund_params: Option<ChannelRefundParameters>,
+	pub dca_params: Option<DcaParameters>,
+	pub boost_fee: Option<BasisPoints>,
+}
 
 pub struct EthCallBuilder {}
 
@@ -234,6 +257,10 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
+		refund_params: Option<ChannelRefundParameters>,
+		dca_params: Option<DcaParameters>,
+		// This is only to be checked in the pre-witnessed version
+		boost_fee: Option<BasisPoints>,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
 			if let Some(deposit_metadata) = deposit_metadata {
@@ -244,6 +271,9 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 					destination_address,
 					deposit_metadata,
 					tx_hash,
+					boost_fee,
+					dca_params,
+					refund_params,
 				}
 			} else {
 				pallet_cf_ingress_egress::Call::contract_swap_request {
@@ -253,10 +283,9 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 					destination_address,
 					tx_hash,
 					deposit_details: DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) },
-					// TODO: use real parameters when we can decode them
-					boost_fee: 0,
-					dca_params: None,
-					refund_params: None,
+					boost_fee: boost_fee.unwrap_or_default(),
+					dca_params,
+					refund_params,
 				}
 			},
 		)

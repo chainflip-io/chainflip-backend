@@ -29,7 +29,7 @@ pub enum MockEgressParameter<C: Chain> {
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		message: CcmMessage,
-		cf_parameters: CcmCfParameters,
+		ccm_cf_parameters: CcmCfParameters,
 		gas_budget: C::ChainAmount,
 	},
 }
@@ -95,7 +95,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 						amount,
 						destination_address,
 						message: message.channel_metadata.message.clone(),
-						cf_parameters: message.channel_metadata.cf_parameters.clone(),
+						ccm_cf_parameters: message.channel_metadata.ccm_cf_parameters.clone(),
 						gas_budget: *gas_budget,
 					},
 					None => MockEgressParameter::<C>::Swap {
