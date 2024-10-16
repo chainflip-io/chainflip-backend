@@ -206,7 +206,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				sp_core::blake2_256(&encoded).into()
 			};
 
-			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic).await {
+			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic.clone()).await {
 				Ok(mut transaction_status_stream) => {
 					request.pending_submissions.insert(request.next_submission_id, nonce);
 					self.submissions_by_nonce.entry(nonce).or_default().push(Submission {
@@ -266,7 +266,14 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 							self.runtime_version = new_runtime_version;
 						},
-						obj => break Err(obj.into()),
+						obj => {
+							warn!(
+								"Error while submitting extrinsic {:?} version: {}",
+								signed_extrinsic,
+								obj.message()
+							);
+							break Err(obj.into())
+						},
 					}
 				},
 			}
