@@ -7,7 +7,7 @@ use crate::{
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject, TaintedTransactions,
-	TxExpiresAt, TAINTED_TX_EXPIRATION_BLOCKS,
+	TAINTED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -2120,15 +2120,29 @@ fn tainted_transactions_expire_if_not_witnessed() {
 		let tx_id = DepositDetails::default();
 		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
 
-		TaintedTransactions::<Test>::insert(BROKER, tx_id.clone(), ());
-		TxExpiresAt::<Test>::insert(expiry_at, vec![(BROKER, tx_id.clone())]);
+		let (_, address) = request_address_and_deposit(BROKER, eth::Asset::Eth);
+		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
+			RuntimeOrigin::signed(BROKER),
+			Default::default(),
+		));
+
+		System::set_block_number(expiry_at);
 
 		IngressEgress::on_idle(expiry_at, Weight::MAX);
 
-		assert!(!TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id.clone()));
+		assert!(!TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id));
 
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
-			crate::Event::TaintedTransactionExpired { account_id: BROKER, tx_id },
+			crate::Event::TaintedTransactionExpired {
+				account_id: BROKER,
+				tx_id: Default::default(),
+			},
 		));
 	});
 }

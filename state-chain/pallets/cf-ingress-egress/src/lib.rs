@@ -552,8 +552,9 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Stores the block number when the report expires to gather with the reporter and the tx_id.
 	#[pallet::storage]
-	pub(crate) type TxExpiresAt<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub(crate) type ReportExpiresAt<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		BlockNumberFor<T>,
@@ -799,7 +800,7 @@ pub mod pallet {
 				}
 			}
 
-			let expired_transactions = TxExpiresAt::<T, I>::take(now);
+			let expired_transactions = ReportExpiresAt::<T, I>::take(now);
 
 			for (account, tx_id) in expired_transactions {
 				TaintedTransactions::<T, I>::remove(account.clone(), tx_id.clone());
@@ -1331,12 +1332,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tx_id: <T::TargetChain as Chain>::DepositDetails,
 	) -> DispatchResult {
 		let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-		TxExpiresAt::<T, I>::mutate(
+		ReportExpiresAt::<T, I>::append(
 			<frame_system::Pallet<T>>::block_number()
 				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS)),
-			|txs| {
-				txs.push((account_id.clone(), tx_id.clone()));
-			},
+			(account_id.clone(), tx_id.clone()),
 		);
 		TaintedTransactions::<T, I>::insert(account_id, tx_id, ());
 		Ok(())
