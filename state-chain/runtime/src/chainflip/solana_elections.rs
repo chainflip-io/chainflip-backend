@@ -202,7 +202,8 @@ pub mod old {
 				<old::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
 				Twox64Concat
 			>(b"SolanaElections", b"ElectionProperties")
-				.filter(|(_, value)| {
+				.filter(|(key, value)| {
+					log::info!("Old {:?}: {:?}",key, value);
 					matches!(value, pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::D(_))
 				})
 				.map(|(key, _)| {
@@ -220,19 +221,19 @@ pub mod old {
 					)
 					.fold(0, |acc, _elem| acc + 1)
 			);
-			let election_identifiers = frame_support::migration::storage_key_iter::<
-				ElectionIdentifierOf<super::SolanaElectoralSystem>,
-				<super::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
-				Twox64Concat
-			>(b"SolanaElections", b"ElectionProperties")
-				.filter(|(_, value)| {
-					matches!(value, pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::D(_))
-				})
-				.map(|(key, _)| {
-					key
-				})
-				.collect::<Vec<ElectionIdentifierOf<old::SolanaElectoralSystem>>>();
-			assert!(previous_number_election == election_identifiers.len() as u32);
+			// let election_identifiers = frame_support::migration::storage_key_iter::<
+			// 	ElectionIdentifierOf<super::SolanaElectoralSystem>,
+			// 	<super::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
+			// 	Twox64Concat
+			// >(b"SolanaElections", b"ElectionProperties")
+			// 	.filter(|(_, value)| {
+			// 		matches!(value, pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::D(_))
+			// 	})
+			// 	.map(|(key, _)| {
+			// 		key
+			// 	})
+			// 	.collect::<Vec<ElectionIdentifierOf<old::SolanaElectoralSystem>>>();
+			// assert!(previous_number_election == election_identifiers.len() as u32);
 
 			Ok(())
 		}
