@@ -12,7 +12,9 @@ version = '0.1.0'
 workspace = true
 
 [dependencies]
-jsonrpsee = { workspace = true, features = ["jsonrpsee-types"], optional = true }
+jsonrpsee = { workspace = true, features = [
+  "jsonrpsee-types",
+], optional = true }
 anyhow = { workspace = true, optional = true }
 async-broadcast = { workspace = true, optional = true }
 async-channel = { workspace = true, optional = true }

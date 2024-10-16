@@ -29,7 +29,7 @@ secp256k1 = { workspace = true, features = [
 	"rand-std",
 	"global-context",
 ] }
-serde = { workspace = true, features = ["derive", "rc"]}
+serde = { workspace = true, features = ["derive", "rc"] }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
@@ -40,9 +40,7 @@ num-derive = { workspace = true }
 zeroize = { workspace = true }
 generic-array = { workspace = true }
 public-ip = { workspace = true }
-curve25519-dalek = { workspace = true, features = [
-  "serde",
-] }
+curve25519-dalek = { workspace = true, features = ["serde"] }
 typenum = { workspace = true }
 schnorrkel = { workspace = true }
 rayon = { workspace = true }

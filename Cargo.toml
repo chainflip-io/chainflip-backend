@@ -175,7 +175,7 @@ httparse = { version = "1.4.1" }
 insta = { version = "1.38.0" }
 itertools = { version = "0.13", default-features = false }
 jsonrpsee = { version = "0.23.2" }
-lazy_format = { version ="2.0" }
+lazy_format = { version = "2.0" }
 lazy_static = { version = "1.4" }
 libp2p-identity = { version = "0.2" }
 libsecp256k1 = { version = "0.7", default-features = false }
@@ -228,6 +228,6 @@ tracing-subscriber = { version = "0.3.3" }
 typenum = { version = "1.15" }
 url = { version = "2.4" }
 warp = { version = "0.3.6" }
-web3 = { version = "0.19", default-features = false}
+web3 = { version = "0.19", default-features = false }
 x25519-dalek = { version = "2.0" }
 zeroize = { version = "1.5.4" }

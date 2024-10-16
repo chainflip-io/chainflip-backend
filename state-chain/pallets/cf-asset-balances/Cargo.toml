@@ -29,12 +29,8 @@ log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Parity deps
-codec = { workspace = true, features = [
-    'derive',
-] }
-scale-info = { workspace = true, features = [
-    'derive',
-] }
+codec = { workspace = true, features = ['derive'] }
+scale-info = { workspace = true, features = ['derive'] }
 
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }

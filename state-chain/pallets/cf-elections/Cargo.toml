@@ -33,17 +33,11 @@ serde = { workspace = true, features = ["derive", "alloc"] }
 nanorand = { workspace = true, features = ['wyrand'] }
 
 # Parity deps
-codec = { workspace = true, features = [
-  'derive',
-  'bit-vec',
-] }
+codec = { workspace = true, features = ['derive', 'bit-vec'] }
 frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true, default-features = false }
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-scale-info = { workspace = true, features = [
-  'derive',
-  'bit-vec',
-] }
+scale-info = { workspace = true, features = ['derive', 'bit-vec'] }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 

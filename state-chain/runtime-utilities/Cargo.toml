@@ -12,9 +12,7 @@ workspace = true
 log = { workspace = true }
 cf-runtime-macros = { path = './macros', optional = true }
 
-codec = { workspace = true, features = [
-  'derive',
-] }
+codec = { workspace = true, features = ['derive'] }
 
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 # Not used in this crate but required in order to import sp-io without conflicts.

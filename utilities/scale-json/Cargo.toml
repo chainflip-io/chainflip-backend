@@ -20,9 +20,5 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }
-codec = { workspace = true, features = [
-    'derive',
-] }
-scale-info = { workspace = true, features = [
-    'derive',
-] }
+codec = { workspace = true, features = ['derive'] }
+scale-info = { workspace = true, features = ['derive'] }

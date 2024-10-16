@@ -30,12 +30,8 @@ cf-utilities = { package = 'utilities', path = '../../../utilities', default-fea
 bitvec = { workspace = true, features = ['alloc'] }
 
 # Parity deps
-codec = { workspace = true, features = [
-  'derive',
-] }
-scale-info = { workspace = true, features = [
-  'derive',
-] }
+codec = { workspace = true, features = ['derive'] }
+scale-info = { workspace = true, features = ['derive'] }
 
 frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true, default-features = false }
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }

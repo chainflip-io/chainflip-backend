@@ -15,9 +15,7 @@ cf-runtime-utilities = { path = '../runtime-utilities', default-features = false
 
 # Cryptography
 digest = { workspace = true }
-libsecp256k1 = { workspace = true, features = [
-  'static-context',
-] }
+libsecp256k1 = { workspace = true, features = ['static-context'] }
 sha2 = { workspace = true }
 
 # Solana
@@ -35,7 +33,7 @@ ethereum = { workspace = true }
 rlp = { workspace = true }
 
 # Bitcoin
-bech32 ={ workspace = true }
+bech32 = { workspace = true }
 
 # Solana
 borsh = { workspace = true, features = [
@@ -43,12 +41,8 @@ borsh = { workspace = true, features = [
   "unstable__schema",
   "hashbrown",
 ] }
-serde_with = { workspace = true, features = [
-  "macros",
-] }
-generic-array = { workspace = true, features = [
-  "serde",
-] }
+serde_with = { workspace = true, features = ["macros"] }
+generic-array = { workspace = true, features = ["serde"] }
 bs58 = { workspace = true, features = ["alloc"] }
 
 # Special case for Solana: We use bincode 2 for its no-std support.
@@ -75,12 +69,8 @@ rand = { workspace = true, optional = true }
 
 # Substrate packages
 ss58-registry = { workspace = true, optional = true }
-codec = { workspace = true, features = [
-  "derive",
-] }
-scale-info = { workspace = true, features = [
-  "derive",
-] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }

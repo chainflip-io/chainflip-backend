@@ -60,12 +60,8 @@ pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = fal
 pallet-cf-cfe-interface = { path = '../pallets/cf-cfe-interface', default-features = false }
 
 # SCALE
-codec = { workspace = true, features = [
-  'derive',
-] }
-scale-info = { workspace = true, features = [
-  'derive',
-] }
+codec = { workspace = true, features = ['derive'] }
+scale-info = { workspace = true, features = ['derive'] }
 
 # Additional FRAME pallets
 pallet-authorship = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }

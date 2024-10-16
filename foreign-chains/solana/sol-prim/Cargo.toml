@@ -17,12 +17,8 @@ digest = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 sha2 = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
-codec = { workspace = true, optional = true, features = [
-	'derive',
-] }
-scale-info = { workspace = true, optional = true, features = [
-	'derive',
-] }
+codec = { workspace = true, optional = true, features = ['derive'] }
+scale-info = { workspace = true, optional = true, features = ['derive'] }
 
 [dev-dependencies]
 serde_json = { workspace = true }

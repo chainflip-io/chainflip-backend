@@ -14,12 +14,8 @@ cf-utilities = { package = 'utilities', path = '../../utilities', default-featur
 serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Parity deps
-codec = { workspace = true, features = [
-	'derive',
-] }
-scale-info = { workspace = true, features = [
-	'derive',
-] }
+codec = { workspace = true, features = ['derive'] }
+scale-info = { workspace = true, features = ['derive'] }
 
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }

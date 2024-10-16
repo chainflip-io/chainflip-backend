@@ -19,14 +19,10 @@ state-chain-runtime = { path = '../runtime' }
 log = { workspace = true }
 
 [dev-dependencies]
-libsecp256k1 = { workspace = true, features = [
-  'static-context',
-] }
+libsecp256k1 = { workspace = true, features = ['static-context'] }
 rand = { workspace = true }
 hex-literal = { workspace = true }
-secp256k1 = { workspace = true, features = [
-	"rand-std",
-] }
+secp256k1 = { workspace = true, features = ["rand-std"] }
 arrayref = { workspace = true }
 
 # Chainflip local dependencies
@@ -64,9 +60,7 @@ pallet-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag
 ] }
 
 # Substrate dependencies
-codec = { workspace = true, features = [
-	"derive",
-] }
+codec = { workspace = true, features = ["derive"] }
 scale-info = { workspace = true, features = ["derive"] }
 
 frame-executive = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }

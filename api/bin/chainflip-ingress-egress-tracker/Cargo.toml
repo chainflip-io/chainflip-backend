@@ -25,10 +25,7 @@ config = { workspace = true }
 redis = { workspace = true, features = ["tokio-comp"] }
 
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-codec = { workspace = true, features = [
-  "derive",
-  "full",
-] }
+codec = { workspace = true, features = ["derive", "full"] }
 
 # Local dependencies
 chainflip-engine = { path = "../../../engine/" }
