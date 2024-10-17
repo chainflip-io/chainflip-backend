@@ -2087,7 +2087,7 @@ pub mod pallet {
 			Ok(*election_identifier.unique_monotonic())
 		}
 
-		fn handle_corrupt_storage<Ok>(
+		pub fn handle_corrupt_storage<Ok>(
 			result: Result<Ok, CorruptStorageError>,
 		) -> Result<Ok, Error<T, I>> {
 			match result {

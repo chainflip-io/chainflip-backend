@@ -21,10 +21,7 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		self,
 		change::OnChangeHook,
-		composite::{
-			tuple_6_impls::{ElectoralAccessTranslator, Hooks},
-			CompositeRunner, Translator,
-		},
+		composite::{tuple_6_impls::Hooks, CompositeRunner, Translator},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
 		monotonic_median::MedianChangeHook,
@@ -352,18 +349,15 @@ impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
 	}
 }
 
-// We have to manually transalte the access...?
 impl SolanaChainTrackingProvider {
 	pub fn priority_fee() -> Option<<Solana as Chain>::ChainAmount> {
-		todo!()
-		// pallet_cf_elections::Pallet::<Runtime, Instance>::with_storage_access(|electoral_access|
-		// { 	SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
-		// 		let (_, access_translator, ..) = &access_translators;
-		// 		let electoral_access = access_translator.translate_electoral_access();
-		// 		electoral_access.unsynchronised_state()
-		// 	})
-		// })
-		// .ok()
+		CompositeElectoralAccess::<
+			_,
+			SolanaFeeTracking,
+			RunnerStorageAccess<Runtime, SolanaInstance>,
+			>::new()
+			.unsynchronised_state()
+			.ok()
 	}
 
 	fn with_tracked_data_then_apply_fee_multiplier<
@@ -371,20 +365,25 @@ impl SolanaChainTrackingProvider {
 	>(
 		f: F,
 	) -> <Solana as Chain>::ChainAmount {
-		todo!()
-		// pallet_cf_elections::Pallet::<Runtime, Instance>::with_storage_access(|electoral_access|
-		// { 	SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
-		// 		let (_, access_translator, ..) = &access_translators;
-		// 		let electoral_access = access_translator.translate_electoral_access();
-		// 		Ok(electoral_access.unsynchronised_settings()?.fee_multiplier.saturating_mul_int(
-		// 			f(SolTrackedData { priority_fee: electoral_access.unsynchronised_state()? }),
-		// 		))
-		// 	})
-		// })
-		// .unwrap_or_else(|err| {
-		// 	log_or_panic!("Failed to obtain Solana fee: '{err:?}'.");
-		// 	Default::default()
-		// })
+		let storage_access = CompositeElectoralAccess::<
+			_,
+			SolanaFeeTracking,
+			RunnerStorageAccess<Runtime, SolanaInstance>,
+		>::new();
+		storage_access
+			.unsynchronised_state()
+			.map(|priority_fee| {
+				storage_access.unsynchronised_settings().map(|fees| {
+					{
+						fees.fee_multiplier.saturating_mul_int(f(SolTrackedData { priority_fee }))
+					}
+				})
+			})
+			.flatten()
+			.unwrap_or_else(|err| {
+				log_or_panic!("Failed to obtain Solana fee: '{err:?}'.");
+				Default::default()
+			})
 	}
 }
 impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
@@ -412,27 +411,28 @@ impl IngressSource for SolanaIngress {
 		asset: <Self::Chain as Chain>::ChainAsset,
 		close_block: <Self::Chain as Chain>::ChainBlockNumber,
 	) -> DispatchResult {
-		todo!()
-		// pallet_cf_elections::Pallet::<Runtime, Instance>::with_election_identifiers(
-		// 	|electoral_access, election_identifiers| {
-		// 		SolanaElectoralSystemRunner::with_identifiers(
-		// 			election_identifiers,
-		// 			|election_identifiers| {
-		// 				SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
-		// 					let (_, _, access_translator, ..) = &access_translators;
-		// 					let (_, _, election_identifiers, ..) = election_identifiers;
-		// 					SolanaIngressTracking::open_channel(
-		// 						election_identifiers,
-		// 						&mut access_translator.translate_electoral_access(),
-		// 						channel,
-		// 						asset,
-		// 						close_block,
-		// 					)
-		// 				})
-		// 			},
-		// 		)
-		// 	},
-		// )
+		// We just want the identifiers from one of the electoral systems.
+		pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_election_identifiers(
+			|composite_election_identifiers| {
+				SolanaElectoralSystemRunner::with_identifiers(
+					composite_election_identifiers,
+					|grouped_election_identifiers| {
+						let (_, _, election_identifiers, ..) = grouped_election_identifiers;
+						SolanaIngressTracking::open_channel(
+							election_identifiers,
+							&mut CompositeElectoralAccess::<
+								_,
+								SolanaIngressTracking,
+								RunnerStorageAccess<Runtime, SolanaInstance>,
+							>::new(),
+							channel,
+							asset,
+							close_block,
+						)
+					},
+				)
+			},
+		)
 	}
 }
 
@@ -443,19 +443,20 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 		nonce_account: SolAddress,
 		previous_nonce_value: SolHash,
 	) -> DispatchResult {
-		todo!()
-		// pallet_cf_elections::Pallet::<Runtime, Instance>::with_storage_access(|electoral_access|
-		// { 	SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
-		// 		let (_, _, _, access_translator, ..) = &access_translators;
-		// 		let mut electoral_access = access_translator.translate_electoral_access();
-
-		// 		SolanaNonceTracking::watch_for_change(
-		// 			&mut electoral_access,
-		// 			nonce_account,
-		// 			previous_nonce_value,
-		// 		)
-		// 	})
-		// })
+		// TODO: Check if safe. We are not checking if initialised or not here - we were before in
+		// with_electoral_access
+		// TODO: Look at handling the corrupt storage elsewhere.
+		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::handle_corrupt_storage(
+			SolanaNonceTracking::watch_for_change(
+				&mut CompositeElectoralAccess::<
+					_,
+					SolanaNonceTracking,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>::new(),
+				nonce_account,
+				previous_nonce_value,
+			),
+		)?)
 	}
 }
 
@@ -465,14 +466,17 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 	type Chain = SolanaCrypto;
 
 	fn watch_for_egress_success(signature: SolSignature) -> DispatchResult {
-		todo!()
-		// pallet_cf_elections::Pallet::<Runtime, Instance>::with_storage_access(|electoral_access|
-		// { 	SolanaElectoralSystemRunner::with_access_translators(|access_translators| {
-		// 		let (_, _, _, _, access_translator, ..) = &access_translators;
-		// 		let mut electoral_access = access_translator.translate_electoral_access();
-
-		// 		SolanaEgressWitnessing::watch_for_egress(&mut electoral_access, signature)
-		// 	})
-		// })
+		// TODO: Check if safe. We are not checking if initialised or not here - we were before in
+		// with_electoral_access
+		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::handle_corrupt_storage(
+			SolanaEgressWitnessing::watch_for_egress(
+				&mut CompositeElectoralAccess::<
+					_,
+					SolanaEgressWitnessing,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>::new(),
+				signature,
+			),
+		)?)
 	}
 }

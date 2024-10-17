@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "256"]
+#![feature(result_flattening)]
 pub mod chainflip;
 pub mod constants;
 pub mod migrations;

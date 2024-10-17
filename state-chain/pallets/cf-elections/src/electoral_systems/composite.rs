@@ -277,6 +277,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     }
                 }
 
+                // Just here uses the translators
                 fn on_finalize(
                     election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
                 ) -> Result<(), CorruptStorageError> {
