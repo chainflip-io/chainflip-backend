@@ -14,20 +14,14 @@ pub struct DefaultHooks<OnFinalizeContext, StorageAccess> {
 /// specific electoral system.
 pub trait Translator<StorageAccess> {
 	type ElectoralSystem: ElectoralSystem;
-	type ElectionAccess<'a>: ElectoralWriteAccess<ElectoralSystem = Self::ElectoralSystem>
-	where
-		Self: 'a,
-		StorageAccess: 'a;
+	type ElectionAccess: ElectoralWriteAccess<ElectoralSystem = Self::ElectoralSystem>;
 
-	fn translate_electoral_access<'a>(
-		&'a self,
-		storage_access: &'a mut StorageAccess,
-	) -> Self::ElectionAccess<'a>;
+	fn translate_electoral_access(&self) -> Self::ElectionAccess;
 }
 
 /// The access wrappers need to impl the access traits once for each variant,
 /// these tags ensure these trait impls don't overlap.
-mod tags {
+pub mod tags {
 	pub struct A;
 	pub struct B;
 	pub struct C;
@@ -181,7 +175,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                         $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
                             <$electoral_system as ElectoralSystem>::is_vote_desired(
                                 election_identifier.with_extra(extra),
-                                &CompositeElectionAccess::<tags::$electoral_system, $electoral_system, StorageAccess>::new(storage_access, election_identifier.with_extra(extra)),
+                                &CompositeElectionAccess::<tags::$electoral_system, $electoral_system, StorageAccess>::new(election_identifier.with_extra(extra)),
                                 current_vote.map(|(properties, vote)| {
                                     Ok((
                                         match properties {
@@ -244,7 +238,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     Ok(match (*election_identifier.extra(), partial_vote) {
                         $((CompositeElectionIdentifierExtra::$electoral_system(extra), CompositePartialVote::$electoral_system(partial_vote)) => <$electoral_system as ElectoralSystem>::is_vote_valid(
                             election_identifier.with_extra(extra),
-                            &CompositeElectionAccess::<tags::$electoral_system, $electoral_system, Self::StorageAccess>::new(storage_access, election_identifier.with_extra(extra)),
+                            &CompositeElectionAccess::<tags::$electoral_system, $electoral_system, Self::StorageAccess>::new(election_identifier.with_extra(extra)),
                             partial_vote,
                         )?,)*
                         _ => false,
@@ -298,6 +292,7 @@ macro_rules! generate_electoral_system_tuple_impls {
 
                 fn check_consensus(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
+                    // TODO: do we need to pass this in?
                     election_access: &Self::StorageAccess,
                     previous_consensus: Option<&Self::Consensus>,
                     consensus_votes: CompositeConsensusVotes<Self>,
@@ -307,7 +302,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                             <$electoral_system as ElectoralSystem>::check_consensus(
                                 // The elction access should already have this, why do we need to pass it in again?
                                 election_identifier.with_extra(extra),
-                                &CompositeElectionAccess::<tags::$electoral_system, _, Self::StorageAccess>::new(election_access, election_identifier.with_extra(extra)),
+                                &CompositeElectionAccess::<tags::$electoral_system, _, Self::StorageAccess>::new(election_identifier.with_extra(extra)),
                                 previous_consensus.map(|previous_consensus| {
                                     match previous_consensus {
                                         CompositeConsensus::$electoral_system(previous_consensus) => Ok(previous_consensus),
@@ -342,29 +337,26 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
             }
 
-            pub struct CompositeElectionAccess<'a, Tag, ES: ElectoralSystem, StorageAccess> {
+            pub struct CompositeElectionAccess<Tag, ES: ElectoralSystem, StorageAccess> {
                 id: ElectionIdentifierOf<ES>,
-                storage_access: &'a StorageAccess,
-                _phantom: core::marker::PhantomData<(Tag, ES)>,
+                _phantom: core::marker::PhantomData<(Tag, ES, StorageAccess)>,
             }
 
-            impl<'a, Tag, ES: ElectoralSystem, StorageAccess: RunnerStorageAccessTrait> CompositeElectionAccess<'a, Tag, ES, StorageAccess> {
-                fn new(storage_access: &'a StorageAccess, id: ElectionIdentifierOf<ES>) -> Self {
+            impl<Tag, ES: ElectoralSystem, StorageAccess: RunnerStorageAccessTrait> CompositeElectionAccess<Tag, ES, StorageAccess> {
+                fn new(id: ElectionIdentifierOf<ES>) -> Self {
                     Self {
                         id,
-                        storage_access,
                         _phantom: Default::default(),
                     }
                 }
             }
-            pub struct CompositeElectoralAccess<'a, Tag, ES, StorageAccess> {
-                storage_access: &'a StorageAccess,
-                _phantom: core::marker::PhantomData<(Tag, ES)>,
+            pub struct CompositeElectoralAccess<Tag, ES, StorageAccess> {
+                _phantom: core::marker::PhantomData<(Tag, ES, StorageAccess)>,
             }
-            impl<'a, Tag, ES, StorageAccess> CompositeElectoralAccess<'a, Tag, ES, StorageAccess> {
-                fn new(storage_access: &'a StorageAccess) -> Self {
+            impl<Tag, ES, StorageAccess> CompositeElectoralAccess<Tag, ES, StorageAccess> {
+                // TODO: Try to remove new if we don't need &self
+                pub fn new() -> Self {
                     Self {
-                        storage_access,
                         _phantom: Default::default(),
                     }
                 }
@@ -390,7 +382,7 @@ macro_rules! generate_electoral_system_tuple_impls {
     (@ $($previous:ident,)*;: $($electoral_system:ident,)*) => {};
     (@ $($previous:ident,)*; $current:ident, $($remaining:ident,)*: $($electoral_system:ident,)*) => {
 
-        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectionReadAccess for CompositeElectionAccess<'a, tags::$current, $current, StorageAccess> {
+        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectionReadAccess for CompositeElectionAccess<tags::$current, $current, StorageAccess> {
             type ElectoralSystem = $current;
 
             fn settings(&self) -> Result<$current::ElectoralSettings, CorruptStorageError> {
@@ -426,7 +418,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
         }
 
-        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectionWriteAccess for CompositeElectionAccess<'a, tags::$current, $current, StorageAccess> {
+        impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectionWriteAccess for CompositeElectionAccess<tags::$current, $current, StorageAccess> {
             fn set_state(&self, state: $current::ElectionState) -> Result<(), CorruptStorageError> {
                 StorageAccess::set_election_state(*self.id.unique_monotonic(), CompositeElectionState::$current(state))
             }
@@ -466,9 +458,9 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
         }
 
-        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectoralReadAccess for CompositeElectoralAccess<'a, tags::$current, $current, StorageAccess> {
+        impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectoralReadAccess for CompositeElectoralAccess<tags::$current, $current, StorageAccess> {
             type ElectoralSystem = $current;
-            type ElectionReadAccess<'b> = CompositeElectionAccess<'a, tags::$current, $current, StorageAccess>
+            type ElectionReadAccess<'b> = CompositeElectionAccess<tags::$current, $current, StorageAccess>
             where
                 Self: 'b;
 
@@ -476,7 +468,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 &self,
                 id: ElectionIdentifier<<$current as ElectoralSystem>::ElectionIdentifierExtra>,
             ) -> Result<Self::ElectionReadAccess<'_>, CorruptStorageError> {
-                Ok(CompositeElectionAccess::<tags::$current, _, StorageAccess>::new(self.storage_access, id))
+                Ok(CompositeElectionAccess::<tags::$current, _, StorageAccess>::new(id))
             }
             fn unsynchronised_settings(
                 &self,
@@ -502,8 +494,8 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
         }
 
-        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectoralWriteAccess for CompositeElectoralAccess<'a, tags::$current, $current, StorageAccess> {
-            type ElectionWriteAccess<'b> = CompositeElectionAccess<'a, tags::$current, $current, StorageAccess>
+        impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectoralWriteAccess for CompositeElectoralAccess<tags::$current, $current, StorageAccess> {
+            type ElectionWriteAccess<'b> = CompositeElectionAccess<tags::$current, $current, StorageAccess>
             where
                 Self: 'b;
 
@@ -514,14 +506,14 @@ macro_rules! generate_electoral_system_tuple_impls {
                 state: $current::ElectionState,
             ) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
                 let election_identifier = StorageAccess::new_election(CompositeElectionIdentifierExtra::$current(extra), CompositeElectionProperties::$current(properties), CompositeElectionState::$current(state))?;
-                Ok(Self::ElectionWriteAccess::new(self.storage_access, election_identifier.with_extra(extra)))
+                Ok(Self::ElectionWriteAccess::new(election_identifier.with_extra(extra)))
             }
 
             fn election_mut(
                 &mut self,
                 id: ElectionIdentifier<$current::ElectionIdentifierExtra>,
             ) -> Self::ElectionWriteAccess<'_> {
-                Self::ElectionWriteAccess::new(self.storage_access, id)
+                Self::ElectionWriteAccess::new(id)
             }
 
             fn set_unsynchronised_state(
@@ -553,22 +545,21 @@ macro_rules! generate_electoral_system_tuple_impls {
                 &mut self,
                 f: F,
             ) -> Result<T, CorruptStorageError> {
-                let ($($previous,)* mut unsynchronised_state, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
-                let t = f(self, &mut unsynchronised_state)?;
-                StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))?;
-                Ok(t)
+                todo!()
+                // let ($($previous,)* mut unsynchronised_state, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
+                // let t = f(self, &mut unsynchronised_state)?;
+                // StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))?;
+                // Ok(t)
             }
         }
 
         impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> Translator<StorageAccess> for ElectoralAccessTranslator<tags::$current, $current, StorageAccess> {
 
             type ElectoralSystem = $current;
-            type ElectionAccess<'a> = CompositeElectoralAccess<'a, tags::$current, $current, StorageAccess>
-            where
-                Self: 'a;
+            type ElectionAccess = CompositeElectoralAccess<tags::$current, $current, StorageAccess>;
 
-            fn translate_electoral_access<'a>(&'a self, storage_access: &'a mut StorageAccess) -> Self::ElectionAccess<'a> {
-                Self::ElectionAccess::<'a>::new(storage_access)
+            fn translate_electoral_access(&self) -> Self::ElectionAccess {
+                Self::ElectionAccess::new()
             }
         }
 
