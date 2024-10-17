@@ -87,7 +87,6 @@ macro_rules! generate_electoral_system_tuple_impls {
                 type StorageAccess: RunnerStorageAccessTrait;
 
                 fn on_finalize<$($electoral_system_alt_name_0: Translator<Self::StorageAccess, ElectoralSystem = $electoral_system>),*>(
-                    storage_access: &mut Self::StorageAccess,
                     electoral_access_translators: ($($electoral_system_alt_name_0,)*),
                     election_identifiers: ($(Vec<ElectionIdentifierOf<$electoral_system>>,)*),
                 ) -> Result<(), CorruptStorageError>;
@@ -285,13 +284,11 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
 
                 fn on_finalize(
-                    storage_access: &mut Self::StorageAccess,
                     election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
                 ) -> Result<(), CorruptStorageError> {
                     Self::with_access_translators(|access_translators| {
                         Self::with_identifiers(election_identifiers, |election_identifiers| {
                             H::on_finalize(
-                                storage_access,
                                 access_translators,
                                 election_identifiers,
                             )

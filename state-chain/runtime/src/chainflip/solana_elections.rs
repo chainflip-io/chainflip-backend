@@ -410,7 +410,7 @@ impl IngressSource for SolanaIngress {
 		asset: <Self::Chain as Chain>::ChainAsset,
 		close_block: <Self::Chain as Chain>::ChainBlockNumber,
 	) -> DispatchResult {
-		pallet_cf_elections::Pallet::<Runtime, Instance>::with_storage_access_and_identifiers(
+		pallet_cf_elections::Pallet::<Runtime, Instance>::with_election_identifiers(
 			|electoral_access, election_identifiers| {
 				SolanaElectoralSystemRunner::with_identifiers(
 					election_identifiers,

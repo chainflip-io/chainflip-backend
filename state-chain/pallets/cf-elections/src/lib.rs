@@ -1250,6 +1250,8 @@ pub mod pallet {
 				ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
 			>,
 		) -> DispatchResult {
+			Self::ensure_initialized()?;
+
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
 			ensure!(!authority_votes.is_empty(), Error::<T, I>::NoVotesSpecified);
@@ -1278,14 +1280,12 @@ pub mod pallet {
 				};
 
 				ensure!(
-					Self::with_storage_access(
-						|storage_access| -> Result<_, CorruptStorageError> {
-							<T::ElectoralSystemRunner as ElectoralSystemRunner>::is_vote_valid(
-								election_identifier,
-								&storage_access,
-								&partial_vote,
-							)
-						}
+					Self::handle_corrupt_storage(
+						<T::ElectoralSystemRunner as ElectoralSystemRunner>::is_vote_valid(
+							election_identifier,
+							&RunnerStorageAccess::<T, I>::new(),
+							&partial_vote
+						)
 					)?,
 					Error::<T, I>::InvalidVote
 				);
@@ -1616,50 +1616,45 @@ pub mod pallet {
 							Self::deposit_event(Event::<T, I>::CorruptStorage);
 						},
 					ElectoralSystemStatus::Running => {
-						let _ = Self::with_storage_access_and_identifiers(
-							|storage_access, election_identifiers| {
-								if Into::<sp_core::U256>::into(block_number) %
-									BLOCKS_BETWEEN_CLEANUP == sp_core::U256::zero()
-								{
-									let minimum_election_identifiers = election_identifiers
-										.iter()
-										.copied()
-										.map(|election_identifier| {
-											*election_identifier.unique_monotonic()
-										})
-										.min()
-										.unwrap_or_default();
-									let mut settings_boundaries =
-										ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
-									settings_boundaries.sort();
-									for setting_boundary in &settings_boundaries
+						let _ = Self::with_election_identifiers(|election_identifiers| {
+							if Into::<sp_core::U256>::into(block_number) % BLOCKS_BETWEEN_CLEANUP ==
+								sp_core::U256::zero()
+							{
+								let minimum_election_identifiers = election_identifiers
+									.iter()
+									.copied()
+									.map(|election_identifier| {
+										*election_identifier.unique_monotonic()
+									})
+									.min()
+									.unwrap_or_default();
+								let mut settings_boundaries =
+									ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
+								settings_boundaries.sort();
+								for setting_boundary in &settings_boundaries
 										[..settings_boundaries[..]
 											.partition_point(|&setting_boundary| {
 												setting_boundary <= minimum_election_identifiers
 											})
 											.saturating_sub(1) /*Keep the latest settings lower than the minimum election identifier, i.e. the settings referenced by the election with the minimum election identifier*/]
-									{
-										ElectoralSettings::<T, I>::remove(setting_boundary);
-									}
-
-									let current_authorities = T::EpochInfo::current_authorities();
-									for validator in ContributingAuthorities::<T, I>::iter_keys()
-										.collect::<Vec<_>>()
-									{
-										if !current_authorities.contains(&validator) {
-											ContributingAuthorities::<T, I>::remove(validator);
-										}
-									}
+								{
+									ElectoralSettings::<T, I>::remove(setting_boundary);
 								}
 
-								T::ElectoralSystemRunner::on_finalize(
-									storage_access,
-									election_identifiers,
-								)?;
+								let current_authorities = T::EpochInfo::current_authorities();
+								for validator in
+									ContributingAuthorities::<T, I>::iter_keys().collect::<Vec<_>>()
+								{
+									if !current_authorities.contains(&validator) {
+										ContributingAuthorities::<T, I>::remove(validator);
+									}
+								}
+							}
 
-								Ok(())
-							},
-						);
+							T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
+
+							Ok(())
+						});
 					},
 				}
 			}
@@ -1705,21 +1700,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Provides access into the ElectoralSystem's storage.
-		///
-		/// Ideally we would avoid introducing re-entrance (also with
-		/// `with_storage_access_and_identifiers`), so the RunnerElectoralAccess object can
-		/// internally cache storage which is possibly helpful particularly in the case of
-		/// composites.
-		pub fn with_storage_access<
-			R,
-			F: FnOnce(&mut RunnerStorageAccess<T, I>) -> Result<R, CorruptStorageError>,
-		>(
-			f: F,
-		) -> Result<R, DispatchError> {
+		pub fn ensure_initialized() -> Result<(), DispatchError> {
 			if Status::<T, I>::get().is_some() {
-				Self::handle_corrupt_storage(f(&mut RunnerStorageAccess::<T, I>::new()))
-					.map_err(Into::into)
+				Ok(())
 			} else {
 				Self::deposit_event(Event::<T, I>::Uninitialized);
 				Err(Error::<T, I>::Uninitialized.into())
@@ -1732,10 +1715,9 @@ pub mod pallet {
 		/// Ideally we would avoid introducing re-entrance (also with `with_storage_access`), so
 		/// the ElectoralAccess object can internally cache storage which is possibly helpful
 		/// particularly in the case of composites.
-		pub fn with_storage_access_and_identifiers<
+		pub fn with_election_identifiers<
 			R,
 			F: FnOnce(
-				&mut RunnerStorageAccess<T, I>,
 				Vec<CompositeElectionIdentifierOf<T::ElectoralSystemRunner>>,
 			) -> Result<R, CorruptStorageError>,
 		>(
@@ -1745,11 +1727,7 @@ pub mod pallet {
 				let mut election_identifiers =
 					ElectionProperties::<T, I>::iter_keys().collect::<Vec<_>>();
 				election_identifiers.sort();
-				Self::handle_corrupt_storage(f(
-					&mut RunnerStorageAccess::<T, I>::new(),
-					election_identifiers,
-				))
-				.map_err(Into::into)
+				Self::handle_corrupt_storage(f(election_identifiers)).map_err(Into::into)
 			} else {
 				Self::deposit_event(Event::<T, I>::Uninitialized);
 				Err(Error::<T, I>::Uninitialized.into())
@@ -1768,8 +1746,8 @@ pub mod pallet {
 					let block_number = frame_system::Pallet::<T>::current_block_number();
 
 					Some(ElectoralData {
-						current_elections: Self::with_storage_access_and_identifiers(
-							|storage_access, election_identifiers| {
+						current_elections: Self::with_election_identifiers(
+							|election_identifiers| {
 								election_identifiers
 									.into_iter()
 									.map(|election_identifier| {
@@ -1812,7 +1790,7 @@ pub mod pallet {
 													}),
 													is_vote_desired: <T::ElectoralSystemRunner as ElectoralSystemRunner>::is_vote_desired(
 														election_identifier,
-														storage_access,
+														&RunnerStorageAccess::<T, I>::new(),
 														option_current_authority_vote.filter(|_| !contains_timed_out_shared_data_references),
 													)?,
 												},
@@ -1869,8 +1847,8 @@ pub mod pallet {
 			{
 				let block_number = frame_system::Pallet::<T>::current_block_number();
 
-				Self::with_storage_access_and_identifiers(
-					|_electoral_access, election_identifiers| {
+				Self::with_election_identifiers(
+					|election_identifiers| {
 						election_identifiers
 							.into_iter()
 							.map(|election_identifier| {
