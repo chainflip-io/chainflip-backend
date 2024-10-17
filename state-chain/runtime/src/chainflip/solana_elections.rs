@@ -244,60 +244,48 @@ impl<StorageAccess: RunnerStorageAccessTrait>
 			Vec<ElectionIdentifier<<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra>>,
 		),
 	) -> Result<(), CorruptStorageError> {
-		let block_height = SolanaBlockHeightTracking::on_finalize(
-			&mut CompositeElectoralAccess::<
+		let block_height = SolanaBlockHeightTracking::on_finalize::<
+			CompositeElectoralAccess<
 				_,
 				SolanaBlockHeightTracking,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>::new(),
-			block_height_identifiers,
-			&(),
-		)?;
-		SolanaLiveness::on_finalize(
-			&mut CompositeElectoralAccess::<
+			>,
+		>(block_height_identifiers, &())?;
+		SolanaLiveness::on_finalize::<
+			CompositeElectoralAccess<
 				_,
 				SolanaLiveness,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>::new(),
-			liveness_identifiers,
-			&(crate::System::block_number(), block_height),
-		)?;
-		SolanaFeeTracking::on_finalize(
-			&mut CompositeElectoralAccess::<
+			>,
+		>(liveness_identifiers, &(crate::System::block_number(), block_height))?;
+		SolanaFeeTracking::on_finalize::<
+			CompositeElectoralAccess<
 				_,
 				SolanaFeeTracking,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>::new(),
-			fee_identifiers,
-			&(),
-		)?;
-		SolanaNonceTracking::on_finalize(
-			&mut CompositeElectoralAccess::<
+			>,
+		>(fee_identifiers, &())?;
+		SolanaNonceTracking::on_finalize::<
+			CompositeElectoralAccess<
 				_,
 				SolanaNonceTracking,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>::new(),
-			nonce_tracking_identifiers,
-			&(),
-		)?;
-		SolanaEgressWitnessing::on_finalize(
-			&mut CompositeElectoralAccess::<
+			>,
+		>(nonce_tracking_identifiers, &())?;
+		SolanaEgressWitnessing::on_finalize::<
+			CompositeElectoralAccess<
 				_,
 				SolanaEgressWitnessing,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>::new(),
-			egress_witnessing_identifiers,
-			&(),
-		)?;
-		SolanaIngressTracking::on_finalize(
-			&mut CompositeElectoralAccess::<
+			>,
+		>(egress_witnessing_identifiers, &())?;
+		SolanaIngressTracking::on_finalize::<
+			CompositeElectoralAccess<
 				_,
 				SolanaIngressTracking,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>::new(),
-			ingress_identifiers,
-			&block_height,
-		)?;
+			>,
+		>(ingress_identifiers, &block_height)?;
 		Ok(())
 	}
 }
@@ -339,8 +327,7 @@ impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
 			_,
 			SolanaBlockHeightTracking,
 			RunnerStorageAccess<Runtime, SolanaInstance>,
-		>::new()
-		.unsynchronised_state()
+		>::unsynchronised_state()
 		.unwrap_or_else(|err| {
 			log_or_panic!("Failed to obtain Solana block height: '{err:?}'.");
 			// We use default in error case as it is preferable to panicking, and in
@@ -357,8 +344,7 @@ impl SolanaChainTrackingProvider {
 			_,
 			SolanaFeeTracking,
 			RunnerStorageAccess<Runtime, SolanaInstance>,
-			>::new()
-			.unsynchronised_state()
+			>::unsynchronised_state()
 			.ok()
 	}
 
@@ -367,15 +353,17 @@ impl SolanaChainTrackingProvider {
 	>(
 		f: F,
 	) -> <Solana as Chain>::ChainAmount {
-		let storage_access = CompositeElectoralAccess::<
+		CompositeElectoralAccess::<
 			_,
 			SolanaFeeTracking,
 			RunnerStorageAccess<Runtime, SolanaInstance>,
-		>::new();
-		storage_access
-			.unsynchronised_state()
+		>::unsynchronised_state()
 			.map(|priority_fee| {
-				storage_access.unsynchronised_settings().map(|fees| {
+				CompositeElectoralAccess::<
+			_,
+			SolanaFeeTracking,
+			RunnerStorageAccess<Runtime, SolanaInstance>,
+		>::unsynchronised_settings().map(|fees| {
 					{
 						fees.fee_multiplier.saturating_mul_int(f(SolTrackedData { priority_fee }))
 					}
@@ -420,17 +408,13 @@ impl IngressSource for SolanaIngress {
 					composite_election_identifiers,
 					|grouped_election_identifiers| {
 						let (_, _, election_identifiers, ..) = grouped_election_identifiers;
-						SolanaIngressTracking::open_channel(
-							election_identifiers,
-							&mut CompositeElectoralAccess::<
+						SolanaIngressTracking::open_channel::<
+							CompositeElectoralAccess<
 								_,
 								SolanaIngressTracking,
 								RunnerStorageAccess<Runtime, SolanaInstance>,
-							>::new(),
-							channel,
-							asset,
-							close_block,
-						)
+							>,
+						>(election_identifiers, channel, asset, close_block)
 					},
 				)
 			},
@@ -449,15 +433,13 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 		// with_electoral_access
 		// TODO: Look at handling the corrupt storage elsewhere.
 		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::handle_corrupt_storage(
-			SolanaNonceTracking::watch_for_change(
-				&mut CompositeElectoralAccess::<
+			SolanaNonceTracking::watch_for_change::<
+				CompositeElectoralAccess<
 					_,
 					SolanaNonceTracking,
 					RunnerStorageAccess<Runtime, SolanaInstance>,
-				>::new(),
-				nonce_account,
-				previous_nonce_value,
-			),
+				>,
+			>(nonce_account, previous_nonce_value),
 		)?)
 	}
 }
@@ -471,14 +453,13 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 		// TODO: Check if safe. We are not checking if initialised or not here - we were before in
 		// with_electoral_access
 		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::handle_corrupt_storage(
-			SolanaEgressWitnessing::watch_for_egress(
-				&mut CompositeElectoralAccess::<
+			SolanaEgressWitnessing::watch_for_egress::<
+				CompositeElectoralAccess<
 					_,
 					SolanaEgressWitnessing,
 					RunnerStorageAccess<Runtime, SolanaInstance>,
-				>::new(),
-				signature,
-			),
+				>,
+			>(signature),
 		)?)
 	}
 }

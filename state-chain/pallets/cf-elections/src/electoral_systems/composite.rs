@@ -266,8 +266,6 @@ macro_rules! generate_electoral_system_tuple_impls {
                     Ok(match *election_identifier.extra() {
                         $(CompositeElectionIdentifierExtra::$electoral_system(extra) => {
                             <$electoral_system as ElectoralSystem>::check_consensus(
-                                // The elction access should already have this, why do we need to pass it in again?
-                                election_identifier.with_extra(extra),
                                 &CompositeElectionAccess::<tags::$electoral_system, _, Self::StorageAccess>::new(election_identifier.with_extra(extra)),
                                 previous_consensus.map(|previous_consensus| {
                                     match previous_consensus {
@@ -319,14 +317,6 @@ macro_rules! generate_electoral_system_tuple_impls {
             pub struct CompositeElectoralAccess<Tag, ES, StorageAccess> {
                 _phantom: core::marker::PhantomData<(Tag, ES, StorageAccess)>,
             }
-            impl<Tag, ES, StorageAccess> CompositeElectoralAccess<Tag, ES, StorageAccess> {
-                // TODO: Try to remove new if we don't need &self
-                pub fn new() -> Self {
-                    Self {
-                        _phantom: Default::default(),
-                    }
-                }
-            }
 
             // This macro solves the problem of taking a repeating argument and generating the
             // product of the arguments elements. As we need to be able to refer to every element
@@ -361,15 +351,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
             }
 
-            // This is broken now - since we don't actually store the identifier in the storage.
-            #[cfg(test)]
-            fn election_identifier(&self) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError> {
-                let composite_identifier = self.runner.borrow().election_identifier()?;
-                let extra = match composite_identifier.extra() {
-                    CompositeElectionIdentifierExtra::$current(extra) => Ok(extra),
-                    _ => Err(CorruptStorageError::new()),
-                }?;
-                Ok(composite_identifier.with_extra(*extra))
+            fn election_identifier(&self) -> ElectionIdentifierOf<Self::ElectoralSystem> {
+                self.id
             }
         }
 
@@ -415,30 +398,24 @@ macro_rules! generate_electoral_system_tuple_impls {
 
         impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectoralReadAccess for CompositeElectoralAccess<tags::$current, $current, StorageAccess> {
             type ElectoralSystem = $current;
-            type ElectionReadAccess<'b> = CompositeElectionAccess<tags::$current, $current, StorageAccess>
-            where
-                Self: 'b;
+            type ElectionReadAccess = CompositeElectionAccess<tags::$current, $current, StorageAccess>;
 
             fn election(
-                &self,
                 id: ElectionIdentifier<<$current as ElectoralSystem>::ElectionIdentifierExtra>,
-            ) -> Result<Self::ElectionReadAccess<'_>, CorruptStorageError> {
+            ) -> Result<Self::ElectionReadAccess, CorruptStorageError> {
                 Ok(CompositeElectionAccess::<tags::$current, _, StorageAccess>::new(id))
             }
             fn unsynchronised_settings(
-                &self,
             ) -> Result<$current::ElectoralUnsynchronisedSettings, CorruptStorageError> {
                 let ($($previous,)* unsynchronised_settings, $($remaining,)*) = StorageAccess::unsynchronised_settings()?;
                 Ok(unsynchronised_settings)
             }
             fn unsynchronised_state(
-                &self,
             ) -> Result<$current::ElectoralUnsynchronisedState, CorruptStorageError> {
                 let ($($previous,)* unsynchronised_state, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
                 Ok(unsynchronised_state)
             }
             fn unsynchronised_state_map(
-                &self,
                 key: &$current::ElectoralUnsynchronisedStateMapKey,
             ) -> Result<Option<$current::ElectoralUnsynchronisedStateMapValue>, CorruptStorageError> {
                 match StorageAccess::unsynchronised_state_map(&CompositeElectoralUnsynchronisedStateMapKey::$current(key.clone()))? {
@@ -450,29 +427,24 @@ macro_rules! generate_electoral_system_tuple_impls {
         }
 
         impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectoralWriteAccess for CompositeElectoralAccess<tags::$current, $current, StorageAccess> {
-            type ElectionWriteAccess<'b> = CompositeElectionAccess<tags::$current, $current, StorageAccess>
-            where
-                Self: 'b;
+            type ElectionWriteAccess = CompositeElectionAccess<tags::$current, $current, StorageAccess>;
 
             fn new_election(
-                &mut self,
                 extra: $current::ElectionIdentifierExtra,
                 properties: $current::ElectionProperties,
                 state: $current::ElectionState,
-            ) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
+            ) -> Result<Self::ElectionWriteAccess, CorruptStorageError> {
                 let election_identifier = StorageAccess::new_election(CompositeElectionIdentifierExtra::$current(extra), CompositeElectionProperties::$current(properties), CompositeElectionState::$current(state))?;
                 Ok(Self::ElectionWriteAccess::new(election_identifier.with_extra(extra)))
             }
 
             fn election_mut(
-                &mut self,
                 id: ElectionIdentifier<$current::ElectionIdentifierExtra>,
-            ) -> Self::ElectionWriteAccess<'_> {
+            ) -> Self::ElectionWriteAccess {
                 Self::ElectionWriteAccess::new(id)
             }
 
             fn set_unsynchronised_state(
-                &self,
                 unsynchronised_state: $current::ElectoralUnsynchronisedState,
             ) -> Result<(), CorruptStorageError> {
                 let ($($previous,)* _, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
@@ -480,7 +452,6 @@ macro_rules! generate_electoral_system_tuple_impls {
             }
 
             fn set_unsynchronised_state_map(
-                &self,
                 key: $current::ElectoralUnsynchronisedStateMapKey,
                 value: Option<$current::ElectoralUnsynchronisedStateMapValue>,
             ) -> Result<(), CorruptStorageError> {
@@ -493,15 +464,13 @@ macro_rules! generate_electoral_system_tuple_impls {
             fn mutate_unsynchronised_state<
                 T,
                 F: for<'b> FnOnce(
-                    &mut Self,
                     &'b mut $current::ElectoralUnsynchronisedState,
                 ) -> Result<T, CorruptStorageError>,
             >(
-                &mut self,
                 f: F,
             ) -> Result<T, CorruptStorageError> {
                 let ($($previous,)* mut unsynchronised_state, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
-                let t = f(self, &mut unsynchronised_state)?;
+                let t = f( &mut unsynchronised_state)?;
                 StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))?;
                 Ok(t)
             }
