@@ -253,6 +253,7 @@ pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereumChainCrypto;
 impl ChainCrypto for MockEthereumChainCrypto {
+	const NAME: &'static str = "MockEthereum";
 	type UtxoChain = ConstBool<false>;
 
 	type AggKey = MockAggKey;
