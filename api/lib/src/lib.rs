@@ -4,13 +4,16 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
 	address::{try_from_encoded_address, EncodedAddress},
+	btc::smart_contract_encoding::{
+		encode_swap_params_in_nulldata_utxo, SharedCfParameters, UtxoEncodedData,
+	},
 	dot::PolkadotAccountId,
 	evm::to_evm_address,
 	sol::SolAddress,
 	CcmChannelMetadata, ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{BlockNumber, DcaParameters, NetworkEnvironment, Price};
+use cf_primitives::{AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment, Price};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -105,6 +108,16 @@ pub async fn request_block(
 		.block(block_hash)
 		.await?
 		.ok_or_else(|| anyhow!("unknown block hash"))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SwapPayload {
+	Bitcoin { nulldata_utxo: Bytes },
+}
+
+#[derive(Serialize)]
+struct RefundValidationParams {
+	pub retry_duration: u32,
 }
 
 pub struct StateChainApi {
@@ -321,8 +334,8 @@ impl AddressString {
 			.map_err(|_| anyhow!("Failed to parse address"))
 	}
 
-	pub fn from_encoded_address(address: &EncodedAddress) -> Self {
-		Self(address.to_string())
+	pub fn from_encoded_address<T: std::borrow::Borrow<EncodedAddress>>(address: T) -> Self {
+		Self(address.borrow().to_string())
 	}
 }
 
@@ -514,6 +527,75 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	async fn deregister_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
 			.await
+	}
+
+	async fn request_swap_parameter_encoding(
+		&self,
+		input_asset: Asset,
+		output_asset: Asset,
+		output_address: AddressString,
+		retry_duration: BlockNumber,
+		min_output_amount: AssetAmount,
+		boost_fee: Option<BasisPoints>,
+		dca_parameters: Option<DcaParameters>,
+	) -> Result<SwapPayload> {
+		// Check if safe mode is active
+		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;
+		let safe_mode = self
+			.storage_value::<pallet_cf_environment::RuntimeSafeMode<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await?;
+		if !safe_mode.swapping.swaps_enabled {
+			bail!("Safe mode is active. Swaps are disabled.");
+		}
+
+		// Validate params
+		let params = serde_json::to_string(&RefundValidationParams { retry_duration })?;
+		let raw_value = serde_json::value::RawValue::from_string(params)?;
+		self.base_rpc_api()
+			.request_raw("cf_validate_refund_params", Some(raw_value))
+			.await
+			.map_err(anyhow::Error::msg)?;
+
+		if let Some(params) = &dca_parameters {
+			let params_json = serde_json::to_string(params)?;
+			let raw_value = serde_json::value::RawValue::from_string(params_json)?;
+			self.base_rpc_api()
+				.request_raw("cf_validate_dca_params", Some(raw_value))
+				.await
+				.map_err(anyhow::Error::msg)?;
+		}
+
+		// Encode swap
+		match input_asset {
+			Asset::Btc => {
+				let params = UtxoEncodedData {
+					output_asset,
+					output_address: output_address
+						.try_parse_to_encoded_address(output_asset.into())?,
+					parameters: SharedCfParameters {
+						retry_duration: retry_duration.try_into()?,
+						min_output_amount,
+						number_of_chunks: dca_parameters
+							.as_ref()
+							.map(|params| params.number_of_chunks)
+							.unwrap_or(1)
+							.try_into()?,
+						chunk_interval: dca_parameters
+							.as_ref()
+							.map(|params| params.chunk_interval)
+							.unwrap_or(2)
+							.try_into()?,
+						boost_fee: boost_fee.unwrap_or_default().try_into()?,
+					},
+				};
+				Ok(SwapPayload::Bitcoin {
+					nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw().into(),
+				})
+			},
+			_ => bail!("Unsupported input asset"),
+		}
 	}
 }
 

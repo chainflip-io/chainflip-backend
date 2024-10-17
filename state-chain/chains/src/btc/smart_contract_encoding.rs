@@ -69,7 +69,6 @@ pub struct SharedCfParameters {
 	pub boost_fee: u8,
 }
 
-#[allow(dead_code)]
 pub fn encode_data_in_nulldata_utxo(data: &[u8]) -> Option<BitcoinScript> {
 	if data.len() > MAX_NULLDATA_LENGTH {
 		return None;
