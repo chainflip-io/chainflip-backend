@@ -124,6 +124,7 @@ mod test {
 			cf_parameters: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 				remaining_accounts: vec![],
+				fallback_address: SolPubkey([0xf0; 32]),
 			}
 			.encode()
 			.try_into()
@@ -146,6 +147,7 @@ mod test {
 				pubkey: SolPubkey([0x01; 32]),
 				is_writable: true,
 			}],
+			fallback_address: SolPubkey([0xf0; 32]),
 		}
 		.encode()
 		.try_into()
@@ -163,6 +165,7 @@ mod test {
 			gas_budget: 0,
 			cf_parameters: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
+				fallback_address: SolPubkey([0xf0; 32]),
 				remaining_accounts: vec![],
 			}
 			.encode()
@@ -186,6 +189,7 @@ mod test {
 				pubkey: SolPubkey([0x01; 32]),
 				is_writable: true,
 			}],
+			fallback_address: SolPubkey([0xf0; 32]),
 		}
 		.encode()
 		.try_into()
@@ -259,6 +263,7 @@ mod test {
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x01; 32]), is_writable: false },
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
 			],
+			fallback_address: SolPubkey([0xf0; 32]),
 		};
 		assert_err!(
 			check_ccm_for_blacklisted_accounts(&ccm_accounts, blacklisted_accounts()),
@@ -277,6 +282,7 @@ mod test {
 				},
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
 			],
+			fallback_address: SolPubkey([0xf0; 32]),
 		};
 		assert_err!(
 			check_ccm_for_blacklisted_accounts(&ccm_accounts, blacklisted_accounts()),
@@ -293,6 +299,7 @@ mod test {
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x01; 32]), is_writable: false },
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
 			],
+			fallback_address: SolPubkey([0xf0; 32]),
 		};
 		assert_err!(
 			check_ccm_for_blacklisted_accounts(&ccm_accounts, blacklisted_accounts()),
@@ -308,6 +315,7 @@ mod test {
 				SolCcmAddress { pubkey: sol_test_values::agg_key().into(), is_writable: false },
 				SolCcmAddress { pubkey: crate::sol::SolPubkey([0x02; 32]), is_writable: false },
 			],
+			fallback_address: SolPubkey([0xf0; 32]),
 		};
 		assert_err!(
 			check_ccm_for_blacklisted_accounts(&ccm_accounts, blacklisted_accounts()),
