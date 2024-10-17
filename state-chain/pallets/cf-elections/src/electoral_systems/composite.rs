@@ -1,11 +1,7 @@
 /// Allows the composition of multiple ElectoralSystems while allowing the ability to configure the
 /// `on_finalize` behaviour without exposing the internal composite types.
-pub struct CompositeRunner<T, ValidatorId, StorageAccess, H = DefaultHooks<(), StorageAccess>> {
+pub struct CompositeRunner<T, ValidatorId, StorageAccess, H> {
 	_phantom: core::marker::PhantomData<(T, ValidatorId, StorageAccess, H)>,
-}
-
-pub struct DefaultHooks<OnFinalizeContext, StorageAccess> {
-	_phantom: core::marker::PhantomData<(OnFinalizeContext, StorageAccess)>,
 }
 
 /// The access wrappers need to impl the access traits once for each variant,
