@@ -25,6 +25,7 @@ serde = { default-features = false, version = '1.0.197', features = [
   'alloc',
   'derive',
 ] }
+bitvec = { default-features = false, version = '1.0', features = ['alloc'] }
 
 ethabi = { default-features = false, version = '18.0' }
 

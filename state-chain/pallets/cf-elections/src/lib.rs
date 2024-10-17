@@ -546,7 +546,7 @@ pub mod pallet {
 	>;
 
 	#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo, Default)]
-	struct ConsensusHistory<T> {
+	pub struct ConsensusHistory<T> {
 		/// The most recent consensus the election had.
 		most_recent: T,
 		/// Indicates if consensus was lost after the `most_recent` consensus was gained. I.e. that

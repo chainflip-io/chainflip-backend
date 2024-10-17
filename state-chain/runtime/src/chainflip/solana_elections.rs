@@ -55,8 +55,17 @@ pub type SolanaElectoralSystem = Composite<
 pub mod old {
 	use super::*;
 	use crate::Weight;
-	use frame_support::{traits::OnRuntimeUpgrade, Twox64Concat};
-	use pallet_cf_elections::electoral_system::ElectionIdentifierOf;
+	use bitvec::prelude::*;
+	use cf_primitives::EpochIndex;
+	use frame_support::{
+		pallet_prelude::{OptionQuery, StorageDoubleMap},
+		traits::{OnRuntimeUpgrade, StorageInstance},
+		Identity, Twox64Concat,
+	};
+	use pallet_cf_elections::{
+		electoral_system::ElectionIdentifierOf, vote_storage::VoteStorage, ConsensusHistory,
+		SharedDataHash, UniqueMonotonicIdentifier,
+	};
 	use sp_runtime::DispatchError;
 
 	pub type SolanaNonceTrackingOld = pallet_cf_elections::migrations::change_old::Change<
@@ -192,7 +201,21 @@ pub mod old {
 			Ok(())
 		}
 	}
-
+	#[derive(Encode, Decode, TypeInfo, Clone)]
+	struct ElectionBitmapComponents {
+		epoch: EpochIndex,
+		#[allow(clippy::type_complexity)]
+		bitmaps: Vec<(
+			<<SolanaElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::BitmapComponent,
+			BitVec<u8, bitvec::order::Lsb0>,
+		)>, //sp_core::H256, BitVec<u8, bitvec::order::Lsb0>)>,
+	}
+	#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo, Default)]
+	pub struct ReferenceDetails {
+		pub count: u32,
+		pub created: u32,
+		pub expires: u32,
+	}
 	pub struct Migration;
 	impl OnRuntimeUpgrade for Migration {
 		#[cfg(feature = "try-runtime")]
@@ -202,38 +225,48 @@ pub mod old {
 				<old::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
 				Twox64Concat
 			>(b"SolanaElections", b"ElectionProperties")
-				.filter(|(key, value)| {
-					log::info!("Old {:?}: {:?}",key, value);
+				.filter(|(_, value)| {
 					matches!(value, pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::D(_))
 				})
-				.map(|(key, _)| {
+				.map(|(key, value)| {
+					log::info!("Old {:?}: {:?}",key, value);
 					key
 				})
 				.collect::<Vec<ElectionIdentifierOf<old::SolanaElectoralSystem>>>();
+			log::info!("Number of elections: {:?}", election_identifiers.len());
 			Ok((election_identifiers.len() as u32).encode())
 		}
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 			let previous_number_election = u32::decode(&mut &state[..]).unwrap();
+			log::info!("Post upgrade number of election old state: {:?}", previous_number_election);
+			log::info!(
+				"Post upgrade number of unavailable nonces: {:?}",
+				pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys()
+					.collect::<Vec<_>>()
+					.len() as u32
+			);
+
 			assert!(
 				previous_number_election ==
-					pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys(
-					)
-					.fold(0, |acc, _elem| acc + 1)
+					pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys()
+						.collect::<Vec<_>>()
+						.len() as u32
 			);
-			// let election_identifiers = frame_support::migration::storage_key_iter::<
-			// 	ElectionIdentifierOf<super::SolanaElectoralSystem>,
-			// 	<super::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
-			// 	Twox64Concat
-			// >(b"SolanaElections", b"ElectionProperties")
-			// 	.filter(|(_, value)| {
-			// 		matches!(value, pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::D(_))
-			// 	})
-			// 	.map(|(key, _)| {
-			// 		key
-			// 	})
-			// 	.collect::<Vec<ElectionIdentifierOf<old::SolanaElectoralSystem>>>();
-			// assert!(previous_number_election == election_identifiers.len() as u32);
+			let election_identifiers = frame_support::migration::storage_key_iter::<
+				ElectionIdentifierOf<super::SolanaElectoralSystem>,
+				<super::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
+				Twox64Concat
+			>(b"SolanaElections", b"ElectionProperties")
+				.filter(|(_, value)| {
+					matches!(value, pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::D(_))
+				})
+				.map(|(key, _)| {
+					key
+				})
+				.collect::<Vec<ElectionIdentifierOf<super::SolanaElectoralSystem>>>();
+			log::info!("Post upgrade number of elections: {:?}", election_identifiers.len() as u32);
+			assert!(previous_number_election == election_identifiers.len() as u32);
 
 			Ok(())
 		}
@@ -246,59 +279,100 @@ pub mod old {
 				.filter(|(_, value)| {
 					matches!(value, pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectionProperties::D(_))
 				})
-				.map(|(key, _)| {
+				.map(|(key, value)| {
+					log::info!("During Upgrade {:?}: {:?}",key, value);
 					key
 				})
 				.collect::<Vec<ElectionIdentifierOf<old::SolanaElectoralSystem>>>();
 
 			for election_identifier in election_identifiers {
-				let unique_monotonic_identifier = election_identifier.unique_monotonic();
-				// ElectionBitmapComponents::<T, I>::clear(unique_monotonic_identifier);
-				let _ = frame_support::storage::migration::take_storage_item::<
+				//Removing BitmapComponents
+				let bitmap = frame_support::storage::migration::take_storage_item::<
 					_,
-					Vec<u8>,
-					Twox64Concat,
-				>(b"SolanaElections", b"BitmapComponents", unique_monotonic_identifier);
-
-				let _ = frame_support::storage::migration::take_storage_item::<
-					_,
-					Vec<u8>,
+					ElectionBitmapComponents,
 					Twox64Concat,
 				>(
-					b"SolanaElections", b"ElectionProperties", unique_monotonic_identifier
+					b"SolanaElections",
+					b"BitmapComponents",
+					election_identifier.unique_monotonic(),
 				);
+				if bitmap.is_some() {
+					log::info!("Bitmap {:?}", bitmap.clone().unwrap().bitmaps);
+					//If they have some data, remove the SharedDataRederenceCount as well
+					for (bitmap_component, _) in bitmap.unwrap().bitmaps {
+						<<SolanaElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
+							&bitmap_component,
+							|shared_data_hash| {
+								struct StoragePrefix;
+								impl StorageInstance for StoragePrefix{
+									const STORAGE_PREFIX: &'static str = "SharedDataReferenceCount";
+									fn pallet_prefix() -> &'static str {
+										"SolanaElections"
+									}
+								}
+								let hashed_key_and_prefix = StorageDoubleMap::<
+									StoragePrefix,
+									Identity,
+									SharedDataHash,
+									Twox64Concat,
+									UniqueMonotonicIdentifier,
+									(),
+									OptionQuery,
+								>::hashed_key_for(shared_data_hash, election_identifier.unique_monotonic());
+								let reference: core::option::Option<ReferenceDetails> = frame_support::storage::unhashed::take::<ReferenceDetails>(&hashed_key_and_prefix);
+								log::info!("References {:?}", reference);
+							}
+						);
+					}
+				}
+				let properties =
+					frame_support::storage::migration::take_storage_item::<
+						_,
+						<old::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
+						Twox64Concat,
+					>(b"SolanaElections", b"ElectionProperties", election_identifier);
+				log::info!("Properties {:?}", properties);
 
-				let _ = frame_support::storage::migration::take_storage_item::<
+				let consensus_history = frame_support::storage::migration::take_storage_item::<
 					_,
-					Vec<u8>,
+					ConsensusHistory<<old::SolanaElectoralSystem as ElectoralSystem>::Consensus>,
 					Twox64Concat,
 				>(
 					b"SolanaElections",
 					b"ElectionConsensusHistory",
-					unique_monotonic_identifier,
+					election_identifier.unique_monotonic(),
 				);
+				log::info!("Consensus history {:?}", consensus_history);
 
-				let _ = frame_support::storage::migration::take_storage_item::<
+				let settings = frame_support::storage::migration::take_storage_item::<
 					_,
-					Vec<u8>,
-					Twox64Concat,
-				>(b"SolanaElections", b"ElectoralSettings", unique_monotonic_identifier);
-
-				let _ = frame_support::storage::migration::take_storage_item::<
-					_,
-					Vec<u8>,
+					<old::SolanaElectoralSystem as ElectoralSystem>::ElectoralSettings,
 					Twox64Concat,
 				>(
 					b"SolanaElections",
-					b"ElectionConsensusHistoryUpToDate",
-					unique_monotonic_identifier,
+					b"ElectoralSettings",
+					election_identifier.unique_monotonic(),
 				);
+				log::info!("Settings {:?}", settings);
+
+				let consensus_history_uptodate =
+					frame_support::storage::migration::take_storage_item::<
+						_,
+						EpochIndex,
+						Twox64Concat,
+					>(
+						b"SolanaElections",
+						b"ElectionConsensusHistoryUpToDate",
+						election_identifier.unique_monotonic(),
+					);
+				log::info!("Consensus history up to date {:?}", consensus_history_uptodate);
 			}
-			let _ = pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter().map(
-				|(key, value)| {
-					let _ = SolanaNonceTrackingTrigger::watch_for_nonce_change(key, value);
-				},
-			);
+			for (key, value) in
+				pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter()
+			{
+				log::info!("Creating a new election for nonce: {:?}, {:?}", key, value);
+				let _ = SolanaNonceTrackingTrigger::watch_for_nonce_change(key, value);
+			}
 			Weight::zero()
 		}
 	}
