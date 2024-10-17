@@ -25,12 +25,10 @@ import {
   shortChainFromAsset,
 } from './utils';
 import { getBalance } from './get_balance';
-import { CcmDepositMetadata } from '../shared/new_swap';
+import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
 import { send } from './send';
 import { SwapContext, SwapStatus } from './swap_context';
 import { vaultSwapCfParametersCodec } from './swapping';
-import { newEvmAddress } from './new_evm_address';
-import { newSolAddress } from './new_sol_address';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
@@ -40,6 +38,9 @@ export async function executeContractSwap(
   destAddress: string,
   wallet: HDNodeWallet,
   messageMetadata?: CcmDepositMetadata,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
 ): ReturnType<typeof executeSwap> {
   const srcChain = chainFromAsset(srcAsset);
   const destChain = chainFromAsset(destAsset);
@@ -55,45 +56,37 @@ export async function executeContractSwap(
     gasLimit: srcChain === Chains.Arbitrum ? 10000000n : 200000n,
   } as const;
 
-  console.log('messageMetadata?.cfParameters', messageMetadata?.cfParameters);
-  console.log('hexTou8(messageMetadata?.cfParameters)', hexToU8a(messageMetadata?.cfParameters));
+  // messageMetadata.cfParameters = undefined;
+  // boostFeeBps = 1;
 
-  // const refundAddressTest = hexToU8a('0x41aD2bc63A2059f9b623533d87fe99887D794847');
+  const ccmAdditionalData =
+    messageMetadata?.cfParameters || fillOrKillParams || dcaParams || boostFeeBps
+      ? u8aToHex(
+          vaultSwapCfParametersCodec.enc({
+            ccmAdditionalData: messageMetadata?.cfParameters
+              ? hexToU8a(messageMetadata.cfParameters)
+              : undefined,
+            vaultSwapAttributes:
+              fillOrKillParams || dcaParams || boostFeeBps
+                ? {
+                    refundParams: fillOrKillParams && {
+                      retryDuration: fillOrKillParams.retryDurationBlocks,
+                      // refundAddress: { tag: shortChainFromAsset(srcAsset), value: hexToU8a(refundAddress) },
+                      refundAddress: {
+                        tag: shortChainFromAsset(srcAsset),
+                        // value: fillOrKillParams.refundAddress,
+                        value: hexToU8a(fillOrKillParams.refundAddress),
+                      },
+                      minPriceX128: BigInt(fillOrKillParams.minPriceX128),
+                    },
+                    dcaParams,
+                    boostFee: boostFeeBps,
+                  }
+                : undefined,
+          }),
+        )
+      : undefined;
 
-  let refundAddress;
-  switch (srcChain) {
-    case Chains.Ethereum:
-    case Chains.Arbitrum:
-      refundAddress = newEvmAddress('refundAddress');
-      break;
-    case Chains.Solana:
-      refundAddress = newSolAddress('refundAddress');
-      break;
-    default:
-      throw new Error(`Unsupported chain: ${srcChain}`);
-  }
-  console.log('refundAddress', refundAddress);
-  console.log('refundAddress', hexToU8a(refundAddress));
-
-  const ccmAdditionalData = u8aToHex(
-    vaultSwapCfParametersCodec.enc({
-      ccmAdditionalData: hexToU8a(messageMetadata?.cfParameters),
-      // vaultSwapAttributes: undefined,
-      vaultSwapAttributes: {
-        // refundParams: undefined,
-        refundParams: {
-          retryDuration: 2,
-          refundAddress: { tag: shortChainFromAsset(srcAsset), value: hexToU8a(refundAddress) },
-          minPriceX128: BigInt(3),
-        },
-        dcaParams: {
-          numberOfChunks: 4,
-          chunkIntervalBlocks: 5,
-        },
-        boostFee: 1,
-      },
-    }),
-  );
   console.log('ccmAdditionalData passed to the SDK in contractCall', ccmAdditionalData);
 
   const receipt = await executeSwap(
@@ -106,6 +99,10 @@ export async function executeContractSwap(
       destAddress,
       srcAsset: stateChainAssetFromAsset(srcAsset),
       srcChain,
+      // TODO: This will need some refactoring either putting the cfParameters outside the
+      // ccmParams and the user should encode it as done here or, probably better, we just
+      // add the SwapAttributes support (Fok/Dca/Boost) as separate parameters, rename
+      // cfParameters to ccmAdditionalData and do the encoding within the SDK.
       ccmParams: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
@@ -134,6 +131,9 @@ export async function performSwapViaContract(
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
   log = true,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
 ): Promise<ContractSwapParams> {
   const tag = swapTag ?? '';
 
@@ -183,6 +183,9 @@ export async function performSwapViaContract(
       destAddress,
       wallet,
       messageMetadata,
+      boostFeeBps,
+      fillOrKillParams,
+      dcaParams,
     );
     swapContext?.updateStatus(swapTag, SwapStatus.ContractExecuted);
 
