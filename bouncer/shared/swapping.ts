@@ -1,7 +1,6 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import Web3 from 'web3';
-import { Vector, bool, Struct, Bytes as TsBytes } from 'scale-ts';
 import { u8aToHex } from '@polkadot/util';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
 import { performSwap } from '../shared/perform_swap';
@@ -13,6 +12,7 @@ import {
   defaultAssetAmounts,
   ccmSupportedChains,
   assetDecimals,
+  solCfParamsCodec,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -71,18 +71,6 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
 
 export function newSolanaCfParameters(maxAccounts: number) {
   const cfReceiverAddress = getContractAddress('Solana', 'CFTESTER');
-  const myCodec = Struct({
-    cf_receiver: Struct({
-      pubkey: TsBytes(32),
-      is_writable: bool,
-    }),
-    remaining_accounts: Vector(
-      Struct({
-        pubkey: TsBytes(32),
-        is_writable: bool,
-      }),
-    ),
-  });
 
   const remainingAccounts = [];
   const numRemainingAccounts = Math.floor(Math.random() * maxAccounts);
@@ -102,7 +90,7 @@ export function newSolanaCfParameters(maxAccounts: number) {
     remaining_accounts: remainingAccounts,
   };
 
-  return u8aToHex(myCodec.enc(cfParameters));
+  return u8aToHex(solCfParamsCodec.enc(cfParameters));
 }
 
 // Solana CCM-related parameters. These are values in the protocol.
