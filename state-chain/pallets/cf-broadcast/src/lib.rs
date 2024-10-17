@@ -708,6 +708,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					>>::into_foreign_chain_address(signer_id.clone());
 
 					use cf_traits::LiabilityTracker;
+
 					T::LiabilityTracker::record_liability(
 						address_to_refund,
 						<T::TargetChain as Chain>::GAS_ASSET.into(),
