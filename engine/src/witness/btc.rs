@@ -15,11 +15,10 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 	},
 };
-use bitcoin::BlockHash;
+use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
 use cf_primitives::{EpochIndex, NetworkEnvironment};
 use futures_core::Future;
-use secp256k1::hashes::Hash;
 use source::BtcSource;
 use std::sync::Arc;
 use utilities::task_scope::Scope;
