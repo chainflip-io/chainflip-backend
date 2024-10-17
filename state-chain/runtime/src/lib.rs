@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "256"]
+#![feature(result_flattening)]
 pub mod chainflip;
 pub mod constants;
 pub mod migrations;
@@ -995,7 +996,7 @@ impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
 
 impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type ElectoralSystem = chainflip::solana_elections::SolanaElectoralSystem;
+	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 }
 
