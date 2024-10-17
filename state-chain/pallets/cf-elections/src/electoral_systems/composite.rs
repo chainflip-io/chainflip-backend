@@ -437,7 +437,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 StorageAccess::clear_election_votes(*self.id.unique_monotonic());
             }
             fn delete(self) {
-                self.storage_access.delete_election(self.id.with_extra(CompositeElectionIdentifierExtra::$current(*self.id.extra())));
+                StorageAccess::delete_election(self.id.with_extra(CompositeElectionIdentifierExtra::$current(*self.id.extra())));
             }
             fn refresh(
                 &mut self,
@@ -455,7 +455,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             fn check_consensus(
                 &self,
             ) -> Result<ConsensusStatus<$current::Consensus>, CorruptStorageError> {
-                self.storage_access.check_consensus(self.id.with_extra(CompositeElectionIdentifierExtra::$current(*self.id.extra()))).and_then(|consensus_status| {
+                StorageAccess::check_consensus(self.id.with_extra(CompositeElectionIdentifierExtra::$current(*self.id.extra()))).and_then(|consensus_status| {
                     consensus_status.try_map(|consensus| {
                         match consensus {
                             CompositeConsensus::$current(composite_consensus) => {
@@ -484,20 +484,20 @@ macro_rules! generate_electoral_system_tuple_impls {
             fn unsynchronised_settings(
                 &self,
             ) -> Result<$current::ElectoralUnsynchronisedSettings, CorruptStorageError> {
-                let ($($previous,)* unsynchronised_settings, $($remaining,)*) = self.storage_access.unsynchronised_settings()?;
+                let ($($previous,)* unsynchronised_settings, $($remaining,)*) = StorageAccess::unsynchronised_settings()?;
                 Ok(unsynchronised_settings)
             }
             fn unsynchronised_state(
                 &self,
             ) -> Result<$current::ElectoralUnsynchronisedState, CorruptStorageError> {
-                let ($($previous,)* unsynchronised_state, $($remaining,)*) = self.storage_access.unsynchronised_state()?;
+                let ($($previous,)* unsynchronised_state, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
                 Ok(unsynchronised_state)
             }
             fn unsynchronised_state_map(
                 &self,
                 key: &$current::ElectoralUnsynchronisedStateMapKey,
             ) -> Result<Option<$current::ElectoralUnsynchronisedStateMapValue>, CorruptStorageError> {
-                match self.storage_access.unsynchronised_state_map(&CompositeElectoralUnsynchronisedStateMapKey::$current(key.clone()))? {
+                match StorageAccess::unsynchronised_state_map(&CompositeElectoralUnsynchronisedStateMapKey::$current(key.clone()))? {
                     Some(CompositeElectoralUnsynchronisedStateMapValue::$current(value)) => Ok(Some(value)),
                     None => Ok(None),
                     _ => Err(CorruptStorageError::new()),
@@ -531,7 +531,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 &self,
                 unsynchronised_state: $current::ElectoralUnsynchronisedState,
             ) -> Result<(), CorruptStorageError> {
-                let ($($previous,)* _, $($remaining,)*) = self.storage_access.unsynchronised_state()?;
+                let ($($previous,)* _, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
                 self.storage_access.set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))
             }
 
@@ -556,7 +556,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 &mut self,
                 f: F,
             ) -> Result<T, CorruptStorageError> {
-                let ($($previous,)* mut unsynchronised_state, $($remaining,)*) = self.storage_access.unsynchronised_state()?;
+                let ($($previous,)* mut unsynchronised_state, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
                 let t = f(self, &mut unsynchronised_state)?;
                 self.storage_access.set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))?;
                 Ok(t)

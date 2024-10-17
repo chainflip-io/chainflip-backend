@@ -710,7 +710,6 @@ pub mod pallet {
 				ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
 			}
 			fn delete_election(
-				&self,
 				composite_election_identifier: CompositeElectionIdentifierOf<
 					Self::ElectoralSystemRunner,
 				>,
@@ -741,7 +740,6 @@ pub mod pallet {
 			}
 
 			fn check_consensus(
-				&self,
 				election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
 			) -> Result<
 				ConsensusStatus<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus>,
@@ -838,7 +836,7 @@ pub mod pallet {
 						let option_new_consensus =
 							<T::ElectoralSystemRunner as ElectoralSystemRunner>::check_consensus(
 								election_identifier,
-								&*self, /* Disallow recursive calls to this function */
+								&RunnerStorageAccess::new(),
 								option_consensus_history.as_ref().and_then(|consensus_history| {
 									if consensus_history.lost_since {
 										None
@@ -899,16 +897,7 @@ pub mod pallet {
 				)
 			}
 
-			// Not storage related
-			// pub fn election(
-			// 	&self,
-			// 	id: CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
-			// ) -> Result<Self, CorruptStorageError> {
-			// 	Ok(RunnerStorageAccess::new(id))
-			// }
-
 			fn unsynchronised_settings(
-				&self,
 			) -> Result<
 				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedSettings,
 				CorruptStorageError,
@@ -916,9 +905,7 @@ pub mod pallet {
 				ElectoralUnsynchronisedSettings::<T, I>::get().ok_or_else(CorruptStorageError::new)
 			}
 
-			fn unsynchronised_state(
-				&self,
-			) -> Result<
+			fn unsynchronised_state() -> Result<
 				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
 				CorruptStorageError,
 			> {
@@ -926,7 +913,6 @@ pub mod pallet {
 			}
 
 			fn unsynchronised_state_map(
-				&self,
 				key: &<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
 			) -> Result<
 				Option<
@@ -1178,7 +1164,8 @@ pub mod pallet {
 			pub(super) fn take(
 				&mut self,
 				authority_index: AuthorityCount,
-			) -> Result<Option<BitmapComponentOf<T::ElectoralSystemRunner>>, CorruptStorageError> {
+			) -> Result<Option<BitmapComponentOf<T::ElectoralSystemRunner>>, CorruptStorageError>
+			{
 				let authority_index = authority_index as usize;
 				Ok(self
 					.bitmaps
@@ -1195,7 +1182,8 @@ pub mod pallet {
 			pub(super) fn get(
 				&self,
 				authority_index: AuthorityCount,
-			) -> Result<Option<BitmapComponentOf<T::ElectoralSystemRunner>>, CorruptStorageError> {
+			) -> Result<Option<BitmapComponentOf<T::ElectoralSystemRunner>>, CorruptStorageError>
+			{
 				Ok(self
 					.bitmaps
 					.iter()

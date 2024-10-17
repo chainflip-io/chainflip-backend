@@ -239,7 +239,6 @@ pub trait RunnerStorageAccessTrait {
 	fn clear_election_votes(unique_monotonic_identifier: UniqueMonotonicIdentifier);
 
 	fn delete_election(
-		&self,
 		composite_election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
 	);
 	/// This will change the `ElectionIdentifierExtra` value of the election, and allows you to
@@ -263,27 +262,21 @@ pub trait RunnerStorageAccessTrait {
 	/// votes/state. This also returns information about the difference in the consensus between
 	/// the last call to `check_consensus`.
 	fn check_consensus(
-		&self,
 		election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
 	) -> Result<
 		ConsensusStatus<<Self::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus>,
 		CorruptStorageError,
 	>;
 
-	fn unsynchronised_settings(
-		&self,
-	) -> Result<
+	fn unsynchronised_settings() -> Result<
 		<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedSettings,
 		CorruptStorageError,
 	>;
-	fn unsynchronised_state(
-		&self,
-	) -> Result<
+	fn unsynchronised_state() -> Result<
 		<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
 		CorruptStorageError,
 	>;
 	fn unsynchronised_state_map(
-			&self,
 			key: &<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
 		) -> Result<
 			Option<
@@ -327,7 +320,7 @@ pub trait RunnerStorageAccessTrait {
 		&self,
 		f: F,
 	) -> Result<T, CorruptStorageError> {
-		let mut unsynchronised_state = self.unsynchronised_state()?;
+		let mut unsynchronised_state = Self::unsynchronised_state()?;
 		let t = f(self, &mut unsynchronised_state)?;
 		self.set_unsynchronised_state(unsynchronised_state)?;
 		Ok(t)
