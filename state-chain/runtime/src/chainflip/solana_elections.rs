@@ -358,7 +358,7 @@ impl SolanaChainTrackingProvider {
 			SolanaFeeTracking,
 			RunnerStorageAccess<Runtime, SolanaInstance>,
 		>::unsynchronised_state()
-			.map(|priority_fee| {
+			.and_then(|priority_fee| {
 				CompositeElectoralAccess::<
 			_,
 			SolanaFeeTracking,
@@ -369,7 +369,6 @@ impl SolanaChainTrackingProvider {
 					}
 				})
 			})
-			.flatten()
 			.unwrap_or_else(|err| {
 				log_or_panic!("Failed to obtain Solana fee: '{err:?}'.");
 				Default::default()

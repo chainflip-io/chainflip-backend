@@ -188,7 +188,6 @@ pub trait ElectoralSystem: 'static + Sized {
 	/// You should *NEVER* update the epoch during this call. And in general updating any other
 	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
 	/// function.
-	#[allow(clippy::type_complexity)]
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		election_access: &ElectionAccess,
 		// This is the consensus as of the last time the consensus was checked. Note this is *NOT*
