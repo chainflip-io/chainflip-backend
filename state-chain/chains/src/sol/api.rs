@@ -10,7 +10,7 @@ use sp_std::{vec, vec::Vec};
 use crate::{
 	ccm_checker::{
 		check_ccm_for_blacklisted_accounts, CcmValidityCheck, CcmValidityChecker, CcmValidityError,
-		DecodedCfParameters,
+		DecodedCcmAdditionalData,
 	},
 	sol::{
 		transaction_builder::SolanaTransactionBuilder, SolAddress, SolAmount, SolApiEnvironment,
@@ -260,10 +260,10 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Solana as Chain>::ChainAmount,
 		message: Vec<u8>,
-		ccm_cf_parameters: Vec<u8>,
+		ccm_additional_data: Vec<u8>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// For extra safety, re-verify the validity of the CCM message here
-		// and extract the decoded `ccm_accounts` from `ccm_cf_parameters`.
+		// and extract the decoded `ccm_accounts` from `ccm_additional_data`.
 		let decoded_cf_params = CcmValidityChecker::check_and_decode(
 			&CcmChannelMetadata {
 				message: message
@@ -271,7 +271,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					.try_into()
 					.expect("This is parsed from bounded vec, therefore the size must fit"),
 				gas_budget: 0, // This value is un-used by Solana
-				ccm_cf_parameters: ccm_cf_parameters
+				ccm_additional_data: ccm_additional_data
 					.clone()
 					.try_into()
 					.expect("This is parsed from bounded vec, therefore the size must fit"),
@@ -280,12 +280,14 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		)
 		.map_err(SolanaTransactionBuildingError::InvalidCcm)?;
 
-		// Always expects the `DecodedCfParameters::Solana(..)` variant of the decoded cf params.
-		let ccm_accounts = if let DecodedCfParameters::Solana(ccm_accounts) = decoded_cf_params {
+		// Always expects the `DecodedCcmAdditionalData::Solana(..)` variant of the decoded cf
+		// params.
+		let ccm_accounts = if let DecodedCcmAdditionalData::Solana(ccm_accounts) = decoded_cf_params
+		{
 			Ok(ccm_accounts)
 		} else {
 			Err(SolanaTransactionBuildingError::InvalidCcm(
-				CcmValidityError::CannotDecodeCfParameters,
+				CcmValidityError::CannotDecodeCcmAdditionalData,
 			))
 		}?;
 
@@ -439,7 +441,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Solana as Chain>::ChainAmount,
 		message: Vec<u8>,
-		ccm_cf_parameters: Vec<u8>,
+		ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		Self::ccm_transfer(
 			transfer_param,
@@ -447,7 +449,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 			source_address,
 			gas_budget,
 			message,
-			ccm_cf_parameters,
+			ccm_additional_data,
 		)
 		.map_err(|e| {
 			log::error!("Failed to construct Solana CCM transfer transaction! \nError: {:?}", e);

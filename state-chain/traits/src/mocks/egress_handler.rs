@@ -1,6 +1,6 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::{EgressApi, ScheduledEgressDetails};
-use cf_chains::{CcmCfParameters, CcmDepositMetadata, CcmMessage, Chain};
+use cf_chains::{CcmAdditionalData, CcmDepositMetadata, CcmMessage, Chain};
 use cf_primitives::{AssetAmount, EgressCounter};
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::{
@@ -29,7 +29,7 @@ pub enum MockEgressParameter<C: Chain> {
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		message: CcmMessage,
-		ccm_cf_parameters: CcmCfParameters,
+		ccm_additional_data: CcmAdditionalData,
 		gas_budget: C::ChainAmount,
 	},
 }
@@ -95,7 +95,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 						amount,
 						destination_address,
 						message: message.channel_metadata.message.clone(),
-						ccm_cf_parameters: message.channel_metadata.ccm_cf_parameters.clone(),
+						ccm_additional_data: message.channel_metadata.ccm_additional_data.clone(),
 						gas_budget: *gas_budget,
 					},
 					None => MockEgressParameter::<C>::Swap {

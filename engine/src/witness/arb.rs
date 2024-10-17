@@ -194,7 +194,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		// This is only to be checked in the pre-witnessed version
 		boost_fee: Option<BasisPoints>,
 	) -> state_chain_runtime::RuntimeCall {
-		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
+		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
 			if let Some(deposit_metadata) = deposit_metadata {
 				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
 					source_asset,

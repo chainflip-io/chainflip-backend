@@ -374,7 +374,7 @@ fn solana_ccm_fails_with_invalid_input() {
 				channel_metadata: CcmChannelMetadata {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 0u128,
-					ccm_cf_parameters: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
+					ccm_additional_data: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 				},
 			};
 
@@ -446,7 +446,7 @@ fn solana_ccm_fails_with_invalid_input() {
 				channel_metadata: CcmChannelMetadata {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 0u128,
-					ccm_cf_parameters: SolCcmAccounts {
+					ccm_additional_data: SolCcmAccounts {
 						cf_receiver: SolCcmAddress { pubkey: receiver.into(), is_writable: true },
 						remaining_accounts: vec![
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
@@ -492,7 +492,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					egress_id: (ForeignChain::Solana, 1u64),
 					error: ExecutexSwapAndCallError::FailedToBuildCcmForSolana(
 						SolanaTransactionBuildingError::InvalidCcm(
-							CcmValidityError::CfParametersContainsInvalidAccounts
+							CcmValidityError::CcmAdditionalDataContainsInvalidAccounts
 						)
 					),
 				}),

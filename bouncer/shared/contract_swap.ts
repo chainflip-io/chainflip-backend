@@ -8,6 +8,8 @@ import {
   InternalAsset,
   Chain,
 } from '@chainflip/cli';
+import { u8aToHex, hexToU8a } from '@polkadot/util';
+
 import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
 import {
   observeBalanceIncrease,
@@ -20,11 +22,15 @@ import {
   assetDecimals,
   stateChainAssetFromAsset,
   chainGasAsset,
+  shortChainFromAsset,
 } from './utils';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { send } from './send';
 import { SwapContext, SwapStatus } from './swap_context';
+import { vaultSwapCfParametersCodec } from './swapping';
+import { newEvmAddress } from './new_evm_address';
+import { newSolAddress } from './new_sol_address';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
@@ -49,6 +55,47 @@ export async function executeContractSwap(
     gasLimit: srcChain === Chains.Arbitrum ? 10000000n : 200000n,
   } as const;
 
+  console.log('messageMetadata?.cfParameters', messageMetadata?.cfParameters);
+  console.log('hexTou8(messageMetadata?.cfParameters)', hexToU8a(messageMetadata?.cfParameters));
+
+  // const refundAddressTest = hexToU8a('0x41aD2bc63A2059f9b623533d87fe99887D794847');
+
+  let refundAddress;
+  switch (srcChain) {
+    case Chains.Ethereum:
+    case Chains.Arbitrum:
+      refundAddress = newEvmAddress('refundAddress');
+      break;
+    case Chains.Solana:
+      refundAddress = newSolAddress('refundAddress');
+      break;
+    default:
+      throw new Error(`Unsupported chain: ${srcChain}`);
+  }
+  console.log('refundAddress', refundAddress);
+  console.log('refundAddress', hexToU8a(refundAddress));
+
+  const ccmAdditionalData = u8aToHex(
+    vaultSwapCfParametersCodec.enc({
+      ccmAdditionalData: hexToU8a(messageMetadata?.cfParameters),
+      // vaultSwapAttributes: undefined,
+      vaultSwapAttributes: {
+        // refundParams: undefined,
+        refundParams: {
+          retryDuration: 2,
+          refundAddress: { tag: shortChainFromAsset(srcAsset), value: hexToU8a(refundAddress) },
+          minPriceX128: BigInt(3),
+        },
+        dcaParams: {
+          numberOfChunks: 4,
+          chunkIntervalBlocks: 5,
+        },
+        boostFee: 1,
+      },
+    }),
+  );
+  console.log('ccmAdditionalData passed to the SDK in contractCall', ccmAdditionalData);
+
   const receipt = await executeSwap(
     {
       destChain,
@@ -62,7 +109,8 @@ export async function executeContractSwap(
       ccmParams: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
-        cfParameters: messageMetadata.cfParameters,
+        cfParameters: ccmAdditionalData,
+        // ccmAdditionalData: ccmAdditionalData,
       },
     } as ExecuteSwapParams,
     networkOptions,

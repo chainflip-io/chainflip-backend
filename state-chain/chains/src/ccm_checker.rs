@@ -12,22 +12,22 @@ use sp_std::vec::Vec;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum CcmValidityError {
-	CannotDecodeCfParameters,
+	CannotDecodeCcmAdditionalData,
 	CcmIsTooLong,
-	CfParametersContainsInvalidAccounts,
+	CcmAdditionalDataContainsInvalidAccounts,
 }
 
 pub trait CcmValidityCheck {
 	fn check_and_decode(
 		_ccm: &CcmChannelMetadata,
 		_egress_asset: cf_primitives::Asset,
-	) -> Result<DecodedCfParameters, CcmValidityError> {
-		Ok(DecodedCfParameters::NotRequired)
+	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
+		Ok(DecodedCcmAdditionalData::NotRequired)
 	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum DecodedCfParameters {
+pub enum DecodedCcmAdditionalData {
 	Solana(SolCcmAccounts),
 	NotRequired,
 }
@@ -41,11 +41,11 @@ impl CcmValidityCheck for CcmValidityChecker {
 	fn check_and_decode(
 		ccm: &CcmChannelMetadata,
 		egress_asset: Asset,
-	) -> Result<DecodedCfParameters, CcmValidityError> {
+	) -> Result<DecodedCcmAdditionalData, CcmValidityError> {
 		if ForeignChain::from(egress_asset) == ForeignChain::Solana {
 			// Check if the cf_parameter can be decoded
-			let ccm_accounts = SolCcmAccounts::decode(&mut &ccm.ccm_cf_parameters.clone()[..])
-				.map_err(|_| CcmValidityError::CannotDecodeCfParameters)?;
+			let ccm_accounts = SolCcmAccounts::decode(&mut &ccm.ccm_additional_data.clone()[..])
+				.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData)?;
 			let asset: SolAsset = egress_asset
 				.try_into()
 				.expect("Only Solana chain's asset will be checked. This conversion must succeed.");
@@ -61,9 +61,9 @@ impl CcmValidityCheck for CcmValidityChecker {
 				return Err(CcmValidityError::CcmIsTooLong)
 			}
 
-			Ok(DecodedCfParameters::Solana(ccm_accounts))
+			Ok(DecodedCcmAdditionalData::Solana(ccm_accounts))
 		} else {
-			Ok(DecodedCfParameters::NotRequired)
+			Ok(DecodedCcmAdditionalData::NotRequired)
 		}
 	}
 }
@@ -80,7 +80,7 @@ pub fn check_ccm_for_blacklisted_accounts(
 				.iter()
 				.any(|acc| acc.pubkey == blacklisted_account))
 		.then_some(())
-		.ok_or(CcmValidityError::CfParametersContainsInvalidAccounts)
+		.ok_or(CcmValidityError::CcmAdditionalDataContainsInvalidAccounts)
 	})
 }
 
@@ -98,7 +98,7 @@ mod test {
 		let ccm = sol_test_values::ccm_parameter().channel_metadata;
 		assert_eq!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol),
-			Ok(DecodedCfParameters::Solana(sol_test_values::ccm_accounts()))
+			Ok(DecodedCcmAdditionalData::Solana(sol_test_values::ccm_accounts()))
 		);
 	}
 
@@ -107,12 +107,12 @@ mod test {
 		let ccm = CcmChannelMetadata {
 			message: vec![0x01, 0x02, 0x03, 0x04, 0x05].try_into().unwrap(),
 			gas_budget: 1,
-			ccm_cf_parameters: vec![0x01, 0x02, 0x03, 0x04, 0x05].try_into().unwrap(),
+			ccm_additional_data: vec![0x01, 0x02, 0x03, 0x04, 0x05].try_into().unwrap(),
 		};
 
 		assert_err!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Sol),
-			CcmValidityError::CannotDecodeCfParameters
+			CcmValidityError::CannotDecodeCcmAdditionalData
 		);
 	}
 
@@ -121,7 +121,7 @@ mod test {
 		let ccm = || CcmChannelMetadata {
 			message: vec![0x01; MAX_CCM_BYTES_SOL].try_into().unwrap(),
 			gas_budget: 0,
-			ccm_cf_parameters: SolCcmAccounts {
+			ccm_additional_data: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 				remaining_accounts: vec![],
 			}
@@ -140,7 +140,7 @@ mod test {
 		);
 
 		let mut invalid_ccm = ccm();
-		invalid_ccm.ccm_cf_parameters = SolCcmAccounts {
+		invalid_ccm.ccm_additional_data = SolCcmAccounts {
 			cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 			remaining_accounts: vec![SolCcmAddress {
 				pubkey: SolPubkey([0x01; 32]),
@@ -161,7 +161,7 @@ mod test {
 		let ccm = || CcmChannelMetadata {
 			message: vec![0x01; MAX_CCM_BYTES_USDC].try_into().unwrap(),
 			gas_budget: 0,
-			ccm_cf_parameters: SolCcmAccounts {
+			ccm_additional_data: SolCcmAccounts {
 				cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 				remaining_accounts: vec![],
 			}
@@ -180,7 +180,7 @@ mod test {
 		);
 
 		let mut invalid_ccm = ccm();
-		invalid_ccm.ccm_cf_parameters = SolCcmAccounts {
+		invalid_ccm.ccm_additional_data = SolCcmAccounts {
 			cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: true },
 			remaining_accounts: vec![SolCcmAddress {
 				pubkey: SolPubkey([0x01; 32]),
@@ -215,31 +215,31 @@ mod test {
 		// Always valid on other chains.
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Eth),
-			DecodedCfParameters::NotRequired
+			DecodedCcmAdditionalData::NotRequired
 		);
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Btc),
-			DecodedCfParameters::NotRequired
+			DecodedCcmAdditionalData::NotRequired
 		);
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Flip),
-			DecodedCfParameters::NotRequired
+			DecodedCcmAdditionalData::NotRequired
 		);
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Usdt),
-			DecodedCfParameters::NotRequired
+			DecodedCcmAdditionalData::NotRequired
 		);
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::Usdc),
-			DecodedCfParameters::NotRequired
+			DecodedCcmAdditionalData::NotRequired
 		);
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::ArbUsdc),
-			DecodedCfParameters::NotRequired
+			DecodedCcmAdditionalData::NotRequired
 		);
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::ArbEth),
-			DecodedCfParameters::NotRequired
+			DecodedCcmAdditionalData::NotRequired
 		);
 	}
 
@@ -262,7 +262,7 @@ mod test {
 		};
 		assert_err!(
 			check_ccm_for_blacklisted_accounts(&ccm_accounts, blacklisted_accounts()),
-			CcmValidityError::CfParametersContainsInvalidAccounts
+			CcmValidityError::CcmAdditionalDataContainsInvalidAccounts
 		);
 
 		let ccm_accounts = SolCcmAccounts {
@@ -280,7 +280,7 @@ mod test {
 		};
 		assert_err!(
 			check_ccm_for_blacklisted_accounts(&ccm_accounts, blacklisted_accounts()),
-			CcmValidityError::CfParametersContainsInvalidAccounts
+			CcmValidityError::CcmAdditionalDataContainsInvalidAccounts
 		);
 
 		// Agg key is blacklisted
@@ -296,7 +296,7 @@ mod test {
 		};
 		assert_err!(
 			check_ccm_for_blacklisted_accounts(&ccm_accounts, blacklisted_accounts()),
-			CcmValidityError::CfParametersContainsInvalidAccounts
+			CcmValidityError::CcmAdditionalDataContainsInvalidAccounts
 		);
 
 		let ccm_accounts = SolCcmAccounts {
@@ -311,7 +311,7 @@ mod test {
 		};
 		assert_err!(
 			check_ccm_for_blacklisted_accounts(&ccm_accounts, blacklisted_accounts()),
-			CcmValidityError::CfParametersContainsInvalidAccounts
+			CcmValidityError::CcmAdditionalDataContainsInvalidAccounts
 		);
 	}
 }

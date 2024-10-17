@@ -222,24 +222,18 @@ where
 }
 
 use cf_chains::{
-	address::EncodedAddress, CcmCfParameters, CcmDepositMetadata, ChannelRefundParameters,
+	address::EncodedAddress, CcmAdditionalData, CcmDepositMetadata, ChannelRefundParameters,
 };
 use cf_primitives::{Asset, AssetAmount, BasisPoints, DcaParameters, TransactionHash};
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct ChannellessCfParameters {
-	pub ccm_cf_parameters: Option<CcmCfParameters>,
-	// TODO: Consider if we want use the BTC SharedCfParameters. It's done like that to save on
-	// bytes but in EVM/SOL we have more bytes to work with. At the same time the optional types
-	// allow the user to not have to pass an unnecessary amount of bytes as parameters on-chain.
-	// We might have to do it if we need to convert internal parameters such as foreign addresses
-	// either in order to decode properly or to pass them correctly to the ingress pallet's
-	// contract_swap_request.
-	pub shared_cf_parameters: Option<SharedCfParametersContract>,
+pub struct VaultSwapCfParameters {
+	pub ccm_additional_data: Option<CcmAdditionalData>,
+	pub vault_swap_attributes: Option<VaultSwapAttributes>,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct SharedCfParametersContract {
+pub struct VaultSwapAttributes {
 	pub refund_params: Option<ChannelRefundParameters>,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: Option<BasisPoints>,

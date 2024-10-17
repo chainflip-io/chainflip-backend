@@ -26,7 +26,7 @@ use cf_chains::{
 	},
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
-	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata,
+	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata,
 	CcmFailReason, CcmMessage, Chain, ChannelLifecycleHooks, ChannelRefundParameters,
 	ConsolidateCall, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
 	SwapOrigin, TransferAssetParams,
@@ -134,7 +134,7 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
-	pub ccm_cf_parameters: CcmCfParameters,
+	pub ccm_additional_data: CcmAdditionalData,
 	pub gas_budget: C::ChainAmount,
 }
 
@@ -1474,7 +1474,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.source_address,
 				ccm.gas_budget,
 				ccm.message.to_vec(),
-				ccm.ccm_cf_parameters.to_vec(),
+				ccm.ccm_additional_data.to_vec(),
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -2118,7 +2118,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			match maybe_ccm_with_gas_budget {
 				Some((
 					CcmDepositMetadata {
-						channel_metadata: CcmChannelMetadata { message, ccm_cf_parameters, .. },
+						channel_metadata: CcmChannelMetadata { message, ccm_additional_data, .. },
 						source_chain,
 						source_address,
 						..
@@ -2131,7 +2131,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						amount,
 						destination_address: destination_address.clone(),
 						message,
-						ccm_cf_parameters,
+						ccm_additional_data,
 						source_chain,
 						source_address,
 						gas_budget,

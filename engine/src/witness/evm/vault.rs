@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::{
 	evm::retry_rpc::EvmRetryRpcApi,
-	witness::eth::{ChannellessCfParameters, SharedCfParametersContract},
+	witness::eth::{VaultSwapAttributes, VaultSwapCfParameters},
 };
 
 use super::{
@@ -23,7 +23,7 @@ use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
-	CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
+	CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, MAX_CCM_ADDITIONAL_DATA_LENGTH
 };
 use cf_primitives::{Asset, BasisPoints, DcaParameters, ForeignChain};
 use ethers::prelude::*;
@@ -32,7 +32,8 @@ use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
-pub const MAX_CF_PARAM_LENGTH: u32 = 1_000;
+// MAX_CF_PARAM_LENGTH ~== MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_ATTRIBUTES_LENGTH
+pub const MAX_CF_PARAM_LENGTH: u32 = MAX_CCM_ADDITIONAL_DATA_LENGTH + 1_000;
 pub type CfParameters = BoundedVec<u8, ConstU32<MAX_CF_PARAM_LENGTH>>;
 
 pub fn call_from_event<
@@ -64,7 +65,7 @@ where
 		})
 	}
 
-	fn decode_shared_cf_parameters(
+	fn decode_vault_swap_attributes(
 		cf_parameters_vec: CfParameters,
 	) -> Result<(Option<ChannelRefundParameters>, Option<DcaParameters>, Option<BasisPoints>)> {
 		println!("DEBUGDEBUG cf_parameters_vec {:?}", cf_parameters_vec);
@@ -74,24 +75,21 @@ where
 
 			Ok((None, None, None))
 		} else {
-			let shared_cf_parameters: SharedCfParametersContract =
-				SharedCfParametersContract::decode(&mut &cf_parameters_vec[..])
-					.map_err(|_| anyhow!("Failed to decode to `SharedCfParametersContract`"))?;
+			let attributes: VaultSwapAttributes =
+				VaultSwapAttributes::decode(&mut &cf_parameters_vec[..])
+					.map_err(|_| anyhow!("Failed to decode to `VaultSwapAttributes`"))?;
 
-			println!("DEBUGDEBUG shared_cf_parameters {:?}", shared_cf_parameters);
+			println!("DEBUGDEBUG attributes {:?}", attributes);
 
-			Ok((
-				shared_cf_parameters.refund_params,
-				shared_cf_parameters.dca_params,
-				shared_cf_parameters.boost_fee,
-			))
+			Ok((attributes.refund_params, attributes.dca_params, attributes.boost_fee))
 		}
 	}
 
-	fn decode_channelless_cf_parameters(
+	#[allow(clippy::type_complexity)]
+	fn decode_vault_swap_cf_parameters(
 		cf_parameters_vec: CfParameters,
 	) -> Result<(
-		CcmCfParameters,
+		CcmAdditionalData,
 		(Option<ChannelRefundParameters>, Option<DcaParameters>, Option<BasisPoints>),
 	)> {
 		println!("DEBUGDEBUG cf_parameters_vec {:?}", cf_parameters_vec);
@@ -99,29 +97,25 @@ where
 		if cf_parameters_vec.is_empty() {
 			println!("DEBUGDEBUG Emtpy cf_parameters_vec");
 
-			Ok((cf_parameters_vec, (None, None, None)))
+			// Return the empty vector since the CCM additional data is required
+			Ok((CcmAdditionalData::default(), (None, None, None)))
 		} else {
-			let channelless_cf_parameters: ChannellessCfParameters =
-				ChannellessCfParameters::decode(&mut &cf_parameters_vec[..])
-					.map_err(|_| anyhow!("Failed to decode to `ChannellessCfParameters`"))?;
+			let vault_swap_cf_parameters: VaultSwapCfParameters =
+				VaultSwapCfParameters::decode(&mut &cf_parameters_vec[..])
+					.map_err(|_| anyhow!("Failed to decode to `VaultSwapCfParameters`"))?;
 
-			println!("DEBUGDEBUG channelless_cf_parameters {:?}", channelless_cf_parameters);
+			println!("DEBUGDEBUG vault_swap_cf_parameters {:?}", vault_swap_cf_parameters);
 
-			let (refund_params, dca_params, boost_fee) = if let Some(shared_cf_parameters) =
-				channelless_cf_parameters.shared_cf_parameters
-			{
-				(
-					shared_cf_parameters.refund_params,
-					shared_cf_parameters.dca_params,
-					shared_cf_parameters.boost_fee,
-				)
-			} else {
-				(None, None, None)
-			};
+			let (refund_params, dca_params, boost_fee) =
+				if let Some(attributes) = vault_swap_cf_parameters.vault_swap_attributes {
+					(attributes.refund_params, attributes.dca_params, attributes.boost_fee)
+				} else {
+					(None, None, None)
+				};
 
 			Ok((
-				// Default to empty CcmCfParameters if not present
-				channelless_cf_parameters.ccm_cf_parameters.unwrap_or_default(),
+				// Default to empty CcmAdditionalData if not present
+				vault_swap_cf_parameters.ccm_additional_data.unwrap_or_default(),
 				(refund_params, dca_params, boost_fee),
 			))
 		}
@@ -142,7 +136,7 @@ where
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
 			let (refund_params, dca_params, boost_fee) =
-				decode_shared_cf_parameters(cf_parameters_vec)?;
+				decode_vault_swap_attributes(cf_parameters_vec)?;
 
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
@@ -172,7 +166,7 @@ where
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
 			let (refund_params, dca_params, boost_fee) =
-				decode_shared_cf_parameters(cf_parameters_vec)?;
+				decode_vault_swap_attributes(cf_parameters_vec)?;
 
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
@@ -204,8 +198,8 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let (ccm_cf_parameters, (refund_params, dca_params, boost_fee)) =
-				decode_channelless_cf_parameters(cf_parameters_vec)?;
+			let (ccm_additional_data, (refund_params, dca_params, boost_fee)) =
+				decode_vault_swap_cf_parameters(cf_parameters_vec)?;
 
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
@@ -225,7 +219,7 @@ where
 							.try_into()
 							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
-						ccm_cf_parameters,
+						ccm_additional_data,
 					},
 				}),
 				event.tx_hash.into(),
@@ -251,8 +245,8 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let (ccm_cf_parameters, (refund_params, dca_params, boost_fee)) =
-				decode_channelless_cf_parameters(cf_parameters_vec)?;
+			let (ccm_additional_data, (refund_params, dca_params, boost_fee)) =
+				decode_vault_swap_cf_parameters(cf_parameters_vec)?;
 
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
@@ -274,7 +268,7 @@ where
 							.try_into()
 							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
-						ccm_cf_parameters,
+						ccm_additional_data,
 					},
 				}),
 				event.tx_hash.into(),

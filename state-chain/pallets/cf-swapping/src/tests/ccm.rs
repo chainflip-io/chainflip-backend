@@ -66,7 +66,7 @@ pub(super) fn assert_ccm_egressed(
 			amount: principal_amount,
 			destination_address: (*EVM_OUTPUT_ADDRESS).clone(),
 			message: vec![0x01].try_into().unwrap(),
-			ccm_cf_parameters: vec![].try_into().unwrap(),
+			ccm_additional_data: vec![].try_into().unwrap(),
 			gas_budget,
 		},
 	);

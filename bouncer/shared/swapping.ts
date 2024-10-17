@@ -1,6 +1,8 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import Web3 from 'web3';
+import { u8aToHex } from '@polkadot/util';
+import { str, u32, Struct, Option, u16, u256, Bytes as TsBytes, Enum } from 'scale-ts';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
 import { performSwap } from '../shared/perform_swap';
 import {
@@ -13,9 +15,10 @@ import {
   assetDecimals,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
-import { CcmDepositMetadata } from '../shared/new_swap';
+import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
 import { performSwapViaContract } from '../shared/contract_swap';
 import { SwapContext, SwapStatus } from './swap_context';
+import { U256 } from '@polkadot/types';
 
 enum SolidityType {
   Uint256 = 'uint256',
@@ -67,7 +70,7 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
   return web3.eth.abi.encodeParameters(typesArray, variables);
 }
 
-function newSolanaCfParameters(maxAccounts: number) {
+function newSolanaCcmAdditionalData(maxAccounts: number) {
   function arrayToHexString(byteArray: Uint8Array): string {
     return (
       '0x' +
@@ -120,7 +123,7 @@ function newCcmArbitraryBytes(maxLength: number): string {
   return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
 }
 
-function newCfParameters(destAsset: Asset, message?: string): string {
+function newCcmAdditionalData(destAsset: Asset, message?: string): string {
   const destChain = chainFromAsset(destAsset);
   switch (destChain) {
     case 'Ethereum':
@@ -136,7 +139,7 @@ function newCfParameters(destAsset: Asset, message?: string): string {
 
       // The maximum number of extra accounts that can be passed is limited by the tx size
       // and therefore also depends on the message length.
-      return newSolanaCfParameters(maxAccounts);
+      return newSolanaCcmAdditionalData(maxAccounts);
     }
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
@@ -156,6 +159,29 @@ function newCcmMessage(destAsset: Asset): string {
   }
 }
 
+export const vaultSwapCfParametersCodec = Struct({
+  ccmAdditionalData: Option(TsBytes()),
+  vaultSwapAttributes: Option(
+    Struct({
+      refundParams: Option(
+        Struct({
+          retryDuration: u32,
+          refundAddress: Enum({
+            Eth: TsBytes(20),
+            Dot: TsBytes(32),
+            Btc: TsBytes(), // not supported anyway
+            Arb: TsBytes(20),
+            Sol: TsBytes(32),
+          }),
+          minPriceX128: u256,
+        }),
+      ),
+      dcaParams: Option(Struct({ numberOfChunks: u32, chunkIntervalBlocks: u32 })),
+      boostFee: Option(u16),
+    }),
+  ),
+});
+
 export function newCcmMetadata(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -164,7 +190,7 @@ export function newCcmMetadata(
   cfParamsArray?: string,
 ): CcmDepositMetadata {
   const message = ccmMessage ?? newCcmMessage(destAsset);
-  const cfParameters = cfParamsArray ?? newCfParameters(destAsset, message);
+  const cfParameters = cfParamsArray ?? newCcmAdditionalData(destAsset, message);
   const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
@@ -175,8 +201,39 @@ export function newCcmMetadata(
   return {
     message,
     gasBudget,
+    // TODO: To rename to ccmAdditionalData
     cfParameters,
   };
+}
+
+export function newVaultSwapCfParameters(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  ccmMessage?: string,
+  gasBudgetFraction?: number,
+  cfParamsArray?: string,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
+): string {
+  const ccmMetadata = newCcmMetadata(
+    sourceAsset,
+    destAsset,
+    ccmMessage,
+    gasBudgetFraction,
+    cfParamsArray,
+  );
+
+  return u8aToHex(
+    vaultSwapCfParametersCodec.enc({
+      ccmAdditionalData: ccmMetadata.cfParameters,
+      vaultSwapAttributes: {
+        boostFeeBps,
+        fillOrKillParams,
+        dcaParams,
+      },
+    }),
+  );
 }
 
 export async function prepareSwap(

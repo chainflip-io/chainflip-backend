@@ -318,7 +318,7 @@ mod benchmarks {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00].try_into().unwrap(),
 				gas_budget: 1,
-				ccm_cf_parameters: Default::default(),
+				ccm_additional_data: Default::default(),
 			},
 		};
 		let call = Call::<T, I>::contract_ccm_swap_request {
