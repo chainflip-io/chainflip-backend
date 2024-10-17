@@ -409,7 +409,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 }
             }
             fn state(&self) -> Result<$current::ElectionState, CorruptStorageError> {
-                match self.storage_access.election_state(*self.id.unique_monotonic())? {
+                match StorageAccess::election_state(*self.id.unique_monotonic())? {
                     CompositeElectionState::$current(state) => {
                         Ok(state)
                     },
@@ -431,7 +431,7 @@ macro_rules! generate_electoral_system_tuple_impls {
 
         impl<'a, $($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> ElectionWriteAccess for CompositeElectionAccess<'a, tags::$current, $current, StorageAccess> {
             fn set_state(&self, state: $current::ElectionState) -> Result<(), CorruptStorageError> {
-                self.storage_access.set_election_state(*self.id.unique_monotonic(), CompositeElectionState::$current(state))
+                StorageAccess::set_election_state(*self.id.unique_monotonic(), CompositeElectionState::$current(state))
             }
             fn clear_votes(&self) {
                 StorageAccess::clear_election_votes(*self.id.unique_monotonic());

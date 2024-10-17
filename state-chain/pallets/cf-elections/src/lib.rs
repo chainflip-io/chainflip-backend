@@ -662,7 +662,6 @@ pub mod pallet {
 			}
 			// Do we need to take a ref self?
 			fn election_state(
-				&self,
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,
 			) -> Result<
 				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
@@ -682,11 +681,10 @@ pub mod pallet {
 			}
 
 			fn set_election_state(
-				&self,
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,
 				state: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
 			) -> Result<(), CorruptStorageError> {
-				if self.election_state(unique_monotonic_identifier)? != state {
+				if Self::election_state(unique_monotonic_identifier)? != state {
 					ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
 					ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
 				}

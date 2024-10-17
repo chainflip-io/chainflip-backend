@@ -212,7 +212,6 @@ pub trait RunnerStorageAccessTrait {
 		CorruptStorageError,
 	>;
 	fn election_state(
-		&self,
 		unique_monotonic_identifier: UniqueMonotonicIdentifier,
 	) -> Result<
 		<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
@@ -228,7 +227,6 @@ pub trait RunnerStorageAccessTrait {
 	/// to ensure that in situations where `check_consensus` depends on the `state` that we will
 	/// correctly recalculate the consensus if needed.
 	fn set_election_state(
-		&self,
 		unique_monotonic_identifier: UniqueMonotonicIdentifier,
 		state: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
 	) -> Result<(), CorruptStorageError>;
