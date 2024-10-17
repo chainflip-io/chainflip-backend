@@ -18,7 +18,6 @@ use crate::{
 		},
 		Offence,
 	},
-	migrations::serialize_solana_broadcast::{NoopUpgrade, SerializeSolanaBroadcastMigration},
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
 		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
@@ -50,7 +49,6 @@ use cf_chains::{
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
-use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
@@ -59,7 +57,6 @@ use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
 use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
-use migrations::add_liveness_electoral_system_solana::LivenessSettingsMigration;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
@@ -197,7 +194,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 170,
+	spec_version: 180,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -1225,7 +1222,7 @@ type AllMigrations = (
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
-	MigrationsForV1_7,
+	MigrationsForV1_8,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
 );
@@ -1269,25 +1266,7 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-type MigrationsForV1_7 = (
-	// Only the Solana Transaction type has changed
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		SerializeSolanaBroadcastMigration,
-		8,
-		9,
-	>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 8, 9>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 9>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 9>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 9>,
-	VersionedMigration<
-		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-		LivenessSettingsMigration,
-		0,
-		1,
-	>,
-);
+type MigrationsForV1_8 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]

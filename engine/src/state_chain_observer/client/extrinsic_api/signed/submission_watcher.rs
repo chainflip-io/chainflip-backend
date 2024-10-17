@@ -206,7 +206,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				sp_core::blake2_256(&encoded).into()
 			};
 
-			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic).await {
+			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic.clone()).await {
 				Ok(mut transaction_status_stream) => {
 					request.pending_submissions.insert(request.next_submission_id, nonce);
 					self.submissions_by_nonce.entry(nonce).or_default().push(Submission {
@@ -236,21 +236,26 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					break Ok(Ok(tx_hash))
 				},
 				Err(rpc_err) => {
+					use jsonrpsee::core::ClientError;
 					match rpc_err {
 						// This occurs when a transaction with the same nonce is in the
 						// transaction pool (and the priority is <= priority of that
 						// existing tx)
-						obj if obj.code() == 1014 => {
+						ClientError::Call(obj) if obj.code() == 1014 => {
 							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as transaction with same nonce found in transaction pool: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
 						// This occurs when the nonce has already been *consumed* i.e a
 						// transaction with that nonce is in a block
-						obj if obj == invalid_err_obj(InvalidTransaction::Stale) => {
+						ClientError::Call(obj)
+							if obj == invalid_err_obj(InvalidTransaction::Stale) =>
+						{
 							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as the transaction is stale: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
-						obj if obj == invalid_err_obj(InvalidTransaction::BadProof) => {
+						ClientError::Call(obj)
+							if obj == invalid_err_obj(InvalidTransaction::BadProof) =>
+						{
 							warn!(target: "state_chain_client", request_id = request.id, "Submission failed due to a bad proof: {obj:?}. Refetching the runtime version.");
 
 							// TODO: Check if hash and block number should also be updated
@@ -266,7 +271,19 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 							self.runtime_version = new_runtime_version;
 						},
-						obj => break Err(obj.into()),
+						ClientError::Call(obj) => {
+							warn!(
+								"Unhandled error while submitting extrinsic {:?}: {:?}",
+								signed_extrinsic, obj
+							);
+							break Err(obj.into())
+						},
+						err => {
+							error!(
+								"Error while submitting extrinsic {:?}: {}",
+								signed_extrinsic, err
+							);
+						},
 					}
 				},
 			}
@@ -639,4 +656,9 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			Ok(())
 		}
 	}
+}
+
+#[test]
+fn test_invalid_err_obj() {
+	println!("{:?}", invalid_err_obj(InvalidTransaction::Stale));
 }
