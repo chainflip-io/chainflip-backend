@@ -13,9 +13,7 @@ use cf_chains::{
 	CcmChannelMetadata, ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{
-	AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment, Price, SWAP_DELAY_BLOCKS,
-};
+use cf_primitives::{AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment, Price};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -115,6 +113,11 @@ pub async fn request_block(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SwapPayload {
 	Bitcoin { nulldata_utxo: Bytes },
+}
+
+#[derive(Serialize)]
+struct RefundValidationParams {
+	pub retry_duration: u32,
 }
 
 pub struct StateChainApi {
@@ -536,39 +539,20 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		boost_fee: Option<BasisPoints>,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapPayload> {
-		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;
-		let max_swap_retry_duration_blocks = self
-			.storage_value::<pallet_cf_swapping::MaxSwapRetryDurationBlocks<state_chain_runtime::Runtime>>(
-				block_hash,
-			)
-			.await?;
-		let max_swap_request_duration_blocks = self
-			.storage_value::<pallet_cf_swapping::MaxSwapRequestDurationBlocks<state_chain_runtime::Runtime>>(
-				block_hash,
-			)
-			.await?;
+		let params = serde_json::to_string(&RefundValidationParams { retry_duration })?;
+		let raw_value = serde_json::value::RawValue::from_string(params)?;
+		self.base_rpc_api()
+			.request_raw("cf_validate_refund_params", Some(raw_value))
+			.await
+			.map_err(anyhow::Error::msg)?;
 
-		if retry_duration > max_swap_retry_duration_blocks {
-			bail!("Retry duration must be <= {max_swap_retry_duration_blocks} blocks");
-		}
 		if let Some(params) = &dca_parameters {
-			if params.number_of_chunks != 1 {
-				if params.number_of_chunks == 0 {
-					bail!("Number of chunks must be greater than 0");
-				}
-				if params.chunk_interval < SWAP_DELAY_BLOCKS {
-					bail!("Chunk interval must be >= {SWAP_DELAY_BLOCKS} blocks");
-				}
-				let total_swap_request_duration = params
-					.number_of_chunks
-					.saturating_sub(1)
-					.checked_mul(params.chunk_interval)
-					.ok_or(anyhow!("Invalid DCA parameters"))?;
-
-				if total_swap_request_duration > max_swap_request_duration_blocks {
-					bail!("Invalid DCA parameters: Total swap request duration must be <= {max_swap_request_duration_blocks} blocks");
-				}
-			}
+			let params_json = serde_json::to_string(params)?;
+			let raw_value = serde_json::value::RawValue::from_string(params_json)?;
+			self.base_rpc_api()
+				.request_raw("cf_validate_dca_params", Some(raw_value))
+				.await
+				.map_err(anyhow::Error::msg)?;
 		}
 
 		match input_asset {

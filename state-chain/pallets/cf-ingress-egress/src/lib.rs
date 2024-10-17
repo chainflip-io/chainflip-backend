@@ -34,7 +34,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
 	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS,
+	SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -694,11 +694,6 @@ pub mod pallet {
 		DepositChannelCreationDisabled,
 		/// The specified boost pool does not exist.
 		BoostPoolDoesNotExist,
-		/// Swap Retry duration is set above the max allowed.
-		SwapRetryDurationTooLong,
-		/// The number of chunks must be greater than 0, the interval must be greater than 2 and
-		/// the total duration of the swap request must be less then the max allowed.
-		InvalidDcaParameters,
 		/// CCM parameters from a contract swap failed validity check.
 		InvalidCcm,
 	}
@@ -2217,31 +2212,11 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		let swap_limits = T::SwapLimitsProvider::get_swap_limits();
 		if let Some(params) = &refund_params {
-			ensure!(
-				params.retry_duration <= swap_limits.max_swap_retry_duration_blocks,
-				DispatchError::from(Error::<T, I>::SwapRetryDurationTooLong)
-			);
+			T::SwapLimitsProvider::validate_refund_params(params.retry_duration)?;
 		}
-
 		if let Some(params) = &dca_params {
-			if params.number_of_chunks != 1 {
-				ensure!(
-					params.number_of_chunks > 0 && params.chunk_interval >= SWAP_DELAY_BLOCKS,
-					DispatchError::from(Error::<T, I>::InvalidDcaParameters)
-				);
-				let total_swap_request_duration = params
-					.number_of_chunks
-					.saturating_sub(1)
-					.checked_mul(params.chunk_interval)
-					.ok_or(Error::<T, I>::InvalidDcaParameters)?;
-
-				ensure!(
-					total_swap_request_duration <= swap_limits.max_swap_request_duration_blocks,
-					DispatchError::from(Error::<T, I>::InvalidDcaParameters)
-				);
-			}
+			T::SwapLimitsProvider::validate_dca_params(params)?;
 		}
 
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(

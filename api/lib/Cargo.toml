@@ -24,6 +24,7 @@ zeroize = "1.5.4"
 libp2p-identity = { version = "0.2", features = ["ed25519", "peerid"] }
 lazy_static = "1.4"
 jsonrpsee = { version = "0.23.2", features = ["full"] }
+serde_json = "1.0"
 
 # Local
 chainflip-engine = { path = "../../engine/" }

@@ -1654,6 +1654,7 @@ dependencies = [
  "parity-scale-codec",
  "rand 0.8.5",
  "serde",
+ "serde_json",
  "sp-consensus-aura",
  "sp-consensus-grandpa",
  "sp-core 34.0.0",
