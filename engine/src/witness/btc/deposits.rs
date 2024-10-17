@@ -4,7 +4,6 @@ use cf_primitives::EpochIndex;
 use futures_core::Future;
 use itertools::Itertools;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
-use secp256k1::hashes::Hash as secp256k1Hash;
 use state_chain_runtime::BitcoinInstance;
 
 use super::super::common::chunked_chain_source::chunked_by_vault::{
@@ -17,7 +16,7 @@ use crate::{
 		RuntimeHasChain,
 	},
 };
-use bitcoin::BlockHash;
+use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::{
 	assets::btc,
 	btc::{ScriptPubkey, UtxoId},

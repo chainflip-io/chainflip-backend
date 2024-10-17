@@ -40,7 +40,7 @@ lazy_static = { workspace = true }
 num-bigint = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
-secp256k1 = { workspace = true }
+secp256k1 = { workspace = true, features = ["hashes"] }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
