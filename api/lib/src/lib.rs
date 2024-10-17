@@ -539,6 +539,18 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		boost_fee: Option<BasisPoints>,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapPayload> {
+		// Check if safe mode is active
+		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;
+		let safe_mode = self
+			.storage_value::<pallet_cf_environment::RuntimeSafeMode<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await?;
+		if !safe_mode.swapping.swaps_enabled {
+			bail!("Safe mode is active. Swaps are disabled.");
+		}
+
+		// Validate params
 		let params = serde_json::to_string(&RefundValidationParams { retry_duration })?;
 		let raw_value = serde_json::value::RawValue::from_string(params)?;
 		self.base_rpc_api()
@@ -555,6 +567,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				.map_err(anyhow::Error::msg)?;
 		}
 
+		// Encode swap
 		match input_asset {
 			Asset::Btc => {
 				let params = UtxoEncodedData {
