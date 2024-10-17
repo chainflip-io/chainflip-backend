@@ -109,7 +109,7 @@ services:
     command:
       - --alice
       - --blocks-pruning=archive
-      - --chain=/chainspecs/polkadot-dev.chainspec.v1.2.5.json
+      - --chain=/chainspecs/polkadot-dev.chainspec.v1.3.3.json
       - --force-authoring
       - --name=PolkaDocker
       - --rpc-cors=all
