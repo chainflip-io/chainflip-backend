@@ -293,13 +293,11 @@ pub trait RunnerStorageAccessTrait {
 	) -> Result<CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>, CorruptStorageError>;
 
 	fn set_unsynchronised_state(
-		&self,
 		unsynchronised_state: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
 	) -> Result<(), CorruptStorageError>;
 
 	/// Inserts or removes a value from the unsynchronised state map of the electoral system.
 	fn set_unsynchronised_state_map(
-		&self,
 		key: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
 		value: Option<
 				<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
@@ -322,7 +320,7 @@ pub trait RunnerStorageAccessTrait {
 	) -> Result<T, CorruptStorageError> {
 		let mut unsynchronised_state = Self::unsynchronised_state()?;
 		let t = f(self, &mut unsynchronised_state)?;
-		self.set_unsynchronised_state(unsynchronised_state)?;
+		Self::set_unsynchronised_state(unsynchronised_state)?;
 		Ok(t)
 	}
 }

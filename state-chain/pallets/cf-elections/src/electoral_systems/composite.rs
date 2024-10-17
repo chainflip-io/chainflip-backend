@@ -532,7 +532,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 unsynchronised_state: $current::ElectoralUnsynchronisedState,
             ) -> Result<(), CorruptStorageError> {
                 let ($($previous,)* _, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
-                self.storage_access.set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))
+                StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))
             }
 
             fn set_unsynchronised_state_map(
@@ -540,7 +540,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 key: $current::ElectoralUnsynchronisedStateMapKey,
                 value: Option<$current::ElectoralUnsynchronisedStateMapValue>,
             ) -> Result<(), CorruptStorageError> {
-                self.storage_access.set_unsynchronised_state_map(
+                StorageAccess::set_unsynchronised_state_map(
                     CompositeElectoralUnsynchronisedStateMapKey::$current(key),
                     value.map(CompositeElectoralUnsynchronisedStateMapValue::$current),
                 )
@@ -558,7 +558,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             ) -> Result<T, CorruptStorageError> {
                 let ($($previous,)* mut unsynchronised_state, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
                 let t = f(self, &mut unsynchronised_state)?;
-                self.storage_access.set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))?;
+                StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))?;
                 Ok(t)
             }
         }

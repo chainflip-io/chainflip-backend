@@ -924,7 +924,6 @@ pub mod pallet {
 			}
 
 			fn set_unsynchronised_state(
-				&self,
 				unsynchronised_state: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
 			) -> Result<(), CorruptStorageError> {
 				ElectoralUnsynchronisedState::<T, I>::put(unsynchronised_state);
@@ -932,7 +931,6 @@ pub mod pallet {
 			}
 
 			fn set_unsynchronised_state_map(
-				&self,
 				key: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
 				value: Option<
 					<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
