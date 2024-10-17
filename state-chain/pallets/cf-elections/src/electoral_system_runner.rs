@@ -182,7 +182,6 @@ pub trait ElectoralSystemRunner: 'static + Sized {
 	#[allow(clippy::type_complexity)]
 	fn check_consensus(
 		election_identifier: CompositeElectionIdentifierOf<Self>,
-		electoral_access: &Self::StorageAccess,
 		// This is the consensus as of the last time the consensus was checked. Note this is *NOT*
 		// the "last" consensus, i.e. this can be `None` even if on some previous check we had
 		// consensus, but it was subsequently lost.

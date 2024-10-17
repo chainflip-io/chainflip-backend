@@ -264,8 +264,6 @@ macro_rules! generate_electoral_system_tuple_impls {
 
                 fn check_consensus(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
-                    // TODO: do we need to pass this in?
-                    election_access: &Self::StorageAccess,
                     previous_consensus: Option<&Self::Consensus>,
                     consensus_votes: CompositeConsensusVotes<Self>,
                 ) -> Result<Option<Self::Consensus>, CorruptStorageError> {

@@ -831,7 +831,6 @@ pub mod pallet {
 						let option_new_consensus =
 							<T::ElectoralSystemRunner as ElectoralSystemRunner>::check_consensus(
 								election_identifier,
-								&RunnerStorageAccess::new(),
 								option_consensus_history.as_ref().and_then(|consensus_history| {
 									if consensus_history.lost_since {
 										None
