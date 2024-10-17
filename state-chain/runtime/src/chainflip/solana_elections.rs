@@ -321,6 +321,13 @@ pub mod old {
 								>::hashed_key_for(shared_data_hash, election_identifier.unique_monotonic());
 								let reference: core::option::Option<ReferenceDetails> = frame_support::storage::unhashed::take::<ReferenceDetails>(&hashed_key_and_prefix);
 								log::info!("References {:?}", reference);
+								let shared_data =
+									frame_support::storage::migration::take_storage_item::<
+										_,
+										<<old::SolanaElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData,
+										Identity,
+									>(b"SolanaElections", b"SharedData", shared_data_hash);
+								log::info!("SharedData {:?}", shared_data);
 							}
 						);
 					}
