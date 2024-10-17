@@ -1,5 +1,3 @@
-use crate::electoral_system::{ElectoralSystem, ElectoralWriteAccess};
-
 /// Allows the composition of multiple ElectoralSystems while allowing the ability to configure the
 /// `on_finalize` behaviour without exposing the internal composite types.
 pub struct CompositeRunner<T, ValidatorId, StorageAccess, H = DefaultHooks<(), StorageAccess>> {
@@ -508,11 +506,10 @@ macro_rules! generate_electoral_system_tuple_impls {
                 &mut self,
                 f: F,
             ) -> Result<T, CorruptStorageError> {
-                todo!()
-                // let ($($previous,)* mut unsynchronised_state, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
-                // let t = f(self, &mut unsynchronised_state)?;
-                // StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))?;
-                // Ok(t)
+                let ($($previous,)* mut unsynchronised_state, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
+                let t = f(self, &mut unsynchronised_state)?;
+                StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))?;
+                Ok(t)
             }
         }
 
