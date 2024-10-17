@@ -11,8 +11,6 @@ use state_chain_runtime::SolanaInstance;
 use std::collections::{BTreeMap, BTreeSet};
 use tracing::error;
 
-// TOOD: think about tying this more closly to the Runner, given that it is only useful for the
-// runner and not ElectoralSystems now
 pub trait ElectoralApi<Instance: 'static>
 where
 	state_chain_runtime::Runtime: pallet_cf_elections::Config<Instance>,
