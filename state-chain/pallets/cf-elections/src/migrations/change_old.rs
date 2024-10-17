@@ -3,6 +3,7 @@ use crate::{
 		AuthorityVoteOf, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
 		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
 	},
+	electoral_systems::monotonic_change::OnChangeHook,
 	vote_storage::{self, VoteStorage},
 	CorruptStorageError,
 };
@@ -25,10 +26,6 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 /// `ElectionProperties`.
 pub struct Change<Identifier, Value, Settings, Hook, ValidatorId> {
 	_phantom: core::marker::PhantomData<(Identifier, Value, Settings, Hook, ValidatorId)>,
-}
-
-pub trait OnChangeHook<Identifier, Value> {
-	fn on_change(id: Identifier, value: Value);
 }
 
 impl<
