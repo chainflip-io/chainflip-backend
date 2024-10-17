@@ -106,7 +106,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'SWAP_ENDPOINT':
           return '35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT';
         case 'FALLBACK':
-          //3wDSVR6YSRDFiWdwsnZZRjAKHKvsmb4fouYVqoBt5yd4vSrY7aQdvtLJKMvEb3AMWGD5fxunfdotvwPwnSChWMWx
+          /// 3wDSVR6YSRDFiWdwsnZZRjAKHKvsmb4fouYVqoBt5yd4vSrY7aQdvtLJKMvEb3AMWGD5fxunfdotvwPwnSChWMWx
           return 'CFf51BPWnybvgbZrxy61s4SCCvEohBC7achsPLuoACUG';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
@@ -770,7 +770,6 @@ export async function observeSolanaCcmEvent(
             const {
               remainingAccounts: expectedRemainingAccounts,
               remainingIsWritable: expectedRemainingIsWritable,
-              fallbackAccount: _expectedFallbackAccount,
             } = decodeExpectedCfParameters(messageMetadata.cfParameters!);
 
             if (
