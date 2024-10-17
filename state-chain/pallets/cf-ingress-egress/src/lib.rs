@@ -800,9 +800,7 @@ pub mod pallet {
 				}
 			}
 
-			let expired_transactions = ReportExpiresAt::<T, I>::take(now);
-
-			for (account, tx_id) in expired_transactions {
+			for (account, tx_id) in ReportExpiresAt::<T, I>::take(now) {
 				TaintedTransactions::<T, I>::remove(account.clone(), tx_id.clone());
 				Self::deposit_event(Event::<T, I>::TaintedTransactionExpired {
 					account_id: account,
@@ -1676,15 +1674,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				continue;
 			}
 
+			let DepositChannelDetails {
+				deposit_channel,
+				action,
+				boost_fee,
+				boost_status,
+				owner,
+				..
+			} = DepositChannelLookup::<T, I>::get(&deposit_address)
+				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+
+			if Self::check_if_tx_is_tainted_and_schedule_reject(
+				owner,
+				deposit_details.clone(),
+				amount,
+				asset,
+				deposit_address.clone(),
+				action.clone(),
+			) {
+				return Ok(())
+			}
+
 			let prewitnessed_deposit_id =
 				PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
 					*id = id.saturating_add(1);
 					*id
 				});
-
-			let DepositChannelDetails { deposit_channel, action, boost_fee, boost_status, .. } =
-				DepositChannelLookup::<T, I>::get(&deposit_address)
-					.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
 			let channel_id = deposit_channel.channel_id;
 
@@ -1854,6 +1869,48 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(action)
 	}
 
+	/// Checks if the transaction is tainted and schedules it for rejection if it is.
+	fn check_if_tx_is_tainted_and_schedule_reject(
+		channel_owner: T::AccountId,
+		deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		deposit_amount: TargetChainAmount<T, I>,
+		asset: TargetChainAsset<T, I>,
+		deposit_address: TargetChainAccount<T, I>,
+		action: ChannelAction<T::AccountId>,
+	) -> bool {
+		if TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
+			.is_some()
+		{
+			let refund_address = match action {
+				ChannelAction::Swap { refund_params, .. } =>
+					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
+				ChannelAction::CcmTransfer { refund_params, .. } =>
+					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
+				ChannelAction::LiquidityProvision { refund_address, .. } => Some(refund_address),
+			};
+
+			let tainted_transaction_details = TaintedTransactionDetails {
+				refund_address,
+				amount: deposit_amount,
+				asset,
+				tx_id: deposit_details.clone(),
+			};
+
+			ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
+
+			Self::deposit_event(Event::<T, I>::DepositIgnored {
+				deposit_address: deposit_address.clone(),
+				asset,
+				amount: deposit_amount,
+				deposit_details: deposit_details.clone(),
+				reason: DepositIgnoredReason::TransactionTainted,
+			});
+			true
+		} else {
+			false
+		}
+	}
+
 	/// Completes a single deposit request.
 	#[transactional]
 	fn process_single_deposit(
@@ -1901,34 +1958,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let channel_owner = deposit_channel_details.owner.clone();
 
-		if TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
-			.is_some()
-		{
-			let refund_address = match deposit_channel_details.action {
-				ChannelAction::Swap { refund_params, .. } =>
-					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
-				ChannelAction::CcmTransfer { refund_params, .. } =>
-					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
-				ChannelAction::LiquidityProvision { refund_address, .. } => Some(refund_address),
-			};
-
-			let tainted_transaction_details = TaintedTransactionDetails {
-				refund_address,
-				amount: deposit_amount,
+		if deposit_channel_details.boost_status == BoostStatus::NotBoosted &&
+			Self::check_if_tx_is_tainted_and_schedule_reject(
+				channel_owner.clone(),
+				deposit_details.clone(),
+				deposit_amount,
 				asset,
-				tx_id: deposit_details.clone(),
-			};
-
-			ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
-
-			Self::deposit_event(Event::<T, I>::DepositIgnored {
-				deposit_address: deposit_address.clone(),
-				asset,
-				amount: deposit_amount,
-				deposit_details: deposit_details.clone(),
-				reason: DepositIgnoredReason::TransactionTainted,
-			});
-
+				deposit_address.clone(),
+				deposit_channel_details.action.clone(),
+			) {
 			return Ok(())
 		}
 

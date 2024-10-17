@@ -1,7 +1,7 @@
 mod boost;
 
 use crate::{
-	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
+	mock_eth::*, BoostPoolId, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
@@ -18,7 +18,8 @@ use cf_chains::{
 	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	chains::assets::eth, AssetAmount, ChannelId, DcaParameters, ForeignChain, SWAP_DELAY_BLOCKS,
+	chains::assets::eth, AssetAmount, Beneficiaries, ChannelId, DcaParameters, ForeignChain,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -2144,5 +2145,78 @@ fn tainted_transactions_expire_if_not_witnessed() {
 				tx_id: Default::default(),
 			},
 		));
+	});
+}
+
+#[test]
+fn ignore_boosted_channels_if_tainted() {
+	new_test_ext().execute_with(|| {
+		let tx_id = DepositDetails::default();
+
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+				&ALICE,
+			)
+		);
+
+		// Setup the boost pool
+		assert_ok!(IngressEgress::create_boost_pools(
+			RuntimeOrigin::root(),
+			vec![BoostPoolId { asset: eth::Asset::Eth, tier: 10 }],
+		));
+
+		<Test as crate::Config>::Balance::try_credit_account(&ALICE, eth::Asset::Eth.into(), 1000)
+			.unwrap();
+
+		let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
+			eth::Asset::Eth,
+			eth::Asset::Eth.into(),
+			ForeignChainAddress::Eth(Default::default()),
+			Beneficiaries::new(),
+			BROKER,
+			None,
+			10,
+			None,
+			None,
+		)
+		.unwrap();
+
+		// Setup boost liquidty
+		assert_ok!(IngressEgress::add_boost_funds(
+			RuntimeOrigin::signed(ALICE),
+			eth::Asset::Eth,
+			1000,
+			10
+		));
+
+		let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+
+		let deposit_witness = DepositWitness {
+			deposit_address: address,
+			asset: eth::Asset::Eth,
+			amount: DEFAULT_DEPOSIT_AMOUNT,
+			deposit_details: tx_id.clone(),
+		};
+
+		let deposit_witnesses = vec![deposit_witness];
+		let _ = IngressEgress::add_prewitnessed_deposits(deposit_witnesses, 10);
+		TaintedTransactions::<Test, ()>::insert(BROKER, tx_id.clone(), ());
+
+		assert_ok!(IngressEgress::process_single_deposit(
+			address,
+			eth::Asset::Eth,
+			DEFAULT_DEPOSIT_AMOUNT,
+			tx_id,
+			Default::default()
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised {
+				deposit_address: _,
+				asset: eth::Asset::Eth,
+				..
+			})
+		);
 	});
 }
