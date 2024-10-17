@@ -613,7 +613,6 @@ pub mod pallet {
 			type ElectoralSystemRunner = T::ElectoralSystemRunner;
 
 			fn new_election(
-				&self,
 				extra: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionIdentifierExtra,
 				properties: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 				state: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
@@ -636,7 +635,6 @@ pub mod pallet {
 
 			// Why do we even take &self, if we have nothing inside to call onto?
 			fn electoral_settings_for_election(
-				&self,
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,
 			) -> Result<
 				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
@@ -654,7 +652,6 @@ pub mod pallet {
 					.ok_or_else(CorruptStorageError::new)
 			}
 			fn election_properties(
-				&self,
 				election_identifier: CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
 			) -> Result<
 				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
@@ -1807,8 +1804,8 @@ pub mod pallet {
 										Ok((
 												election_identifier,
 												AuthorityElectionData {
-													settings: storage_access.electoral_settings_for_election(*election_identifier.unique_monotonic())?,
-													properties: storage_access.election_properties(election_identifier)?,
+													settings: RunnerStorageAccess::<T, I>::electoral_settings_for_election(*election_identifier.unique_monotonic())?,
+													properties: RunnerStorageAccess::<T, I>::election_properties(election_identifier)?,
 													// We report the vote to the engine even though it is timeouted so the engine
 													// knows to delete it. As it may still later to reconstructed if the right
 													// `SharedData` is provided, unless it is delete.

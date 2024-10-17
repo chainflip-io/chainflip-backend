@@ -200,14 +200,12 @@ pub trait RunnerStorageAccessTrait {
 	type ElectoralSystemRunner: ElectoralSystemRunner;
 
 	fn electoral_settings_for_election(
-		&self,
 		unique_monotonic_identifier: UniqueMonotonicIdentifier,
 	) -> Result<
 		<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
 		CorruptStorageError,
 	>;
 	fn election_properties(
-		&self,
 		election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
 	) -> Result<
 		<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
@@ -286,7 +284,6 @@ pub trait RunnerStorageAccessTrait {
 		>;
 
 	fn new_election(
-		&self,
 		extra: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionIdentifierExtra,
 		properties: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 		state: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,

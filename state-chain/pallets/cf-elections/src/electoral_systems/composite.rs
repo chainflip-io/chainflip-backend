@@ -397,11 +397,11 @@ macro_rules! generate_electoral_system_tuple_impls {
             type ElectoralSystem = $current;
 
             fn settings(&self) -> Result<$current::ElectoralSettings, CorruptStorageError> {
-                let ($($previous,)* settings, $($remaining,)*) = self.storage_access.electoral_settings_for_election(*self.id.unique_monotonic())?;
+                let ($($previous,)* settings, $($remaining,)*) = StorageAccess::electoral_settings_for_election(*self.id.unique_monotonic())?;
                 Ok(settings)
             }
             fn properties(&self) -> Result<$current::ElectionProperties, CorruptStorageError> {
-                match self.storage_access.election_properties(self.id.with_extra(CompositeElectionIdentifierExtra::$current(*self.id.extra())))? {
+                match StorageAccess::election_properties(self.id.with_extra(CompositeElectionIdentifierExtra::$current(*self.id.extra())))? {
                     CompositeElectionProperties::$current(properties) => {
                         Ok(properties)
                     },
@@ -516,7 +516,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 properties: $current::ElectionProperties,
                 state: $current::ElectionState,
             ) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
-                let election_identifier = self.storage_access.new_election(CompositeElectionIdentifierExtra::$current(extra), CompositeElectionProperties::$current(properties), CompositeElectionState::$current(state))?;
+                let election_identifier = StorageAccess::new_election(CompositeElectionIdentifierExtra::$current(extra), CompositeElectionProperties::$current(properties), CompositeElectionState::$current(state))?;
                 Ok(Self::ElectionWriteAccess::new(self.storage_access, election_identifier.with_extra(extra)))
             }
 
