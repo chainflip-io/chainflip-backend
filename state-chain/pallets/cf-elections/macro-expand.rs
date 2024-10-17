@@ -4961,10 +4961,8 @@ pub mod electoral_systems {
                 fn on_finalize(
                     election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
                 ) -> Result<(), CorruptStorageError> {
-                    Self::with_access_translators(|access_translators| {
-                        Self::with_identifiers(election_identifiers, |election_identifiers| {
-                            H::on_finalize(access_translators, election_identifiers)
-                        })
+                    Self::with_identifiers(election_identifiers, |election_identifiers| {
+                        H::on_finalize(election_identifiers)
                     })
                 }
                 fn check_consensus(

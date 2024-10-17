@@ -10,15 +10,6 @@ pub struct DefaultHooks<OnFinalizeContext, StorageAccess> {
 	_phantom: core::marker::PhantomData<(OnFinalizeContext, StorageAccess)>,
 }
 
-/// Takes a generic storage access type and then can translate into an election access type for a
-/// specific electoral system.
-pub trait Translator<StorageAccess> {
-	type ElectoralSystem: ElectoralSystem;
-	type ElectionAccess: ElectoralWriteAccess<ElectoralSystem = Self::ElectoralSystem>;
-
-	fn translate_electoral_access(&self) -> Self::ElectionAccess;
-}
-
 /// The access wrappers need to impl the access traits once for each variant,
 /// these tags ensure these trait impls don't overlap.
 pub mod tags {
@@ -41,7 +32,6 @@ macro_rules! generate_electoral_system_tuple_impls {
         #[allow(unused_variables)]
         pub mod $module {
             use super::{
-                Translator,
                 CompositeRunner,
                 tags,
             };
@@ -75,13 +65,12 @@ macro_rules! generate_electoral_system_tuple_impls {
             use scale_info::TypeInfo;
             use sp_std::vec::Vec;
 
-            /// This trait specifies the behaviour of the composite's `ElectoralSystem::on_finalize` without that code being exposed to the internals of the composite by using the Translator trait to obtain ElectoralAccess objects that abstract those details.
+            /// This trait specifies the behaviour of the composite's `ElectoralSystem::on_finalize` function.
             pub trait Hooks<$($electoral_system: ElectoralSystem,)*> {
 
                 type StorageAccess: RunnerStorageAccessTrait;
 
-                fn on_finalize<$($electoral_system_alt_name_0: Translator<Self::StorageAccess, ElectoralSystem = $electoral_system>),*>(
-                    electoral_access_translators: ($($electoral_system_alt_name_0,)*),
+                fn on_finalize(
                     election_identifiers: ($(Vec<ElectionIdentifierOf<$electoral_system>>,)*),
                 ) -> Result<(), CorruptStorageError>;
             }
@@ -132,18 +121,6 @@ macro_rules! generate_electoral_system_tuple_impls {
 
                     f((
                         $($electoral_system_alt_name_0,)*
-                    ))
-                }
-
-                pub fn with_access_translators<R, F: for<'a> FnOnce(
-                    ($(
-                        ElectoralAccessTranslator<tags::$electoral_system, $electoral_system, StorageAccess>,
-                    )*)
-                ) -> R>(
-                    f: F,
-                ) -> R {
-                    f((
-                        $(ElectoralAccessTranslator::<tags::$electoral_system, $electoral_system, StorageAccess>::new(),)*
                     ))
                 }
             }
@@ -277,17 +254,13 @@ macro_rules! generate_electoral_system_tuple_impls {
                     }
                 }
 
-                // Just here uses the translators
                 fn on_finalize(
                     election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
                 ) -> Result<(), CorruptStorageError> {
-                    Self::with_access_translators(|access_translators| {
-                        Self::with_identifiers(election_identifiers, |election_identifiers| {
-                            H::on_finalize(
-                                access_translators,
-                                election_identifiers,
-                            )
-                        })
+                    Self::with_identifiers(election_identifiers, |election_identifiers| {
+                        H::on_finalize(
+                            election_identifiers,
+                        )
                     })
                 }
 
@@ -357,17 +330,6 @@ macro_rules! generate_electoral_system_tuple_impls {
             impl<Tag, ES, StorageAccess> CompositeElectoralAccess<Tag, ES, StorageAccess> {
                 // TODO: Try to remove new if we don't need &self
                 pub fn new() -> Self {
-                    Self {
-                        _phantom: Default::default(),
-                    }
-                }
-            }
-
-            pub struct ElectoralAccessTranslator<Tag, ES, Runner> {
-                _phantom: core::marker::PhantomData<(Tag, ES, Runner)>,
-            }
-            impl<Tag, ES, Runner> ElectoralAccessTranslator<Tag, ES, Runner> {
-                fn new() -> Self {
                     Self {
                         _phantom: Default::default(),
                     }
@@ -551,16 +513,6 @@ macro_rules! generate_electoral_system_tuple_impls {
                 // let t = f(self, &mut unsynchronised_state)?;
                 // StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))?;
                 // Ok(t)
-            }
-        }
-
-        impl<$($electoral_system: ElectoralSystem<ValidatorId = ValidatorId>,)* ValidatorId: MaybeSerializeDeserialize + Parameter + Member, H: Hooks<$($electoral_system),*, StorageAccess = StorageAccess> + 'static, StorageAccess: RunnerStorageAccessTrait<ElectoralSystemRunner = CompositeRunner<($($electoral_system,)*), ValidatorId, StorageAccess, H>> + 'static> Translator<StorageAccess> for ElectoralAccessTranslator<tags::$current, $current, StorageAccess> {
-
-            type ElectoralSystem = $current;
-            type ElectionAccess = CompositeElectoralAccess<tags::$current, $current, StorageAccess>;
-
-            fn translate_electoral_access(&self) -> Self::ElectionAccess {
-                Self::ElectionAccess::new()
             }
         }
 

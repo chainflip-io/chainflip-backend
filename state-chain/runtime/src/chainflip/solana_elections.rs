@@ -21,7 +21,7 @@ use pallet_cf_elections::{
 	electoral_systems::{
 		self,
 		change::OnChangeHook,
-		composite::{tuple_6_impls::Hooks, CompositeRunner, Translator},
+		composite::{tuple_6_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
 		monotonic_median::MedianChangeHook,
@@ -209,29 +209,7 @@ impl<StorageAccess: RunnerStorageAccessTrait>
 {
 	type StorageAccess = StorageAccess;
 
-	fn on_finalize<
-		BlockHeightTranslator: Translator<Self::StorageAccess, ElectoralSystem = SolanaBlockHeightTracking>,
-		FeeTranslator: Translator<Self::StorageAccess, ElectoralSystem = SolanaFeeTracking>,
-		IngressTranslator: Translator<Self::StorageAccess, ElectoralSystem = SolanaIngressTracking>,
-		NonceTrackingTranslator: Translator<Self::StorageAccess, ElectoralSystem = SolanaNonceTracking>,
-		EgressWitnessingTranslator: Translator<Self::StorageAccess, ElectoralSystem = SolanaEgressWitnessing>,
-		LivenessTranslator: Translator<Self::StorageAccess, ElectoralSystem = SolanaLiveness>,
-	>(
-		(
-			block_height_translator,
-			fee_translator,
-			ingress_translator,
-			nonce_tracking_translator,
-			egress_witnessing_translator,
-			liveness_translator,
-		): (
-			BlockHeightTranslator,
-			FeeTranslator,
-			IngressTranslator,
-			NonceTrackingTranslator,
-			EgressWitnessingTranslator,
-			LivenessTranslator,
-		),
+	fn on_finalize(
 		(
 			block_height_identifiers,
 			fee_identifiers,
@@ -267,32 +245,56 @@ impl<StorageAccess: RunnerStorageAccessTrait>
 		),
 	) -> Result<(), CorruptStorageError> {
 		let block_height = SolanaBlockHeightTracking::on_finalize(
-			&mut block_height_translator.translate_electoral_access(),
+			&mut CompositeElectoralAccess::<
+				_,
+				SolanaBlockHeightTracking,
+				RunnerStorageAccess<Runtime, SolanaInstance>,
+			>::new(),
 			block_height_identifiers,
 			&(),
 		)?;
 		SolanaLiveness::on_finalize(
-			&mut liveness_translator.translate_electoral_access(),
+			&mut CompositeElectoralAccess::<
+				_,
+				SolanaLiveness,
+				RunnerStorageAccess<Runtime, SolanaInstance>,
+			>::new(),
 			liveness_identifiers,
 			&(crate::System::block_number(), block_height),
 		)?;
 		SolanaFeeTracking::on_finalize(
-			&mut fee_translator.translate_electoral_access(),
+			&mut CompositeElectoralAccess::<
+				_,
+				SolanaFeeTracking,
+				RunnerStorageAccess<Runtime, SolanaInstance>,
+			>::new(),
 			fee_identifiers,
 			&(),
 		)?;
 		SolanaNonceTracking::on_finalize(
-			&mut nonce_tracking_translator.translate_electoral_access(),
+			&mut CompositeElectoralAccess::<
+				_,
+				SolanaNonceTracking,
+				RunnerStorageAccess<Runtime, SolanaInstance>,
+			>::new(),
 			nonce_tracking_identifiers,
 			&(),
 		)?;
 		SolanaEgressWitnessing::on_finalize(
-			&mut egress_witnessing_translator.translate_electoral_access(),
+			&mut CompositeElectoralAccess::<
+				_,
+				SolanaEgressWitnessing,
+				RunnerStorageAccess<Runtime, SolanaInstance>,
+			>::new(),
 			egress_witnessing_identifiers,
 			&(),
 		)?;
 		SolanaIngressTracking::on_finalize(
-			&mut ingress_translator.translate_electoral_access(),
+			&mut CompositeElectoralAccess::<
+				_,
+				SolanaIngressTracking,
+				RunnerStorageAccess<Runtime, SolanaInstance>,
+			>::new(),
 			ingress_identifiers,
 			&block_height,
 		)?;
