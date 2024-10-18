@@ -1,8 +1,7 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import Web3 from 'web3';
-import { u8aToHex } from '@polkadot/util';
-import { str, u32, Struct, Option, u16, u256, Bytes as TsBytes, Enum } from 'scale-ts';
+import { u32, Struct, Option, u16, u256, Bytes as TsBytes, Enum } from 'scale-ts';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
 import { performSwap } from '../shared/perform_swap';
 import {
@@ -15,10 +14,9 @@ import {
   assetDecimals,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
-import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
+import { CcmDepositMetadata } from '../shared/new_swap';
 import { performSwapViaContract } from '../shared/contract_swap';
 import { SwapContext, SwapStatus } from './swap_context';
-import { U256 } from '@polkadot/types';
 
 enum SolidityType {
   Uint256 = 'uint256',
@@ -165,10 +163,10 @@ export const vaultSwapCfParametersCodec = Struct({
     Struct({
       refundParams: Option(
         Struct({
-          retryDuration: u32,
+          retryDurationBlocks: u32,
           refundAddress: Enum({
             Eth: TsBytes(20),
-            Dot: TsBytes(32),
+            Dot: TsBytes(32), // not supported anyway
             Btc: TsBytes(), // not supported anyway
             Arb: TsBytes(20),
             Sol: TsBytes(32),
@@ -190,7 +188,7 @@ export function newCcmMetadata(
   cfParamsArray?: string,
 ): CcmDepositMetadata {
   const message = ccmMessage ?? newCcmMessage(destAsset);
-  const cfParameters = cfParamsArray ?? newCcmAdditionalData(destAsset, message);
+  const ccmAdditionalData = cfParamsArray ?? newCcmAdditionalData(destAsset, message);
   const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
@@ -202,38 +200,8 @@ export function newCcmMetadata(
     message,
     gasBudget,
     // TODO: To rename to ccmAdditionalData
-    cfParameters,
+    cfParameters: ccmAdditionalData,
   };
-}
-
-export function newVaultSwapCfParameters(
-  sourceAsset: Asset,
-  destAsset: Asset,
-  ccmMessage?: string,
-  gasBudgetFraction?: number,
-  cfParamsArray?: string,
-  boostFeeBps?: number,
-  fillOrKillParams?: FillOrKillParamsX128,
-  dcaParams?: DcaParams,
-): string {
-  const ccmMetadata = newCcmMetadata(
-    sourceAsset,
-    destAsset,
-    ccmMessage,
-    gasBudgetFraction,
-    cfParamsArray,
-  );
-
-  return u8aToHex(
-    vaultSwapCfParametersCodec.enc({
-      ccmAdditionalData: ccmMetadata.cfParameters,
-      vaultSwapAttributes: {
-        boostFeeBps,
-        fillOrKillParams,
-        dcaParams,
-      },
-    }),
-  );
 }
 
 export async function prepareSwap(

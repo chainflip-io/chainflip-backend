@@ -15,12 +15,14 @@ import { getBalance } from '../shared/get_balance';
 import { observeEvent } from '../shared/utils/substrate';
 import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
+import { performSwapViaContract } from '../shared/contract_swap';
+import { newCcmMetadata } from '../shared/swapping';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testFillOrKill = new ExecutableTest('FoK', main, 600);
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
-async function testMinPriceRefund(inputAsset: Asset, amount: number) {
+async function testMinPriceRefund(inputAsset: Asset, amount: number, swapviaContract = false) {
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const refundAddress = await newAddress(inputAsset, randomBytes(32).toString('hex'));
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
@@ -39,56 +41,76 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
     ),
   };
 
-  testFillOrKill.log(
-    `Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`,
-  );
-  const swapRequest = await requestNewSwap(
-    inputAsset,
-    destAsset,
-    destAddress,
-    'FoK_Test',
-    undefined, // messageMetadata
-    0, // brokerCommissionBps
-    false, // log
-    0, // boostFeeBps
-    refundParameters,
-  );
-  const depositAddress = swapRequest.depositAddress;
-  const depositChannelId = swapRequest.channelId;
+  let swapHandle;
 
-  const swapRequestedHandle = observeSwapRequested(
-    inputAsset,
-    destAsset,
-    depositChannelId,
-    SwapRequestType.Regular,
-  );
+  if (!swapviaContract) {
+    testFillOrKill.log(
+      `Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`,
+    );
+    const swapRequest = await requestNewSwap(
+      inputAsset,
+      destAsset,
+      destAddress,
+      'FoK_Test',
+      undefined, // messageMetadata
+      0, // brokerCommissionBps
+      false, // log
+      0, // boostFeeBps
+      refundParameters,
+    );
+    const depositAddress = swapRequest.depositAddress;
+    const depositChannelId = swapRequest.channelId;
 
-  // Deposit the asset
-  await send(inputAsset, depositAddress, amount.toString());
-  testFillOrKill.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
+    const swapRequestedHandle = observeSwapRequested(
+      inputAsset,
+      destAsset,
+      depositChannelId,
+      SwapRequestType.Regular,
+    );
 
-  const swapRequestedEvent = await swapRequestedHandle;
-  const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
-  testFillOrKill.log(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
+    // Deposit the asset
+    await send(inputAsset, depositAddress, amount.toString());
+    testFillOrKill.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
 
-  const observeSwapExecuted = observeEvent(`swapping:SwapExecuted`, {
-    test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicalCheckBlocks: 10,
-  }).event;
+    const swapRequestedEvent = await swapRequestedHandle;
+    const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
+    testFillOrKill.log(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
+
+    swapHandle = observeEvent(`swapping:SwapExecuted`, {
+      test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
+      historicalCheckBlocks: 10,
+    }).event;
+  } else {
+    swapHandle = performSwapViaContract(
+      inputAsset,
+      destAsset,
+      destAddress,
+      'test',
+      // Creating CCM metadata because we need a CCM metadata with the current SDK to be able
+      // to pass the ccmAdditionalData even if we dont' need it. Then if the gasBudget is
+      // very high the swap might fail so we force a lower gasBudget.
+      // TODO: Remove the entire CCM metadata.
+      newCcmMetadata(inputAsset, destAsset, undefined, 100),
+      undefined,
+      true,
+      amount.toString(),
+      undefined,
+      refundParameters,
+      undefined,
+    );
+  }
 
   // Wait for the swap to execute or get refunded
   const executeOrRefund = await Promise.race([
-    observeSwapExecuted,
+    swapHandle,
     observeBalanceIncrease(inputAsset, refundAddress, refundBalanceBefore),
   ]);
 
   if (typeof executeOrRefund !== 'number') {
-    throw new Error(
-      `${inputAsset} swap ${swapRequestId} was executed instead of failing and being refunded`,
-    );
+    throw new Error(`${inputAsset} swap was executed instead of failing and being refunded`);
   }
 
-  testFillOrKill.log(`FoK ${inputAsset} swap refunded`);
+  testFillOrKill.log(`FoK ${inputAsset} ${swapviaContract ? ' via contract' : ''} swap refunded`);
 }
 
 async function main() {
@@ -98,5 +120,8 @@ async function main() {
     testMinPriceRefund(Assets.Dot, 100),
     testMinPriceRefund(Assets.Btc, 0.1),
     testMinPriceRefund(Assets.Usdc, 1000),
+    testMinPriceRefund(Assets.Flip, 500, true),
+    testMinPriceRefund(Assets.Eth, 1, true),
+    testMinPriceRefund(Assets.ArbEth, 5, true),
   ]);
 }

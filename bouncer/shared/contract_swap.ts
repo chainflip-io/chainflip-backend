@@ -32,62 +32,72 @@ import { vaultSwapCfParametersCodec } from './swapping';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
+export function encodeCfParameters(
+  sourceAsset: Asset,
+  ccmAdditionalData?: string | undefined,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
+): string | undefined {
+  return ccmAdditionalData || fillOrKillParams || dcaParams || boostFeeBps
+    ? u8aToHex(
+        vaultSwapCfParametersCodec.enc({
+          ccmAdditionalData: ccmAdditionalData ? hexToU8a(ccmAdditionalData) : undefined,
+          vaultSwapAttributes:
+            fillOrKillParams || dcaParams || boostFeeBps
+              ? {
+                  refundParams: fillOrKillParams && {
+                    retryDurationBlocks: fillOrKillParams.retryDurationBlocks,
+                    refundAddress: {
+                      tag: shortChainFromAsset(sourceAsset),
+                      value: hexToU8a(fillOrKillParams.refundAddress),
+                    },
+                    minPriceX128: BigInt(fillOrKillParams.minPriceX128),
+                  },
+                  dcaParams,
+                  boostFee: boostFeeBps,
+                }
+              : undefined,
+        }),
+      )
+    : undefined;
+}
+
 export async function executeContractSwap(
-  srcAsset: Asset,
+  sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
   wallet: HDNodeWallet,
   messageMetadata?: CcmDepositMetadata,
+  amount?: string,
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
 ): ReturnType<typeof executeSwap> {
-  const srcChain = chainFromAsset(srcAsset);
+  const srcChain = chainFromAsset(sourceAsset);
   const destChain = chainFromAsset(destAsset);
+  const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
 
   const networkOptions = {
     signer: wallet,
     network: 'localnet',
     vaultContractAddress: getContractAddress(srcChain, 'VAULT'),
-    srcTokenContractAddress: getContractAddress(srcChain, srcAsset),
+    srcTokenContractAddress: getContractAddress(srcChain, sourceAsset),
   } as const;
   const txOptions = {
     // This is run with fresh addresses to prevent nonce issues. Will be 1 for ERC20s.
     gasLimit: srcChain === Chains.Arbitrum ? 10000000n : 200000n,
   } as const;
 
-  // messageMetadata.cfParameters = undefined;
-  // boostFeeBps = 1;
+  const cfParameters = encodeCfParameters(
+    sourceAsset,
+    messageMetadata?.cfParameters,
+    boostFeeBps,
+    fillOrKillParams,
+    dcaParams,
+  );
 
-  const ccmAdditionalData =
-    messageMetadata?.cfParameters || fillOrKillParams || dcaParams || boostFeeBps
-      ? u8aToHex(
-          vaultSwapCfParametersCodec.enc({
-            ccmAdditionalData: messageMetadata?.cfParameters
-              ? hexToU8a(messageMetadata.cfParameters)
-              : undefined,
-            vaultSwapAttributes:
-              fillOrKillParams || dcaParams || boostFeeBps
-                ? {
-                    refundParams: fillOrKillParams && {
-                      retryDuration: fillOrKillParams.retryDurationBlocks,
-                      // refundAddress: { tag: shortChainFromAsset(srcAsset), value: hexToU8a(refundAddress) },
-                      refundAddress: {
-                        tag: shortChainFromAsset(srcAsset),
-                        // value: fillOrKillParams.refundAddress,
-                        value: hexToU8a(fillOrKillParams.refundAddress),
-                      },
-                      minPriceX128: BigInt(fillOrKillParams.minPriceX128),
-                    },
-                    dcaParams,
-                    boostFee: boostFeeBps,
-                  }
-                : undefined,
-          }),
-        )
-      : undefined;
-
-  console.log('ccmAdditionalData passed to the SDK in contractCall', ccmAdditionalData);
+  console.log('cfParameters passed to the SDK in contractCall', cfParameters);
 
   const receipt = await executeSwap(
     {
@@ -95,9 +105,9 @@ export async function executeContractSwap(
       destAsset: stateChainAssetFromAsset(destAsset),
       // It is important that this is large enough to result in
       // an amount larger than existential (e.g. on Polkadot):
-      amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
+      amount: amountToFineAmount(amountToSwap, assetDecimals(sourceAsset)),
       destAddress,
-      srcAsset: stateChainAssetFromAsset(srcAsset),
+      srcAsset: stateChainAssetFromAsset(sourceAsset),
       srcChain,
       // TODO: This will need some refactoring either putting the cfParameters outside the
       // ccmParams and the user should encode it as done here or, probably better, we just
@@ -106,8 +116,7 @@ export async function executeContractSwap(
       ccmParams: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
-        cfParameters: ccmAdditionalData,
-        // ccmAdditionalData: ccmAdditionalData,
+        cfParameters,
       },
     } as ExecuteSwapParams,
     networkOptions,
@@ -131,11 +140,13 @@ export async function performSwapViaContract(
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
   log = true,
+  amount?: string,
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
 ): Promise<ContractSwapParams> {
   const tag = swapTag ?? '';
+  const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
 
   const srcChain = chainFromAsset(sourceAsset);
 
@@ -157,10 +168,7 @@ export async function performSwapViaContract(
       // eslint-disable-next-line @typescript-eslint/no-use-before-define
       await approveTokenVault(
         sourceAsset,
-        (
-          BigInt(amountToFineAmount(defaultAssetAmounts(sourceAsset), assetDecimals(sourceAsset))) *
-          100n
-        ).toString(),
+        (BigInt(amountToFineAmount(amountToSwap, assetDecimals(sourceAsset))) * 100n).toString(),
         wallet,
       );
     }
@@ -183,6 +191,7 @@ export async function performSwapViaContract(
       destAddress,
       wallet,
       messageMetadata,
+      amountToSwap,
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
@@ -222,24 +231,24 @@ export async function performSwapViaContract(
     throw new Error(`${tag} ${err}`);
   }
 }
-export async function approveTokenVault(srcAsset: Asset, amount: string, wallet: HDNodeWallet) {
-  if (!erc20Assets.includes(srcAsset)) {
-    throw new Error(`Unsupported asset, not an ERC20: ${srcAsset}`);
+export async function approveTokenVault(sourceAsset: Asset, amount: string, wallet: HDNodeWallet) {
+  if (!erc20Assets.includes(sourceAsset)) {
+    throw new Error(`Unsupported asset, not an ERC20: ${sourceAsset}`);
   }
 
-  const chain = chainFromAsset(srcAsset as Asset);
+  const chain = chainFromAsset(sourceAsset as Asset);
 
   await approveVault(
     {
       amount,
       srcChain: chain as Chain,
-      srcAsset: stateChainAssetFromAsset(srcAsset) as SCAsset,
+      srcAsset: stateChainAssetFromAsset(sourceAsset) as SCAsset,
     },
     {
       signer: wallet,
       network: 'localnet',
       vaultContractAddress: getContractAddress(chain, 'VAULT'),
-      srcTokenContractAddress: getContractAddress(chain, srcAsset),
+      srcTokenContractAddress: getContractAddress(chain, sourceAsset),
     },
     // This is run with fresh addresses to prevent nonce issues
     {
