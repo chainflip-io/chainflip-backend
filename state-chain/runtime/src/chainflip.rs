@@ -70,6 +70,8 @@ use cf_traits::{
 	ScheduledEgressDetails,
 };
 
+use cf_chains::btc::ScriptPubkey;
+use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -822,11 +824,20 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 				let output_len = outputs.len();
 				let vout = output_len - 1;
 				let change_output = outputs.get(vout).unwrap();
-				Environment::add_bitcoin_change_utxo(
-					change_output.amount,
-					UtxoId { tx_id, vout: vout as u32 },
-					batch_transfer.change_utxo_key,
-				);
+				if ScriptPubkey::Taproot(batch_transfer.change_utxo_key) ==
+					change_output.script_pubkey
+				{
+					Environment::add_bitcoin_change_utxo(
+						change_output.amount,
+						UtxoId { tx_id, vout: vout as u32 },
+						batch_transfer.change_utxo_key,
+					);
+				} else {
+					log_or_panic!(
+						"We always expect our key to be Taproot, we found {:?} instead",
+						change_output.script_pubkey
+					);
+				}
 			},
 			_ => unreachable!(),
 		}

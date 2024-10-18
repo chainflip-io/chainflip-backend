@@ -42,7 +42,7 @@ pub use cf_chains::instances::{
 use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
-	btc::{BitcoinCrypto, BitcoinRetryPolicy},
+	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
@@ -2106,8 +2106,26 @@ impl_runtime_apis! {
 
 		fn cf_btc_utxos() -> BtcUtxos {
 			let utxos = pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
+			let mut btc_balance = utxos.iter().fold(0, |acc, elem| acc + elem.amount);
+			//Sum the btc balance contained in the change utxos to the btc "free_balance"
+			let btc_ceremonies = pallet_cf_threshold_signature::PendingCeremonies::<Runtime,BitcoinInstance>::iter_values().map(|ceremony|{
+				ceremony.request_context.request_id
+			}).collect::<Vec<_>>();
+			for ceremony in btc_ceremonies {
+				if let RuntimeCall::BitcoinBroadcaster(pallet_cf_broadcast::pallet::Call::on_signature_ready{ api_call, ..}) = pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::get(ceremony).unwrap() {
+					if let BitcoinApi::BatchTransfer(batch_transfer) = *api_call {
+						let outputs = batch_transfer.bitcoin_transaction.outputs;
+						let change_output = outputs.last().unwrap();
+						if let ScriptPubkey::Taproot(key) = change_output.script_pubkey {
+							if key == batch_transfer.change_utxo_key {
+								btc_balance += change_output.amount;
+							}
+						}
+					}
+				}
+			}
 			BtcUtxos {
-				total_balance: utxos.iter().fold(0, |acc, elem| acc + elem.amount),
+				total_balance: btc_balance,
 				count: utxos.len() as u32,
 			}
 		}
