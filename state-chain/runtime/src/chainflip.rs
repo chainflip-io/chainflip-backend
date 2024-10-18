@@ -833,9 +833,7 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 						batch_transfer.change_utxo_key,
 					);
 				} else {
-					log_or_panic!(
-						"Keys do not match, no change_utxo available"
-					);
+					log_or_panic!("Keys do not match, no change_utxo available");
 				}
 			},
 			_ => unreachable!(),
