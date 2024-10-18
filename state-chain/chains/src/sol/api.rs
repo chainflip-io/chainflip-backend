@@ -113,8 +113,12 @@ pub enum SolanaTransactionType {
 	BatchFetch,
 	Transfer,
 	RotateAggKey,
-	CcmTransfer { fallback: TransferAssetParams<Solana> },
+	#[deprecated]
+	CcmTransferLegacy,
 	SetGovKeyWithAggKey,
+	CcmTransfer {
+		fallback: TransferAssetParams<Solana>,
+	},
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
