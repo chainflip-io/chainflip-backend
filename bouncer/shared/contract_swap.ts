@@ -97,8 +97,6 @@ export async function executeContractSwap(
     dcaParams,
   );
 
-  console.log('cfParameters passed to the SDK in contractCall', cfParameters);
-
   const receipt = await executeSwap(
     {
       destChain,

@@ -1,8 +1,6 @@
 mod chain_tracking;
 mod state_chain_gateway;
 
-use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::TypeInfo;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{evm::DepositDetails, Ethereum};
@@ -221,23 +219,8 @@ where
 	Ok(())
 }
 
-use cf_chains::{
-	address::EncodedAddress, CcmAdditionalData, CcmDepositMetadata, ChannelRefundParameters,
-};
+use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ChannelRefundParameters};
 use cf_primitives::{Asset, AssetAmount, BasisPoints, DcaParameters, TransactionHash};
-
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct VaultSwapCfParameters {
-	pub ccm_additional_data: Option<CcmAdditionalData>,
-	pub vault_swap_attributes: Option<VaultSwapAttributes>,
-}
-
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct VaultSwapAttributes {
-	pub refund_params: Option<ChannelRefundParameters>,
-	pub dca_params: Option<DcaParameters>,
-	pub boost_fee: Option<BasisPoints>,
-}
 
 pub struct EthCallBuilder {}
 
