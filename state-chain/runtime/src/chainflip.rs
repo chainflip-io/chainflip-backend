@@ -834,8 +834,7 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 					);
 				} else {
 					log_or_panic!(
-						"We always expect our key to be Taproot, we found {:?} instead",
-						change_output.script_pubkey
+						"Keys do not match, no change_utxo available"
 					);
 				}
 			},
