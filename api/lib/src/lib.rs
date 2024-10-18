@@ -13,7 +13,9 @@ use cf_chains::{
 	CcmChannelMetadata, ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment, Price};
+use cf_primitives::{
+	AssetAmount, Beneficiaries, BlockNumber, DcaParameters, NetworkEnvironment, Price,
+};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -533,6 +535,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		min_output_amount: AssetAmount,
 		boost_fee: Option<BasisPoints>,
 		dca_parameters: Option<DcaParameters>,
+		_broker_fees: Option<Beneficiaries<AccountId32>>,
 	) -> Result<SwapPayload> {
 		// Check if safe mode is active
 		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;

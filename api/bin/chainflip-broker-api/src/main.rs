@@ -4,7 +4,10 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self,
-	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
+	primitives::{
+		AccountRole, Affiliates, Asset, BasisPoints, Beneficiaries, CcmChannelMetadata,
+		DcaParameters,
+	},
 	settings::StateChain,
 	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
 	SwapDepositAddress, SwapPayload, WithdrawFeesDetail,
@@ -59,6 +62,7 @@ pub trait Rpc {
 		min_output_amount: u128,
 		boost_fee: Option<BasisPoints>,
 		dca_parameters: Option<DcaParameters>,
+		broker_fees: Option<Beneficiaries<AccountId32>>,
 	) -> RpcResult<SwapPayload>;
 }
 
@@ -142,6 +146,7 @@ impl RpcServer for RpcServerImpl {
 		min_output_amount: u128,
 		boost_fee: Option<BasisPoints>,
 		dca_parameters: Option<DcaParameters>,
+		broker_fees: Option<Beneficiaries<AccountId32>>,
 	) -> RpcResult<SwapPayload> {
 		Ok(self
 			.api
@@ -154,6 +159,7 @@ impl RpcServer for RpcServerImpl {
 				min_output_amount,
 				boost_fee,
 				dca_parameters,
+				broker_fees,
 			)
 			.await
 			.map_err(to_rpc_error)?)
