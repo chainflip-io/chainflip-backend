@@ -2116,10 +2116,8 @@ impl_runtime_apis! {
 					if let BitcoinApi::BatchTransfer(batch_transfer) = *api_call {
 						let outputs = batch_transfer.bitcoin_transaction.outputs;
 						let change_output = outputs.last().unwrap();
-						if let ScriptPubkey::Taproot(key) = change_output.script_pubkey {
-							if key == batch_transfer.change_utxo_key {
-								btc_balance += change_output.amount;
-							}
+						if ScriptPubkey::Taproot(batch_transfer.change_utxo_key) == change_output.script_pubkey {
+							btc_balance += change_output.amount;
 						}
 					}
 				}
