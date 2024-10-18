@@ -1,8 +1,6 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-// eslint-disable-next-line no-restricted-imports
-import { KeyringPair } from '@polkadot/keyring/types';
 import Keyring from '../polkadot/keyring';
 import {
   brokerMutex,
@@ -20,6 +18,7 @@ import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { send } from '../shared/send';
 import { ExecutableTest } from '../shared/executable_test';
+import { getFreeBalance } from '../shared/get_free_balance';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testBrokerFeeCollection = new ExecutableTest('Broker-Fee-Collection', main, 200);
@@ -56,21 +55,12 @@ export async function submitBrokerWithdrawal(
 
 const feeAsset = Assets.Usdc;
 
-async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> {
-  await using chainflip = await getChainflipApi();
-  // NOTE: All broker fees are collected in USDC now:
-  const feeStr = (
-    await chainflip.query.assetBalances.freeBalances(brokerKeypair.address, Assets.Usdc)
-  ).toString();
-  return BigInt(feeStr);
-}
-
 /// Runs a swap, checks that the broker fees are collected,
 /// then withdraws the broker fees, making sure the balance is correct after the withdrawal.
 async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   await using chainflip = await getChainflipApi();
   // Check the broker fees before the swap
-  const earnedBrokerFeesBefore = await getEarnedBrokerFees(broker);
+  const earnedBrokerFeesBefore = await getFreeBalance(broker.address, Assets.Usdc);
   testBrokerFeeCollection.log(`${inputAsset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
   // Run a swap
@@ -153,7 +143,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   );
 
   // Check that the detected increase in earned broker fees matches the swap event values and it is equal to the expected amount (after the deposit fee is accounted for)
-  const earnedBrokerFeesAfter = await getEarnedBrokerFees(broker);
+  const earnedBrokerFeesAfter = await getFreeBalance(broker.address, Assets.Usdc);
   testBrokerFeeCollection.log(`${inputAsset} earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
 
   assert(earnedBrokerFeesAfter > earnedBrokerFeesBefore, 'No increase in earned broker fees');
