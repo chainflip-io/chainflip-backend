@@ -11,9 +11,9 @@ version = "1.7.0"
 proc-macro = true
 
 [dependencies]
-syn = "2.0.52"
-quote = "1.0.35"
-proc-macro2 = "1.0.79"
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
 engine-upgrade-utils = { path = "../engine-upgrade-utils" }
 
 [build-dependencies]

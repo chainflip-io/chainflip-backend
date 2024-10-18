@@ -70,11 +70,11 @@ fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 		ScriptPubkey::P2PKH(data_from_script(script, 3))
 	} else if script.is_p2sh() {
 		ScriptPubkey::P2SH(data_from_script(script, 2))
-	} else if script.is_v1_p2tr() {
+	} else if script.is_p2tr() {
 		ScriptPubkey::Taproot(data_from_script(script, 2))
-	} else if script.is_v0_p2wsh() {
+	} else if script.is_p2wsh() {
 		ScriptPubkey::P2WSH(data_from_script(script, 2))
-	} else if script.is_v0_p2wpkh() {
+	} else if script.is_p2wpkh() {
 		ScriptPubkey::P2WPKH(data_from_script(script, 2))
 	} else {
 		ScriptPubkey::OtherSegwit {
@@ -152,11 +152,13 @@ pub fn try_extract_contract_call(
 mod tests {
 
 	use bitcoin::{
-		address::WitnessProgram, key::TweakedPublicKey, PubkeyHash, ScriptHash, WPubkeyHash,
-		WScriptHash,
+		blockdata::script::{witness_program::WitnessProgram, witness_version::WitnessVersion},
+		hashes::Hash,
+		key::TweakedPublicKey,
+		PubkeyHash, ScriptHash, WPubkeyHash, WScriptHash,
 	};
 	use cf_chains::address::EncodedAddress;
-	use secp256k1::{hashes::Hash, XOnlyPublicKey};
+	use secp256k1::XOnlyPublicKey;
 	use sp_core::bounded_vec;
 
 	use crate::{btc::rpc::VerboseTxOut, witness::btc::deposits::tests::fake_transaction};
@@ -192,22 +194,22 @@ mod tests {
 				ScriptPubkey::P2SH([7; 20]),
 			),
 			(
-				ScriptBuf::new_v1_p2tr_tweaked(TweakedPublicKey::dangerous_assume_tweaked(
+				ScriptBuf::new_p2tr_tweaked(TweakedPublicKey::dangerous_assume_tweaked(
 					XOnlyPublicKey::from_slice(&[7; 32]).unwrap(),
 				)),
 				ScriptPubkey::Taproot([7; 32]),
 			),
 			(
-				ScriptBuf::new_v0_p2wsh(&WScriptHash::from_byte_array([7; 32])),
+				ScriptBuf::new_p2wsh(&WScriptHash::from_byte_array([7; 32])),
 				ScriptPubkey::P2WSH([7; 32]),
 			),
 			(
-				ScriptBuf::new_v0_p2wpkh(&WPubkeyHash::from_byte_array([7; 20])),
+				ScriptBuf::new_p2wpkh(&WPubkeyHash::from_byte_array([7; 20])),
 				ScriptPubkey::P2WPKH([7; 20]),
 			),
 			(
 				ScriptBuf::new_witness_program(
-					&WitnessProgram::new(bitcoin::address::WitnessVersion::V2, [7; 40]).unwrap(),
+					&WitnessProgram::new(WitnessVersion::V2, &[7; 40]).unwrap(),
 				),
 				ScriptPubkey::OtherSegwit { version: 2, program: bounded_vec![7; 40] },
 			),
