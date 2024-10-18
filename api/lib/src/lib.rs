@@ -115,11 +115,6 @@ pub enum SwapPayload {
 	Bitcoin { nulldata_utxo: Bytes },
 }
 
-#[derive(Serialize)]
-struct RefundValidationParams {
-	pub retry_duration: u32,
-}
-
 pub struct StateChainApi {
 	pub state_chain_client: Arc<StateChainClient>,
 }
@@ -551,25 +546,22 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		}
 
 		// Validate params
-		let params = serde_json::to_string(&RefundValidationParams { retry_duration })?;
-		let raw_value = serde_json::value::RawValue::from_string(params)?;
 		self.base_rpc_api()
-			.request_raw("cf_validate_refund_params", Some(raw_value))
-			.await
-			.map_err(anyhow::Error::msg)?;
-
-		if let Some(params) = &dca_parameters {
-			let params_json = serde_json::to_string(params)?;
-			let raw_value = serde_json::value::RawValue::from_string(params_json)?;
+			.validate_refund_params(retry_duration, Some(block_hash))
+			.await?;
+		if let Some(params) = dca_parameters.as_ref() {
 			self.base_rpc_api()
-				.request_raw("cf_validate_dca_params", Some(raw_value))
-				.await
-				.map_err(anyhow::Error::msg)?;
+				.validate_dca_params(
+					params.number_of_chunks,
+					params.chunk_interval,
+					Some(block_hash),
+				)
+				.await?;
 		}
 
 		// Encode swap
-		match input_asset {
-			Asset::Btc => {
+		match ForeignChain::from(input_asset) {
+			ForeignChain::Bitcoin => {
 				let params = UtxoEncodedData {
 					output_asset,
 					output_address: output_address
