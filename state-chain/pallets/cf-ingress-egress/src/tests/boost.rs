@@ -46,8 +46,13 @@ fn request_deposit_address(
 	asset: eth::Asset,
 	max_boost_fee: BasisPoints,
 ) -> (u64, H160) {
-	let (channel_id, deposit_address, ..) =
-		IngressEgress::request_liquidity_deposit_address(account_id, asset, max_boost_fee).unwrap();
+	let (channel_id, deposit_address, ..) = IngressEgress::request_liquidity_deposit_address(
+		account_id,
+		asset,
+		max_boost_fee,
+		ForeignChainAddress::Eth(Default::default()),
+	)
+	.unwrap();
 
 	(channel_id, deposit_address.try_into().unwrap())
 }

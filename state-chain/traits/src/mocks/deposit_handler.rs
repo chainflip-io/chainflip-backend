@@ -89,6 +89,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		lp_account: Self::AccountId,
 		source_asset: <C as cf_chains::Chain>::ChainAsset,
 		boost_fee: BasisPoints,
+		_refund_address: ForeignChainAddress,
 	) -> Result<
 		(
 			cf_primitives::ChannelId,
