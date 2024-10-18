@@ -23,7 +23,8 @@ use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
-	CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters, MAX_CCM_ADDITIONAL_DATA_LENGTH
+	CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
+	MAX_CCM_ADDITIONAL_DATA_LENGTH,
 };
 use cf_primitives::{Asset, BasisPoints, DcaParameters, ForeignChain};
 use ethers::prelude::*;

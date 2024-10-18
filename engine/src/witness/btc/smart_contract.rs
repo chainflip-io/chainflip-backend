@@ -77,7 +77,6 @@ fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 type BtcIngressEgressCall =
 	pallet_cf_ingress_egress::Call<state_chain_runtime::Runtime, BitcoinInstance>;
 
-// Currently unused, but will be used by the deposit wintesser:
 pub fn try_extract_contract_call(
 	tx: &VerboseTransaction,
 	vault_address: &DepositAddress,
@@ -135,11 +134,11 @@ pub fn try_extract_contract_call(
 		deposit_amount,
 		destination_address: data.output_address,
 		tx_hash: tx_id,
-		deposit_details: BtcDepositDetails {
+		deposit_details: Box::new(BtcDepositDetails {
 			// we require the deposit to be the first UTXO
 			utxo_id: UtxoId { tx_id: tx_id.into(), vout: 0 },
 			deposit_address: vault_address.clone(),
-		},
+		}),
 		refund_params: Some(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration as u32,
 			refund_address: ForeignChainAddress::Btc(refund_address),
@@ -271,10 +270,10 @@ mod tests {
 				deposit_amount: DEPOSIT_AMOUNT,
 				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
 				tx_hash: tx.hash.to_byte_array(),
-				deposit_details: BtcDepositDetails {
+				deposit_details: Box::new(BtcDepositDetails {
 					utxo_id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
 					deposit_address: vault_deposit_address,
-				},
+				}),
 				refund_params: Some(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),

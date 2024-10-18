@@ -276,7 +276,9 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 					deposit_amount,
 					destination_address,
 					tx_hash,
-					deposit_details: DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) },
+					deposit_details: Box::new(DepositDetails {
+						tx_hashes: Some(vec![tx_hash.into()]),
+					}),
 					boost_fee: boost_fee.unwrap_or_default(),
 					dca_params,
 					refund_params,
