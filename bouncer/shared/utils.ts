@@ -469,7 +469,7 @@ function checkRequestTypeMatches(actual: object | string, expected: SwapRequestT
 export async function observeSwapRequested(
   sourceAsset: Asset,
   destAsset: Asset,
-  channelId: number,
+  id: number | string,
   swapRequestType: SwapRequestType,
 ) {
   // need to await this to prevent the chainflip api from being disposed prematurely
@@ -477,9 +477,12 @@ export async function observeSwapRequested(
     test: (event) => {
       const data = event.data;
 
-      if (typeof data.origin === 'object' && 'DepositChannel' in data.origin) {
+      if (typeof data.origin === 'object') {
         const channelMatches =
-          Number(data.origin.DepositChannel.channelId.replaceAll(',', '')) === channelId;
+          (typeof id === 'number' &&
+            'DepositChannel' in data.origin &&
+            Number(data.origin.DepositChannel.channelId.replaceAll(',', '')) === id) ||
+          (typeof id === 'string' && 'Vault' in data.origin && data.origin.Vault.txHash === id);
         const sourceAssetMatches = sourceAsset === (data.inputAsset as Asset);
         const destAssetMatches = destAsset === (data.outputAsset as Asset);
         const requestTypeMatches = checkRequestTypeMatches(data.requestType, swapRequestType);

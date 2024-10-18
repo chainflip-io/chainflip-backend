@@ -81,11 +81,14 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapviaCont
       historicalCheckBlocks: 10,
     }).event;
   } else {
+    testFillOrKill.log(
+      `Swapping via contract from ${inputAsset} to ${destAsset} with unrealistic min price`,
+    );
     swapHandle = performSwapViaContract(
       inputAsset,
       destAsset,
       destAddress,
-      'test',
+      undefined,
       // Creating CCM metadata because we need a CCM metadata with the current SDK to be able
       // to pass the ccmAdditionalData even if we dont' need it. Then if the gasBudget is
       // very high the swap might fail so we force a lower gasBudget.
@@ -110,7 +113,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapviaCont
     throw new Error(`${inputAsset} swap was executed instead of failing and being refunded`);
   }
 
-  testFillOrKill.log(`FoK ${inputAsset} ${swapviaContract ? ' via contract' : ''} swap refunded`);
+  testFillOrKill.log(`FoK ${inputAsset} ${swapviaContract ? 'via contract' : ''} swap refunded`);
 }
 
 async function main() {
