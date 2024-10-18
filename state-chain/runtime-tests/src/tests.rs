@@ -20,7 +20,7 @@ pub trait RuntimeTest: Default {
 pub mod example;
 
 pub fn run_all(ext: RemoteExternalities<StateChainBlock>) -> anyhow::Result<()> {
-	let block_hash = ext.block_hash;
+	let block_hash = ext.header.hash();
 	let state_version = ext.state_version;
 	let (raw_storage, storage_root) = ext.inner_ext.into_raw_snapshot();
 
@@ -61,11 +61,7 @@ pub fn run_all(ext: RemoteExternalities<StateChainBlock>) -> anyhow::Result<()> 
 			"{:<64}: num_items: {:>7} / total_size: ~{:>3}{}",
 			decription,
 			count,
-			if size < 1_000_000 {
-				size / 1_000
-			} else {
-				size / 1_000_000
-			},
+			if size < 1_000_000 { size / 1_000 } else { size / 1_000_000 },
 			if size < 1_000_000 { "Kb" } else { "Mb" },
 		);
 	}

@@ -6,7 +6,6 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_core::H256;
 use sp_runtime::{
 	traits::{CheckedSub, Dispatchable, UniqueSaturatedInto},
 	BuildStorage, DispatchError, StateVersion,
@@ -149,6 +148,26 @@ where
 	}
 }
 
+impl<Runtime, Ctx> TestExternalities<Runtime, Ctx>
+where
+	Runtime: HasAllPallets + frame_system::Config,
+	Ctx: Clone,
+{
+	pub fn snapshot(mut self) -> Snapshot<Ctx, Runtime::Hash> {
+		self.ext.0.commit_all().expect("Failed to commit storage changes");
+		Snapshot { raw_snapshot: self.ext.0.into_raw_snapshot(), context: self.context.clone() }
+	}
+
+	pub fn from_snapshot(snapshot: Snapshot<Ctx, Runtime::Hash>) -> Self {
+		let ext = sp_state_machine::TestExternalities::from_raw_snapshot(
+			snapshot.raw_snapshot.0,
+			snapshot.raw_snapshot.1,
+			Default::default(),
+		);
+		TestExternalities { ext: RichExternalities::new(ext), context: snapshot.context }
+	}
+}
+
 impl<Runtime> From<sp_state_machine::TestExternalities<Runtime::Hashing>>
 	for TestExternalities<Runtime>
 where
@@ -164,20 +183,6 @@ where
 	Runtime: HasAllPallets,
 	Ctx: Clone,
 {
-	/// Initialises new [TestExternalities] with the given genesis config at block number 1.
-	#[track_caller]
-	pub fn new<GenesisConfig: BuildStorage>(config: GenesisConfig) -> TestExternalities<Runtime> {
-		let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-		ext.execute_with(
-			#[track_caller]
-			|| {
-				frame_system::Pallet::<Runtime>::set_block_number(1u32.into());
-				Runtime::integrity_test();
-			},
-		);
-		TestExternalities { ext: RichExternalities::new(ext), context: () }
-	}
-
 	/// Transforms the test context. Analogous to [std::iter::Iterator::map].
 	///
 	/// Storage is not accessible in this closure. This means that assert_noop! won't work. If
@@ -342,27 +347,13 @@ where
 		assert_ok!(self.ext.0.commit_all());
 		self
 	}
-
-	pub fn snapshot(mut self) -> Snapshot<Ctx> {
-		self.ext.0.commit_all().expect("Failed to commit storage changes");
-		Snapshot { raw_snapshot: self.ext.0.into_raw_snapshot(), context: self.context.clone() }
-	}
-
-	pub fn from_snapshot(snapshot: Snapshot<Ctx>) -> Self {
-		let ext = sp_io::TestExternalities::from_raw_snapshot(
-			snapshot.raw_snapshot.0,
-			snapshot.raw_snapshot.1,
-			Default::default(),
-		);
-		TestExternalities { ext: RichExternalities::new(ext), context: snapshot.context }
-	}
 }
 
-pub type RawSnapshot = (Vec<(Vec<u8>, (Vec<u8>, i32))>, H256);
+pub type RawSnapshot<H> = (Vec<(Vec<u8>, (Vec<u8>, i32))>, H);
 
 #[derive(Clone)]
-pub struct Snapshot<Ctx> {
-	raw_snapshot: RawSnapshot,
+pub struct Snapshot<Ctx, H> {
+	raw_snapshot: RawSnapshot<H>,
 	context: Ctx,
 }
 

@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
 		(None, hashes) => hashes
 			.into_iter()
 			.map(|hash| {
-				Mode::<StateChainBlock>::Offline(OfflineConfig {
+				Mode::<state_chain_runtime::Hash>::Offline(OfflineConfig {
 					state_snapshot: snapshot_file_for_hash(hash),
 				})
 			})
@@ -123,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
 			if snapshot.path == snapshot_file_for_hash(None).path {
 				std::fs::rename(
 					snapshot.path,
-					snapshot_file_for_hash(Some(remote_externalities.block_hash)).path,
+					snapshot_file_for_hash(Some(remote_externalities.header.hash())).path,
 				)?;
 			}
 		}
