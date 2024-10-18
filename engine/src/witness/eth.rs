@@ -252,7 +252,9 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 					deposit_amount,
 					destination_address,
 					tx_hash,
-					deposit_details: DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) },
+					deposit_details: Box::new(DepositDetails {
+						tx_hashes: Some(vec![tx_hash.into()]),
+					}),
 					// TODO: use real parameters when we can decode them
 					boost_fee: 0,
 					dca_params: None,

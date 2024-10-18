@@ -134,11 +134,11 @@ pub fn try_extract_contract_call(
 		deposit_amount,
 		destination_address: data.output_address,
 		tx_hash: tx_id,
-		deposit_details: BtcDepositDetails {
+		deposit_details: Box::new(BtcDepositDetails {
 			// we require the deposit to be the first UTXO
 			utxo_id: UtxoId { tx_id: tx_id.into(), vout: 0 },
 			deposit_address: vault_address.clone(),
-		},
+		}),
 		refund_params: Some(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration as u32,
 			refund_address: ForeignChainAddress::Btc(refund_address),

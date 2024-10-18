@@ -57,6 +57,7 @@ use scale_info::{
 };
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
+	boxed::Box,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	marker::PhantomData,
 	vec,
@@ -1103,7 +1104,7 @@ pub mod pallet {
 			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 			destination_address: EncodedAddress,
 			tx_hash: TransactionHash,
-			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
 			refund_params: Option<ChannelRefundParameters>,
 			dca_params: Option<DcaParameters>,
 			// This is only to be checked in the pre-witnessed version (not implemented yet)
@@ -1123,7 +1124,7 @@ pub mod pallet {
 					},
 				};
 
-			T::DepositHandler::on_deposit_made(deposit_details, deposit_amount);
+			T::DepositHandler::on_deposit_made(*deposit_details, deposit_amount);
 
 			// TODO: ensure minimum deposit?
 
