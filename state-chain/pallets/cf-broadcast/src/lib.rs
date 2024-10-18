@@ -59,7 +59,7 @@ pub enum PalletConfigUpdate {
 	BroadcastTimeout { blocks: u32 },
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(10);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -1033,6 +1033,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// NOTE: decode_non_dedup_len is correct here only as long as we *don't* use `append` to
 		// insert items.
 		FailedBroadcasters::<T, I>::decode_non_dedup_len(broadcast_id).unwrap_or_default() as u32
+	}
+
+	/// Returns the ApiCall from a `transaction_out_id`.
+	pub fn pending_api_call_from_out_id(
+		tx_out_id: TransactionOutIdFor<T, I>,
+	) -> Option<(BroadcastId, ApiCallFor<T, I>)> {
+		TransactionOutIdToBroadcastId::<T, I>::get(tx_out_id).and_then(|(broadcast_id, _)| {
+			PendingApiCalls::<T, I>::get(broadcast_id).map(|api_call| (broadcast_id, api_call))
+		})
 	}
 }
 
