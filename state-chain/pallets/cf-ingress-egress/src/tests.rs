@@ -6,8 +6,8 @@ use crate::{
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject, TaintedTransactions,
-	TAINTED_TX_EXPIRATION_BLOCKS,
+	RejectingStatus, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject,
+	TaintedTransactions, TAINTED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -2200,7 +2200,11 @@ fn ignore_boosted_channels_if_tainted() {
 
 		let deposit_witnesses = vec![deposit_witness];
 		let _ = IngressEgress::add_prewitnessed_deposits(deposit_witnesses, 10);
-		TaintedTransactions::<Test, ()>::insert(BROKER, tx_id.clone(), ());
+		TaintedTransactions::<Test, ()>::insert(
+			BROKER,
+			tx_id.clone(),
+			RejectingStatus::NotYetMarked,
+		);
 
 		assert_ok!(IngressEgress::process_single_deposit(
 			address,
