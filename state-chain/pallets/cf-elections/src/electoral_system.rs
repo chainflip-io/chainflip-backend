@@ -118,7 +118,6 @@ pub trait ElectoralSystem: 'static + Sized {
 	/// to vote in a given Election. Validators are expected to call this indirectly via RPC once
 	/// per state-chain block, for each active election.
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier_with_extra: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
 		current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
@@ -155,8 +154,7 @@ pub trait ElectoralSystem: 'static + Sized {
 
 	/// This is called during the pallet's `on_finalize` callback, if elections aren't paused and
 	/// the CorruptStorage error hasn't occurred.
-	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
+	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
 		context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError>;
@@ -168,10 +166,8 @@ pub trait ElectoralSystem: 'static + Sized {
 	/// You should *NEVER* update the epoch during this call. And in general updating any other
 	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
 	/// function.
-	#[allow(clippy::type_complexity)]
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		election_identifier: ElectionIdentifierOf<Self>,
-		electoral_access: &ElectionAccess,
+		election_access: &ElectionAccess,
 		// This is the consensus as of the last time the consensus was checked. Note this is *NOT*
 		// the "last" consensus, i.e. this can be `None` even if on some previous check we had
 		// consensus, but it was subsequently lost.
@@ -291,10 +287,7 @@ mod access {
 			&self,
 		) -> Result<<Self::ElectoralSystem as ElectoralSystem>::ElectionState, CorruptStorageError>;
 
-		#[cfg(test)]
-		fn election_identifier(
-			&self,
-		) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError>;
+		fn election_identifier(&self) -> ElectionIdentifierOf<Self::ElectoralSystem>;
 	}
 
 	/// A trait allowing write access to the details about a single election
@@ -304,10 +297,10 @@ mod access {
 		/// to ensure that in situations where `check_consensus` depends on the `state` that we will
 		/// correctly recalculate the consensus if needed.
 		fn set_state(
-			&mut self,
+			&self,
 			state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
 		) -> Result<(), CorruptStorageError>;
-		fn clear_votes(&mut self);
+		fn clear_votes(&self);
 		fn delete(self);
 		/// This will change the `ElectionIdentifierExtra` value of the election, and allows you to
 		/// optionally change the properties. Note the `extra` must be strictly greater than the
@@ -322,7 +315,7 @@ mod access {
 		/// will be invalidated by this.
 		fn refresh(
 			&mut self,
-			extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
+			new_extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
 			properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
 		) -> Result<(), CorruptStorageError>;
 
@@ -330,7 +323,7 @@ mod access {
 		/// votes/state. This also returns information about the difference in the consensus between
 		/// the last call to `check_consensus`.
 		fn check_consensus(
-			&mut self,
+			&self,
 		) -> Result<
 			ConsensusStatus<<Self::ElectoralSystem as ElectoralSystem>::Consensus>,
 			CorruptStorageError,
@@ -340,28 +333,18 @@ mod access {
 	/// A trait allowing read access to the details about the electoral system and its elections
 	pub trait ElectoralReadAccess {
 		type ElectoralSystem: ElectoralSystem;
-		type ElectionReadAccess<'a>: ElectionReadAccess<ElectoralSystem = Self::ElectoralSystem>
-		where
-			Self: 'a;
+		type ElectionReadAccess: ElectionReadAccess<ElectoralSystem = Self::ElectoralSystem>;
 
-		fn election(
-			&self,
-			id: ElectionIdentifierOf<Self::ElectoralSystem>,
-		) -> Result<Self::ElectionReadAccess<'_>, CorruptStorageError>;
-		fn unsynchronised_settings(
-			&self,
-		) -> Result<
+		fn election(id: ElectionIdentifierOf<Self::ElectoralSystem>) -> Self::ElectionReadAccess;
+		fn unsynchronised_settings() -> Result<
 			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
 			CorruptStorageError,
 		>;
-		fn unsynchronised_state(
-			&self,
-		) -> Result<
+		fn unsynchronised_state() -> Result<
 			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 			CorruptStorageError,
 		>;
 		fn unsynchronised_state_map(
-			&self,
 			key: &<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
 		) -> Result<
 			Option<
@@ -373,28 +356,22 @@ mod access {
 
 	/// A trait allowing write access to the details about the electoral system and its elections
 	pub trait ElectoralWriteAccess: ElectoralReadAccess {
-		type ElectionWriteAccess<'a>: ElectionWriteAccess<ElectoralSystem = Self::ElectoralSystem>
-		where
-			Self: 'a;
+		type ElectionWriteAccess: ElectionWriteAccess<ElectoralSystem = Self::ElectoralSystem>;
 
 		fn new_election(
-			&mut self,
 			extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
 			properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
 			state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
-		) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError>;
+		) -> Result<Self::ElectionWriteAccess, CorruptStorageError>;
 		fn election_mut(
-			&mut self,
 			id: ElectionIdentifierOf<Self::ElectoralSystem>,
-		) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError>;
+		) -> Self::ElectionWriteAccess;
 		fn set_unsynchronised_state(
-			&mut self,
 			unsynchronised_state: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 		) -> Result<(), CorruptStorageError>;
 
 		/// Inserts or removes a value from the unsynchronised state map of the electoral system.
 		fn set_unsynchronised_state_map(
-			&mut self,
 			key: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
 			value: Option<
 				<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
@@ -408,16 +385,14 @@ mod access {
 		fn mutate_unsynchronised_state<
 			T,
 			F: for<'a> FnOnce(
-				&mut Self,
 				&'a mut <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 			) -> Result<T, CorruptStorageError>,
 		>(
-			&mut self,
 			f: F,
 		) -> Result<T, CorruptStorageError> {
-			let mut unsynchronised_state = self.unsynchronised_state()?;
-			let t = f(self, &mut unsynchronised_state)?;
-			self.set_unsynchronised_state(unsynchronised_state)?;
+			let mut unsynchronised_state = Self::unsynchronised_state()?;
+			let t = f(&mut unsynchronised_state)?;
+			Self::set_unsynchronised_state(unsynchronised_state)?;
 			Ok(t)
 		}
 	}

@@ -108,6 +108,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 pub mod electoral_system;
+pub mod electoral_system_runner;
 pub mod electoral_systems;
 mod mock;
 mod tests;
@@ -136,14 +137,18 @@ pub mod pallet {
 	use cf_primitives::{AuthorityCount, EpochIndex};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
 
-	use crate::electoral_system::{ConsensusVote, ConsensusVotes};
-	use access_impls::{ElectionAccess, ElectoralAccess};
+	use crate::electoral_system::ConsensusStatus;
+	pub use access_impls::RunnerStorageAccess;
+
+	use crate::electoral_system_runner::{
+		CompositeConsensusVote, CompositeConsensusVotes, RunnerStorageAccessTrait,
+	};
 	use bitmap_components::ElectionBitmapComponents;
-	use electoral_system::{
-		AuthorityVoteOf, ConsensusStatus, ElectionIdentifierOf, ElectionReadAccess,
-		ElectionWriteAccess, ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess,
+	pub use electoral_system_runner::{
+		AuthorityVoteOf, CompositeElectionIdentifierOf, ElectoralSystemRunner,
 		IndividualComponentOf, VotePropertiesOf,
 	};
+
 	use frame_support::{
 		sp_runtime::traits::BlockNumberProvider, storage::bounded_btree_map::BoundedBTreeMap,
 		Deserialize, Serialize, StorageDoubleMap as _,
@@ -184,10 +189,10 @@ pub mod pallet {
 	/// when to vote.
 	#[allow(type_alias_bounds)]
 	pub type ElectoralDataFor<T: Config<I>, I: 'static> = ElectoralData<
-		ElectionIdentifierOf<T::ElectoralSystem>,
-		<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
-		<T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
-		AuthorityVoteOf<T::ElectoralSystem>,
+		CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
+		AuthorityVoteOf<T::ElectoralSystemRunner>,
 		BlockNumberFor<T>,
 	>;
 
@@ -315,9 +320,9 @@ pub mod pallet {
 
 	#[allow(type_alias_bounds)]
 	pub type InitialStateOf<T: Config<I>, I: 'static> = InitialState<
-		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
-		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
-		<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedSettings,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
 	>;
 
 	#[pallet::genesis_config]
@@ -354,8 +359,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		type ElectoralSystem: ElectoralSystem<
-			OnFinalizeContext = (),
+		type ElectoralSystemRunner: ElectoralSystemRunner<
 			ValidatorId = <Self as Chainflip>::ValidatorId,
 		>;
 
@@ -441,7 +445,7 @@ pub mod pallet {
 		_,
 		Identity,
 		SharedDataHash,
-		<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData,
+		<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::SharedData,
 		OptionQuery,
 	>;
 
@@ -464,10 +468,15 @@ pub mod pallet {
 		UniqueMonotonicIdentifier,
 		Identity,
 		T::ValidatorId,
-		(VotePropertiesOf<T::ElectoralSystem>, IndividualComponentOf<T::ElectoralSystem>),
+		(
+			VotePropertiesOf<T::ElectoralSystemRunner>,
+			IndividualComponentOf<T::ElectoralSystemRunner>,
+		),
 		OptionQuery,
 	>;
 
+	// TODO: rename this storage item to be specific to umi.
+	// election identifier is used elsewhere to mean umi + extra.
 	/// Stores the next valid election identifier.
 	#[pallet::storage]
 	pub(crate) type NextElectionIdentifier<T: Config<I>, I: 'static = ()> =
@@ -478,7 +487,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type ElectoralUnsynchronisedSettings<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
-		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedSettings,
 		OptionQuery,
 	>;
 
@@ -486,7 +495,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type ElectoralUnsynchronisedState<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
-		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
 		OptionQuery,
 	>;
 
@@ -495,8 +504,8 @@ pub mod pallet {
 	type ElectoralUnsynchronisedStateMap<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
-		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
-		<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
 		OptionQuery,
 	>;
 
@@ -507,7 +516,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
-		<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
 		OptionQuery,
 	>;
 
@@ -517,8 +526,8 @@ pub mod pallet {
 	type ElectionProperties<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
-		ElectionIdentifierOf<T::ElectoralSystem>,
-		<T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+		CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 		OptionQuery,
 	>;
 
@@ -528,19 +537,19 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
-		<T::ElectoralSystem as ElectoralSystem>::ElectionState,
+		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
 		OptionQuery,
 	>;
 
 	/// Stores the most recent consensus, i.e. the most recent result of
-	/// `ElectoralSystem::check_consensus` that returned `Some(...)`, and whether it is `current` /
-	/// has not been `lost` since.
+	/// `ElectoralSystemRunner::check_consensus` that returned `Some(...)`, and whether it is
+	/// `current` / has not been `lost` since.
 	#[pallet::storage]
 	type ElectionConsensusHistory<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
-		ConsensusHistory<<T::ElectoralSystem as ElectoralSystem>::Consensus>,
+		ConsensusHistory<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus>,
 		OptionQuery,
 	>;
 
@@ -581,30 +590,44 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	pub mod access_impls {
+	pub(crate) mod access_impls {
+		use electoral_system_runner::RunnerStorageAccessTrait;
+
 		use super::*;
 
-		/// Implements traits to allow electoral systems to read/write an Election's details.
-		pub struct ElectionAccess<T: Config<I>, I: 'static> {
-			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
+		// Provides access to the storage layer in a controlled, and consistent way.
+		pub struct RunnerStorageAccess<T: Config<I>, I: 'static> {
 			_phantom: core::marker::PhantomData<(T, I)>,
 		}
-		impl<T: Config<I>, I: 'static> ElectionAccess<T, I> {
-			pub fn new(election_identifier: ElectionIdentifierOf<T::ElectoralSystem>) -> Self {
-				Self { election_identifier, _phantom: Default::default() }
-			}
 
-			pub(crate) fn unique_monotonic_identifier(&self) -> UniqueMonotonicIdentifier {
-				*self.election_identifier.unique_monotonic()
-			}
-		}
-		impl<T: Config<I>, I: 'static> ElectionReadAccess for ElectionAccess<T, I> {
-			type ElectoralSystem = T::ElectoralSystem;
+		impl<T: Config<I>, I: 'static> RunnerStorageAccessTrait for RunnerStorageAccess<T, I> {
+			type ElectoralSystemRunner = T::ElectoralSystemRunner;
 
-			fn settings(
-				&self,
+			fn new_election(
+				extra: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionIdentifierExtra,
+				properties: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
+				state: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
 			) -> Result<
-				<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
+				CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
+				CorruptStorageError,
+			> {
+				let unique_monotonic_identifier = NextElectionIdentifier::<T, I>::get();
+				let election_identifier = ElectionIdentifier(unique_monotonic_identifier, extra);
+				NextElectionIdentifier::<T, I>::set(UniqueMonotonicIdentifier(
+					unique_monotonic_identifier
+						.0
+						.checked_add(1)
+						.ok_or_else(CorruptStorageError::new)?,
+				));
+				ElectionProperties::<T, I>::insert(election_identifier, properties);
+				ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
+				Ok(election_identifier)
+			}
+
+			fn electoral_settings_for_election(
+				unique_monotonic_identifier: UniqueMonotonicIdentifier,
+			) -> Result<
+				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
 				CorruptStorageError,
 			> {
 				let mut settings_boundaries =
@@ -613,93 +636,90 @@ pub mod pallet {
 				let settings_boundary = settings_boundaries
 					.iter()
 					.rev()
-					.find(|settings_boundary| {
-						**settings_boundary <= self.unique_monotonic_identifier()
-					})
+					.find(|settings_boundary| **settings_boundary <= unique_monotonic_identifier)
 					.ok_or_else(CorruptStorageError::new)?;
 				ElectoralSettings::<T, I>::get(settings_boundary)
 					.ok_or_else(CorruptStorageError::new)
 			}
-			fn properties(
-				&self,
+			fn election_properties(
+				election_identifier: CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
 			) -> Result<
-				<T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 				CorruptStorageError,
 			> {
-				ElectionProperties::<T, I>::get(self.election_identifier)
+				ElectionProperties::<T, I>::get(election_identifier)
 					.ok_or_else(CorruptStorageError::new)
 			}
-			fn state(
-				&self,
-			) -> Result<<T::ElectoralSystem as ElectoralSystem>::ElectionState, CorruptStorageError>
-			{
-				ElectionState::<T, I>::get(self.unique_monotonic_identifier())
+			fn election_state(
+				unique_monotonic_identifier: UniqueMonotonicIdentifier,
+			) -> Result<
+				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
+				CorruptStorageError,
+			> {
+				ElectionState::<T, I>::get(unique_monotonic_identifier)
 					.ok_or_else(CorruptStorageError::new)
 			}
-			#[cfg(test)]
-			fn election_identifier(
-				&self,
-			) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError> {
-				Ok(self.election_identifier)
-			}
-		}
-		impl<T: Config<I>, I: 'static> ElectionWriteAccess for ElectionAccess<T, I> {
-			fn set_state(
-				&mut self,
-				state: <T::ElectoralSystem as ElectoralSystem>::ElectionState,
+
+			fn set_election_state(
+				unique_monotonic_identifier: UniqueMonotonicIdentifier,
+				state: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionState,
 			) -> Result<(), CorruptStorageError> {
-				if self.state()? != state {
-					ElectionState::<T, I>::insert(self.unique_monotonic_identifier(), state);
-					ElectionConsensusHistoryUpToDate::<T, I>::remove(
-						self.unique_monotonic_identifier(),
-					);
+				if Self::election_state(unique_monotonic_identifier)? != state {
+					ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
+					ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
 				}
 
 				Ok(())
 			}
-			fn clear_votes(&mut self) {
-				let unique_monotonic_identifier = self.unique_monotonic_identifier();
+			fn clear_election_votes(unique_monotonic_identifier: UniqueMonotonicIdentifier) {
 				ElectionBitmapComponents::<T, I>::clear(unique_monotonic_identifier);
 				for (_, (_, individual_component)) in
 					IndividualComponents::<T, I>::drain_prefix(unique_monotonic_identifier)
 				{
-					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_individual_component(&individual_component, |shared_data_hash| {
-						Pallet::<T, I>::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier);
+					<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as
+				VoteStorage>::visit_shared_data_references_in_individual_component(&
+				individual_component, |shared_data_hash| { 		Pallet::<T,
+				I>::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier);
 					});
 				}
 				ElectionConsensusHistoryUpToDate::<T, I>::remove(unique_monotonic_identifier);
 			}
-			fn delete(mut self) {
-				self.clear_votes();
-				ElectionProperties::<T, I>::remove(self.election_identifier);
-				let unique_monotonic_identifier = self.unique_monotonic_identifier();
+			fn delete_election(
+				composite_election_identifier: CompositeElectionIdentifierOf<
+					Self::ElectoralSystemRunner,
+				>,
+			) {
+				let unique_monotonic_identifier = composite_election_identifier.unique_monotonic();
+				Self::clear_election_votes(*unique_monotonic_identifier);
+				ElectionProperties::<T, I>::remove(composite_election_identifier);
 				ElectionState::<T, I>::remove(unique_monotonic_identifier);
 				ElectionConsensusHistory::<T, I>::remove(unique_monotonic_identifier);
 			}
-			fn refresh(
-				&mut self,
-				extra: <T::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
-				properties: <T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
+
+			fn refresh_election(
+				election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
+				new_extra: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionIdentifierExtra,
+				properties: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 			) -> Result<(), CorruptStorageError> {
-				if extra <= *self.election_identifier.extra() {
+				if new_extra <= *election_identifier.extra() {
 					Err(CorruptStorageError::new())
 				} else {
-					ElectionProperties::<T, I>::remove(self.election_identifier);
-					self.election_identifier =
-						ElectionIdentifier::new(self.unique_monotonic_identifier(), extra);
-					ElectionProperties::<T, I>::insert(self.election_identifier, properties);
+					ElectionProperties::<T, I>::remove(election_identifier);
+					let new_election_identifier =
+						ElectionIdentifier::new(*election_identifier.unique_monotonic(), new_extra);
+					ElectionProperties::<T, I>::insert(new_election_identifier, properties);
 					Ok(())
 				}
 			}
 
-			fn check_consensus(
-				&mut self,
+			fn check_election_consensus(
+				election_identifier: CompositeElectionIdentifierOf<Self::ElectoralSystemRunner>,
 			) -> Result<
-				ConsensusStatus<<T::ElectoralSystem as ElectoralSystem>::Consensus>,
+				ConsensusStatus<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Consensus>,
 				CorruptStorageError,
 			> {
 				let epoch_index = T::EpochInfo::epoch_index();
-				let unique_monotonic_identifier = self.unique_monotonic_identifier();
+				let unique_monotonic_identifier = election_identifier.unique_monotonic();
 				let option_consensus_history =
 					ElectionConsensusHistory::<T, I>::get(unique_monotonic_identifier);
 				Ok(
@@ -720,7 +740,7 @@ pub mod pallet {
 
 						let bitmap_components = ElectionBitmapComponents::<T, I>::with(
 							epoch_index,
-							unique_monotonic_identifier,
+							*unique_monotonic_identifier,
 							|election_bitmap_components| {
 								election_bitmap_components.get_all(&current_authorities)
 							},
@@ -729,45 +749,56 @@ pub mod pallet {
 							IndividualComponents::<T, I>::iter_prefix(unique_monotonic_identifier)
 								.collect::<BTreeMap<_, _>>();
 
-						let votes = current_authorities.into_iter().map(|validator_id|
-							(
-								VoteComponents {
-									bitmap_component: bitmap_components.get(&validator_id).cloned(),
-									individual_component: individual_components.remove(&validator_id),
-								},
-								validator_id,
-							)
-						).map(|(vote_components, validator_id)| {
-							if ContributingAuthorities::<T, I>::contains_key(&validator_id) {
-								match <<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash| {
-									// We don't bother to check if the reference has expired, as if we have the data we may as well use it, even if it was provided after the shared data reference expired (But before the reference was cleaned up `on_finalize`).
+						let votes = current_authorities
+							.into_iter()
+							.map(|validator_id| {
+								(
+									VoteComponents {
+										bitmap_component: bitmap_components
+											.get(&validator_id)
+											.cloned(),
+										individual_component: individual_components
+											.remove(&validator_id),
+									},
+									validator_id,
+								)
+							})
+							.map(|(vote_components, validator_id)| {
+								if ContributingAuthorities::<T, I>::contains_key(&validator_id) {
+									match <<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as
+								VoteStorage>::components_into_authority_vote(vote_components, |shared_data_hash|
+							{
+								 	// We don't bother to check if the reference has expired, as if we have the
+									// data we may as well use it, even if it was provided after the shared data
+									// reference expired (But before the reference was cleaned up `on_finalize`).
 									Ok(SharedData::<T, I>::get(shared_data_hash))
 								}) {
 									// Only a full vote can count towards consensus.
-									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties, vote))),
-									Ok(Some((_properties, AuthorityVote::PartialVote(_)))) => Ok(None),
+									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties,
+				vote))), 					Ok(Some((_properties, AuthorityVote::PartialVote(_)))) => Ok(None),
 									Ok(None) => Ok(None),
 									Err(e) => Err(e),
 								}
-							} else {
-								Ok(None)
-							}.map(|props_and_vote|
-								ConsensusVote {
-									vote: props_and_vote,
-									validator_id
+								} else {
+									Ok(None)
 								}
-							)
-						}).collect::<Result<Vec<_>, _>>()?;
+								.map(|props_and_vote| CompositeConsensusVote {
+									vote: props_and_vote,
+									validator_id,
+								})
+							})
+							.collect::<Result<Vec<_>, _>>()?;
 
 						debug_assert!(votes.len() == current_authorities_count as usize);
 
 						// Remove individual components from non-authorities
 						for (validator_id, (_, individual_component)) in individual_components {
-							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_individual_component(
+							<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as
+				VoteStorage>::visit_shared_data_references_in_individual_component(
 								&individual_component,
 								|shared_data_hash| {
-									Pallet::<T, I>::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier);
-								},
+									Pallet::<T, I>::remove_shared_data_reference(shared_data_hash,
+				*unique_monotonic_identifier); 				},
 							);
 							IndividualComponents::<T, I>::remove(
 								unique_monotonic_identifier,
@@ -776,9 +807,8 @@ pub mod pallet {
 						}
 
 						let option_new_consensus =
-							<T::ElectoralSystem as ElectoralSystem>::check_consensus(
-								self.election_identifier,
-								&*self, /* Disallow recursive calls to this function */
+							<T::ElectoralSystemRunner as ElectoralSystemRunner>::check_consensus(
+								election_identifier,
 								option_consensus_history.as_ref().and_then(|consensus_history| {
 									if consensus_history.lost_since {
 										None
@@ -786,7 +816,7 @@ pub mod pallet {
 										Some(&consensus_history.most_recent)
 									}
 								}),
-								ConsensusVotes { votes },
+								CompositeConsensusVotes { votes },
 							)?;
 
 						ElectionConsensusHistory::<T, I>::set(
@@ -838,99 +868,44 @@ pub mod pallet {
 					},
 				)
 			}
-		}
-
-		/// Implements traits to allow election systems to read/write multiple Election's details.
-		pub struct ElectoralAccess<T: Config<I>, I: 'static> {
-			_phantom: core::marker::PhantomData<(T, I)>,
-		}
-		impl<T: Config<I>, I: 'static> ElectoralAccess<T, I> {
-			pub(super) fn new() -> Self {
-				Self { _phantom: Default::default() }
-			}
-		}
-		impl<T: Config<I>, I: 'static> ElectoralReadAccess for ElectoralAccess<T, I> {
-			type ElectoralSystem = T::ElectoralSystem;
-			type ElectionReadAccess<'a> = ElectionAccess<T, I>;
-
-			fn election(
-				&self,
-				id: ElectionIdentifierOf<T::ElectoralSystem>,
-			) -> Result<Self::ElectionReadAccess<'_>, CorruptStorageError> {
-				Ok(ElectionAccess::new(id))
-			}
 
 			fn unsynchronised_settings(
-				&self,
 			) -> Result<
-				<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
+				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedSettings,
 				CorruptStorageError,
-			> {
+			>{
 				ElectoralUnsynchronisedSettings::<T, I>::get().ok_or_else(CorruptStorageError::new)
 			}
 
-			fn unsynchronised_state(
-				&self,
-			) -> Result<
-				<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+			fn unsynchronised_state() -> Result<
+				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
 				CorruptStorageError,
 			> {
 				ElectoralUnsynchronisedState::<T, I>::get().ok_or_else(CorruptStorageError::new)
 			}
 
 			fn unsynchronised_state_map(
-				&self,
-				key: &<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
+				key: &<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
 			) -> Result<
 				Option<
-					<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
+					<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
 				>,
 				CorruptStorageError,
-			> {
+			>{
 				Ok(ElectoralUnsynchronisedStateMap::<T, I>::get(key))
-			}
-		}
-		impl<T: Config<I>, I: 'static> ElectoralWriteAccess for ElectoralAccess<T, I> {
-			type ElectionWriteAccess<'a> = ElectionAccess<T, I>;
-
-			fn new_election(
-				&mut self,
-				extra: <T::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
-				properties: <T::ElectoralSystem as ElectoralSystem>::ElectionProperties,
-				state: <T::ElectoralSystem as ElectoralSystem>::ElectionState,
-			) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
-				let unique_monotonic_identifier = NextElectionIdentifier::<T, I>::get();
-				let election_identifier = ElectionIdentifier(unique_monotonic_identifier, extra);
-				NextElectionIdentifier::<T, I>::set(UniqueMonotonicIdentifier(
-					unique_monotonic_identifier
-						.0
-						.checked_add(1)
-						.ok_or_else(CorruptStorageError::new)?,
-				));
-				ElectionProperties::<T, I>::insert(election_identifier, properties);
-				ElectionState::<T, I>::insert(unique_monotonic_identifier, state);
-				self.election_mut(election_identifier)
-			}
-			fn election_mut(
-				&mut self,
-				id: ElectionIdentifierOf<T::ElectoralSystem>,
-			) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
-				Ok(ElectionAccess::new(id))
 			}
 
 			fn set_unsynchronised_state(
-				&mut self,
-				unsynchronised_state: <T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
+				unsynchronised_state: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
 			) -> Result<(), CorruptStorageError> {
 				ElectoralUnsynchronisedState::<T, I>::put(unsynchronised_state);
 				Ok(())
 			}
 
 			fn set_unsynchronised_state_map(
-				&mut self,
-				key: <T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
+				key: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
 				value: Option<
-					<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
+					<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
 				>,
 			) -> Result<(), CorruptStorageError> {
 				ElectoralUnsynchronisedStateMap::<T, I>::set(key, value);
@@ -946,7 +921,7 @@ pub mod pallet {
 			BitmapComponents, Config, CorruptStorageError, Pallet, UniqueMonotonicIdentifier,
 		};
 		use crate::{
-			electoral_system::{BitmapComponentOf, ElectoralSystem},
+			electoral_system_runner::{BitmapComponentOf, ElectoralSystemRunner},
 			vote_storage::VoteStorage,
 		};
 		use bitvec::prelude::*;
@@ -962,7 +937,8 @@ pub mod pallet {
 		pub(crate) struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
 			epoch: EpochIndex,
 			#[allow(clippy::type_complexity)]
-			bitmaps: Vec<(BitmapComponentOf<T::ElectoralSystem>, BitVec<u8, bitvec::order::Lsb0>)>,
+			bitmaps:
+				Vec<(BitmapComponentOf<T::ElectoralSystemRunner>, BitVec<u8, bitvec::order::Lsb0>)>,
 			#[codec(skip)]
 			_phantom: core::marker::PhantomData<(T, I)>,
 		}
@@ -1070,7 +1046,7 @@ pub mod pallet {
 					this.bitmaps.retain(|(bitmap_component, bitmap)| {
 						let retain = bitmap.any();
 						if !retain {
-							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
+							<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
 								bitmap_component,
 								|shared_data_hash| {
 									Pallet::<T, I>::remove_shared_data_reference(
@@ -1117,7 +1093,7 @@ pub mod pallet {
 			pub(super) fn add(
 				&mut self,
 				authority_index: AuthorityCount,
-				bitmap_component: BitmapComponentOf<T::ElectoralSystem>,
+				bitmap_component: BitmapComponentOf<T::ElectoralSystemRunner>,
 				unique_monotonic_identifier: UniqueMonotonicIdentifier,
 				block_number: BlockNumberFor<T>,
 			) -> Result<(), CorruptStorageError> {
@@ -1140,7 +1116,7 @@ pub mod pallet {
 							true;
 						bitmap
 					}));
-					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
+					<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
 						&bitmap_component,
 						|shared_data_hash| {
 							Pallet::<T, I>::add_shared_data_reference(
@@ -1158,7 +1134,8 @@ pub mod pallet {
 			pub(super) fn take(
 				&mut self,
 				authority_index: AuthorityCount,
-			) -> Result<Option<BitmapComponentOf<T::ElectoralSystem>>, CorruptStorageError> {
+			) -> Result<Option<BitmapComponentOf<T::ElectoralSystemRunner>>, CorruptStorageError>
+			{
 				let authority_index = authority_index as usize;
 				Ok(self
 					.bitmaps
@@ -1175,7 +1152,8 @@ pub mod pallet {
 			pub(super) fn get(
 				&self,
 				authority_index: AuthorityCount,
-			) -> Result<Option<BitmapComponentOf<T::ElectoralSystem>>, CorruptStorageError> {
+			) -> Result<Option<BitmapComponentOf<T::ElectoralSystemRunner>>, CorruptStorageError>
+			{
 				Ok(self
 					.bitmaps
 					.iter()
@@ -1191,7 +1169,7 @@ pub mod pallet {
 				&self,
 				current_authorities: &[T::ValidatorId],
 			) -> Result<
-				BTreeMap<T::ValidatorId, BitmapComponentOf<T::ElectoralSystem>>,
+				BTreeMap<T::ValidatorId, BitmapComponentOf<T::ElectoralSystemRunner>>,
 				CorruptStorageError,
 			> {
 				self.debug_assert_authorities_in_order_of_indices(current_authorities);
@@ -1211,7 +1189,7 @@ pub mod pallet {
 			pub(super) fn clear(unique_monotonic_identifier: UniqueMonotonicIdentifier) {
 				if let Some(this) = BitmapComponents::<T, I>::get(unique_monotonic_identifier) {
 					for (bitmap_component, _) in this.bitmaps {
-						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
+						<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
 							&bitmap_component,
 							|shared_data_hash| {
 								Pallet::<T, I>::remove_shared_data_reference(
@@ -1244,11 +1222,13 @@ pub mod pallet {
 		pub fn vote(
 			origin: OriginFor<T>,
 			authority_votes: BoundedBTreeMap<
-				ElectionIdentifierOf<T::ElectoralSystem>,
-				AuthorityVoteOf<T::ElectoralSystem>,
+				CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
+				AuthorityVoteOf<T::ElectoralSystemRunner>,
 				ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
 			>,
 		) -> DispatchResult {
+			Self::ensure_initialized()?;
+
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
 			ensure!(!authority_votes.is_empty(), Error::<T, I>::NoVotesSpecified);
@@ -1267,7 +1247,7 @@ pub mod pallet {
 					},
 					AuthorityVote::Vote(vote) => {
 						(
-							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
+							<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::vote_into_partial_vote(
 								&vote,
 								|shared_data| SharedDataHash::of(&shared_data)
 							),
@@ -1282,8 +1262,8 @@ pub mod pallet {
 					&authority,
 					authority_index,
 					|option_existing_vote, election_bitmap_components| {
-						let components = <<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::partial_vote_into_components(
-							<T::ElectoralSystem as ElectoralSystem>::generate_vote_properties(
+						let components = <<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::partial_vote_into_components(
+							<T::ElectoralSystemRunner as ElectoralSystemRunner>::generate_vote_properties(
 								election_identifier,
 								option_existing_vote,
 								&partial_vote,
@@ -1305,7 +1285,7 @@ pub mod pallet {
 							components.individual_component
 						{
 							// Update shared data reference counts
-							<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_individual_component(
+							<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::visit_shared_data_references_in_individual_component(
 								&individual_component,
 								|shared_data_hash| Self::add_shared_data_reference(shared_data_hash, unique_monotonic_identifier, block_number),
 							);
@@ -1323,7 +1303,7 @@ pub mod pallet {
 
 				// Insert any `SharedData` provided as part of the `Vote`.
 				if let Some(vote) = option_vote {
-					<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_in_vote(
+					<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::visit_shared_data_in_vote(
 						vote,
 						|shared_data| Self::inner_provide_shared_data(shared_data),
 					)
@@ -1345,7 +1325,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::provide_shared_data())]
 		pub fn provide_shared_data(
 			origin: OriginFor<T>,
-			shared_data: <<T::ElectoralSystem as electoral_system::ElectoralSystem>::Vote as VoteStorage>::SharedData,
+			shared_data: <<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::SharedData,
 		) -> DispatchResult {
 			Self::ensure_can_vote(origin)?;
 			Self::inner_provide_shared_data(shared_data)?;
@@ -1381,7 +1361,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::delete_vote())]
 		pub fn delete_vote(
 			origin: OriginFor<T>,
-			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
+			election_identifier: CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
 		) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 			let unique_monotonic_identifier = Self::ensure_election_exists(election_identifier)?;
@@ -1414,9 +1394,11 @@ pub mod pallet {
 		pub fn update_settings(
 			origin: OriginFor<T>,
 			unsynchronised_settings: Option<
-				<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
+				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedSettings,
 			>,
-			settings: Option<<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings>,
+			settings: Option<
+				<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
+			>,
 			ignore_corrupt_storage: CorruptStorageAdherance,
 		) -> DispatchResult {
 			Self::ensure_governance(origin, ignore_corrupt_storage)?;
@@ -1452,7 +1434,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::clear_election_votes())]
 		pub fn clear_election_votes(
 			origin: OriginFor<T>,
-			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
+			election_identifier: CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
 			ignore_corrupt_storage: CorruptStorageAdherance,
 			check_election_exists: bool,
 		) -> DispatchResult {
@@ -1461,7 +1443,9 @@ pub mod pallet {
 				Self::ensure_election_exists(election_identifier)?;
 			}
 
-			ElectionAccess::<T, I>::new(election_identifier).clear_votes();
+			RunnerStorageAccess::<T, I>::clear_election_votes(
+				*election_identifier.unique_monotonic(),
+			);
 
 			Ok(())
 		}
@@ -1470,7 +1454,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::invalidate_election_consensus_cache())]
 		pub fn invalidate_election_consensus_cache(
 			origin: OriginFor<T>,
-			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
+			election_identifier: CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
 			ignore_corrupt_storage: CorruptStorageAdherance,
 			check_election_exists: bool,
 		) -> DispatchResult {
@@ -1598,51 +1582,45 @@ pub mod pallet {
 							Self::deposit_event(Event::<T, I>::CorruptStorage);
 						},
 					ElectionPalletStatus::Running => {
-						let _ = Self::with_electoral_access_and_identifiers(
-							|electoral_access, election_identifiers| {
-								if Into::<sp_core::U256>::into(block_number) %
-									BLOCKS_BETWEEN_CLEANUP == sp_core::U256::zero()
-								{
-									let minimum_election_identifiers = election_identifiers
-										.iter()
-										.copied()
-										.map(|election_identifier| {
-											*election_identifier.unique_monotonic()
-										})
-										.min()
-										.unwrap_or_default();
-									let mut settings_boundaries =
-										ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
-									settings_boundaries.sort();
-									for setting_boundary in &settings_boundaries
+						let _ = Self::with_election_identifiers(|election_identifiers| {
+							if Into::<sp_core::U256>::into(block_number) % BLOCKS_BETWEEN_CLEANUP ==
+								sp_core::U256::zero()
+							{
+								let minimum_election_identifiers = election_identifiers
+									.iter()
+									.copied()
+									.map(|election_identifier| {
+										*election_identifier.unique_monotonic()
+									})
+									.min()
+									.unwrap_or_default();
+								let mut settings_boundaries =
+									ElectoralSettings::<T, I>::iter_keys().collect::<Vec<_>>();
+								settings_boundaries.sort();
+								for setting_boundary in &settings_boundaries
 										[..settings_boundaries[..]
 											.partition_point(|&setting_boundary| {
 												setting_boundary <= minimum_election_identifiers
 											})
 											.saturating_sub(1) /*Keep the latest settings lower than the minimum election identifier, i.e. the settings referenced by the election with the minimum election identifier*/]
-									{
-										ElectoralSettings::<T, I>::remove(setting_boundary);
-									}
-
-									let current_authorities = T::EpochInfo::current_authorities();
-									for validator in ContributingAuthorities::<T, I>::iter_keys()
-										.collect::<Vec<_>>()
-									{
-										if !current_authorities.contains(&validator) {
-											ContributingAuthorities::<T, I>::remove(validator);
-										}
-									}
+								{
+									ElectoralSettings::<T, I>::remove(setting_boundary);
 								}
 
-								T::ElectoralSystem::on_finalize(
-									electoral_access,
-									election_identifiers,
-									&(),
-								)?;
+								let current_authorities = T::EpochInfo::current_authorities();
+								for validator in
+									ContributingAuthorities::<T, I>::iter_keys().collect::<Vec<_>>()
+								{
+									if !current_authorities.contains(&validator) {
+										ContributingAuthorities::<T, I>::remove(validator);
+									}
+								}
+							}
 
-								Ok(())
-							},
-						);
+							T::ElectoralSystemRunner::on_finalize(election_identifiers)?;
+
+							Ok(())
+						});
 					},
 				}
 			}
@@ -1688,20 +1666,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Provides access into the ElectoralSystem's storage.
-		///
-		/// Ideally we would avoid introducing re-entrance (also with
-		/// `with_electoral_access_and_identifiers`), so the ElectoralAccess object can internally
-		/// cache storage which is possibly helpful particularly in the case of composites.
-		pub fn with_electoral_access<
-			R,
-			F: FnOnce(&mut ElectoralAccess<T, I>) -> Result<R, CorruptStorageError>,
-		>(
-			f: F,
-		) -> Result<R, DispatchError> {
+		pub fn ensure_initialized() -> Result<(), DispatchError> {
 			if Status::<T, I>::get().is_some() {
-				Self::handle_corrupt_storage(f(&mut ElectoralAccess::<T, I>::new()))
-					.map_err(Into::into)
+				Ok(())
 			} else {
 				Self::deposit_event(Event::<T, I>::Uninitialized);
 				Err(Error::<T, I>::Uninitialized.into())
@@ -1711,14 +1678,13 @@ pub mod pallet {
 		/// Provides access into the ElectoralSystem's storage, and also all the current election
 		/// identifiers.
 		///
-		/// Ideally we would avoid introducing re-entrance (also with `with_electoral_access`), so
+		/// Ideally we would avoid introducing re-entrance (also with `with_storage_access`), so
 		/// the ElectoralAccess object can internally cache storage which is possibly helpful
 		/// particularly in the case of composites.
-		pub fn with_electoral_access_and_identifiers<
+		pub fn with_election_identifiers<
 			R,
 			F: FnOnce(
-				&mut ElectoralAccess<T, I>,
-				Vec<ElectionIdentifierOf<T::ElectoralSystem>>,
+				Vec<CompositeElectionIdentifierOf<T::ElectoralSystemRunner>>,
 			) -> Result<R, CorruptStorageError>,
 		>(
 			f: F,
@@ -1727,11 +1693,7 @@ pub mod pallet {
 				let mut election_identifiers =
 					ElectionProperties::<T, I>::iter_keys().collect::<Vec<_>>();
 				election_identifiers.sort();
-				Self::handle_corrupt_storage(f(
-					&mut ElectoralAccess::<T, I>::new(),
-					election_identifiers,
-				))
-				.map_err(Into::into)
+				Self::handle_corrupt_storage(f(election_identifiers)).map_err(Into::into)
 			} else {
 				Self::deposit_event(Event::<T, I>::Uninitialized);
 				Err(Error::<T, I>::Uninitialized.into())
@@ -1750,8 +1712,8 @@ pub mod pallet {
 					let block_number = frame_system::Pallet::<T>::current_block_number();
 
 					Some(ElectoralData {
-						current_elections: Self::with_electoral_access_and_identifiers(
-							|electoral_access, election_identifiers| {
+						current_elections: Self::with_election_identifiers(
+							|election_identifiers| {
 								election_identifiers
 									.into_iter()
 									.map(|election_identifier| {
@@ -1781,27 +1743,23 @@ pub mod pallet {
 												},
 											)?;
 
-										let election_access =
-											electoral_access.election(election_identifier)?;
-
 										Ok((
-										election_identifier,
-										AuthorityElectionData {
-											settings: election_access.settings()?,
-											properties: election_access.properties()?,
-											// We report the vote to the engine even though it is timeouted so the engine
-											// knows to delete it. As it may still later to reconstructed if the right
-											// `SharedData` is provided, unless it is delete.
-											option_existing_vote: option_current_authority_vote.as_ref().map(|(_, authority_vote)| {
-												authority_vote.clone()
-											}),
-											is_vote_desired: <T::ElectoralSystem as ElectoralSystem>::is_vote_desired(
 												election_identifier,
-												&election_access,
-												option_current_authority_vote.filter(|_| !contains_timed_out_shared_data_references),
-											)?,
-										},
-									))
+												AuthorityElectionData {
+													settings: RunnerStorageAccess::<T, I>::electoral_settings_for_election(*election_identifier.unique_monotonic())?,
+													properties: RunnerStorageAccess::<T, I>::election_properties(election_identifier)?,
+													// We report the vote to the engine even though it is timeouted so the engine
+													// knows to delete it. As it may still later to reconstructed if the right
+													// `SharedData` is provided, unless it is delete.
+													option_existing_vote: option_current_authority_vote.as_ref().map(|(_, authority_vote)| {
+														authority_vote.clone()
+													}),
+													is_vote_desired: <T::ElectoralSystemRunner as ElectoralSystemRunner>::is_vote_desired(
+														election_identifier,
+														option_current_authority_vote.filter(|_| !contains_timed_out_shared_data_references),
+													)?,
+												},
+											))
 									})
 									.collect::<Result<BTreeMap<_, _>, _>>()
 							},
@@ -1843,10 +1801,10 @@ pub mod pallet {
 		pub fn filter_votes(
 			validator_id: &T::ValidatorId,
 			proposed_votes: BTreeMap<
-				ElectionIdentifierOf<T::ElectoralSystem>,
-				<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote,
+				CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
+				<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
 			>,
-		) -> BTreeSet<ElectionIdentifierOf<T::ElectoralSystem>> {
+		) -> BTreeSet<CompositeElectionIdentifierOf<T::ElectoralSystemRunner>> {
 			use frame_support::traits::OriginTrait;
 
 			if let Ok((epoch_index, authority, authority_index)) =
@@ -1854,8 +1812,8 @@ pub mod pallet {
 			{
 				let block_number = frame_system::Pallet::<T>::current_block_number();
 
-				Self::with_electoral_access_and_identifiers(
-					|_electoral_access, election_identifiers| {
+				Self::with_election_identifiers(
+					|election_identifiers| {
 						election_identifiers
 							.into_iter()
 							.map(|election_identifier| {
@@ -1896,12 +1854,12 @@ pub mod pallet {
 										)) = option_current_authority_vote
 											.filter(|_| !contains_timed_out_shared_data_references)
 										{
-											<T::ElectoralSystem as ElectoralSystem>::is_vote_needed(
+											<T::ElectoralSystemRunner as ElectoralSystemRunner>::is_vote_needed(
 												(
 													existing_vote_properties,
 													match &existing_authority_vote {
 														AuthorityVote::Vote(existing_vote) => {
-															<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
+															<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::vote_into_partial_vote(
 																existing_vote,
 																|shared_data| SharedDataHash::of(&shared_data)
 															)
@@ -1911,7 +1869,7 @@ pub mod pallet {
 													existing_authority_vote,
 												),
 												(
-													<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::vote_into_partial_vote(
+													<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::vote_into_partial_vote(
 														proposed_vote,
 														|shared_data| SharedDataHash::of(&shared_data)
 													),
@@ -1963,7 +1921,10 @@ pub mod pallet {
 		fn take_vote_and_then<
 			R,
 			F: for<'a> FnOnce(
-				Option<(VotePropertiesOf<T::ElectoralSystem>, AuthorityVoteOf<T::ElectoralSystem>)>,
+				Option<(
+					VotePropertiesOf<T::ElectoralSystemRunner>,
+					AuthorityVoteOf<T::ElectoralSystemRunner>,
+				)>,
 				&'a mut ElectionBitmapComponents<T, I>,
 			) -> Result<R, CorruptStorageError>,
 		>(
@@ -1981,7 +1942,7 @@ pub mod pallet {
 						IndividualComponents::<T, I>::take(unique_monotonic_identifier, authority);
 
 					let r = f(
-						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_authority_vote(
+						<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::components_into_authority_vote(
 							VoteComponents {
 								bitmap_component: election_bitmap_components.take(authority_index)?,
 								individual_component: individual_component.clone(),
@@ -1994,7 +1955,7 @@ pub mod pallet {
 					// Remove references late to avoid deleting shared data that we will add
 					// references to inside `f`.
 					if let Some((_properties, individual_component)) = individual_component {
-						<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_individual_component(
+						<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::visit_shared_data_references_in_individual_component(
 							&individual_component,
 							|shared_data_hash| Self::remove_shared_data_reference(shared_data_hash, unique_monotonic_identifier),
 						);
@@ -2019,10 +1980,13 @@ pub mod pallet {
 			authority_index: AuthorityCount,
 			mut visit_unprovided_shared_data: VisitUnprovidedSharedData,
 		) -> Result<
-			Option<(VotePropertiesOf<T::ElectoralSystem>, AuthorityVoteOf<T::ElectoralSystem>)>,
+			Option<(
+				VotePropertiesOf<T::ElectoralSystemRunner>,
+				AuthorityVoteOf<T::ElectoralSystemRunner>,
+			)>,
 			CorruptStorageError,
 		> {
-			<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::components_into_authority_vote(
+			<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::components_into_authority_vote(
 				VoteComponents {
 					bitmap_component: ElectionBitmapComponents::<T, I>::with(
 						epoch_index,
@@ -2079,7 +2043,7 @@ pub mod pallet {
 			}
 		}
 		fn ensure_election_exists(
-			election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
+			election_identifier: CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
 		) -> Result<UniqueMonotonicIdentifier, Error<T, I>> {
 			ensure!(
 				ElectionProperties::<T, I>::contains_key(election_identifier),
@@ -2088,7 +2052,7 @@ pub mod pallet {
 			Ok(*election_identifier.unique_monotonic())
 		}
 
-		fn handle_corrupt_storage<Ok>(
+		pub fn handle_corrupt_storage<Ok>(
 			result: Result<Ok, CorruptStorageError>,
 		) -> Result<Ok, Error<T, I>> {
 			match result {
@@ -2152,7 +2116,7 @@ pub mod pallet {
 			}
 		}
 		fn inner_provide_shared_data(
-			shared_data: <<T::ElectoralSystem as electoral_system::ElectoralSystem>::Vote as VoteStorage>::SharedData,
+			shared_data: <<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::SharedData,
 		) -> Result<(), Error<T, I>> {
 			let shared_data_hash = SharedDataHash::of(&shared_data);
 			let (unique_monotonic_identifiers, reference_details): (Vec<_>, Vec<_>) =

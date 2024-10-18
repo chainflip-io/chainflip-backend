@@ -143,7 +143,7 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 			#[track_caller]
 			|mut ctx| {
 				let unique_monotonic_identifier =
-					*Pallet::<Test, Instance1>::with_electoral_access(|electoral_access| {
+					*Pallet::<Test, Instance1>::with_storage_access(|electoral_access| {
 						electoral_access.new_election((), (), ())
 					})
 					.expect("New election should not corrupt storage.")
@@ -153,7 +153,7 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 
 				assert_eq!(Status::<Test, Instance1>::get(), Some(ElectionPalletStatus::Running));
 
-				Pallet::<Test, Instance1>::with_electoral_access(|electoral_access| {
+				Pallet::<Test, Instance1>::with_storage_access(|electoral_access| {
 					electoral_access
 						.election(ElectionIdentifier::new(unique_monotonic_identifier, ()))
 				})
