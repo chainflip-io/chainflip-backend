@@ -71,7 +71,6 @@ use cf_traits::{
 };
 
 use cf_chains::btc::ScriptPubkey;
-use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -83,6 +82,7 @@ use frame_support::{
 	},
 	traits::{Defensive, Get},
 };
+use log::{log, Level};
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
 use scale_info::TypeInfo;
@@ -833,7 +833,7 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 						batch_transfer.change_utxo_key,
 					);
 				} else {
-					log_or_panic!("Keys do not match, no change_utxo available");
+					log!(Level::Info, "BTC egress without change UTXO");
 				}
 			},
 			_ => unreachable!(),

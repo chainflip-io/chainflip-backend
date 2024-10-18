@@ -2114,8 +2114,7 @@ impl_runtime_apis! {
 			for ceremony in btc_ceremonies {
 				if let RuntimeCall::BitcoinBroadcaster(pallet_cf_broadcast::pallet::Call::on_signature_ready{ api_call, ..}) = pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::get(ceremony).unwrap() {
 					if let BitcoinApi::BatchTransfer(batch_transfer) = *api_call {
-						let outputs = batch_transfer.bitcoin_transaction.outputs;
-						let change_output = outputs.last().unwrap();
+						let change_output = batch_transfer.bitcoin_transaction.outputs.last().unwrap();
 						if ScriptPubkey::Taproot(batch_transfer.change_utxo_key) == change_output.script_pubkey {
 							btc_balance += change_output.amount;
 						}
