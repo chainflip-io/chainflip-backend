@@ -5,9 +5,7 @@ use engine_upgrade_utils::{
 };
 use reqwest::blocking::get;
 
-// TODO: Download from mainnet repo if it exists and verify signature.
-// TODO: If we're doing a release build we should force use mainnet binaries. PRO-1622
-fn download_old_dylib(dest_folder: &Path) -> Result<(), Box<dyn Error>> {
+fn download_old_dylib(dest_folder: &Path, is_mainnet: bool) -> Result<(), Box<dyn Error>> {
 	let target: String = env::var("TARGET").unwrap();
 
 	let prebuilt_supported =
@@ -24,7 +22,15 @@ fn download_old_dylib(dest_folder: &Path) -> Result<(), Box<dyn Error>> {
 	// or added another commit on top then we get the latest build artifacts for a particular
 	// version.
 	if prebuilt_supported {
-		let download_url = format!("https://artifacts.chainflip.io/{OLD_VERSION}/{dylib_name}");
+		let root_url = if is_mainnet {
+			println!("Downloading from pkgs...");
+			format!("https://pkgs.chainflip.io/")
+		} else {
+			println!("Downloading from artifacts...");
+			format!("https://artifacts.chainflip.io/")
+		};
+		let download_url = format!("{root_url}{OLD_VERSION}/{dylib_name}");
+
 		let mut response = get(&download_url)?;
 
 		if response.status().is_success() {
@@ -59,7 +65,14 @@ fn main() {
 		.parent()
 		.unwrap(); // target/debug or target/release
 
-	download_old_dylib(build_dir).unwrap();
+	let is_mainnet = match env::var("IS_MAINNET") {
+		Ok(val) => val.to_lowercase() == "true",
+		Err(_) => false, // Default to false
+	};
+
+	panic!("Is mainnet: {}", is_mainnet);
+
+	download_old_dylib(build_dir, is_mainnet).unwrap();
 
 	let build_dir_str = build_dir.to_str().unwrap();
 
