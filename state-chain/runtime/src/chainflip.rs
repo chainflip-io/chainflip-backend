@@ -70,6 +70,7 @@ use cf_traits::{
 	ScheduledEgressDetails,
 };
 
+use cf_chains::btc::ScriptPubkey;
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -81,6 +82,7 @@ use frame_support::{
 	},
 	traits::{Defensive, Get},
 };
+use log::{log, Level};
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
 use scale_info::TypeInfo;
@@ -819,11 +821,17 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 				let output_len = outputs.len();
 				let vout = output_len - 1;
 				let change_output = outputs.get(vout).unwrap();
-				Environment::add_bitcoin_change_utxo(
-					change_output.amount,
-					UtxoId { tx_id, vout: vout as u32 },
-					batch_transfer.change_utxo_key,
-				);
+				if ScriptPubkey::Taproot(batch_transfer.change_utxo_key) ==
+					change_output.script_pubkey
+				{
+					Environment::add_bitcoin_change_utxo(
+						change_output.amount,
+						UtxoId { tx_id, vout: vout as u32 },
+						batch_transfer.change_utxo_key,
+					);
+				} else {
+					log!(Level::Info, "BTC egress without change UTXO");
+				}
 			},
 			_ => unreachable!(),
 		}
