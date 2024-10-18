@@ -4,10 +4,13 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self,
-	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
+	primitives::{
+		AccountRole, Affiliates, Asset, BasisPoints, Beneficiaries, CcmChannelMetadata,
+		DcaParameters,
+	},
 	settings::StateChain,
 	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
-	SwapDepositAddress, WithdrawFeesDetail,
+	SwapDepositAddress, SwapPayload, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::to_rpc_error;
@@ -48,6 +51,19 @@ pub trait Rpc {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "request_swap_parameter_encoding", aliases = ["broker_requestSwapParameterEncoding"])]
+	async fn request_swap_parameter_encoding(
+		&self,
+		input_asset: Asset,
+		output_asset: Asset,
+		output_address: AddressString,
+		retry_duration: u32,
+		min_output_amount: u128,
+		boost_fee: Option<BasisPoints>,
+		dca_parameters: Option<DcaParameters>,
+		broker_fees: Option<Beneficiaries<AccountId32>>,
+	) -> RpcResult<SwapPayload>;
 }
 
 pub struct RpcServerImpl {
@@ -117,6 +133,34 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.broker_api()
 			.withdraw_fees(asset, destination_address)
+			.await
+			.map_err(to_rpc_error)?)
+	}
+
+	async fn request_swap_parameter_encoding(
+		&self,
+		input_asset: Asset,
+		output_asset: Asset,
+		output_address: AddressString,
+		retry_duration: u32,
+		min_output_amount: u128,
+		boost_fee: Option<BasisPoints>,
+		dca_parameters: Option<DcaParameters>,
+		broker_fees: Option<Beneficiaries<AccountId32>>,
+	) -> RpcResult<SwapPayload> {
+		Ok(self
+			.api
+			.broker_api()
+			.request_swap_parameter_encoding(
+				input_asset,
+				output_asset,
+				output_address,
+				retry_duration,
+				min_output_amount,
+				boost_fee,
+				dca_parameters,
+				broker_fees,
+			)
 			.await
 			.map_err(to_rpc_error)?)
 	}

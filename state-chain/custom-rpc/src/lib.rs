@@ -912,6 +912,21 @@ pub trait CustomApi {
 		proposed_votes: Vec<u8>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "validate_dca_params")]
+	fn cf_validate_dca_params(
+		&self,
+		number_of_chunks: u32,
+		chunk_interval: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<()>;
+
+	#[method(name = "validate_refund_params")]
+	fn cf_validate_refund_params(
+		&self,
+		retry_duration: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<()>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1972,6 +1987,31 @@ where
 			proposed_votes,
 		)
 		.map_err(to_rpc_error)
+	}
+
+	fn cf_validate_dca_params(
+		&self,
+		number_of_chunks: u32,
+		chunk_interval: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<()> {
+		self.client
+			.runtime_api()
+			.cf_validate_dca_params(self.unwrap_or_best(at), number_of_chunks, chunk_interval)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
+	}
+
+	fn cf_validate_refund_params(
+		&self,
+		retry_duration: u32,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<()> {
+		self.client
+			.runtime_api()
+			.cf_validate_refund_params(self.unwrap_or_best(at), retry_duration)
+			.map_err(to_rpc_error)
+			.and_then(|result| result.map_err(map_dispatch_error))
 	}
 }
 
