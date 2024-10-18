@@ -79,10 +79,11 @@ pub enum BoostStatus<ChainAmount> {
 	NotBoosted,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum RejectingStatus {
-	MarkedForRejecting,
-	NotYetMarked,
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+pub enum Prewitnessed {
+	Yes,
+	#[default]
+	No,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -554,7 +555,7 @@ pub mod pallet {
 		T::AccountId,
 		Blake2_128Concat,
 		<T::TargetChain as Chain>::DepositDetails,
-		RejectingStatus,
+		Prewitnessed,
 		OptionQuery,
 	>;
 
@@ -807,7 +808,12 @@ pub mod pallet {
 			}
 
 			for (account, tx_id) in ReportExpiresAt::<T, I>::take(now) {
-				TaintedTransactions::<T, I>::remove(account.clone(), tx_id.clone());
+				// TODO: Could be a mutate-exists or similar.
+				let marked_status = TaintedTransactions::<T, I>::take(&account, &tx_id);
+				if marked_status == Some(Prewitnessed::Yes) {
+					// Pre-witnessed means we expect this deposit to be finalised.
+					TaintedTransactions::<T, I>::insert(&account, &tx_id, Prewitnessed::Yes);
+				}
 				Self::deposit_event(Event::<T, I>::TaintedTransactionExpired {
 					account_id: account,
 					tx_id,
@@ -1341,7 +1347,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS)),
 			(account_id.clone(), tx_id.clone()),
 		);
-		TaintedTransactions::<T, I>::insert(account_id, tx_id, RejectingStatus::NotYetMarked);
+		TaintedTransactions::<T, I>::set(account_id, tx_id, Default::default());
 		Ok(())
 	}
 	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {
@@ -1690,11 +1696,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} = DepositChannelLookup::<T, I>::get(&deposit_address)
 				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
+			// TODO: use mutate
 			if TaintedTransactions::<T, I>::get(owner.clone(), deposit_details.clone()).is_some() {
 				TaintedTransactions::<T, I>::insert(
 					owner.clone(),
 					deposit_details.clone(),
-					RejectingStatus::MarkedForRejecting,
+					Prewitnessed::Yes,
 				);
 				continue;
 			}
@@ -1920,10 +1927,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let channel_owner = deposit_channel_details.owner.clone();
 
-		let transaction_tainted =
-			TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone());
-
-		if transaction_tainted.is_some() {
+		if TaintedTransactions::<T, I>::take(&channel_owner, &deposit_details).is_some() {
 			let refund_address = match deposit_channel_details.action.clone() {
 				ChannelAction::Swap { refund_params, .. } =>
 					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
@@ -1939,20 +1943,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				tx_id: deposit_details.clone(),
 			};
 
-			if deposit_channel_details.boost_status == BoostStatus::NotBoosted ||
-				transaction_tainted.unwrap_or(RejectingStatus::NotYetMarked) ==
-					RejectingStatus::MarkedForRejecting
-			{
-				ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
-				Self::deposit_event(Event::<T, I>::DepositIgnored {
-					deposit_address,
-					asset,
-					amount: deposit_amount,
-					deposit_details,
-					reason: DepositIgnoredReason::TransactionTainted,
-				});
-				return Ok(())
-			}
+			ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
+			Self::deposit_event(Event::<T, I>::DepositIgnored {
+				deposit_address,
+				asset,
+				amount: deposit_amount,
+				deposit_details,
+				reason: DepositIgnoredReason::TransactionTainted,
+			});
+			return Ok(())
 		}
 
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
