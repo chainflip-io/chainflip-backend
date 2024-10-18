@@ -17,6 +17,7 @@ use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
 	assets::eth::Asset as EthAsset,
 	eth::{api::EthereumApi, EthereumTrackedData},
+	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, DefaultRetryPolicy, Ethereum,
 	ExecutexSwapAndCall, ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin,
 	TransactionBuilder, TransferAssetParams,
@@ -622,6 +623,10 @@ fn failed_swaps_are_rolled_back() {
 				deposit_amount: 10_000 * DECIMALS,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				tx_hash: Default::default(),
+				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
+				refund_params: None,
+				dca_params: None,
+				boost_fee: 0,
 			},
 		));
 
