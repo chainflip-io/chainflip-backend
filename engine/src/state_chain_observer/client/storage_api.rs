@@ -9,11 +9,10 @@ use frame_support::{
 	traits::{Get, StorageInstance},
 	ReversibleStorageHasher, StorageHasher,
 };
-use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
 use utilities::context;
 
-use super::{BlockInfo, CFE_VERSION, SUBSTRATE_BEHAVIOUR};
+use super::{BlockInfo, RpcResult, CFE_VERSION, SUBSTRATE_BEHAVIOUR};
 
 /// This trait extracts otherwise private type information about Substrate storage double maps
 pub trait StorageDoubleMapAssociatedTypes {

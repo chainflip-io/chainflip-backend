@@ -396,11 +396,13 @@ mod tests {
 		BlockInfo,
 	};
 	use frame_support::storage::types::QueryKindTrait;
-	use jsonrpsee::core::RpcResult;
+	use jsonrpsee::core::ClientError;
 	use mockall::mock;
 	use pallet_cf_ingress_egress::DepositWitness;
 	use sp_core::{storage::StorageKey, H160};
 	use std::collections::HashMap;
+
+	type RpcResult<T> = Result<T, ClientError>;
 
 	#[derive(Default)]
 	struct MockStore {

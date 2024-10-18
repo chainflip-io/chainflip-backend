@@ -10,18 +10,26 @@ use chainflip_api::{
 	SwapDepositAddress, WithdrawFeesDetail,
 };
 use clap::Parser;
-use custom_rpc::to_rpc_error;
 use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	proc_macros::rpc,
 	server::ServerBuilder,
+	types::ErrorCode,
 };
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
 };
 use tracing::log;
+
+fn to_error_object(error: impl core::fmt::Display) -> jsonrpsee::types::error::ErrorObjectOwned {
+	jsonrpsee::types::error::ErrorObjectOwned::owned(
+		ErrorCode::ServerError(0xcf).code(),
+		error.to_string(),
+		None::<()>,
+	)
+}
 
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
@@ -75,7 +83,7 @@ impl RpcServer for RpcServerImpl {
 			.register_account_role(AccountRole::Broker)
 			.await
 			.map(|tx_hash| format!("{tx_hash:#x}"))
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	async fn request_swap_deposit_address(
@@ -105,7 +113,7 @@ impl RpcServer for RpcServerImpl {
 				dca_parameters,
 			)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 
 	async fn withdraw_fees(
@@ -118,7 +126,7 @@ impl RpcServer for RpcServerImpl {
 			.broker_api()
 			.withdraw_fees(asset, destination_address)
 			.await
-			.map_err(to_rpc_error)?)
+			.map_err(to_error_object)?)
 	}
 }
 
@@ -176,11 +184,9 @@ async fn main() -> anyhow::Result<()> {
 			let server = ServerBuilder::default()
 				.max_connections(opts.max_connections)
 				.build(format!("0.0.0.0:{}", opts.port))
-				.await
-				.map_err(to_rpc_error)?;
+				.await?;
 			let server_addr = server.local_addr()?;
-			let server = server
-				.start(RpcServerImpl::new(scope, opts).await.map_err(to_rpc_error)?.into_rpc());
+			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc());
 
 			log::info!("🎙 Server is listening on {server_addr}.");
 
