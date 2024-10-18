@@ -1155,6 +1155,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "buffered-reader"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd098763fdb64579407a8c83cf0d751e6d4a7e161d0114c89cc181a2ca760ec8"
+dependencies = [
+ "bzip2",
+ "flate2",
+ "lazy_static",
+ "libc",
+]
+
+[[package]]
 name = "build-helper"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3279,6 +3291,7 @@ dependencies = [
  "engine-upgrade-utils",
  "predicates 3.1.2",
  "reqwest",
+ "sequoia-openpgp",
  "tempfile",
 ]
 
@@ -4552,8 +4565,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4567c8db10ae91089c99af84c68c38da3ec2f087c3f82960bcdbf3656b6f4d7"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -6817,6 +6832,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "memsec"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c797b9d6bb23aab2fc369c65f871be49214f5c759af65bde26ffaaa2b646b492"
+
+[[package]]
 name = "merlin"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7320,6 +7341,33 @@ dependencies = [
  "libc",
  "log",
  "tokio",
+]
+
+[[package]]
+name = "nettle"
+version = "7.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44e6ff4a94e5d34a1fd5abbd39418074646e2fa51b257198701330f22fcd6936"
+dependencies = [
+ "getrandom 0.2.15",
+ "libc",
+ "nettle-sys",
+ "thiserror",
+ "typenum",
+]
+
+[[package]]
+name = "nettle-sys"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b495053a10a19a80e3a26bf1212e92e29350797b5f5bdc58268c3f3f818e66ec"
+dependencies = [
+ "bindgen",
+ "cc",
+ "libc",
+ "pkg-config",
+ "tempfile",
+ "vcpkg",
 ]
 
 [[package]]
@@ -11605,6 +11653,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
 
 [[package]]
+name = "sequoia-openpgp"
+version = "1.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13261ee216b44d932ef93b2d4a75d45199bef77864bcc5b77ecfc7bc0ecb02d6"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "buffered-reader",
+ "bzip2",
+ "chrono",
+ "dyn-clone",
+ "flate2",
+ "getrandom 0.2.15",
+ "idna 0.5.0",
+ "lalrpop",
+ "lalrpop-util",
+ "lazy_static",
+ "libc",
+ "memsec",
+ "nettle",
+ "once_cell",
+ "regex",
+ "regex-syntax 0.8.5",
+ "sha1collisiondetection",
+ "thiserror",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.210"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11764,6 +11841,16 @@ name = "sha1_smol"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
+
+[[package]]
+name = "sha1collisiondetection"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f606421e4a6012877e893c399822a4ed4b089164c5969424e1b9d1e66e6964b"
+dependencies = [
+ "digest 0.10.7",
+ "generic-array 1.1.0",
+]
 
 [[package]]
 name = "sha2"
@@ -15596,6 +15683,12 @@ checksum = "d7d8a75eaf6557bb84a65ace8609883db44a29951042ada9b393151532e41fcb"
 dependencies = [
  "xml-rs",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a5cbf750400958819fb6178eaa83bee5cd9c29a26a40cc241df8c70fdd46984"
 
 [[package]]
 name = "yaml-rust"
