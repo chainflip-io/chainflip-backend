@@ -9,8 +9,8 @@ state-chain-runtime = { workspace = true }
 cf-test-utilities = { path = "../test-utilities" }
 
 # Polkadot SDK dependencies
-frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
+frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
 
 tokio = { version = "1.38.0", features = ["full"] }
 anyhow = "1.0.86"
