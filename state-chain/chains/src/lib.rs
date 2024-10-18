@@ -216,7 +216,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ FullCodec
 		+ Into<cf_primitives::Asset>
 		+ Into<cf_primitives::ForeignChain>
-		+ TryFrom<cf_primitives::Asset>
+		+ TryFrom<cf_primitives::Asset, Error: Debug>
 		+ IntoEnumIterator
 		+ Unpin;
 

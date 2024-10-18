@@ -566,7 +566,7 @@ pub mod pallet {
 		},
 		/// The deposits was rejected because the amount was below the minimum allowed.
 		DepositIgnored {
-			deposit_address: TargetChainAccount<T, I>,
+			deposit_address: Option<TargetChainAccount<T, I>>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
@@ -1099,7 +1099,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::contract_swap_request())]
 		pub fn contract_swap_request(
 			origin: OriginFor<T>,
-			from: Asset,
+			from: TargetChainAsset<T, I>,
 			to: Asset,
 			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 			destination_address: EncodedAddress,
@@ -1124,14 +1124,25 @@ pub mod pallet {
 					},
 				};
 
-			T::DepositHandler::on_deposit_made(*deposit_details, deposit_amount);
+			if deposit_amount < MinimumDeposit::<T, I>::get(from) {
+				// If the deposit amount is below the minimum allowed, the deposit is ignored.
+				// TODO: track these funds somewhere, for example add them to the withheld fees.
+				Self::deposit_event(Event::<T, I>::DepositIgnored {
+					deposit_address: None,
+					asset: from,
+					amount: deposit_amount,
+					deposit_details: *deposit_details,
+					reason: DepositIgnoredReason::BelowMinimumDeposit,
+				});
+				return Ok(())
+			}
 
-			// TODO: ensure minimum deposit?
+			T::DepositHandler::on_deposit_made(*deposit_details, deposit_amount);
 
 			// TODO: validate dca_params and refund_params
 
 			T::SwapRequestHandler::init_swap_request(
-				from,
+				from.into(),
 				deposit_amount.into(),
 				to,
 				SwapRequestType::Regular { output_address: destination_address_internal.clone() },
@@ -1148,14 +1159,32 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::contract_ccm_swap_request())]
 		pub fn contract_ccm_swap_request(
 			origin: OriginFor<T>,
-			source_asset: Asset,
-			deposit_amount: AssetAmount,
+			source_asset: TargetChainAsset<T, I>,
+			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
 			tx_hash: TransactionHash,
+			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
+			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DcaParameters>,
+			// This is only to be checked in the pre-witnessed version (not implemented yet)
+			_boost_fee: BasisPoints,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			if deposit_amount < MinimumDeposit::<T, I>::get(source_asset) {
+				// If the deposit amount is below the minimum allowed, the deposit is ignored.
+				// TODO: track these funds somewhere, for example add them to the withheld fees.
+				Self::deposit_event(Event::<T, I>::DepositIgnored {
+					deposit_address: None,
+					asset: source_asset,
+					amount: deposit_amount,
+					deposit_details: *deposit_details,
+					reason: DepositIgnoredReason::BelowMinimumDeposit,
+				});
+				return Ok(())
+			}
 
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
@@ -1193,8 +1222,8 @@ pub mod pallet {
 				};
 
 			let ccm_swap_metadata = match deposit_metadata.clone().into_swap_metadata(
-				deposit_amount,
-				source_asset,
+				deposit_amount.into(),
+				source_asset.into(),
 				destination_asset,
 			) {
 				Ok(metadata) => metadata,
@@ -1205,18 +1234,16 @@ pub mod pallet {
 			};
 
 			T::SwapRequestHandler::init_swap_request(
-				source_asset,
-				deposit_amount,
+				source_asset.into(),
+				deposit_amount.into(),
 				destination_asset,
 				SwapRequestType::Ccm {
 					ccm_swap_metadata,
 					output_address: destination_address_internal.clone(),
 				},
 				Default::default(),
-				// NOTE: FoK not yet supported for swaps from the contract
-				None,
-				// NOTE: DCA not yet supported for swaps from the contract
-				None,
+				refund_params,
+				dca_params,
 				swap_origin,
 			);
 
@@ -1811,7 +1838,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// If the deposit amount is below the minimum allowed, the deposit is ignored.
 			// TODO: track these funds somewhere, for example add them to the withheld fees.
 			Self::deposit_event(Event::<T, I>::DepositIgnored {
-				deposit_address,
+				deposit_address: Some(deposit_address),
 				asset,
 				amount: deposit_amount,
 				deposit_details,
@@ -1893,7 +1920,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			if amount_after_fees.is_zero() {
 				Self::deposit_event(Event::<T, I>::DepositIgnored {
-					deposit_address,
+					deposit_address: Some(deposit_address),
 					asset,
 					amount: deposit_amount,
 					deposit_details,
