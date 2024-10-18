@@ -109,6 +109,7 @@
 
 pub mod electoral_system;
 pub mod electoral_systems;
+pub mod migrations;
 mod mock;
 mod tests;
 pub mod vote_storage;
@@ -229,7 +230,7 @@ pub mod pallet {
 			ElectionIdentifier::new(*self.unique_monotonic(), other_extra)
 		}
 
-		pub(crate) fn unique_monotonic(&self) -> &UniqueMonotonicIdentifier {
+		pub fn unique_monotonic(&self) -> &UniqueMonotonicIdentifier {
 			&self.0
 		}
 
@@ -545,7 +546,7 @@ pub mod pallet {
 	>;
 
 	#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo, Default)]
-	struct ConsensusHistory<T> {
+	pub struct ConsensusHistory<T> {
 		/// The most recent consensus the election had.
 		most_recent: T,
 		/// Indicates if consensus was lost after the `most_recent` consensus was gained. I.e. that
