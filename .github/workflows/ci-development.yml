@@ -31,8 +31,6 @@ jobs:
     secrets: inherit
     with:
       profile: "release"
-      # TODO: Set to false before merge
-      is_mainnet: true
   # build-m2:
   #   uses: ./.github/workflows/_21_build_m2.yml
   #   secrets: inherit
