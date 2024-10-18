@@ -5,9 +5,10 @@ use crate::{
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	RejectingStatus, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject,
-	TaintedTransactions, TAINTED_TX_EXPIRATION_BLOCKS,
+	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, Prewitnessed,
+	PrewitnessedDepositIdCounter, ReportExpiresAt, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, ScheduledTxForReject, TaintedTransactions,
+	TAINTED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -2149,7 +2150,7 @@ fn tainted_transactions_expire_if_not_witnessed() {
 }
 
 #[test]
-fn ignore_boosted_channels_if_tainted() {
+fn ignore_boosted_channels_if_tainted_after_prewitness() {
 	new_test_ext().execute_with(|| {
 		let tx_id = DepositDetails::default();
 
@@ -2158,6 +2159,89 @@ fn ignore_boosted_channels_if_tainted() {
 				&ALICE,
 			)
 		);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		assert_ok!(IngressEgress::create_boost_pools(
+			RuntimeOrigin::root(),
+			vec![BoostPoolId { asset: eth::Asset::Eth, tier: 10 }],
+		));
+
+		<Test as crate::Config>::Balance::try_credit_account(&ALICE, eth::Asset::Eth.into(), 1000)
+			.unwrap();
+
+		let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
+			eth::Asset::Eth,
+			eth::Asset::Eth.into(),
+			ForeignChainAddress::Eth(Default::default()),
+			Beneficiaries::new(),
+			BROKER,
+			None,
+			10,
+			None,
+			None,
+		)
+		.unwrap();
+
+		assert_ok!(IngressEgress::add_boost_funds(
+			RuntimeOrigin::signed(ALICE),
+			eth::Asset::Eth,
+			1000,
+			10
+		));
+
+		let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+
+		let deposit_witness = DepositWitness {
+			deposit_address: address,
+			asset: eth::Asset::Eth,
+			amount: DEFAULT_DEPOSIT_AMOUNT,
+			deposit_details: tx_id.clone(),
+		};
+
+		let deposit_witnesses = vec![deposit_witness];
+		let _ = IngressEgress::add_prewitnessed_deposits(deposit_witnesses, 10);
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
+			RuntimeOrigin::signed(BROKER),
+			tx_id.clone(),
+		));
+
+		assert_ok!(IngressEgress::process_single_deposit(
+			address,
+			eth::Asset::Eth,
+			DEFAULT_DEPOSIT_AMOUNT,
+			tx_id,
+			Default::default()
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised {
+				deposit_address: _,
+				asset: eth::Asset::Eth,
+				..
+			})
+		);
+	});
+}
+
+#[test]
+fn reject_tx_if_tainted_before_prewitness() {
+	new_test_ext().execute_with(|| {
+		let tx_id = DepositDetails::default();
+
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+				&ALICE,
+			)
+		);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
 
 		// Setup the boost pool
 		assert_ok!(IngressEgress::create_boost_pools(
@@ -2181,7 +2265,6 @@ fn ignore_boosted_channels_if_tainted() {
 		)
 		.unwrap();
 
-		// Setup boost liquidty
 		assert_ok!(IngressEgress::add_boost_funds(
 			RuntimeOrigin::signed(ALICE),
 			eth::Asset::Eth,
@@ -2199,12 +2282,13 @@ fn ignore_boosted_channels_if_tainted() {
 		};
 
 		let deposit_witnesses = vec![deposit_witness];
-		let _ = IngressEgress::add_prewitnessed_deposits(deposit_witnesses, 10);
-		TaintedTransactions::<Test, ()>::insert(
-			BROKER,
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
+			RuntimeOrigin::signed(BROKER),
 			tx_id.clone(),
-			RejectingStatus::NotYetMarked,
-		);
+		));
+
+		let _ = IngressEgress::add_prewitnessed_deposits(deposit_witnesses, 10);
 
 		assert_ok!(IngressEgress::process_single_deposit(
 			address,
@@ -2216,11 +2300,29 @@ fn ignore_boosted_channels_if_tainted() {
 
 		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised {
+			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
 				deposit_address: _,
 				asset: eth::Asset::Eth,
-				..
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: _,
+				reason: DepositIgnoredReason::TransactionTainted,
 			})
 		);
+	});
+}
+
+#[test]
+fn do_not_expire_tainted_transactions_if_prewitnessed() {
+	new_test_ext().execute_with(|| {
+		let tx_id = DepositDetails::default();
+		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
+
+		TaintedTransactions::<Test, ()>::insert(BROKER, tx_id.clone(), Prewitnessed::Yes);
+
+		ReportExpiresAt::<Test, ()>::insert(expiry_at, vec![(BROKER, tx_id.clone())]);
+
+		IngressEgress::on_idle(expiry_at, Weight::MAX);
+
+		assert!(TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id));
 	});
 }
