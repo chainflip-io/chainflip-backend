@@ -2,7 +2,7 @@ use crate::*;
 use frame_support::{pallet_prelude::Weight, storage::unhashed, traits::OnRuntimeUpgrade};
 use frame_system::pallet_prelude::BlockNumberFor;
 
-use pallet_cf_elections::{electoral_system::ElectoralSystem, Config, ElectoralSettings};
+use pallet_cf_elections::{Config, ElectoralSettings, ElectoralSystemRunner};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
@@ -23,7 +23,7 @@ impl OnRuntimeUpgrade for LivenessSettingsMigration {
 			>::hashed_key_for(key))
 			.expect("We just got the keys directly from the storage");
 			raw_storage_at_key.extend(LIVENESS_CHECK_DURATION.encode());
-			ElectoralSettings::<Runtime, SolanaInstance>::insert(key, <<Runtime as Config<SolanaInstance>>::ElectoralSystem as ElectoralSystem>::ElectoralSettings::decode(&mut &raw_storage_at_key[..]).unwrap());
+			ElectoralSettings::<Runtime, SolanaInstance>::insert(key, <<Runtime as Config<SolanaInstance>>::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings::decode(&mut &raw_storage_at_key[..]).unwrap());
 		}
 
 		Weight::zero()
