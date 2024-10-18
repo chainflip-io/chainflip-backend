@@ -297,7 +297,7 @@ mod benchmarks {
 			deposit_amount: deposit_amount.into(),
 			destination_address: EncodedAddress::benchmark_value(),
 			tx_hash: [0; 32],
-			deposit_details: BenchmarkValue::benchmark_value(),
+			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
 			refund_params: None,
 			dca_params: None,
 			boost_fee: 0,

@@ -623,7 +623,7 @@ fn failed_swaps_are_rolled_back() {
 				deposit_amount: 10_000 * DECIMALS,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				tx_hash: Default::default(),
-				deposit_details: DepositDetails { tx_hashes: None },
+				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
 				refund_params: None,
 				dca_params: None,
 				boost_fee: 0,

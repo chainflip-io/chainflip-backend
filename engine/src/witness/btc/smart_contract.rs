@@ -270,10 +270,10 @@ mod tests {
 				deposit_amount: DEPOSIT_AMOUNT,
 				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
 				tx_hash: tx.hash.to_byte_array(),
-				deposit_details: BtcDepositDetails {
+				deposit_details: Box::new(BtcDepositDetails {
 					utxo_id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
 					deposit_address: vault_deposit_address,
-				},
+				}),
 				refund_params: Some(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),
