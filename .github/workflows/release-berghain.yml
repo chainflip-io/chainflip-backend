@@ -20,6 +20,7 @@ jobs:
     with:
       profile: "production"
       binary-subdir: "production"
+      is_mainnet: true
   build-m2:
     uses: ./.github/workflows/_21_build_m2.yml
     secrets: inherit

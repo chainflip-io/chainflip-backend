@@ -5,6 +5,10 @@ on:
         default: release
         description: Profile to build
         type: string
+      is_mainnet:
+        default: false
+        description: Whether to build for mainnet (currently just for verifying dylibs)
+        type: boolean
       upload-name:
         default: chainflip-backend-bin
         description: Name of the folder to upload the binaries to
@@ -37,6 +41,9 @@ jobs:
 
       - name: Build chainflip binaries 🏗️
         run: |
+          if [ "${{ inputs.is_mainnet }}" = "true" ]; then
+            export IS_MAINNET=true
+          fi
           cargo cf-build-${{ inputs.profile }} --locked
 
       - name: ls directory

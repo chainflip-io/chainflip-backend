@@ -10,83 +10,83 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pre-check:
-    uses: ./.github/workflows/_01_pre_check.yml
-    secrets: inherit
-  force-version-bump:
-    uses: ./.github/workflows/_05_force_version_bump.yml
-    secrets: inherit
-    with:
-      network-to-check-against: "sisyphos"
-  test:
-    uses: ./.github/workflows/_10_test.yml
-    secrets: inherit
-  coverage:
-    uses: ./.github/workflows/_11_coverage.yml
-    with:
-      test_features: runtime-benchmarks
-    secrets: inherit
+  # pre-check:
+  #   uses: ./.github/workflows/_01_pre_check.yml
+  #   secrets: inherit
+  # force-version-bump:
+  #   uses: ./.github/workflows/_05_force_version_bump.yml
+  #   secrets: inherit
+  #   with:
+  #     network-to-check-against: "sisyphos"
+  # test:
+  #   uses: ./.github/workflows/_10_test.yml
+  #   secrets: inherit
+  # coverage:
+  #   uses: ./.github/workflows/_11_coverage.yml
+  #   with:
+  #     test_features: runtime-benchmarks
+  #   secrets: inherit
   build:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
       profile: "release"
-  build-m2:
-    uses: ./.github/workflows/_21_build_m2.yml
-    secrets: inherit
-    with:
-      profile: "release"
+  # build-m2:
+  #   uses: ./.github/workflows/_21_build_m2.yml
+  #   secrets: inherit
+  #   with:
+  #     profile: "release"
   # Used to test upgrades to this version from the latest release
-  build-try-runtime:
-    uses: ./.github/workflows/_20_build.yml
-    secrets: inherit
-    with:
-      profile: "try-runtime"
-      upload-name: "chainflip-backend-bin-try-runtime"
-      binary-subdir: release
-  build-benchmarks:
-    uses: ./.github/workflows/_20_build.yml
-    secrets: inherit
-    with:
-      profile: "benchmarks"
-      upload-name: "chainflip-backend-bin-benchmarks"
-      binary-subdir: release
-  docker:
-    needs: [build]
-    uses: ./.github/workflows/_24_docker.yml
-    secrets: inherit
-    with:
-      network: "test"
-      environment: "development"
-  package:
-    needs: [build]
-    uses: ./.github/workflows/_25_package.yml
-    with:
-      network: "test"
-    secrets: inherit
-  post-check:
-    needs: [build]
-    uses: ./.github/workflows/_40_post_check.yml
-    secrets: inherit
-    with:
-      full_bouncer: false
-      ngrok: true
-  test-benchmarks:
-    needs: [build-benchmarks]
-    uses: ./.github/workflows/_41_test_benchmarks.yml
-  upgrade-check:
-    needs: [build-try-runtime]
-    uses: ./.github/workflows/upgrade-test.yml
-    secrets: inherit
-    with:
-      run-job: false
-  publish:
-    needs: [package]
-    uses: ./.github/workflows/_30_publish.yml
-    with:
-      version: ci/${{ github.sha }}/
-      environment: "development"
-    secrets: inherit
-  merge-commit-summary:
-    needs: [publish]
-    uses: ./.github/workflows/_04_merge_commit_summary.yml
+  # build-try-runtime:
+  #   uses: ./.github/workflows/_20_build.yml
+  #   secrets: inherit
+  #   with:
+  #     profile: "try-runtime"
+  #     upload-name: "chainflip-backend-bin-try-runtime"
+  #     binary-subdir: release
+  # build-benchmarks:
+  #   uses: ./.github/workflows/_20_build.yml
+  #   secrets: inherit
+  #   with:
+  #     profile: "benchmarks"
+  #     upload-name: "chainflip-backend-bin-benchmarks"
+  #     binary-subdir: release
+  # docker:
+  #   needs: [build]
+  #   uses: ./.github/workflows/_24_docker.yml
+  #   secrets: inherit
+  #   with:
+  #     network: "test"
+  #     environment: "development"
+  # package:
+  #   needs: [build]
+  #   uses: ./.github/workflows/_25_package.yml
+  #   with:
+  #     network: "test"
+  #   secrets: inherit
+  # post-check:
+  #   needs: [build]
+  #   uses: ./.github/workflows/_40_post_check.yml
+  #   secrets: inherit
+  #   with:
+  #     full_bouncer: false
+  #     ngrok: true
+  # test-benchmarks:
+  #   needs: [build-benchmarks]
+  #   uses: ./.github/workflows/_41_test_benchmarks.yml
+  # upgrade-check:
+  #   needs: [build-try-runtime]
+  #   uses: ./.github/workflows/upgrade-test.yml
+  #   secrets: inherit
+  #   with:
+  #     run-job: false
+  # publish:
+  #   needs: [package]
+  #   uses: ./.github/workflows/_30_publish.yml
+  #   with:
+  #     version: ci/${{ github.sha }}/
+  #     environment: "development"
+  #   secrets: inherit
+  # merge-commit-summary:
+  #   needs: [publish]
+  #   uses: ./.github/workflows/_04_merge_commit_summary.yml

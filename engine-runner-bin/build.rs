@@ -1,13 +1,59 @@
-use std::{env, error::Error, fs::File, io::BufWriter, path::Path};
+#![feature(path_add_extension)]
+use std::{
+	env,
+	error::Error,
+	fs::File,
+	io::BufWriter,
+	path::{Path, PathBuf},
+	str::FromStr,
+};
+
+use sequoia_openpgp::{
+	cert::Cert,
+	parse::{stream::*, Parse},
+	policy::StandardPolicy,
+	KeyHandle,
+};
 
 use engine_upgrade_utils::{
 	build_helpers::toml_with_package_version, ENGINE_LIB_PREFIX, NEW_VERSION, OLD_VERSION,
 };
 use reqwest::blocking::get;
 
-// TODO: Download from mainnet repo if it exists and verify signature.
-// TODO: If we're doing a release build we should force use mainnet binaries. PRO-1622
-fn download_old_dylib(dest_folder: &Path) -> Result<(), Box<dyn Error>> {
+fn download_file(download_url: String, dest: PathBuf) -> Result<(), Box<dyn Error>> {
+	let mut response: reqwest::blocking::Response = get(&download_url)?;
+
+	if response.status().is_success() {
+		let mut dest: BufWriter<File> = BufWriter::new(File::create(dest)?);
+		response.copy_to(&mut dest)?;
+		Ok(())
+	} else {
+		Err(Box::from(format!("Failed to download from {download_url}: {}", response.status())))
+	}
+}
+
+// https://keys.openpgp.org/vks/v1/by-keyid/4E506212E4EF4E0D3E37E568596FBDCACBBCDD37
+
+fn fetch_public_key(key_id: &KeyHandle) -> sequoia_openpgp::Result<Cert> {
+	let key_server_url = format!("https://keys.openpgp.org/vks/v1/by-keyid/{}", key_id);
+
+	let response = get(&key_server_url)?;
+
+	if !response.status().is_success() {
+		panic!("failed");
+		// return Err("Failed to fetch public key".into());
+	}
+
+	// The response should be the ASCII-armored public key
+	let key_data = response.text().expect("Failed to read response text");
+
+	// Parse the public key
+	let cert = Cert::from_str(&key_data)?;
+
+	Ok(cert)
+}
+
+fn download_old_dylib(dest_folder: &Path, is_mainnet: bool) -> Result<(), Box<dyn Error>> {
 	let target: String = env::var("TARGET").unwrap();
 
 	let prebuilt_supported =
@@ -24,17 +70,27 @@ fn download_old_dylib(dest_folder: &Path) -> Result<(), Box<dyn Error>> {
 	// or added another commit on top then we get the latest build artifacts for a particular
 	// version.
 	if prebuilt_supported {
-		let download_url = format!("https://artifacts.chainflip.io/{OLD_VERSION}/{dylib_name}");
-		let mut response = get(&download_url)?;
-
-		if response.status().is_success() {
-			std::fs::create_dir_all(dest_folder)?;
-			let mut dest: BufWriter<File> = BufWriter::new(File::create(dylib_location)?);
-			response.copy_to(&mut dest)?;
-			Ok(())
+		let root_url = if is_mainnet {
+			println!("Downloading from pkgs...");
+			format!("https://pkgs.chainflip.io/")
 		} else {
-			Err(Box::from(format!("Failed to download from {download_url}: {}", response.status())))
+			println!("Downloading from artifacts...");
+			format!("https://artifacts.chainflip.io/")
+		};
+		let download_dylib = format!("{root_url}{OLD_VERSION}/{dylib_name}");
+
+		std::fs::create_dir_all(dest_folder)?;
+		download_file(download_dylib.clone(), dylib_location.clone())?;
+
+		// We want to download the sig file and verify the downloaded dylib only for mainnet.
+		if is_mainnet {
+			let mut dylib_sig_location = dylib_location.clone();
+			dylib_sig_location.add_extension("sig");
+			download_file(format!("{download_dylib}.sig"), dylib_sig_location.clone())?;
+			pgp_verify_signature(dylib_location, dylib_sig_location)?;
 		}
+
+		Ok(())
 	} else if dylib_location.exists() {
 		// They've already been built and moved to the correct folder, so we can continue the
 		// build.
@@ -44,6 +100,32 @@ fn download_old_dylib(dest_folder: &Path) -> Result<(), Box<dyn Error>> {
 				"Unsupported target {target} for downloading prebuilt shared libraries. You need to build from source and insert the shared libs into the target/debug or target/release folder.",
 			)))
 	}
+}
+
+struct Helper {}
+impl VerificationHelper for Helper {
+	fn get_certs(&mut self, _ids: &[KeyHandle]) -> sequoia_openpgp::Result<Vec<Cert>> {
+		let cert =
+			fetch_public_key(&KeyHandle::from_str("4E506212E4EF4E0D3E37E568596FBDCACBBCDD37")?)?;
+		Ok(vec![cert])
+	}
+	fn check(&mut self, _structure: MessageStructure) -> sequoia_openpgp::Result<()> {
+		Ok(())
+	}
+}
+
+// use: https://github.com/rpgp/rpgp instead - simpler
+fn pgp_verify_signature(
+	dylib_location: PathBuf,
+	dylib_sig_location: PathBuf,
+) -> Result<(), Box<dyn Error>> {
+	let standard_policy = StandardPolicy::new();
+	let mut verifier = DetachedVerifierBuilder::from_file(dylib_sig_location)
+		.unwrap()
+		.with_policy(&standard_policy, None, Helper {})
+		.unwrap();
+
+	Ok(verifier.verify_file(dylib_location)?)
 }
 
 fn main() {
@@ -59,7 +141,14 @@ fn main() {
 		.parent()
 		.unwrap(); // target/debug or target/release
 
-	download_old_dylib(build_dir).unwrap();
+	let is_mainnet = match env::var("IS_MAINNET") {
+		Ok(val) => val.to_lowercase() == "true",
+		Err(_) => false, // Default to false
+	};
+
+	// panic!("Is mainnet: {}", is_mainnet);
+
+	download_old_dylib(build_dir, is_mainnet).unwrap();
 
 	let build_dir_str = build_dir.to_str().unwrap();
 
