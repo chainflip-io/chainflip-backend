@@ -1,4 +1,4 @@
-use crate::boost_pool_rpc::BoostPoolFeesRpc;
+use crate::{boost_pool_rpc::BoostPoolFeesRpc, monitoring::RpcEpochStateV2};
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
@@ -41,7 +41,7 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	monitoring_apis::{
-		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
+		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, ExternalChainsBlockHeight,
 		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
@@ -62,26 +62,7 @@ use std::{
 pub mod monitoring;
 pub mod order_fills;
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct RpcEpochState {
-	pub blocks_per_epoch: u32,
-	pub current_epoch_started_at: u32,
-	pub current_epoch_index: u32,
-	pub min_active_bid: Option<NumberOrHex>,
-	pub rotation_phase: String,
-}
-impl From<EpochState> for RpcEpochState {
-	fn from(rotation_state: EpochState) -> Self {
-		Self {
-			blocks_per_epoch: rotation_state.blocks_per_epoch,
-			current_epoch_started_at: rotation_state.current_epoch_started_at,
-			current_epoch_index: rotation_state.current_epoch_index,
-			rotation_phase: rotation_state.rotation_phase,
-			min_active_bid: rotation_state.min_active_bid.map(Into::into),
-		}
-	}
-}
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct RpcRedemptionsInfo {
 	pub total_balance: NumberOrHex,
 	pub count: u32,
@@ -112,7 +93,7 @@ impl From<FlipSupply> for RpcFlipSupply {
 pub struct RpcMonitoringData {
 	pub external_chains_height: ExternalChainsBlockHeight,
 	pub btc_utxos: BtcUtxos,
-	pub epoch: RpcEpochState,
+	pub epoch: RpcEpochStateV2,
 	pub pending_redemptions: RpcRedemptionsInfo,
 	pub pending_broadcasts: PendingBroadcasts,
 	pub pending_tss: PendingTssCeremonies,
@@ -359,7 +340,7 @@ type RpcSuspensions = Vec<(Offence, Vec<(u32, state_chain_runtime::AccountId)>)>
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RpcAuctionState {
-	blocks_per_epoch: u32,
+	epoch_duration: u32,
 	current_epoch_started_at: u32,
 	redemption_period_as_percentage: u8,
 	min_funding: NumberOrHex,
@@ -1298,7 +1279,7 @@ where
 			.map_err(to_rpc_error)?;
 
 		Ok(RpcAuctionState {
-			blocks_per_epoch: auction_state.blocks_per_epoch,
+			epoch_duration: auction_state.epoch_duration,
 			current_epoch_started_at: auction_state.current_epoch_started_at,
 			redemption_period_as_percentage: auction_state.redemption_period_as_percentage,
 			min_funding: auction_state.min_funding.into(),
