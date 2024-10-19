@@ -34,7 +34,8 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
 	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS,
+	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SECONDS_PER_BLOCK,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -64,8 +65,7 @@ use sp_std::{
 };
 pub use weights::WeightInfo;
 
-// 1 hour.
-const TAINTED_TX_EXPIRATION_BLOCKS: u32 = 600;
+const TAINTED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
