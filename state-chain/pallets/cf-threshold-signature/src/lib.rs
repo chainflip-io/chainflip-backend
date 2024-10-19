@@ -18,7 +18,7 @@ mod response_status;
 use response_status::ResponseStatus;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::TypeInfo;
+use scale_info::{build::Fields, Path, Type, TypeInfo};
 
 use cf_chains::ChainCrypto;
 use cf_primitives::{
@@ -247,8 +247,7 @@ pub mod pallet {
 	};
 	use frame_system::ensure_none;
 	/// Context for tracking the progress of a threshold signature ceremony.
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	#[scale_info(skip_type_params(T, I))]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct CeremonyContext<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
 		/// The respondents that have yet to reply.
@@ -265,8 +264,7 @@ pub mod pallet {
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	#[scale_info(skip_type_params(T, I))]
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode)]
 	pub struct RequestContext<T: Config<I>, I: 'static> {
 		pub request_id: RequestId,
 		/// The number of ceremonies attempted so far, excluding the current one.
@@ -1192,6 +1190,88 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::PalletConfigUpdated { update });
 			Ok(())
 		}
+	}
+}
+
+macro_rules! append_chain_to_name {
+	($name:ident) => {
+		match T::TargetChainCrypto::NAME {
+			"EVM" => concat!(stringify!($name), "EVM"),
+			"Polkadot" => concat!(stringify!($name), "Polkadot"),
+			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
+			"Solana" => concat!(stringify!($name), "Solana"),
+			_ => concat!(stringify!($name), "Other"),
+		}
+	};
+}
+
+impl<T, I> TypeInfo for pallet::CeremonyContext<T, I>
+where
+	T: Config<I>,
+	I: 'static,
+{
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new(append_chain_to_name!(CeremonyContext), module_path!()))
+			.composite(
+				Fields::named()
+					.field(|f| {
+						f.ty::<RequestContext<T, I>>()
+							.type_name(append_chain_to_name!(RequestContext))
+							.name("request_context")
+					})
+					.field(|f| {
+						f.ty::<BTreeSet<T::ValidatorId>>()
+							.type_name("BTreeSet<T::ValidatorId>")
+							.name("remaining_respondents")
+					})
+					.field(|f| {
+						f.ty::<BTreeMap<T::ValidatorId, AuthorityCount>>()
+							.type_name("BTreeMap<T::ValidatorId, AuthorityCount>")
+							.name("blame_counts")
+					})
+					.field(|f| {
+						f.ty::<BTreeSet<T::ValidatorId>>()
+							.type_name("BTreeSet<T::ValidatorId>")
+							.name("candidates")
+					})
+					.field(|f| f.ty::<EpochIndex>().type_name("EpochIndex").name("epoch"))
+					.field(|f| {
+						f.ty::<<T::TargetChainCrypto as ChainCrypto>::AggKey>()
+							.type_name(append_chain_to_name!(Key))
+							.name("key")
+					})
+					.field(|f| {
+						f.ty::<ThresholdCeremonyType>()
+							.type_name("ThresholdCeremonyType")
+							.name("threshold_ceremony_type")
+					}),
+			)
+	}
+}
+
+impl<T, I> TypeInfo for pallet::RequestContext<T, I>
+where
+	T: Config<I>,
+	I: 'static,
+{
+	type Identity = Self;
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new(append_chain_to_name!(RequestContext), module_path!()))
+			.composite(
+				Fields::named()
+					.field(|f| f.ty::<RequestId>().type_name("RequestId").name("request_id"))
+					.field(|f| {
+						f.ty::<AttemptCount>().type_name("AttemptCount").name("attempt_count")
+					})
+					.field(|f| {
+						f.ty::<PayloadFor<T, I>>()
+							.type_name(append_chain_to_name!(PayloadFor))
+							.name("payload")
+					}),
+			)
 	}
 }
 
