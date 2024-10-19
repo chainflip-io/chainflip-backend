@@ -2149,60 +2149,64 @@ fn tainted_transactions_expire_if_not_witnessed() {
 	});
 }
 
+fn setup_boost_swap() -> ForeignChainAddress {
+	assert_ok!(
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+			&ALICE,
+		)
+	);
+
+	assert_ok!(IngressEgress::create_boost_pools(
+		RuntimeOrigin::root(),
+		vec![BoostPoolId { asset: eth::Asset::Eth, tier: 10 }],
+	));
+
+	<Test as crate::Config>::Balance::try_credit_account(&ALICE, eth::Asset::Eth.into(), 1000)
+		.unwrap();
+
+	let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
+		eth::Asset::Eth,
+		eth::Asset::Eth.into(),
+		ForeignChainAddress::Eth(Default::default()),
+		Beneficiaries::new(),
+		BROKER,
+		None,
+		10,
+		None,
+		None,
+	)
+	.unwrap();
+
+	assert_ok!(IngressEgress::add_boost_funds(
+		RuntimeOrigin::signed(ALICE),
+		eth::Asset::Eth,
+		1000,
+		10
+	));
+
+	address
+}
+
 #[test]
 fn ignore_boosted_channels_if_tainted_after_prewitness() {
 	new_test_ext().execute_with(|| {
 		let tx_id = DepositDetails::default();
 
-		assert_ok!(
-			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
-				&ALICE,
-			)
-		);
-
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
 			&BROKER,
 		));
 
-		assert_ok!(IngressEgress::create_boost_pools(
-			RuntimeOrigin::root(),
-			vec![BoostPoolId { asset: eth::Asset::Eth, tier: 10 }],
-		));
+		let address: <Ethereum as Chain>::ChainAccount = setup_boost_swap().try_into().unwrap();
 
-		<Test as crate::Config>::Balance::try_credit_account(&ALICE, eth::Asset::Eth.into(), 1000)
-			.unwrap();
-
-		let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
-			eth::Asset::Eth,
-			eth::Asset::Eth.into(),
-			ForeignChainAddress::Eth(Default::default()),
-			Beneficiaries::new(),
-			BROKER,
-			None,
+		let _ = IngressEgress::add_prewitnessed_deposits(
+			vec![DepositWitness {
+				deposit_address: address,
+				asset: eth::Asset::Eth,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: tx_id.clone(),
+			}],
 			10,
-			None,
-			None,
-		)
-		.unwrap();
-
-		assert_ok!(IngressEgress::add_boost_funds(
-			RuntimeOrigin::signed(ALICE),
-			eth::Asset::Eth,
-			1000,
-			10
-		));
-
-		let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
-
-		let deposit_witness = DepositWitness {
-			deposit_address: address,
-			asset: eth::Asset::Eth,
-			amount: DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details: tx_id.clone(),
-		};
-
-		let deposit_witnesses = vec![deposit_witness];
-		let _ = IngressEgress::add_prewitnessed_deposits(deposit_witnesses, 10);
+		);
 
 		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
 			RuntimeOrigin::signed(BROKER),
@@ -2233,62 +2237,26 @@ fn reject_tx_if_tainted_before_prewitness() {
 	new_test_ext().execute_with(|| {
 		let tx_id = DepositDetails::default();
 
-		assert_ok!(
-			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
-				&ALICE,
-			)
-		);
-
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
 			&BROKER,
 		));
 
-		// Setup the boost pool
-		assert_ok!(IngressEgress::create_boost_pools(
-			RuntimeOrigin::root(),
-			vec![BoostPoolId { asset: eth::Asset::Eth, tier: 10 }],
-		));
-
-		<Test as crate::Config>::Balance::try_credit_account(&ALICE, eth::Asset::Eth.into(), 1000)
-			.unwrap();
-
-		let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
-			eth::Asset::Eth,
-			eth::Asset::Eth.into(),
-			ForeignChainAddress::Eth(Default::default()),
-			Beneficiaries::new(),
-			BROKER,
-			None,
-			10,
-			None,
-			None,
-		)
-		.unwrap();
-
-		assert_ok!(IngressEgress::add_boost_funds(
-			RuntimeOrigin::signed(ALICE),
-			eth::Asset::Eth,
-			1000,
-			10
-		));
-
-		let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
-
-		let deposit_witness = DepositWitness {
-			deposit_address: address,
-			asset: eth::Asset::Eth,
-			amount: DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details: tx_id.clone(),
-		};
-
-		let deposit_witnesses = vec![deposit_witness];
+		let address: <Ethereum as Chain>::ChainAccount = setup_boost_swap().try_into().unwrap();
 
 		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
 			RuntimeOrigin::signed(BROKER),
 			tx_id.clone(),
 		));
 
-		let _ = IngressEgress::add_prewitnessed_deposits(deposit_witnesses, 10);
+		let _ = IngressEgress::add_prewitnessed_deposits(
+			vec![DepositWitness {
+				deposit_address: address,
+				asset: eth::Asset::Eth,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: tx_id.clone(),
+			}],
+			10,
+		);
 
 		assert_ok!(IngressEgress::process_single_deposit(
 			address,
