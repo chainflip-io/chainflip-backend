@@ -114,8 +114,12 @@ pub enum SolanaTransactionType {
 	BatchFetch,
 	Transfer,
 	RotateAggKey,
-	CcmTransfer,
+	#[deprecated]
+	CcmTransferLegacy,
 	SetGovKeyWithAggKey,
+	CcmTransfer {
+		fallback: TransferAssetParams<Solana>,
+	},
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
@@ -303,6 +307,12 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 		let durable_nonce = Environment::nonce_account()?;
 
+		let fallback = TransferAssetParams {
+			asset: transfer_param.asset,
+			amount: transfer_param.amount,
+			to: ccm_accounts.fallback_address.into(),
+		};
+
 		// Build the transaction
 		let transaction = match transfer_param.asset {
 			SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
@@ -364,7 +374,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		})?;
 
 		Ok(Self {
-			call_type: SolanaTransactionType::CcmTransfer,
+			call_type: SolanaTransactionType::CcmTransfer { fallback },
 			transaction,
 			signer: None,
 			_phantom: Default::default(),

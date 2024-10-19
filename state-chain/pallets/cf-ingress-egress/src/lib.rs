@@ -34,7 +34,8 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
 	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS,
+	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SECONDS_PER_BLOCK,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -64,8 +65,7 @@ use sp_std::{
 };
 pub use weights::WeightInfo;
 
-// 1 hour.
-const TAINTED_TX_EXPIRATION_BLOCKS: u32 = 600;
+const TAINTED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum BoostStatus<ChainAmount> {
@@ -77,6 +77,13 @@ pub enum BoostStatus<ChainAmount> {
 		amount: ChainAmount,
 	},
 	NotBoosted,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+pub enum Prewitnessed {
+	Yes,
+	#[default]
+	No,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -547,10 +554,20 @@ pub mod pallet {
 		_,
 		Identity,
 		T::AccountId,
-		Twox64Concat,
+		Blake2_128Concat,
 		<T::TargetChain as Chain>::DepositDetails,
-		BlockNumberFor<T>,
+		Prewitnessed,
 		OptionQuery,
+	>;
+
+	/// Stores the block number when the report expires to gather with the reporter and the tx_id.
+	#[pallet::storage]
+	pub(crate) type ReportExpiresAt<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		BlockNumberFor<T>,
+		Vec<(T::AccountId, <T::TargetChain as Chain>::DepositDetails)>,
+		ValueQuery,
 	>;
 
 	/// Stores the details of the tainted transactions that are scheduled for rejecting.
@@ -695,6 +712,10 @@ pub mod pallet {
 			account_id: T::AccountId,
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
+		CcmFallbackScheduled {
+			broadcast_id: BroadcastId,
+			egress_details: ScheduledEgressDetails<T::TargetChain>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -791,16 +812,12 @@ pub mod pallet {
 				}
 			}
 
-			let mut expired_transactions = Vec::new();
-
-			for (account, tx_id, expire_block) in TaintedTransactions::<T, I>::iter() {
-				if expire_block <= now {
-					expired_transactions.push((account.clone(), tx_id.clone()));
+			for (account, tx_id) in ReportExpiresAt::<T, I>::take(now) {
+				let marked_status = TaintedTransactions::<T, I>::take(&account, &tx_id);
+				if marked_status == Some(Prewitnessed::Yes) {
+					TaintedTransactions::<T, I>::insert(&account, &tx_id, Prewitnessed::Yes);
+					continue;
 				}
-			}
-
-			for (account, tx_id) in expired_transactions {
-				TaintedTransactions::<T, I>::remove(account.clone(), tx_id.clone());
 				Self::deposit_event(Event::<T, I>::TaintedTransactionExpired {
 					account_id: account,
 					tx_id,
@@ -1344,12 +1361,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tx_id: <T::TargetChain as Chain>::DepositDetails,
 	) -> DispatchResult {
 		let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-		TaintedTransactions::<T, I>::insert(
-			account_id,
-			tx_id,
+		ReportExpiresAt::<T, I>::append(
 			<frame_system::Pallet<T>>::block_number()
 				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS)),
+			(account_id.clone(), tx_id.clone()),
 		);
+		TaintedTransactions::<T, I>::insert(account_id, tx_id, Prewitnessed::No);
 		Ok(())
 	}
 	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {
@@ -1688,15 +1705,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				continue;
 			}
 
+			let DepositChannelDetails {
+				deposit_channel,
+				action,
+				boost_fee,
+				boost_status,
+				owner,
+				..
+			} = DepositChannelLookup::<T, I>::get(&deposit_address)
+				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+
+			if TaintedTransactions::<T, I>::contains_key(owner.clone(), deposit_details.clone()) {
+				TaintedTransactions::<T, I>::insert(
+					owner.clone(),
+					deposit_details.clone(),
+					Prewitnessed::Yes,
+				);
+				continue;
+			}
+
 			let prewitnessed_deposit_id =
 				PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
 					*id = id.saturating_add(1);
 					*id
 				});
-
-			let DepositChannelDetails { deposit_channel, action, boost_fee, boost_status, .. } =
-				DepositChannelLookup::<T, I>::get(&deposit_address)
-					.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
 			let channel_id = deposit_channel.channel_id;
 
@@ -1913,35 +1945,40 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let channel_owner = deposit_channel_details.owner.clone();
 
-		if TaintedTransactions::<T, I>::take(channel_owner.clone(), deposit_details.clone())
-			.is_some()
+		if let Some(prewitness_state) =
+			TaintedTransactions::<T, I>::take(&channel_owner, &deposit_details)
 		{
-			let refund_address = match deposit_channel_details.action {
-				ChannelAction::Swap { refund_params, .. } =>
-					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
-				ChannelAction::CcmTransfer { refund_params, .. } =>
-					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
-				ChannelAction::LiquidityProvision { refund_address, .. } => Some(refund_address),
-			};
+			if deposit_channel_details.boost_status == BoostStatus::NotBoosted ||
+				prewitness_state == Prewitnessed::Yes
+			{
+				let refund_address = match deposit_channel_details.action.clone() {
+					ChannelAction::Swap { refund_params, .. } => refund_params
+						.as_ref()
+						.map(|refund_params| refund_params.refund_address.clone()),
+					ChannelAction::CcmTransfer { refund_params, .. } => refund_params
+						.as_ref()
+						.map(|refund_params| refund_params.refund_address.clone()),
+					ChannelAction::LiquidityProvision { refund_address, .. } =>
+						Some(refund_address),
+				};
 
-			let tainted_transaction_details = TaintedTransactionDetails {
-				refund_address,
-				amount: deposit_amount,
-				asset,
-				tx_id: deposit_details.clone(),
-			};
+				let tainted_transaction_details = TaintedTransactionDetails {
+					refund_address,
+					amount: deposit_amount,
+					asset,
+					tx_id: deposit_details.clone(),
+				};
+				ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
 
-			ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
-
-			Self::deposit_event(Event::<T, I>::DepositIgnored {
-				deposit_address: deposit_address.clone(),
-				asset,
-				amount: deposit_amount,
-				deposit_details: deposit_details.clone(),
-				reason: DepositIgnoredReason::TransactionTainted,
-			});
-
-			return Ok(())
+				Self::deposit_event(Event::<T, I>::DepositIgnored {
+					deposit_address,
+					asset,
+					amount: deposit_amount,
+					deposit_details,
+					reason: DepositIgnoredReason::TransactionTainted,
+				});
+				return Ok(())
+			}
 		}
 
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
@@ -2226,6 +2263,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		AmountAndFeesWithheld::<T, I> {
 			amount_after_fees: available_amount.saturating_sub(fees_withheld),
 			fees_withheld,
+		}
+	}
+
+	/// If a Ccm failed, we want to refund the user their assets.
+	/// This function will schedule a transfer to the fallback address, and emit an event on
+	/// success. IMPORTANT: Currently only used for Solana.
+	pub fn do_ccm_fallback(
+		broadcast_id: BroadcastId,
+		fallback: TransferAssetParams<T::TargetChain>,
+	) {
+		match Self::schedule_egress(
+			fallback.asset,
+			fallback.amount,
+			fallback.to,
+			None,
+		) {
+			Ok(egress_details) => Self::deposit_event(Event::<T, I>::CcmFallbackScheduled {
+				broadcast_id,
+				egress_details,
+			}),
+			Err(e) => log::error!("Ccm fallback failed to schedule the fallback egress: Target chain: {:?}, broadcast_id: {:?}, error: {:?}", T::TargetChain::get(), broadcast_id, e),
 		}
 	}
 }

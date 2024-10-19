@@ -1,12 +1,13 @@
 mod boost;
 
 use crate::{
-	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
+	mock_eth::*, BoostPoolId, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject, TaintedTransactions,
+	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, Prewitnessed,
+	PrewitnessedDepositIdCounter, ReportExpiresAt, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, ScheduledTxForReject, TaintedTransactions,
 	TAINTED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
@@ -18,7 +19,8 @@ use cf_chains::{
 	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	chains::assets::eth, AssetAmount, ChannelId, DcaParameters, ForeignChain, SWAP_DELAY_BLOCKS,
+	chains::assets::eth, AssetAmount, Beneficiaries, ChannelId, DcaParameters, ForeignChain,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -2120,14 +2122,175 @@ fn tainted_transactions_expire_if_not_witnessed() {
 		let tx_id = DepositDetails::default();
 		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
 
-		TaintedTransactions::<Test>::insert(BROKER, tx_id.clone(), expiry_at);
+		let (_, address) = request_address_and_deposit(BROKER, eth::Asset::Eth);
+		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
+			RuntimeOrigin::signed(BROKER),
+			Default::default(),
+		));
+
+		System::set_block_number(expiry_at);
 
 		IngressEgress::on_idle(expiry_at, Weight::MAX);
 
-		assert!(!TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id.clone()));
+		assert!(!TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id));
 
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
-			crate::Event::TaintedTransactionExpired { account_id: BROKER, tx_id },
+			crate::Event::TaintedTransactionExpired {
+				account_id: BROKER,
+				tx_id: Default::default(),
+			},
 		));
+	});
+}
+
+fn setup_boost_swap() -> ForeignChainAddress {
+	assert_ok!(
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+			&ALICE,
+		)
+	);
+
+	assert_ok!(IngressEgress::create_boost_pools(
+		RuntimeOrigin::root(),
+		vec![BoostPoolId { asset: eth::Asset::Eth, tier: 10 }],
+	));
+
+	<Test as crate::Config>::Balance::try_credit_account(&ALICE, eth::Asset::Eth.into(), 1000)
+		.unwrap();
+
+	let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
+		eth::Asset::Eth,
+		eth::Asset::Eth.into(),
+		ForeignChainAddress::Eth(Default::default()),
+		Beneficiaries::new(),
+		BROKER,
+		None,
+		10,
+		None,
+		None,
+	)
+	.unwrap();
+
+	assert_ok!(IngressEgress::add_boost_funds(
+		RuntimeOrigin::signed(ALICE),
+		eth::Asset::Eth,
+		1000,
+		10
+	));
+
+	address
+}
+
+#[test]
+fn ignore_boosted_channels_if_tainted_after_prewitness() {
+	new_test_ext().execute_with(|| {
+		let tx_id = DepositDetails::default();
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		let address: <Ethereum as Chain>::ChainAccount = setup_boost_swap().try_into().unwrap();
+
+		let _ = IngressEgress::add_prewitnessed_deposits(
+			vec![DepositWitness {
+				deposit_address: address,
+				asset: eth::Asset::Eth,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: tx_id.clone(),
+			}],
+			10,
+		);
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
+			RuntimeOrigin::signed(BROKER),
+			tx_id.clone(),
+		));
+
+		assert_ok!(IngressEgress::process_single_deposit(
+			address,
+			eth::Asset::Eth,
+			DEFAULT_DEPOSIT_AMOUNT,
+			tx_id,
+			Default::default()
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised {
+				deposit_address: _,
+				asset: eth::Asset::Eth,
+				..
+			})
+		);
+	});
+}
+
+#[test]
+fn reject_tx_if_tainted_before_prewitness() {
+	new_test_ext().execute_with(|| {
+		let tx_id = DepositDetails::default();
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		let address: <Ethereum as Chain>::ChainAccount = setup_boost_swap().try_into().unwrap();
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
+			RuntimeOrigin::signed(BROKER),
+			tx_id.clone(),
+		));
+
+		let _ = IngressEgress::add_prewitnessed_deposits(
+			vec![DepositWitness {
+				deposit_address: address,
+				asset: eth::Asset::Eth,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: tx_id.clone(),
+			}],
+			10,
+		);
+
+		assert_ok!(IngressEgress::process_single_deposit(
+			address,
+			eth::Asset::Eth,
+			DEFAULT_DEPOSIT_AMOUNT,
+			tx_id,
+			Default::default()
+		));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
+				deposit_address: _,
+				asset: eth::Asset::Eth,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: _,
+				reason: DepositIgnoredReason::TransactionTainted,
+			})
+		);
+	});
+}
+
+#[test]
+fn do_not_expire_tainted_transactions_if_prewitnessed() {
+	new_test_ext().execute_with(|| {
+		let tx_id = DepositDetails::default();
+		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
+
+		TaintedTransactions::<Test, ()>::insert(BROKER, tx_id.clone(), Prewitnessed::Yes);
+
+		ReportExpiresAt::<Test, ()>::insert(expiry_at, vec![(BROKER, tx_id.clone())]);
+
+		IngressEgress::on_idle(expiry_at, Weight::MAX);
+
+		assert!(TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id));
 	});
 }

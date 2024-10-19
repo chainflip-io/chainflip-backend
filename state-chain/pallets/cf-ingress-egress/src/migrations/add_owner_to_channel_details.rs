@@ -29,19 +29,21 @@ pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
-		for (account, channel_details) in old::DepositChannelLookup::<T, I>::drain() {
-			let dummy_account = T::AccountId::decode(&mut &[0u8; 32][..]).unwrap();
-			let new_channel_details = DepositChannelDetails {
-				owner: dummy_account,
-				deposit_channel: channel_details.deposit_channel,
-				opened_at: channel_details.opened_at,
-				expires_at: channel_details.expires_at,
-				action: channel_details.action,
-				boost_fee: channel_details.boost_fee,
-				boost_status: channel_details.boost_status,
-			};
-			DepositChannelLookup::<T, I>::insert(account, new_channel_details);
-		}
+		DepositChannelLookup::<T, I>::translate(
+			|_account, channel_details: old::OldDepositChannelDetails<T, I>| {
+				let dummy_account = T::AccountId::decode(&mut &[0u8; 32][..]).unwrap();
+				let new_channel_details = DepositChannelDetails {
+					owner: dummy_account,
+					deposit_channel: channel_details.deposit_channel,
+					opened_at: channel_details.opened_at,
+					expires_at: channel_details.expires_at,
+					action: channel_details.action,
+					boost_fee: channel_details.boost_fee,
+					boost_status: channel_details.boost_status,
+				};
+				Some(new_channel_details)
+			},
+		);
 		Weight::zero()
 	}
 

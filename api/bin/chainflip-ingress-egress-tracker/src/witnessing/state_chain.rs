@@ -4,7 +4,7 @@ use crate::{
 };
 use cf_chains::{
 	address::ToHumanreadableAddress,
-	dot::PolkadotTransactionId,
+	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
 	evm::{SchnorrVerificationComponents, H256},
 	AnyChain, Arbitrum, Bitcoin, Chain, Ethereum, Polkadot,
 };
@@ -60,6 +60,15 @@ enum TransactionId {
 
 #[derive(Serialize)]
 #[serde(untagged)]
+enum DepositDetails {
+	Bitcoin { tx_id: H256, vout: u32 },
+	Ethereum { tx_hashes: Vec<H256> },
+	Polkadot { extrinsic_index: PolkadotExtrinsicIndex },
+	Arbitrum { tx_hashes: Vec<H256> },
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
 enum WitnessInformation {
 	Deposit {
 		deposit_chain_block_height: <AnyChain as Chain>::ChainBlockNumber,
@@ -67,6 +76,7 @@ enum WitnessInformation {
 		deposit_address: String,
 		amount: NumberOrHex,
 		asset: cf_chains::assets::any::Asset,
+		deposit_details: Option<DepositDetails>,
 	},
 	Broadcast {
 		#[serde(skip_serializing)]
@@ -121,6 +131,10 @@ impl From<DepositInfo<Ethereum>> for WitnessInformation {
 			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			deposit_details: value
+				.deposit_details
+				.tx_hashes
+				.map(|tx_hashes| DepositDetails::Ethereum { tx_hashes }),
 		}
 	}
 }
@@ -132,6 +146,10 @@ impl From<DepositInfo<Bitcoin>> for WitnessInformation {
 			deposit_address: value.deposit_address.to_humanreadable(network),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			deposit_details: Some(DepositDetails::Bitcoin {
+				tx_id: value.deposit_details.tx_id,
+				vout: value.deposit_details.vout,
+			}),
 		}
 	}
 }
@@ -143,6 +161,9 @@ impl From<DepositInfo<Polkadot>> for WitnessInformation {
 			deposit_address: hex_encode_bytes(value.deposit_address.aliased_ref()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			deposit_details: Some(DepositDetails::Polkadot {
+				extrinsic_index: value.deposit_details,
+			}),
 		}
 	}
 }
@@ -154,6 +175,10 @@ impl From<DepositInfo<Arbitrum>> for WitnessInformation {
 			deposit_address: hex_encode_bytes(value.deposit_address.as_bytes()),
 			amount: value.amount.into(),
 			asset: value.asset.into(),
+			deposit_details: value
+				.deposit_details
+				.tx_hashes
+				.map(|tx_hashes| DepositDetails::Arbitrum { tx_hashes }),
 		}
 	}
 }
@@ -208,15 +233,8 @@ where
 			deposit_witnesses,
 			block_height,
 		}) =>
-			for witness in deposit_witnesses as Vec<DepositWitness<Polkadot>> {
-				store
-					.save_to_array(&WitnessInformation::from((
-						witness,
-						block_height,
-						chainflip_network,
-					)))
-					.await?;
-			},
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		ArbitrumIngressEgress(IngressEgressCall::process_deposits {
 			deposit_witnesses,
 			block_height,
