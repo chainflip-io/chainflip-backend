@@ -1,13 +1,12 @@
-use codec::{Decode, Encode, MaxEncodedLen};
 use ethers::types::Bloom;
-use scale_info::TypeInfo;
-use sp_core::{ConstU32, H256};
+use sp_core::H256;
 use std::collections::HashMap;
 
 use crate::evm::retry_rpc::EvmRetryRpcApi;
 
 use super::{
 	super::common::{
+		cf_parameters::*,
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
@@ -21,33 +20,13 @@ use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
-	CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
-	MAX_CCM_ADDITIONAL_DATA_LENGTH,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 };
 use cf_primitives::{Asset, BasisPoints, DcaParameters, ForeignChain};
 use ethers::prelude::*;
-use frame_support::sp_runtime::BoundedVec;
 use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
-
-pub const MAX_VAULT_SWAP_ATTRIBUTES_LENGTH: u32 = 1_000;
-pub const MAX_CF_PARAM_LENGTH: u32 =
-	MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_ATTRIBUTES_LENGTH;
-pub type CfParameters = BoundedVec<u8, ConstU32<MAX_CF_PARAM_LENGTH>>;
-
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct VaultSwapCfParameters {
-	pub ccm_additional_data: Option<CcmAdditionalData>,
-	pub vault_swap_attributes: Option<VaultSwapAttributes>,
-}
-
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct VaultSwapAttributes {
-	pub refund_params: Option<ChannelRefundParameters>,
-	pub dca_params: Option<DcaParameters>,
-	pub boost_fee: Option<BasisPoints>,
-}
 
 pub fn call_from_event<
 	C: cf_chains::Chain<ChainAccount = EthereumAddress>,
@@ -78,45 +57,6 @@ where
 		})
 	}
 
-	fn decode_vault_swap_attributes(
-		cf_parameters_vec: CfParameters,
-	) -> Result<VaultSwapAttributes> {
-		if cf_parameters_vec.is_empty() {
-			Ok(VaultSwapAttributes { refund_params: None, dca_params: None, boost_fee: None })
-		} else {
-			let attributes: VaultSwapAttributes =
-				VaultSwapAttributes::decode(&mut &cf_parameters_vec[..])
-					.map_err(|_| anyhow!("Failed to decode to `VaultSwapAttributes`"))?;
-			Ok(attributes)
-		}
-	}
-
-	fn decode_vault_swap_cf_parameters(
-		cf_parameters_vec: CfParameters,
-	) -> Result<(CcmAdditionalData, VaultSwapAttributes)> {
-		if cf_parameters_vec.is_empty() {
-			// Return the empty vector since the CCM additional data is required
-			Ok((
-				CcmAdditionalData::default(),
-				VaultSwapAttributes { refund_params: None, dca_params: None, boost_fee: None },
-			))
-		} else {
-			let vault_swap_cf_parameters: VaultSwapCfParameters =
-				VaultSwapCfParameters::decode(&mut &cf_parameters_vec[..])
-					.map_err(|_| anyhow!("Failed to decode to `VaultSwapCfParameters`"))?;
-
-			Ok((
-				// Default to empty CcmAdditionalData vector if not present
-				vault_swap_cf_parameters.ccm_additional_data.unwrap_or_default(),
-				vault_swap_cf_parameters.vault_swap_attributes.unwrap_or(VaultSwapAttributes {
-					refund_params: None,
-					dca_params: None,
-					boost_fee: None,
-				}),
-			))
-		}
-	}
-
 	Ok(match event.event_parameters {
 		VaultEvents::SwapNativeFilter(SwapNativeFilter {
 			dst_chain,
@@ -130,7 +70,7 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let vault_swap_attributes = decode_vault_swap_attributes(cf_parameters_vec)?;
+			let vault_swap_attributes = cf_parameters_vec.decode_vault_swap_attributes()?;
 
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
@@ -157,7 +97,7 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let vault_swap_attributes = decode_vault_swap_attributes(cf_parameters_vec)?;
+			let vault_swap_attributes = cf_parameters_vec.decode_vault_swap_attributes()?;
 
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
@@ -188,7 +128,7 @@ where
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
 			let (ccm_additional_data, vault_swap_attributes) =
-				decode_vault_swap_cf_parameters(cf_parameters_vec)?;
+				cf_parameters_vec.decode_vault_swap_cf_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
@@ -233,7 +173,7 @@ where
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
 			let (ccm_additional_data, vault_swap_attributes) =
-				decode_vault_swap_cf_parameters(cf_parameters_vec)?;
+				cf_parameters_vec.decode_vault_swap_cf_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
