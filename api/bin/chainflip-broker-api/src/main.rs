@@ -1,3 +1,4 @@
+use cf_chains::btc::UtxoId;
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	task_scope::{task_scope, Scope},
@@ -6,8 +7,8 @@ use chainflip_api::{
 	self,
 	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
 	settings::StateChain,
-	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
-	SwapDepositAddress, WithdrawFeesDetail,
+	AccountId32, AddressString, BrokerApi, DepositMonitorApi, OperatorApi, RefundParameters,
+	StateChainApi, SwapDepositAddress, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::to_rpc_error;
@@ -17,6 +18,7 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
+use sp_core::H256;
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
@@ -48,6 +50,9 @@ pub trait Rpc {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "mark_btc_transaction_as_tainted", aliases = ["broker_markBtcTransactionAsTainted"])]
+	async fn mark_btc_transaction_as_tainted(&self, tx_id: H256, vout: u32) -> RpcResult<()>;
 }
 
 pub struct RpcServerImpl {
@@ -117,6 +122,15 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.broker_api()
 			.withdraw_fees(asset, destination_address)
+			.await
+			.map_err(to_rpc_error)?)
+	}
+
+	async fn mark_btc_transaction_as_tainted(&self, tx_id: H256, vout: u32) -> RpcResult<()> {
+		Ok(self
+			.api
+			.deposit_monitor_api()
+			.mark_btc_transaction_as_tainted(UtxoId { tx_id, vout })
 			.await
 			.map_err(to_rpc_error)?)
 	}

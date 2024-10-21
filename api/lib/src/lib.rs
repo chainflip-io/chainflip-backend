@@ -4,6 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
 	address::{try_from_encoded_address, EncodedAddress},
+	btc::UtxoId,
 	dot::PolkadotAccountId,
 	evm::to_evm_address,
 	sol::SolAddress,
@@ -150,6 +151,10 @@ impl StateChainApi {
 		self.state_chain_client.clone()
 	}
 
+	pub fn deposit_monitor_api(&self) -> Arc<impl DepositMonitorApi> {
+		self.state_chain_client.clone()
+	}
+
 	pub fn query_api(&self) -> queries::QueryApi {
 		queries::QueryApi { state_chain_client: self.state_chain_client.clone() }
 	}
@@ -167,6 +172,8 @@ impl BrokerApi for StateChainClient {
 impl OperatorApi for StateChainClient {}
 #[async_trait]
 impl ValidatorApi for StateChainClient {}
+#[async_trait]
+impl DepositMonitorApi for StateChainClient {}
 
 #[async_trait]
 pub trait ValidatorApi: SimpleSubmissionApi {
@@ -546,6 +553,20 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 			Err(_) => EncodedAddress::Sol(clean_hex_address(address)?),
 		},
 	})
+}
+
+#[async_trait]
+pub trait DepositMonitorApi:
+	SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static
+{
+	async fn mark_btc_transaction_as_tainted(&self, tx_id: UtxoId) -> Result<()> {
+		let _ = self
+			.submit_signed_extrinsic(state_chain_runtime::RuntimeCall::BitcoinIngressEgress(
+				pallet_cf_ingress_egress::Call::mark_transaction_as_tainted { tx_id },
+			))
+			.await;
+		Ok(())
+	}
 }
 
 #[derive(Debug, Zeroize, PartialEq, Eq)]
