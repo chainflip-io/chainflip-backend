@@ -80,10 +80,10 @@ pub enum BoostStatus<ChainAmount> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
-pub enum Prewitnessed {
+pub enum BoostRejected {
 	Yes,
 	#[default]
-	No,
+	NoOrNotBoosted,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -555,7 +555,7 @@ pub mod pallet {
 		T::AccountId,
 		Blake2_128Concat,
 		<T::TargetChain as Chain>::DepositDetails,
-		Prewitnessed,
+		BoostRejected,
 		OptionQuery,
 	>;
 
@@ -811,10 +811,16 @@ pub mod pallet {
 				}
 			}
 
+			// A report get's cleaned up after approx 1 hour and needs to be re-reported by the
+			// broker if necessary. This is need as some kind of garbage collection mechanism
+			// for tainted deposits.
 			for (account, tx_id) in ReportExpiresAt::<T, I>::take(now) {
 				let marked_status = TaintedTransactions::<T, I>::take(&account, &tx_id);
-				if marked_status == Some(Prewitnessed::Yes) {
-					TaintedTransactions::<T, I>::insert(&account, &tx_id, Prewitnessed::Yes);
+				// A special case when a deposit was boosted and rejected in the prewitness step but
+				// expired between the prewitness and witness step. In this case we put it back into
+				// the list of expired transactions so it get's witness and finally rejected.
+				if marked_status == Some(BoostRejected::Yes) {
+					TaintedTransactions::<T, I>::insert(&account, &tx_id, BoostRejected::Yes);
 					continue;
 				}
 				Self::deposit_event(Event::<T, I>::TaintedTransactionExpired {
@@ -1350,7 +1356,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS)),
 			(account_id.clone(), tx_id.clone()),
 		);
-		TaintedTransactions::<T, I>::insert(account_id, tx_id, Prewitnessed::No);
+		TaintedTransactions::<T, I>::insert(account_id, tx_id, BoostRejected::NoOrNotBoosted);
 		Ok(())
 	}
 	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {
@@ -1703,7 +1709,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				TaintedTransactions::<T, I>::insert(
 					owner.clone(),
 					deposit_details.clone(),
-					Prewitnessed::Yes,
+					BoostRejected::Yes,
 				);
 				continue;
 			}
@@ -1932,9 +1938,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(prewitness_state) =
 			TaintedTransactions::<T, I>::take(&channel_owner, &deposit_details)
 		{
-			if deposit_channel_details.boost_status == BoostStatus::NotBoosted ||
-				prewitness_state == Prewitnessed::Yes
-			{
+			let is_not_boosted = deposit_channel_details.boost_status == BoostStatus::NotBoosted;
+			let boost_rejected = prewitness_state == BoostRejected::Yes;
+
+			// If the deposit is not boosted, or is boosted but was already detected as tainted in
+			// the pre witness step we schedule it to get rejected. Otherwise we have to accept the
+			// tainted tx since it was already boosted and the funds are gone.
+			if is_not_boosted || boost_rejected {
 				let refund_address = match deposit_channel_details.action.clone() {
 					ChannelAction::Swap { refund_params, .. } => refund_params
 						.as_ref()
@@ -1962,6 +1972,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					reason: DepositIgnoredReason::TransactionTainted,
 				});
 				return Ok(())
+			} else {
+				log::warn!(
+					"Deposit has been boosted but is tainted. Continuing finalizing deposit for tx_id {deposit_details:?}."
+				);
 			}
 		}
 

@@ -1,11 +1,11 @@
 mod boost;
 
 use crate::{
-	mock_eth::*, BoostPoolId, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
-	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
-	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
-	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, Prewitnessed,
+	mock_eth::*, BoostPoolId, BoostRejected, BoostStatus, Call as PalletCall, ChannelAction,
+	ChannelIdCounter, ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup,
+	DepositChannelPool, DepositIgnoredReason, DepositWitness, DisabledEgressAssets,
+	EgressDustLimit, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
+	FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode,
 	PrewitnessedDepositIdCounter, ReportExpiresAt, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer, ScheduledTxForReject, TaintedTransactions,
 	TAINTED_TX_EXPIRATION_BLOCKS,
@@ -2188,7 +2188,7 @@ fn setup_boost_swap() -> ForeignChainAddress {
 }
 
 #[test]
-fn ignore_boosted_channels_if_tainted_after_prewitness() {
+fn finalize_boosted_tx_if_tainted_after_prewitness() {
 	new_test_ext().execute_with(|| {
 		let tx_id = DepositDetails::default();
 
@@ -2285,7 +2285,7 @@ fn do_not_expire_tainted_transactions_if_prewitnessed() {
 		let tx_id = DepositDetails::default();
 		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
 
-		TaintedTransactions::<Test, ()>::insert(BROKER, tx_id.clone(), Prewitnessed::Yes);
+		TaintedTransactions::<Test, ()>::insert(BROKER, tx_id.clone(), BoostRejected::Yes);
 
 		ReportExpiresAt::<Test, ()>::insert(expiry_at, vec![(BROKER, tx_id.clone())]);
 
