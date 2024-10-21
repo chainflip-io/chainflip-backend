@@ -1,3 +1,5 @@
+use frame_support::assert_err;
+
 use super::*;
 
 const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
@@ -538,4 +540,20 @@ fn fok_ccm_refunded_no_gas_swap() {
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted { swap_request_id: REQUEST_ID }),
 			);
 		});
+}
+
+#[test]
+fn test_refund_parameter_validation() {
+	use cf_traits::SwapLimitsProvider;
+
+	new_test_ext().execute_with(|| {
+		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<Test>::get();
+
+		assert_ok!(Swapping::validate_refund_params(0));
+		assert_ok!(Swapping::validate_refund_params(max_swap_retry_duration_blocks));
+		assert_err!(
+			Swapping::validate_refund_params(max_swap_retry_duration_blocks + 1),
+			DispatchError::from(crate::Error::<Test>::RetryDurationTooHigh)
+		);
+	});
 }

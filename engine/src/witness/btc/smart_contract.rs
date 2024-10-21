@@ -244,7 +244,7 @@ mod tests {
 					n: 0,
 					script_pubkey: vault_script.clone(),
 				},
-				// A nulddata UTXO encoding some swap parameters:
+				// A nulldata UTXO encoding some swap parameters:
 				VerboseTxOut {
 					value: Amount::from_sat(0),
 					n: 1,
