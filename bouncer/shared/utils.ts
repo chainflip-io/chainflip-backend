@@ -718,10 +718,10 @@ export async function observeSolanaCcmEvent(
   sourceAddress: string | null,
   messageMetadata: CcmDepositMetadata,
 ): Promise<ContractEvent> {
-  function decodeExpectedCfParameters(cfParametersHex: string) {
+  function decodeExpectedCcmAdditionalData(ccmAdditionalDataHex: string) {
     // Convert the hexadecimal string back to a byte array
-    const cfParameters = new Uint8Array(
-      cfParametersHex
+    const ccmAdditionalData = new Uint8Array(
+      ccmAdditionalDataHex
         .slice(2)
         .match(/.{1,2}/g)
         ?.map((byte) => parseInt(byte, 16)) ?? [],
@@ -731,7 +731,7 @@ export async function observeSolanaCcmEvent(
     const remainingAccountSize = publicKeySize + 1;
 
     // Extra byte for the encoded length
-    const remainingAccountsBytes = cfParameters.slice(remainingAccountSize + 1, -publicKeySize);
+    const remainingAccountsBytes = ccmAdditionalData.slice(remainingAccountSize + 1, -publicKeySize);
 
     const remainingAccounts = [];
     const remainingIsWritable = [];
@@ -746,7 +746,7 @@ export async function observeSolanaCcmEvent(
     }
 
     // fallback account
-    const fallbackAccount = cfParameters.slice(-publicKeySize);
+    const fallbackAccount = ccmAdditionalData.slice(-publicKeySize);
 
     return { remainingAccounts, remainingIsWritable, fallbackAccount };
   }
@@ -775,7 +775,7 @@ export async function observeSolanaCcmEvent(
             const {
               remainingAccounts: expectedRemainingAccounts,
               remainingIsWritable: expectedRemainingIsWritable,
-            } = decodeExpectedCfParameters(messageMetadata.cfParameters!);
+            } = decodeExpectedCcmAdditionalData(messageMetadata.ccmAdditionalData!);
 
             if (
               expectedRemainingIsWritable.length !== event.data.remaining_is_writable.length ||

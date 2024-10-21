@@ -110,7 +110,7 @@ export async function executeContractSwap(
 
   const cfParameters = encodeCfParameters(
     sourceAsset,
-    messageMetadata?.cfParameters,
+    messageMetadata?.ccmAdditionalData,
     boostFeeBps,
     fillOrKillParams,
     dcaParams,
@@ -126,15 +126,16 @@ export async function executeContractSwap(
       destAddress,
       srcAsset: stateChainAssetFromAsset(sourceAsset),
       srcChain,
-      // TODO: This will need some refactoring either putting the cfParameters outside the
-      // ccmParams and the user should encode it as done here or, probably better, we just
-      // add the SwapParameters support (Fok/Dca/Boost) as separate parameters, rename
-      // cfParameters to ccmAdditionalData and do the encoding within the SDK.
       ccmParams: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
-        cfParameters,
+        ccmAdditionalData: messageMetadata.ccmAdditionalData
       },
+      // TODO: Temporal until SDK has the encoding
+      cfParameters,
+      boostFeeBps,
+      fillOrKillParams,
+      dcaParams,
     } as ExecuteSwapParams,
     networkOptions,
     txOptions,

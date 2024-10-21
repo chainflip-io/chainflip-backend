@@ -178,8 +178,7 @@ export function newCcmMetadata(
   return {
     message,
     gasBudget,
-    // TODO: To rename to ccmAdditionalData
-    cfParameters: ccmAdditionalData,
+    ccmAdditionalData,
   };
 }
 
