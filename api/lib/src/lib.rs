@@ -535,7 +535,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		min_output_amount: AssetAmount,
 		boost_fee: Option<BasisPoints>,
 		dca_parameters: Option<DcaParameters>,
-		_broker_fees: Option<Beneficiaries<AccountId32>>,
+		broker_commission: BasisPoints,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
 	) -> Result<SwapPayload> {
 		// Check if safe mode is active
 		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;

@@ -1,13 +1,12 @@
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
+	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
+	try_parse_number_or_hex,
 };
 use chainflip_api::{
 	self,
-	primitives::{
-		AccountRole, Affiliates, Asset, BasisPoints, Beneficiaries, CcmChannelMetadata,
-		DcaParameters,
-	},
+	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
 	settings::StateChain,
 	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
 	SwapDepositAddress, SwapPayload, WithdrawFeesDetail,
@@ -55,14 +54,15 @@ pub trait Rpc {
 	#[method(name = "request_swap_parameter_encoding", aliases = ["broker_requestSwapParameterEncoding"])]
 	async fn request_swap_parameter_encoding(
 		&self,
-		input_asset: Asset,
-		output_asset: Asset,
-		output_address: AddressString,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
 		retry_duration: u32,
-		min_output_amount: u128,
-		boost_fee: Option<BasisPoints>,
+		min_output_amount: NumberOrHex,
 		dca_parameters: Option<DcaParameters>,
-		broker_fees: Option<Beneficiaries<AccountId32>>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
 	) -> RpcResult<SwapPayload>;
 }
 
@@ -139,27 +139,29 @@ impl RpcServer for RpcServerImpl {
 
 	async fn request_swap_parameter_encoding(
 		&self,
-		input_asset: Asset,
-		output_asset: Asset,
-		output_address: AddressString,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
 		retry_duration: u32,
-		min_output_amount: u128,
-		boost_fee: Option<BasisPoints>,
+		min_output_amount: NumberOrHex,
 		dca_parameters: Option<DcaParameters>,
-		broker_fees: Option<Beneficiaries<AccountId32>>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
 	) -> RpcResult<SwapPayload> {
 		Ok(self
 			.api
 			.broker_api()
 			.request_swap_parameter_encoding(
-				input_asset,
-				output_asset,
-				output_address,
+				source_asset,
+				destination_asset,
+				destination_address,
 				retry_duration,
-				min_output_amount,
+				try_parse_number_or_hex(min_output_amount).map_err(to_rpc_error)?,
 				boost_fee,
 				dca_parameters,
-				broker_fees,
+				broker_commission,
+				affiliate_fees,
 			)
 			.await
 			.map_err(to_rpc_error)?)
