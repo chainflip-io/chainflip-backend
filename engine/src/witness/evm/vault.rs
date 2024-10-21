@@ -31,8 +31,9 @@ use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
-// MAX_CF_PARAM_LENGTH ~== MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_ATTRIBUTES_LENGTH
-pub const MAX_CF_PARAM_LENGTH: u32 = MAX_CCM_ADDITIONAL_DATA_LENGTH + 1_000;
+pub const MAX_VAULT_SWAP_ATTRIBUTES_LENGTH: u32 = 1_000;
+pub const MAX_CF_PARAM_LENGTH: u32 =
+	MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_ATTRIBUTES_LENGTH;
 pub type CfParameters = BoundedVec<u8, ConstU32<MAX_CF_PARAM_LENGTH>>;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
