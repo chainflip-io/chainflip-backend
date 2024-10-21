@@ -5,12 +5,11 @@ import {
   approveVault,
   Asset as SCAsset,
   Chains,
-  InternalAsset,
   Chain,
 } from '@chainflip/cli';
 import { u8aToHex, hexToU8a } from '@polkadot/util';
 
-import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
+import { HDNodeWallet, Wallet } from 'ethers';
 import {
   observeBalanceIncrease,
   getContractAddress,
@@ -18,15 +17,13 @@ import {
   amountToFineAmount,
   defaultAssetAmounts,
   chainFromAsset,
-  getEvmEndpoint,
   assetDecimals,
   stateChainAssetFromAsset,
-  chainGasAsset,
   shortChainFromAsset,
+  createEvmWalletAndFund,
 } from './utils';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
-import { send } from './send';
 import { SwapContext, SwapStatus } from './swap_context';
 import { vaultSwapCfParametersCodec } from './swapping';
 
@@ -146,21 +143,15 @@ export async function performSwapViaContract(
   const tag = swapTag ?? '';
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
 
-  const srcChain = chainFromAsset(sourceAsset);
-
   // Generate a new wallet for each contract swap to prevent nonce issues when running in parallel
   // with other swaps via deposit channels.
   const mnemonic = Wallet.createRandom().mnemonic?.phrase ?? '';
   if (mnemonic === '') {
     throw new Error('Failed to create random mnemonic');
   }
-  const wallet = Wallet.fromPhrase(mnemonic).connect(getDefaultProvider(getEvmEndpoint(srcChain)));
+  const wallet = await createEvmWalletAndFund(sourceAsset);
 
   try {
-    // Fund new key with native asset and asset to swap.
-    await send(chainGasAsset(srcChain) as InternalAsset, wallet.address);
-    await send(sourceAsset, wallet.address);
-
     if (erc20Assets.includes(sourceAsset)) {
       // Doing effectively infinite approvals to make sure it doesn't fail.
       // eslint-disable-next-line @typescript-eslint/no-use-before-define

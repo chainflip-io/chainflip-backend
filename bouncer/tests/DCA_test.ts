@@ -1,12 +1,10 @@
-import { InternalAsset as Asset, InternalAssets as Assets, InternalAsset } from '@chainflip/cli';
+import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { randomBytes } from 'crypto';
-import { getDefaultProvider, Wallet } from 'ethers';
 import assert from 'assert';
 import {
   chainFromAsset,
-  chainGasAsset,
+  createEvmWalletAndFund,
   getContractAddress,
-  getEvmEndpoint,
   newAddress,
   observeBalanceIncrease,
   observeSwapRequested,
@@ -83,18 +81,7 @@ async function testDCASwap(
     await send(inputAsset, swapRequest.depositAddress, amount.toString());
     testDCASwaps.log(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
-    const srcChain = chainFromAsset(inputAsset);
-
-    // Probably refactor this into a function
-    const mnemonic = Wallet.createRandom().mnemonic?.phrase ?? '';
-    if (mnemonic === '') {
-      throw new Error('Failed to create random mnemonic');
-    }
-    const wallet = Wallet.fromPhrase(mnemonic).connect(
-      getDefaultProvider(getEvmEndpoint(srcChain)),
-    );
-    await send(chainGasAsset(srcChain) as InternalAsset, wallet.address);
-    await send(inputAsset, wallet.address);
+    const wallet = await createEvmWalletAndFund(inputAsset);
 
     const contractSwapParams = await executeContractSwap(
       inputAsset,

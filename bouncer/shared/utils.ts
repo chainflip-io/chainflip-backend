@@ -1,5 +1,6 @@
 import { execSync } from 'child_process';
 import * as crypto from 'crypto';
+import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, Keyring } from '@polkadot/api';
@@ -30,6 +31,7 @@ import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
 import { execWithLog } from './utils/exec_with_log';
+import { send } from './send';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -1160,4 +1162,19 @@ export function getTimeStamp(): string {
   const minutes = now.getMinutes().toString().padStart(2, '0');
   const seconds = now.getSeconds().toString().padStart(2, '0');
   return `${hours}:${minutes}:${seconds}`;
+}
+
+export async function createEvmWalletAndFund(asset: Asset): Promise<HDNodeWallet> {
+  const chain = chainFromAsset(asset);
+
+  const mnemonic = Wallet.createRandom().mnemonic?.phrase ?? '';
+  if (mnemonic === '') {
+    throw new Error('Failed to create random mnemonic');
+  }
+  const wallet = Wallet.fromPhrase(mnemonic).connect(
+    getDefaultProvider(getEvmEndpoint(chain)),
+  );
+  await send(chainGasAsset(chain) as SDKAsset, wallet.address);
+  await send(asset, wallet.address);
+  return wallet;
 }
