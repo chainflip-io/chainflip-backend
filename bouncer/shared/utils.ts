@@ -107,6 +107,9 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH';
         case 'SWAP_ENDPOINT':
           return '35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT';
+        case 'FALLBACK':
+          /// 3wDSVR6YSRDFiWdwsnZZRjAKHKvsmb4fouYVqoBt5yd4vSrY7aQdvtLJKMvEb3AMWGD5fxunfdotvwPwnSChWMWx
+          return 'CFf51BPWnybvgbZrxy61s4SCCvEohBC7achsPLuoACUG';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -728,7 +731,7 @@ export async function observeSolanaCcmEvent(
     const remainingAccountSize = publicKeySize + 1;
 
     // Extra byte for the encoded length
-    const remainingAccountsBytes = cfParameters.slice(remainingAccountSize + 1);
+    const remainingAccountsBytes = cfParameters.slice(remainingAccountSize + 1, -publicKeySize);
 
     const remainingAccounts = [];
     const remainingIsWritable = [];
@@ -742,7 +745,10 @@ export async function observeSolanaCcmEvent(
       remainingIsWritable.push(Boolean(isWritable));
     }
 
-    return { remainingAccounts, remainingIsWritable };
+    // fallback account
+    const fallbackAccount = cfParameters.slice(-publicKeySize);
+
+    return { remainingAccounts, remainingIsWritable, fallbackAccount };
   }
 
   const connection = getSolConnection();

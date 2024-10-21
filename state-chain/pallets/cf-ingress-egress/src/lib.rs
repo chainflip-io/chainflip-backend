@@ -658,6 +658,10 @@ pub mod pallet {
 			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
 		},
+		CcmFallbackScheduled {
+			broadcast_id: BroadcastId,
+			egress_details: ScheduledEgressDetails<T::TargetChain>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -2099,6 +2103,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		AmountAndFeesWithheld::<T, I> {
 			amount_after_fees: available_amount.saturating_sub(fees_withheld),
 			fees_withheld,
+		}
+	}
+
+	/// If a Ccm failed, we want to refund the user their assets.
+	/// This function will schedule a transfer to the fallback address, and emit an event on
+	/// success. IMPORTANT: Currently only used for Solana.
+	pub fn do_ccm_fallback(
+		broadcast_id: BroadcastId,
+		fallback: TransferAssetParams<T::TargetChain>,
+	) {
+		match Self::schedule_egress(
+			fallback.asset,
+			fallback.amount,
+			fallback.to,
+			None,
+		) {
+			Ok(egress_details) => Self::deposit_event(Event::<T, I>::CcmFallbackScheduled {
+				broadcast_id,
+				egress_details,
+			}),
+			Err(e) => log::error!("Ccm fallback failed to schedule the fallback egress: Target chain: {:?}, broadcast_id: {:?}, error: {:?}", T::TargetChain::get(), broadcast_id, e),
 		}
 	}
 }

@@ -90,6 +90,8 @@ function newSolanaCcmAdditionalData(maxAccounts: number) {
     cfReceiver.is_writable ? 1 : 0,
   ]);
 
+  const fallbackAddrBytes = new PublicKey(getContractAddress('Solana', 'FALLBACK')).toBytes();
+
   const remainingAccounts = [];
   const numRemainingAccounts = Math.floor(Math.random() * maxAccounts);
 
@@ -105,6 +107,7 @@ function newSolanaCcmAdditionalData(maxAccounts: number) {
     // Inserted by the codec::Encode
     4 * remainingAccounts.length,
     ...remainingAccounts.flatMap((account) => Array.from(account)),
+    ...fallbackAddrBytes,
   ]);
 
   return arrayToHexString(cfParameters);
