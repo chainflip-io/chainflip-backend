@@ -45,7 +45,7 @@ async function testDCASwap(
 
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
 
-  // TODO: Temporary while we are forced to have CCM when passing VaultSwapAttributes
+  // TODO: Temporary while we are forced to have CCM when passing VaultSwapParameters
   const destAddress = !swapviaContract
     ? await newAddress(destAsset, randomBytes(32).toString('hex'))
     : getContractAddress(chainFromAsset(destAsset), 'CFTESTER');

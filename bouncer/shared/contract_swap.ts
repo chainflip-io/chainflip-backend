@@ -30,7 +30,7 @@ const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
 export const vaultSwapCfParametersCodec = Struct({
   ccmAdditionalData: Option(TsBytes()),
-  vaultSwapAttributes: Option(
+  vaultSwapParameters: Option(
     Struct({
       refundParams: Option(
         Struct({
@@ -62,7 +62,7 @@ export function encodeCfParameters(
     ? u8aToHex(
         vaultSwapCfParametersCodec.enc({
           ccmAdditionalData: ccmAdditionalData ? hexToU8a(ccmAdditionalData) : undefined,
-          vaultSwapAttributes:
+          vaultSwapParameters:
             fillOrKillParams || dcaParams || boostFeeBps
               ? {
                   refundParams: fillOrKillParams && {
@@ -128,7 +128,7 @@ export async function executeContractSwap(
       srcChain,
       // TODO: This will need some refactoring either putting the cfParameters outside the
       // ccmParams and the user should encode it as done here or, probably better, we just
-      // add the SwapAttributes support (Fok/Dca/Boost) as separate parameters, rename
+      // add the SwapParameters support (Fok/Dca/Boost) as separate parameters, rename
       // cfParameters to ccmAdditionalData and do the encoding within the SDK.
       ccmParams: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),

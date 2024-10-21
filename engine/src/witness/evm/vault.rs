@@ -70,7 +70,7 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let vault_swap_attributes = cf_parameters_vec.decode_vault_swap_attributes()?;
+			let vault_swap_parameters = cf_parameters_vec.decode_vault_swap_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
@@ -79,9 +79,9 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
-				vault_swap_attributes.refund_params,
-				vault_swap_attributes.dca_params,
-				vault_swap_attributes.boost_fee,
+				vault_swap_parameters.refund_params,
+				vault_swap_parameters.dca_params,
+				vault_swap_parameters.boost_fee,
 			))
 		},
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
@@ -97,7 +97,7 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let vault_swap_attributes = cf_parameters_vec.decode_vault_swap_attributes()?;
+			let vault_swap_parameters = cf_parameters_vec.decode_vault_swap_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
@@ -108,9 +108,9 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
-				vault_swap_attributes.refund_params,
-				vault_swap_attributes.dca_params,
-				vault_swap_attributes.boost_fee,
+				vault_swap_parameters.refund_params,
+				vault_swap_parameters.dca_params,
+				vault_swap_parameters.boost_fee,
 			))
 		},
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
@@ -127,7 +127,7 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let (ccm_additional_data, vault_swap_attributes) =
+			let (ccm_additional_data, vault_swap_parameters) =
 				cf_parameters_vec.decode_vault_swap_cf_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
@@ -152,9 +152,9 @@ where
 					},
 				}),
 				event.tx_hash.into(),
-				vault_swap_attributes.refund_params,
-				vault_swap_attributes.dca_params,
-				vault_swap_attributes.boost_fee,
+				vault_swap_parameters.refund_params,
+				vault_swap_parameters.dca_params,
+				vault_swap_parameters.boost_fee,
 			))
 		},
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
@@ -172,7 +172,7 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let (ccm_additional_data, vault_swap_attributes) =
+			let (ccm_additional_data, vault_swap_parameters) =
 				cf_parameters_vec.decode_vault_swap_cf_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
@@ -199,9 +199,9 @@ where
 					},
 				}),
 				event.tx_hash.into(),
-				vault_swap_attributes.refund_params,
-				vault_swap_attributes.dca_params,
-				vault_swap_attributes.boost_fee,
+				vault_swap_parameters.refund_params,
+				vault_swap_parameters.dca_params,
+				vault_swap_parameters.boost_fee,
 			))
 		},
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
