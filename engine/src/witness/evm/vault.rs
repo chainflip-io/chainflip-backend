@@ -80,19 +80,12 @@ where
 	fn decode_vault_swap_attributes(
 		cf_parameters_vec: CfParameters,
 	) -> Result<VaultSwapAttributes> {
-		println!("DEBUGDEBUG cf_parameters_vec {:?}", cf_parameters_vec);
-
 		if cf_parameters_vec.is_empty() {
-			println!("DEBUGDEBUG Emtpy cf_parameters_vec");
-
 			Ok(VaultSwapAttributes { refund_params: None, dca_params: None, boost_fee: None })
 		} else {
 			let attributes: VaultSwapAttributes =
 				VaultSwapAttributes::decode(&mut &cf_parameters_vec[..])
 					.map_err(|_| anyhow!("Failed to decode to `VaultSwapAttributes`"))?;
-
-			println!("DEBUGDEBUG attributes {:?}", attributes);
-
 			Ok(attributes)
 		}
 	}
@@ -100,11 +93,7 @@ where
 	fn decode_vault_swap_cf_parameters(
 		cf_parameters_vec: CfParameters,
 	) -> Result<(CcmAdditionalData, VaultSwapAttributes)> {
-		println!("DEBUGDEBUG cf_parameters_vec {:?}", cf_parameters_vec);
-
 		if cf_parameters_vec.is_empty() {
-			println!("DEBUGDEBUG Emtpy cf_parameters_vec");
-
 			// Return the empty vector since the CCM additional data is required
 			Ok((
 				CcmAdditionalData::default(),
@@ -114,8 +103,6 @@ where
 			let vault_swap_cf_parameters: VaultSwapCfParameters =
 				VaultSwapCfParameters::decode(&mut &cf_parameters_vec[..])
 					.map_err(|_| anyhow!("Failed to decode to `VaultSwapCfParameters`"))?;
-
-			println!("DEBUGDEBUG vault_swap_cf_parameters {:?}", vault_swap_cf_parameters);
 
 			Ok((
 				// Default to empty CcmAdditionalData vector if not present
@@ -138,7 +125,6 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			println!("DEBUGDEBUG cf_parameters {:?}", cf_parameters);
 			let cf_parameters_vec: CfParameters = cf_parameters
 				.to_vec()
 				.try_into()
@@ -166,8 +152,6 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			println!("DEBUGDEBUG cf_parameters {:?}", cf_parameters);
-
 			let cf_parameters_vec: CfParameters = cf_parameters
 				.to_vec()
 				.try_into()
@@ -198,8 +182,6 @@ where
 			gas_amount,
 			cf_parameters,
 		}) => {
-			println!("DEBUGDEBUG cf_parameters {:?}", cf_parameters);
-
 			let cf_parameters_vec: CfParameters = cf_parameters
 				.to_vec()
 				.try_into()
@@ -245,8 +227,6 @@ where
 			gas_amount,
 			cf_parameters,
 		}) => {
-			println!("DEBUGDEBUG cf_parameters {:?}", cf_parameters);
-
 			let cf_parameters_vec: CfParameters = cf_parameters
 				.to_vec()
 				.try_into()

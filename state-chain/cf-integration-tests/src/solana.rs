@@ -687,7 +687,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 				channel_metadata: CcmChannelMetadata {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 1_000_000_000u128,
-					cf_parameters: SolCcmAccounts {
+					ccm_additional_data: SolCcmAccounts {
 						cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x10; 32]), is_writable: true },
 						remaining_accounts: vec![
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
@@ -708,6 +708,9 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 					destination_address: EncodedAddress::Sol([1u8; 32]),
 					deposit_metadata: ccm,
 					tx_hash: Default::default(),
+					boost_fee: None,
+					refund_params: None,
+					dca_params: None,
 				},
 			));
 
