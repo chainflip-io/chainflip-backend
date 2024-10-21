@@ -82,7 +82,6 @@ use frame_support::{
 	},
 	traits::{Defensive, Get},
 };
-use log::{log, Level};
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
 use scale_info::TypeInfo;
@@ -833,7 +832,7 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 						batch_transfer.change_utxo_key,
 					);
 				} else {
-					log!(Level::Info, "BTC egress without change UTXO");
+					log::info!("BTC egress without change UTXO");
 				}
 			},
 			_ => unreachable!(),
