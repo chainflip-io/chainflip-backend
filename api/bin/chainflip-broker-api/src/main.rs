@@ -46,6 +46,9 @@ pub trait Rpc {
 	async fn get_open_btc_swap_addresses(
 		&self,
 	) -> RpcResult<Vec<String>>;
+
+    #[method(name = "mark_btc_transaction_as_tainted", aliases = ["broker_markBtcTransactionAsTainted"])]
+    async fn mark_btc_transaction_as_tainted(&self, tx_id: String) -> RpcResult<()>;
 }
 
 pub struct RpcServerImpl {
@@ -117,6 +120,11 @@ impl RpcServer for RpcServerImpl {
 	) -> RpcResult<Vec<String>> {
 		let result = self.api.query_api().get_open_swap_channels::<primitives::chains::Bitcoin>(None).await?;
 		Ok(result.iter().map(|channel| channel.deposit_address.clone()).collect())
+	}
+
+    async fn mark_btc_transaction_as_tainted(&self, tx_id: String) -> RpcResult<()> {
+		println!("INFO: Got tx_id {tx_id} to be refunded.");
+		Ok(())
 	}
 }
 
