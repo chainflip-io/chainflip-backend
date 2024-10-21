@@ -13,9 +13,7 @@ use cf_chains::{
 	CcmChannelMetadata, ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{
-	AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment, Price,
-};
+use cf_primitives::{AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment, Price};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
