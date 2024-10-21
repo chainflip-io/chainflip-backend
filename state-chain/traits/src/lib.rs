@@ -23,7 +23,7 @@ use cf_chains::{
 	assets::any::AssetMap,
 	sol::{SolAddress, SolHash},
 	ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters,
-	DepositChannel, Ethereum,
+	Ethereum,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BlockNumber,
@@ -897,12 +897,7 @@ pub trait FlipBurnInfo {
 
 /// The trait implementation is intentionally no-op by default
 pub trait OnDeposit<C: Chain> {
-	fn on_deposit_made(
-		_deposit_details: C::DepositDetails,
-		_amount: C::ChainAmount,
-		_channel: &DepositChannel<C>,
-	) {
-	}
+	fn on_deposit_made(_deposit_details: C::DepositDetails, _amount: C::ChainAmount) {}
 }
 
 pub trait NetworkEnvironmentProvider {

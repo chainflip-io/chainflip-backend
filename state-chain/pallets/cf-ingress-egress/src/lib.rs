@@ -57,6 +57,7 @@ use scale_info::{
 };
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
+	boxed::Box,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	marker::PhantomData,
 	vec,
@@ -1104,9 +1105,14 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			from: Asset,
 			to: Asset,
-			deposit_amount: AssetAmount,
+			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 			destination_address: EncodedAddress,
 			tx_hash: TransactionHash,
+			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
+			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DcaParameters>,
+			// This is only to be checked in the pre-witnessed version (not implemented yet)
+			_boost_fee: BasisPoints,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -1122,16 +1128,20 @@ pub mod pallet {
 					},
 				};
 
+			T::DepositHandler::on_deposit_made(*deposit_details, deposit_amount);
+
+			// TODO: ensure minimum deposit?
+
+			// TODO: validate dca_params and refund_params
+
 			T::SwapRequestHandler::init_swap_request(
 				from,
-				deposit_amount,
+				deposit_amount.into(),
 				to,
 				SwapRequestType::Regular { output_address: destination_address_internal.clone() },
 				Default::default(),
-				// NOTE: FoK not yet supported for swaps from the contract
-				None,
-				// NOTE: DCA not yet supported for swaps from the contract
-				None,
+				refund_params,
+				dca_params,
 				SwapOrigin::Vault { tx_hash },
 			);
 
@@ -1823,11 +1833,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
 		// Add the deposit to the balance.
-		T::DepositHandler::on_deposit_made(
-			deposit_details.clone(),
-			deposit_amount,
-			&deposit_channel_details.deposit_channel,
-		);
+		T::DepositHandler::on_deposit_made(deposit_details.clone(), deposit_amount);
 
 		// We received a deposit on a channel. If channel has been boosted earlier
 		// (i.e. awaiting finalisation), *and* the boosted amount matches the amount
