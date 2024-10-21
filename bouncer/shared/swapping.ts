@@ -1,7 +1,6 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import Web3 from 'web3';
-import { u32, Struct, Option, u16, u256, Bytes as TsBytes, Enum } from 'scale-ts';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
 import { performSwap } from '../shared/perform_swap';
 import {
@@ -159,29 +158,6 @@ function newCcmMessage(destAsset: Asset): string {
       throw new Error(`Unsupported chain: ${destChain}`);
   }
 }
-
-export const vaultSwapCfParametersCodec = Struct({
-  ccmAdditionalData: Option(TsBytes()),
-  vaultSwapAttributes: Option(
-    Struct({
-      refundParams: Option(
-        Struct({
-          retryDurationBlocks: u32,
-          refundAddress: Enum({
-            Eth: TsBytes(20),
-            Dot: TsBytes(32), // not supported anyway
-            Btc: TsBytes(), // not supported anyway
-            Arb: TsBytes(20),
-            Sol: TsBytes(32),
-          }),
-          minPriceX128: u256,
-        }),
-      ),
-      dcaParams: Option(Struct({ numberOfChunks: u32, chunkIntervalBlocks: u32 })),
-      boostFee: Option(u16),
-    }),
-  ),
-});
 
 export function newCcmMetadata(
   sourceAsset: Asset,

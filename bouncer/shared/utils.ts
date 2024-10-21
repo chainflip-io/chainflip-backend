@@ -1177,9 +1177,7 @@ export async function createEvmWalletAndFund(asset: Asset): Promise<HDNodeWallet
   if (mnemonic === '') {
     throw new Error('Failed to create random mnemonic');
   }
-  const wallet = Wallet.fromPhrase(mnemonic).connect(
-    getDefaultProvider(getEvmEndpoint(chain)),
-  );
+  const wallet = Wallet.fromPhrase(mnemonic).connect(getDefaultProvider(getEvmEndpoint(chain)));
   await send(chainGasAsset(chain) as SDKAsset, wallet.address);
   await send(asset, wallet.address);
   return wallet;
