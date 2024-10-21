@@ -14,7 +14,7 @@ use cf_chains::{
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{
-	AssetAmount, Beneficiaries, BlockNumber, DcaParameters, NetworkEnvironment, Price,
+	AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment, Price,
 };
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
@@ -550,6 +550,10 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		}
 
 		// Validate params
+		frame_support::ensure!(
+			broker_commission == 0 && affiliate_fees.map_or(true, |fees| fees.is_empty()),
+			anyhow!("Broker/Affi fees are not yet supported for vault swaps. Request a deposit address or remove the broker fees.")
+		);
 		self.base_rpc_api()
 			.validate_refund_params(retry_duration, Some(block_hash))
 			.await?;
