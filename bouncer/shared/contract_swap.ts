@@ -8,7 +8,6 @@ import {
   Chain,
 } from '@chainflip/cli';
 import { u32, Struct, Option, u16, u256, Bytes as TsBytes, Enum } from 'scale-ts';
-import { u8aToHex, hexToU8a } from '@polkadot/util';
 import { HDNodeWallet, Wallet } from 'ethers';
 import {
   observeBalanceIncrease,
@@ -19,7 +18,6 @@ import {
   chainFromAsset,
   assetDecimals,
   stateChainAssetFromAsset,
-  shortChainFromAsset,
   createEvmWalletAndFund,
 } from './utils';
 import { getBalance } from './get_balance';
@@ -51,37 +49,6 @@ export const vaultSwapCfParametersCodec = Struct({
   ),
 });
 
-export function encodeCfParameters(
-  sourceAsset: Asset,
-  ccmAdditionalData?: string | undefined,
-  boostFeeBps?: number,
-  fillOrKillParams?: FillOrKillParamsX128,
-  dcaParams?: DcaParams,
-): string | undefined {
-  return ccmAdditionalData || fillOrKillParams || dcaParams || boostFeeBps
-    ? u8aToHex(
-        vaultSwapCfParametersCodec.enc({
-          ccmAdditionalData: ccmAdditionalData ? hexToU8a(ccmAdditionalData) : undefined,
-          vaultSwapParameters:
-            fillOrKillParams || dcaParams || boostFeeBps
-              ? {
-                  refundParams: fillOrKillParams && {
-                    retryDurationBlocks: fillOrKillParams.retryDurationBlocks,
-                    refundAddress: {
-                      tag: shortChainFromAsset(sourceAsset),
-                      value: hexToU8a(fillOrKillParams.refundAddress),
-                    },
-                    minPriceX128: BigInt(fillOrKillParams.minPriceX128),
-                  },
-                  dcaParams,
-                  boostFee: boostFeeBps,
-                }
-              : undefined,
-        }),
-      )
-    : undefined;
-}
-
 export async function executeContractSwap(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -108,14 +75,6 @@ export async function executeContractSwap(
     gasLimit: srcChain === Chains.Arbitrum ? 10000000n : 200000n,
   } as const;
 
-  const cfParameters = encodeCfParameters(
-    sourceAsset,
-    messageMetadata?.ccmAdditionalData,
-    boostFeeBps,
-    fillOrKillParams,
-    dcaParams,
-  );
-
   const receipt = await executeSwap(
     {
       destChain,
@@ -129,10 +88,8 @@ export async function executeContractSwap(
       ccmParams: messageMetadata && {
         gasBudget: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
-        ccmAdditionalData: messageMetadata.ccmAdditionalData
+        ccmAdditionalData: messageMetadata.ccmAdditionalData,
       },
-      // TODO: Temporal until SDK has the encoding
-      cfParameters,
       boostFeeBps,
       fillOrKillParams,
       dcaParams,

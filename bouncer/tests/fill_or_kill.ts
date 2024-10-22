@@ -13,7 +13,7 @@ import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
 import { getBalance } from '../shared/get_balance';
 import { observeEvent } from '../shared/utils/substrate';
-import { FillOrKillParamsX128 } from '../shared/new_swap';
+import { CcmDepositMetadata, FillOrKillParamsX128 } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
 import { performSwapViaContract } from '../shared/contract_swap';
 import { newCcmMetadata } from '../shared/swapping';
@@ -27,6 +27,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapviaCont
   const refundAddress = await newAddress(inputAsset, randomBytes(32).toString('hex'));
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
   testFillOrKill.debugLog(`Swap destination address: ${destAddress}`);
+  testFillOrKill.debugLog(`Refund address: ${refundAddress}`);
 
   const refundBalanceBefore = await getBalance(inputAsset, refundAddress);
 
@@ -84,22 +85,26 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapviaCont
     testFillOrKill.log(
       `Swapping via contract from ${inputAsset} to ${destAsset} with unrealistic min price`,
     );
+
+    // Randomly use CCM to test different encodings
+    let ccmMetadata: CcmDepositMetadata | undefined;
+    if (Math.random() < 0.5) {
+      ccmMetadata = newCcmMetadata(inputAsset, destAsset, undefined, 100);
+      ccmMetadata.ccmAdditionalData =
+        Math.random() < 0.5 ? ccmMetadata.ccmAdditionalData : undefined;
+    }
+
     swapHandle = performSwapViaContract(
       inputAsset,
       destAsset,
       destAddress,
       undefined,
-      // Creating CCM metadata because we need a CCM metadata with the current SDK to be able
-      // to pass the ccmAdditionalData even if we dont' need it. Then if the gasBudget is
-      // very high the swap might fail so we force a lower gasBudget.
-      // TODO: Remove the entire CCM metadata.
-      newCcmMetadata(inputAsset, destAsset, undefined, 100),
+      ccmMetadata,
       undefined,
       true,
       amount.toString(),
       undefined,
       refundParameters,
-      undefined,
     );
   }
 

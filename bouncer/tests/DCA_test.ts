@@ -2,9 +2,7 @@ import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli
 import { randomBytes } from 'crypto';
 import assert from 'assert';
 import {
-  chainFromAsset,
   createEvmWalletAndFund,
-  getContractAddress,
   newAddress,
   observeBalanceIncrease,
   observeSwapRequested,
@@ -16,7 +14,6 @@ import { getBalance } from '../shared/get_balance';
 import { ExecutableTest } from '../shared/executable_test';
 import { requestNewSwap } from '../shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
-import { newCcmMetadata } from '../shared/swapping';
 import { executeContractSwap } from '../shared/contract_swap';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
@@ -45,10 +42,7 @@ async function testDCASwap(
 
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
 
-  // TODO: Temporary while we are forced to have CCM when passing VaultSwapParameters
-  const destAddress = !swapviaContract
-    ? await newAddress(destAsset, randomBytes(32).toString('hex'))
-    : getContractAddress(chainFromAsset(destAsset), 'CFTESTER');
+  const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
 
   const destBalanceBefore = await getBalance(inputAsset, destAddress);
   testDCASwaps.debugLog(`DCA destination address: ${destAddress}`);
@@ -88,23 +82,25 @@ async function testDCASwap(
       destAsset,
       destAddress,
       wallet,
-      // Creating CCM metadata because we need a CCM metadata with the current SDK to be able
-      // to pass the ccmAdditionalData even if we dont' need it. Then if the gasBudget is
-      // very high the swap might fail so we force a lower gasBudget.
-      // TODO: Remove the entire CCM metadata.
-      newCcmMetadata(inputAsset, destAsset, undefined, 100),
+      // newCcmMetadata(inputAsset, destAsset, undefined, 100),
+      undefined,
       amount.toString(),
       undefined,
+      // TODO: Something is wrong when passing fillOrKillParams but no CCM Metadata.
+      // Problem is when ccmAdditionalData is undefined.
       fillOrKillParams,
+      // undefined,
       dcaParams,
     );
+
+    testDCASwaps.log(`Contract swap executed, tx hash: ${contractSwapParams.hash}`);
 
     // Look after Swap Requested of data.origin.Vault.tx_hash
     swapRequestedHandle = observeSwapRequested(
       inputAsset,
       destAsset,
       contractSwapParams.hash,
-      SwapRequestType.Ccm,
+      SwapRequestType.Regular,
     );
   }
 
@@ -127,22 +123,18 @@ async function testDCASwap(
   // Check that there were the correct number of SwapExecuted events, one for each chunk.
   assert.strictEqual(
     observeSwapExecutedEvents.length,
-    // TODO: Temporary because of gas swap
-    !swapviaContract ? numberOfChunks : numberOfChunks + 1,
+    numberOfChunks,
     'Unexpected number of SwapExecuted events',
   );
 
-  // TODO: Temporary because of gas swap
-  if (!swapviaContract) {
-    // Check the chunk interval of all chunks
-    for (let i = 1; i < numberOfChunks; i++) {
-      const interval = observeSwapExecutedEvents[i].block - observeSwapExecutedEvents[i - 1].block;
-      assert.strictEqual(
-        interval,
-        CHUNK_INTERVAL,
-        `Unexpected chunk interval between chunk ${i - 1} & ${i}`,
-      );
-    }
+  // Check the chunk interval of all chunks
+  for (let i = 1; i < numberOfChunks; i++) {
+    const interval = observeSwapExecutedEvents[i].block - observeSwapExecutedEvents[i - 1].block;
+    assert.strictEqual(
+      interval,
+      CHUNK_INTERVAL,
+      `Unexpected chunk interval between chunk ${i - 1} & ${i}`,
+    );
   }
 
   testDCASwaps.log(`Chunk interval of ${CHUNK_INTERVAL} verified for all ${numberOfChunks} chunks`);
