@@ -58,11 +58,11 @@ pub trait Rpc {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		retry_duration: u32,
 		min_output_amount: NumberOrHex,
-		dca_parameters: Option<DcaParameters>,
+		retry_duration: u32,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapPayload>;
 }
 
@@ -116,7 +116,7 @@ impl RpcServer for RpcServerImpl {
 				broker_commission,
 				channel_metadata,
 				boost_fee,
-				affiliate_fees.unwrap_or_default(),
+				affiliate_fees,
 				refund_parameters,
 				dca_parameters,
 			)
@@ -143,11 +143,11 @@ impl RpcServer for RpcServerImpl {
 		destination_asset: Asset,
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
-		retry_duration: u32,
 		min_output_amount: NumberOrHex,
-		dca_parameters: Option<DcaParameters>,
+		retry_duration: u32,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapPayload> {
 		Ok(self
 			.api
@@ -156,12 +156,12 @@ impl RpcServer for RpcServerImpl {
 				source_asset,
 				destination_asset,
 				destination_address,
-				retry_duration,
-				try_parse_number_or_hex(min_output_amount).map_err(to_rpc_error)?,
-				boost_fee,
-				dca_parameters,
 				broker_commission,
+				try_parse_number_or_hex(min_output_amount).map_err(to_rpc_error)?,
+				retry_duration,
+				boost_fee,
 				affiliate_fees,
+				dca_parameters,
 			)
 			.await
 			.map_err(to_rpc_error)?)
