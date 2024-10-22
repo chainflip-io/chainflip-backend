@@ -811,14 +811,15 @@ pub mod pallet {
 				}
 			}
 
-			// A report get's cleaned up after approx 1 hour and needs to be re-reported by the
-			// broker if necessary. This is need as some kind of garbage collection mechanism
+			// A report gets cleaned up after approx 1 hour and needs to be re-reported by the
+			// broker if necessary. This is needed as some kind of garbage collection mechanism
 			// for tainted deposits.
 			for (account, tx_id) in ReportExpiresAt::<T, I>::take(now) {
 				let marked_status = TaintedTransactions::<T, I>::take(&account, &tx_id);
-				// A special case when a deposit was boosted and rejected in the prewitness step but
-				// expired between the prewitness and witness step. In this case we put it back into
-				// the list of expired transactions so it get's witness and finally rejected.
+				// In the case where a transaction is prewitnessed after having been marked
+				// tainted, the boost will be rejected. The following code ensures that
+				// we don't expire the tainted record until the deposit is fully witnessed (and
+				// refunded).
 				if marked_status == Some(BoostRejected::Yes) {
 					TaintedTransactions::<T, I>::insert(&account, &tx_id, BoostRejected::Yes);
 					continue;
@@ -1938,13 +1939,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(prewitness_state) =
 			TaintedTransactions::<T, I>::take(&channel_owner, &deposit_details)
 		{
-			let is_not_boosted = deposit_channel_details.boost_status == BoostStatus::NotBoosted;
+			let has_boosted_deposit =
+				deposit_channel_details.boost_status == BoostStatus::NotBoosted;
 			let boost_rejected = prewitness_state == BoostRejected::Yes;
 
-			// If the deposit is not boosted, or is boosted but was already detected as tainted in
-			// the pre witness step we schedule it to get rejected. Otherwise we have to accept the
-			// tainted tx since it was already boosted and the funds are gone.
-			if is_not_boosted || boost_rejected {
+			// We reject/refund as long as the deposit hasn't been boosted. We can infer this by
+			// checking that (a) the channel has no boosted deposits, or (b) it does have a
+			// boosted deposit, but it can't be this one since it was explicitly marked as rejected
+			// (can happen in case of multiple deposits into the same channel):
+			if has_boosted_deposit || boost_rejected {
 				let refund_address = match deposit_channel_details.action.clone() {
 					ChannelAction::Swap { refund_params, .. } => refund_params
 						.as_ref()
