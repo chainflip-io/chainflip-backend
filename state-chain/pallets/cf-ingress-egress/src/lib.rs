@@ -2074,7 +2074,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		T::DepositHandler::on_deposit_made(deposit_details, deposit_amount);
 
-		let ccm_swap_metadata = if let Some(deposit_metadata) = deposit_metadata {
+		let destination_address_internal =
+			match T::AddressConverter::decode_and_validate_address_for_asset(
+				destination_address.clone(),
+				destination_asset,
+			) {
+				Ok(address) => address,
+				Err(err) => {
+					log::warn!("Failed to process contract swap due to invalid destination address. Tx hash: {tx_hash:?}. Error: {err:?}");
+					return;
+				},
+			};
+
+		let request_type = if let Some(deposit_metadata) = deposit_metadata {
 			let swap_origin = SwapOrigin::Vault { tx_hash };
 
 			let ccm_failed = |reason| {
@@ -2103,27 +2115,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				source_asset.into(),
 				destination_asset,
 			) {
-				Ok(metadata) => Some(metadata),
+				Ok(ccm_swap_metadata) => SwapRequestType::Ccm {
+					ccm_swap_metadata,
+					output_address: destination_address_internal.clone(),
+				},
 				Err(reason) => {
 					ccm_failed(reason);
 					return;
 				},
 			}
 		} else {
-			None
+			SwapRequestType::Regular { output_address: destination_address_internal.clone() }
 		};
-
-		let destination_address_internal =
-			match T::AddressConverter::decode_and_validate_address_for_asset(
-				destination_address.clone(),
-				destination_asset,
-			) {
-				Ok(address) => address,
-				Err(err) => {
-					log::warn!("Failed to process contract swap due to invalid destination address. Tx hash: {tx_hash:?}. Error: {err:?}");
-					return;
-				},
-			};
 
 		if let Some(params) = &refund_params {
 			if let Err(err) = T::SwapLimitsProvider::validate_refund_params(params.retry_duration) {
@@ -2142,15 +2145,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return;
 			}
 		}
-
-		let request_type = if let Some(ccm_swap_metadata) = ccm_swap_metadata {
-			SwapRequestType::Ccm {
-				ccm_swap_metadata,
-				output_address: destination_address_internal.clone(),
-			}
-		} else {
-			SwapRequestType::Regular { output_address: destination_address_internal.clone() }
-		};
 
 		T::SwapRequestHandler::init_swap_request(
 			source_asset.into(),
