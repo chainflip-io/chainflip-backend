@@ -2294,3 +2294,25 @@ fn do_not_expire_tainted_transactions_if_prewitnessed() {
 		assert!(TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id));
 	});
 }
+
+#[test]
+fn can_not_report_transaction_twice() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
+			RuntimeOrigin::signed(BROKER),
+			Default::default(),
+		));
+
+		assert_noop!(
+			IngressEgress::mark_transaction_as_tainted_inner(
+				RuntimeOrigin::signed(BROKER),
+				Default::default(),
+			),
+			crate::Error::<Test, ()>::TransactionAlreadyReported
+		);
+	});
+}

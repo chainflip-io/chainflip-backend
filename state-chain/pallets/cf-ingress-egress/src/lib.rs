@@ -763,6 +763,8 @@ pub mod pallet {
 		TransactionTainted,
 		/// Unsupported chain
 		UnsupportedChain,
+		/// Transaction already reported
+		TransactionAlreadyReported,
 	}
 
 	#[pallet::hooks]
@@ -1352,6 +1354,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tx_id: <T::TargetChain as Chain>::DepositDetails,
 	) -> DispatchResult {
 		let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+		ensure!(
+			!TaintedTransactions::<T, I>::contains_key(&account_id, &tx_id),
+			Error::<T, I>::TransactionAlreadyReported
+		);
 		ReportExpiresAt::<T, I>::append(
 			<frame_system::Pallet<T>>::block_number()
 				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS)),
