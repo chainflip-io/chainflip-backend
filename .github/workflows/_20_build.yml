@@ -5,7 +5,7 @@ on:
         default: release
         description: Profile to build
         type: string
-      is_mainnet:
+      is-mainnet:
         default: false
         description: Whether to build for mainnet (currently just for verifying dylibs)
         type: boolean
@@ -41,13 +41,13 @@ jobs:
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Import GPG key from Ubuntu key server 🔑
-        if: inputs.is_mainnet
+        if: inputs.is-mainnet
         run: |
           gpg --keyserver keyserver.ubuntu.com --recv-keys $CF_MAINNET_GPG_KEY_ID
           gpg --list-keys
 
       - name: Verify GPG key import ✅
-        if: inputs.is_mainnet
+        if: inputs.is-mainnet
         run: |
           gpg --list-keys | grep -q "$CF_MAINNET_GPG_KEY_ID"
           if [ $? -eq 0 ]; then
@@ -59,7 +59,7 @@ jobs:
 
       - name: Build chainflip binaries 🏗️
         run: |
-          if [ "${{ inputs.is_mainnet }}" = "true" ]; then
+          if [ "${{ inputs.is-mainnet }}" = "true" ]; then
             export IS_MAINNET=true
           fi
           cargo cf-build-${{ inputs.profile }} --locked

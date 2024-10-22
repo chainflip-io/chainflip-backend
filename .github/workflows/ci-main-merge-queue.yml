@@ -45,7 +45,7 @@ jobs:
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
-      full_bouncer: true
+      full-bouncer: true
 
   upgrade-check:
     needs: [build-try-runtime]
