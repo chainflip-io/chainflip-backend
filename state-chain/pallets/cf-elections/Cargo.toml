@@ -18,12 +18,12 @@ workspace = true
 [dependencies]
 
 # Internal deps
-cf-chains = { path = '../../chains', default-features = false }
-cf-traits = { path = '../../traits', default-features = false }
-cf-primitives = { path = '../../primitives', default-features = false }
+cf-chains = { workspace = true }
+cf-traits = { workspace = true }
+cf-primitives = { workspace = true }
 
 # Local deps
-cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
+cf-utilities = { workspace = true }
 
 # Non-substrate external deps
 bitvec = { workspace = true, features = ['alloc'] }
@@ -34,16 +34,16 @@ nanorand = { workspace = true, features = ['wyrand'] }
 
 # Parity deps
 codec = { workspace = true, features = ['derive', 'bit-vec'] }
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true, default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+frame-benchmarking = { workspace = true, optional = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
 scale-info = { workspace = true, features = ['derive', 'bit-vec'] }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-core = { workspace = true }
+sp-std = { workspace = true }
 
 [dev-dependencies]
-cf-test-utilities = { path = '../../test-utilities' }
-rand = { workspace = true }
+cf-test-utilities = { workspace = true }
+rand = { workspace = true, features = ["std"] }
 
 [features]
 default = ['std']

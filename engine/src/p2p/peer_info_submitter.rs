@@ -5,10 +5,10 @@ use std::{
 
 use anyhow::Result;
 
+use cf_utilities::Port;
 use codec::Encode;
 use sp_core::H256;
 use tracing::info;
-use utilities::Port;
 
 use crate::{
 	p2p::PeerInfo,

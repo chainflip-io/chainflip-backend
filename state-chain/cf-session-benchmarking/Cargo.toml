@@ -18,18 +18,16 @@ workspace = true
 [dependencies]
 rand = { workspace = true, features = ['std_rng'] }
 
-pallet-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false, features = [
-  'historical',
-] }
+pallet-session = { workspace = true, features = ['historical'] }
 
 codec = { workspace = true, features = ['derive'] }
 
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+frame-system = { workspace = true }
+frame-support = { workspace = true }
+frame-benchmarking = { workspace = true }
 
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-runtime = { workspace = true }
+sp-std = { workspace = true }
 
 [features]
 default = ['std']

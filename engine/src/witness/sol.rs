@@ -28,8 +28,8 @@ use state_chain_runtime::{
 	SolanaInstance,
 };
 
+use cf_utilities::{task_scope, task_scope::Scope};
 use std::{str::FromStr, sync::Arc};
-use utilities::{task_scope, task_scope::Scope};
 
 #[derive(Clone)]
 struct SolanaBlockHeightTrackingVoter {

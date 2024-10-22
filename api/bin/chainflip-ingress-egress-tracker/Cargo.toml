@@ -24,24 +24,24 @@ clap = { workspace = true, features = ["derive", "env"] }
 config = { workspace = true }
 redis = { workspace = true, features = ["tokio-comp"] }
 
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-core = { workspace = true }
 codec = { workspace = true, features = ["derive", "full"] }
 
 # Local dependencies
-chainflip-engine = { path = "../../../engine/" }
-utilities = { path = "../../../utilities" }
-cf-primitives = { path = "../../../state-chain/primitives" }
-pallet-cf-environment = { path = "../../../state-chain/pallets/cf-environment" }
-pallet-cf-ingress-egress = { path = "../../../state-chain/pallets/cf-ingress-egress" }
-pallet-cf-broadcast = { path = "../../../state-chain/pallets/cf-broadcast" }
-state-chain-runtime = { path = "../../../state-chain/runtime" }
-cf-chains = { path = "../../../state-chain/chains" }
+chainflip-engine = { workspace = true }
+cf-utilities = { workspace = true }
+cf-primitives = { workspace = true }
+pallet-cf-environment = { workspace = true }
+pallet-cf-ingress-egress = { workspace = true }
+pallet-cf-broadcast = { workspace = true }
+state-chain-runtime = { workspace = true }
+cf-chains = { workspace = true }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
+substrate-build-script-utils = { workspace = true }
 
 [dev-dependencies]
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+frame-support = { workspace = true }
 insta = { workspace = true, features = ["json"] }
 jsonrpsee = { workspace = true, features = ["full"] }
 mockall = { workspace = true }

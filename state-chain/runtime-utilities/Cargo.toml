@@ -10,15 +10,15 @@ workspace = true
 
 [dependencies]
 log = { workspace = true }
-cf-runtime-macros = { path = './macros', optional = true }
+cf-runtime-macros = { workspace = true, optional = true }
 
 codec = { workspace = true, features = ['derive'] }
 
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-std = { workspace = true }
 # Not used in this crate but required in order to import sp-io without conflicts.
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-runtime = { workspace = true }
+sp-io = { workspace = true }
+frame-support = { workspace = true }
 
 [features]
 default = ['std']

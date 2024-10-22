@@ -73,9 +73,9 @@ mod tests {
 	};
 
 	use cf_chains::{sol::SolSignature, Chain, Solana};
+	use cf_utilities::task_scope;
 	use futures_util::FutureExt;
 	use std::str::FromStr;
-	use utilities::task_scope;
 
 	use super::*;
 

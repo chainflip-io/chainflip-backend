@@ -11,8 +11,8 @@ use serde_json::{json, Map};
 use bitcoin::{
 	absolute, block::Version, Amount, BlockHash, ScriptBuf, Sequence, Transaction, Txid,
 };
+use cf_utilities::make_periodic_tick;
 use tracing::error;
-use utilities::make_periodic_tick;
 
 use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, settings::HttpBasicAuthEndpoint};
 
@@ -463,7 +463,7 @@ impl BtcRpcApi for BtcRpcClient {
 #[cfg(test)]
 mod tests {
 
-	use utilities::testing::logging::init_test_logger;
+	use cf_utilities::testing::logging::init_test_logger;
 
 	use super::*;
 

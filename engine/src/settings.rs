@@ -14,11 +14,11 @@ pub use anyhow::Result;
 use sp_runtime::DeserializeOwned;
 use url::Url;
 
-use clap::Parser;
-use utilities::{
+use cf_utilities::{
 	health::HealthCheck, logging::LoggingSettings, metrics::Prometheus,
 	redact_endpoint_secret::SecretUrl, Port,
 };
+use clap::Parser;
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
@@ -852,7 +852,7 @@ fn is_valid_db_path(db_file: &Path) -> Result<()> {
 
 #[cfg(test)]
 pub mod tests {
-	use utilities::assert_ok;
+	use cf_utilities::assert_ok;
 
 	use crate::constants::{
 		ARB_BACKUP_HTTP_ENDPOINT, ARB_BACKUP_WS_ENDPOINT, ARB_HTTP_ENDPOINT, ARB_WS_ENDPOINT,

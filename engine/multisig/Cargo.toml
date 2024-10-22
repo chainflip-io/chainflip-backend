@@ -51,24 +51,22 @@ strum_macros = { workspace = true }
 blake2 = { workspace = true }
 
 # Local deps
-cf-chains = { path = "../../state-chain/chains" }
-cf-primitives = { path = "../../state-chain/primitives" }
-state-chain-runtime = { path = "../../state-chain/runtime" }
-utilities = { package = "utilities", path = "../../utilities" }
+cf-chains = { workspace = true }
+cf-primitives = { workspace = true }
+state-chain-runtime = { workspace = true }
+cf-utilities = { workspace = true }
 
 # substrate deps
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-core = { workspace = true }
+sp-runtime = { workspace = true }
 ed25519-dalek = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }
 
 # Turn on the "test" feature flag for tests
-multisig = { path = ".", features = ["test"] }
-utilities = { package = "utilities", path = "../../utilities", features = [
-	"test-utils",
-] }
+multisig = { workspace = true, features = ["test"] }
+cf-utilities = { workspace = true, features = ["test-utils"] }
 
 [features]
 test = ['mockall']

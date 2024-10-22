@@ -16,15 +16,13 @@ workspace = true
 
 [dependencies]
 # Internal deps
-cf-chains = { path = '../../chains', default-features = false }
-cf-primitives = { path = '../../primitives', default-features = false }
-cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
-cf-runtime-utilities = { path = '../../runtime-utilities', default-features = false, features = [
-  'derive',
-] }
-cf-traits = { path = '../../traits', default-features = false }
-cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
-cfe-events = { path = '../../cfe-events', default-features = false }
+cf-chains = { workspace = true }
+cf-primitives = { workspace = true }
+cf-runtime-upgrade-utilities = { workspace = true }
+cf-runtime-utilities = { workspace = true, features = ['derive'] }
+cf-traits = { workspace = true }
+cf-utilities = { workspace = true }
+cfe-events = { workspace = true }
 
 log = { workspace = true }
 
@@ -32,17 +30,17 @@ log = { workspace = true }
 codec = { workspace = true, features = ['derive'] }
 scale-info = { workspace = true, features = ['derive'] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true, default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+frame-benchmarking = { workspace = true, optional = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sp-std = { workspace = true }
 
 [dev-dependencies]
 hex = { workspace = true }
-cf-test-utilities = { path = '../../test-utilities' }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+cf-test-utilities = { workspace = true }
+sp-core = { workspace = true }
+sp-io = { workspace = true }
+sp-runtime = { workspace = true }
 
 [features]
 default = ['std']

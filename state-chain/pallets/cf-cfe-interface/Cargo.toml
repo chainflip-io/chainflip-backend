@@ -17,19 +17,19 @@ workspace = true
 
 [dependencies]
 # Internal dependencies
-cf-traits = { path = '../../traits', default-features = false }
-cf-primitives = { path = '../../primitives', default-features = false }
-cf-chains = { path = "../../chains", default-features = false }
-cfe-events = { path = "../../cfe-events", default-features = false }
-cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+cf-traits = { workspace = true }
+cf-primitives = { workspace = true }
+cf-chains = { workspace = true }
+cfe-events = { workspace = true }
+cf-runtime-upgrade-utilities = { workspace = true }
 
 # Parity deps
 codec = { workspace = true, features = ['derive'] }
 scale-info = { workspace = true, features = ['derive'] }
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+frame-benchmarking = { workspace = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sp-std = { workspace = true }
 
 [features]
 default = ['std']

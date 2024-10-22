@@ -14,20 +14,20 @@ hex = { workspace = true, optional = true }
 ethabi = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-arithmetic = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-core = { workspace = true }
+sp-arithmetic = { workspace = true }
 lazy_format = { workspace = true }
 
-cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+cf-utilities = { workspace = true }
 
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+frame-support = { workspace = true }
+sp-std = { workspace = true }
 
 codec = { workspace = true, features = ['derive'] }
 scale-info = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-runtime = { workspace = true }
 serde_json = { workspace = true }
 
 [features]

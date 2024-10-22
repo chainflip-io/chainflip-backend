@@ -4,9 +4,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::Arbitrum;
 use cf_primitives::EpochIndex;
+use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use sp_core::H160;
-use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
@@ -241,11 +241,11 @@ mod tests {
 		witness::common::epoch_source::EpochSource,
 	};
 
-	use futures::FutureExt;
-	use utilities::{
+	use cf_utilities::{
 		logging::LoggingSettings, task_scope::task_scope,
 		testing::new_temp_directory_with_nonexistent_file,
 	};
+	use futures::FutureExt;
 
 	use super::*;
 
@@ -253,7 +253,7 @@ mod tests {
 	#[tokio::test]
 	async fn run_arb_witnessing() {
 		let _start_logger_server_fn = Some(
-			utilities::logging::init_json_logger(LoggingSettings {
+			cf_utilities::logging::init_json_logger(LoggingSettings {
 				span_lifecycle: false,
 				command_server_port: 6666,
 			})

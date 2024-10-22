@@ -20,11 +20,11 @@ hex = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Internal deps
-cf-primitives = { path = '../../primitives', default-features = false }
-cf-traits = { path = '../../traits', default-features = false }
+cf-primitives = { workspace = true }
+cf-traits = { workspace = true }
 
 # Local deps
-cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
+cf-utilities = { workspace = true }
 
 # Non-substrate external deps
 bitvec = { workspace = true, features = ['alloc'] }
@@ -33,16 +33,16 @@ bitvec = { workspace = true, features = ['alloc'] }
 codec = { workspace = true, features = ['derive'] }
 scale-info = { workspace = true, features = ['derive'] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true, default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+frame-benchmarking = { workspace = true, optional = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sp-std = { workspace = true }
 
 [dev-dependencies]
-cf-test-utilities = { path = '../../test-utilities' }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+cf-test-utilities = { workspace = true }
+sp-core = { workspace = true }
+sp-io = { workspace = true }
+sp-runtime = { workspace = true }
 
 [features]
 default = ['std']

@@ -48,12 +48,14 @@ use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use engine_upgrade_utils::{ExitStatus, ERROR_READING_SETTINGS, NO_START_FROM, SUCCESS};
 
+use cf_utilities::{
+	cached_stream::CachedStream, logging::ErrorType, metrics, task_scope::task_scope,
+};
 use futures::FutureExt;
 use std::{
 	sync::{atomic::AtomicBool, Arc},
 	time::Duration,
 };
-use utilities::{cached_stream::CachedStream, logging::ErrorType, metrics, task_scope::task_scope};
 
 pub fn settings_and_run_main(
 	settings_strings: Vec<String>,
@@ -79,7 +81,7 @@ pub fn settings_and_run_main(
 		.block_on(async {
 			// Note: the greeting should only be printed in normal mode (i.e. not for short-lived
 			// commands like `--version`), so we execute it only after the settings have been parsed.
-			utilities::print_start_and_end!(async run_main(settings, if start_from == NO_START_FROM { None } else { Some(start_from) }))
+			cf_utilities::print_start_and_end!(async run_main(settings, if start_from == NO_START_FROM { None } else { Some(start_from) }))
 		}) {
 		Ok(()) => ExitStatus { status_code: SUCCESS, at_block: NO_START_FROM },
 		Err(ErrorType::Error(e)) => {
@@ -115,7 +117,7 @@ async fn run_main(
 	settings: Settings,
 	start_from: Option<state_chain_runtime::BlockNumber>,
 ) -> anyhow::Result<()> {
-	let _guard = utilities::logging::init_json_logger(settings.logging.clone()).await;
+	let _guard = cf_utilities::logging::init_json_logger(settings.logging.clone()).await;
 
 	task_scope(|scope| {
 		async move {
@@ -138,7 +140,7 @@ async fn run_main(
 			tokio::time::sleep(Duration::from_secs(4)).await;
 
 			if let Some(health_check_settings) = &settings.health_check {
-				utilities::health::start(
+				cf_utilities::health::start(
 					scope,
 					health_check_settings,
 					has_completed_initialising.clone(),

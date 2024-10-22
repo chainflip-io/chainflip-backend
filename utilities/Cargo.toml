@@ -36,8 +36,8 @@ regex = { workspace = true, optional = true }
 scale-info = { workspace = true, optional = true }
 scopeguard = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive", "alloc"] }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true }
+sp-core = { workspace = true, optional = true }
+sp-rpc = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
@@ -50,7 +50,7 @@ url = { workspace = true, optional = true }
 warp = { workspace = true, optional = true }
 
 # local dependencies
-scale-json = { path = "./scale-json", optional = true }
+scale-json = { workspace = true, optional = true }
 
 
 [dev-dependencies]

@@ -5,6 +5,11 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use cf_primitives::CfeCompatibility;
+use cf_utilities::{
+	future_map::FutureMap,
+	task_scope::{self, Scope},
+	UnendingStream,
+};
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
@@ -18,11 +23,6 @@ use state_chain_runtime::{BlockNumber, Nonce, UncheckedExtrinsic};
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{debug, error, info, warn};
-use utilities::{
-	future_map::FutureMap,
-	task_scope::{self, Scope},
-	UnendingStream,
-};
 
 use crate::state_chain_observer::client::{
 	base_rpc_api,

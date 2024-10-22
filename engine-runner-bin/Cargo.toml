@@ -63,9 +63,9 @@ maintainer-scripts = "package/berghain"
 
 [dependencies]
 # Ensures correct compilation order. We want to compile the engine dylib first, then the runner.
-cf-engine-dylib = { path = "../engine-dylib" }
-engine-upgrade-utils = { path = "../engine-upgrade-utils" }
-engine-proc-macros = { path = "../engine-proc-macros" }
+cf-engine-dylib =  { workspace = true }
+engine-upgrade-utils =  { workspace = true }
+engine-proc-macros =  { workspace = true }
 anyhow = { workspace = true }
 
 [dev-dependencies]
@@ -74,5 +74,5 @@ predicates = { workspace = true }
 tempfile = { workspace = true }
 
 [build-dependencies]
-engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+engine-upgrade-utils = { workspace = true }
 reqwest = { workspace = true, features = ["blocking"] }

@@ -20,11 +20,11 @@ tokio = { workspace = true, features = ["full"] }
 serde_json = { workspace = true }
 
 # Local Deps
-chainflip-engine = { path = "../../../engine/" }
-chainflip-api = { path = "../../lib" }
-cf-chains = { path = "../../../state-chain/chains" }
-utilities = { path = "../../../utilities" }
-custom-rpc = { path = "../../../state-chain/custom-rpc" }
+chainflip-engine = { workspace = true }
+chainflip-api = { workspace = true }
+cf-chains = { workspace = true }
+cf-utilities = { workspace = true }
+custom-rpc = { workspace = true }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
+substrate-build-script-utils = { workspace = true }

@@ -26,7 +26,7 @@ use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
-use utilities::{
+use cf_utilities::{
 	cached_stream::{CachedStream, MakeCachedStream},
 	loop_select, make_periodic_tick, read_clean_and_decode_hex_str_file, spmc,
 	task_scope::{Scope, UnwrapOrCancel},
@@ -217,7 +217,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		watch::Receiver<BlockInfo>,
 		StateChainStream<
 			IS_FINALIZED,
-			utilities::cached_stream::InnerCachedStream<spmc::Receiver<BlockInfo>>,
+			cf_utilities::cached_stream::InnerCachedStream<spmc::Receiver<BlockInfo>>,
 		>,
 		tokio::sync::mpsc::Sender<tokio::sync::oneshot::Sender<Box<dyn StreamApi<IS_FINALIZED>>>>,
 	)>
@@ -360,7 +360,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 			> + Send
 			+ 'a,
 		base_rpc_client: Arc<BaseRpcClient>,
-	) -> utilities::try_cached_stream::InnerTryCachedStream<
+	) -> cf_utilities::try_cached_stream::InnerTryCachedStream<
 		impl futures::Stream<Item = Result<BlockInfo>> + Send + 'a,
 	> {
 		let latest_finalized_block: BlockInfo = *sparse_block_stream.cache();
@@ -672,7 +672,7 @@ where
 			.fetch_or_default(&subxt::storage::dynamic(
 				"Validator",
 				"NodeCFEVersion",
-				vec![subxt_signer.account_id()],
+				subxt::storage::StaticStorageKey::new(&vec![subxt_signer.account_id()]),
 			))
 			.await?
 			.encoded(),
@@ -830,7 +830,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 
 						subxt_client
 							.tx()
-							.create_signed_with_nonce(
+							.create_signed(
 								&subxt::dynamic::tx(
 									"Validator",
 									"cfe_version",
@@ -844,15 +844,16 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 									)],
 								),
 								&subxt_signer,
-								current_nonce.into(),
 								DefaultExtrinsicParamsBuilder::new()
 									.mortal_unchecked(
 										block_number.into(),
 										block_hash,
 										SIGNED_EXTRINSIC_LIFETIME.into(),
 									)
+									.nonce(current_nonce.into())
 									.build(),
-							)?
+							)
+							.await?
 							.submit_and_watch()
 							.await?
 							.wait_for_finalized()

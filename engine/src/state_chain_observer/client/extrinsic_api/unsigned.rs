@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use cf_utilities::task_scope::{Scope, ScopedJoinHandle, UnwrapOrCancel};
 use sp_core::H256;
 use sp_runtime::{traits::Hash, transaction_validity::InvalidTransaction};
 use tokio::sync::{mpsc, oneshot};
-use utilities::task_scope::{Scope, ScopedJoinHandle, UnwrapOrCancel};
 
 use crate::state_chain_observer::client::extrinsic_api::common::invalid_err_obj;
 

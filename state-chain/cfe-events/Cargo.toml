@@ -11,19 +11,18 @@ workspace = true
 
 [dependencies]
 # Internal dependencies
-cf-primitives = { path = '../primitives', default-features = false }
-cf-chains = { path = "../chains", default-features = false }
+cf-primitives = { workspace = true }
+cf-chains = { workspace = true }
 
 # Parity dependencies
 codec = { workspace = true, features = ['derive'] }
 scale-info = { workspace = true, features = ['derive'] }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-std = { workspace = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
 
 [dev-dependencies]
 hex = { workspace = true }
-
 
 [features]
 default = ['std']

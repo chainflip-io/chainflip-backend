@@ -23,8 +23,8 @@ use subxt::{
 use url::Url;
 
 use anyhow::{anyhow, Result};
+use cf_utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
 use tracing::{error, warn};
-use utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
 
 use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
 
@@ -217,7 +217,7 @@ impl DotRpcApi for DotHttpRpcClient {
 			);
 			let new_metadata = self.metadata(parent_hash).await?;
 
-			self.online_client.set_runtime_version(subxt::backend::RuntimeVersion {
+			self.online_client.set_runtime_version(subxt::client::RuntimeVersion {
 				spec_version: chain_runtime_version.spec_version,
 				transaction_version: chain_runtime_version.transaction_version,
 			});

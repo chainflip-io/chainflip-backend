@@ -49,74 +49,60 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 url = { workspace = true }
-web3 = { workspace = true, features = [
-	"ws-tls-tokio",
-] }
+web3 = { workspace = true, features = ["ws-tls-tokio"] }
 zeroize = { workspace = true }
-curve25519-dalek = { workspace = true, features = [
-  "serde",
-] }
+curve25519-dalek = { workspace = true, features = ["serde"] }
 ed25519-dalek = { workspace = true }
 pin-project = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tracing = { workspace = true }
 x25519-dalek = { workspace = true, features = ["serde"] }
-zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1", features = [
-	"vendored",
-] }
 warp = { workspace = true }
 regex = { workspace = true }
 lazy_format = { workspace = true }
+zmq = { workspace = true, features = ["vendored"] }
 
 # Local deps
-cf-chains = { path = "../state-chain/chains" }
-cf-primitives = { path = "../state-chain/primitives" }
-chainflip-node = { path = "../state-chain/node" }
-custom-rpc = { path = "../state-chain/custom-rpc" }
-engine-upgrade-utils = { path = "../engine-upgrade-utils" }
-multisig = { path = "multisig" }
-pallet-cf-account-roles = { path = "../state-chain/pallets/cf-account-roles" }
-pallet-cf-broadcast = { path = "../state-chain/pallets/cf-broadcast" }
-pallet-cf-chain-tracking = { path = "../state-chain/pallets/cf-chain-tracking" }
-pallet-cf-elections = { path = "../state-chain/pallets/cf-elections" }
-pallet-cf-environment = { path = "../state-chain/pallets/cf-environment" }
-pallet-cf-flip = { path = "../state-chain/pallets/cf-flip" }
-pallet-cf-governance = { path = "../state-chain/pallets/cf-governance" }
-pallet-cf-ingress-egress = { path = "../state-chain/pallets/cf-ingress-egress" }
-pallet-cf-reputation = { path = "../state-chain/pallets/cf-reputation" }
-pallet-cf-funding = { path = "../state-chain/pallets/cf-funding" }
-pallet-cf-swapping = { path = "../state-chain/pallets/cf-swapping" }
-pallet-cf-threshold-signature = { path = "../state-chain/pallets/cf-threshold-signature" }
-pallet-cf-validator = { path = "../state-chain/pallets/cf-validator" }
-pallet-cf-vaults = { path = "../state-chain/pallets/cf-vaults" }
-pallet-cf-witnesser = { path = "../state-chain/pallets/cf-witnesser" }
-pallet-cf-cfe-interface = { path = "../state-chain/pallets/cf-cfe-interface" }
-state-chain-runtime = { path = "../state-chain/runtime" }
-utilities = { path = "../utilities" }
-sol-prim = { path = "../foreign-chains/solana/sol-prim", features = [
-	"pda",
-	"str",
-	"serde",
-	"scale",
-] }
+cf-chains = { workspace = true }
+cf-primitives = { workspace = true }
+chainflip-node = { workspace = true }
+custom-rpc = { workspace = true }
+engine-upgrade-utils = { workspace = true }
+multisig = { workspace = true }
+pallet-cf-account-roles = { workspace = true }
+pallet-cf-broadcast = { workspace = true }
+pallet-cf-chain-tracking = { workspace = true }
+pallet-cf-elections = { workspace = true }
+pallet-cf-environment = { workspace = true }
+pallet-cf-flip = { workspace = true }
+pallet-cf-governance = { workspace = true }
+pallet-cf-ingress-egress = { workspace = true }
+pallet-cf-reputation = { workspace = true }
+pallet-cf-funding = { workspace = true }
+pallet-cf-swapping = { workspace = true }
+pallet-cf-threshold-signature = { workspace = true }
+pallet-cf-validator = { workspace = true }
+pallet-cf-vaults = { workspace = true }
+pallet-cf-witnesser = { workspace = true }
+pallet-cf-cfe-interface = { workspace = true }
+state-chain-runtime = { workspace = true }
+cf-utilities = { workspace = true }
+sol-prim = { workspace = true, features = ["pda", "str", "serde", "scale"] }
 
 # substrate deps
-cf-amm = { path = "../state-chain/amm" }
-codec = { workspace = true, features = [
-	"derive",
-	"full",
-] }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sc-transaction-pool-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
+cf-amm = { workspace = true }
+codec = { workspace = true, features = ["derive", "full"] }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sc-rpc-api = { workspace = true }
+sc-transaction-pool-api = { workspace = true }
 scale-info = { workspace = true, features = ["derive"] }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-version = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-core = { workspace = true }
+sp-rpc = { workspace = true }
+sp-runtime = { workspace = true }
+sp-version = { workspace = true }
+substrate-frame-rpc-system = { workspace = true }
 
 frame-metadata = { workspace = true, features = ["current"] }
 serde_bytes = { workspace = true }
@@ -128,17 +114,15 @@ rocksdb = { workspace = true, features = ["lz4"] }
 csv = { workspace = true }
 ethereum = { workspace = true }
 mockall = { workspace = true, features = ["nightly"] }
-multisig = { path = "multisig", features = ["test"] }
+multisig = { workspace = true, features = ["test"] }
 rlp = { workspace = true }
 tempfile = { workspace = true }
-utilities = { package = "utilities", path = "../utilities", features = [
-	"test-utils",
-] }
-serde_path_to_error = "*"
+cf-utilities = { workspace = true, features = ["test-utils"] }
+serde_path_to_error = { workspace = true }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+substrate-build-script-utils = { workspace = true }
+engine-upgrade-utils = { workspace = true }
 
 [features]
 integration-test = []

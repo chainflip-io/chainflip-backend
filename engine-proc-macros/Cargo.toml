@@ -14,7 +14,7 @@ proc-macro = true
 syn = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
-engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+engine-upgrade-utils = { workspace = true }
 
 [build-dependencies]
-engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+engine-upgrade-utils = { workspace = true }

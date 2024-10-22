@@ -18,11 +18,11 @@ serde = { workspace = true, features = ["derive"] }
 rand = { workspace = true }
 
 # Local deps
-cf-primitives = { path = "../../state-chain/primitives" }
-chainflip-engine = { path = "../../engine" }
-chainflip-node = { path = "../../state-chain/node" }
-multisig = { path = "../../engine/multisig" }
-state-chain-runtime = { path = "../../state-chain/runtime" }
+cf-primitives = { workspace = true }
+chainflip-engine = { workspace = true }
+chainflip-node = { workspace = true }
+multisig = { workspace = true }
+state-chain-runtime = { workspace = true }
 rocksdb = { workspace = true, features = ["lz4"] }
 
 [dev-dependencies]

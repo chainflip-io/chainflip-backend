@@ -5,9 +5,9 @@ use cf_chains::{
 	btc::{smart_contract_encoding::UtxoEncodedData, ScriptPubkey},
 };
 use cf_primitives::{Asset, AssetAmount, Price};
+use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
-use utilities::SliceToArray;
 
 use crate::btc::rpc::VerboseTransaction;
 

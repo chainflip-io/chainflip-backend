@@ -22,9 +22,9 @@ name = "chainflip-broker-api"
 workspace = true
 
 [dependencies]
-chainflip-api = { path = "../../lib" }
-cf-utilities = { package = "utilities", path = "../../../utilities" }
-custom-rpc = { path = "../../../state-chain/custom-rpc" }
+chainflip-api = { workspace = true }
+cf-utilities = { workspace = true }
+custom-rpc = { workspace = true }
 
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
@@ -32,11 +32,11 @@ futures = { workspace = true }
 hex = { workspace = true }
 jsonrpsee = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-core = { workspace = true }
+sp-rpc = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
+substrate-build-script-utils = { workspace = true }

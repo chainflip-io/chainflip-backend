@@ -11,7 +11,7 @@ workspace = true
 codec = { workspace = true }
 
 # Chainflip Runtime
-state-chain-runtime = { path = '../runtime' }
+state-chain-runtime = { workspace = true }
 
 anyhow = { workspace = true }
 futures = { workspace = true }
@@ -21,25 +21,25 @@ serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 log = { workspace = true }
 
-cf-chains = { path = '../chains' }
-cf-primitives = { path = '../primitives' }
-cf-utilities = { package = 'utilities', path = '../../utilities' }
-cf-amm = { path = '../amm' }
-pallet-cf-governance = { path = "../pallets/cf-governance" }
-pallet-cf-pools = { path = "../pallets/cf-pools" }
-pallet-cf-witnesser = { path = "../pallets/cf-witnesser" }
-pallet-cf-swapping = { path = "../pallets/cf-swapping" }
+cf-chains = { workspace = true }
+cf-primitives = { workspace = true }
+cf-utilities = { workspace = true }
+cf-amm = { workspace = true }
+pallet-cf-governance = { workspace = true }
+pallet-cf-pools = { workspace = true }
+pallet-cf-witnesser = { workspace = true }
+pallet-cf-swapping = { workspace = true }
 
-sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sc-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-api = { workspace = true }
+sp-core = { workspace = true }
+sp-rpc = { workspace = true }
+sc-rpc = { workspace = true }
+sc-rpc-api = { workspace = true }
+sp-runtime = { workspace = true }
+sp-state-machine = { workspace = true }
+sc-client-api = { workspace = true }
+frame-system = { workspace = true }
+frame-support = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }

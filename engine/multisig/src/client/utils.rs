@@ -180,7 +180,7 @@ where
 
 #[cfg(test)]
 mod utils_tests {
-	use utilities::assert_panics;
+	use cf_utilities::assert_panics;
 
 	use crate::client::helpers::ACCOUNT_IDS;
 

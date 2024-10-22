@@ -12,23 +12,23 @@ workspace = true
 log = { workspace = true }
 
 # Internal
-cf-chains = { path = '../chains', default-features = false }
-cf-primitives = { path = '../primitives', default-features = false }
-cfe-events = { path = '../cfe-events', default-features = false }
-cf-amm = { path = "../amm", default-features = false }
+cf-chains = { workspace = true }
+cf-primitives = { workspace = true }
+cfe-events = { workspace = true }
+cf-amm = { workspace = true }
 
-# Parity deps
+# # Parity deps
 codec = { workspace = true, features = ['derive'] }
 scale-info = { workspace = true, features = ['derive'] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false, optional = true }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+frame-benchmarking = { workspace = true, optional = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sp-std = { workspace = true }
 
 [dev-dependencies]
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-io = { workspace = true, features = ["std"] }
+sp-runtime = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive", "alloc"] }
 
 [features]
@@ -43,7 +43,6 @@ std = [
   'log/std',
   'scale-info/std',
   'sp-std/std',
-  'serde/std',
   'cf-amm/std',
 ]
 runtime-benchmarks = [
@@ -52,4 +51,7 @@ runtime-benchmarks = [
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
 ]
-try-runtime = ['frame-support/try-runtime', 'frame-system/try-runtime']
+try-runtime = [
+  'frame-support/try-runtime', 
+  'frame-system/try-runtime'
+]

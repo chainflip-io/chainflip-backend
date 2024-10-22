@@ -18,10 +18,10 @@ use crate::{
 use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
 use cf_primitives::{EpochIndex, NetworkEnvironment};
+use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use source::BtcSource;
 use std::sync::Arc;
-use utilities::task_scope::Scope;
 
 use super::common::{
 	chain_source::{extension::ChainSourceExt, Header},

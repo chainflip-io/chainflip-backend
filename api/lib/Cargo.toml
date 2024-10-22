@@ -26,32 +26,32 @@ lazy_static = { workspace = true }
 jsonrpsee = { workspace = true, features = ["full"] }
 
 # Local
-chainflip-engine = { path = "../../engine/" }
-utilities = { path = "../../utilities/" }
+chainflip-engine = { workspace = true }
+cf-utilities = { workspace = true }
 
 # State Chain
-cf-amm = { path = "../../state-chain/amm" }
-cf-chains = { path = "../../state-chain/chains" }
-cf-primitives = { path = "../../state-chain/primitives" }
-chainflip-node = { path = "../../state-chain/node" }
-custom-rpc = { path = "../../state-chain/custom-rpc" }
-pallet-cf-account-roles = { path = '../../state-chain/pallets/cf-account-roles' }
-pallet-cf-environment = { path = "../../state-chain/pallets/cf-environment" }
-pallet-cf-governance = { path = "../../state-chain/pallets/cf-governance" }
-pallet-cf-ingress-egress = { path = "../../state-chain/pallets/cf-ingress-egress" }
-pallet-cf-lp = { path = '../../state-chain/pallets/cf-lp' }
-pallet-cf-asset-balances = { path = '../../state-chain/pallets/cf-asset-balances' }
-pallet-cf-funding = { path = "../../state-chain/pallets/cf-funding" }
-pallet-cf-swapping = { path = '../../state-chain/pallets/cf-swapping' }
-pallet-cf-pools = { path = '../../state-chain/pallets/cf-pools' }
-pallet-cf-threshold-signature = { path = "../../state-chain/pallets/cf-threshold-signature" }
-pallet-cf-validator = { path = "../../state-chain/pallets/cf-validator" }
-state-chain-runtime = { path = "../../state-chain/runtime" }
+cf-amm = { workspace = true }
+cf-chains = { workspace = true }
+cf-primitives = { workspace = true }
+chainflip-node = { workspace = true }
+custom-rpc = { workspace = true }
+pallet-cf-account-roles = { workspace = true }
+pallet-cf-environment = { workspace = true }
+pallet-cf-governance = { workspace = true }
+pallet-cf-ingress-egress = { workspace = true }
+pallet-cf-lp = { workspace = true }
+pallet-cf-asset-balances = { workspace = true }
+pallet-cf-funding = { workspace = true }
+pallet-cf-swapping = { workspace = true }
+pallet-cf-pools = { workspace = true }
+pallet-cf-threshold-signature = { workspace = true }
+pallet-cf-validator = { workspace = true }
+state-chain-runtime = { workspace = true }
 
 
 # Substrate
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-consensus-aura = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+2' }
-sp-core = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+2' }
-sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+2' }
+frame-support = { workspace = true }
+sp-consensus-aura = { workspace = true }
+sp-core = { workspace = true }
+sp-consensus-grandpa = { workspace = true }
 codec = { workspace = true }
