@@ -70,7 +70,7 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let vault_swap_parameters = cf_parameters_vec.decode_vault_swap_parameters()?;
+			let vault_swap_parameters = cf_parameters_vec.decode_into_swap_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
@@ -97,7 +97,7 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let vault_swap_parameters = cf_parameters_vec.decode_vault_swap_parameters()?;
+			let vault_swap_parameters = cf_parameters_vec.decode_into_swap_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
@@ -128,7 +128,7 @@ where
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
 			let (ccm_additional_data, vault_swap_parameters) =
-				cf_parameters_vec.decode_vault_swap_cf_parameters()?;
+				cf_parameters_vec.decode_into_ccm_swap_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
@@ -173,7 +173,7 @@ where
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
 			let (ccm_additional_data, vault_swap_parameters) =
-				cf_parameters_vec.decode_vault_swap_cf_parameters()?;
+				cf_parameters_vec.decode_into_ccm_swap_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
