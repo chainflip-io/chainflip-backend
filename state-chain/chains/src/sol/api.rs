@@ -1,4 +1,4 @@
-use crate::{RefundParams, RejectCall, RejectError};
+use crate::{RejectCall, RejectError};
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
@@ -533,8 +533,8 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 }
 
 impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {
-	type TxId = <Solana as Chain>::DepositDetails;
-	fn reject_call(tx_id: Self::TxId, refund_params: RefundParams) -> Result<Self, RejectError> {
+	type DepositDetails = <Solana as Chain>::DepositDetails;
+	fn new_unsigned(_deposit_details: Self::DepositDetails) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
 }

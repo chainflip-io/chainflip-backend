@@ -149,8 +149,8 @@ impl<E> RejectCall<Polkadot> for PolkadotApi<E>
 where
 	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	type TxId = <Polkadot as Chain>::DepositDetails;
-	fn reject_call(tx_id: Self::TxId, refund_params: RefundParams) -> Result<Self, RejectError> {
+	type DepositDetails = <Polkadot as Chain>::DepositDetails;
+	fn new_unsigned(_deposit_details: Self::DepositDetails) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
 }

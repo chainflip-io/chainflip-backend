@@ -152,15 +152,13 @@ where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>
 		+ ChainEnvironment<(), AggKey>,
 {
-	type TxId = <Bitcoin as Chain>::DepositDetails;
-	fn reject_call(tx_id: Self::TxId, refund_params: RefundParams) -> Result<Self, RejectError> {
-		let utxo = E::lookup(UtxoSelectionType::TakeUtxo(tx_id));
-
-		if let Some(utxo) = E::lookup(UtxoSelectionType::TakeUtxo(tx_id)) {
+	type DepositDetails = <Bitcoin as Chain>::DepositDetails;
+	fn new_unsigned(deposit_details: Self::DepositDetails) -> Result<Self, RejectError> {
+		if let Some(utxo) = E::lookup(UtxoSelectionType::TakeUtxo(deposit_details.utxo_id)) {
 			if utxo.0.len() != 1 {
 				return Err(RejectError::UnexpectedLengthOfSelectedUtxos);
 			}
-			let utxo = utxo.0.get(0).ok_or(RejectError::UnexpectedLengthOfSelectedUtxos)?;
+			let utxo = utxo.0.first().ok_or(RejectError::UnexpectedLengthOfSelectedUtxos)?;
 			let agg_key @ AggKey { current, .. } =
 				<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(RejectError::Other)?;
 			let bitcoin_change_script =

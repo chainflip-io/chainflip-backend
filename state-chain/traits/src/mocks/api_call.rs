@@ -3,8 +3,8 @@ use core::marker::PhantomData;
 use cf_chains::{
 	btc::BitcoinCrypto, evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Bitcoin, Chain,
 	ChainCrypto, ChainEnvironment, ConsolidationError, Ethereum, ExecutexSwapAndCall,
-	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
-	TransferFallback, TransferFallbackError,
+	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, RejectCall, RejectError,
+	TransferAssetParams, TransferFallback, TransferFallbackError,
 };
 use cf_primitives::{chains::assets, EgressId, ForeignChain};
 use codec::{Decode, Encode};
@@ -36,6 +36,7 @@ pub enum MockEthereumApiCall<MockEvmEnvironment> {
 	AllBatch(MockEthAllBatch<MockEvmEnvironment>),
 	ExecutexSwapAndCall(MockEthExecutexSwapAndCall<MockEvmEnvironment>),
 	TransferFallback(MockEthTransferFallback<MockEvmEnvironment>),
+	RejectCall,
 }
 
 impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
@@ -206,6 +207,7 @@ pub enum MockBitcoinApiCall<MockBtcEnvironment> {
 	AllBatch(MockBtcAllBatch<MockBtcEnvironment>),
 	ExecutexSwapAndCall(MockBtcExecutexSwapAndCall<MockBtcEnvironment>),
 	TransferFallback(MockBtcTransferFallback<MockBtcEnvironment>),
+	RejectCall,
 }
 
 impl ApiCall<BitcoinCrypto> for MockBitcoinApiCall<MockBtcEnvironment> {
@@ -333,5 +335,21 @@ impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		} else {
 			Err(AllBatchError::UnsupportedToken)
 		}
+	}
+}
+
+impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
+	type DepositDetails = <Bitcoin as Chain>::DepositDetails;
+	fn new_unsigned(
+		_deposit_details: <Bitcoin as Chain>::DepositDetails,
+	) -> Result<Self, RejectError> {
+		Ok(Self::RejectCall)
+	}
+}
+
+impl RejectCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
+	type DepositDetails = <Ethereum as Chain>::DepositDetails;
+	fn new_unsigned(_deposit_details: Self::DepositDetails) -> Result<Self, RejectError> {
+		Ok(Self::RejectCall)
 	}
 }

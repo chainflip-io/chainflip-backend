@@ -154,8 +154,8 @@ impl<E> RejectCall<Arbitrum> for ArbitrumApi<E>
 where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
-	type TxId = <Arbitrum as Chain>::DepositDetails;
-	fn reject_call(tx_id: Self::TxId, refund_params: RefundParams) -> Result<Self, RejectError> {
+	type DepositDetails = <Arbitrum as Chain>::DepositDetails;
+	fn new_unsigned(_deposit_details: Self::DepositDetails) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
 }

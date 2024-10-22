@@ -15,7 +15,6 @@ use evm::api::common::*;
 use frame_support::{
 	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
 };
-use sp_core::H160;
 use sp_std::marker::PhantomData;
 
 use evm::tokenizable::Tokenizable;
@@ -242,24 +241,9 @@ impl<E> RejectCall<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	type TxId = <Ethereum as Chain>::DepositDetails;
-	fn reject_call(tx_id: Self::TxId, refund_params: RefundParams) -> Result<Self, RejectError> {
-		let addresses = match refund_params.refund_address {
-			ForeignChainAddress::Eth(address) => Some((H160::from(address), H160::from(address))),
-			_ => None,
-		};
-		if let Some((to, asset)) = addresses {
-			Ok(Self::TransferFallback(EvmTransactionBuilder::new_unsigned(
-				E::replay_protection(E::vault_address()),
-				transfer_fallback::TransferFallback::new(EncodableTransferAssetParams {
-					asset,
-					to,
-					amount: refund_params.amount,
-				}),
-			)))
-		} else {
-			Err(RejectError::NotSupportedForAsset)
-		}
+	type DepositDetails = <Ethereum as Chain>::DepositDetails;
+	fn new_unsigned(_deposit_details: Self::DepositDetails) -> Result<Self, RejectError> {
+		Err(RejectError::NotSupportedForAsset)
 	}
 }
 

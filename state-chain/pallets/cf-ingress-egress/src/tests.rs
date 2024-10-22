@@ -7,7 +7,8 @@ use crate::{
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
 	ReportExpiresAt, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject,
-	TaintedTransactionStatus, TaintedTransactions, TAINTED_TX_EXPIRATION_BLOCKS,
+	TaintedTransactionDetails, TaintedTransactionStatus, TaintedTransactions,
+	TAINTED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -2248,5 +2249,23 @@ fn can_not_report_transaction_after_witnessing() {
 			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), boosted,),
 			crate::Error::<Test, ()>::TransactionAlreadyPreWitnessed
 		);
+	});
+}
+
+#[test]
+fn send_funds_back_after_they_have_been_rejected() {
+	new_test_ext().execute_with(|| {
+		let tainted_tx_details = TaintedTransactionDetails {
+			refund_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+			amount: DEFAULT_DEPOSIT_AMOUNT,
+			asset: eth::Asset::Eth,
+			tx_id: Default::default(),
+		};
+
+		ScheduledTxForReject::<Test, ()>::append(tainted_tx_details);
+
+		IngressEgress::on_finalize(1);
+
+		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), None);
 	});
 }
