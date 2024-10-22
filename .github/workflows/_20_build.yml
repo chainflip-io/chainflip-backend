@@ -21,6 +21,7 @@ on:
 env:
   FORCE_COLOR: 1
   COMMIT_HASH: ${{ github.sha }}
+  CF_MAINNET_GPG_KEY_ID: "4E506212E4EF4E0D3E37E568596FBDCACBBCDD37"
 
 jobs:
   compile:
@@ -39,12 +40,30 @@ jobs:
       - name: Configure Git 🛠️
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
+      - name: Import GPG key from Ubuntu key server 🔑
+        if: inputs.is_mainnet
+        run: |
+          gpg --keyserver keyserver.ubuntu.com --recv-keys $CF_MAINNET_GPG_KEY_ID
+          gpg --list-keys
+
+      - name: Verify GPG key import ✅
+        if: inputs.is_mainnet
+        run: |
+          gpg --list-keys | grep -q "$CF_MAINNET_GPG_KEY_ID"
+          if [ $? -eq 0 ]; then
+            echo "GPG key successfully imported"
+          else
+            echo "Failed to import GPG key"
+            exit 1
+          fi
+
       - name: Build chainflip binaries 🏗️
         run: |
           if [ "${{ inputs.is_mainnet }}" = "true" ]; then
             export IS_MAINNET=true
           fi
           cargo cf-build-${{ inputs.profile }} --locked
+
 
       - name: ls directory
         run: |
