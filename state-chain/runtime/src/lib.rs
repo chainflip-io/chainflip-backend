@@ -2063,6 +2063,14 @@ impl_runtime_apis! {
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>> {
 			LiquidityPools::pools()
 		}
+
+		fn cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> Result<(), DispatchErrorWithMessage> {
+			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&cf_primitives::DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
+		}
+
+		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage> {
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
+		}
 	}
 
 	impl monitoring_apis::MonitoringRuntimeApi<Block> for Runtime {

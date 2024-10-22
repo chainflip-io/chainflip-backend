@@ -296,15 +296,19 @@ mod benchmarks {
 
 	#[benchmark]
 	fn contract_swap_request() {
-		let deposit_amount = 1_000;
+		let deposit_amount = 1_000u32;
 
 		let witness_origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let call = Call::<T, I>::contract_swap_request {
 			from: Asset::Usdc,
 			to: Asset::Eth,
-			deposit_amount,
+			deposit_amount: deposit_amount.into(),
 			destination_address: EncodedAddress::benchmark_value(),
 			tx_hash: [0; 32],
+			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
+			refund_params: None,
+			dca_params: None,
+			boost_fee: 0,
 		};
 
 		#[block]

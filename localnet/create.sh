@@ -5,8 +5,6 @@
 ## Usage ./localnet/create.sh -b <BINARY_ROOT_PATH> -n <NODE_COUNT> -t <START_TRACKER>
 ## Example ./localnet/create.sh -b ./target/debug -n 1 -s y
 
-source ./localnet/common.sh
-
 # Parse command-line arguments
 while getopts "b:n:t:h" opt; do
   case $opt in
@@ -14,7 +12,7 @@ while getopts "b:n:t:h" opt; do
     n) NODE_COUNT=$OPTARG ;;
     t) START_TRACKER=$OPTARG ;;
     h) echo "Usage: ./localnet/create.sh -b <BINARY_ROOT_PATH> -n <NODE_COUNT> -t <START_TRACKER>"; exit 0 ;;
-    \?) echo "Invalid option -$OPTARG" >&2 ;;
+    \?) echo "Invalid option -$OPTARG" >&2 ; exit 0 ;;
   esac
 done
 if [[ -n "$NODE_COUNT" && "$NODE_COUNT" != "1" && "$NODE_COUNT" != "3" ]]; then
@@ -25,6 +23,8 @@ if [[ -n "$START_TRACKER" && "$START_TRACKER" != "y" && "$START_TRACKER" != "" ]
   echo "❌ Invalid START_TRACKER value: $START_TRACKER"
   exit 1
 fi
+
+source ./localnet/common.sh
 
 # Set default values if not provided
 export BINARY_ROOT_PATH=${BINARY_ROOT_PATH:-"./target/debug"}

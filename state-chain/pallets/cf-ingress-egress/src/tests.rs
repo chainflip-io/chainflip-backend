@@ -14,13 +14,10 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{self, DepositDetails, EvmFetchId},
 	mocks::MockEthereum,
-	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel,
-	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
+	CcmChannelMetadata, CcmFailReason, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
+	TransferAssetParams,
 };
-use cf_primitives::{
-	chains::assets::eth, AssetAmount, Beneficiaries, ChannelId, DcaParameters, ForeignChain,
-	SWAP_DELAY_BLOCKS,
-};
+use cf_primitives::{chains::assets::eth, AssetAmount, Beneficiaries, ChannelId, ForeignChain};
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
 	mocks::{
@@ -39,7 +36,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, BalanceApi, DepositApi, EgressApi, EpochInfo,
 	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode, ScheduledEgressDetails,
-	SwapLimitsProvider, SwapRequestType,
+	SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -477,104 +474,6 @@ fn reused_address_channel_id_matches() {
 		// The reused details should be the same as before.
 		assert_eq!(new_channel.channel_id, reused_channel_id);
 		assert_eq!(new_channel.address, reused_address);
-	});
-}
-
-#[test]
-fn test_refund_parameter_validation() {
-	fn request_fok_swap(retry_duration: u32) -> Result<(), DispatchError> {
-		IngressEgress::request_swap_deposit_address(
-			eth::Asset::Flip,
-			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
-			Default::default(),
-			1,
-			None,
-			0,
-			Some(ChannelRefundParameters {
-				retry_duration,
-				refund_address: ForeignChainAddress::Eth(Default::default()),
-				min_price: Default::default(),
-			}),
-			None,
-		)
-		.map(|_| ())
-	}
-
-	new_test_ext().execute_with(|| {
-		let max_swap_retry_duration_blocks =
-			<Test as crate::pallet::Config>::SwapLimitsProvider::get_swap_limits()
-				.max_swap_retry_duration_blocks;
-
-		assert_ok!(request_fok_swap(0));
-		assert_ok!(request_fok_swap(max_swap_retry_duration_blocks));
-		assert_err!(
-			request_fok_swap(max_swap_retry_duration_blocks + 1),
-			DispatchError::from(crate::Error::<Test, _>::SwapRetryDurationTooLong)
-		);
-	});
-}
-
-#[test]
-fn test_dca_parameter_validation() {
-	fn request_dca_swap(number_of_chunks: u32, chunk_interval: u32) -> Result<(), DispatchError> {
-		IngressEgress::request_swap_deposit_address(
-			eth::Asset::Flip,
-			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
-			Default::default(),
-			1,
-			None,
-			0,
-			None,
-			Some(DcaParameters { number_of_chunks, chunk_interval }),
-		)
-		.map(|_| ())
-	}
-
-	new_test_ext().execute_with(|| {
-		const MIN_CHUNK_INTERVAL: u32 = SWAP_DELAY_BLOCKS;
-		let max_swap_request_duration_blocks =
-			<Test as crate::pallet::Config>::SwapLimitsProvider::get_swap_limits()
-				.max_swap_request_duration_blocks;
-
-		// Trivially ok
-		assert_ok!(request_dca_swap(1, MIN_CHUNK_INTERVAL));
-		assert_ok!(request_dca_swap(2, MIN_CHUNK_INTERVAL));
-
-		// Equal to the limit
-		assert_ok!(request_dca_swap(
-			(max_swap_request_duration_blocks / MIN_CHUNK_INTERVAL) + 1,
-			MIN_CHUNK_INTERVAL
-		));
-		assert_ok!(request_dca_swap(2, max_swap_request_duration_blocks));
-
-		// Limit is ignored because there is only 1 chunk
-		assert_ok!(request_dca_swap(1, max_swap_request_duration_blocks + 100));
-		assert_ok!(request_dca_swap(1, 0));
-
-		// Exceeding limit
-		assert_err!(
-			request_dca_swap(
-				(max_swap_request_duration_blocks / MIN_CHUNK_INTERVAL) + 2,
-				MIN_CHUNK_INTERVAL
-			),
-			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
-		);
-		assert_err!(
-			request_dca_swap(2, max_swap_request_duration_blocks + 1),
-			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
-		);
-
-		// Below the minimum
-		assert_err!(
-			request_dca_swap(10, 1),
-			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
-		);
-		assert_err!(
-			request_dca_swap(0, MIN_CHUNK_INTERVAL),
-			DispatchError::from(crate::Error::<Test, _>::InvalidDcaParameters)
-		);
 	});
 }
 
@@ -1894,6 +1793,10 @@ fn can_request_swap_via_extrinsic() {
 			INPUT_AMOUNT,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			TX_HASH,
+			Box::new(DepositDetails { tx_hashes: None }),
+			None,
+			None,
+			0,
 		));
 
 		assert_eq!(
@@ -1978,18 +1881,27 @@ fn rejects_invalid_swap_by_witnesser() {
 			10000,
 			btc_encoded_address,
 			Default::default(),
+			Box::new(DepositDetails { tx_hashes: None }),
+			None,
+			None,
+			0
 		),);
 
 		// No swap request created -> the call was ignored
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
+		// Invalid BTC address:
 		assert_ok!(IngressEgress::contract_swap_request(
 			RuntimeOrigin::root(),
 			Asset::Eth,
 			Asset::Btc,
 			10000,
 			EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
-			Default::default()
+			Default::default(),
+			Box::new(DepositDetails { tx_hashes: None }),
+			None,
+			None,
+			0
 		),);
 
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());

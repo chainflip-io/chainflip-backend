@@ -179,7 +179,7 @@ where
 }
 
 /// To ensure we don't double witness deposits, we use the following pseudo-code, implemented by
-/// `eth_ingresses_at_block`.
+/// [eth_ingresses_at_block].
 ///
 /// if !address.hasContract:
 ///    swap = address.balanceAtCurrentBlock - address.balanceAtPreviousBlock
