@@ -428,12 +428,16 @@ fn solana_ccm_fails_with_invalid_input() {
 			// Contract call fails with invalid CCM
 			assert_ok!(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: Asset::Sol,
-					deposit_amount: 1_000_000_000_000u128,
+					source_asset: cf_chains::assets::sol::Asset::Sol,
+					deposit_amount: 1_000_000_000_000u64,
 					destination_asset: Asset::SolUsdc,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
 					deposit_metadata: invalid_ccm,
 					tx_hash: Default::default(),
+					deposit_details: Box::new(()),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: 0,
 				}
 			)
 			.dispatch_bypass_filter(
@@ -477,12 +481,16 @@ fn solana_ccm_fails_with_invalid_input() {
 
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: Asset::Sol,
-					deposit_amount: 1_000_000_000_000u128,
+					source_asset: cf_chains::assets::sol::Asset::Sol,
+					deposit_amount: 1_000_000_000_000u64,
 					destination_asset: Asset::SolUsdc,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
 					deposit_metadata: ccm,
 					tx_hash: Default::default(),
+					deposit_details: Box::new(()),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: 0,
 				},
 			));
 			// Setting the current agg key will invalidate the CCM.
@@ -696,12 +704,17 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			};
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: Asset::Sol,
-					deposit_amount: 1_000_000_000_000u128,
+					source_asset: cf_chains::assets::sol::Asset::Sol,
+					deposit_amount: 1_000_000_000_000u64,
 					destination_asset: Asset::SolUsdc,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
 					deposit_metadata: ccm,
 					tx_hash: Default::default(),
+					deposit_details: Box::new(()),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: 0,
+
 				},
 			));
 

@@ -7,7 +7,7 @@ use cf_chains::{
 	},
 	ChannelRefundParameters, ForeignChainAddress,
 };
-use cf_primitives::{Asset, DcaParameters};
+use cf_primitives::DcaParameters;
 use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
@@ -17,6 +17,7 @@ use crate::btc::rpc::VerboseTransaction;
 
 const OP_PUSHBYTES_75: u8 = 0x4b;
 const OP_PUSHDATA1: u8 = 0x4c;
+const NATIVE_ASSET: cf_chains::assets::btc::Asset = cf_chains::assets::btc::Asset::Btc;
 
 fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 	let bytes = script.as_script().as_bytes();
@@ -127,7 +128,7 @@ pub fn try_extract_contract_call(
 	let tx_id: [u8; 32] = tx.txid.to_byte_array();
 
 	Some(BtcIngressEgressCall::contract_swap_request {
-		from: Asset::Btc,
+		from: NATIVE_ASSET,
 		to: data.output_asset,
 		deposit_amount,
 		destination_address: data.output_address,
@@ -173,7 +174,7 @@ mod tests {
 	const MOCK_DOT_ADDRESS: [u8; 32] = [9u8; 32];
 
 	const MOCK_SWAP_PARAMS: UtxoEncodedData = UtxoEncodedData {
-		output_asset: Asset::Dot,
+		output_asset: cf_primitives::Asset::Dot,
 		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
 		parameters: SharedCfParameters {
 			retry_duration: 5,
@@ -265,7 +266,7 @@ mod tests {
 		assert_eq!(
 			try_extract_contract_call(&tx, &vault_deposit_address),
 			Some(BtcIngressEgressCall::contract_swap_request {
-				from: Asset::Btc,
+				from: NATIVE_ASSET,
 				to: MOCK_SWAP_PARAMS.output_asset,
 				deposit_amount: DEPOSIT_AMOUNT,
 				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),

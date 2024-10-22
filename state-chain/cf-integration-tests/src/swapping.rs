@@ -573,12 +573,16 @@ fn can_process_ccm_via_direct_deposit() {
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-				source_asset: Asset::Flip,
+				source_asset: cf_chains::assets::eth::Asset::Flip,
 				deposit_amount,
 				destination_asset: Asset::Usdc,
 				destination_address: EncodedAddress::Eth([0x02; 20]),
 				deposit_metadata: ccm_deposit_metadata_mock(),
 				tx_hash: Default::default(),
+				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
+				refund_params: None,
+				dca_params: None,
+				boost_fee: 0,
 			},
 		));
 
@@ -618,7 +622,7 @@ fn failed_swaps_are_rolled_back() {
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::contract_swap_request {
-				from: Asset::Eth,
+				from: cf_chains::assets::eth::Asset::Eth,
 				to: Asset::Flip,
 				deposit_amount: 10_000 * DECIMALS,
 				destination_address: EncodedAddress::Eth(Default::default()),
@@ -778,13 +782,16 @@ fn can_resign_failed_ccm() {
 
 			witness_call(RuntimeCall::EthereumIngressEgress(
 				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: Asset::Flip,
+					source_asset: cf_chains::assets::eth::Asset::Flip,
 					deposit_amount: 10_000_000_000_000,
 					destination_asset: Asset::Usdc,
 					destination_address: EncodedAddress::Eth([0x02; 20]),
 					deposit_metadata: ccm_deposit_metadata_mock(),
-					// deposit_metadata,
 					tx_hash: Default::default(),
+					deposit_details: Box::new(DepositDetails { tx_hashes: None }),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: 0,
 				},
 			));
 

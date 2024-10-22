@@ -829,7 +829,7 @@ fn deposits_below_minimum_are_rejected() {
 		let (_, deposit_address) = request_address_and_deposit(0, eth);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, ()>::DepositIgnored {
-				deposit_address,
+				deposit_address: Some(deposit_address),
 				asset: eth,
 				amount: default_deposit_amount,
 				deposit_details: Default::default(),
@@ -1788,7 +1788,7 @@ fn can_request_swap_via_extrinsic() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(IngressEgress::contract_swap_request(
 			RuntimeOrigin::root(),
-			INPUT_ASSET,
+			INPUT_ASSET.try_into().unwrap(),
 			OUTPUT_ASSET,
 			INPUT_AMOUNT,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
@@ -1814,7 +1814,7 @@ fn can_request_swap_via_extrinsic() {
 
 #[test]
 fn can_request_ccm_swap_via_extrinsic() {
-	const INPUT_ASSET: Asset = Asset::Btc;
+	const INPUT_ASSET: Asset = Asset::Flip;
 	const OUTPUT_ASSET: Asset = Asset::Usdc;
 
 	const INPUT_AMOUNT: AssetAmount = 10_000;
@@ -1835,12 +1835,16 @@ fn can_request_ccm_swap_via_extrinsic() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(IngressEgress::contract_ccm_swap_request(
 			RuntimeOrigin::root(),
-			INPUT_ASSET,
+			INPUT_ASSET.try_into().unwrap(),
 			10_000,
 			OUTPUT_ASSET,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			ccm_deposit_metadata.clone(),
 			TX_HASH,
+			Box::new(DepositDetails { tx_hashes: None }),
+			None,
+			None,
+			0
 		));
 
 		assert_eq!(
@@ -1876,7 +1880,7 @@ fn rejects_invalid_swap_by_witnesser() {
 		// Is valid Bitcoin address, but asset is Dot, so not compatible
 		assert_ok!(IngressEgress::contract_swap_request(
 			RuntimeOrigin::root(),
-			Asset::Eth,
+			cf_chains::assets::eth::Asset::Eth,
 			Asset::Dot,
 			10000,
 			btc_encoded_address,
@@ -1893,7 +1897,7 @@ fn rejects_invalid_swap_by_witnesser() {
 		// Invalid BTC address:
 		assert_ok!(IngressEgress::contract_swap_request(
 			RuntimeOrigin::root(),
-			Asset::Eth,
+			cf_chains::assets::eth::Asset::Eth,
 			Asset::Btc,
 			10000,
 			EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
@@ -1926,12 +1930,16 @@ fn failed_ccm_deposit_can_deposit_event() {
 		// CCM is not supported for Dot:
 		assert_ok!(IngressEgress::contract_ccm_swap_request(
 			RuntimeOrigin::root(),
-			Asset::Flip,
+			cf_chains::assets::eth::Asset::Flip,
 			10_000,
 			Asset::Dot,
 			EncodedAddress::Dot(Default::default()),
 			ccm_deposit_metadata.clone(),
 			Default::default(),
+			Box::new(DepositDetails { tx_hashes: None }),
+			None,
+			None,
+			0
 		));
 
 		assert_has_matching_event!(
@@ -1947,12 +1955,16 @@ fn failed_ccm_deposit_can_deposit_event() {
 		// Insufficient deposit amount:
 		assert_ok!(IngressEgress::contract_ccm_swap_request(
 			RuntimeOrigin::root(),
-			Asset::Flip,
+			cf_chains::assets::eth::Asset::Flip,
 			GAS_BUDGET - 1,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 			ccm_deposit_metadata,
 			Default::default(),
+			Box::new(DepositDetails { tx_hashes: None }),
+			None,
+			None,
+			0
 		));
 
 		assert_has_matching_event!(

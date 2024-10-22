@@ -1887,12 +1887,12 @@ impl_runtime_apis! {
 						match call {
 							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
 								from: swap_from, to: swap_to, deposit_amount, ..
-							}) if from == swap_from && to == swap_to => {
+							}) if from == swap_from.into() && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
 							}
 							RuntimeCall::ArbitrumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
 								from: swap_from, to: swap_to, deposit_amount, ..
-							}) if from == swap_from && to == swap_to => {
+							}) if from == swap_from.into() && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
 							}
 							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits::<_, EthereumInstance> {
