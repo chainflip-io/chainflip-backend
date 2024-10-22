@@ -565,14 +565,14 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			egress_fee: AssetAmount,
+			egress_fee: (AssetAmount, Asset),
 		},
 		RefundEgressScheduled {
 			swap_request_id: SwapRequestId,
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			egress_fee: AssetAmount,
+			egress_fee: (AssetAmount, Asset),
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
@@ -1684,7 +1684,7 @@ pub mod pallet {
 							egress_id,
 							asset,
 							amount: egress_amount,
-							egress_fee: fee_withheld,
+							egress_fee: (fee_withheld, asset),
 						});
 					} else {
 						Self::deposit_event(Event::<T>::SwapEgressScheduled {
@@ -1692,7 +1692,7 @@ pub mod pallet {
 							egress_id,
 							asset,
 							amount: egress_amount,
-							egress_fee: fee_withheld,
+							egress_fee: (fee_withheld, asset),
 						});
 					},
 				Err(err) => {
