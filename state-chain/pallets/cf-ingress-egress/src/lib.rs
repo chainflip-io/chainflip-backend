@@ -707,7 +707,7 @@ pub mod pallet {
 			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
 		},
-		TaintedTransactionExpired {
+		TaintedTransactionReportExpired {
 			account_id: T::AccountId,
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
@@ -826,7 +826,7 @@ pub mod pallet {
 					TaintedTransactions::<T, I>::insert(&account, &tx_id, BoostRejected::Yes);
 					continue;
 				}
-				Self::deposit_event(Event::<T, I>::TaintedTransactionExpired {
+				Self::deposit_event(Event::<T, I>::TaintedTransactionReportExpired {
 					account_id: account,
 					tx_id,
 				});
