@@ -522,7 +522,7 @@ mod benchmarks {
 		#[block]
 		{
 			assert_ok!(Pallet::<T, I>::mark_transaction_as_tainted_inner(
-				RawOrigin::Signed(caller.clone()).into(),
+				caller.clone(),
 				tx_id.clone(),
 			));
 		}

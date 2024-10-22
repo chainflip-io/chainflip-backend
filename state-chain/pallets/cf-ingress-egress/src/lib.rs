@@ -80,10 +80,14 @@ pub enum BoostStatus<ChainAmount> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
-pub enum BoostRejected {
-	Yes,
+pub enum TaintedTransactionStatus {
+	/// Transaction was boosted, can't be rejected.
+	Boosted,
+	/// Transaction was prewitnessed but not boosted due to being reported.
+	Prewitnessed,
+	/// Transaction has been reported but not neither prewitnessed nor boosted.
 	#[default]
-	NoOrNotBoosted,
+	Unseen,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -443,6 +447,9 @@ pub mod pallet {
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
+
+		#[pallet::constant]
+		type AllowTransactionReports: Get<bool>;
 	}
 
 	/// Lookup table for addresses to corresponding deposit channels.
@@ -555,7 +562,7 @@ pub mod pallet {
 		T::AccountId,
 		Blake2_128Concat,
 		<T::TargetChain as Chain>::DepositDetails,
-		BoostRejected,
+		TaintedTransactionStatus,
 		OptionQuery,
 	>;
 
@@ -707,6 +714,11 @@ pub mod pallet {
 			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
 		},
+		TaintedTransactionReportReceived {
+			account_id: T::AccountId,
+			tx_id: <T::TargetChain as Chain>::DepositDetails,
+			expires_at: BlockNumberFor<T>,
+		},
 		TaintedTransactionReportExpired {
 			account_id: T::AccountId,
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
@@ -759,12 +771,10 @@ pub mod pallet {
 		InvalidDcaParameters,
 		/// CCM parameters from a contract swap failed validity check.
 		InvalidCcm,
-		/// Transaction tainted
-		TransactionTainted,
 		/// Unsupported chain
 		UnsupportedChain,
-		/// Transaction already reported
-		TransactionAlreadyReported,
+		/// Transaction cannot be reported after being pre-witnessed or boosted.
+		TransactionAlreadyPreWitnessed,
 	}
 
 	#[pallet::hooks]
@@ -816,19 +826,22 @@ pub mod pallet {
 			// A report gets cleaned up after approx 1 hour and needs to be re-reported by the
 			// broker if necessary. This is needed as some kind of garbage collection mechanism
 			// for tainted deposits.
-			for (account, tx_id) in ReportExpiresAt::<T, I>::take(now) {
-				let marked_status = TaintedTransactions::<T, I>::take(&account, &tx_id);
-				// In the case where a transaction is prewitnessed after having been marked
-				// tainted, the boost will be rejected. The following code ensures that
-				// we don't expire the tainted record until the deposit is fully witnessed (and
-				// refunded).
-				if marked_status == Some(BoostRejected::Yes) {
-					TaintedTransactions::<T, I>::insert(&account, &tx_id, BoostRejected::Yes);
-					continue;
-				}
-				Self::deposit_event(Event::<T, I>::TaintedTransactionReportExpired {
-					account_id: account,
-					tx_id,
+			for (account_id, tx_id) in ReportExpiresAt::<T, I>::take(now) {
+				let _ = TaintedTransactions::<T, I>::try_mutate(&account_id, &tx_id, |status| {
+					match status.take() {
+						Some(TaintedTransactionStatus::Unseen) => {
+							Self::deposit_event(Event::<T, I>::TaintedTransactionReportExpired {
+								account_id: account_id.clone(),
+								tx_id: tx_id.clone(),
+							});
+							Ok(())
+						},
+						_ => {
+							// Don't apply the mutation. We expect the pre-witnessed/boosted
+							// transaction to eventually be fully witnessed.
+							Err(())
+						},
+					}
 				});
 			}
 
@@ -1303,11 +1316,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		) -> DispatchResult {
-			ensure!(
-				T::TargetChain::get() == ForeignChain::Bitcoin,
-				Error::<T, I>::UnsupportedChain
-			);
-			Self::mark_transaction_as_tainted_inner(origin, tx_id)?;
+			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+			ensure!(T::AllowTransactionReports::get(), Error::<T, I>::UnsupportedChain);
+			Self::mark_transaction_as_tainted_inner(account_id, tx_id)?;
 			Ok(())
 		}
 	}
@@ -1350,20 +1361,28 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn mark_transaction_as_tainted_inner(
-		origin: OriginFor<T>,
+		account_id: T::AccountId,
 		tx_id: <T::TargetChain as Chain>::DepositDetails,
 	) -> DispatchResult {
-		let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-		ensure!(
-			!TaintedTransactions::<T, I>::contains_key(&account_id, &tx_id),
-			Error::<T, I>::TransactionAlreadyReported
-		);
+		TaintedTransactions::<T, I>::try_mutate(&account_id, &tx_id, |opt| {
+			const UNSEEN: TaintedTransactionStatus = TaintedTransactionStatus::Unseen;
+			ensure!(
+				opt.replace(UNSEEN).unwrap_or_default() == UNSEEN,
+				Error::<T, I>::TransactionAlreadyPreWitnessed
+			);
+			Ok::<_, DispatchError>(())
+		})?;
+		let expires_at =<frame_system::Pallet<T>>::block_number()
+				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS));
 		ReportExpiresAt::<T, I>::append(
-			<frame_system::Pallet<T>>::block_number()
-				.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS)),
-			(account_id.clone(), tx_id.clone()),
+			expires_at,
+			(&account_id, &tx_id),
 		);
-		TaintedTransactions::<T, I>::insert(account_id, tx_id, BoostRejected::NoOrNotBoosted);
+		Self::deposit_event(Event::<T, I>::TaintedTransactionReportReceived {
+			account_id,
+			tx_id,
+			expires_at,
+		});
 		Ok(())
 	}
 	fn recycle_channel(used_weight: &mut Weight, address: <T::TargetChain as Chain>::ChainAccount) {
@@ -1712,12 +1731,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} = DepositChannelLookup::<T, I>::get(&deposit_address)
 				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-			if TaintedTransactions::<T, I>::contains_key(owner.clone(), deposit_details.clone()) {
-				TaintedTransactions::<T, I>::insert(
-					owner.clone(),
-					deposit_details.clone(),
-					BoostRejected::Yes,
-				);
+			if TaintedTransactions::<T, I>::mutate(&owner, &deposit_details, |opt| {
+				match opt.as_mut() {
+					// Transaction has been reported, mark it as pre-witnessed.
+					Some(status @ TaintedTransactionStatus::Unseen) => {
+						*status = TaintedTransactionStatus::Prewitnessed;
+						true
+					},
+					// Transaction has not been reported, mark it as boosted to prevent further
+					// reports.
+					None => {
+						let _ = opt.insert(TaintedTransactionStatus::Boosted);
+						false
+					},
+					// Pre-witnessing twice or pre-witnessing after boosting is unlikely but
+					// possible. Either way we don't want to change the status.
+					Some(TaintedTransactionStatus::Prewitnessed) |
+					Some(TaintedTransactionStatus::Boosted) => true,
+				}
+			}) {
 				continue;
 			}
 
@@ -1942,50 +1974,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let channel_owner = deposit_channel_details.owner.clone();
 
-		if let Some(prewitness_state) =
-			TaintedTransactions::<T, I>::take(&channel_owner, &deposit_details)
+		if matches!(TaintedTransactions::<T, I>::take(&channel_owner, &deposit_details),
+			Some(status) if status != TaintedTransactionStatus::Boosted)
 		{
-			let has_boosted_deposit =
-				deposit_channel_details.boost_status == BoostStatus::NotBoosted;
-			let boost_rejected = prewitness_state == BoostRejected::Yes;
+			let refund_address = match deposit_channel_details.action.clone() {
+				ChannelAction::Swap { refund_params, .. } =>
+					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
+				ChannelAction::CcmTransfer { refund_params, .. } =>
+					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
+				ChannelAction::LiquidityProvision { refund_address, .. } => Some(refund_address),
+			};
 
-			// We reject/refund as long as the deposit hasn't been boosted. We can infer this by
-			// checking that (a) the channel has no boosted deposits, or (b) it does have a
-			// boosted deposit, but it can't be this one since it was explicitly marked as rejected
-			// (can happen in case of multiple deposits into the same channel):
-			if has_boosted_deposit || boost_rejected {
-				let refund_address = match deposit_channel_details.action.clone() {
-					ChannelAction::Swap { refund_params, .. } => refund_params
-						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone()),
-					ChannelAction::CcmTransfer { refund_params, .. } => refund_params
-						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone()),
-					ChannelAction::LiquidityProvision { refund_address, .. } =>
-						Some(refund_address),
-				};
+			let tainted_transaction_details = TaintedTransactionDetails {
+				refund_address,
+				amount: deposit_amount,
+				asset,
+				tx_id: deposit_details.clone(),
+			};
+			ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
 
-				let tainted_transaction_details = TaintedTransactionDetails {
-					refund_address,
-					amount: deposit_amount,
-					asset,
-					tx_id: deposit_details.clone(),
-				};
-				ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
-
-				Self::deposit_event(Event::<T, I>::DepositIgnored {
-					deposit_address,
-					asset,
-					amount: deposit_amount,
-					deposit_details,
-					reason: DepositIgnoredReason::TransactionTainted,
-				});
-				return Ok(())
-			} else {
-				log::warn!(
-					"Deposit has been boosted but is tainted. Continuing finalizing deposit for tx_id {deposit_details:?}."
-				);
-			}
+			Self::deposit_event(Event::<T, I>::DepositIgnored {
+				deposit_address,
+				asset,
+				amount: deposit_amount,
+				deposit_details,
+				reason: DepositIgnoredReason::TransactionTainted,
+			});
+			return Ok(())
 		}
 
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {

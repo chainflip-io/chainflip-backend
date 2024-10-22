@@ -1,19 +1,18 @@
 mod boost;
 
 use crate::{
-	mock_eth::*, BoostPoolId, BoostRejected, BoostStatus, Call as PalletCall, ChannelAction,
-	ChannelIdCounter, ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup,
-	DepositChannelPool, DepositIgnoredReason, DepositWitness, DisabledEgressAssets,
-	EgressDustLimit, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
-	FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode,
-	PrewitnessedDepositIdCounter, ReportExpiresAt, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer, ScheduledTxForReject, TaintedTransactions,
-	TAINTED_TX_EXPIRATION_BLOCKS,
+	mock_eth::*, BoostPoolId, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
+	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
+	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
+	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
+	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
+	ReportExpiresAt, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject,
+	TaintedTransactionStatus, TaintedTransactions, TAINTED_TX_EXPIRATION_BLOCKS,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	btc::{BitcoinNetwork, ScriptPubkey},
-	evm::{DepositDetails, EvmFetchId},
+	evm::{self, DepositDetails, EvmFetchId},
 	mocks::MockEthereum,
 	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel,
 	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
@@ -47,7 +46,7 @@ use frame_support::{
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::H160;
+use sp_core::{H160, H256};
 use sp_runtime::{DispatchError, DispatchError::BadOrigin};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
@@ -2066,8 +2065,8 @@ fn process_tainted_transaction_and_expect_refund() {
 			&BROKER,
 		));
 
-		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
-			RuntimeOrigin::signed(BROKER),
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+			OriginTrait::signed(BROKER),
 			Default::default(),
 		));
 
@@ -2098,8 +2097,8 @@ fn process_tainted_transaction_and_expect_refund() {
 fn only_broker_can_mark_transaction_as_tainted() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted_inner(
-				RuntimeOrigin::signed(ALICE),
+			IngressEgress::mark_transaction_as_tainted(
+				OriginTrait::signed(ALICE),
 				Default::default(),
 			),
 			BadOrigin
@@ -2109,8 +2108,8 @@ fn only_broker_can_mark_transaction_as_tainted() {
 			&BROKER,
 		));
 
-		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
-			RuntimeOrigin::signed(BROKER),
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+			OriginTrait::signed(BROKER),
 			Default::default(),
 		));
 	});
@@ -2129,8 +2128,8 @@ fn tainted_transactions_expire_if_not_witnessed() {
 			&BROKER,
 		));
 
-		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
-			RuntimeOrigin::signed(BROKER),
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+			OriginTrait::signed(BROKER),
 			Default::default(),
 		));
 
@@ -2141,7 +2140,7 @@ fn tainted_transactions_expire_if_not_witnessed() {
 		assert!(!TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id));
 
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
-			crate::Event::TaintedTransactionExpired {
+			crate::Event::TaintedTransactionReportExpired {
 				account_id: BROKER,
 				tx_id: Default::default(),
 			},
@@ -2208,10 +2207,10 @@ fn finalize_boosted_tx_if_tainted_after_prewitness() {
 			10,
 		);
 
-		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
-			RuntimeOrigin::signed(BROKER),
-			tx_id.clone(),
-		));
+		assert_noop!(
+			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id.clone(),),
+			crate::Error::<Test, ()>::TransactionAlreadyPreWitnessed
+		);
 
 		assert_ok!(IngressEgress::process_single_deposit(
 			address,
@@ -2243,8 +2242,8 @@ fn reject_tx_if_tainted_before_prewitness() {
 
 		let address: <Ethereum as Chain>::ChainAccount = setup_boost_swap().try_into().unwrap();
 
-		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
-			RuntimeOrigin::signed(BROKER),
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+			OriginTrait::signed(BROKER),
 			tx_id.clone(),
 		));
 
@@ -2285,7 +2284,11 @@ fn do_not_expire_tainted_transactions_if_prewitnessed() {
 		let tx_id = DepositDetails::default();
 		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
 
-		TaintedTransactions::<Test, ()>::insert(BROKER, tx_id.clone(), BoostRejected::Yes);
+		TaintedTransactions::<Test, ()>::insert(
+			BROKER,
+			&tx_id,
+			TaintedTransactionStatus::Prewitnessed,
+		);
 
 		ReportExpiresAt::<Test, ()>::insert(expiry_at, vec![(BROKER, tx_id.clone())]);
 
@@ -2296,23 +2299,42 @@ fn do_not_expire_tainted_transactions_if_prewitnessed() {
 }
 
 #[test]
-fn can_not_report_transaction_twice() {
+fn can_not_report_transaction_after_witnessing() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
 			&BROKER,
 		));
+		let unreported = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
+		let unseen = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
+		let prewitnessed = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
+		let boosted = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
 
-		assert_ok!(IngressEgress::mark_transaction_as_tainted_inner(
-			RuntimeOrigin::signed(BROKER),
-			Default::default(),
+		TaintedTransactions::<Test, ()>::insert(BROKER, &unseen, TaintedTransactionStatus::Unseen);
+		TaintedTransactions::<Test, ()>::insert(
+			BROKER,
+			&prewitnessed,
+			TaintedTransactionStatus::Prewitnessed,
+		);
+		TaintedTransactions::<Test, ()>::insert(
+			BROKER,
+			&boosted,
+			TaintedTransactionStatus::Boosted,
+		);
+
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(
+			OriginTrait::signed(BROKER),
+			unreported,
 		));
-
+		assert_ok!(
+			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), unseen,)
+		);
 		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted_inner(
-				RuntimeOrigin::signed(BROKER),
-				Default::default(),
-			),
-			crate::Error::<Test, ()>::TransactionAlreadyReported
+			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), prewitnessed,),
+			crate::Error::<Test, ()>::TransactionAlreadyPreWitnessed
+		);
+		assert_noop!(
+			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), boosted,),
+			crate::Error::<Test, ()>::TransactionAlreadyPreWitnessed
 		);
 	});
 }
