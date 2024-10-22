@@ -2,17 +2,29 @@
 resolver = "2"
 
 members = [
-  'foreign-chains/solana/sol-prim',
-  'api/lib',
-  'api/bin/chainflip-cli',
   'api/bin/chainflip-broker-api',
-  'api/bin/chainflip-lp-api',
+  'api/bin/chainflip-cli',
   'api/bin/chainflip-ingress-egress-tracker',
-  'state-chain/chains',
-  'state-chain/node',
+  'api/bin/chainflip-lp-api',
+  'api/lib',
+  'engine',
+  'engine-proc-macros',
+  'engine-runner-bin',
+  'engine-upgrade-utils',
+  'engine/generate-genesis-keys',
+  'engine/multisig',
+  'foreign-chains/solana/sol-prim',
   'state-chain/amm',
+  'state-chain/cf-integration-tests',
+  'state-chain/cf-session-benchmarking',
+  'state-chain/cfe-events',
+  'state-chain/chains',
+  'state-chain/custom-rpc',
+  'state-chain/node',
   'state-chain/pallets/cf-account-roles',
+  'state-chain/pallets/cf-asset-balances',
   'state-chain/pallets/cf-broadcast',
+  'state-chain/pallets/cf-cfe-interface',
   'state-chain/pallets/cf-chain-tracking',
   'state-chain/pallets/cf-elections',
   'state-chain/pallets/cf-emissions',
@@ -22,42 +34,29 @@ members = [
   'state-chain/pallets/cf-governance',
   'state-chain/pallets/cf-ingress-egress',
   'state-chain/pallets/cf-lp',
-  'state-chain/pallets/cf-asset-balances',
   'state-chain/pallets/cf-pools',
   'state-chain/pallets/cf-reputation',
+  'state-chain/pallets/cf-swapping',
   'state-chain/pallets/cf-threshold-signature',
+  'state-chain/pallets/cf-tokenholder-governance',
   'state-chain/pallets/cf-validator',
   'state-chain/pallets/cf-vaults',
-  'state-chain/pallets/cf-swapping',
   'state-chain/pallets/cf-witnesser',
-  'state-chain/pallets/cf-tokenholder-governance',
-  'state-chain/pallets/cf-cfe-interface',
-  'state-chain/cf-integration-tests',
+  'state-chain/primitives',
+  'state-chain/runtime',
   'state-chain/runtime-upgrade-utilities',
   'state-chain/runtime-utilities',
-  'state-chain/test-utilities',
   'state-chain/runtime-utilities/macros',
-  'state-chain/runtime',
+  'state-chain/test-utilities',
   'state-chain/traits',
-  'state-chain/primitives',
-  'state-chain/cfe-events',
-  'engine',
-  'engine/generate-genesis-keys',
-  'engine-runner-bin',
-  'engine-upgrade-utils',
-  'engine-proc-macros',
   'utilities',
   'utilities/scale-json',
   'utilities/scale-json-event-logger',
-  'state-chain/custom-rpc',
-  'state-chain/cf-session-benchmarking',
-  'engine/multisig',
 ]
 
 [workspace.lints.clippy]
 blocks_in_conditions = "allow"
 missing_const_for_thread_local = "allow"
-
 
 [workspace.dependencies]
 # Third party crates
@@ -164,7 +163,7 @@ warp = { version = "0.3.6" }
 web3 = { version = "0.19", default-features = false }
 x25519-dalek = { version = "2.0" }
 zeroize = { version = "1.7.0" }
-zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1"}
+zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1" }
 
 # PolkadotSdk Pallets
 pallet-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
@@ -173,8 +172,8 @@ pallet-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag
 pallet-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 pallet-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 pallet-transaction-payment = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 pallet-transaction-payment-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 
 # PolkadotSdk Frame
 frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
@@ -191,73 +190,73 @@ sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chai
 sp-application-crypto = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-arithmetic = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-block-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-blockchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
 sp-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false}
+sp-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-genesis-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-inherents = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-keyring = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
 sp-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-staking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false  }
+sp-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sp-version = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-keyring = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sp-blockchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
 
 # PolkadotSdk Client
-sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sc-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sc-transaction-pool-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sc-basic-authorship = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
 sc-cli = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sc-network = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sc-service = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sc-telemetry = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sc-keystore = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sc-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sc-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sc-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sp-consensus = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sc-consensus = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
 sc-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
 sc-consensus-grandpa-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
-sc-basic-authorship = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-keystore = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-network = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 sc-rpc-spec-v2 = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-service = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-telemetry = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
+sc-transaction-pool-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-consensus = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2', default-features = false }
 
 # PolkadotSdk Others
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-substrate-frame-rpc-system= { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-substrate-wasm-builder = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+2', default-features = false  }
+substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+substrate-wasm-builder = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+2', default-features = false }
 
 # Chainflip Statechain
 pallet-cf-account-roles = { path = "state-chain/pallets/cf-account-roles", default-features = false }
 pallet-cf-asset-balances = { path = "state-chain/pallets/cf-asset-balances", default-features = false }
 pallet-cf-broadcast = { path = "state-chain/pallets/cf-broadcast", default-features = false }
+pallet-cf-cfe-interface = { path = "state-chain/pallets/cf-cfe-interface", default-features = false }
 pallet-cf-chain-tracking = { path = "state-chain/pallets/cf-chain-tracking", default-features = false }
 pallet-cf-elections = { path = "state-chain/pallets/cf-elections", default-features = false }
 pallet-cf-emissions = { path = "state-chain/pallets/cf-emissions", default-features = false }
 pallet-cf-environment = { path = "state-chain/pallets/cf-environment", default-features = false }
 pallet-cf-flip = { path = "state-chain/pallets/cf-flip", default-features = false }
+pallet-cf-funding = { path = "state-chain/pallets/cf-funding", default-features = false }
 pallet-cf-governance = { path = "state-chain/pallets/cf-governance", default-features = false }
 pallet-cf-ingress-egress = { path = "state-chain/pallets/cf-ingress-egress", default-features = false }
 pallet-cf-lp = { path = "state-chain/pallets/cf-lp", default-features = false }
 pallet-cf-pools = { path = "state-chain/pallets/cf-pools", default-features = false }
 pallet-cf-reputation = { path = "state-chain/pallets/cf-reputation", default-features = false }
-pallet-cf-funding = { path = "state-chain/pallets/cf-funding", default-features = false }
 pallet-cf-swapping = { path = "state-chain/pallets/cf-swapping", default-features = false }
 pallet-cf-threshold-signature = { path = "state-chain/pallets/cf-threshold-signature", default-features = false }
 pallet-cf-tokenholder-governance = { path = "state-chain/pallets/cf-tokenholder-governance", default-features = false }
 pallet-cf-validator = { path = "state-chain/pallets/cf-validator", default-features = false }
 pallet-cf-vaults = { path = "state-chain/pallets/cf-vaults", default-features = false }
 pallet-cf-witnesser = { path = "state-chain/pallets/cf-witnesser", default-features = false }
-pallet-cf-cfe-interface = { path = "state-chain/pallets/cf-cfe-interface", default-features = false }
 
 cf-amm = { path = "state-chain/amm", default-features = false }
 cf-chains = { path = "state-chain/chains", default-features = false }
@@ -268,7 +267,6 @@ chainflip-node = { path = "state-chain/node", default-features = false }
 custom-rpc = { path = "state-chain/custom-rpc", default-features = false }
 state-chain-runtime = { path = "state-chain/runtime", default-features = false }
 
-
 # Chainflip Engine + Api
 cf-engine-dylib = { path = "engine-dylib" }
 chainflip-api = { path = "api/lib" }
@@ -276,17 +274,16 @@ chainflip-engine = { path = "engine" }
 engine-proc-macros = { path = "engine-proc-macros" }
 
 # Chainflip utilities and others
-scale-json = { path = "utilities/scale-json", default-features = false }
-engine-upgrade-utils = { path = "engine-upgrade-utils" }
-cfe-events = { path = 'state-chain/cfe-events', default-features = false}
+cf-runtime-macros = { path = "state-chain/runtime-utilities/macros", default-features = false }
+cf-runtime-upgrade-utilities = { path = "state-chain/runtime-upgrade-utilities", default-features = false }
+cf-runtime-utilities = { path = "state-chain/runtime-utilities", default-features = false }
 cf-test-utilities = { path = "state-chain/test-utilities", default-features = false }
 cf-utilities = { package = "utilities", path = "utilities", default-features = false }
-cf-runtime-macros = { path = "state-chain/runtime-utilities/macros", default-features = false }
-cf-runtime-utilities = { path = "state-chain/runtime-utilities", default-features = false }
-cf-runtime-upgrade-utilities = { path = "state-chain/runtime-upgrade-utilities", default-features = false }
+cfe-events = { path = 'state-chain/cfe-events', default-features = false }
+engine-upgrade-utils = { path = "engine-upgrade-utils" }
 multisig = { path = "engine/multisig" }
+scale-json = { path = "utilities/scale-json", default-features = false }
 sol-prim = { path = "foreign-chains/solana/sol-prim", default-features = false }
-
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
 # that are suspected to be CPU-intensive, and that are unlikely to require debugging (as some of
@@ -311,8 +308,8 @@ curve25519-dalek = { opt-level = 3 }
 ed25519-zebra = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
-hashbrown = { opt-level = 3 }
 hash-db = { opt-level = 3 }
+hashbrown = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }
 integer-sqrt = { opt-level = 3 }
