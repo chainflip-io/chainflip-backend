@@ -26,6 +26,7 @@ use cf_traits::{
 	DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
+use sp_core::ConstBool;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -105,6 +106,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<true>;
 }
 
 impl_test_helpers! {

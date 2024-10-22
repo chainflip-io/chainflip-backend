@@ -31,7 +31,7 @@ use cf_chains::{
 	assets::any::ForeignChainAndAsset,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, UtxoId,
+		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, BtcDepositDetails, UtxoId,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
@@ -55,9 +55,9 @@ use cf_chains::{
 		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
 	},
 	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
-	ChainEnvironment, ChainState, ChannelRefundParameters, DepositChannel, ForeignChain,
-	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
-	Solana, TransactionBuilder,
+	ChainEnvironment, ChainState, ChannelRefundParameters, ForeignChain, ReplayProtectionProvider,
+	RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
+	TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
@@ -768,11 +768,14 @@ impl OnDeposit<Ethereum> for DepositHandler {}
 impl OnDeposit<Polkadot> for DepositHandler {}
 impl OnDeposit<Bitcoin> for DepositHandler {
 	fn on_deposit_made(
-		utxo_id: <Bitcoin as Chain>::DepositDetails,
+		deposit_details: BtcDepositDetails,
 		amount: <Bitcoin as Chain>::ChainAmount,
-		channel: &DepositChannel<Bitcoin>,
 	) {
-		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, channel.state.clone())
+		Environment::add_bitcoin_utxo_to_list(
+			amount,
+			deposit_details.utxo_id,
+			deposit_details.deposit_address,
+		)
 	}
 }
 impl OnDeposit<Arbitrum> for DepositHandler {}

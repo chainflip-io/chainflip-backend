@@ -1,13 +1,15 @@
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
+	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
+	try_parse_number_or_hex,
 };
 use chainflip_api::{
 	self,
 	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
 	settings::StateChain,
 	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
-	SwapDepositAddress, WithdrawFeesDetail,
+	SwapDepositAddress, SwapPayload, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::to_rpc_error;
@@ -48,6 +50,20 @@ pub trait Rpc {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "request_swap_parameter_encoding", aliases = ["broker_requestSwapParameterEncoding"])]
+	async fn request_swap_parameter_encoding(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		retry_duration: u32,
+		min_output_amount: NumberOrHex,
+		dca_parameters: Option<DcaParameters>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+	) -> RpcResult<SwapPayload>;
 }
 
 pub struct RpcServerImpl {
@@ -117,6 +133,36 @@ impl RpcServer for RpcServerImpl {
 			.api
 			.broker_api()
 			.withdraw_fees(asset, destination_address)
+			.await
+			.map_err(to_rpc_error)?)
+	}
+
+	async fn request_swap_parameter_encoding(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		retry_duration: u32,
+		min_output_amount: NumberOrHex,
+		dca_parameters: Option<DcaParameters>,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+	) -> RpcResult<SwapPayload> {
+		Ok(self
+			.api
+			.broker_api()
+			.request_swap_parameter_encoding(
+				source_asset,
+				destination_asset,
+				destination_address,
+				retry_duration,
+				try_parse_number_or_hex(min_output_amount).map_err(to_rpc_error)?,
+				boost_fee,
+				dca_parameters,
+				broker_commission,
+				affiliate_fees,
+			)
 			.await
 			.map_err(to_rpc_error)?)
 	}

@@ -381,6 +381,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -407,6 +408,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -433,6 +435,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<true>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -459,6 +462,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -485,6 +489,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -2057,6 +2062,14 @@ impl_runtime_apis! {
 
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>> {
 			LiquidityPools::pools()
+		}
+
+		fn cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> Result<(), DispatchErrorWithMessage> {
+			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&cf_primitives::DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
+		}
+
+		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage> {
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
 		}
 	}
 
