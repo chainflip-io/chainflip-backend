@@ -43,17 +43,12 @@ impl<
 	> MonotonicChange<Identifier, Value, BlockHeight, Settings, Hook, ValidatorId>
 {
 	pub fn watch_for_change<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
 		identifier: Identifier,
 		previous_value: Value,
 	) -> Result<(), CorruptStorageError> {
 		let previous_block_height =
-			electoral_access.unsynchronised_state_map(&identifier)?.unwrap_or_default();
-		electoral_access.new_election(
-			(),
-			(identifier, previous_value, previous_block_height),
-			(),
-		)?;
+			ElectoralAccess::unsynchronised_state_map(&identifier)?.unwrap_or_default();
+		ElectoralAccess::new_election((), (identifier, previous_value, previous_block_height), ())?;
 		Ok(())
 	}
 }
@@ -82,7 +77,6 @@ impl<
 	type OnFinalizeReturn = ();
 
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
@@ -119,12 +113,11 @@ impl<
 	}
 
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
 		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
+			let election_access = ElectoralAccess::election_mut(election_identifier);
 			if let Some((value, block_height)) = election_access.check_consensus()?.has_consensus()
 			{
 				let (identifier, previous_value, previous_block_height) =
@@ -132,8 +125,7 @@ impl<
 				if previous_value != value && block_height > previous_block_height {
 					election_access.delete();
 					Hook::on_change(identifier.clone(), value);
-					electoral_access
-						.set_unsynchronised_state_map(identifier, Some(block_height))?;
+					ElectoralAccess::set_unsynchronised_state_map(identifier, Some(block_height))?;
 				} else {
 					// We don't expect this to be hit, since we should have filtered out any votes
 					// that would cause this in check_consensus.
@@ -150,7 +142,6 @@ impl<
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifierOf<Self>,
 		election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: ConsensusVotes<Self>,

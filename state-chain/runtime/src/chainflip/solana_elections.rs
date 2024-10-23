@@ -3,8 +3,11 @@ use crate::{
 	SolanaIngressEgress, SolanaThresholdSigner,
 };
 use cf_chains::{
-	instances::ChainInstanceAlias,
-	sol::{api::SolanaTransactionType, SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto},
+	instances::{ChainInstanceAlias, SolanaInstance},
+	sol::{
+		api::SolanaTransactionType, SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData,
+		SolanaCrypto,
+	},
 	Chain, FeeEstimationApi, ForeignChain, Solana,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -19,7 +22,6 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
 	electoral_systems::{
 		self,
-		change::OnChangeHook,
 		composite::{tuple_6_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
