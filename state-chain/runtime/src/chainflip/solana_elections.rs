@@ -71,6 +71,9 @@ pub mod old {
 		ElectoralSystemRunner, SharedDataHash, UniqueMonotonicIdentifier,
 	};
 
+	#[cfg(feature = "try-runtime")]
+	use frame_support::pallet_prelude::DispatchError;
+
 	pub type SolanaNonceTrackingOld = pallet_cf_elections::migrations::change_old::Change<
 		SolAddress,
 		SolHash,
@@ -208,7 +211,7 @@ pub mod old {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			let election_identifiers = frame_support::migration::storage_key_iter::<
-				ElectionIdentifierOf<old::SolanaElectoralSystemRunner>,
+				CompositeElectionIdentifierOf<old::SolanaElectoralSystemRunner>,
 				<old::SolanaElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 				Twox64Concat
 			>(b"SolanaElections", b"ElectionProperties")
@@ -219,7 +222,7 @@ pub mod old {
 					log::info!("Old {:?}: {:?}",key, value);
 					key
 				})
-				.collect::<Vec<ElectionIdentifierOf<old::SolanaElectoralSystem>>>();
+				.collect::<Vec<CompositeElectionIdentifierOf<old::SolanaElectoralSystemRunner>>>();
 			log::info!("Number of elections: {:?}", election_identifiers.len());
 			Ok((election_identifiers.len() as u32).encode())
 		}
@@ -241,7 +244,7 @@ pub mod old {
 						.len() as u32
 			);
 			let election_identifiers = frame_support::migration::storage_key_iter::<
-				ElectionIdentifierOf<super::SolanaElectoralSystemRunner>,
+				CompositeElectionIdentifierOf<super::SolanaElectoralSystemRunner>,
 				<super::SolanaElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 				Twox64Concat
 			>(b"SolanaElections", b"ElectionProperties")

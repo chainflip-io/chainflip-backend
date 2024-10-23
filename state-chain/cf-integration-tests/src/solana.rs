@@ -27,8 +27,7 @@ use frame_support::{
 	traits::{OnFinalize, UnfilteredDispatchable},
 };
 use pallet_cf_elections::{
-	electoral_system::{ElectionIdentifierOf, ElectoralSystem},
-	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote, VoteStorage},
+	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote},
 	CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FetchOrTransfer};
