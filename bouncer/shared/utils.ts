@@ -54,7 +54,7 @@ const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
 export const solanaNumberOfNonces = 10;
 
-export const solCfParamsCodec = Struct({
+export const solCcmAdditionalDataCodec = Struct({
   cf_receiver: Struct({
     pubkey: TsBytes(32),
     is_writable: bool,
@@ -751,7 +751,7 @@ export async function observeSolanaCcmEvent(
 
           // The message is being used as the main discriminator
           if (matchEventName && matchSourceChain && matchMessage) {
-            const { remaining_accounts: expectedRemainingAccounts } = solCfParamsCodec.dec(
+            const { remaining_accounts: expectedRemainingAccounts } = solCcmAdditionalDataCodec.dec(
               messageMetadata.ccmAdditionalData!,
             );
 
