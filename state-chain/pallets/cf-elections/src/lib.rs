@@ -1667,12 +1667,7 @@ pub mod pallet {
 		}
 
 		pub fn ensure_initialized() -> Result<(), DispatchError> {
-			if Status::<T, I>::get().is_some() {
-				Ok(())
-			} else {
-				Self::deposit_event(Event::<T, I>::Uninitialized);
-				Err(Error::<T, I>::Uninitialized.into())
-			}
+			Self::with_status_check(|| Ok(()))
 		}
 
 		/// Provides access into the ElectoralSystem's current election
@@ -1685,11 +1680,20 @@ pub mod pallet {
 		>(
 			f: F,
 		) -> Result<R, DispatchError> {
-			if Status::<T, I>::get().is_some() {
+			Self::with_status_check(|| {
 				let mut election_identifiers =
 					ElectionProperties::<T, I>::iter_keys().collect::<Vec<_>>();
 				election_identifiers.sort();
-				Self::handle_corrupt_storage(f(election_identifiers)).map_err(Into::into)
+				f(election_identifiers)
+			})
+		}
+
+		// TODO: make handle_corrupt storage private
+		pub fn with_status_check<R, F: FnOnce() -> Result<R, CorruptStorageError>>(
+			f: F,
+		) -> Result<R, DispatchError> {
+			if Status::<T, I>::get().is_some() {
+				Self::handle_corrupt_storage(f()).map_err(Into::into)
 			} else {
 				Self::deposit_event(Event::<T, I>::Uninitialized);
 				Err(Error::<T, I>::Uninitialized.into())
@@ -2048,7 +2052,7 @@ pub mod pallet {
 			Ok(*election_identifier.unique_monotonic())
 		}
 
-		pub fn handle_corrupt_storage<Ok>(
+		fn handle_corrupt_storage<Ok>(
 			result: Result<Ok, CorruptStorageError>,
 		) -> Result<Ok, Error<T, I>> {
 			match result {

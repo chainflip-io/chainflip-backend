@@ -441,18 +441,15 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 		nonce_account: SolAddress,
 		previous_nonce_value: SolHash,
 	) -> DispatchResult {
-		// TODO: Check if safe. We are not checking if initialised or not here - we were before in
-		// with_electoral_access
-		// TODO: Look at handling the corrupt storage elsewhere.
-		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::handle_corrupt_storage(
+		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
 			SolanaNonceTracking::watch_for_change::<
 				DerivedElectoralAccess<
 					_,
 					SolanaNonceTracking,
 					RunnerStorageAccess<Runtime, SolanaInstance>,
 				>,
-			>(nonce_account, previous_nonce_value),
-		)?)
+			>(nonce_account, previous_nonce_value)
+		})?)
 	}
 }
 
@@ -462,16 +459,14 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 	type Chain = SolanaCrypto;
 
 	fn watch_for_egress_success(signature: SolSignature) -> DispatchResult {
-		// TODO: Check if safe. We are not checking if initialised or not here - we were before in
-		// with_electoral_access
-		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::handle_corrupt_storage(
+		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
 			SolanaEgressWitnessing::watch_for_egress::<
 				DerivedElectoralAccess<
 					_,
 					SolanaEgressWitnessing,
 					RunnerStorageAccess<Runtime, SolanaInstance>,
 				>,
-			>(signature),
-		)?)
+			>(signature)
+		})?)
 	}
 }
