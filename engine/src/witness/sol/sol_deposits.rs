@@ -246,7 +246,10 @@ fn parse_account_amount_from_data(
 						.parse()
 						.map_err(|_| anyhow::anyhow!("Failed to parse string to u128"))
 				},
-				_ => Err(anyhow::anyhow!("Data account encoding is not JsonParsed")),
+				_ => Err(anyhow::anyhow!(
+					"Data account encoding is not JsonParsed: {:?}",
+					deposit_channel_info.data
+				)),
 			}
 		},
 	}
