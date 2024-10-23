@@ -1688,7 +1688,6 @@ pub mod pallet {
 			})
 		}
 
-		// TODO: make handle_corrupt storage private
 		pub fn with_status_check<R, F: FnOnce() -> Result<R, CorruptStorageError>>(
 			f: F,
 		) -> Result<R, DispatchError> {

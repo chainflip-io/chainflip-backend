@@ -299,7 +299,6 @@ register_checks! {
 	assert_unchanged(pre_finalize, post_finalize) {
 		assert_eq!(pre_finalize, post_finalize);
 	},
-	// check state is deleted, rather than can't construct election
 	last_election_deleted(pre_finalize, post_finalize) {
 		let last_election_id = pre_finalize.election_identifiers.last().expect("Expected an election before finalization");
 		assert!(
