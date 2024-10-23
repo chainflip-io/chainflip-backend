@@ -155,7 +155,11 @@ where
 	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
 {
 	type DepositDetails = <Arbitrum as Chain>::DepositDetails;
-	fn new_unsigned(_deposit_details: Self::DepositDetails) -> Result<Self, RejectError> {
+	fn new_unsigned(
+		_deposit_details: Self::DepositDetails,
+		_refund_address: ForeignChainAddress,
+		_amount: <Arbitrum as Chain>::ChainAmount,
+	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
 }

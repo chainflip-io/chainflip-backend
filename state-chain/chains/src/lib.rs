@@ -536,7 +536,11 @@ pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 
 pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	type DepositDetails: Member + Parameter + Unpin + BenchmarkValue;
-	fn new_unsigned(deposit_details: Self::DepositDetails) -> Result<Self, RejectError>;
+	fn new_unsigned(
+		deposit_details: Self::DepositDetails,
+		refund_address: ForeignChainAddress,
+		amount: <C as Chain>::ChainAmount,
+	) -> Result<Self, RejectError>;
 }
 
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {

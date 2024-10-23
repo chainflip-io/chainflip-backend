@@ -534,7 +534,11 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 
 impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {
 	type DepositDetails = <Solana as Chain>::DepositDetails;
-	fn new_unsigned(_deposit_details: Self::DepositDetails) -> Result<Self, RejectError> {
+	fn new_unsigned(
+		_deposit_details: Self::DepositDetails,
+		_refund_address: ForeignChainAddress,
+		_amount: <Solana as Chain>::ChainAmount,
+	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
 }

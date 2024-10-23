@@ -685,18 +685,6 @@ impl<T: Config> Pallet<T> {
 							min_fee_required_per_tx,
 					)
 				}),
-
-			UtxoSelectionType::TakeUtxo(utxo_id) => {
-				let utxos = BitcoinAvailableUtxos::<T>::get();
-				if let Some(utxo) = utxos.iter().find(|utxo| utxo.id == utxo_id) {
-					BitcoinAvailableUtxos::<T>::set(
-						utxos.clone().into_iter().filter(|utxo| utxo.id != utxo_id).collect(),
-					);
-					Some((vec![utxo.clone()], utxo.amount))
-				} else {
-					None
-				}
-			},
 		}
 	}
 

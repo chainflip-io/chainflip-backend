@@ -585,6 +585,11 @@ pub mod pallet {
 	pub(crate) type ScheduledTxForReject<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
 
+	/// Stores the details of the tainted transactions that failed to be rejected.
+	#[pallet::storage]
+	pub(crate) type FailedRejections<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -918,12 +923,21 @@ pub mod pallet {
 			}
 
 			for tx in ScheduledTxForReject::<T, I>::take() {
-				if let Ok(api_call) =
-					<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(tx.tx_id)
-				{
-					T::Broadcaster::threshold_sign_and_broadcast(api_call);
+				if let Some(refund_address) = tx.refund_address {
+					if let Ok(api_call) =
+						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+							tx.tx_id,
+							refund_address,
+							tx.amount,
+						) {
+						T::Broadcaster::threshold_sign_and_broadcast(api_call);
+					} else {
+						FailedRejections::<T, I>::append(tx);
+						log_or_panic!("Failed to construct reject call.");
+					}
 				} else {
-					log_or_panic!("Failed to reject call. This is unexpected.");
+					FailedRejections::<T, I>::append(tx);
+					log_or_panic!("Refund address is not available.");
 				}
 			}
 		}

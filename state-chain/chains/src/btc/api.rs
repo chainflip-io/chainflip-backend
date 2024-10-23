@@ -4,7 +4,7 @@ use super::{
 	deposit_address::DepositAddress, AggKey, Bitcoin, BitcoinCrypto, BitcoinOutput, BtcAmount,
 	Utxo, BITCOIN_DUST_LIMIT, CHANGE_ADDRESS_SALT,
 };
-use crate::{btc::UtxoId, *};
+use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
@@ -23,7 +23,6 @@ pub type SelectedUtxosAndChangeAmount = (Vec<Utxo>, BtcAmount);
 pub enum UtxoSelectionType {
 	SelectForConsolidation,
 	Some { output_amount: BtcAmount, number_of_outputs: u64 },
-	TakeUtxo(UtxoId),
 }
 
 impl<E> ConsolidateCall<Bitcoin> for BitcoinApi<E>
@@ -153,29 +152,28 @@ where
 		+ ChainEnvironment<(), AggKey>,
 {
 	type DepositDetails = <Bitcoin as Chain>::DepositDetails;
-	fn new_unsigned(deposit_details: Self::DepositDetails) -> Result<Self, RejectError> {
-		if let Some(utxo) = E::lookup(UtxoSelectionType::TakeUtxo(deposit_details.utxo_id)) {
-			if utxo.0.len() != 1 {
-				return Err(RejectError::UnexpectedLengthOfSelectedUtxos);
-			}
-			let utxo = utxo.0.first().ok_or(RejectError::UnexpectedLengthOfSelectedUtxos)?;
-			let agg_key @ AggKey { current, .. } =
-				<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(RejectError::Other)?;
-			let bitcoin_change_script =
-				DepositAddress::new(current, CHANGE_ADDRESS_SALT).script_pubkey();
-
-			let btc_outputs =
-				vec![BitcoinOutput { amount: utxo.amount, script_pubkey: bitcoin_change_script }];
-
-			Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
-				&agg_key,
-				agg_key.current,
-				vec![utxo.clone()],
-				btc_outputs,
-			)))
-		} else {
-			Err(RejectError::UtxoUnavailable)
-		}
+	fn new_unsigned(
+		deposit_details: Self::DepositDetails,
+		refund_address: ForeignChainAddress,
+		amount: <Bitcoin as Chain>::ChainAmount,
+	) -> Result<Self, RejectError> {
+		let agg_key = <E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(RejectError::Other)?;
+		let script_pubkey = match refund_address {
+			ForeignChainAddress::Btc(script_pubkey) => script_pubkey,
+			_ => return Err(RejectError::Other),
+		};
+		let btc_outputs = vec![BitcoinOutput { amount, script_pubkey }];
+		let utxo = Utxo {
+			amount,
+			id: deposit_details.utxo_id,
+			deposit_address: DepositAddress::new(agg_key.current, 0),
+		};
+		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
+			&agg_key,
+			agg_key.current,
+			vec![utxo],
+			btc_outputs,
+		)))
 	}
 }
 
