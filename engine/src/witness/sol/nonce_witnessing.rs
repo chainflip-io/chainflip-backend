@@ -64,7 +64,8 @@ where
 
 			Ok(Some(hash))
 		},
-		Some(_) => Err(anyhow!("Expected UiAccountData::Json(ParsedAccount)")),
+		Some(_) =>
+			Err(anyhow!("Nonce data account encoding is not JsonParsed: {:?}", account_info)),
 		None => Ok(None),
 	}
 }
