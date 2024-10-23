@@ -80,9 +80,6 @@ importers:
       rxjs:
         specifier: ^7.8.1
         version: 7.8.1
-      scale-ts:
-        specifier: 1.6.0
-        version: 1.6.0
       tiny-secp256k1:
         specifier: ^2.2.1
         version: 2.2.3
@@ -6227,7 +6224,8 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
-  scale-ts@1.6.0: {}
+  scale-ts@1.6.0:
+    optional: true
 
   scrypt-js@3.0.1: {}
 

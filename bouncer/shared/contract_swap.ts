@@ -7,7 +7,6 @@ import {
   Chains,
   Chain,
 } from '@chainflip/cli';
-import { u32, Struct, Option, u16, u256, Bytes as TsBytes, Enum } from 'scale-ts';
 import { HDNodeWallet, Wallet } from 'ethers';
 import {
   observeBalanceIncrease,
@@ -25,29 +24,6 @@ import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from '../shared/n
 import { SwapContext, SwapStatus } from './swap_context';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
-
-export const vaultSwapCfParametersCodec = Struct({
-  ccmAdditionalData: Option(TsBytes()),
-  vaultSwapParameters: Option(
-    Struct({
-      refundParams: Option(
-        Struct({
-          retryDurationBlocks: u32,
-          refundAddress: Enum({
-            Eth: TsBytes(20),
-            Dot: TsBytes(32),
-            Btc: TsBytes(),
-            Arb: TsBytes(20),
-            Sol: TsBytes(32),
-          }),
-          minPriceX128: u256,
-        }),
-      ),
-      dcaParams: Option(Struct({ numberOfChunks: u32, chunkIntervalBlocks: u32 })),
-      boostFee: Option(u16),
-    }),
-  ),
-});
 
 export async function executeContractSwap(
   sourceAsset: Asset,
@@ -90,6 +66,8 @@ export async function executeContractSwap(
         message: messageMetadata.message,
         ccmAdditionalData: messageMetadata.ccmAdditionalData,
       },
+      // The SDK will encode these parameters and the ccmAdditionalData
+      // into the `cfParameters` field for the vault swap.
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
