@@ -43,6 +43,7 @@ impl FeeRefundCalculator<NoneChain> for () {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NoneChainCrypto;
 impl ChainCrypto for NoneChainCrypto {
+	const NAME: &'static str = "None";
 	type UtxoChain = ConstBool<false>;
 	type AggKey = ();
 	type Payload = ();

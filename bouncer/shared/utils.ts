@@ -63,6 +63,7 @@ export const solCfParamsCodec = Struct({
       is_writable: bool,
     }),
   ),
+  fallback_address: TsBytes(32),
 });
 
 export function getContractAddress(chain: Chain, contract: string): string {

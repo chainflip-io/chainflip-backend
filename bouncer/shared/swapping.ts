@@ -72,6 +72,8 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
 export function newSolanaCfParameters(maxAccounts: number) {
   const cfReceiverAddress = getContractAddress('Solana', 'CFTESTER');
 
+  const fallbackAddress = Keypair.generate().publicKey.toBytes();
+
   const remainingAccounts = [];
   const numRemainingAccounts = Math.floor(Math.random() * maxAccounts);
 
@@ -88,6 +90,7 @@ export function newSolanaCfParameters(maxAccounts: number) {
       is_writable: false,
     },
     remaining_accounts: remainingAccounts,
+    fallback_address: fallbackAddress,
   };
 
   return u8aToHex(solCfParamsCodec.enc(cfParameters));

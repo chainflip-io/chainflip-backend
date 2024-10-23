@@ -222,7 +222,7 @@ pub mod pallet {
 			Self(unique_monotonic, extra)
 		}
 
-		pub(crate) fn with_extra<OtherExtra>(
+		pub fn with_extra<OtherExtra>(
 			&self,
 			other_extra: OtherExtra,
 		) -> ElectionIdentifier<OtherExtra> {
@@ -581,7 +581,7 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	pub(crate) mod access_impls {
+	pub mod access_impls {
 		use super::*;
 
 		/// Implements traits to allow electoral systems to read/write an Election's details.
@@ -590,9 +590,7 @@ pub mod pallet {
 			_phantom: core::marker::PhantomData<(T, I)>,
 		}
 		impl<T: Config<I>, I: 'static> ElectionAccess<T, I> {
-			pub(crate) fn new(
-				election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
-			) -> Self {
+			pub fn new(election_identifier: ElectionIdentifierOf<T::ElectoralSystem>) -> Self {
 				Self { election_identifier, _phantom: Default::default() }
 			}
 
