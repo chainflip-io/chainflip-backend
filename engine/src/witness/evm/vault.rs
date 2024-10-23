@@ -70,6 +70,9 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
+
+			// TODO: We can consider defaulting values if decoding fails for backwards
+			// compatibility. Or we can default in the decoding functions if it's an empty array.
 			let vault_swap_parameters = cf_parameters_vec.decode_into_swap_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
@@ -79,9 +82,11 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
-				vault_swap_parameters.refund_params,
+				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
+				// TODO: Add broker_fees. Probably pass None for now as it'll need decoding id ->
+				// account_id
 			))
 		},
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
@@ -97,6 +102,9 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
+
+			// TODO: We can consider defaulting values if decoding fails for backwards
+			// compatibility. Or we can default in the decoding functions if it's an empty array.
 			let vault_swap_parameters = cf_parameters_vec.decode_into_swap_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
@@ -108,9 +116,11 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
-				vault_swap_parameters.refund_params,
+				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
+				// TODO: Add broker_fees. Probably pass None for now as it'll need decoding id ->
+				// account_id
 			))
 		},
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
@@ -127,8 +137,10 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let (ccm_additional_data, vault_swap_parameters) =
-				cf_parameters_vec.decode_into_ccm_swap_parameters()?;
+
+			// TODO: We can consider defaulting values if decoding fails for backwards
+			// compatibility. Or we can default in the decoding functions if it's an empty array.
+			let parameters = cf_parameters_vec.decode_into_ccm_swap_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
@@ -148,13 +160,15 @@ where
 							.try_into()
 							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
-						ccm_additional_data,
+						ccm_additional_data: parameters.ccm_additional_data.unwrap_or_default(),
 					},
 				}),
 				event.tx_hash.into(),
-				vault_swap_parameters.refund_params,
-				vault_swap_parameters.dca_params,
-				vault_swap_parameters.boost_fee,
+				Some(parameters.vault_swap_parameters.refund_params),
+				parameters.vault_swap_parameters.dca_params,
+				parameters.vault_swap_parameters.boost_fee,
+				// TODO: Add broker_fees. Probably pass None for now as it'll need decoding id ->
+				// account_id
 			))
 		},
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
@@ -172,8 +186,10 @@ where
 				.to_vec()
 				.try_into()
 				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-			let (ccm_additional_data, vault_swap_parameters) =
-				cf_parameters_vec.decode_into_ccm_swap_parameters()?;
+
+			// TODO: We can consider defaulting values if decoding fails for backwards
+			// compatibility. Or we can default in the decoding functions if it's an empty array.
+			let parameters = cf_parameters_vec.decode_into_ccm_swap_parameters()?;
 
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
@@ -195,13 +211,15 @@ where
 							.try_into()
 							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
-						ccm_additional_data,
+						ccm_additional_data: parameters.ccm_additional_data.unwrap_or_default(),
 					},
 				}),
 				event.tx_hash.into(),
-				vault_swap_parameters.refund_params,
-				vault_swap_parameters.dca_params,
-				vault_swap_parameters.boost_fee,
+				Some(parameters.vault_swap_parameters.refund_params),
+				parameters.vault_swap_parameters.dca_params,
+				parameters.vault_swap_parameters.boost_fee,
+				// TODO: Add broker_fees. Probably pass None for now as it'll need decoding id ->
+				// account_id
 			))
 		},
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {

@@ -15,19 +15,22 @@ pub type CfParameters = BoundedVec<u8, ConstU32<MAX_CF_PARAM_LENGTH>>;
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub struct VaultCfParameters {
 	pub ccm_additional_data: Option<CcmAdditionalData>,
-	pub vault_swap_parameters: Option<VaultSwapParameters>,
+	pub vault_swap_parameters: VaultSwapParameters,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub struct VaultSwapParameters {
-	pub refund_params: Option<ChannelRefundParameters>,
+	pub refund_params: ChannelRefundParameters,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: Option<BasisPoints>,
+	// TODO: Should we make broker mandatory? Should we have a separate field?
+	pub broker_fees: Option<BoundedVec<u8, ConstU32<{ cf_primitives::MAX_AFFILIATES + 1 }>>>,
+	// pub broker_fees: Option<cf_primitives::Beneficiaries<u8>>,
 }
 
 pub trait CfParametersDecode {
 	fn decode_into_swap_parameters(self) -> Result<VaultSwapParameters>;
-	fn decode_into_ccm_swap_parameters(self) -> Result<(CcmAdditionalData, VaultSwapParameters)>;
+	fn decode_into_ccm_swap_parameters(self) -> Result<VaultCfParameters>;
 }
 
 // CfParameters is swap data encoded in Vault Swaps that is to be decoded into the adequate
@@ -36,36 +39,14 @@ pub trait CfParametersDecode {
 // support initiating CCM swaps via vault swaps.
 impl CfParametersDecode for CfParameters {
 	fn decode_into_swap_parameters(self) -> Result<VaultSwapParameters> {
-		if self.is_empty() {
-			Ok(VaultSwapParameters { refund_params: None, dca_params: None, boost_fee: None })
-		} else {
-			let parameters: VaultSwapParameters = VaultSwapParameters::decode(&mut &self[..])
-				.map_err(|_| anyhow!("Failed to decode to `VaultSwapParameters`"))?;
-			Ok(parameters)
-		}
+		let parameters: VaultSwapParameters = VaultSwapParameters::decode(&mut &self[..])
+			.map_err(|_| anyhow!("Failed to decode to `VaultSwapParameters`"))?;
+		Ok(parameters)
 	}
 
-	fn decode_into_ccm_swap_parameters(self) -> Result<(CcmAdditionalData, VaultSwapParameters)> {
-		if self.is_empty() {
-			// Return the empty vector since the CCM additional data is required
-			Ok((
-				CcmAdditionalData::default(),
-				VaultSwapParameters { refund_params: None, dca_params: None, boost_fee: None },
-			))
-		} else {
-			let vault_swap_cf_parameters: VaultCfParameters =
-				VaultCfParameters::decode(&mut &self[..])
-					.map_err(|_| anyhow!("Failed to decode to `VaultCfParameters`"))?;
-
-			Ok((
-				// Default to empty CcmAdditionalData vector if not present
-				vault_swap_cf_parameters.ccm_additional_data.unwrap_or_default(),
-				vault_swap_cf_parameters.vault_swap_parameters.unwrap_or(VaultSwapParameters {
-					refund_params: None,
-					dca_params: None,
-					boost_fee: None,
-				}),
-			))
-		}
+	fn decode_into_ccm_swap_parameters(self) -> Result<VaultCfParameters> {
+		let vault_swap_cf_parameters: VaultCfParameters = VaultCfParameters::decode(&mut &self[..])
+			.map_err(|_| anyhow!("Failed to decode to `VaultCfParameters`"))?;
+		Ok(vault_swap_cf_parameters)
 	}
 }

@@ -8,6 +8,7 @@ import {
   Chain,
 } from '@chainflip/cli';
 import { HDNodeWallet, Wallet } from 'ethers';
+import { randomBytes } from 'crypto';
 import {
   observeBalanceIncrease,
   getContractAddress,
@@ -18,6 +19,7 @@ import {
   assetDecimals,
   stateChainAssetFromAsset,
   createEvmWalletAndFund,
+  newAddress,
 } from './utils';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
@@ -39,6 +41,13 @@ export async function executeContractSwap(
   const srcChain = chainFromAsset(sourceAsset);
   const destChain = chainFromAsset(destAsset);
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
+
+  const refundAddress = await newAddress(sourceAsset, randomBytes(32).toString('hex'));
+  const fokParams = fillOrKillParams ?? {
+    retryDurationBlocks: 0,
+    refundAddress,
+    minPriceX128: "0",
+  };
 
   const networkOptions = {
     signer: wallet,
@@ -69,8 +78,9 @@ export async function executeContractSwap(
       // The SDK will encode these parameters and the ccmAdditionalData
       // into the `cfParameters` field for the vault swap.
       boostFeeBps,
-      fillOrKillParams,
+      fillOrKillParams: fokParams,
       dcaParams,
+      beneficiaries: undefined
     } as ExecuteSwapParams,
     networkOptions,
     txOptions,
