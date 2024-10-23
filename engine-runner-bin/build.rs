@@ -93,7 +93,7 @@ fn gpg_verify_signature(
 	{
 		Ok(())
 	} else {
-		Err(Box::from(format!("Failed to verify gpg signature")))
+		Err(Box::from("Failed to verify gpg signature".to_string()))
 	}
 }
 
