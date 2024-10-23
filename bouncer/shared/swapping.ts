@@ -1,6 +1,7 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import Web3 from 'web3';
+import { u8aToHex } from '@polkadot/util';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
 import { performSwap } from '../shared/perform_swap';
 import {
@@ -11,6 +12,7 @@ import {
   defaultAssetAmounts,
   ccmSupportedChains,
   assetDecimals,
+  solCfParamsCodec,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -67,49 +69,31 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
   return web3.eth.abi.encodeParameters(typesArray, variables);
 }
 
-function newSolanaCcmAdditionalData(maxAccounts: number) {
-  function arrayToHexString(byteArray: Uint8Array): string {
-    return (
-      '0x' +
-      Array.from(byteArray)
-        // eslint-disable-next-line no-bitwise
-        .map((byte) => ('0' + (byte & 0xff).toString(16)).slice(-2))
-        .join('')
-    );
-  }
+export function newSolanaCcmAdditionalData(maxAccounts: number) {
+  const cfReceiverAddress = getContractAddress('Solana', 'CFTESTER');
 
-  const cfReceiver = {
-    pubkey: getContractAddress('Solana', 'CFTESTER'),
-    is_writable: false,
-  };
-
-  // Convert the public keys and is_writable fields to byte arrays
-  const cfReceiverBytes = new Uint8Array([
-    ...new PublicKey(cfReceiver.pubkey).toBytes(),
-    cfReceiver.is_writable ? 1 : 0,
-  ]);
-
-  const fallbackAddrBytes = new PublicKey(getContractAddress('Solana', 'FALLBACK')).toBytes();
+  const fallbackAddress = Keypair.generate().publicKey.toBytes();
 
   const remainingAccounts = [];
   const numRemainingAccounts = Math.floor(Math.random() * maxAccounts);
 
   for (let i = 0; i < numRemainingAccounts; i++) {
-    remainingAccounts.push(
-      new Uint8Array([...Keypair.generate().publicKey.toBytes(), Math.random() < 0.5 ? 1 : 0]),
-    );
+    remainingAccounts.push({
+      pubkey: Keypair.generate().publicKey.toBytes(),
+      is_writable: Math.random() < 0.5,
+    });
   }
 
-  // Concatenate the byte arrays
-  const cfParameters = new Uint8Array([
-    ...cfReceiverBytes,
-    // Inserted by the codec::Encode
-    4 * remainingAccounts.length,
-    ...remainingAccounts.flatMap((account) => Array.from(account)),
-    ...fallbackAddrBytes,
-  ]);
+  const cfParameters = {
+    cf_receiver: {
+      pubkey: new PublicKey(cfReceiverAddress).toBytes(),
+      is_writable: false,
+    },
+    remaining_accounts: remainingAccounts,
+    fallback_address: fallbackAddress,
+  };
 
-  return arrayToHexString(cfParameters);
+  return u8aToHex(solCfParamsCodec.enc(cfParameters));
 }
 
 // Solana CCM-related parameters. These are values in the protocol.

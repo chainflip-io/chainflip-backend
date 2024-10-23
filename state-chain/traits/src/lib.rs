@@ -989,6 +989,8 @@ pub struct SwapLimits {
 }
 pub trait SwapLimitsProvider {
 	fn get_swap_limits() -> SwapLimits;
+	fn validate_dca_params(dca_params: &DcaParameters) -> Result<(), DispatchError>;
+	fn validate_refund_params(retry_duration: u32) -> Result<(), DispatchError>;
 }
 
 /// API for interacting with the asset-balance pallet.
