@@ -731,7 +731,10 @@ export async function observeSolanaCcmEvent(
     const remainingAccountSize = publicKeySize + 1;
 
     // Extra byte for the encoded length
-    const remainingAccountsBytes = ccmAdditionalData.slice(remainingAccountSize + 1, -publicKeySize);
+    const remainingAccountsBytes = ccmAdditionalData.slice(
+      remainingAccountSize + 1,
+      -publicKeySize,
+    );
 
     const remainingAccounts = [];
     const remainingIsWritable = [];
