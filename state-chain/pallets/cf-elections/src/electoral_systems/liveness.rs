@@ -76,15 +76,13 @@ impl<
 	}
 
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(true)
 	}
 
-	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
+	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
 		(current_sc_block, current_chain_tracking_number): &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
@@ -108,7 +106,7 @@ impl<
 			.at_most_one()
 			.map_err(|_| CorruptStorageError::new())?
 		{
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
+			let election_access = ElectoralAccess::election_mut(election_identifier);
 
 			// Is the block the election started at + the duration we want the check to stay open
 			// for less than or equal to the current SC block?
@@ -121,14 +119,14 @@ impl<
 					}
 				}
 				election_access.delete();
-				electoral_access.new_election(
+				ElectoralAccess::new_election(
 					(),
 					block_number_to_check(*current_chain_tracking_number),
 					*current_sc_block,
 				)?;
 			}
 		} else {
-			electoral_access.new_election(
+			ElectoralAccess::new_election(
 				(),
 				block_number_to_check(*current_chain_tracking_number),
 				*current_sc_block,
@@ -139,7 +137,6 @@ impl<
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: ConsensusVotes<Self>,

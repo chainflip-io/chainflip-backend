@@ -1,14 +1,11 @@
 use crate::{
-	chainflip::solana_elections::SolanaElectoralSystem, Runtime, SolEnvironment, SolanaElections,
-	Weight,
+	chainflip::solana_elections::SolanaElectoralSystemRunner, Runtime, SolEnvironment,
+	SolanaElections, Weight,
 };
 use cf_chains::{instances::SolanaInstance, sol::api::SolanaApi, TransferAssetParams};
 use frame_support::traits::OnRuntimeUpgrade;
 
-use pallet_cf_elections::{
-	access_impls::ElectionAccess, electoral_system::ElectionWriteAccess,
-	electoral_systems::composite::tuple_6_impls::CompositeElectionIdentifierExtra,
-};
+use pallet_cf_elections::{electoral_system_runner::RunnerStorageAccessTrait, RunnerStorageAccess};
 
 use cf_chains::sol::{SolAddress, SolPubkey, SolTransaction};
 
@@ -74,34 +71,24 @@ impl OnRuntimeUpgrade for SolanaEgressSuccessWitnessMigration {
 		log::info!("🥮 Running Solana Success witnessing migration.");
 
 		// Clear Solana's egress-success votes.
-		let _ =
-			SolanaElections::with_electoral_access_and_identifiers(|_, election_identifiers| {
-				SolanaElectoralSystem::with_identifiers(
-					election_identifiers,
-					|election_identifiers| {
-						// Extract egress-success elections only.
-						let (_, _, _, _, egress_success_election_identifiers, ..) =
-							election_identifiers;
-						egress_success_election_identifiers.into_iter().for_each(
-							|election_identifier| {
-								ElectionAccess::<Runtime, SolanaInstance>::new(
-									election_identifier
-										.with_extra(CompositeElectionIdentifierExtra::<
-										(),
-										(),
-										u32,
-										(),
-										(),
-										(),
-									>::EE(())),
-								)
-								.clear_votes()
-							},
-						);
-						Ok(())
-					},
-				)
-			});
+		let _ = SolanaElections::with_election_identifiers(|election_identifiers| {
+			SolanaElectoralSystemRunner::with_identifiers(
+				election_identifiers,
+				|election_identifiers| {
+					// Extract egress-success elections only.
+					let (_, _, _, _, egress_success_election_identifiers, ..) =
+						election_identifiers;
+					egress_success_election_identifiers.into_iter().for_each(
+						|election_identifier| {
+							RunnerStorageAccess::<Runtime, SolanaInstance>::clear_election_votes(
+								*election_identifier.unique_monotonic(),
+							);
+						},
+					);
+					Ok(())
+				},
+			)
+		});
 
 		// Solana ApiCalls are stored in the broadcaster pallets. Add empty "fallback" info for
 		// existing Ccms.

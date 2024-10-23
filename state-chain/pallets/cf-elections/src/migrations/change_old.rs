@@ -36,12 +36,13 @@ impl<
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 	> Change<Identifier, Value, Settings, Hook, ValidatorId>
 {
-	pub fn watch_for_change<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
+	pub fn watch_for_change<
+		ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
+	>(
 		identifier: Identifier,
 		previous_value: Value,
 	) -> Result<(), CorruptStorageError> {
-		electoral_access.new_election((), (identifier, previous_value), ())?;
+		ElectoralAccess::new_election((), (identifier, previous_value), ())?;
 		Ok(())
 	}
 }
@@ -77,7 +78,6 @@ impl<
 	}
 
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
@@ -104,13 +104,12 @@ impl<
 		}
 	}
 
-	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
+	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
 		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
+			let election_access = ElectoralAccess::election_mut(election_identifier);
 			if let Some(value) = election_access.check_consensus()?.has_consensus() {
 				let (identifier, previous_value) = election_access.properties()?;
 				if previous_value != value {
@@ -124,7 +123,6 @@ impl<
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: ConsensusVotes<Self>,

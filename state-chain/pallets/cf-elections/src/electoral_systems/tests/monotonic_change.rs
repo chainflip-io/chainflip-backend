@@ -162,8 +162,8 @@ fn votes_with_old_value_or_lower_block_are_rejected() {
 	const OLD_BLOCK: u32 = 7;
 	const NEW_VALUE: u64 = 10;
 	const NEW_BLOCK: u32 = 11;
-	let mut test = with_no_election();
-	let _ = test.mut_access().new_election((), ((), OLD_VALUE, OLD_BLOCK), ());
+	let test = with_no_election();
+	let _ = MockAccess::<SimpleMonotonicChange>::new_election((), ((), OLD_VALUE, OLD_BLOCK), ());
 	//new value but old block not valid
 	assert!(!test
 		.is_vote_valid(&MonotonicChangeVote {
