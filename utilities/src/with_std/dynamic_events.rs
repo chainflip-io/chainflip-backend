@@ -30,7 +30,7 @@ pub enum DispatchError {
 	KnownModuleError { pallet: String, name: String, error: String },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 /// A wrapper around a JSON value that represents a substrate EventRecord.
 pub struct DynamicEventRecord(JsonValue);
 
@@ -42,7 +42,7 @@ impl Deref for DynamicEventRecord {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DynamicEvent(JsonValue);
 
 impl Deref for DynamicEvent {
