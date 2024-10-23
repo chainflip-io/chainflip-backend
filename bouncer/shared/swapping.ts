@@ -12,7 +12,7 @@ import {
   defaultAssetAmounts,
   ccmSupportedChains,
   assetDecimals,
-  solCfParamsCodec,
+  solCcmAdditionalDataCodec,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -93,7 +93,7 @@ export function newSolanaCcmAdditionalData(maxAccounts: number) {
     fallback_address: fallbackAddress,
   };
 
-  return u8aToHex(solCfParamsCodec.enc(cfParameters));
+  return u8aToHex(solCcmAdditionalDataCodec.enc(cfParameters));
 }
 
 // Solana CCM-related parameters. These are values in the protocol.
