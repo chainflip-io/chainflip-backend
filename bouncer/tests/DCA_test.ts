@@ -82,14 +82,10 @@ async function testDCASwap(
       destAsset,
       destAddress,
       wallet,
-      // newCcmMetadata(inputAsset, destAsset, undefined, 100),
       undefined,
       amount.toString(),
       undefined,
-      // TODO: Something is wrong when passing fillOrKillParams but no CCM Metadata.
-      // Problem is when ccmAdditionalData is undefined.
       fillOrKillParams,
-      // undefined,
       dcaParams,
     );
 
