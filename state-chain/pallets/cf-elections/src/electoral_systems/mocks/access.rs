@@ -230,7 +230,7 @@ impl MockStorageAccess {
 	}
 
 	pub fn next_umi() -> UniqueMonotonicIdentifier {
-		NEXT_ELECTION_ID.with(|next_id| next_id.borrow().clone())
+		NEXT_ELECTION_ID.with(|next_id| *next_id.borrow())
 	}
 
 	pub fn increment_next_umi() {
@@ -273,7 +273,6 @@ impl MockStorageAccess {
 			let settings_ref = settings.borrow();
 			settings_ref
 				.get(&identifier.encode())
-				.clone()
 				.map(|v| ES::ElectoralSettings::decode(&mut &v[..]).unwrap())
 				.unwrap()
 		})
@@ -382,8 +381,7 @@ impl MockStorageAccess {
 		})
 	}
 
-	pub fn raw_unsynchronised_state_map<ES: ElectoralSystem>() -> BTreeMap<Vec<u8>, Option<Vec<u8>>>
-	{
+	pub fn raw_unsynchronised_state_map() -> BTreeMap<Vec<u8>, Option<Vec<u8>>> {
 		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
 			let state_map_ref = old_state_map.borrow();
 			state_map_ref.clone()

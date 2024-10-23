@@ -339,7 +339,7 @@ impl<ES: ElectoralSystem> ElectoralSystemState<ES> {
 		Self {
 			unsynchronised_settings: MockStorageAccess::unsynchronised_settings::<ES>(),
 			unsynchronised_state: MockStorageAccess::unsynchronised_state::<ES>(),
-			unsynchronised_state_map: MockStorageAccess::raw_unsynchronised_state_map::<ES>(),
+			unsynchronised_state_map: MockStorageAccess::raw_unsynchronised_state_map(),
 			election_identifiers: MockStorageAccess::election_identifiers::<ES>(),
 			next_umi: MockStorageAccess::next_umi(),
 		}
