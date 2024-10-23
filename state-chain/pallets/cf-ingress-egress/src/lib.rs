@@ -923,10 +923,10 @@ pub mod pallet {
 			}
 
 			for tx in ScheduledTxForReject::<T, I>::take() {
-				if let Some(refund_address) = tx.refund_address {
+				if let Some(refund_address) = tx.refund_address.clone() {
 					if let Ok(api_call) =
 						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
-							tx.tx_id,
+							tx.tx_id.clone(),
 							refund_address,
 							tx.amount,
 						) {
