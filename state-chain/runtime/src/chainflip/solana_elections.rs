@@ -443,7 +443,7 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 		nonce_account: SolAddress,
 		previous_nonce_value: SolHash,
 	) -> DispatchResult {
-		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
+		pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
 			SolanaNonceTracking::watch_for_change::<
 				DerivedElectoralAccess<
 					_,
@@ -451,7 +451,7 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 					RunnerStorageAccess<Runtime, SolanaInstance>,
 				>,
 			>(nonce_account, previous_nonce_value)
-		})?)
+		})
 	}
 }
 
@@ -461,7 +461,7 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 	type Chain = SolanaCrypto;
 
 	fn watch_for_egress_success(signature: SolSignature) -> DispatchResult {
-		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
+		pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::with_status_check(|| {
 			SolanaEgressWitnessing::watch_for_egress::<
 				DerivedElectoralAccess<
 					_,
@@ -469,6 +469,6 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 					RunnerStorageAccess<Runtime, SolanaInstance>,
 				>,
 			>(signature)
-		})?)
+		})
 	}
 }
