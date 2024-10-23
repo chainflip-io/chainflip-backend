@@ -3,15 +3,13 @@ use crate::{
 		ConsensusStatus, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
 		ElectionWriteAccess, ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess,
 	},
-	vote_storage::VoteStorage,
 	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
 use codec::{Decode, Encode};
 use core::cell::RefCell;
-use frame_support::{ensure, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
+use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use std::collections::BTreeMap;
 
-// TODO: Create a new() so no need to pass mock storage access in each time. same below.
 pub struct MockReadAccess<ES: ElectoralSystem> {
 	election_identifier: ElectionIdentifierOf<ES>,
 }
@@ -200,6 +198,10 @@ impl MockStorageAccess {
 		ELECTION_PROPERTIES.with(|properties| {
 			let mut properties_ref = properties.borrow_mut();
 			properties_ref.clear();
+		});
+		ELECTORAL_SETTINGS.with(|settings| {
+			let mut settings_ref = settings.borrow_mut();
+			settings_ref.clear();
 		});
 		ELECTION_SETTINGS.with(|settings| {
 			let mut settings_ref = settings.borrow_mut();
