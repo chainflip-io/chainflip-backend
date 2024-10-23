@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, marker::PhantomData};
 use super::*;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
-	assets::any::Asset,
+	assets::{any::Asset, sol::Asset as SolAsset},
 	ccm_checker::CcmValidityError,
 	sol::{
 		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
@@ -428,7 +428,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			// Contract call fails with invalid CCM
 			assert_ok!(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: cf_chains::assets::sol::Asset::Sol,
+					source_asset: SolAsset::Sol,
 					deposit_amount: 1_000_000_000_000u64,
 					destination_asset: Asset::SolUsdc,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
@@ -481,7 +481,7 @@ fn solana_ccm_fails_with_invalid_input() {
 
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: cf_chains::assets::sol::Asset::Sol,
+					source_asset: SolAsset::Sol,
 					deposit_amount: 1_000_000_000_000u64,
 					destination_asset: Asset::SolUsdc,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
@@ -704,7 +704,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			};
 			witness_call(RuntimeCall::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: cf_chains::assets::sol::Asset::Sol,
+					source_asset: SolAsset::Sol,
 					deposit_amount: 1_000_000_000_000u64,
 					destination_asset: Asset::SolUsdc,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
@@ -760,7 +760,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			assert!(matches!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::get()[0],
 				FetchOrTransfer::Transfer {
 					egress_id: (ForeignChain::Solana, 2),
-					asset: cf_chains::assets::sol::Asset::SolUsdc,
+					asset: SolAsset::SolUsdc,
 					destination_address: FALLBACK_ADDRESS,
 					..
 				}

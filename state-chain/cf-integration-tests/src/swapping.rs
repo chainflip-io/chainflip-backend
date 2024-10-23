@@ -268,7 +268,7 @@ fn basic_pool_setup_provision_and_swap() {
 
 			let deposit_address =
 				<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
-					cf_primitives::chains::assets::eth::Asset::Eth,
+					EthAsset::Eth,
 					pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 				)
 				.unwrap();
@@ -279,8 +279,8 @@ fn basic_pool_setup_provision_and_swap() {
 				pallet_cf_ingress_egress::Call::process_deposits {
 					deposit_witnesses: vec![DepositWitness {
 						deposit_address,
-						asset: cf_primitives::chains::assets::eth::Asset::Eth,
-						amount: (DEPOSIT_AMOUNT + EthereumChainTracking::estimate_ingress_fee(cf_primitives::chains::assets::eth::Asset::Eth)),
+						asset: EthAsset::Eth,
+						amount: (DEPOSIT_AMOUNT + EthereumChainTracking::estimate_ingress_fee(EthAsset::Eth)),
 						deposit_details: Default::default(),
 					}],
 					block_height: 0,
@@ -573,7 +573,7 @@ fn can_process_ccm_via_direct_deposit() {
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-				source_asset: cf_chains::assets::eth::Asset::Flip,
+				source_asset: EthAsset::Flip,
 				deposit_amount,
 				destination_asset: Asset::Usdc,
 				destination_address: EncodedAddress::Eth([0x02; 20]),
@@ -622,7 +622,7 @@ fn failed_swaps_are_rolled_back() {
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::contract_swap_request {
-				from: cf_chains::assets::eth::Asset::Eth,
+				from: EthAsset::Eth,
 				to: Asset::Flip,
 				deposit_amount: 10_000 * DECIMALS,
 				destination_address: EncodedAddress::Eth(Default::default()),
@@ -782,7 +782,7 @@ fn can_resign_failed_ccm() {
 
 			witness_call(RuntimeCall::EthereumIngressEgress(
 				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: cf_chains::assets::eth::Asset::Flip,
+					source_asset: EthAsset::Flip,
 					deposit_amount: 10_000_000_000_000,
 					destination_asset: Asset::Usdc,
 					destination_address: EncodedAddress::Eth([0x02; 20]),
@@ -904,7 +904,7 @@ fn can_handle_failed_vault_transfer() {
 
 			// Report a failed vault transfer
 			let starting_epoch = Validator::current_epoch();
-			let asset = cf_chains::assets::eth::Asset::Eth;
+			let asset = EthAsset::Eth;
 			let amount = 1_000_000u128;
 			let destination_address = [0x00; 20].into();
 			let broadcast_id = 2;

@@ -1,6 +1,7 @@
 use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN, ScriptBuf};
 use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
+	assets::btc::Asset as BtcAsset,
 	btc::{
 		deposit_address::DepositAddress, smart_contract_encoding::UtxoEncodedData,
 		BtcDepositDetails, ScriptPubkey, UtxoId,
@@ -17,7 +18,7 @@ use crate::btc::rpc::VerboseTransaction;
 
 const OP_PUSHBYTES_75: u8 = 0x4b;
 const OP_PUSHDATA1: u8 = 0x4c;
-const NATIVE_ASSET: cf_chains::assets::btc::Asset = cf_chains::assets::btc::Asset::Btc;
+const NATIVE_ASSET: BtcAsset = BtcAsset::Btc;
 
 fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 	let bytes = script.as_script().as_bytes();
