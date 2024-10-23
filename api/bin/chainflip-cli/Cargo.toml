@@ -1,7 +1,7 @@
 [package]
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
-edition = '2021'
-build = 'build.rs'
+edition = "2021"
+build = "build.rs"
 name = "chainflip-cli"
 version = "1.7.0"
 
@@ -14,16 +14,16 @@ bigdecimal = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 config = { workspace = true }
 futures = { workspace = true }
-hex = { workspace = true, features = ["serde"] }
-serde = { workspace = true, features = ["derive", "rc"] }
+hex = { workspace = true, default-features = true, features = ["serde"] }
+serde = { workspace = true, default-features = true, features = ["derive", "rc"] }
 tokio = { workspace = true, features = ["full"] }
 serde_json = { workspace = true }
 
 # Local Deps
 chainflip-engine = { workspace = true }
 chainflip-api = { workspace = true }
-cf-chains = { workspace = true }
-cf-utilities = { workspace = true }
+cf-chains = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
 custom-rpc = { workspace = true }
 
 [build-dependencies]

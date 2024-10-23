@@ -1,45 +1,45 @@
 [package]
-name = 'custom-rpc'
-version = '0.1.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2021'
+name = "custom-rpc"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+edition = "2021"
 
 [lints]
 workspace = true
 
 [dependencies]
-codec = { workspace = true }
+codec = { workspace = true, default-features = true }
 
 # Chainflip Runtime
-state-chain-runtime = { workspace = true }
+state-chain-runtime = { workspace = true, default-features = true }
 
 anyhow = { workspace = true }
 futures = { workspace = true }
 jsonrpsee = { workspace = true, features = ["full"] }
-hex = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
+hex = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
 thiserror = { workspace = true }
 log = { workspace = true }
 
-cf-chains = { workspace = true }
-cf-primitives = { workspace = true }
-cf-utilities = { workspace = true }
-cf-amm = { workspace = true }
-pallet-cf-governance = { workspace = true }
-pallet-cf-pools = { workspace = true }
-pallet-cf-witnesser = { workspace = true }
-pallet-cf-swapping = { workspace = true }
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
+cf-amm = { workspace = true, default-features = true }
+pallet-cf-governance = { workspace = true, default-features = true }
+pallet-cf-pools = { workspace = true, default-features = true }
+pallet-cf-witnesser = { workspace = true, default-features = true }
+pallet-cf-swapping = { workspace = true, default-features = true }
 
-sp-api = { workspace = true }
-sp-core = { workspace = true }
-sp-rpc = { workspace = true }
-sc-rpc = { workspace = true }
-sc-rpc-api = { workspace = true }
-sp-runtime = { workspace = true }
-sp-state-machine = { workspace = true }
-sc-client-api = { workspace = true }
-frame-system = { workspace = true }
-frame-support = { workspace = true }
+sp-api = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-rpc = { workspace = true, default-features = true }
+sc-rpc = { workspace = true, default-features = true }
+sc-rpc-api = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-state-machine = { workspace = true, default-features = true }
+sc-client-api = { workspace = true, default-features = true }
+frame-system = { workspace = true, default-features = true }
+frame-support = { workspace = true, default-features = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }

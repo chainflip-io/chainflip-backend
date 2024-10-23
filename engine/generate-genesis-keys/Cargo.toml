@@ -1,6 +1,6 @@
 [package]
 authors = ["Chainflip <https://chainflip.io>"]
-edition = '2021'
+edition = "2021"
 name = "generate-genesis-keys"
 version = "0.1.0"
 
@@ -9,20 +9,20 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-hex = { workspace = true }
+hex = { workspace = true, default-features = true }
 bincode = { workspace = true }
 csv = { workspace = true }
 serde_json = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true, default-features = true, features = ["derive"] }
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
-rand = { workspace = true }
+rand = { workspace = true, default-features = true }
 
 # Local deps
-cf-primitives = { workspace = true }
+cf-primitives = { workspace = true, default-features = true }
 chainflip-engine = { workspace = true }
 chainflip-node = { workspace = true }
-multisig = { workspace = true }
-state-chain-runtime = { workspace = true }
+multisig = { workspace = true, default-features = true }
+state-chain-runtime = { workspace = true, default-features = true }
 rocksdb = { workspace = true, features = ["lz4"] }
 
 [dev-dependencies]

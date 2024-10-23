@@ -1,16 +1,16 @@
 [package]
-name = 'pallet-cf-lp'
-version = '0.1.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'Pallet for liquidity provider functionality.'
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = '<TODO>'
+name = "pallet-cf-lp"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+description = "Pallet for liquidity provider functionality."
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "<TODO>"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [lints]
 workspace = true
@@ -25,8 +25,8 @@ cf-runtime-upgrade-utilities = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Parity deps
-codec = { workspace = true, features = ['derive'] }
-scale-info = { workspace = true, features = ['derive'] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 
 frame-support = { workspace = true }
 frame-system = { workspace = true }
@@ -34,37 +34,37 @@ frame-benchmarking = { workspace = true }
 sp-std = { workspace = true }
 
 [dev-dependencies]
-pallet-cf-account-roles = { workspace = true }
-cf-test-utilities = { workspace = true }
-sp-runtime = { workspace = true }
-sp-core = { workspace = true }
-sp-io = { workspace = true }
+pallet-cf-account-roles = { workspace = true, default-features = true }
+cf-test-utilities = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-io = { workspace = true, default-features = true }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'cf-chains/std',
-  'cf-primitives/std',
-  'cf-traits/std',
-  'cf-runtime-upgrade-utilities/std',
-  'codec/std',
-  'frame-benchmarking/std',
-  'frame-support/std',
-  'frame-system/std',
-  'scale-info/std',
-  'serde/std',
-  'sp-std/std',
+  "cf-chains/std",
+  "cf-primitives/std",
+  "cf-traits/std",
+  "cf-runtime-upgrade-utilities/std",
+  "codec/std",
+  "frame-benchmarking/std",
+  "frame-support/std",
+  "frame-system/std",
+  "scale-info/std",
+  "serde/std",
+  "sp-std/std",
 ]
 runtime-benchmarks = [
-  'cf-chains/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
-  'pallet-cf-account-roles/runtime-benchmarks',
+  "cf-chains/runtime-benchmarks",
+  "cf-traits/runtime-benchmarks",
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
+  "pallet-cf-account-roles/runtime-benchmarks",
 ]
 try-runtime = [
-  'cf-runtime-upgrade-utilities/try-runtime',
-  'frame-support/try-runtime',
-  'frame-system/try-runtime',
+  "cf-runtime-upgrade-utilities/try-runtime",
+  "frame-support/try-runtime",
+  "frame-system/try-runtime",
 ]

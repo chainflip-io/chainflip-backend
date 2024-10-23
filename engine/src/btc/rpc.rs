@@ -373,7 +373,7 @@ impl BtcRpcApi for BtcRpcClient {
 	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid> {
 		let tx: Transaction = bitcoin::consensus::encode::deserialize(&transaction_bytes)
 			.map_err(|_| anyhow!("Failed to deserialize transaction"))?;
-		let derived_txid = tx.txid();
+		let derived_txid = tx.compute_txid();
 
 		match call_rpc_raw(
 			&self.client,

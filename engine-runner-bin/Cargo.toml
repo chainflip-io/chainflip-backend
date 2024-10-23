@@ -4,11 +4,11 @@ description = "The central runner for the chainflip engine, it requires two shar
 # NB: When updating this version, you must update the debian assets appropriately too.
 version = "1.7.0"
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
-build = 'build.rs'
-edition = '2021'
-license = '<TODO>'
+build = "build.rs"
+edition = "2021"
+license = "<TODO>"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.deb]
 assets = [

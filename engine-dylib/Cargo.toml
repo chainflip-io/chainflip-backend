@@ -1,14 +1,14 @@
 [package]
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
-build = 'build.rs'
-edition = '2021'
+build = "build.rs"
+edition = "2021"
 name = "cf-engine-dylib"
 version = "1.7.0"
 
 [lib]
 crate-type = ["cdylib"]
 name = "chainflip_engine_v1_7_0"
-path = 'src/lib.rs'
+path = "src/lib.rs"
 
 [dependencies]
 chainflip-engine = { workspace = true }

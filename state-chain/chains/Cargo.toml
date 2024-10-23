@@ -1,9 +1,9 @@
 [package]
-name = 'cf-chains'
-version = '0.1.0'
-authors = ['Chainflip <https://chainflip.io>']
-edition = '2021'
-description = 'Shared Chain-specific functionality for use in the substrate runtime.'
+name = "cf-chains"
+version = "0.1.0"
+authors = ["Chainflip <https://chainflip.io>"]
+edition = "2021"
+description = "Shared Chain-specific functionality for use in the substrate runtime."
 
 [lints]
 workspace = true
@@ -15,7 +15,7 @@ cf-runtime-utilities = { workspace = true }
 
 # Cryptography
 digest = { workspace = true }
-libsecp256k1 = { workspace = true, features = ['static-context'] }
+libsecp256k1 = { workspace = true, features = ["static-context"] }
 sha2 = { workspace = true }
 
 # Solana
@@ -80,7 +80,7 @@ rand = { workspace = true, features = ["std"] }
 ed25519-dalek = { workspace = true, features = ["rand_core"] }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
   "bech32/std",
   "cf-primitives/std",
@@ -120,9 +120,9 @@ std = [
   # "borsh/std" not needed, it conflicts with borsh/hashbrown.
 ]
 runtime-benchmarks = [
-  'frame-support/runtime-benchmarks',
-  'sp-runtime/runtime-benchmarks',
+  "frame-support/runtime-benchmarks",
+  "sp-runtime/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime", "sp-runtime/try-runtime"]
 
-runtime-integration-tests = ['std', 'dep:rand', 'ed25519-dalek/rand_core']
+runtime-integration-tests = ["std", "dep:rand", "ed25519-dalek/rand_core"]

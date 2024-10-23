@@ -1,9 +1,9 @@
 [package]
-name = 'cf-test-utilities'
-version = '0.1.0'
-edition = '2021'
-authors = ['Chainflip <https://chainflip.io>']
-description = 'Chainflip test utilities used in multiple crates'
+name = "cf-test-utilities"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chainflip <https://chainflip.io>"]
+description = "Chainflip test utilities used in multiple crates"
 
 [lints]
 workspace = true

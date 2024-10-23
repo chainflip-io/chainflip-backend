@@ -1,14 +1,14 @@
 [package]
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
-build = 'build.rs'
-edition = '2021'
+build = "build.rs"
+edition = "2021"
 name = "chainflip-engine"
 version = "1.7.0"
 
 [lib]
 crate-type = ["lib"]
 name = "chainflip_engine"
-path = 'src/lib.rs'
+path = "src/lib.rs"
 
 [lints]
 workspace = true
@@ -27,10 +27,10 @@ fs_extra = { workspace = true }
 futures = { workspace = true }
 futures-core = { workspace = true }
 futures-util = { workspace = true }
-hex = { workspace = true }
+hex = { workspace = true, default-features = true }
 httparse = { workspace = true }
 http = { workspace = true }
-itertools = { workspace = true }
+itertools = { workspace = true, default-features = true }
 jsonrpsee = { workspace = true, features = ["full"] }
 
 dyn-clone = { workspace = true }
@@ -41,20 +41,20 @@ num-bigint = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
 secp256k1 = { workspace = true, features = ["hashes"] }
-serde = { workspace = true, features = ["derive", "rc"] }
+serde = { workspace = true, default-features = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
+sha2 = { workspace = true, default-features = true }
 subxt = { workspace = true, features = ["substrate-compat"] }
-thiserror = { workspace = true }
+thiserror = { workspace = true, default-features = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 url = { workspace = true }
 web3 = { workspace = true, features = ["ws-tls-tokio"] }
 zeroize = { workspace = true }
-curve25519-dalek = { workspace = true, features = ["serde"] }
+curve25519-dalek = { workspace = true, default-features = true, features = ["serde"] }
 ed25519-dalek = { workspace = true }
 pin-project = { workspace = true }
-rand = { workspace = true }
+rand = { workspace = true, default-features = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tracing = { workspace = true }
 x25519-dalek = { workspace = true, features = ["serde"] }
@@ -64,60 +64,60 @@ lazy_format = { workspace = true }
 zmq = { workspace = true, features = ["vendored"] }
 
 # Local deps
-cf-chains = { workspace = true }
-cf-primitives = { workspace = true }
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
 chainflip-node = { workspace = true }
 custom-rpc = { workspace = true }
 engine-upgrade-utils = { workspace = true }
 multisig = { workspace = true }
-pallet-cf-account-roles = { workspace = true }
-pallet-cf-broadcast = { workspace = true }
-pallet-cf-chain-tracking = { workspace = true }
-pallet-cf-elections = { workspace = true }
-pallet-cf-environment = { workspace = true }
-pallet-cf-flip = { workspace = true }
-pallet-cf-governance = { workspace = true }
-pallet-cf-ingress-egress = { workspace = true }
-pallet-cf-reputation = { workspace = true }
-pallet-cf-funding = { workspace = true }
-pallet-cf-swapping = { workspace = true }
-pallet-cf-threshold-signature = { workspace = true }
-pallet-cf-validator = { workspace = true }
-pallet-cf-vaults = { workspace = true }
-pallet-cf-witnesser = { workspace = true }
-pallet-cf-cfe-interface = { workspace = true }
-state-chain-runtime = { workspace = true }
-cf-utilities = { workspace = true }
+pallet-cf-account-roles = { workspace = true, default-features = true }
+pallet-cf-broadcast = { workspace = true, default-features = true }
+pallet-cf-chain-tracking = { workspace = true, default-features = true }
+pallet-cf-elections = { workspace = true, default-features = true }
+pallet-cf-environment = { workspace = true, default-features = true }
+pallet-cf-flip = { workspace = true, default-features = true }
+pallet-cf-governance = { workspace = true, default-features = true }
+pallet-cf-ingress-egress = { workspace = true, default-features = true }
+pallet-cf-reputation = { workspace = true, default-features = true }
+pallet-cf-funding = { workspace = true, default-features = true }
+pallet-cf-swapping = { workspace = true, default-features = true }
+pallet-cf-threshold-signature = { workspace = true, default-features = true }
+pallet-cf-validator = { workspace = true, default-features = true }
+pallet-cf-vaults = { workspace = true, default-features = true }
+pallet-cf-witnesser = { workspace = true, default-features = true }
+pallet-cf-cfe-interface = { workspace = true, default-features = true }
+state-chain-runtime = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
 sol-prim = { workspace = true, features = ["pda", "str", "serde", "scale"] }
 
 # substrate deps
-cf-amm = { workspace = true }
-codec = { workspace = true, features = ["derive", "full"] }
-frame-support = { workspace = true }
-frame-system = { workspace = true }
-sc-rpc-api = { workspace = true }
-sc-transaction-pool-api = { workspace = true }
-scale-info = { workspace = true, features = ["derive"] }
-sp-core = { workspace = true }
-sp-rpc = { workspace = true }
-sp-runtime = { workspace = true }
-sp-version = { workspace = true }
+cf-amm = { workspace = true, default-features = true }
+codec = { workspace = true, default-features = true, features = ["derive", "full"] }
+frame-support = { workspace = true, default-features = true }
+frame-system = { workspace = true, default-features = true }
+sc-rpc-api = { workspace = true, default-features = true }
+sc-transaction-pool-api = { workspace = true, default-features = true }
+scale-info = { workspace = true, default-features = true, features = ["derive"] }
+sp-core = { workspace = true, default-features = true }
+sp-rpc = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-version = { workspace = true, default-features = true }
 substrate-frame-rpc-system = { workspace = true }
 
-frame-metadata = { workspace = true, features = ["current"] }
-serde_bytes = { workspace = true }
-bs58 = { workspace = true }
+frame-metadata = { workspace = true, default-features = true, features = ["current"] }
+serde_bytes = { workspace = true, default-features = true }
+bs58 = { workspace = true, default-features = true }
 base64 = { workspace = true }
 rocksdb = { workspace = true, features = ["lz4"] }
 
 [dev-dependencies]
 csv = { workspace = true }
-ethereum = { workspace = true }
+ethereum = { workspace = true, default-features = true }
 mockall = { workspace = true, features = ["nightly"] }
 multisig = { workspace = true, features = ["test"] }
-rlp = { workspace = true }
+rlp = { workspace = true, default-features = true }
 tempfile = { workspace = true }
-cf-utilities = { workspace = true, features = ["test-utils"] }
+cf-utilities = { workspace = true, default-features = true, features = ["test-utils"] }
 serde_path_to_error = { workspace = true }
 
 [build-dependencies]

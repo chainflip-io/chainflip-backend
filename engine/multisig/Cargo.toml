@@ -1,12 +1,12 @@
 [package]
-authors = ['Chainflip <https://chainflip.io>']
-description = 'Multisig component of the Chainflip Engine'
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = 'TBC'
-name = 'multisig'
-repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.1.0'
+authors = ["Chainflip <https://chainflip.io>"]
+description = "Multisig component of the Chainflip Engine"
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "TBC"
+name = "multisig"
+repository = "https://github.com/chainflip-io/chainflip-backend"
+version = "0.1.0"
 
 [lints]
 workspace = true
@@ -21,17 +21,20 @@ bincode = { workspace = true }
 futures = { workspace = true }
 futures-core = { workspace = true }
 futures-util = { workspace = true }
-hex = { workspace = true }
-itertools = { workspace = true }
+hex = { workspace = true, default-features = true }
+itertools = { workspace = true, default-features = true }
 lazy_static = { workspace = true }
 secp256k1 = { workspace = true, features = [
 	"serde",
 	"rand-std",
 	"global-context",
 ] }
-serde = { workspace = true, features = ["derive", "rc"] }
-sha2 = { workspace = true }
-thiserror = { workspace = true }
+serde = { workspace = true, default-features = true, features = [
+	"derive",
+	"rc",
+] }
+sha2 = { workspace = true, default-features = true }
+thiserror = { workspace = true, default-features = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 num-bigint = { workspace = true }
@@ -40,25 +43,27 @@ num-derive = { workspace = true }
 zeroize = { workspace = true }
 generic-array = { workspace = true }
 public-ip = { workspace = true }
-curve25519-dalek = { workspace = true, features = ["serde"] }
+curve25519-dalek = { workspace = true, default-features = true, features = [
+	"serde",
+] }
 typenum = { workspace = true }
 schnorrkel = { workspace = true }
 rayon = { workspace = true }
-rand = { workspace = true }
+rand = { workspace = true, default-features = true }
 tracing = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
+strum = { workspace = true, default-features = true }
+strum_macros = { workspace = true, default-features = true }
 blake2 = { workspace = true }
 
 # Local deps
-cf-chains = { workspace = true }
-cf-primitives = { workspace = true }
-state-chain-runtime = { workspace = true }
-cf-utilities = { workspace = true }
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
+state-chain-runtime = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
 
 # substrate deps
-sp-core = { workspace = true }
-sp-runtime = { workspace = true }
+sp-core = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
 ed25519-dalek = { workspace = true }
 
 [dev-dependencies]
@@ -66,8 +71,10 @@ mockall = { workspace = true }
 
 # Turn on the "test" feature flag for tests
 multisig = { workspace = true, features = ["test"] }
-cf-utilities = { workspace = true, features = ["test-utils"] }
+cf-utilities = { workspace = true, default-features = true, features = [
+	"test-utils",
+] }
 
 [features]
-test = ['mockall']
+test = ["mockall"]
 std = []

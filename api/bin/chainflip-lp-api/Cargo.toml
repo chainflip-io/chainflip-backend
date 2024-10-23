@@ -25,24 +25,24 @@ workspace = true
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 futures = { workspace = true }
-hex = { workspace = true }
+hex = { workspace = true, default-features = true }
 jsonrpsee = { workspace = true, features = ["full"] }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true, default-features = true, features = ["derive"] }
 serde_json = { workspace = true }
-sp-rpc = { workspace = true }
-sp-core = { workspace = true }
+sp-rpc = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-pallet-cf-pools = { workspace = true }
-cf-primitives = { workspace = true }
+pallet-cf-pools = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
 custom-rpc = { workspace = true }
-frame-system = { workspace = true }
-sc-rpc = { workspace = true }
+frame-system = { workspace = true, default-features = true }
+sc-rpc = { workspace = true, default-features = true }
 
 # Local
 chainflip-api = { workspace = true }
-cf-utilities = { workspace = true }
+cf-utilities = { workspace = true, default-features = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }

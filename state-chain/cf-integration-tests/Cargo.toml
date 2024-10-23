@@ -1,15 +1,15 @@
 [package]
-name = 'cf-integration-tests'
-version = '0.1.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = '<TODO>'
+name = "cf-integration-tests"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "<TODO>"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [lints]
 workspace = true
@@ -19,68 +19,68 @@ state-chain-runtime = { workspace = true }
 log = { workspace = true }
 
 [dev-dependencies]
-libsecp256k1 = { workspace = true, features = ['static-context'] }
-rand = { workspace = true, features = ["std"] }
-hex-literal = { workspace = true }
+libsecp256k1 = { workspace = true, default-features = true, features = ["static-context"] }
+rand = { workspace = true, default-features = true }
+hex-literal = { workspace = true, default-features = true }
 secp256k1 = { workspace = true, features = ["rand-std"] }
 arrayref = { workspace = true }
 
 # Chainflip local dependencies
 # Additional FRAME pallets
-cf-amm = { workspace = true }
-cf-chains = { workspace = true, features = ['runtime-integration-tests'] }
-cf-primitives = { workspace = true }
-cf-test-utilities = { workspace = true }
-cf-utilities = { workspace = true }
-cf-traits = { workspace = true }
-cfe-events = { workspace = true }
-chainflip-node = { workspace = true }
-pallet-authorship = { workspace = true }
-pallet-cf-account-roles = { workspace = true }
-pallet-cf-broadcast = { workspace = true }
-pallet-cf-chain-tracking = { workspace = true }
-pallet-cf-emissions = { workspace = true }
-pallet-cf-environment = { workspace = true }
-pallet-cf-flip = { workspace = true }
-pallet-cf-funding = { workspace = true }
-pallet-cf-governance = { workspace = true }
-pallet-cf-ingress-egress = { workspace = true }
-pallet-cf-lp = { workspace = true }
-pallet-cf-asset-balances = { workspace = true }
-pallet-cf-elections = { workspace = true }
-pallet-cf-pools = { workspace = true }
-pallet-cf-reputation = { workspace = true }
-pallet-cf-swapping = { workspace = true }
-pallet-cf-threshold-signature = { workspace = true }
-pallet-cf-validator = { workspace = true }
-pallet-cf-vaults = { workspace = true }
-pallet-cf-witnesser = { workspace = true }
-pallet-session = { workspace = true, features = ['historical'] }
+cf-amm = { workspace = true, default-features = true}
+cf-chains = { workspace = true, default-features = true, features = ["runtime-integration-tests"] }
+cf-primitives = { workspace = true, default-features = true }
+cf-test-utilities = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
+cf-traits = { workspace = true, default-features = true }
+cfe-events = { workspace = true, default-features = true }
+chainflip-node = { workspace = true, default-features = true }
+pallet-authorship = { workspace = true, default-features = true }
+pallet-cf-account-roles = { workspace = true, default-features = true }
+pallet-cf-broadcast = { workspace = true, default-features = true }
+pallet-cf-chain-tracking = { workspace = true, default-features = true }
+pallet-cf-emissions = { workspace = true, default-features = true }
+pallet-cf-environment = { workspace = true, default-features = true }
+pallet-cf-flip = { workspace = true, default-features = true }
+pallet-cf-funding = { workspace = true, default-features = true }
+pallet-cf-governance = { workspace = true, default-features = true }
+pallet-cf-ingress-egress = { workspace = true, default-features = true }
+pallet-cf-lp = { workspace = true, default-features = true }
+pallet-cf-asset-balances = { workspace = true, default-features = true }
+pallet-cf-elections = { workspace = true, default-features = true }
+pallet-cf-pools = { workspace = true, default-features = true }
+pallet-cf-reputation = { workspace = true, default-features = true }
+pallet-cf-swapping = { workspace = true, default-features = true }
+pallet-cf-threshold-signature = { workspace = true, default-features = true }
+pallet-cf-validator = { workspace = true, default-features = true }
+pallet-cf-vaults = { workspace = true, default-features = true }
+pallet-cf-witnesser = { workspace = true, default-features = true }
+pallet-session = { workspace = true, default-features = true, features = ["historical"] }
 
 # Substrate dependencies
-codec = { workspace = true, features = ["derive"] }
-scale-info = { workspace = true, features = ["derive"] }
+codec = { workspace = true, default-features = true, features = ["derive"] }
+scale-info = { workspace = true, default-features = true, features = ["derive"] }
 
-frame-executive = { workspace = true }
-frame-support = { workspace = true }
-frame-system = { workspace = true }
-frame-system-rpc-runtime-api = { workspace = true }
+frame-executive = { workspace = true, default-features = true }
+frame-support = { workspace = true, default-features = true }
+frame-system = { workspace = true, default-features = true }
+frame-system-rpc-runtime-api = { workspace = true, default-features = true }
 
-pallet-aura = { workspace = true }
-pallet-grandpa = { workspace = true }
-pallet-timestamp = { workspace = true }
-pallet-transaction-payment = { workspace = true }
+pallet-aura = { workspace = true, default-features = true }
+pallet-grandpa = { workspace = true, default-features = true }
+pallet-timestamp = { workspace = true, default-features = true }
+pallet-transaction-payment = { workspace = true, default-features = true }
 
-sp-block-builder = { workspace = true }
-sp-consensus-aura = { workspace = true }
+sp-block-builder = { workspace = true, default-features = true }
+sp-consensus-aura = { workspace = true, default-features = true }
 
-sp-core = { workspace = true }
-sp-inherents = { workspace = true }
-sp-offchain = { workspace = true }
-sp-runtime = { workspace = true }
-sp-session = { workspace = true }
-sp-std = { workspace = true }
-sp-transaction-pool = { workspace = true }
-sp-version = { workspace = true }
-sp-consensus-grandpa = { workspace = true }
-sp-timestamp = { workspace = true }
+sp-core = { workspace = true, default-features = true }
+sp-inherents = { workspace = true, default-features = true }
+sp-offchain = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-session = { workspace = true, default-features = true }
+sp-std = { workspace = true, default-features = true }
+sp-transaction-pool = { workspace = true, default-features = true }
+sp-version = { workspace = true, default-features = true }
+sp-consensus-grandpa = { workspace = true, default-features = true }
+sp-timestamp = { workspace = true, default-features = true }

@@ -9,14 +9,14 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bs58 = { workspace = true }
+bs58 = { workspace = true, default-features = true }
 ed25519-dalek = { workspace = true }
 futures = { workspace = true }
-hex = { workspace = true }
+hex = { workspace = true, default-features = true}
 hmac-sha512 = { workspace = true }
-libsecp256k1 = { workspace = true }
-rand = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
+libsecp256k1 = { workspace = true, default-features = true }
+rand = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
 tiny-bip39 = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -27,31 +27,31 @@ jsonrpsee = { workspace = true, features = ["full"] }
 
 # Local
 chainflip-engine = { workspace = true }
-cf-utilities = { workspace = true }
+cf-utilities = { workspace = true, default-features = true }
 
 # State Chain
-cf-amm = { workspace = true }
-cf-chains = { workspace = true }
-cf-primitives = { workspace = true }
+cf-amm = { workspace = true, default-features = true }
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
 chainflip-node = { workspace = true }
 custom-rpc = { workspace = true }
-pallet-cf-account-roles = { workspace = true }
-pallet-cf-environment = { workspace = true }
-pallet-cf-governance = { workspace = true }
-pallet-cf-ingress-egress = { workspace = true }
-pallet-cf-lp = { workspace = true }
-pallet-cf-asset-balances = { workspace = true }
-pallet-cf-funding = { workspace = true }
-pallet-cf-swapping = { workspace = true }
-pallet-cf-pools = { workspace = true }
-pallet-cf-threshold-signature = { workspace = true }
-pallet-cf-validator = { workspace = true }
-state-chain-runtime = { workspace = true }
+pallet-cf-account-roles = { workspace = true, default-features = true }
+pallet-cf-environment = { workspace = true, default-features = true }
+pallet-cf-governance = { workspace = true, default-features = true }
+pallet-cf-ingress-egress = { workspace = true, default-features = true }
+pallet-cf-lp = { workspace = true, default-features = true }
+pallet-cf-asset-balances = { workspace = true, default-features = true }
+pallet-cf-funding = { workspace = true, default-features = true }
+pallet-cf-swapping = { workspace = true, default-features = true }
+pallet-cf-pools = { workspace = true, default-features = true }
+pallet-cf-threshold-signature = { workspace = true, default-features = true }
+pallet-cf-validator = { workspace = true, default-features = true }
+state-chain-runtime = { workspace = true, default-features = true }
 
 
 # Substrate
-frame-support = { workspace = true }
-sp-consensus-aura = { workspace = true }
-sp-core = { workspace = true }
-sp-consensus-grandpa = { workspace = true }
-codec = { workspace = true }
+frame-support = { workspace = true, default-features = true }
+sp-consensus-aura = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-consensus-grandpa = { workspace = true, default-features = true }
+codec = { workspace = true, default-features = true }

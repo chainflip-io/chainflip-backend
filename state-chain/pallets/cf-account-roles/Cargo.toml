@@ -1,16 +1,16 @@
 [package]
-name = 'pallet-cf-account-roles'
-version = '0.1.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'Chainflip account roles pallet.'
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = '<TODO>'
+name = "pallet-cf-account-roles"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+description = "Chainflip account roles pallet."
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "<TODO>"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [lints]
 workspace = true
@@ -24,8 +24,8 @@ cf-runtime-upgrade-utilities = { workspace = true }
 log = { workspace = true }
 
 # Parity deps
-codec = { workspace = true, features = ['derive'] }
-scale-info = { workspace = true, features = ['derive'] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 
 frame-benchmarking = { workspace = true, optional = true }
 frame-support = { workspace = true }
@@ -35,33 +35,33 @@ sp-std = { workspace = true }
 sp-core = { workspace = true }
 
 [dev-dependencies]
-sp-io = { workspace = true }
-sp-runtime = { workspace = true }
-cf-test-utilities = { workspace = true }
+sp-io = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+cf-test-utilities = { workspace = true, default-features = true }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'cf-primitives/std',
-  'cf-traits/std',
-  'cf-runtime-upgrade-utilities/std',
-  'codec/std',
-  'scale-info/std',
-  'frame-benchmarking?/std',
-  'frame-support/std',
-  'frame-system/std',
-  'log/std',
-  'sp-core/std',
-  'sp-std/std',
+  "cf-primitives/std",
+  "cf-traits/std",
+  "cf-runtime-upgrade-utilities/std",
+  "codec/std",
+  "scale-info/std",
+  "frame-benchmarking?/std",
+  "frame-support/std",
+  "frame-system/std",
+  "log/std",
+  "sp-core/std",
+  "sp-std/std",
 ]
 runtime-benchmarks = [
-  'cf-traits/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
+  "cf-traits/runtime-benchmarks",
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
 ]
 try-runtime = [
-  'frame-support/try-runtime',
-  'frame-system/try-runtime',
-  'cf-runtime-upgrade-utilities/try-runtime',
+  "frame-support/try-runtime",
+  "frame-system/try-runtime",
+  "cf-runtime-upgrade-utilities/try-runtime",
 ]

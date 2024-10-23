@@ -1,16 +1,16 @@
 [package]
-name = 'pallet-cf-cfe-interface'
-version = '0.1.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'Pallet for interfacing with the CFE'
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = '<TODO>'
+name = "pallet-cf-cfe-interface"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+description = "Pallet for interfacing with the CFE"
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "<TODO>"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [lints]
 workspace = true
@@ -24,35 +24,35 @@ cfe-events = { workspace = true }
 cf-runtime-upgrade-utilities = { workspace = true }
 
 # Parity deps
-codec = { workspace = true, features = ['derive'] }
-scale-info = { workspace = true, features = ['derive'] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 frame-benchmarking = { workspace = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 sp-std = { workspace = true }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'cf-chains/std',
-  'cf-primitives/std',
-  'cf-traits/std',
-  'cf-runtime-upgrade-utilities/std',
-  'codec/std',
-  'frame-support/std',
-  'frame-system/std',
-  'scale-info/std',
-  'sp-std/std',
+  "cf-chains/std",
+  "cf-primitives/std",
+  "cf-traits/std",
+  "cf-runtime-upgrade-utilities/std",
+  "codec/std",
+  "frame-support/std",
+  "frame-system/std",
+  "scale-info/std",
+  "sp-std/std",
 ]
 runtime-benchmarks = [
-  'cf-chains/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
+  "cf-chains/runtime-benchmarks",
+  "cf-traits/runtime-benchmarks",
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
 ]
 try-runtime = [
-  'cf-runtime-upgrade-utilities/try-runtime',
-  'frame-support/try-runtime',
-  'frame-system/try-runtime',
+  "cf-runtime-upgrade-utilities/try-runtime",
+  "frame-support/try-runtime",
+  "frame-system/try-runtime",
 ]

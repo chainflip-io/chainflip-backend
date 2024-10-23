@@ -1,14 +1,14 @@
 [package]
-name = 'state-chain-runtime'
-version = '1.7.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = '<TODO>'
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+name = "state-chain-runtime"
+version = "1.7.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "<TODO>"
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
 substrate-wasm-builder = { workspace = true, optional = true }
@@ -20,7 +20,7 @@ workspace = true
 hex-literal = { workspace = true }
 hex = { workspace = true }
 log = { workspace = true }
-nanorand = { workspace = true, features = ['wyrand'] }
+nanorand = { workspace = true, features = ["wyrand"] }
 serde = { workspace = true, features = ["derive", "alloc"] }
 ethabi = { workspace = true }
 
@@ -59,12 +59,12 @@ pallet-cf-witnesser = { workspace = true }
 pallet-cf-cfe-interface = { workspace = true }
 
 # SCALE
-codec = { workspace = true, features = ['derive'] }
-scale-info = { workspace = true, features = ['derive'] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 
 # Additional FRAME pallets
 pallet-authorship = { workspace = true }
-pallet-session = { workspace = true, features = ['historical'] }
+pallet-session = { workspace = true, features = ["historical"] }
 
 # Substrate dependencies
 frame-benchmarking = { workspace = true, optional = true }
@@ -80,12 +80,12 @@ pallet-transaction-payment = { workspace = true }
 
 sp-api = { workspace = true }
 sp-block-builder = { workspace = true }
-sp-consensus-aura = { workspace = true, features = ['serde'] }
-sp-consensus-grandpa = { workspace = true, features = ['serde'] }
-sp-core = { workspace = true, features = ['serde'] }
+sp-consensus-aura = { workspace = true, features = ["serde"] }
+sp-consensus-grandpa = { workspace = true, features = ["serde"] }
+sp-core = { workspace = true, features = ["serde"] }
 sp-inherents = { workspace = true }
 sp-offchain = { workspace = true }
-sp-runtime = { workspace = true, features = ['serde'] }
+sp-runtime = { workspace = true, features = ["serde"] }
 sp-session = { workspace = true }
 sp-std = { workspace = true }
 sp-transaction-pool = { workspace = true }
@@ -102,143 +102,143 @@ pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 cf-test-utilities = { workspace = true, optional = true }
 
 [dev-dependencies]
-sp-io = { workspace = true }
+sp-io = { workspace = true, default-features = true }
 
 [features]
-default = ['std']
+default = ["std"]
 runtime-benchmarks = [
-  'cf-chains/runtime-benchmarks',
-  'cf-session-benchmarking/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system-benchmarking/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
-  'pallet-cf-account-roles/runtime-benchmarks',
-  'pallet-cf-asset-balances/runtime-benchmarks',
-  'pallet-cf-broadcast/runtime-benchmarks',
-  'pallet-cf-chain-tracking/runtime-benchmarks',
-  'pallet-cf-emissions/runtime-benchmarks',
-  'pallet-cf-environment/runtime-benchmarks',
-  'pallet-cf-elections/runtime-benchmarks',
-  'pallet-cf-flip/runtime-benchmarks',
-  'pallet-cf-funding/runtime-benchmarks',
-  'pallet-cf-governance/runtime-benchmarks',
-  'pallet-cf-ingress-egress/runtime-benchmarks',
-  'pallet-cf-lp/runtime-benchmarks',
-  'pallet-cf-pools/runtime-benchmarks',
-  'pallet-cf-reputation/runtime-benchmarks',
-  'pallet-cf-swapping/runtime-benchmarks',
-  'pallet-cf-threshold-signature/runtime-benchmarks',
-  'pallet-cf-tokenholder-governance/runtime-benchmarks',
-  'pallet-cf-validator/runtime-benchmarks',
-  'pallet-cf-vaults/runtime-benchmarks',
-  'pallet-cf-witnesser/runtime-benchmarks',
-  'pallet-cf-cfe-interface/runtime-benchmarks',
-  'pallet-grandpa/runtime-benchmarks',
-  'pallet-timestamp/runtime-benchmarks',
-  'sp-runtime/runtime-benchmarks',
+  "cf-chains/runtime-benchmarks",
+  "cf-session-benchmarking/runtime-benchmarks",
+  "cf-traits/runtime-benchmarks",
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system-benchmarking/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
+  "pallet-cf-account-roles/runtime-benchmarks",
+  "pallet-cf-asset-balances/runtime-benchmarks",
+  "pallet-cf-broadcast/runtime-benchmarks",
+  "pallet-cf-chain-tracking/runtime-benchmarks",
+  "pallet-cf-emissions/runtime-benchmarks",
+  "pallet-cf-environment/runtime-benchmarks",
+  "pallet-cf-elections/runtime-benchmarks",
+  "pallet-cf-flip/runtime-benchmarks",
+  "pallet-cf-funding/runtime-benchmarks",
+  "pallet-cf-governance/runtime-benchmarks",
+  "pallet-cf-ingress-egress/runtime-benchmarks",
+  "pallet-cf-lp/runtime-benchmarks",
+  "pallet-cf-pools/runtime-benchmarks",
+  "pallet-cf-reputation/runtime-benchmarks",
+  "pallet-cf-swapping/runtime-benchmarks",
+  "pallet-cf-threshold-signature/runtime-benchmarks",
+  "pallet-cf-tokenholder-governance/runtime-benchmarks",
+  "pallet-cf-validator/runtime-benchmarks",
+  "pallet-cf-vaults/runtime-benchmarks",
+  "pallet-cf-witnesser/runtime-benchmarks",
+  "pallet-cf-cfe-interface/runtime-benchmarks",
+  "pallet-grandpa/runtime-benchmarks",
+  "pallet-timestamp/runtime-benchmarks",
+  "sp-runtime/runtime-benchmarks",
 ]
 std = [
-  'cf-amm/std',
-  'cf-chains/std',
-  'cf-primitives/std',
-  'cf-runtime-utilities/std',
-  'cf-runtime-upgrade-utilities/std',
-  'cf-session-benchmarking?/std',
-  'cf-traits/std',
-  'cf-utilities/std',
-  'codec/std',
-  'ethabi/std',
-  'frame-benchmarking?/std',
-  'frame-executive/std',
-  'frame-support/std',
-  'frame-system-benchmarking?/std',
-  'frame-system-rpc-runtime-api/std',
-  'frame-system/std',
-  'frame-try-runtime?/std',
-  'hex/std',
-  'log/std',
-  'nanorand/std',
-  'pallet-aura/std',
-  'pallet-authorship/std',
-  'pallet-cf-account-roles/std',
-  'pallet-cf-asset-balances/std',
-  'pallet-cf-broadcast/std',
-  'pallet-cf-chain-tracking/std',
-  'pallet-cf-elections/std',
-  'pallet-cf-emissions/std',
-  'pallet-cf-environment/std',
-  'pallet-cf-flip/std',
-  'pallet-cf-funding/std',
-  'pallet-cf-governance/std',
-  'pallet-cf-ingress-egress/std',
-  'pallet-cf-lp/std',
-  'pallet-cf-pools/std',
-  'pallet-cf-reputation/std',
-  'pallet-cf-swapping/std',
-  'pallet-cf-threshold-signature/std',
-  'pallet-cf-tokenholder-governance/std',
-  'pallet-cf-validator/std',
-  'pallet-cf-vaults/std',
-  'pallet-cf-witnesser/std',
-  'pallet-grandpa/std',
-  'pallet-session/std',
-  'pallet-timestamp/std',
-  'pallet-transaction-payment-rpc-runtime-api/std',
-  'pallet-transaction-payment/std',
-  'pallet-cf-cfe-interface/std',
-  'scale-info/std',
-  'serde/std',
-  'sol-prim/std',
-  'sp-api/std',
-  'sp-block-builder/std',
-  'sp-consensus-aura/std',
-  'sp-consensus-grandpa/std',
-  'sp-core/std',
-  'sp-genesis-builder/std',
-  'sp-inherents/std',
-  'sp-offchain/std',
-  'sp-runtime/std',
-  'sp-session/std',
-  'sp-std/std',
-  'sp-transaction-pool/std',
-  'sp-version/std',
-  'dep:cf-test-utilities',
+  "cf-amm/std",
+  "cf-chains/std",
+  "cf-primitives/std",
+  "cf-runtime-utilities/std",
+  "cf-runtime-upgrade-utilities/std",
+  "cf-session-benchmarking?/std",
+  "cf-traits/std",
+  "cf-utilities/std",
+  "codec/std",
+  "ethabi/std",
+  "frame-benchmarking?/std",
+  "frame-executive/std",
+  "frame-support/std",
+  "frame-system-benchmarking?/std",
+  "frame-system-rpc-runtime-api/std",
+  "frame-system/std",
+  "frame-try-runtime?/std",
+  "hex/std",
+  "log/std",
+  "nanorand/std",
+  "pallet-aura/std",
+  "pallet-authorship/std",
+  "pallet-cf-account-roles/std",
+  "pallet-cf-asset-balances/std",
+  "pallet-cf-broadcast/std",
+  "pallet-cf-chain-tracking/std",
+  "pallet-cf-elections/std",
+  "pallet-cf-emissions/std",
+  "pallet-cf-environment/std",
+  "pallet-cf-flip/std",
+  "pallet-cf-funding/std",
+  "pallet-cf-governance/std",
+  "pallet-cf-ingress-egress/std",
+  "pallet-cf-lp/std",
+  "pallet-cf-pools/std",
+  "pallet-cf-reputation/std",
+  "pallet-cf-swapping/std",
+  "pallet-cf-threshold-signature/std",
+  "pallet-cf-tokenholder-governance/std",
+  "pallet-cf-validator/std",
+  "pallet-cf-vaults/std",
+  "pallet-cf-witnesser/std",
+  "pallet-grandpa/std",
+  "pallet-session/std",
+  "pallet-timestamp/std",
+  "pallet-transaction-payment-rpc-runtime-api/std",
+  "pallet-transaction-payment/std",
+  "pallet-cf-cfe-interface/std",
+  "scale-info/std",
+  "serde/std",
+  "sol-prim/std",
+  "sp-api/std",
+  "sp-block-builder/std",
+  "sp-consensus-aura/std",
+  "sp-consensus-grandpa/std",
+  "sp-core/std",
+  "sp-genesis-builder/std",
+  "sp-inherents/std",
+  "sp-offchain/std",
+  "sp-runtime/std",
+  "sp-session/std",
+  "sp-std/std",
+  "sp-transaction-pool/std",
+  "sp-version/std",
+  "dep:cf-test-utilities",
   "dep:substrate-wasm-builder",
 ]
 try-runtime = [
-  'cf-runtime-upgrade-utilities/try-runtime',
-  'frame-executive/try-runtime',
-  'frame-try-runtime/try-runtime',
-  'frame-system/try-runtime',
-  'frame-support/try-runtime',
-  'pallet-cf-account-roles/try-runtime',
-  'pallet-cf-asset-balances/try-runtime',
-  'pallet-cf-broadcast/try-runtime',
-  'pallet-cf-chain-tracking/try-runtime',
-  'pallet-cf-elections/try-runtime',
-  'pallet-cf-emissions/try-runtime',
-  'pallet-cf-environment/try-runtime',
-  'pallet-cf-flip/try-runtime',
-  'pallet-cf-governance/try-runtime',
-  'pallet-cf-ingress-egress/try-runtime',
-  'pallet-cf-lp/try-runtime',
-  'pallet-cf-pools/try-runtime',
-  'pallet-cf-reputation/try-runtime',
-  'pallet-cf-funding/try-runtime',
-  'pallet-cf-swapping/try-runtime',
-  'pallet-cf-threshold-signature/try-runtime',
-  'pallet-cf-tokenholder-governance/try-runtime',
-  'pallet-cf-validator/try-runtime',
-  'pallet-cf-vaults/try-runtime',
-  'pallet-cf-witnesser/try-runtime',
-  'pallet-cf-cfe-interface/try-runtime',
-  'pallet-timestamp/try-runtime',
-  'pallet-transaction-payment/try-runtime',
-  'pallet-aura/try-runtime',
-  'pallet-grandpa/try-runtime',
-  'pallet-session/try-runtime',
-  'pallet-authorship/try-runtime',
-  'sp-runtime/try-runtime',
+  "cf-runtime-upgrade-utilities/try-runtime",
+  "frame-executive/try-runtime",
+  "frame-try-runtime/try-runtime",
+  "frame-system/try-runtime",
+  "frame-support/try-runtime",
+  "pallet-cf-account-roles/try-runtime",
+  "pallet-cf-asset-balances/try-runtime",
+  "pallet-cf-broadcast/try-runtime",
+  "pallet-cf-chain-tracking/try-runtime",
+  "pallet-cf-elections/try-runtime",
+  "pallet-cf-emissions/try-runtime",
+  "pallet-cf-environment/try-runtime",
+  "pallet-cf-flip/try-runtime",
+  "pallet-cf-governance/try-runtime",
+  "pallet-cf-ingress-egress/try-runtime",
+  "pallet-cf-lp/try-runtime",
+  "pallet-cf-pools/try-runtime",
+  "pallet-cf-reputation/try-runtime",
+  "pallet-cf-funding/try-runtime",
+  "pallet-cf-swapping/try-runtime",
+  "pallet-cf-threshold-signature/try-runtime",
+  "pallet-cf-tokenholder-governance/try-runtime",
+  "pallet-cf-validator/try-runtime",
+  "pallet-cf-vaults/try-runtime",
+  "pallet-cf-witnesser/try-runtime",
+  "pallet-cf-cfe-interface/try-runtime",
+  "pallet-timestamp/try-runtime",
+  "pallet-transaction-payment/try-runtime",
+  "pallet-aura/try-runtime",
+  "pallet-grandpa/try-runtime",
+  "pallet-session/try-runtime",
+  "pallet-authorship/try-runtime",
+  "sp-runtime/try-runtime",
 ]

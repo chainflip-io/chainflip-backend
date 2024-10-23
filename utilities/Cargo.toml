@@ -1,12 +1,12 @@
 [package]
-authors = ['Chainflip <https://chainflip.io>']
-description = 'Common utilities used by the State Chain and the Chainflip Engine'
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = 'TBC'
-name = 'utilities'
-repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.1.0'
+authors = ["Chainflip <https://chainflip.io>"]
+description = "Common utilities used by the State Chain and the Chainflip Engine"
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "TBC"
+name = "utilities"
+repository = "https://github.com/chainflip-io/chainflip-backend"
+version = "0.1.0"
 
 [lints]
 workspace = true
@@ -60,33 +60,33 @@ reqwest = { workspace = true, features = ["rustls-tls"] }
 
 [features]
 std = [
-  'dep:anyhow',
-  'dep:async-broadcast',
-  'dep:predicates',
-  'dep:mockall',
-  'dep:futures',
-  'dep:futures-util',
-  'dep:tokio',
-  'hex/std',
-  'dep:async-channel',
-  'itertools/use_std',
-  'dep:pin-project',
-  'dep:prometheus',
-  'dep:serde',
-  'serde?/std',
-  'dep:scale-info',
-  'dep:scale-json',
-  'dep:thiserror',
-  'dep:tracing',
-  'dep:tracing-subscriber',
-  'dep:warp',
-  'dep:sp-core',
-  'dep:sp-rpc',
-  'dep:num-traits',
-  'dep:jsonrpsee',
-  'dep:regex',
-  'dep:url',
-  'dep:clap',
+  "dep:anyhow",
+  "dep:async-broadcast",
+  "dep:predicates",
+  "dep:mockall",
+  "dep:futures",
+  "dep:futures-util",
+  "dep:tokio",
+  "hex/std",
+  "dep:async-channel",
+  "itertools/use_std",
+  "dep:pin-project",
+  "dep:prometheus",
+  "dep:serde",
+  "serde?/std",
+  "dep:scale-info",
+  "dep:scale-json",
+  "dep:thiserror",
+  "dep:tracing",
+  "dep:tracing-subscriber",
+  "dep:warp",
+  "dep:sp-core",
+  "dep:sp-rpc",
+  "dep:num-traits",
+  "dep:jsonrpsee",
+  "dep:regex",
+  "dep:url",
+  "dep:clap",
 ]
-default = ['std']
-test-utils = ['dep:tempfile', 'dep:tracing', 'dep:tracing-subscriber']
+default = ["std"]
+test-utils = ["dep:tempfile", "dep:tracing", "dep:tracing-subscriber"]

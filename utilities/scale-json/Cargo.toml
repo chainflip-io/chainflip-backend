@@ -1,12 +1,12 @@
 [package]
-authors = ['Chainflip <https://chainflip.io>']
-description = 'Decode SCALE values to serde_json::Value'
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = 'TBC'
-name = 'scale-json'
-repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.1.0'
+authors = ["Chainflip <https://chainflip.io>"]
+description = "Decode SCALE values to serde_json::Value"
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "TBC"
+name = "scale-json"
+repository = "https://github.com/chainflip-io/chainflip-backend"
+version = "0.1.0"
 
 [lints]
 workspace = true
@@ -20,5 +20,5 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }
-codec = { workspace = true, features = ['derive'] }
-scale-info = { workspace = true, features = ['derive'] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }

@@ -1,16 +1,16 @@
 [package]
-name = 'pallet-cf-elections'
-version = '0.1.0'
-authors = ['Chainflip <https://chainflip.io>']
-description = 'FRAME pallet for chainflip witnessing.'
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = 'TBC'
+name = "pallet-cf-elections"
+version = "0.1.0"
+authors = ["Chainflip <https://chainflip.io>"]
+description = "FRAME pallet for chainflip witnessing."
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "TBC"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend/pallets/'
+repository = "https://github.com/chainflip-io/chainflip-backend/pallets/"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [lints]
 workspace = true
@@ -26,53 +26,53 @@ cf-primitives = { workspace = true }
 cf-utilities = { workspace = true }
 
 # Non-substrate external deps
-bitvec = { workspace = true, features = ['alloc'] }
+bitvec = { workspace = true, features = ["alloc"] }
 itertools = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
-nanorand = { workspace = true, features = ['wyrand'] }
+nanorand = { workspace = true, features = ["wyrand"] }
 
 # Parity deps
-codec = { workspace = true, features = ['derive', 'bit-vec'] }
+codec = { workspace = true, features = ["derive", "bit-vec"] }
 frame-benchmarking = { workspace = true, optional = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
-scale-info = { workspace = true, features = ['derive', 'bit-vec'] }
+scale-info = { workspace = true, features = ["derive", "bit-vec"] }
 sp-core = { workspace = true }
 sp-std = { workspace = true }
 
 [dev-dependencies]
-cf-test-utilities = { workspace = true }
+cf-test-utilities = { workspace = true, default-features = true }
 rand = { workspace = true, features = ["std"] }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'bitvec/std',
-  'cf-chains/std',
-  'cf-traits/std',
-  'cf-primitives/std',
-  'cf-utilities/std',
-  'codec/std',
-  'frame-support/std',
-  'frame-system/std',
-  'scale-info/std',
-  'sp-std/std',
-  'sp-core/std',
-  'log/std',
-  'serde/std',
+  "bitvec/std",
+  "cf-chains/std",
+  "cf-traits/std",
+  "cf-primitives/std",
+  "cf-utilities/std",
+  "codec/std",
+  "frame-support/std",
+  "frame-system/std",
+  "scale-info/std",
+  "sp-std/std",
+  "sp-core/std",
+  "log/std",
+  "serde/std",
   "frame-benchmarking?/std",
   "itertools/use_std",
 ]
 try-runtime = [
-  'frame-support/try-runtime',
-  'frame-system/try-runtime',
-  'cf-traits/try-runtime',
+  "frame-support/try-runtime",
+  "frame-system/try-runtime",
+  "cf-traits/try-runtime",
 ]
 runtime-benchmarks = [
-  'cf-chains/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
+  "cf-chains/runtime-benchmarks",
+  "cf-traits/runtime-benchmarks",
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
 ]

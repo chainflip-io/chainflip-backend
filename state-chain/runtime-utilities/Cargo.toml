@@ -1,9 +1,9 @@
 [package]
-name = 'cf-runtime-utilities'
-version = '0.1.0'
-edition = '2021'
-authors = ['Chainflip <https://chainflip.io>']
-description = 'Utilities for interacting with substrate runtimes.'
+name = "cf-runtime-utilities"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chainflip <https://chainflip.io>"]
+description = "Utilities for interacting with substrate runtimes."
 
 [lints]
 workspace = true
@@ -12,7 +12,7 @@ workspace = true
 log = { workspace = true }
 cf-runtime-macros = { workspace = true, optional = true }
 
-codec = { workspace = true, features = ['derive'] }
+codec = { workspace = true, features = ["derive"] }
 
 sp-std = { workspace = true }
 # Not used in this crate but required in order to import sp-io without conflicts.
@@ -21,13 +21,13 @@ sp-io = { workspace = true }
 frame-support = { workspace = true }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'codec/std',
-  'frame-support/std',
-  'sp-std/std',
-  'sp-io/std',
-  'sp-runtime/std',
-  'log/std',
+  "codec/std",
+  "frame-support/std",
+  "sp-std/std",
+  "sp-io/std",
+  "sp-runtime/std",
+  "log/std",
 ]
-derive = ['cf-runtime-macros']
+derive = ["cf-runtime-macros"]
