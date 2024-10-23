@@ -1,34 +1,22 @@
-use bitcoin::{opcodes::all::OP_RETURN, ScriptBuf};
+use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN, ScriptBuf};
 use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
-	address::EncodedAddress,
-	btc::{smart_contract_encoding::UtxoEncodedData, ScriptPubkey},
+	btc::{
+		deposit_address::DepositAddress, smart_contract_encoding::UtxoEncodedData,
+		BtcDepositDetails, ScriptPubkey, UtxoId,
+	},
+	ChannelRefundParameters, ForeignChainAddress,
 };
-use cf_primitives::{Asset, AssetAmount, Price};
+use cf_primitives::{Asset, DcaParameters};
 use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
+use state_chain_runtime::BitcoinInstance;
 
 use crate::btc::rpc::VerboseTransaction;
 
 const OP_PUSHBYTES_75: u8 = 0x4b;
 const OP_PUSHDATA1: u8 = 0x4c;
-
-#[derive(PartialEq, Debug)]
-pub struct BtcContractCall {
-	output_asset: Asset,
-	deposit_amount: AssetAmount,
-	output_address: EncodedAddress,
-	// --- FoK ---
-	retry_duration: u16,
-	refund_address: ScriptPubkey,
-	min_price: Price,
-	// --- DCA ---
-	number_of_chunks: u16,
-	chunk_interval: u16,
-	// --- Boost ---
-	boost_fee: u8,
-}
 
 fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 	let bytes = script.as_script().as_bytes();
@@ -86,19 +74,20 @@ fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 	Some(pubkey)
 }
 
-// Currently unused, but will be used by the deposit wintesser:
-#[allow(dead_code)]
+type BtcIngressEgressCall =
+	pallet_cf_ingress_egress::Call<state_chain_runtime::Runtime, BitcoinInstance>;
+
 pub fn try_extract_contract_call(
 	tx: &VerboseTransaction,
-	vault_address: ScriptPubkey,
-) -> Option<BtcContractCall> {
+	vault_address: &DepositAddress,
+) -> Option<BtcIngressEgressCall> {
 	// A correctly constructed transaction carrying CF swap parameters must have at least 3 outputs:
 	let [utxo_to_vault, nulldata_utxo, change_utxo, ..] = &tx.vout[..] else {
 		return None;
 	};
 
 	// First output must be a deposit into our vault:
-	if utxo_to_vault.script_pubkey.as_bytes() != vault_address.bytes() {
+	if utxo_to_vault.script_pubkey.as_bytes() != vault_address.script_pubkey().bytes() {
 		return None;
 	}
 
@@ -135,16 +124,30 @@ pub fn try_extract_contract_call(
 		deposit_amount.into(),
 	));
 
-	Some(BtcContractCall {
-		output_asset: data.output_asset,
-		deposit_amount: deposit_amount as AssetAmount,
-		output_address: data.output_address,
-		retry_duration: data.parameters.retry_duration,
-		refund_address,
-		min_price,
-		number_of_chunks: data.parameters.number_of_chunks,
-		chunk_interval: data.parameters.chunk_interval,
-		boost_fee: data.parameters.boost_fee,
+	let tx_id: [u8; 32] = tx.txid.to_byte_array();
+
+	Some(BtcIngressEgressCall::contract_swap_request {
+		from: Asset::Btc,
+		to: data.output_asset,
+		deposit_amount,
+		destination_address: data.output_address,
+		tx_hash: tx_id,
+		deposit_details: Box::new(BtcDepositDetails {
+			// we require the deposit to be the first UTXO
+			utxo_id: UtxoId { tx_id: tx_id.into(), vout: 0 },
+			deposit_address: vault_address.clone(),
+		}),
+		refund_params: Some(ChannelRefundParameters {
+			retry_duration: data.parameters.retry_duration as u32,
+			refund_address: ForeignChainAddress::Btc(refund_address),
+			min_price,
+		}),
+		dca_params: Some(DcaParameters {
+			number_of_chunks: data.parameters.number_of_chunks as u32,
+			chunk_interval: data.parameters.chunk_interval as u32,
+		}),
+		// This is only to be checked in the pre-witnessed version
+		boost_fee: data.parameters.boost_fee as u16,
 	})
 }
 
@@ -222,13 +225,12 @@ mod tests {
 	fn test_extract_contract_call_from_tx() {
 		use bitcoin::Amount;
 
-		const VAULT_PK_HASH: [u8; 20] = [7; 20];
 		const REFUND_PK_HASH: [u8; 20] = [8; 20];
+		const DEPOSIT_AMOUNT: u64 = 1000;
 
-		// Addresses represented in both `ScriptPubkey` and `ScriptBuf` to satisfy interfaces:
-		let vault_pubkey = ScriptPubkey::P2PKH(VAULT_PK_HASH);
-		let vault_script = ScriptBuf::new_p2pkh(&PubkeyHash::from_byte_array(VAULT_PK_HASH));
-		assert_eq!(vault_pubkey.bytes(), vault_script.to_bytes());
+		// Addresses have different representations to satisfy interfaces:
+		let vault_deposit_address = DepositAddress::new([7; 32], 0);
+		let vault_script = ScriptBuf::from_bytes(vault_deposit_address.script_pubkey().bytes());
 
 		let refund_pubkey = ScriptPubkey::P2PKH(REFUND_PK_HASH);
 		let refund_script = ScriptBuf::new_p2pkh(&PubkeyHash::from_byte_array(REFUND_PK_HASH));
@@ -238,11 +240,11 @@ mod tests {
 			vec![
 				// A UTXO spending into our vault;
 				VerboseTxOut {
-					value: Amount::from_sat(1000),
+					value: Amount::from_sat(DEPOSIT_AMOUNT),
 					n: 0,
 					script_pubkey: vault_script.clone(),
 				},
-				// A nulddata UTXO encoding some swap parameters:
+				// A nulldata UTXO encoding some swap parameters:
 				VerboseTxOut {
 					value: Amount::from_sat(0),
 					n: 1,
@@ -261,21 +263,31 @@ mod tests {
 		);
 
 		assert_eq!(
-			try_extract_contract_call(&tx, vault_pubkey).unwrap(),
-			BtcContractCall {
-				output_asset: MOCK_SWAP_PARAMS.output_asset,
-				deposit_amount: 1000,
-				output_address: MOCK_SWAP_PARAMS.output_address.clone(),
-				retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration,
-				refund_address: refund_pubkey,
-				min_price: sqrt_price_to_price(bounded_sqrt_price(
-					MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
-					1000.into(),
-				)),
-				number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks,
-				chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval,
-				boost_fee: MOCK_SWAP_PARAMS.parameters.boost_fee,
-			}
+			try_extract_contract_call(&tx, &vault_deposit_address),
+			Some(BtcIngressEgressCall::contract_swap_request {
+				from: Asset::Btc,
+				to: MOCK_SWAP_PARAMS.output_asset,
+				deposit_amount: DEPOSIT_AMOUNT,
+				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
+				tx_hash: tx.hash.to_byte_array(),
+				deposit_details: Box::new(BtcDepositDetails {
+					utxo_id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
+					deposit_address: vault_deposit_address,
+				}),
+				refund_params: Some(ChannelRefundParameters {
+					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
+					refund_address: ForeignChainAddress::Btc(refund_pubkey),
+					min_price: sqrt_price_to_price(bounded_sqrt_price(
+						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
+						DEPOSIT_AMOUNT.into(),
+					)),
+				}),
+				dca_params: Some(DcaParameters {
+					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks as u32,
+					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval as u32,
+				}),
+				boost_fee: MOCK_SWAP_PARAMS.parameters.boost_fee as u16,
+			})
 		);
 	}
 

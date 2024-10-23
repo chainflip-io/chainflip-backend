@@ -1,3 +1,5 @@
+use frame_support::assert_err;
+
 use super::*;
 
 const CHUNK_INTERVAL: u32 = 3;
@@ -1053,5 +1055,60 @@ fn test_minimum_chunk_size() {
 		set_and_test_chunk_size(100, 10, 9, 11);
 		set_and_test_chunk_size(1, 10, 1, 10);
 		set_and_test_chunk_size(1, 1000, 1000, 0);
+	});
+}
+
+#[test]
+fn test_dca_parameter_validation() {
+	use cf_traits::SwapLimitsProvider;
+
+	fn validate_dca_params(
+		number_of_chunks: u32,
+		chunk_interval: u32,
+	) -> Result<(), DispatchError> {
+		Swapping::validate_dca_params(&DcaParameters { number_of_chunks, chunk_interval })
+	}
+
+	new_test_ext().execute_with(|| {
+		const MIN_CHUNK_INTERVAL: u32 = SWAP_DELAY_BLOCKS;
+		let max_swap_request_duration_blocks = MaxSwapRequestDurationBlocks::<Test>::get();
+
+		// Trivially ok
+		assert_ok!(validate_dca_params(1, MIN_CHUNK_INTERVAL));
+		assert_ok!(validate_dca_params(2, MIN_CHUNK_INTERVAL));
+
+		// Equal to the limit
+		assert_ok!(validate_dca_params(
+			(max_swap_request_duration_blocks / MIN_CHUNK_INTERVAL) + 1,
+			MIN_CHUNK_INTERVAL
+		));
+		assert_ok!(validate_dca_params(2, max_swap_request_duration_blocks));
+
+		// Limit is ignored because there is only 1 chunk
+		assert_ok!(validate_dca_params(1, max_swap_request_duration_blocks + 100));
+		assert_ok!(validate_dca_params(1, 0));
+
+		// Exceeding limit
+		assert_err!(
+			validate_dca_params(
+				(max_swap_request_duration_blocks / MIN_CHUNK_INTERVAL) + 2,
+				MIN_CHUNK_INTERVAL
+			),
+			DispatchError::from(crate::Error::<Test>::SwapRequestDurationTooLong)
+		);
+		assert_err!(
+			validate_dca_params(2, max_swap_request_duration_blocks + 1),
+			DispatchError::from(crate::Error::<Test>::SwapRequestDurationTooLong)
+		);
+
+		// Below the minimum
+		assert_err!(
+			validate_dca_params(10, 1),
+			DispatchError::from(crate::Error::<Test>::ChunkIntervalTooLow)
+		);
+		assert_err!(
+			validate_dca_params(0, MIN_CHUNK_INTERVAL),
+			DispatchError::from(crate::Error::<Test>::ZeroNumberOfChunksNotAllowed)
+		);
 	});
 }

@@ -503,6 +503,39 @@ fn historical_epochs() {
 }
 
 #[test]
+fn expired_epoch_data_is_removed() {
+	new_test_ext().then_execute_with_checks(|| {
+		// Epoch 1
+		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
+		HistoricalAuthorities::<Test>::insert(1, Vec::from([ALICE]));
+		HistoricalBonds::<Test>::insert(1, 10);
+		// Epoch 2
+		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
+		HistoricalAuthorities::<Test>::insert(2, Vec::from([ALICE]));
+		HistoricalBonds::<Test>::insert(2, 30);
+		let authority_index = AuthorityIndex::<Test>::get(2, ALICE);
+
+		// Expire
+		ValidatorPallet::expire_epoch(1);
+
+		// Epoch 3
+		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
+		HistoricalAuthorities::<Test>::insert(3, Vec::from([ALICE]));
+		HistoricalBonds::<Test>::insert(3, 20);
+
+		// Expect epoch 1's data to be deleted
+		assert!(AuthorityIndex::<Test>::try_get(1, ALICE).is_err());
+		assert!(HistoricalAuthorities::<Test>::try_get(1).is_err());
+		assert!(HistoricalBonds::<Test>::try_get(1).is_err());
+
+		// Expect epoch 2's data to be exist
+		assert_eq!(AuthorityIndex::<Test>::get(2, ALICE), authority_index);
+		assert_eq!(HistoricalAuthorities::<Test>::get(2), vec![ALICE]);
+		assert_eq!(HistoricalBonds::<Test>::get(2), 30);
+	});
+}
+
+#[test]
 fn highest_bond() {
 	new_test_ext().then_execute_with_checks(|| {
 		// Epoch 1

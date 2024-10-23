@@ -69,7 +69,7 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
@@ -1024,6 +1024,13 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(authority, EpochHistory::<T>::active_bond(authority));
 		}
 		T::EpochTransitionHandler::on_expired_epoch(epoch);
+
+		let validators = HistoricalAuthorities::<T>::take(epoch);
+		for validator in validators {
+			AuthorityIndex::<T>::remove(epoch, validator);
+		}
+		HistoricalBonds::<T>::remove(epoch);
+
 		T::ValidatorWeightInfo::expire_epoch(num_expired_authorities)
 	}
 

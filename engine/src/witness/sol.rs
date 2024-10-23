@@ -137,9 +137,12 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 		<<SolanaEgressWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		Ok(TransactionSuccessDetails {
-			tx_fee: egress_witnessing::get_finalized_fee(&self.client, signature).await?,
-		})
+		egress_witnessing::get_finalized_fee_and_success_status(&self.client, signature)
+			.await
+			.map(|(tx_fee, transaction_successful)| TransactionSuccessDetails {
+				tx_fee,
+				transaction_successful,
+			})
 	}
 }
 

@@ -286,6 +286,11 @@ decl_runtime_apis!(
 		fn cf_swap_limits() -> SwapLimits;
 		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>>;
 		fn cf_minimum_chunk_size(asset: Asset) -> AssetAmount;
+		fn cf_validate_dca_params(
+			number_of_chunks: u32,
+			chunk_interval: u32,
+		) -> Result<(), DispatchErrorWithMessage>;
+		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage>;
 	}
 );
 

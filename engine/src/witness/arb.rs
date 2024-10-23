@@ -2,7 +2,7 @@ mod chain_tracking;
 
 use std::{collections::HashMap, sync::Arc};
 
-use cf_chains::Arbitrum;
+use cf_chains::{evm::DepositDetails, Arbitrum};
 use cf_primitives::EpochIndex;
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
@@ -207,6 +207,13 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 					deposit_amount,
 					destination_address,
 					tx_hash,
+					deposit_details: Box::new(DepositDetails {
+						tx_hashes: Some(vec![tx_hash.into()]),
+					}),
+					// TODO: use real parameters when we can decode them
+					boost_fee: 0,
+					dca_params: None,
+					refund_params: None,
 				}
 			},
 		)

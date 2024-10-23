@@ -1,6 +1,6 @@
 mod chain_tracking;
 mod deposits;
-mod smart_contract;
+pub mod smart_contract;
 pub mod source;
 
 use crate::{
@@ -212,15 +212,15 @@ mod tests {
 		let txs = vec![
 			fake_transaction(vec![], Some(Amount::from_sat(FEE_0))),
 			fake_transaction(
-				fake_verbose_vouts(vec![(2324, vec![0, 32, 121, 9])]),
+				fake_verbose_vouts(vec![(2324, &DepositAddress::new([0; 32], 0))]),
 				Some(Amount::from_sat(FEE_1)),
 			),
 			fake_transaction(
-				fake_verbose_vouts(vec![(232232, vec![32, 32, 121, 9])]),
+				fake_verbose_vouts(vec![(232232, &DepositAddress::new([32; 32], 0))]),
 				Some(Amount::from_sat(FEE_2)),
 			),
 			fake_transaction(
-				fake_verbose_vouts(vec![(232232, vec![32, 32, 121, 9])]),
+				fake_verbose_vouts(vec![(232232, &DepositAddress::new([32; 32], 0))]),
 				Some(Amount::from_sat(FEE_3)),
 			),
 		];

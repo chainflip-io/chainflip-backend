@@ -34,7 +34,7 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
 	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SWAP_DELAY_BLOCKS,
+	SwapRequestId, ThresholdSignatureRequestId, TransactionHash,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -57,6 +57,7 @@ use scale_info::{
 };
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
+	boxed::Box,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	marker::PhantomData,
 	vec,
@@ -657,6 +658,10 @@ pub mod pallet {
 			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
 		},
+		CcmFallbackScheduled {
+			broadcast_id: BroadcastId,
+			egress_details: ScheduledEgressDetails<T::TargetChain>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -694,11 +699,6 @@ pub mod pallet {
 		DepositChannelCreationDisabled,
 		/// The specified boost pool does not exist.
 		BoostPoolDoesNotExist,
-		/// Swap Retry duration is set above the max allowed.
-		SwapRetryDurationTooLong,
-		/// The number of chunks must be greater than 0, the interval must be greater than 2 and
-		/// the total duration of the swap request must be less then the max allowed.
-		InvalidDcaParameters,
 		/// CCM parameters from a contract swap failed validity check.
 		InvalidCcm,
 	}
@@ -1100,9 +1100,14 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			from: Asset,
 			to: Asset,
-			deposit_amount: AssetAmount,
+			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 			destination_address: EncodedAddress,
 			tx_hash: TransactionHash,
+			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
+			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DcaParameters>,
+			// This is only to be checked in the pre-witnessed version (not implemented yet)
+			_boost_fee: BasisPoints,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -1118,16 +1123,20 @@ pub mod pallet {
 					},
 				};
 
+			T::DepositHandler::on_deposit_made(*deposit_details, deposit_amount);
+
+			// TODO: ensure minimum deposit?
+
+			// TODO: validate dca_params and refund_params
+
 			T::SwapRequestHandler::init_swap_request(
 				from,
-				deposit_amount,
+				deposit_amount.into(),
 				to,
 				SwapRequestType::Regular { output_address: destination_address_internal.clone() },
 				Default::default(),
-				// NOTE: FoK not yet supported for swaps from the contract
-				None,
-				// NOTE: DCA not yet supported for swaps from the contract
-				None,
+				refund_params,
+				dca_params,
 				SwapOrigin::Vault { tx_hash },
 			);
 
@@ -1819,11 +1828,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
 		// Add the deposit to the balance.
-		T::DepositHandler::on_deposit_made(
-			deposit_details.clone(),
-			deposit_amount,
-			&deposit_channel_details.deposit_channel,
-		);
+		T::DepositHandler::on_deposit_made(deposit_details.clone(), deposit_amount);
 
 		// We received a deposit on a channel. If channel has been boosted earlier
 		// (i.e. awaiting finalisation), *and* the boosted amount matches the amount
@@ -2093,6 +2098,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			fees_withheld,
 		}
 	}
+
+	/// If a Ccm failed, we want to refund the user their assets.
+	/// This function will schedule a transfer to the fallback address, and emit an event on
+	/// success. IMPORTANT: Currently only used for Solana.
+	pub fn do_ccm_fallback(
+		broadcast_id: BroadcastId,
+		fallback: TransferAssetParams<T::TargetChain>,
+	) {
+		match Self::schedule_egress(
+			fallback.asset,
+			fallback.amount,
+			fallback.to,
+			None,
+		) {
+			Ok(egress_details) => Self::deposit_event(Event::<T, I>::CcmFallbackScheduled {
+				broadcast_id,
+				egress_details,
+			}),
+			Err(e) => log::error!("Ccm fallback failed to schedule the fallback egress: Target chain: {:?}, broadcast_id: {:?}, error: {:?}", T::TargetChain::get(), broadcast_id, e),
+		}
+	}
 }
 
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
@@ -2217,31 +2243,11 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		(ChannelId, ForeignChainAddress, <T::TargetChain as Chain>::ChainBlockNumber, Self::Amount),
 		DispatchError,
 	> {
-		let swap_limits = T::SwapLimitsProvider::get_swap_limits();
 		if let Some(params) = &refund_params {
-			ensure!(
-				params.retry_duration <= swap_limits.max_swap_retry_duration_blocks,
-				DispatchError::from(Error::<T, I>::SwapRetryDurationTooLong)
-			);
+			T::SwapLimitsProvider::validate_refund_params(params.retry_duration)?;
 		}
-
 		if let Some(params) = &dca_params {
-			if params.number_of_chunks != 1 {
-				ensure!(
-					params.number_of_chunks > 0 && params.chunk_interval >= SWAP_DELAY_BLOCKS,
-					DispatchError::from(Error::<T, I>::InvalidDcaParameters)
-				);
-				let total_swap_request_duration = params
-					.number_of_chunks
-					.saturating_sub(1)
-					.checked_mul(params.chunk_interval)
-					.ok_or(Error::<T, I>::InvalidDcaParameters)?;
-
-				ensure!(
-					total_swap_request_duration <= swap_limits.max_swap_request_duration_blocks,
-					DispatchError::from(Error::<T, I>::InvalidDcaParameters)
-				);
-			}
+			T::SwapLimitsProvider::validate_dca_params(params)?;
 		}
 
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
