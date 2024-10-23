@@ -98,6 +98,7 @@ jobs:
           mkdir -p upgrade-from-bins; ( cd upgrade-from-bins
           curl https://artifacts.chainflip.io/${{ env.OLD_VERSION }}/chainflip-backend-bin.zip --output chainflip-backend-bin.zip
           unzip chainflip-backend-bin.zip -d .
+          mv ./artifacts/chainflip-backend-bin/* .
           ); ls -l upgrade-from-bins
 
       - name: Permissions for latest binaries 🛡️
