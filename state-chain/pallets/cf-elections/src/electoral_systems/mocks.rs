@@ -227,7 +227,7 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 		&self,
 		partial_vote: &<ES::Vote as VoteStorage>::PartialVote,
 	) -> Result<bool, CorruptStorageError> {
-		self.electoral_access.is_vote_valid(self.only_election_id(), partial_vote)
+		ES::is_vote_valid(&MockAccess::<ES>::election(self.only_election_id()), partial_vote)
 	}
 }
 

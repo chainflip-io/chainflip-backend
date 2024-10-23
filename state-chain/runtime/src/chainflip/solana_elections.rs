@@ -3,8 +3,11 @@ use crate::{
 	SolanaIngressEgress, SolanaThresholdSigner,
 };
 use cf_chains::{
-	instances::ChainInstanceAlias,
-	sol::{api::SolanaTransactionType, SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto},
+	instances::{ChainInstanceAlias, SolanaInstance},
+	sol::{
+		api::SolanaTransactionType, SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData,
+		SolanaCrypto,
+	},
 	Chain, FeeEstimationApi, ForeignChain, Solana,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -19,7 +22,6 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
 	electoral_systems::{
 		self,
-		change::OnChangeHook,
 		composite::{tuple_6_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
@@ -65,10 +67,9 @@ pub mod old {
 		Identity, Twox64Concat,
 	};
 	use pallet_cf_elections::{
-		electoral_system::ElectionIdentifierOf, vote_storage::VoteStorage, ConsensusHistory,
-		SharedDataHash, UniqueMonotonicIdentifier,
+		vote_storage::VoteStorage, CompositeElectionIdentifierOf, ConsensusHistory,
+		ElectoralSystemRunner, SharedDataHash, UniqueMonotonicIdentifier,
 	};
-	use sp_runtime::DispatchError;
 
 	pub type SolanaNonceTrackingOld = pallet_cf_elections::migrations::change_old::Change<
 		SolAddress,
@@ -77,7 +78,7 @@ pub mod old {
 		SolanaNonceTrackingHook,
 		<Runtime as Chainflip>::ValidatorId,
 	>;
-	pub type SolanaElectoralSystem = Composite<
+	pub type SolanaElectoralSystem = CompositeRunner<
 		(
 			SolanaBlockHeightTracking,
 			SolanaFeeTracking,
@@ -87,6 +88,7 @@ pub mod old {
 			SolanaLiveness,
 		),
 		<Runtime as Chainflip>::ValidatorId,
+		RunnerStorageAccess<Runtime, SolanaInstance>,
 		SolanaElectionHooksOld,
 	>;
 	pub struct SolanaElectionHooksOld;
@@ -100,34 +102,7 @@ pub mod old {
 			SolanaLiveness,
 		> for SolanaElectionHooksOld
 	{
-		type OnFinalizeContext = ();
-		type OnFinalizeReturn = ();
-
-		fn on_finalize<
-			GenericElectoralAccess,
-			BlockHeightTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaBlockHeightTracking>,
-			FeeTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaFeeTracking>,
-			IngressTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaIngressTracking>,
-			OldNonceTrackingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = old::SolanaNonceTrackingOld>,
-			EgressWitnessingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaEgressWitnessing>,
-			LivenessTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaLiveness>,
-		>(
-			generic_electoral_access: &mut GenericElectoralAccess,
-			(
-				block_height_translator,
-				fee_translator,
-				ingress_translator,
-				old_nonce_translator,
-				egress_witnessing_translator,
-				liveness_translator,
-			): (
-				BlockHeightTranslator,
-				FeeTranslator,
-				IngressTranslator,
-				OldNonceTrackingTranslator,
-				EgressWitnessingTranslator,
-				LivenessTranslator,
-			),
+		fn on_finalize(
 			(
 				block_height_identifiers,
 				fee_identifiers,
@@ -167,39 +142,49 @@ pub mod old {
 					>,
 				>,
 			),
-			_context: &Self::OnFinalizeContext,
-		) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
-			let block_height = SolanaBlockHeightTracking::on_finalize(
-				&mut block_height_translator.translate_electoral_access(generic_electoral_access),
-				block_height_identifiers,
-				&(),
-			)?;
-			SolanaLiveness::on_finalize(
-				&mut liveness_translator.translate_electoral_access(generic_electoral_access),
-				liveness_identifiers,
-				&(crate::System::block_number(), block_height),
-			)?;
-			SolanaFeeTracking::on_finalize(
-				&mut fee_translator.translate_electoral_access(generic_electoral_access),
-				fee_identifiers,
-				&(),
-			)?;
-			SolanaEgressWitnessing::on_finalize(
-				&mut egress_witnessing_translator
-					.translate_electoral_access(generic_electoral_access),
-				egress_witnessing_identifiers,
-				&(),
-			)?;
-			SolanaIngressTracking::on_finalize(
-				&mut ingress_translator.translate_electoral_access(generic_electoral_access),
-				ingress_identifiers,
-				&block_height,
-			)?;
-			old::SolanaNonceTrackingOld::on_finalize(
-				&mut old_nonce_translator.translate_electoral_access(generic_electoral_access),
-				old_nonce_identifiers,
-				&(),
-			)?;
+		) -> Result<(), CorruptStorageError> {
+			let block_height = SolanaBlockHeightTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaBlockHeightTracking,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(block_height_identifiers, &())?;
+			SolanaLiveness::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaLiveness,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(liveness_identifiers, &(crate::System::block_number(), block_height))?;
+			SolanaFeeTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaFeeTracking,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(fee_identifiers, &())?;
+			SolanaNonceTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaNonceTracking,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(old_nonce_identifiers, &())?;
+			SolanaEgressWitnessing::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaEgressWitnessing,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(egress_witnessing_identifiers, &())?;
+			SolanaIngressTracking::on_finalize::<
+				DerivedElectoralAccess<
+					_,
+					SolanaIngressTracking,
+					RunnerStorageAccess<Runtime, SolanaInstance>,
+				>,
+			>(ingress_identifiers, &block_height)?;
 			Ok(())
 		}
 	}
@@ -208,9 +193,9 @@ pub mod old {
 		epoch: EpochIndex,
 		#[allow(clippy::type_complexity)]
 		bitmaps: Vec<(
-			<<SolanaElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::BitmapComponent,
+			<<SolanaElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::BitmapComponent,
 			BitVec<u8, bitvec::order::Lsb0>,
-		)>, //sp_core::H256, BitVec<u8, bitvec::order::Lsb0>)>,
+		)>,
 	}
 	#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo, Default)]
 	pub struct ReferenceDetails {
@@ -223,8 +208,8 @@ pub mod old {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 			let election_identifiers = frame_support::migration::storage_key_iter::<
-				ElectionIdentifierOf<old::SolanaElectoralSystem>,
-				<old::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
+				ElectionIdentifierOf<old::SolanaElectoralSystemRunner>,
+				<old::SolanaElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 				Twox64Concat
 			>(b"SolanaElections", b"ElectionProperties")
 				.filter(|(_, value)| {
@@ -256,8 +241,8 @@ pub mod old {
 						.len() as u32
 			);
 			let election_identifiers = frame_support::migration::storage_key_iter::<
-				ElectionIdentifierOf<super::SolanaElectoralSystem>,
-				<super::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
+				ElectionIdentifierOf<super::SolanaElectoralSystemRunner>,
+				<super::SolanaElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 				Twox64Concat
 			>(b"SolanaElections", b"ElectionProperties")
 				.filter(|(_, value)| {
@@ -266,7 +251,7 @@ pub mod old {
 				.map(|(key, _)| {
 					key
 				})
-				.collect::<Vec<ElectionIdentifierOf<super::SolanaElectoralSystem>>>();
+				.collect::<Vec<CompositeElectionIdentifierOf<super::SolanaElectoralSystemRunner>>>();
 			log::info!("Post upgrade number of elections: {:?}", election_identifiers.len() as u32);
 			assert!(previous_number_election == election_identifiers.len() as u32);
 
@@ -274,8 +259,8 @@ pub mod old {
 		}
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			let election_identifiers = frame_support::migration::storage_key_iter::<
-				ElectionIdentifierOf<old::SolanaElectoralSystem>,
-				<old::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
+				CompositeElectionIdentifierOf<old::SolanaElectoralSystemRunner>,
+				<old::SolanaElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
 				Twox64Concat
 			>(b"SolanaElections", b"ElectionProperties")
 				.filter(|(_, value)| {
@@ -285,7 +270,7 @@ pub mod old {
 					log::info!("During Upgrade {:?}: {:?}",key, value);
 					key
 				})
-				.collect::<Vec<ElectionIdentifierOf<old::SolanaElectoralSystem>>>();
+				.collect::<Vec<CompositeElectionIdentifierOf<old::SolanaElectoralSystemRunner>>>();
 
 			for election_identifier in election_identifiers {
 				//Removing BitmapComponents
@@ -302,7 +287,7 @@ pub mod old {
 					log::info!("Bitmap {:?}", bitmap.clone().unwrap().bitmaps);
 					//If they have some data, remove the SharedDataRederenceCount as well
 					for (bitmap_component, _) in bitmap.unwrap().bitmaps {
-						<<SolanaElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
+						<<SolanaElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::visit_shared_data_references_in_bitmap_component(
 							&bitmap_component,
 							|shared_data_hash| {
 								struct StoragePrefix;
@@ -326,7 +311,7 @@ pub mod old {
 								let shared_data =
 									frame_support::storage::migration::take_storage_item::<
 										_,
-										<<old::SolanaElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData,
+										<<old::SolanaElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::SharedData,
 										Identity,
 									>(b"SolanaElections", b"SharedData", shared_data_hash);
 								log::info!("SharedData {:?}", shared_data);
@@ -334,17 +319,20 @@ pub mod old {
 						);
 					}
 				}
-				let properties =
-					frame_support::storage::migration::take_storage_item::<
-						_,
-						<old::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
-						Twox64Concat,
-					>(b"SolanaElections", b"ElectionProperties", election_identifier);
+				let properties = frame_support::storage::migration::take_storage_item::<
+					_,
+					<old::SolanaElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
+					Twox64Concat,
+				>(
+					b"SolanaElections", b"ElectionProperties", election_identifier
+				);
 				log::info!("Properties {:?}", properties);
 
 				let consensus_history = frame_support::storage::migration::take_storage_item::<
 					_,
-					ConsensusHistory<<old::SolanaElectoralSystem as ElectoralSystem>::Consensus>,
+					ConsensusHistory<
+						<old::SolanaElectoralSystemRunner as ElectoralSystemRunner>::Consensus,
+					>,
 					Twox64Concat,
 				>(
 					b"SolanaElections",
@@ -355,7 +343,7 @@ pub mod old {
 
 				let settings = frame_support::storage::migration::take_storage_item::<
 					_,
-					<old::SolanaElectoralSystem as ElectoralSystem>::ElectoralSettings,
+					<old::SolanaElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
 					Twox64Concat,
 				>(
 					b"SolanaElections",

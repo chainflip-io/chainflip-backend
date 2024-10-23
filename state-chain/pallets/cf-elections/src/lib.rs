@@ -591,7 +591,7 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	pub(crate) mod access_impls {
+	pub mod access_impls {
 		use electoral_system_runner::RunnerStorageAccessTrait;
 
 		use super::*;

@@ -126,14 +126,6 @@ impl<ES: ElectoralSystem> ElectionWriteAccess for MockWriteAccess<ES> {
 	> {
 		Ok(MockStorageAccess::consensus_status::<ES>(self.identifier()))
 	}
-
-	pub fn is_vote_valid(
-		&self,
-		election_identifier: ElectionIdentifierOf<ES>,
-		partial_vote: &<ES::Vote as VoteStorage>::PartialVote,
-	) -> Result<bool, CorruptStorageError> {
-		ES::is_vote_valid(election_identifier, &self.election(election_identifier)?, partial_vote)
-	}
 }
 
 impl<ES: ElectoralSystem> ElectoralReadAccess for MockAccess<ES> {
