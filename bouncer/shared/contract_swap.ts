@@ -46,7 +46,7 @@ export async function executeContractSwap(
   const fokParams = fillOrKillParams ?? {
     retryDurationBlocks: 0,
     refundAddress,
-    minPriceX128: "0",
+    minPriceX128: '0',
   };
 
   const networkOptions = {
@@ -80,7 +80,7 @@ export async function executeContractSwap(
       boostFeeBps,
       fillOrKillParams: fokParams,
       dcaParams,
-      beneficiaries: undefined
+      beneficiaries: undefined,
     } as ExecuteSwapParams,
     networkOptions,
     txOptions,
