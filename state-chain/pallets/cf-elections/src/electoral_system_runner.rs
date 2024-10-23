@@ -16,28 +16,38 @@ pub type CompositeElectionIdentifierOf<E: ElectoralSystemRunner> =
 	ElectionIdentifier<<E as ElectoralSystemRunner>::ElectionIdentifierExtra>;
 
 #[allow(type_alias_bounds)]
-pub type AuthorityVoteOf<E: ElectoralSystemRunner> = AuthorityVote<
+pub type CompositeAuthorityVoteOf<E: ElectoralSystemRunner> = AuthorityVote<
 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::PartialVote,
 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
 >;
 #[allow(type_alias_bounds)]
-pub type IndividualComponentOf<E: ElectoralSystemRunner> =
+pub type CompositeIndividualComponentOf<E: ElectoralSystemRunner> =
 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::IndividualComponent;
 #[allow(type_alias_bounds)]
 pub type BitmapComponentOf<E: ElectoralSystemRunner> =
 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::BitmapComponent;
 #[allow(type_alias_bounds)]
-pub type VotePropertiesOf<E: ElectoralSystemRunner> =
+pub type CompositeVotePropertiesOf<E: ElectoralSystemRunner> =
 	<<E as ElectoralSystemRunner>::Vote as VoteStorage>::Properties;
 
 pub struct CompositeConsensusVote<ES: ElectoralSystemRunner> {
 	// If the validator hasn't voted, they will get a None.
-	pub vote: Option<(VotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote)>,
+	pub vote: Option<(CompositeVotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote)>,
 	pub validator_id: ES::ValidatorId,
 }
 
 pub struct CompositeConsensusVotes<ES: ElectoralSystemRunner> {
 	pub votes: Vec<CompositeConsensusVote<ES>>,
+}
+
+#[cfg(test)]
+impl<ES: ElectoralSystemRunner> CompositeConsensusVotes<ES> {
+	pub fn active_votes(self) -> Vec<<ES::Vote as VoteStorage>::Vote> {
+		self.votes
+			.into_iter()
+			.filter_map(|CompositeConsensusVote { vote, .. }| vote.map(|v| v.1))
+			.collect()
+	}
 }
 
 pub trait ElectoralSystemRunner: 'static + Sized {
@@ -107,7 +117,7 @@ pub trait ElectoralSystemRunner: 'static + Sized {
 	/// per state-chain block, for each active election.
 	fn is_vote_desired(
 		_election_identifier_with_extra: CompositeElectionIdentifierOf<Self>,
-		current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		current_vote: Option<(CompositeVotePropertiesOf<Self>, CompositeAuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
 		Ok(current_vote.is_none())
 	}
@@ -116,9 +126,9 @@ pub trait ElectoralSystemRunner: 'static + Sized {
 	/// This is a way to decrease the amount of extrinsics a validator needs to send.
 	fn is_vote_needed(
 		_current_vote: (
-			VotePropertiesOf<Self>,
+			CompositeVotePropertiesOf<Self>,
 			<Self::Vote as VoteStorage>::PartialVote,
-			AuthorityVoteOf<Self>,
+			CompositeAuthorityVoteOf<Self>,
 		),
 		_proposed_vote: (
 			<Self::Vote as VoteStorage>::PartialVote,
@@ -156,9 +166,9 @@ pub trait ElectoralSystemRunner: 'static + Sized {
 	/// function.
 	fn generate_vote_properties(
 		election_identifier: CompositeElectionIdentifierOf<Self>,
-		previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+		previous_vote: Option<(CompositeVotePropertiesOf<Self>, CompositeAuthorityVoteOf<Self>)>,
 		vote: &<Self::Vote as VoteStorage>::PartialVote,
-	) -> Result<VotePropertiesOf<Self>, CorruptStorageError>;
+	) -> Result<CompositeVotePropertiesOf<Self>, CorruptStorageError>;
 
 	/// This is called during the pallet's `on_finalize` callback, if elections aren't paused and
 	/// the CorruptStorage error hasn't occurred.

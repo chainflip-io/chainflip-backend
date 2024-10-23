@@ -145,8 +145,8 @@ pub mod pallet {
 	};
 	use bitmap_components::ElectionBitmapComponents;
 	pub use electoral_system_runner::{
-		AuthorityVoteOf, CompositeElectionIdentifierOf, ElectoralSystemRunner,
-		IndividualComponentOf, VotePropertiesOf,
+		CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, CompositeIndividualComponentOf,
+		CompositeVotePropertiesOf, ElectoralSystemRunner,
 	};
 
 	use frame_support::{
@@ -192,7 +192,7 @@ pub mod pallet {
 		CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
 		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings,
 		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionProperties,
-		AuthorityVoteOf<T::ElectoralSystemRunner>,
+		CompositeAuthorityVoteOf<T::ElectoralSystemRunner>,
 		BlockNumberFor<T>,
 	>;
 
@@ -208,8 +208,8 @@ pub mod pallet {
 			self.0.checked_add(1).map(Self)
 		}
 
-		#[cfg(feature = "runtime-benchmarks")]
-		pub fn from_u64(value: u64) -> Self {
+		#[cfg(any(feature = "runtime-benchmarks", test))]
+		pub const fn from_u64(value: u64) -> Self {
 			Self(value)
 		}
 	}
@@ -469,8 +469,8 @@ pub mod pallet {
 		Identity,
 		T::ValidatorId,
 		(
-			VotePropertiesOf<T::ElectoralSystemRunner>,
-			IndividualComponentOf<T::ElectoralSystemRunner>,
+			CompositeVotePropertiesOf<T::ElectoralSystemRunner>,
+			CompositeIndividualComponentOf<T::ElectoralSystemRunner>,
 		),
 		OptionQuery,
 	>;
@@ -1223,7 +1223,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			authority_votes: BoundedBTreeMap<
 				CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
-				AuthorityVoteOf<T::ElectoralSystemRunner>,
+				CompositeAuthorityVoteOf<T::ElectoralSystemRunner>,
 				ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
 			>,
 		) -> DispatchResult {
@@ -1675,12 +1675,8 @@ pub mod pallet {
 			}
 		}
 
-		/// Provides access into the ElectoralSystem's storage, and also all the current election
+		/// Provides access into the ElectoralSystem's current election
 		/// identifiers.
-		///
-		/// Ideally we would avoid introducing re-entrance (also with `with_storage_access`), so
-		/// the ElectoralAccess object can internally cache storage which is possibly helpful
-		/// particularly in the case of composites.
 		pub fn with_election_identifiers<
 			R,
 			F: FnOnce(
@@ -1922,8 +1918,8 @@ pub mod pallet {
 			R,
 			F: for<'a> FnOnce(
 				Option<(
-					VotePropertiesOf<T::ElectoralSystemRunner>,
-					AuthorityVoteOf<T::ElectoralSystemRunner>,
+					CompositeVotePropertiesOf<T::ElectoralSystemRunner>,
+					CompositeAuthorityVoteOf<T::ElectoralSystemRunner>,
 				)>,
 				&'a mut ElectionBitmapComponents<T, I>,
 			) -> Result<R, CorruptStorageError>,
@@ -1981,8 +1977,8 @@ pub mod pallet {
 			mut visit_unprovided_shared_data: VisitUnprovidedSharedData,
 		) -> Result<
 			Option<(
-				VotePropertiesOf<T::ElectoralSystemRunner>,
-				AuthorityVoteOf<T::ElectoralSystemRunner>,
+				CompositeVotePropertiesOf<T::ElectoralSystemRunner>,
+				CompositeAuthorityVoteOf<T::ElectoralSystemRunner>,
 			)>,
 			CorruptStorageError,
 		> {

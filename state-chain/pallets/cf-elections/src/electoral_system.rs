@@ -214,9 +214,12 @@ mod access {
 
 	use super::{CorruptStorageError, ElectionIdentifierOf, ElectoralSystem};
 
+	#[cfg(test)]
+	use codec::{Decode, Encode};
+
 	/// Represents the current consensus, and how it has changed since it was last checked (i.e.
 	/// 'check_consensus' was called).
-	#[cfg_attr(test, derive(Clone, Debug, PartialEq, Eq))]
+	#[cfg_attr(test, derive(Clone, Debug, PartialEq, Eq, Encode, Decode))]
 	pub enum ConsensusStatus<Consensus> {
 		/// You did not have consensus when previously checked, but now consensus has been gained.
 		Gained {

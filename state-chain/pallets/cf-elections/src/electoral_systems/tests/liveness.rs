@@ -35,15 +35,12 @@ type SimpleLiveness =
 register_checks! {
 	SimpleLiveness {
 		only_one_election(_pre, post) {
-			let election_ids = post.election_identifiers();
-			assert_eq!(election_ids.len(), 1, "Only one election should exist.");
+			assert_eq!(post.election_identifiers.len(), 1, "Only one election should exist.");
 		},
 		hook_called_once(_pre, _post) {
-			assert_eq!(HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()), 1, "Hook should have been called once so far!");
-		},
+			assert_eq!(HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()), 1, "Hook should have been called once so far!"); 		},
 		hook_called_twice(_pre, _post) {
-			assert_eq!(HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()), 2, "Hook should have been called twice so far!");
-		},
+			assert_eq!(HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()), 2, "Hook should have been called twice so far!"); 		},
 		hook_not_called(_pre, _post) {
 			assert_eq!(
 				HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()),

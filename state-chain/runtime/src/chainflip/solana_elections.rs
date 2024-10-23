@@ -263,42 +263,38 @@ impl
 		),
 	) -> Result<(), CorruptStorageError> {
 		let block_height = SolanaBlockHeightTracking::on_finalize::<
-			CompositeElectoralAccess<
+			DerivedElectoralAccess<
 				_,
 				SolanaBlockHeightTracking,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
 			>,
 		>(block_height_identifiers, &())?;
 		SolanaLiveness::on_finalize::<
-			CompositeElectoralAccess<
-				_,
-				SolanaLiveness,
-				RunnerStorageAccess<Runtime, SolanaInstance>,
-			>,
+			DerivedElectoralAccess<_, SolanaLiveness, RunnerStorageAccess<Runtime, SolanaInstance>>,
 		>(liveness_identifiers, &(crate::System::block_number(), block_height))?;
 		SolanaFeeTracking::on_finalize::<
-			CompositeElectoralAccess<
+			DerivedElectoralAccess<
 				_,
 				SolanaFeeTracking,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
 			>,
 		>(fee_identifiers, &())?;
 		SolanaNonceTracking::on_finalize::<
-			CompositeElectoralAccess<
+			DerivedElectoralAccess<
 				_,
 				SolanaNonceTracking,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
 			>,
 		>(nonce_tracking_identifiers, &())?;
 		SolanaEgressWitnessing::on_finalize::<
-			CompositeElectoralAccess<
+			DerivedElectoralAccess<
 				_,
 				SolanaEgressWitnessing,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
 			>,
 		>(egress_witnessing_identifiers, &())?;
 		SolanaIngressTracking::on_finalize::<
-			CompositeElectoralAccess<
+			DerivedElectoralAccess<
 				_,
 				SolanaIngressTracking,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
@@ -336,12 +332,12 @@ impl BenchmarkValue for SolanaIngressSettings {
 	}
 }
 
-use pallet_cf_elections::electoral_systems::composite::tuple_6_impls::CompositeElectoralAccess;
+use pallet_cf_elections::electoral_systems::composite::tuple_6_impls::DerivedElectoralAccess;
 
 pub struct SolanaChainTrackingProvider;
 impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
 	fn get_block_height() -> <Solana as Chain>::ChainBlockNumber {
-		CompositeElectoralAccess::<
+		DerivedElectoralAccess::<
 			_,
 			SolanaBlockHeightTracking,
 			RunnerStorageAccess<Runtime, SolanaInstance>,
@@ -358,7 +354,7 @@ impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
 
 impl SolanaChainTrackingProvider {
 	pub fn priority_fee() -> Option<<Solana as Chain>::ChainAmount> {
-		CompositeElectoralAccess::<
+		DerivedElectoralAccess::<
 			_,
 			SolanaFeeTracking,
 			RunnerStorageAccess<Runtime, SolanaInstance>,
@@ -371,13 +367,13 @@ impl SolanaChainTrackingProvider {
 	>(
 		f: F,
 	) -> <Solana as Chain>::ChainAmount {
-		CompositeElectoralAccess::<
+		DerivedElectoralAccess::<
 			_,
 			SolanaFeeTracking,
 			RunnerStorageAccess<Runtime, SolanaInstance>,
 		>::unsynchronised_state()
 			.and_then(|priority_fee| {
-				CompositeElectoralAccess::<
+				DerivedElectoralAccess::<
 			_,
 			SolanaFeeTracking,
 			RunnerStorageAccess<Runtime, SolanaInstance>,
@@ -425,7 +421,7 @@ impl IngressSource for SolanaIngress {
 					|grouped_election_identifiers| {
 						let (_, _, election_identifiers, ..) = grouped_election_identifiers;
 						SolanaIngressTracking::open_channel::<
-							CompositeElectoralAccess<
+							DerivedElectoralAccess<
 								_,
 								SolanaIngressTracking,
 								RunnerStorageAccess<Runtime, SolanaInstance>,
@@ -450,7 +446,7 @@ impl SolanaNonceWatch for SolanaNonceTrackingTrigger {
 		// TODO: Look at handling the corrupt storage elsewhere.
 		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::handle_corrupt_storage(
 			SolanaNonceTracking::watch_for_change::<
-				CompositeElectoralAccess<
+				DerivedElectoralAccess<
 					_,
 					SolanaNonceTracking,
 					RunnerStorageAccess<Runtime, SolanaInstance>,
@@ -470,7 +466,7 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 		// with_electoral_access
 		Ok(pallet_cf_elections::Pallet::<Runtime, SolanaInstance>::handle_corrupt_storage(
 			SolanaEgressWitnessing::watch_for_egress::<
-				CompositeElectoralAccess<
+				DerivedElectoralAccess<
 					_,
 					SolanaEgressWitnessing,
 					RunnerStorageAccess<Runtime, SolanaInstance>,
