@@ -2111,12 +2111,21 @@ impl_runtime_apis! {
 			let btc_ceremonies = pallet_cf_threshold_signature::PendingCeremonies::<Runtime,BitcoinInstance>::iter_values().map(|ceremony|{
 				ceremony.request_context.request_id
 			}).collect::<Vec<_>>();
+			let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
+				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
+				.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
 			for ceremony in btc_ceremonies {
 				if let RuntimeCall::BitcoinBroadcaster(pallet_cf_broadcast::pallet::Call::on_signature_ready{ api_call, ..}) = pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::get(ceremony).unwrap() {
 					if let BitcoinApi::BatchTransfer(batch_transfer) = *api_call {
-						let change_output = batch_transfer.bitcoin_transaction.outputs.last().unwrap();
-						if ScriptPubkey::Taproot(batch_transfer.change_utxo_key) == change_output.script_pubkey {
-							btc_balance += change_output.amount;
+						for output in batch_transfer.bitcoin_transaction.outputs {
+							if [
+								ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
+								ScriptPubkey::Taproot(btc_key.current),
+							]
+							.contains(&output.script_pubkey)
+							{
+								btc_balance += output.amount;
+							}
 						}
 					}
 				}
