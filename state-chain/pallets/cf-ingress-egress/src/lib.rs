@@ -924,11 +924,12 @@ pub mod pallet {
 
 			for tx in ScheduledTxForReject::<T, I>::take() {
 				if let Some(refund_address) = tx.refund_address.clone() {
+					let egress_fee = T::ChainTracking::estimate_egress_fee(tx.asset);
 					if let Ok(api_call) =
 						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
 							tx.tx_id.clone(),
 							refund_address,
-							tx.amount,
+							tx.amount - egress_fee,
 						) {
 						T::Broadcaster::threshold_sign_and_broadcast(api_call);
 					} else {
