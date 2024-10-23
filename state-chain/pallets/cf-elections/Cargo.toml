@@ -22,8 +22,9 @@ cf-chains = { workspace = true }
 cf-traits = { workspace = true }
 cf-primitives = { workspace = true }
 
-# Local deps
+# Utility deps
 cf-utilities = { workspace = true }
+cf-runtime-utilities = { workspace = true }
 
 # Non-substrate external deps
 bitvec = { workspace = true, features = ["alloc"] }

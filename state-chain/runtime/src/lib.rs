@@ -707,7 +707,7 @@ impl pallet_cf_governance::Config for Runtime {
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 	type UpgradeCondition = (
 		pallet_cf_validator::NotDuringRotation<Runtime>,
-		pallet_cf_swapping::NoPendingSwaps<Runtime>,
+		(pallet_cf_swapping::NoPendingSwaps<Runtime>, pallet_cf_environment::NoUsedNonce<Runtime>),
 	);
 	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 	type CompatibleCfeVersions = Environment;
@@ -1231,6 +1231,7 @@ type AllMigrations = (
 	MigrationsForV1_7,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
+	chainflip::solana_elections::old::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not

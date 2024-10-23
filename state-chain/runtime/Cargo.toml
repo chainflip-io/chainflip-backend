@@ -23,6 +23,7 @@ log = { workspace = true }
 nanorand = { workspace = true, features = ["wyrand"] }
 serde = { workspace = true, features = ["derive", "alloc"] }
 ethabi = { workspace = true }
+bitvec = { workspace = true }
 
 # Chainflip local dependencies
 cf-amm = { workspace = true }
