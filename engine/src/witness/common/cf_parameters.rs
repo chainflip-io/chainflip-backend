@@ -23,8 +23,10 @@ pub struct VaultSwapParameters {
 	pub refund_params: ChannelRefundParameters,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: Option<BasisPoints>,
-	// TODO: Should we make broker mandatory? Should we have a separate field?
-	pub broker_fees: Option<BoundedVec<u8, ConstU32<{ cf_primitives::MAX_AFFILIATES + 1 }>>>,
+	// TODO: Should we make broker mandatory? Should we have a separate fields or
+	// we just pass the array to the SC and it will handle it?
+	pub broker_fees:
+		Option<BoundedVec<(u8, BasisPoints), ConstU32<{ cf_primitives::MAX_AFFILIATES + 1 }>>>,
 	// pub broker_fees: Option<cf_primitives::Beneficiaries<u8>>,
 }
 
