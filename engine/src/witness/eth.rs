@@ -246,6 +246,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 					deposit_details: Box::new(DepositDetails {
 						tx_hashes: Some(vec![tx_hash.into()]),
 					}),
+					broker_fees: Default::default(),
 					// TODO: use real parameters when we can decode them
 					boost_fee: 0,
 					dca_params: None,
@@ -261,6 +262,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 					deposit_details: Box::new(DepositDetails {
 						tx_hashes: Some(vec![tx_hash.into()]),
 					}),
+					broker_fees: Default::default(),
 					// TODO: use real parameters when we can decode them
 					boost_fee: 0,
 					dca_params: None,

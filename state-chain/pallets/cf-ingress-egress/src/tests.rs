@@ -1790,6 +1790,7 @@ fn can_request_swap_via_extrinsic() {
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
+			Default::default(),
 			None,
 			None,
 			0,
@@ -1838,6 +1839,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 			ccm_deposit_metadata.clone(),
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
+			Default::default(),
 			None,
 			None,
 			0
@@ -1882,6 +1884,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			btc_encoded_address,
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
+			Default::default(),
 			None,
 			None,
 			0
@@ -1899,6 +1902,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
+			Default::default(),
 			None,
 			None,
 			0
@@ -1933,6 +1937,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 			ccm_deposit_metadata.clone(),
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
+			Default::default(),
 			None,
 			None,
 			0
@@ -1958,6 +1963,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 			ccm_deposit_metadata,
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
+			Default::default(),
 			None,
 			None,
 			0

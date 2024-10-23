@@ -139,6 +139,7 @@ pub fn try_extract_contract_call(
 			utxo_id: UtxoId { tx_id: tx_id.into(), vout: 0 },
 			deposit_address: vault_address.clone(),
 		}),
+		broker_fees: Default::default(),
 		refund_params: Some(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration as u32,
 			refund_address: ForeignChainAddress::Btc(refund_address),
@@ -276,6 +277,7 @@ mod tests {
 					utxo_id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
 					deposit_address: vault_deposit_address,
 				}),
+				broker_fees: Default::default(),
 				refund_params: Some(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),

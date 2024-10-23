@@ -444,7 +444,7 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
 
-		type SwapLimitsProvider: SwapLimitsProvider;
+		type SwapLimitsProvider: SwapLimitsProvider<AccountId = Self::AccountId>;
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
@@ -1197,6 +1197,7 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			tx_hash: TransactionHash,
 			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
+			broker_fees: Beneficiaries<T::AccountId>,
 			refund_params: Option<ChannelRefundParameters>,
 			dca_params: Option<DcaParameters>,
 			// This is only to be checked in the pre-witnessed version (not implemented yet)
@@ -1212,6 +1213,7 @@ pub mod pallet {
 				None,
 				tx_hash,
 				*deposit_details,
+				broker_fees,
 				refund_params,
 				dca_params,
 				boost_fee,
@@ -1231,6 +1233,7 @@ pub mod pallet {
 			deposit_metadata: CcmDepositMetadata,
 			tx_hash: TransactionHash,
 			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
+			broker_fees: Beneficiaries<T::AccountId>,
 			refund_params: Option<ChannelRefundParameters>,
 			dca_params: Option<DcaParameters>,
 			boost_fee: BasisPoints,
@@ -1245,6 +1248,7 @@ pub mod pallet {
 				Some(deposit_metadata),
 				tx_hash,
 				*deposit_details,
+				broker_fees,
 				refund_params,
 				dca_params,
 				boost_fee,
@@ -2054,6 +2058,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		broker_fees: Beneficiaries<T::AccountId>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		// This is only to be checked in the pre-witnessed version (not implemented yet)
@@ -2140,10 +2145,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(params) = &dca_params {
 			if let Err(err) = T::SwapLimitsProvider::validate_dca_params(params) {
 				log::warn!(
-				"Failed to process contract swap due to invalid dca params. Tx hash: {tx_hash:?}. Error: {err:?}",
-			);
+    				"Failed to process contract swap due to invalid dca params. Tx hash: {tx_hash:?}. Error: {err:?}",
+    			);
 				return;
 			}
+		}
+
+		if let Err(err) = T::SwapLimitsProvider::validate_broker_fees(&broker_fees) {
+			log::warn!(
+				"Failed to process contract swap due to invalid broker fees. Tx hash: {tx_hash:?}. Error: {err:?}",
+ 			);
+			return;
 		}
 
 		T::SwapRequestHandler::init_swap_request(
@@ -2151,7 +2163,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_amount.into(),
 			destination_asset,
 			request_type,
-			Default::default(),
+			broker_fees,
 			refund_params,
 			dca_params,
 			SwapOrigin::Vault { tx_hash },
