@@ -769,7 +769,7 @@ pub mod pallet {
 		/// Unsupported chain
 		UnsupportedChain,
 		/// Transaction cannot be reported after being pre-witnessed or boosted.
-		TransactionAlreadyPreWitnessed,
+		TransactionAlreadyPrewitnessed,
 	}
 
 	#[pallet::hooks]
@@ -1372,7 +1372,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			const UNSEEN: TaintedTransactionStatus = TaintedTransactionStatus::Unseen;
 			ensure!(
 				opt.replace(UNSEEN).unwrap_or_default() == UNSEEN,
-				Error::<T, I>::TransactionAlreadyPreWitnessed
+				Error::<T, I>::TransactionAlreadyPrewitnessed
 			);
 			Ok::<_, DispatchError>(())
 		})?;
