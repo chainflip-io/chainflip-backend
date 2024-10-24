@@ -9,13 +9,13 @@ use std::{
 
 use anyhow::Result;
 use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_utilities::{format_iterator, metrics::CeremonyMetrics};
 use futures::future::{BoxFuture, FutureExt};
 use tokio::sync::{
 	mpsc::{UnboundedReceiver, UnboundedSender},
 	oneshot,
 };
 use tracing::{debug, warn, Instrument};
-use utilities::{format_iterator, metrics::CeremonyMetrics};
 
 use crate::{
 	client::{

@@ -302,7 +302,7 @@ mod serialisation {
 	const MAX_ZKP_SIZE: usize = MAX_POINT_SIZE + MAX_SCALAR_SIZE;
 
 	const MAX_COEFFICIENTS: usize =
-		utilities::threshold_from_share_count(MAX_AUTHORITIES) as usize + 1;
+		cf_utilities::threshold_from_share_count(MAX_AUTHORITIES) as usize + 1;
 
 	// NOTE: 8 bytes for the length of the vector
 	pub const MAX_COEFF_COMM_3_SIZE: usize = MAX_ZKP_SIZE + MAX_POINT_SIZE * MAX_COEFFICIENTS + 8;
@@ -550,7 +550,7 @@ impl<P: ECPoint> DKGUnverifiedCommitment<P> {
 #[cfg(test)]
 mod tests {
 
-	use utilities::assert_ok;
+	use cf_utilities::assert_ok;
 
 	use crate::eth::EvmCryptoScheme;
 

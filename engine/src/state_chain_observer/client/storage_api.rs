@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use cf_primitives::{CfeCompatibility, SemVer};
+use cf_utilities::context;
 use codec::{Decode, FullCodec};
 use frame_support::{
 	storage::{
@@ -11,7 +12,6 @@ use frame_support::{
 };
 use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
-use utilities::context;
 
 use super::{BlockInfo, CFE_VERSION, SUBSTRATE_BEHAVIOUR};
 

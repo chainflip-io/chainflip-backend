@@ -191,7 +191,7 @@ impl KeyUtils for DotKeyComponents {
 	}
 }
 
-pub type BtcKeyComponents = KeyComponents<secp256k1::KeyPair, cf_chains::btc::AggKey>;
+pub type BtcKeyComponents = KeyComponents<secp256k1::Keypair, cf_chains::btc::AggKey>;
 
 pub type BtcThresholdSigner = ThresholdSigner<BtcKeyComponents, btc::Signature>;
 
@@ -213,15 +213,15 @@ impl KeyUtils for BtcKeyComponents {
 
 	fn sign(&self, message: &Self::Message) -> Self::SigVerification {
 		let secp = secp256k1::Secp256k1::new();
-		let signature =
-			secp.sign_schnorr(&secp256k1::Message::from_slice(message).unwrap(), &self.secret);
+		let signature = secp
+			.sign_schnorr(&secp256k1::Message::from_digest_slice(message).unwrap(), &self.secret);
 		*array_ref!(signature[..], 0, 64)
 	}
 
 	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {
 		let priv_seed: [u8; 32] = StdRng::seed_from_u64(seed).gen();
 		let secp = secp256k1::Secp256k1::new();
-		let keypair = secp256k1::KeyPair::from_seckey_slice(&secp, &priv_seed).unwrap();
+		let keypair = secp256k1::Keypair::from_seckey_slice(&secp, &priv_seed).unwrap();
 		let pubkey_x = secp256k1::XOnlyPublicKey::from_keypair(&keypair).0.serialize();
 		let agg_key = btc::AggKey { previous: None, current: pubkey_x };
 

@@ -1,9 +1,9 @@
 [package]
 name = "cfe-events"
 version = "0.1.0"
-edition = '2021'
-authors = ['Chainflip <https://chainflip.io>']
-description = 'Events for CFE'
+edition = "2021"
+authors = ["Chainflip <https://chainflip.io>"]
+description = "Events for CFE"
 
 
 [lints]
@@ -11,36 +11,31 @@ workspace = true
 
 [dependencies]
 # Internal dependencies
-cf-primitives = { path = '../primitives', default-features = false }
-cf-chains = { path = "../chains", default-features = false }
+cf-primitives = { workspace = true }
+cf-chains = { workspace = true }
 
 # Parity dependencies
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
-  'derive',
-] }
-scale-info = { version = "2.11.1", default-features = false, features = [
-  'derive',
-] }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
+sp-std = { workspace = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
 
 [dev-dependencies]
-hex = "0.4.3"
-
+hex = { workspace = true }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'cf-primitives/std',
-  'cf-chains/std',
-  'codec/std',
-  'scale-info/std',
-  'sp-std/std',
-  'frame-support/std',
-  'frame-system/std',
+  "cf-primitives/std",
+  "cf-chains/std",
+  "codec/std",
+  "scale-info/std",
+  "sp-std/std",
+  "frame-support/std",
+  "frame-system/std",
 ]
 runtime-benchmarks = [
-  'frame-system/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
+  "frame-system/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
 ]

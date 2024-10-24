@@ -5,9 +5,9 @@ mod tests;
 use std::{cmp::Ordering, collections::HashMap, path::Path};
 
 use cf_primitives::EpochIndex;
+use cf_utilities::rle_bitmap::RleBitmap;
 use serde::{de::DeserializeOwned, Serialize};
 use tracing::{debug, info, info_span};
-use utilities::rle_bitmap::RleBitmap;
 
 use multisig::{client::KeygenResultInfo, ChainSigning, KeyId, CHAIN_TAG_SIZE};
 

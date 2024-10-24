@@ -6,8 +6,8 @@ use ethers::{
 	types::{transaction::eip2930::AccessList, TransactionReceipt},
 };
 
+use cf_utilities::task_scope::Scope;
 use futures_core::Future;
-use utilities::task_scope::Scope;
 
 use crate::{
 	evm::rpc::{EvmRpcApi, EvmSigningRpcApi},
@@ -546,8 +546,8 @@ pub mod mocks {
 mod tests {
 	use crate::settings::Settings;
 	use cf_chains::Chain;
+	use cf_utilities::task_scope::task_scope;
 	use futures::FutureExt;
-	use utilities::task_scope::task_scope;
 
 	use super::*;
 
