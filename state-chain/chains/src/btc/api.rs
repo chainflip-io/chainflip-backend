@@ -166,7 +166,7 @@ where
 		let utxo = Utxo {
 			amount,
 			id: deposit_details.utxo_id,
-			deposit_address: DepositAddress::new(agg_key.current, 0),
+			deposit_address: deposit_details.deposit_address,
 		};
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
 			&agg_key,
