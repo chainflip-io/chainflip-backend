@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@chainflip/cli':
-        specifier: 1.8.0-cf-parameters-rename.2
-        version: 1.8.0-cf-parameters-rename.2(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)
+        specifier: 1.8.0-cf-parameters-rename.3
+        version: 1.8.0-cf-parameters-rename.3(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)
       '@chainflip/utils':
         specifier: ^0.4.0
         version: 0.4.0
@@ -145,8 +145,8 @@ packages:
   '@chainflip/bitcoin@1.1.1':
     resolution: {integrity: sha512-Jr6X/0QTSFYpTp23ZPhyioL6wL9x3Xpj6OGjadQKZyhobRN4BZkhLogv20HDYTJcRzVphzrTJArbEaNie04XVA==}
 
-  '@chainflip/cli@1.8.0-cf-parameters-rename.2':
-    resolution: {integrity: sha512-N7Cg9UlN6VbVPsGwQ+/J8V8qC2e6AU40e131syzOOb9J/hfA2Z/bSP4ukpzkpVpSTxjc4nEv5xKIz6WdvvqcFw==}
+  '@chainflip/cli@1.8.0-cf-parameters-rename.3':
+    resolution: {integrity: sha512-1+i11YjTg7/9yGUWysLc/PQE4hgKcAL6WHTIL/V2LunxFZxp27vowaxDixDMaBZIvL3AUBcs5oAV4kjWmPtJKw==}
     hasBin: true
     peerDependencies:
       axios: ^1.x
@@ -3169,7 +3169,7 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@chainflip/cli@1.8.0-cf-parameters-rename.2(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)':
+  '@chainflip/cli@1.8.0-cf-parameters-rename.3(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@chainflip/bitcoin': 1.1.1(typescript@5.5.3)
       '@chainflip/extrinsics': 1.6.1
