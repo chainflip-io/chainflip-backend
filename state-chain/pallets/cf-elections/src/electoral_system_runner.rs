@@ -50,6 +50,13 @@ impl<ES: ElectoralSystemRunner> CompositeConsensusVotes<ES> {
 	}
 }
 
+/// A trait used to define a runner of electoral systems. An object implementing this trait is
+/// injected into an elections pallet, which then executes the necessary logic to run each electoral
+/// system's logic.
+/// The primary implementation of this trait is the `CompositeRunner`. This should be the *only*
+/// implementation of this trait. This ensures that the storage and access is consistent across all
+/// electoral systems. i.e. we always wrap the storage types. Which leads to consistent and
+/// therefore simpler migration logic.
 pub trait ElectoralSystemRunner: 'static + Sized {
 	type ValidatorId: Parameter + Member + MaybeSerializeDeserialize;
 
