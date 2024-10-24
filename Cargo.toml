@@ -230,9 +230,9 @@ sc-transaction-pool-api = { git = "https://github.com/chainflip-io/polkadot-sdk.
 sp-consensus = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
 
 # PolkadotSdk Others
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-substrate-wasm-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+substrate-frame-rpc-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+substrate-wasm-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
 
 # Chainflip Statechain
 pallet-cf-account-roles = { path = "state-chain/pallets/cf-account-roles", default-features = false }

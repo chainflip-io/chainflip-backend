@@ -69,7 +69,6 @@ pub mod old {
 		electoral_system::ElectionIdentifierOf, vote_storage::VoteStorage, ConsensusHistory,
 		SharedDataHash, UniqueMonotonicIdentifier,
 	};
-	use sp_runtime::DispatchError;
 
 	pub type SolanaNonceTrackingOld = pallet_cf_elections::migrations::change_old::Change<
 		SolAddress,
@@ -222,7 +221,7 @@ pub mod old {
 	pub struct Migration;
 	impl OnRuntimeUpgrade for Migration {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::DispatchError> {
 			let election_identifiers = frame_support::migration::storage_key_iter::<
 				ElectionIdentifierOf<old::SolanaElectoralSystem>,
 				<old::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,
@@ -240,7 +239,7 @@ pub mod old {
 			Ok((election_identifiers.len() as u32).encode())
 		}
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		fn post_upgrade(state: Vec<u8>) -> Result<(), sp_runtime::DispatchError> {
 			let previous_number_election = u32::decode(&mut &state[..]).unwrap();
 			log::info!("Post upgrade number of election old state: {:?}", previous_number_election);
 			log::info!(

@@ -74,7 +74,7 @@ sc-rpc-api = { workspace = true, default-features = true }
 sp-blockchain = { workspace = true, default-features = true }
 sp-block-builder = { workspace = true, default-features = true }
 sc-basic-authorship = { workspace = true, default-features = true }
-substrate-frame-rpc-system = { workspace = true, default-features = true }
+substrate-frame-rpc-system = { workspace = true }
 pallet-transaction-payment-rpc = { workspace = true, default-features = true }
 sc-rpc-spec-v2 = { workspace = true, default-features = true }
 
