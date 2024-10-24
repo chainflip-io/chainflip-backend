@@ -353,6 +353,7 @@ export async function upgradeNetworkPrebuilt(
 
   if (cleanOldVersion.startsWith('1.6')) {
     await setupLpAccount('//LP_3');
+    await setupLpAccount('//LP_API');
   }
 
   console.log('Upgrade complete.');
