@@ -736,6 +736,10 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 			egress_details: ScheduledEgressDetails<T::TargetChain>,
 		},
+		TaintedTransactionRejected {
+			broadcast_id: BroadcastId,
+			tx_id: <T::TargetChain as Chain>::DepositDetails,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -931,7 +935,11 @@ pub mod pallet {
 							refund_address,
 							tx.amount - egress_fee,
 						) {
-						T::Broadcaster::threshold_sign_and_broadcast(api_call);
+						let result = T::Broadcaster::threshold_sign_and_broadcast(api_call);
+						Self::deposit_event(Event::<T, I>::TaintedTransactionRejected {
+							broadcast_id: result.0,
+							tx_id: tx.tx_id.clone(),
+						});
 					} else {
 						FailedRejections::<T, I>::append(tx);
 						log_or_panic!("Failed to construct reject call.");

@@ -4,7 +4,7 @@ use super::{
 	deposit_address::DepositAddress, AggKey, Bitcoin, BitcoinCrypto, BitcoinOutput, BtcAmount,
 	Utxo, BITCOIN_DUST_LIMIT, CHANGE_ADDRESS_SALT,
 };
-use crate::*;
+use crate::{btc::BitcoinTransaction, *};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
@@ -13,6 +13,7 @@ use sp_std::marker::PhantomData;
 #[allow(clippy::large_enum_variant)]
 pub enum BitcoinApi<Environment: 'static> {
 	BatchTransfer(batch_transfer::BatchTransfer),
+	NoChangeTransfer(BitcoinTransaction),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -162,17 +163,14 @@ where
 			ForeignChainAddress::Btc(script_pubkey) => script_pubkey,
 			_ => return Err(RejectError::Other),
 		};
-		let btc_outputs = vec![BitcoinOutput { amount, script_pubkey }];
-		let utxo = Utxo {
-			amount,
-			id: deposit_details.utxo_id,
-			deposit_address: deposit_details.deposit_address,
-		};
-		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
+		Ok(Self::NoChangeTransfer(BitcoinTransaction::create_new_unsigned(
 			&agg_key,
-			agg_key.current,
-			vec![utxo],
-			btc_outputs,
+			vec![Utxo {
+				amount,
+				id: deposit_details.utxo_id,
+				deposit_address: deposit_details.deposit_address,
+			}],
+			vec![BitcoinOutput { amount, script_pubkey }],
 		)))
 	}
 }
@@ -190,7 +188,7 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 	fn threshold_signature_payload(&self) -> <BitcoinCrypto as ChainCrypto>::Payload {
 		match self {
 			BitcoinApi::BatchTransfer(tx) => tx.threshold_signature_payload(),
-
+			BitcoinApi::NoChangeTransfer(tx) => tx.get_signing_payloads(),
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -202,6 +200,10 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 	) -> Self {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.signed(threshold_signature, signer).into(),
+			BitcoinApi::NoChangeTransfer(mut tx) => {
+				tx.add_signer_and_signatures(signer, threshold_signature.clone());
+				Self::NoChangeTransfer(tx)
+			},
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -209,7 +211,7 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 	fn chain_encoded(&self) -> Vec<u8> {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.chain_encoded(),
-
+			BitcoinApi::NoChangeTransfer(call) => call.clone().finalize(),
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -217,7 +219,7 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 	fn is_signed(&self) -> bool {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.is_signed(),
-
+			BitcoinApi::NoChangeTransfer(call) => call.is_signed(),
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -225,6 +227,7 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 	fn transaction_out_id(&self) -> <BitcoinCrypto as ChainCrypto>::TransactionOutId {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.transaction_out_id(),
+			BitcoinApi::NoChangeTransfer(call) => call.txid(),
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -236,6 +239,8 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 	fn signer(&self) -> Option<<BitcoinCrypto as ChainCrypto>::AggKey> {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.signer(),
+			BitcoinApi::NoChangeTransfer(call) =>
+				call.signer_and_signatures.as_ref().map(|(signer, _)| (*signer)),
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}

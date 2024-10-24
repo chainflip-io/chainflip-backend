@@ -2267,5 +2267,13 @@ fn send_funds_back_after_they_have_been_rejected() {
 		IngressEgress::on_finalize(1);
 
 		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), None);
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::TaintedTransactionRejected {
+				broadcast_id: _,
+				tx_id: _,
+			})
+		);
 	});
 }

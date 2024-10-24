@@ -830,7 +830,7 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 					batch_transfer.change_utxo_key,
 				);
 			},
-			_ => unreachable!(),
+			_ => {},
 		}
 	}
 }
