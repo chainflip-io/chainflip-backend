@@ -248,7 +248,7 @@ fn parse_account_amount_from_data(
 				},
 				_ => Err(anyhow::anyhow!(
 					"Data account encoding is not JsonParsed for account {:?}: {:?}",
-					deposit_channel_info.address_to_witness(),
+					deposit_channel.address_to_witness(),
 					deposit_channel_info.data
 				)),
 			}
