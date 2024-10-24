@@ -125,7 +125,7 @@ mod migration_tests {
 
 	#[test]
 	fn test_migration() {
-		use cf_chains::{evm::DeploymentStatus, ForeignChainAddress::Eth};
+		use cf_chains::evm::DeploymentStatus;
 		new_test_ext().execute_with(|| {
 			let channel_id = 1u64;
 			let address = sp_core::H160([1u8; 20]);
