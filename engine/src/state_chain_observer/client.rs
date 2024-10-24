@@ -672,7 +672,7 @@ where
 			.fetch_or_default(&subxt::storage::dynamic(
 				"Validator",
 				"NodeCFEVersion",
-				subxt::storage::StaticStorageKey::new(&vec![subxt_signer.account_id()]),
+				subxt::storage::StaticStorageKey::new(&subxt_signer.account_id()),
 			))
 			.await?
 			.encoded(),
