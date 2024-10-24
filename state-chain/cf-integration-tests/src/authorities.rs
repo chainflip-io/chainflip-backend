@@ -559,7 +559,7 @@ fn waits_for_governance_when_apicall_fails() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {

@@ -656,7 +656,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),

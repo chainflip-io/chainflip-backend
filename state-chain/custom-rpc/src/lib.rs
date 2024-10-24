@@ -67,7 +67,7 @@ use std::{
 pub mod monitoring;
 pub mod order_fills;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcRedemptionsInfo {
 	pub total_balance: NumberOrHex,
 	pub count: u32,

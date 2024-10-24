@@ -25,7 +25,7 @@ impl From<EpochState> for RpcEpochState {
 		}
 	}
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEpochState {
 	pub epoch_duration: u32,
 	pub current_epoch_started_at: u32,
@@ -36,7 +36,7 @@ pub struct RpcEpochState {
 
 // Temporary struct to hold the deprecated blocks_per_epoch field.
 // Can be deleted after v1.7 is released (meaning: after the version is bumped to 1.8).
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEpochStateV2 {
 	#[deprecated(
 		since = "1.8.0",
