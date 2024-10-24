@@ -64,8 +64,11 @@ where
 
 			Ok(Some(hash))
 		},
-		Some(_) =>
-			Err(anyhow!("Nonce data account encoding is not JsonParsed: {:?}", account_info)),
+		Some(_) => Err(anyhow!(
+			"Nonce data account encoding is not JsonParsed for account {:?}: {:?}",
+			nonce_account,
+			account_info
+		)),
 		None => Ok(None),
 	}
 }
