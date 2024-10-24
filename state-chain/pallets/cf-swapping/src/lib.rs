@@ -16,7 +16,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, BalanceApi, DepositApi, ExecutionCondition, IngressEgressFeeApi,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	SwapLimitsProvider, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -967,7 +968,7 @@ pub mod pallet {
 			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
-			let (beneficiaries, total_bps) = {
+			let beneficiaries = {
 				let mut beneficiaries = Beneficiaries::new();
 				if broker_commission > 0 {
 					beneficiaries
@@ -981,13 +982,10 @@ pub mod pallet {
 							.expect("Cannot exceed MAX_BENEFICIARY size which is MAX_AFFILIATE + 1 (main broker)");
 					}
 				}
-				let total_bps = beneficiaries
-					.iter()
-					.fold(0, |total, Beneficiary { bps, .. }| total.saturating_add(*bps));
-				(beneficiaries, total_bps)
+				beneficiaries
 			};
 
-			ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
+			Pallet::<T>::validate_broker_fees(&beneficiaries)?;
 
 			let destination_address_internal =
 				T::AddressConverter::decode_and_validate_address_for_asset(
@@ -2278,7 +2276,9 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	}
 }
 
-impl<T: Config> cf_traits::SwapLimitsProvider for Pallet<T> {
+impl<T: Config> SwapLimitsProvider for Pallet<T> {
+	type AccountId = T::AccountId;
+
 	fn get_swap_limits() -> cf_traits::SwapLimits {
 		cf_traits::SwapLimits {
 			max_swap_retry_duration_blocks: MaxSwapRetryDurationBlocks::<T>::get(),
@@ -2314,6 +2314,18 @@ impl<T: Config> cf_traits::SwapLimitsProvider for Pallet<T> {
 				return Err(DispatchError::from(Error::<T>::InvalidDcaParameters));
 			}
 		}
+		Ok(())
+	}
+
+	fn validate_broker_fees(
+		broker_fees: &Beneficiaries<Self::AccountId>,
+	) -> Result<(), DispatchError> {
+		let total_bps = broker_fees
+			.iter()
+			.fold(0, |total, Beneficiary { bps, .. }| total.saturating_add(*bps));
+
+		ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
+
 		Ok(())
 	}
 }
