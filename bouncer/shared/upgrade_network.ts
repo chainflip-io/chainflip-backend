@@ -351,9 +351,5 @@ export async function upgradeNetworkPrebuilt(
     await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   }
 
-  if (cleanOldVersion.startsWith('1.6')) {
-    await setupLpAccount('//LP_3');
-  }
-
   console.log('Upgrade complete.');
 }
