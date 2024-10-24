@@ -350,7 +350,9 @@ macro_rules! generate_electoral_system_tuple_impls {
                 properties: $current::ElectionProperties,
             ) -> Result<(), CorruptStorageError> {
                 StorageAccess::refresh_election(
+                    // The current election id + extra that we want to refresh.
                     self.id.with_extra(CompositeElectionIdentifierExtra::$current(*self.id.extra())),
+                    // The new extra we want to use.
                     CompositeElectionIdentifierExtra::$current(new_extra),
                     CompositeElectionProperties::$current(properties),
                 )?;
@@ -410,7 +412,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 state: $current::ElectionState,
             ) -> Result<Self::ElectionWriteAccess, CorruptStorageError> {
                 let election_identifier = StorageAccess::new_election(CompositeElectionIdentifierExtra::$current(extra), CompositeElectionProperties::$current(properties), CompositeElectionState::$current(state))?;
-                Ok(Self::ElectionWriteAccess::new(election_identifier.with_extra(extra)))
+                Ok(Self::election_mut(election_identifier.with_extra(extra)))
             }
 
             fn election_mut(

@@ -706,7 +706,10 @@ pub mod pallet {
 				} else {
 					ElectionProperties::<T, I>::remove(election_identifier);
 					let new_election_identifier =
-						ElectionIdentifier::new(*election_identifier.unique_monotonic(), new_extra);
+						CompositeElectionIdentifierOf::<Self::ElectoralSystemRunner>::new(
+							*election_identifier.unique_monotonic(),
+							new_extra,
+						);
 					ElectionProperties::<T, I>::insert(new_election_identifier, properties);
 					Ok(())
 				}
@@ -774,8 +777,8 @@ pub mod pallet {
 									Ok(SharedData::<T, I>::get(shared_data_hash))
 								}) {
 									// Only a full vote can count towards consensus.
-									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties,
-				vote))), 					Ok(Some((_properties, AuthorityVote::PartialVote(_)))) => Ok(None),
+									Ok(Some((properties, AuthorityVote::Vote(vote)))) => Ok(Some((properties, vote))),
+									Ok(Some((_properties, AuthorityVote::PartialVote(_)))) => Ok(None),
 									Ok(None) => Ok(None),
 									Err(e) => Err(e),
 								}
@@ -1223,8 +1226,6 @@ pub mod pallet {
 				ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
 			>,
 		) -> DispatchResult {
-			Self::ensure_initialized()?;
-
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
 			ensure!(!authority_votes.is_empty(), Error::<T, I>::NoVotesSpecified);
@@ -1660,10 +1661,6 @@ pub mod pallet {
 			);
 			Status::<T, I>::put(ElectionPalletStatus::Running);
 			Ok(())
-		}
-
-		pub fn ensure_initialized() -> Result<(), DispatchError> {
-			Self::with_status_check(|| Ok(()))
 		}
 
 		/// Provides access into the ElectoralSystem's current election
