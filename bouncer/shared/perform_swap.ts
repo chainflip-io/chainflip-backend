@@ -70,7 +70,7 @@ export async function requestNewSwap(
         ? event.data.channelMetadata !== null &&
           event.data.channelMetadata.message === messageMetadata.message &&
           event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget &&
-          event.data.channelMetadata.cfParameters === messageMetadata.cfParameters
+          event.data.channelMetadata.ccmAdditionalData === messageMetadata.ccmAdditionalData
         : event.data.channelMetadata === null;
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;

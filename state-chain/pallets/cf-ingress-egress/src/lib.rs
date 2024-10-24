@@ -26,7 +26,7 @@ use cf_chains::{
 	},
 	assets::any::GetChainAssetMap,
 	ccm_checker::CcmValidityCheck,
-	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata,
+	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata,
 	CcmFailReason, CcmMessage, Chain, ChannelLifecycleHooks, ChannelRefundParameters,
 	ConsolidateCall, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
 	SwapOrigin, TransferAssetParams,
@@ -159,7 +159,7 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
-	pub cf_parameters: CcmCfParameters,
+	pub ccm_additional_data: CcmAdditionalData,
 	pub gas_budget: C::ChainAmount,
 }
 
@@ -1245,6 +1245,10 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadata,
 			tx_hash: TransactionHash,
+			refund_params: Option<ChannelRefundParameters>,
+			dca_params: Option<DcaParameters>,
+			// This is only to be checked in the pre-witnessed version (not implemented yet)
+			_boost_fee: Option<BasisPoints>,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -1304,10 +1308,8 @@ pub mod pallet {
 					output_address: destination_address_internal.clone(),
 				},
 				Default::default(),
-				// NOTE: FoK not yet supported for swaps from the contract
-				None,
-				// NOTE: DCA not yet supported for swaps from the contract
-				None,
+				refund_params,
+				dca_params,
 				swap_origin,
 			);
 
@@ -1598,7 +1600,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.source_address,
 				ccm.gas_budget,
 				ccm.message.to_vec(),
-				ccm.cf_parameters.to_vec(),
+				ccm.ccm_additional_data.to_vec(),
 			) {
 				Ok(api_call) => {
 					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
@@ -2323,7 +2325,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			match maybe_ccm_with_gas_budget {
 				Some((
 					CcmDepositMetadata {
-						channel_metadata: CcmChannelMetadata { message, cf_parameters, .. },
+						channel_metadata: CcmChannelMetadata { message, ccm_additional_data, .. },
 						source_chain,
 						source_address,
 						..
@@ -2336,7 +2338,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						amount,
 						destination_address: destination_address.clone(),
 						message,
-						cf_parameters,
+						ccm_additional_data,
 						source_chain,
 						source_address,
 						gas_budget,

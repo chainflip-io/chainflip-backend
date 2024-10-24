@@ -550,7 +550,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
-		cf_parameters: Vec<u8>,
+		ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
@@ -589,10 +589,10 @@ pub enum SwapOrigin {
 }
 
 pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
-pub const MAX_CCM_CF_PARAM_LENGTH: u32 = 1_000;
+pub const MAX_CCM_ADDITIONAL_DATA_LENGTH: u32 = 1_000;
 
 pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
-pub type CcmCfParameters = BoundedVec<u8, ConstU32<MAX_CCM_CF_PARAM_LENGTH>>;
+pub type CcmAdditionalData = BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>;
 
 #[cfg(feature = "std")]
 mod bounded_hex {
@@ -637,7 +637,7 @@ pub struct CcmChannelMetadata {
 		feature = "std",
 		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
 	)]
-	pub cf_parameters: CcmCfParameters,
+	pub ccm_additional_data: CcmAdditionalData,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]

@@ -326,7 +326,7 @@ mod benchmarks {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00].try_into().unwrap(),
 				gas_budget: 1,
-				cf_parameters: Default::default(),
+				ccm_additional_data: Default::default(),
 			},
 		};
 		let call = Call::<T, I>::contract_ccm_swap_request {
@@ -336,6 +336,9 @@ mod benchmarks {
 			destination_address: EncodedAddress::benchmark_value(),
 			deposit_metadata,
 			tx_hash: Default::default(),
+			refund_params: None,
+			dca_params: None,
+			boost_fee: None,
 		};
 
 		#[block]

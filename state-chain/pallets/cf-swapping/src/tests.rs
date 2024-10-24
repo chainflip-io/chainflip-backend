@@ -216,7 +216,7 @@ fn generate_ccm_channel() -> CcmChannelMetadata {
 	CcmChannelMetadata {
 		message: vec![0x01].try_into().unwrap(),
 		gas_budget: GAS_BUDGET,
-		cf_parameters: Default::default(),
+		ccm_additional_data: Default::default(),
 	}
 }
 fn generate_ccm_deposit() -> CcmDepositMetadata {

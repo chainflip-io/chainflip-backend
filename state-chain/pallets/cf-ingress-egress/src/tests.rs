@@ -116,7 +116,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: 1_000,
-				cf_parameters: vec![].try_into().unwrap(),
+				ccm_additional_data: vec![].try_into().unwrap(),
 			},
 		};
 
@@ -150,7 +150,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 				message: ccm.channel_metadata.message.clone(),
 				source_chain: ForeignChain::Ethereum,
 				source_address: ccm.source_address.clone(),
-				cf_parameters: ccm.channel_metadata.cf_parameters,
+				ccm_additional_data: ccm.channel_metadata.ccm_additional_data,
 				gas_budget,
 			}]
 		);
@@ -489,7 +489,7 @@ fn can_egress_ccm() {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: GAS_BUDGET,
-				cf_parameters: vec![].try_into().unwrap(),
+				ccm_additional_data: vec![].try_into().unwrap(),
 			}
 		};
 
@@ -509,7 +509,7 @@ fn can_egress_ccm() {
 				amount,
 				destination_address,
 				message: ccm.channel_metadata.message.clone(),
-				cf_parameters: vec![].try_into().unwrap(),
+				ccm_additional_data: vec![].try_into().unwrap(),
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 				gas_budget: GAS_BUDGET,
@@ -1740,7 +1740,7 @@ fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: 1_000,
-				cf_parameters: vec![].try_into().unwrap(),
+				ccm_additional_data: vec![].try_into().unwrap(),
 			},
 		};
 
@@ -1826,7 +1826,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 		channel_metadata: CcmChannelMetadata {
 			message: vec![0x01].try_into().unwrap(),
 			gas_budget: 1_000,
-			cf_parameters: Default::default(),
+			ccm_additional_data: Default::default(),
 		},
 	};
 
@@ -1841,6 +1841,9 @@ fn can_request_ccm_swap_via_extrinsic() {
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			ccm_deposit_metadata.clone(),
 			TX_HASH,
+			None,
+			None,
+			None,
 		));
 
 		assert_eq!(
@@ -1918,7 +1921,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 		channel_metadata: CcmChannelMetadata {
 			message: vec![0x01].try_into().unwrap(),
 			gas_budget: GAS_BUDGET,
-			cf_parameters: Default::default(),
+			ccm_additional_data: Default::default(),
 		},
 	};
 
@@ -1932,6 +1935,9 @@ fn failed_ccm_deposit_can_deposit_event() {
 			EncodedAddress::Dot(Default::default()),
 			ccm_deposit_metadata.clone(),
 			Default::default(),
+			None,
+			None,
+			None,
 		));
 
 		assert_has_matching_event!(
@@ -1953,6 +1959,9 @@ fn failed_ccm_deposit_can_deposit_event() {
 			EncodedAddress::Eth(Default::default()),
 			ccm_deposit_metadata,
 			Default::default(),
+			None,
+			None,
+			None,
 		));
 
 		assert_has_matching_event!(
