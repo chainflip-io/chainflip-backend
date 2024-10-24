@@ -1,8 +1,8 @@
 use anyhow::Context;
 use cf_chains::{Chain, Ethereum};
 use cf_primitives::chains::assets::eth::Asset;
+use cf_utilities::task_scope;
 use std::sync::Arc;
-use utilities::task_scope;
 
 use chainflip_engine::{
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcClient},

@@ -78,8 +78,8 @@ mod tests {
 		sol::retry_rpc::SolRetryRpcClient,
 	};
 	use cf_chains::{Chain, Solana};
+	use cf_utilities::task_scope::task_scope;
 	use futures::FutureExt;
-	use utilities::task_scope::task_scope;
 
 	use super::*;
 

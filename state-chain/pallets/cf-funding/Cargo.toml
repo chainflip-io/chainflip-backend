@@ -1,79 +1,72 @@
 [package]
-name = 'pallet-cf-funding'
-version = '0.1.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'FRAME pallet for managing transfer of funds to and from the State Chain Gateway contract.'
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = '<TODO>'
+name = "pallet-cf-funding"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+description = "FRAME pallet for managing transfer of funds to and from the State Chain Gateway contract."
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "<TODO>"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [lints]
 workspace = true
 
 [dependencies]
 # Internal deps
-cf-chains = { path = '../../chains', default-features = false }
-cf-primitives = { path = '../../primitives', default-features = false }
-cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
-cf-traits = { path = '../../traits', default-features = false }
+cf-chains = { workspace = true }
+cf-primitives = { workspace = true }
+cf-runtime-upgrade-utilities = { workspace = true }
+cf-traits = { workspace = true }
 
 # Non-substrate external deps
-log = { version = '0.4.16', default-features = false }
+log = { workspace = true }
 
 # Parity deps
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
-  'derive',
-] }
-scale-info = { version = "2.11.1", default-features = false, features = [
-  'derive',
-] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true, default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-serde = { default-features = false, version = '1.0.197', features = [
-  'alloc',
-  'derive',
-] }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+frame-benchmarking = { workspace = true, optional = true }
+sp-std = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 [dev-dependencies]
-pallet-cf-flip = { path = '../cf-flip' }
-cf-test-utilities = { path = '../../test-utilities' }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+pallet-cf-flip = { workspace = true, default-features = true }
+cf-test-utilities = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-io = { workspace = true, default-features = true }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'cf-chains/std',
-  'cf-primitives/std',
-  'cf-runtime-upgrade-utilities/std',
-  'cf-traits/std',
-  'codec/std',
-  'frame-benchmarking?/std',
-  'frame-support/std',
-  'frame-system/std',
-  'log/std',
-  'scale-info/std',
-  'sp-std/std',
-  'serde/std',
+  "cf-chains/std",
+  "cf-primitives/std",
+  "cf-runtime-upgrade-utilities/std",
+  "cf-traits/std",
+  "codec/std",
+  "frame-benchmarking?/std",
+  "frame-support/std",
+  "frame-system/std",
+  "log/std",
+  "scale-info/std",
+  "sp-std/std",
+  "serde/std",
 ]
 runtime-benchmarks = [
-  'cf-chains/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
+  "cf-chains/runtime-benchmarks",
+  "cf-traits/runtime-benchmarks",
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
 ]
 try-runtime = [
-  'cf-runtime-upgrade-utilities/try-runtime',
-  'frame-support/try-runtime',
-  'frame-system/try-runtime',
+  "cf-runtime-upgrade-utilities/try-runtime",
+  "frame-support/try-runtime",
+  "frame-system/try-runtime",
 ]

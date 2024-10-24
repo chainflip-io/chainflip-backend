@@ -26,11 +26,11 @@ use crate::{
 	ChainSigning,
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
-use state_chain_runtime::AccountId;
-use utilities::{
+use cf_utilities::{
 	metrics::{AUTHORIZED_CEREMONIES, CEREMONY_BAD_MSG, UNAUTHORIZED_CEREMONIES},
 	task_scope::{task_scope, Scope, ScopedJoinHandle},
 };
+use state_chain_runtime::AccountId;
 
 use client::{ceremony_runner::CeremonyRunner, utils::PartyIdxMapping};
 

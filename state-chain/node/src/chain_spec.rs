@@ -31,13 +31,13 @@ use state_chain_runtime::{
 	WASM_BINARY,
 };
 
+use cf_utilities::clean_hex_address;
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	env,
 	str::FromStr,
 	time::{SystemTime, UNIX_EPOCH},
 };
-use utilities::clean_hex_address;
 
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},

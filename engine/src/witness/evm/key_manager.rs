@@ -180,9 +180,9 @@ mod tests {
 
 	use cf_chains::{Chain, Ethereum};
 	use cf_primitives::AccountRole;
+	use cf_utilities::task_scope::task_scope;
 	use futures_util::FutureExt;
 	use sp_core::{H160, U256};
-	use utilities::task_scope::task_scope;
 
 	use super::super::source::EvmSource;
 

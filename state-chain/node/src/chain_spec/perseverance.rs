@@ -11,10 +11,10 @@ use cf_chains::{
 	sol::{SolAddress, SolHash},
 };
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
+use cf_utilities::bs58_array;
 use sc_service::ChainType;
 use sol_prim::consts::{const_address, const_hash};
 use sp_core::H256;
-use utilities::bs58_array;
 
 pub struct Config;
 

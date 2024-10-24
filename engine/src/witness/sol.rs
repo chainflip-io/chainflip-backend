@@ -28,9 +28,9 @@ use state_chain_runtime::{
 	SolanaInstance,
 };
 
+use cf_utilities::{task_scope, task_scope::Scope};
 use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
 use std::{str::FromStr, sync::Arc};
-use utilities::{task_scope, task_scope::Scope};
 
 #[derive(Clone)]
 struct SolanaBlockHeightTrackingVoter {

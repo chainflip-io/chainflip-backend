@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use cf_chains::{instances::ChainInstanceFor, Chain, ChainCrypto};
-use utilities::task_scope::Scope;
+use cf_utilities::task_scope::Scope;
 
 use crate::{
 	state_chain_observer::client::{

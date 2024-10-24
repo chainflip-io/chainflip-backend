@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-env_logger = "0.11.3"
-scale-info = "2.10"
-log = "0.4.16"
-subxt = { version = "0.33", features = ["substrate-compat"] }
-tokio = { version = "1.22", features = ["full"] }
+env_logger = { workspace = true }
+scale-info = { workspace = true }
+log = { workspace = true }
+subxt = { workspace = true, features = ["substrate-compat"] }
+tokio = { workspace = true, features = ["full"] }
 cf-utilities = { package = "utilities", path = ".." }
-hex = "0.4.3"
-hex-literal = "0.4.1"
-anyhow = "1.0"
+hex = { workspace = true }
+hex-literal = { workspace = true }
+anyhow = { workspace = true }

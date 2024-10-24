@@ -1,19 +1,19 @@
 [package]
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
-build = 'build.rs'
-edition = '2021'
+build = "build.rs"
+edition = "2021"
 name = "cf-engine-dylib"
 version = "1.7.0"
 
 [lib]
 crate-type = ["cdylib"]
 name = "chainflip_engine_v1_7_0"
-path = 'src/lib.rs'
+path = "src/lib.rs"
 
 [dependencies]
-chainflip-engine = { path = "../engine" }
-engine-proc-macros = { path = "../engine-proc-macros" }
-engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+chainflip-engine = { workspace = true }
+engine-proc-macros = { workspace = true }
+engine-upgrade-utils = { workspace = true }
 
 [build-dependencies]
-engine-upgrade-utils = { path = "../engine-upgrade-utils" }
+engine-upgrade-utils = { workspace = true }

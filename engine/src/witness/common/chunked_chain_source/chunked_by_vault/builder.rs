@@ -1,6 +1,6 @@
+use cf_utilities::{assert_stream_send, task_scope::Scope};
 use futures::StreamExt;
 use futures_core::Future;
-use utilities::{assert_stream_send, task_scope::Scope};
 
 use crate::witness::common::{
 	chain_source::{aliases, Header},

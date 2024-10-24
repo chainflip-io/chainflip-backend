@@ -8,8 +8,8 @@ use crate::{
 };
 use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_utilities::metrics::CeremonyMetrics;
 use tokio::sync::mpsc::UnboundedSender;
-use utilities::metrics::CeremonyMetrics;
 
 /// Outcome of a given ceremony stage
 pub enum StageResult<C: CeremonyTrait> {

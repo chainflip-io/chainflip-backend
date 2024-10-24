@@ -23,12 +23,12 @@ use crate::{
 };
 use anyhow::Result;
 use cf_primitives::{AccountId, CeremonyId};
+use cf_utilities::{task_scope::task_scope, threshold_from_share_count};
 use client::MultisigMessage;
 use futures::{Future, FutureExt};
 use rand::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::{mpsc, oneshot};
-use utilities::{task_scope::task_scope, threshold_from_share_count};
 
 /// Run on_request_to_sign on a ceremony manager, using a dummy key and default ceremony id and
 /// data.

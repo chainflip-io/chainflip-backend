@@ -1,54 +1,50 @@
 [package]
-name = 'cf-session-benchmarking'
-version = '0.1.0'
-description = 'Chainflip session pallet benchmark'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-homepage = 'https://chainflip.io'
-edition = '2021'
-license = '<TODO>'
+name = "cf-session-benchmarking"
+version = "0.1.0"
+description = "Chainflip session pallet benchmark"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+homepage = "https://chainflip.io"
+edition = "2021"
+license = "<TODO>"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [lints]
 workspace = true
 
 [dependencies]
-rand = { version = '0.8.4', default-features = false, features = ['std_rng'] }
+rand = { workspace = true, features = ["std_rng"] }
 
-pallet-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false, features = [
-  'historical',
-] }
+pallet-session = { workspace = true, features = ["historical"] }
 
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
-  'derive',
-] }
+codec = { workspace = true, features = ["derive"] }
 
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+frame-system = { workspace = true }
+frame-support = { workspace = true }
+frame-benchmarking = { workspace = true }
 
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-runtime = { workspace = true }
+sp-std = { workspace = true }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'codec/std',
-  'frame-benchmarking/std',
-  'frame-support/std',
-  'frame-system/std',
-  'pallet-session/std',
-  'sp-runtime/std',
-  'rand/std',
-  'sp-std/std',
+  "codec/std",
+  "frame-benchmarking/std",
+  "frame-support/std",
+  "frame-system/std",
+  "pallet-session/std",
+  "sp-runtime/std",
+  "rand/std",
+  "sp-std/std",
 ]
 
 runtime-benchmarks = [
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
   "sp-runtime/runtime-benchmarks",
 ]

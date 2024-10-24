@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use utilities::task_scope::Scope;
+use cf_utilities::task_scope::Scope;
 
 use crate::{
 	btc::retry_rpc::BtcRetryRpcClient,

@@ -9,12 +9,12 @@ use cf_chains::{
 	AnyChain, Arbitrum, Bitcoin, Chain, Ethereum, Polkadot,
 };
 use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
+use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
 use pallet_cf_ingress_egress::DepositWitness;
 use serde::{Serialize, Serializer};
-use utilities::{rpc::NumberOrHex, ArrayCollect};
 
 /// A wrapper type for bitcoin hashes that serializes the hash in reverse.
 #[derive(Debug)]
