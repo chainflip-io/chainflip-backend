@@ -887,20 +887,17 @@ pub mod pallet {
 
 			fn unsynchronised_state_map(
 				key: &<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
-			) -> Result<
+			) ->
 				Option<
 					<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
-				>,
-				CorruptStorageError,
 			>{
-				Ok(ElectoralUnsynchronisedStateMap::<T, I>::get(key))
+				ElectoralUnsynchronisedStateMap::<T, I>::get(key)
 			}
 
 			fn set_unsynchronised_state(
 				unsynchronised_state: <T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
-			) -> Result<(), CorruptStorageError> {
+			) {
 				ElectoralUnsynchronisedState::<T, I>::put(unsynchronised_state);
-				Ok(())
 			}
 
 			fn set_unsynchronised_state_map(
@@ -908,9 +905,8 @@ pub mod pallet {
 				value: Option<
 					<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
 				>,
-			) -> Result<(), CorruptStorageError> {
+			) {
 				ElectoralUnsynchronisedStateMap::<T, I>::set(key, value);
-				Ok(())
 			}
 		}
 	}

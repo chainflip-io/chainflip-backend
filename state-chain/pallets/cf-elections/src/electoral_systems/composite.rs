@@ -407,7 +407,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             fn unsynchronised_state_map(
                 key: &$current::ElectoralUnsynchronisedStateMapKey,
             ) -> Result<Option<$current::ElectoralUnsynchronisedStateMapValue>, CorruptStorageError> {
-                match StorageAccess::unsynchronised_state_map(&CompositeElectoralUnsynchronisedStateMapKey::$current(key.clone()))? {
+                match StorageAccess::unsynchronised_state_map(&CompositeElectoralUnsynchronisedStateMapKey::$current(key.clone())) {
                     Some(CompositeElectoralUnsynchronisedStateMapValue::$current(value)) => Ok(Some(value)),
                     None => Ok(None),
                     _ => Err(CorruptStorageError::new()),
@@ -437,17 +437,18 @@ macro_rules! generate_electoral_system_tuple_impls {
                 unsynchronised_state: $current::ElectoralUnsynchronisedState,
             ) -> Result<(), CorruptStorageError> {
                 let ($($previous,)* _, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
-                StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))
+                StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*));
+                Ok(())
             }
 
             fn set_unsynchronised_state_map(
                 key: $current::ElectoralUnsynchronisedStateMapKey,
                 value: Option<$current::ElectoralUnsynchronisedStateMapValue>,
-            ) -> Result<(), CorruptStorageError> {
+            ) {
                 StorageAccess::set_unsynchronised_state_map(
                     CompositeElectoralUnsynchronisedStateMapKey::$current(key),
                     value.map(CompositeElectoralUnsynchronisedStateMapValue::$current),
-                )
+                );
             }
 
             fn mutate_unsynchronised_state<
@@ -460,7 +461,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             ) -> Result<T, CorruptStorageError> {
                 let ($($previous,)* mut unsynchronised_state, $($remaining,)*) = StorageAccess::unsynchronised_state()?;
                 let t = f( &mut unsynchronised_state)?;
-                StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*))?;
+                StorageAccess::set_unsynchronised_state(($($previous,)* unsynchronised_state, $($remaining,)*));
                 Ok(t)
             }
         }

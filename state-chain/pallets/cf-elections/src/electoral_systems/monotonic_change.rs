@@ -132,7 +132,7 @@ impl<
 				if previous_value != value && block_height > previous_block_height {
 					election_access.delete();
 					Hook::on_change(identifier.clone(), value);
-					ElectoralAccess::set_unsynchronised_state_map(identifier, Some(block_height))?;
+					ElectoralAccess::set_unsynchronised_state_map(identifier, Some(block_height));
 				} else {
 					log_or_panic!("Should be impossible to reach consensus with the same value and/or lower block_height");
 				}
