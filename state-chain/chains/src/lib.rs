@@ -525,8 +525,6 @@ pub enum ConsolidationError {
 #[derive(Debug)]
 pub enum RejectError {
 	NotSupportedForAsset,
-	UtxoUnavailable,
-	UnexpectedLengthOfSelectedUtxos,
 	Other,
 }
 

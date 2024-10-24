@@ -818,29 +818,26 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 	type ApiCall = BitcoinApi<BtcEnvironment>;
 
 	fn on_broadcast_ready(api_call: &Self::ApiCall) {
-		match api_call {
-			BitcoinApi::BatchTransfer(batch_transfer) => {
-				let tx_id = batch_transfer.bitcoin_transaction.txid();
-				let outputs = &batch_transfer.bitcoin_transaction.outputs;
-				let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
-					pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
-						.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
-				for (i, output) in outputs.iter().enumerate() {
-					if [
-						ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
-						ScriptPubkey::Taproot(btc_key.current),
-					]
-					.contains(&output.script_pubkey)
-					{
-						Environment::add_bitcoin_change_utxo(
-							output.amount,
-							UtxoId { tx_id, vout: i as u32 },
-							batch_transfer.change_utxo_key,
-						);
-					}
+		if let BitcoinApi::BatchTransfer(batch_transfer) = api_call {
+			let tx_id = batch_transfer.bitcoin_transaction.txid();
+			let outputs = &batch_transfer.bitcoin_transaction.outputs;
+			let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
+				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
+					.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
+			for (i, output) in outputs.iter().enumerate() {
+				if [
+					ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
+					ScriptPubkey::Taproot(btc_key.current),
+				]
+				.contains(&output.script_pubkey)
+				{
+					Environment::add_bitcoin_change_utxo(
+						output.amount,
+						UtxoId { tx_id, vout: i as u32 },
+						batch_transfer.change_utxo_key,
+					);
 				}
-			},
-			_ => {},
+			}
 		}
 	}
 }

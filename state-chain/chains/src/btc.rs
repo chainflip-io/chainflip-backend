@@ -371,9 +371,7 @@ fn verify_single_threshold_signature(
 
 // TODO: Look at moving this into Utxo. They're exactly the same apart from the ChannelId
 // which could be made generic, if even necessary at all.
-#[derive(
-	Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen, Copy, Default,
-)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen, Default)]
 pub struct UtxoId {
 	// TxId of the transaction in which this utxo was created.
 	pub tx_id: Hash,
