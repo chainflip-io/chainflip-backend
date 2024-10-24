@@ -70,6 +70,7 @@ use cf_traits::{
 	ScheduledEgressDetails,
 };
 
+use cf_chains::{btc::ScriptPubkey, instances::BitcoinInstance};
 use codec::{Decode, Encode};
 use eth::Address as EvmAddress;
 use frame_support::{
@@ -815,15 +816,24 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 		match api_call {
 			BitcoinApi::BatchTransfer(batch_transfer) => {
 				let tx_id = batch_transfer.bitcoin_transaction.txid();
-				let outputs = batch_transfer.bitcoin_transaction.outputs.clone();
-				let output_len = outputs.len();
-				let vout = output_len - 1;
-				let change_output = outputs.get(vout).unwrap();
-				Environment::add_bitcoin_change_utxo(
-					change_output.amount,
-					UtxoId { tx_id, vout: vout as u32 },
-					batch_transfer.change_utxo_key,
-				);
+				let outputs = &batch_transfer.bitcoin_transaction.outputs;
+				let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
+					pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
+						.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
+				for (i, output) in outputs.iter().enumerate() {
+					if [
+						ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
+						ScriptPubkey::Taproot(btc_key.current),
+					]
+					.contains(&output.script_pubkey)
+					{
+						Environment::add_bitcoin_change_utxo(
+							output.amount,
+							UtxoId { tx_id, vout: i as u32 },
+							batch_transfer.change_utxo_key,
+						);
+					}
+				}
 			},
 			_ => unreachable!(),
 		}
