@@ -10,7 +10,6 @@ import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 import { execWithLog } from './utils/exec_with_log';
 import { submitGovernanceExtrinsic } from './cf_governance';
-import { setupLpAccount } from './setup_lp_account';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -349,10 +348,6 @@ export async function upgradeNetworkPrebuilt(
   } else {
     console.log('The versions are incompatible.');
     await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
-  }
-
-  if (cleanOldVersion.startsWith('1.6')) {
-    await setupLpAccount('//LP_3');
   }
 
   console.log('Upgrade complete.');
