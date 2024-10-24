@@ -10,7 +10,6 @@ import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 import { execWithLog } from './utils/exec_with_log';
 import { submitGovernanceExtrinsic } from './cf_governance';
-import { setupLpAccount } from './setup_lp_account';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
