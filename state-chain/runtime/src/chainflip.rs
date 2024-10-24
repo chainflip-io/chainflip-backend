@@ -31,7 +31,7 @@ use cf_chains::{
 	assets::any::ForeignChainAndAsset,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, BtcDepositDetails, UtxoId,
+		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, Utxo, UtxoId,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
@@ -768,15 +768,8 @@ pub struct DepositHandler;
 impl OnDeposit<Ethereum> for DepositHandler {}
 impl OnDeposit<Polkadot> for DepositHandler {}
 impl OnDeposit<Bitcoin> for DepositHandler {
-	fn on_deposit_made(
-		deposit_details: BtcDepositDetails,
-		amount: <Bitcoin as Chain>::ChainAmount,
-	) {
-		Environment::add_bitcoin_utxo_to_list(
-			amount,
-			deposit_details.utxo_id,
-			deposit_details.deposit_address,
-		)
+	fn on_deposit_made(deposit_details: Utxo, amount: <Bitcoin as Chain>::ChainAmount) {
+		Environment::add_bitcoin_utxo_to_list(deposit_details)
 	}
 }
 impl OnDeposit<Arbitrum> for DepositHandler {}
