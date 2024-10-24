@@ -193,7 +193,9 @@ pub mod tests {
 	fn fake_details(
 		deposit_address: DepositAddress,
 	) -> DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance> {
+		use cf_chains::{btc::ScriptPubkey, ForeignChainAddress};
 		DepositChannelDetails::<_, BitcoinInstance> {
+			owner: AccountId32::new([0xab; 32]),
 			opened_at: 1,
 			expires_at: 10,
 			deposit_channel: DepositChannel {
@@ -204,6 +206,7 @@ pub mod tests {
 			},
 			action: ChannelAction::<AccountId32>::LiquidityProvision {
 				lp_account: AccountId32::new([0xab; 32]),
+				refund_address: Some(ForeignChainAddress::Btc(ScriptPubkey::P2PKH([0; 20]))),
 			},
 			boost_fee: 0,
 			boost_status: BoostStatus::NotBoosted,
