@@ -466,7 +466,7 @@ fn reused_address_channel_id_matches() {
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
-				refund_address: ForeignChainAddress::Eth([0u8; 20].into()),
+				refund_address: Some(ForeignChainAddress::Eth([0u8; 20].into())),
 			},
 			0,
 		)
@@ -1423,7 +1423,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: CHANNEL_REQUESTER,
-				refund_address: ForeignChainAddress::Eth(Default::default()),
+				refund_address: Some(ForeignChainAddress::Eth(Default::default())),
 			},
 			0
 		));
@@ -1440,7 +1440,7 @@ fn broker_pays_a_fee_for_each_deposit_address() {
 				eth::Asset::Eth,
 				ChannelAction::LiquidityProvision {
 					lp_account: CHANNEL_REQUESTER,
-					refund_address: ForeignChainAddress::Eth(Default::default()),
+					refund_address: Some(ForeignChainAddress::Eth(Default::default())),
 				},
 				0
 			),
@@ -1601,7 +1601,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision {
 				lp_account: 0,
-				refund_address: ForeignChainAddress::Eth(Default::default())
+				refund_address: Some(ForeignChainAddress::Eth(Default::default()))
 			},
 			0,
 		));
@@ -1621,7 +1621,7 @@ fn safe_mode_prevents_deposit_channel_creation() {
 				eth::Asset::Eth,
 				ChannelAction::LiquidityProvision {
 					lp_account: 0,
-					refund_address: ForeignChainAddress::Eth(Default::default())
+					refund_address: Some(ForeignChainAddress::Eth(Default::default()))
 				},
 				0,
 			),
