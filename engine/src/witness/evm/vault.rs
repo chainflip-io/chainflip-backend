@@ -1,3 +1,4 @@
+use codec::Decode;
 use ethers::types::Bloom;
 use sp_core::H256;
 use std::collections::HashMap;
@@ -66,14 +67,8 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			let cf_parameters_vec: CfParameters = cf_parameters
-				.to_vec()
-				.try_into()
-				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-
-			// TODO: We can consider defaulting values if decoding fails for backwards
-			// compatibility. Or we can default in the decoding functions if it's an empty array.
-			let vault_swap_parameters = cf_parameters_vec.decode_into_swap_parameters()?;
+			let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
+				CfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
@@ -98,14 +93,8 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			let cf_parameters_vec: CfParameters = cf_parameters
-				.to_vec()
-				.try_into()
-				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-
-			// TODO: We can consider defaulting values if decoding fails for backwards
-			// compatibility. Or we can default in the decoding functions if it's an empty array.
-			let vault_swap_parameters = cf_parameters_vec.decode_into_swap_parameters()?;
+			let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
+				CfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
@@ -133,14 +122,8 @@ where
 			gas_amount,
 			cf_parameters,
 		}) => {
-			let cf_parameters_vec: CfParameters = cf_parameters
-				.to_vec()
-				.try_into()
-				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-
-			// TODO: We can consider defaulting values if decoding fails for backwards
-			// compatibility. Or we can default in the decoding functions if it's an empty array.
-			let parameters = cf_parameters_vec.decode_into_ccm_swap_parameters()?;
+			let CfParameters { ccm_additional_data, vault_swap_parameters } =
+				CcmCfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::contract_swap_request(
 				native_asset,
@@ -160,13 +143,13 @@ where
 							.try_into()
 							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
-						ccm_additional_data: parameters.ccm_additional_data.unwrap_or_default(),
+						ccm_additional_data,
 					},
 				}),
 				event.tx_hash.into(),
-				Some(parameters.vault_swap_parameters.refund_params),
-				parameters.vault_swap_parameters.dca_params,
-				parameters.vault_swap_parameters.boost_fee,
+				Some(vault_swap_parameters.refund_params),
+				vault_swap_parameters.dca_params,
+				vault_swap_parameters.boost_fee,
 				// TODO: Add broker_fees. Probably pass None for now as it'll need decoding id ->
 				// account_id
 			))
@@ -182,14 +165,8 @@ where
 			gas_amount,
 			cf_parameters,
 		}) => {
-			let cf_parameters_vec: CfParameters = cf_parameters
-				.to_vec()
-				.try_into()
-				.map_err(|_| anyhow!("Failed to decode `cf_parameters` too long."))?;
-
-			// TODO: We can consider defaulting values if decoding fails for backwards
-			// compatibility. Or we can default in the decoding functions if it's an empty array.
-			let parameters = cf_parameters_vec.decode_into_ccm_swap_parameters()?;
+			let CfParameters { ccm_additional_data, vault_swap_parameters } =
+				CcmCfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::contract_swap_request(
 				*(supported_assets
@@ -211,13 +188,13 @@ where
 							.try_into()
 							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
-						ccm_additional_data: parameters.ccm_additional_data.unwrap_or_default(),
+						ccm_additional_data,
 					},
 				}),
 				event.tx_hash.into(),
-				Some(parameters.vault_swap_parameters.refund_params),
-				parameters.vault_swap_parameters.dca_params,
-				parameters.vault_swap_parameters.boost_fee,
+				Some(vault_swap_parameters.refund_params),
+				vault_swap_parameters.dca_params,
+				vault_swap_parameters.boost_fee,
 				// TODO: Add broker_fees. Probably pass None for now as it'll need decoding id ->
 				// account_id
 			))
