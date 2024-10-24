@@ -20,7 +20,8 @@ use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteS
 use state_chain_runtime::{
 	chainflip::solana_elections::{
 		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystem,
-		SolanaFeeTracking, SolanaIngressTracking, SolanaNonceTracking, TransactionSuccessDetails,
+		SolanaFeeTracking, SolanaIngressTracking, SolanaNonceTracking, SolanaVaultSwapTracking,
+		TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
@@ -140,6 +141,25 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 	}
 }
 
+#[derive(Clone)]
+struct SolanaVaultSwapsVoter {
+	client: SolRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
+	async fn vote(
+		&self,
+		_settings: <SolanaVaultSwapTracking as ElectoralSystem>::ElectoralSettings,
+		_properties: <SolanaVaultSwapTracking as ElectoralSystem>::ElectionProperties,
+	) -> Result<
+		<<SolanaVaultSwapTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
+		anyhow::Error,
+	> {
+		todo!()
+	}
+}
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: SolRetryRpcClient,
@@ -165,7 +185,8 @@ where
 						SolanaFeeTrackingVoter { client: client.clone() },
 						SolanaIngressTrackingVoter { client: client.clone() },
 						SolanaNonceTrackingVoter { client: client.clone() },
-						SolanaEgressWitnessingVoter { client },
+						SolanaEgressWitnessingVoter { client: client.clone() },
+						SolanaVaultSwapsVoter { client },
 					)),
 				)
 				.continuously_vote()

@@ -4,8 +4,6 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{
-	address::EncodedAddress,
-	assets::any::Asset,
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		deposit_address::DepositAddress,
@@ -21,11 +19,11 @@ use cf_chains::{
 		MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
 		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
 	},
-	Chain, CloseSolanaContractSwapAccounts,
+	Chain, CloseSolanaVaultSwapAccounts,
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	AssetAmount, NetworkEnvironment, SemVer, TransactionHash,
+	NetworkEnvironment, SemVer,
 };
 use cf_traits::{
 	CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
@@ -103,9 +101,9 @@ pub mod pallet {
 
 		type SolanaNonceWatch: SolanaNonceWatch;
 
-		type CloseSolanaContractSwapAccounts: cf_chains::CloseSolanaContractSwapAccounts;
+		type CloseSolanaVaultSwapAccounts: cf_chains::CloseSolanaVaultSwapAccounts;
 
-		type SolanaBroadcaster: Broadcaster<Solana, ApiCall = Self::CloseSolanaContractSwapAccounts>;
+		type SolanaBroadcaster: Broadcaster<Solana, ApiCall = Self::CloseSolanaVaultSwapAccounts>;
 
 		type SolanaContractSwapper: SolanaContractSwap;
 
@@ -294,7 +292,7 @@ pub mod pallet {
 					} else {
 						sp_std::mem::take(accounts)
 					};
-					match T::CloseSolanaContractSwapAccounts::new_unsigned(accounts_to_close.clone()) {
+					match T::CloseSolanaVaultSwapAccounts::new_unsigned(accounts_to_close.clone()) {
 						Ok(apicall) => {
 							let (broadcast_id, _) =
 								T::SolanaBroadcaster::threshold_sign_and_broadcast(apicall);
@@ -818,31 +816,31 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn report_sol_contract_swap_accounts(
-		new_contract_swaps: Vec<(ContractSwapAccountAndSender, SolanaContractSwapDetails)>,
-		confirm_closed_accounts: Vec<ContractSwapAccountAndSender>,
-	) {
-		SolanaOpenContractSwapAccounts::<T>::mutate(|accts| {
-			accts.extend(
-				new_contract_swaps
-					.into_iter()
-					.map(|(contract_swap_account, swap_details)| {
-						T::SolanaContractSwapper::initiate_contract_swap(
-							swap_details.from,
-							swap_details.to,
-							swap_details.deposit_amount,
-							swap_details.destination_address,
-							swap_details.tx_hash,
-						);
-						contract_swap_account
-					})
-					.collect::<Vec<_>>(),
-			)
-		});
-		confirm_closed_accounts
-			.into_iter()
-			.for_each(SolanaClosedContractSwapAccounts::<T>::remove);
-	}
+	// pub fn report_sol_contract_swap_accounts(
+	// 	new_contract_swaps: Vec<(ContractSwapAccountAndSender, SolanaContractSwapDetails)>,
+	// 	confirm_closed_accounts: Vec<ContractSwapAccountAndSender>,
+	// ) {
+	// 	SolanaOpenContractSwapAccounts::<T>::mutate(|accts| {
+	// 		accts.extend(
+	// 			new_contract_swaps
+	// 				.into_iter()
+	// 				.map(|(contract_swap_account, swap_details)| {
+	// 					T::SolanaContractSwapper::initiate_contract_swap(
+	// 						swap_details.from,
+	// 						swap_details.to,
+	// 						swap_details.deposit_amount,
+	// 						swap_details.destination_address,
+	// 						swap_details.tx_hash,
+	// 					);
+	// 					contract_swap_account
+	// 				})
+	// 				.collect::<Vec<_>>(),
+	// 		)
+	// 	});
+	// 	confirm_closed_accounts
+	// 		.into_iter()
+	// 		.for_each(SolanaClosedContractSwapAccounts::<T>::remove);
+	// }
 
 	#[allow(dead_code)]
 	fn get_all_sol_contract_swap_accounts() -> Vec<ContractSwapAccountAndSender> {
@@ -862,12 +860,4 @@ impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 	fn get_network_environment() -> NetworkEnvironment {
 		Self::network_environment()
 	}
-}
-
-pub struct SolanaContractSwapDetails {
-	from: Asset,
-	to: Asset,
-	deposit_amount: AssetAmount,
-	destination_address: EncodedAddress,
-	tx_hash: TransactionHash,
 }

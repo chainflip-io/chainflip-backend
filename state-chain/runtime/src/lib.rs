@@ -270,7 +270,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
 	type SolanaVaultKeyWitnessedHandler = SolanaVault;
 	type SolanaNonceWatch = SolanaNonceTrackingTrigger;
-	type CloseSolanaContractSwapAccounts = SolanaApi<SolEnvironment>;
+	type CloseSolanaVaultSwapAccounts = SolanaApi<SolEnvironment>;
 	type SolanaBroadcaster = SolanaBroadcaster;
 	type SolanaContractSwapper = SolanaContractSwapper;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;

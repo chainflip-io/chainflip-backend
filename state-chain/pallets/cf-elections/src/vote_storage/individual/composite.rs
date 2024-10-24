@@ -81,3 +81,4 @@ generate_individual_vote_storage_tuple_impls!(tuple_2_impls: (A, B));
 generate_individual_vote_storage_tuple_impls!(tuple_3_impls: (A, B, C));
 generate_individual_vote_storage_tuple_impls!(tuple_4_impls: (A, B, C, D));
 generate_individual_vote_storage_tuple_impls!(tuple_5_impls: (A, B, C, D, EE));
+generate_individual_vote_storage_tuple_impls!(tuple_6_impls: (A, B, C, D, EE, FF));

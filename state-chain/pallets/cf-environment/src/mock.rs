@@ -9,8 +9,7 @@ use cf_chains::{
 		api::{ContractSwapAccountAndSender, SolanaTransactionBuildingError},
 		SolanaCrypto,
 	},
-	ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, CloseSolanaContractSwapAccounts, Polkadot,
-	Solana,
+	ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, CloseSolanaVaultSwapAccounts, Polkadot, Solana,
 };
 use cf_primitives::SemVer;
 use cf_traits::{
@@ -166,11 +165,11 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Encode, Decode, TypeInfo)]
-pub struct MockCloseSolanaContractSwapAccounts {
+pub struct MockCloseSolanaVaultSwapAccounts {
 	contract_swap_accounts_and_senders: Vec<ContractSwapAccountAndSender>,
 }
 
-impl CloseSolanaContractSwapAccounts for MockCloseSolanaContractSwapAccounts {
+impl CloseSolanaVaultSwapAccounts for MockCloseSolanaVaultSwapAccounts {
 	fn new_unsigned(
 		accounts: Vec<ContractSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
@@ -178,7 +177,7 @@ impl CloseSolanaContractSwapAccounts for MockCloseSolanaContractSwapAccounts {
 	}
 }
 
-impl ApiCall<SolanaCrypto> for MockCloseSolanaContractSwapAccounts {
+impl ApiCall<SolanaCrypto> for MockCloseSolanaVaultSwapAccounts {
 	fn threshold_signature_payload(
 		&self,
 	) -> <<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload {
@@ -236,8 +235,8 @@ impl pallet_cf_environment::Config for Test {
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
 	type SolanaVaultKeyWitnessedHandler = MockSolanaVaultKeyWitnessedHandler;
 	type SolanaNonceWatch = ();
-	type CloseSolanaContractSwapAccounts = MockCloseSolanaContractSwapAccounts;
-	type SolanaBroadcaster = MockBroadcaster<(MockCloseSolanaContractSwapAccounts, RuntimeCall)>;
+	type CloseSolanaVaultSwapAccounts = MockCloseSolanaVaultSwapAccounts;
+	type SolanaBroadcaster = MockBroadcaster<(MockCloseSolanaVaultSwapAccounts, RuntimeCall)>;
 	type SolanaContractSwapper = MockSolanaContractSwapper;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type BitcoinKeyProvider = MockBitcoinKeyProvider;
