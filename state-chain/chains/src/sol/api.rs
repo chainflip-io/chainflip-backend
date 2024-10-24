@@ -4,6 +4,7 @@ use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sol_prim::consts::SOL_USDC_DECIMAL;
 use sp_core::RuntimeDebug;
 use sp_std::{vec, vec::Vec};
@@ -18,9 +19,9 @@ use crate::{
 		SolAsset, SolHash, SolTransaction, SolanaCrypto,
 	},
 	AllBatch, AllBatchError, ApiCall, CcmChannelMetadata, Chain, ChainCrypto, ChainEnvironment,
-	ConsolidateCall, ConsolidationError, ExecutexSwapAndCall, ExecutexSwapAndCallError,
-	FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey, SetGovKeyWithAggKey, Solana,
-	TransferAssetParams, TransferFallback, TransferFallbackError,
+	CloseSolanaVaultSwapAccounts, ConsolidateCall, ConsolidationError, ExecutexSwapAndCall,
+	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, SetAggKeyWithAggKey,
+	SetGovKeyWithAggKey, Solana, TransferAssetParams, TransferFallback, TransferFallbackError,
 };
 
 use cf_primitives::{EgressId, ForeignChain};
@@ -37,7 +38,25 @@ pub struct ApiEnvironment;
 pub struct CurrentAggKey;
 
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
-pub type EventAccountAndSender = (SolAddress, SolAddress);
+
+#[derive(
+	Clone,
+	Encode,
+	Decode,
+	PartialEq,
+	Debug,
+	TypeInfo,
+	Copy,
+	Serialize,
+	Deserialize,
+	Ord,
+	PartialOrd,
+	Eq,
+)]
+pub struct ContractSwapAccountAndSender {
+	pub contract_swap_account: SolAddress,
+	pub swap_sender: SolAddress,
+}
 
 /// Super trait combining all Environment lookups required for the Solana chain.
 /// Also contains some calls for easy data retrieval.
@@ -519,6 +538,14 @@ impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
 		_transfer_param: TransferAssetParams<Solana>,
 	) -> Result<Self, TransferFallbackError> {
 		Err(TransferFallbackError::Unsupported)
+	}
+}
+
+impl<Env: 'static + SolanaEnvironment> CloseSolanaVaultSwapAccounts for SolanaApi<Env> {
+	fn new_unsigned(
+		accounts: Vec<ContractSwapAccountAndSender>,
+	) -> Result<Self, SolanaTransactionBuildingError> {
+		Self::batch_close_contract_swap_accounts(accounts)
 	}
 }
 

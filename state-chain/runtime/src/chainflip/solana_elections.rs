@@ -12,8 +12,14 @@ use cf_chains::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Chainflip,
-	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
+	instances::ChainInstanceAlias,
+	offence_reporting::OffenceReporter,
+	sol::{
+		api::{SolanaApi, SolanaTransactionBuildingError},
+		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
+	},
+	AdjustedFeeEstimationApi, Broadcaster, Chain, Chainflip, ElectionEgressWitnesser,
+	FeeEstimationApi, GetBlockHeight, IngressSource, Solana, SolanaNonceWatch,
 };
 
 use codec::{Decode, Encode};
@@ -22,15 +28,25 @@ use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
 	electoral_systems::{
 		self,
-		composite::{tuple_6_impls::Hooks, CompositeRunner},
+		change::OnChangeHook,
+		composite::{tuple_6_impls::Hooks, Composite, CompositeRunner, Translator},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
+		solana_swap_accounts_tracking::{
+			SolanaVaultSwapAccountsHook, SolanaVaultSwapsElectoralState,
+		},
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
 
+use crate::{RuntimeOrigin, SolanaIngressEgress};
+use cf_chains::{
+	address::EncodedAddress, assets::any::Asset, sol::api::ContractSwapAccountAndSender,
+	CloseSolanaVaultSwapAccounts,
+};
+use cf_primitives::{AssetAmount, TransactionHash};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
@@ -39,6 +55,8 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
 use sol_prim::SlotNumber;
+
+use super::SolEnvironment;
 
 type Instance = <Solana as ChainInstanceAlias>::Instance;
 
@@ -50,6 +68,7 @@ pub type SolanaElectoralSystemRunner = CompositeRunner<
 		SolanaNonceTracking,
 		SolanaEgressWitnessing,
 		SolanaLiveness,
+		SolanaVaultSwapTracking,
 	),
 	<Runtime as Chainflip>::ValidatorId,
 	RunnerStorageAccess<Runtime, SolanaInstance>,
@@ -74,6 +93,11 @@ pub fn initial_state(
 			(),
 			(),
 			(),
+			SolanaVaultSwapsElectoralState {
+				block_number_last_closed_accounts: 0,
+				witnessed_open_accounts: vec![],
+				closure_initiated_accounts: vec![],
+			},
 		),
 		unsynchronised_settings: (
 			(),
@@ -90,6 +114,7 @@ pub fn initial_state(
 			(),
 			(),
 			LIVENESS_CHECK_DURATION,
+			(),
 		),
 	}
 }
@@ -145,6 +170,16 @@ impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHoo
 		Reputation::report_many(Offence::FailedLivenessCheck(ForeignChain::Solana), validator_ids);
 	}
 }
+pub type SolanaVaultSwapTracking =
+	electoral_systems::solana_swap_accounts_tracking::SolanaVaultSwapAccounts<
+		ContractSwapAccountAndSender,
+		SolanaVaultSwapDetails,
+		BlockNumberFor<Runtime>,
+		(),
+		SolanaVaultSwapsHandler,
+		<Runtime as Chainflip>::ValidatorId,
+		SolanaTransactionBuildingError,
+	>;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
 pub struct TransactionSuccessDetails {
@@ -227,6 +262,7 @@ impl
 		SolanaNonceTracking,
 		SolanaEgressWitnessing,
 		SolanaLiveness,
+		SolanaVaultSwapTracking,
 	> for SolanaElectionHooks
 {
 	fn on_finalize(
@@ -237,6 +273,7 @@ impl
 			nonce_tracking_identifiers,
 			egress_witnessing_identifiers,
 			liveness_identifiers,
+			vault_swap_identifiers,
 		): (
 			Vec<
 				ElectionIdentifier<
@@ -262,8 +299,14 @@ impl
 				>,
 			>,
 			Vec<ElectionIdentifier<<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra>>,
+			Vec<
+				ElectionIdentifier<
+					<SolanaVaultSwapTracking as ElectoralSystem>::ElectionIdentifierExtra,
+				>,
+			>,
 		),
 	) -> Result<(), CorruptStorageError> {
+		let current_SC_block_number = crate::System::block_number();
 		let block_height = SolanaBlockHeightTracking::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -273,7 +316,7 @@ impl
 		>(block_height_identifiers, &())?;
 		SolanaLiveness::on_finalize::<
 			DerivedElectoralAccess<_, SolanaLiveness, RunnerStorageAccess<Runtime, SolanaInstance>>,
-		>(liveness_identifiers, &(crate::System::block_number(), block_height))?;
+		>(liveness_identifiers, &(current_sc_block_number, block_height))?;
 		SolanaFeeTracking::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -302,6 +345,13 @@ impl
 				RunnerStorageAccess<Runtime, SolanaInstance>,
 			>,
 		>(ingress_identifiers, &block_height)?;
+		SolanaVaultSwapTracking::on_finalize::<
+			DerivedElectoralAccess<
+				_,
+				SolanaVaultSwapTracking,
+				RunnerStorageAccess<Runtime, SolanaInstance>,
+			>,
+		>(vault_swap_identifiers, current_sc_block_number)?;
 		Ok(())
 	}
 }
@@ -470,5 +520,52 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 				>,
 			>(signature)
 		})
+	}
+}
+
+#[derive(
+	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, PartialOrd, Ord,
+)]
+pub struct SolanaVaultSwapDetails {
+	from: Asset,
+	to: Asset,
+	deposit_amount: AssetAmount,
+	destination_address: EncodedAddress,
+	tx_hash: TransactionHash,
+}
+pub struct SolanaVaultSwapsHandler;
+
+impl
+	SolanaVaultSwapAccountsHook<
+		ContractSwapAccountAndSender,
+		SolanaVaultSwapDetails,
+		SolanaTransactionBuildingError,
+	> for SolanaVaultSwapsHandler
+{
+	fn initiate_vault_swap(swap_details: SolanaVaultSwapDetails) {
+		let _ = SolanaIngressEgress::contract_swap_request(
+			RuntimeOrigin::root(),
+			swap_details.from,
+			swap_details.to,
+			swap_details.deposit_amount,
+			swap_details.destination_address,
+			swap_details.tx_hash,
+		);
+	}
+
+	fn close_accounts(
+		accounts: Vec<ContractSwapAccountAndSender>,
+	) -> Result<(), SolanaTransactionBuildingError> {
+		<SolanaApi<SolEnvironment> as CloseSolanaVaultSwapAccounts>::new_unsigned(accounts).map(
+			|apicall| {
+				let _ = <SolanaBroadcaster as Broadcaster<Solana>>::threshold_sign_and_broadcast(
+					apicall,
+				);
+			},
+		)
+	}
+
+	fn get_number_of_available_sol_nonce_accounts() -> usize {
+		Environment::get_number_of_available_sol_nonce_accounts()
 	}
 }

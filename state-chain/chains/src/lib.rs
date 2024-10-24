@@ -489,6 +489,12 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 	) -> Self;
 }
 
+pub trait CloseSolanaVaultSwapAccounts: ApiCall<<Solana as Chain>::ChainCrypto> {
+	fn new_unsigned(
+		accounts: Vec<ContractSwapAccountAndSender>,
+	) -> Result<Self, SolanaTransactionBuildingError>;
+}
+
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
 pub enum AllBatchError {
 	/// Empty transaction - the call is not required.

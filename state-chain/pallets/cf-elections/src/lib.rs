@@ -136,6 +136,7 @@ pub mod pallet {
 	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_primitives::{AuthorityCount, EpochIndex};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
+	use frame_support::sp_runtime::traits::{Header, HeaderProvider};
 
 	use crate::electoral_system::ConsensusStatus;
 	pub use access_impls::RunnerStorageAccess;
