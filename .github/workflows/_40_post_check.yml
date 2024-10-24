@@ -3,7 +3,7 @@ name: Post build checks
 on:
   workflow_call:
     inputs:
-      full_bouncer:
+      full-bouncer:
         type: boolean
         default: false
       timeout-minutes:
@@ -122,7 +122,7 @@ jobs:
         run: python3 ./ci/scripts/get_ngrok_urls.py
 
       - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
-        if: inputs.full_bouncer
+        if: inputs.full-bouncer
         working-directory: bouncer
         run: |
           ./full_bouncer.sh
@@ -130,7 +130,7 @@ jobs:
           ./commands/run_test.ts ./tests/delta_based_ingress.ts ./../ ./../localnet/init
 
       - name: Run HeuteLeiderNicht.einfach.exe 🦺
-        if: ${{ ! inputs.full_bouncer }}
+        if: ${{ ! inputs.full-bouncer }}
         working-directory: bouncer
         run: |
           ./run.sh
