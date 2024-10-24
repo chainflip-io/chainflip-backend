@@ -279,12 +279,9 @@ pub trait RunnerStorageAccessTrait {
 	>;
 	fn unsynchronised_state_map(
 			key: &<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapKey,
-		) -> Result<
-			Option<
+		) -> Option<
 				<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
-			>,
-			CorruptStorageError,
-		>;
+			>;
 
 	fn new_election(
 		extra: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectionIdentifierExtra,
@@ -294,7 +291,7 @@ pub trait RunnerStorageAccessTrait {
 
 	fn set_unsynchronised_state(
 		unsynchronised_state: <Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
-	) -> Result<(), CorruptStorageError>;
+	);
 
 	/// Inserts or removes a value from the unsynchronised state map of the electoral system.
 	fn set_unsynchronised_state_map(
@@ -302,7 +299,7 @@ pub trait RunnerStorageAccessTrait {
 		value: Option<
 				<Self::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedStateMapValue,
 			>,
-	) -> Result<(), CorruptStorageError>;
+	);
 
 	/// Allows you to mutate the unsynchronised state. This is more efficient than a read
 	/// (`unsynchronised_state`) and then a write (`set_unsynchronised_state`) in the case of
@@ -320,7 +317,7 @@ pub trait RunnerStorageAccessTrait {
 	) -> Result<T, CorruptStorageError> {
 		let mut unsynchronised_state = Self::unsynchronised_state()?;
 		let t = f(self, &mut unsynchronised_state)?;
-		Self::set_unsynchronised_state(unsynchronised_state)?;
+		Self::set_unsynchronised_state(unsynchronised_state);
 		Ok(t)
 	}
 }

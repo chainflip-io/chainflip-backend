@@ -181,9 +181,8 @@ impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
 		value: Option<
 			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
 		>,
-	) -> Result<(), CorruptStorageError> {
+	) {
 		MockStorageAccess::set_unsynchronised_state_map::<ES>(key, value);
-		Ok(())
 	}
 }
 

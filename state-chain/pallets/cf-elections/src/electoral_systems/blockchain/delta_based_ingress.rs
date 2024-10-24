@@ -236,7 +236,7 @@ where
 							ElectoralAccess::set_unsynchronised_state_map(
 								(account.clone(), details.asset),
 								Some(ingress_total),
-							)?;
+							);
 						},
 						Ordering::Greater => {
 							Sink::on_ingress_reverted(

@@ -125,7 +125,7 @@ impl<
 				if previous_value != value && block_height > previous_block_height {
 					election_access.delete();
 					Hook::on_change(identifier.clone(), value);
-					ElectoralAccess::set_unsynchronised_state_map(identifier, Some(block_height))?;
+					ElectoralAccess::set_unsynchronised_state_map(identifier, Some(block_height));
 				} else {
 					// We don't expect this to be hit, since we should have filtered out any votes
 					// that would cause this in check_consensus.

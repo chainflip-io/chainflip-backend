@@ -379,7 +379,7 @@ mod access {
 			value: Option<
 				<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
 			>,
-		) -> Result<(), CorruptStorageError>;
+		);
 
 		/// Allows you to mutate the unsynchronised state. This is more efficient than a read
 		/// (`unsynchronised_state`) and then a write (`set_unsynchronised_state`) in the case of
