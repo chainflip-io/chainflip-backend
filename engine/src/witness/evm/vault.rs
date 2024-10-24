@@ -1,9 +1,8 @@
+use crate::evm::retry_rpc::EvmRetryRpcApi;
 use codec::Decode;
 use ethers::types::Bloom;
 use sp_core::H256;
 use std::collections::HashMap;
-
-use crate::evm::retry_rpc::EvmRetryRpcApi;
 
 use super::{
 	super::common::{
@@ -307,7 +306,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								process_call(call, epoch.index).await;
 							},
 						Err(message) => {
-							tracing::error!("Ignoring vault contract event: {message}");
+							tracing::warn!("Ignoring vault contract event: {message}");
 						},
 					}
 				}
