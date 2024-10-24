@@ -21,6 +21,7 @@ impl Config for StateChainConfig {
 			signed_extensions::CheckMortality<Self>,
 			signed_extensions::ChargeAssetTxPayment<Self>,
 			signed_extensions::ChargeTransactionPayment,
+			signed_extensions::CheckMetadataHash,
 		),
 	>;
 }

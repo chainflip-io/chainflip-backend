@@ -1,13 +1,14 @@
 use super::*;
 use cf_chains::{address::ToHumanreadableAddress, instances::ChainInstanceFor, Chain};
 use cf_primitives::{chains::assets::any, AssetAmount, EpochIndex, FlipBalance};
+use cf_utilities::task_scope;
 use chainflip_engine::state_chain_observer::client::{
 	chain_api::ChainApi, storage_api::StorageApi,
 };
 use codec::Decode;
 use custom_rpc::CustomApiClient;
 use frame_support::sp_runtime::DigestItem;
-use jsonrpsee::core::RpcResult;
+use jsonrpsee::core::ClientError;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use pallet_cf_validator::RotationPhase;
 use serde::Deserialize;
@@ -15,7 +16,8 @@ use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
 use state_chain_runtime::runtime_apis::FailingWitnessValidators;
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use tracing::log;
-use utilities::task_scope;
+
+type RpcResult<T> = Result<T, ClientError>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo<C: Chain> {

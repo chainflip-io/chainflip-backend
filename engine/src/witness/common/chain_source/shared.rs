@@ -1,9 +1,9 @@
-use futures_util::StreamExt;
-use tokio::sync::oneshot;
-use utilities::{
+use cf_utilities::{
 	loop_select, spmc,
 	task_scope::{Scope, UnwrapOrCancel},
 };
+use futures_util::StreamExt;
+use tokio::sync::oneshot;
 
 use crate::witness::common::ExternalChainSource;
 

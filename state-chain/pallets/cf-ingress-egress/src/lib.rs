@@ -316,7 +316,7 @@ pub mod pallet {
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
-			refund_address: ForeignChainAddress,
+			refund_address: Option<ForeignChainAddress>,
 		},
 		CcmTransfer {
 			destination_asset: Asset,
@@ -2020,7 +2020,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
 				ChannelAction::CcmTransfer { refund_params, .. } =>
 					refund_params.as_ref().map(|refund_params| refund_params.refund_address.clone()),
-				ChannelAction::LiquidityProvision { refund_address, .. } => Some(refund_address),
+				ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
 			};
 
 			let tainted_transaction_details = TaintedTransactionDetails {
@@ -2440,7 +2440,10 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		let (channel_id, deposit_address, expiry_block, channel_opening_fee) = Self::open_channel(
 			&lp_account,
 			source_asset,
-			ChannelAction::LiquidityProvision { lp_account: lp_account.clone(), refund_address },
+			ChannelAction::LiquidityProvision {
+				lp_account: lp_account.clone(),
+				refund_address: Some(refund_address),
+			},
 			boost_fee,
 		)?;
 

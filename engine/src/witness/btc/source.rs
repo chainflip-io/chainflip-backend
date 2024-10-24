@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use bitcoin::BlockHash;
+use cf_utilities::make_periodic_tick;
 use futures_util::stream;
-use utilities::make_periodic_tick;
 
 use crate::{
 	btc::retry_rpc::BtcRetryRpcApi,

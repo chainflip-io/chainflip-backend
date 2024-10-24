@@ -5,9 +5,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{evm::DepositDetails, Ethereum};
 use cf_primitives::{chains::assets::eth, EpochIndex};
+use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use sp_core::H160;
-use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,

@@ -7,8 +7,8 @@ use cf_chains::{
 	sol::{SolAddress, SolHash, SolSignature},
 	Solana,
 };
+use cf_utilities::{make_periodic_tick, task_scope::Scope};
 use core::time::Duration;
-use utilities::{make_periodic_tick, task_scope::Scope};
 
 use anyhow::{anyhow, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
@@ -314,9 +314,9 @@ pub mod mocks {
 #[cfg(test)]
 mod tests {
 	use cf_chains::Chain;
+	use cf_utilities::task_scope::task_scope;
 	use futures::FutureExt;
 	use std::str::FromStr;
-	use utilities::task_scope::task_scope;
 
 	use super::*;
 

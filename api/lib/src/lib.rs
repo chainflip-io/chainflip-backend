@@ -51,11 +51,11 @@ pub mod queries;
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
+use cf_utilities::{clean_hex_address, rpc::NumberOrHex, task_scope::Scope};
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
 };
-use utilities::{clean_hex_address, rpc::NumberOrHex, task_scope::Scope};
 
 lazy_static::lazy_static! {
 	static ref API_VERSION: SemVer = SemVer {
@@ -397,7 +397,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Affiliates<AccountId32>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: Option<RefundParameters>,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
@@ -418,7 +418,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					broker_commission,
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
-					affiliate_fees,
+					affiliate_fees: affiliate_fees.unwrap_or_default(),
 					refund_parameters: refund_parameters
 						.map(|rpc_params| {
 							Ok::<_, anyhow::Error>(ChannelRefundParametersGeneric {
@@ -526,15 +526,15 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 	async fn request_swap_parameter_encoding(
 		&self,
-		input_asset: Asset,
-		output_asset: Asset,
-		output_address: AddressString,
-		retry_duration: BlockNumber,
-		min_output_amount: AssetAmount,
-		boost_fee: Option<BasisPoints>,
-		dca_parameters: Option<DcaParameters>,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
 		broker_commission: BasisPoints,
+		min_output_amount: AssetAmount,
+		retry_duration: BlockNumber,
+		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapPayload> {
 		// Check if safe mode is active
 		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;
@@ -566,12 +566,12 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		}
 
 		// Encode swap
-		match ForeignChain::from(input_asset) {
+		match ForeignChain::from(source_asset) {
 			ForeignChain::Bitcoin => {
 				let params = UtxoEncodedData {
-					output_asset,
-					output_address: output_address
-						.try_parse_to_encoded_address(output_asset.into())?,
+					output_asset: destination_asset,
+					output_address: destination_address
+						.try_parse_to_encoded_address(destination_asset.into())?,
 					parameters: SharedCfParameters {
 						retry_duration: retry_duration.try_into()?,
 						min_output_amount,

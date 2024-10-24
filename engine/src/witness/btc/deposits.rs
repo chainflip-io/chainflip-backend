@@ -4,7 +4,6 @@ use cf_primitives::EpochIndex;
 use futures_core::Future;
 use itertools::Itertools;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
-use secp256k1::hashes::Hash as secp256k1Hash;
 use state_chain_runtime::BitcoinInstance;
 
 use super::super::common::chunked_chain_source::chunked_by_vault::{
@@ -17,7 +16,7 @@ use crate::{
 		RuntimeHasChain,
 	},
 };
-use bitcoin::BlockHash;
+use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::{
 	assets::btc,
 	btc::{deposit_address::DepositAddress, BtcDepositDetails, UtxoId},
@@ -207,7 +206,7 @@ pub mod tests {
 			},
 			action: ChannelAction::<AccountId32>::LiquidityProvision {
 				lp_account: AccountId32::new([0xab; 32]),
-				refund_address: ForeignChainAddress::Btc(ScriptPubkey::P2PKH([0; 20])),
+				refund_address: Some(ForeignChainAddress::Btc(ScriptPubkey::P2PKH([0; 20]))),
 			},
 			boost_fee: 0,
 			boost_status: BoostStatus::NotBoosted,

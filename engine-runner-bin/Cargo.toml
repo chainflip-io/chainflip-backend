@@ -4,11 +4,11 @@ description = "The central runner for the chainflip engine, it requires two shar
 # NB: When updating this version, you must update the debian assets appropriately too.
 version = "1.7.0"
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
-build = 'build.rs'
-edition = '2021'
-license = '<TODO>'
+build = "build.rs"
+edition = "2021"
+license = "<TODO>"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.deb]
 assets = [
@@ -63,16 +63,16 @@ maintainer-scripts = "package/berghain"
 
 [dependencies]
 # Ensures correct compilation order. We want to compile the engine dylib first, then the runner.
-cf-engine-dylib = { path = "../engine-dylib" }
-engine-upgrade-utils = { path = "../engine-upgrade-utils" }
-engine-proc-macros = { path = "../engine-proc-macros" }
-anyhow = "1.0"
+cf-engine-dylib = { workspace = true }
+engine-upgrade-utils = { workspace = true }
+engine-proc-macros = { workspace = true }
+anyhow = { workspace = true }
 
 [dev-dependencies]
-assert_cmd = "2.0.14"
-predicates = "3.0.3"
-tempfile = "3.7.0"
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+tempfile = { workspace = true }
 
 [build-dependencies]
-engine-upgrade-utils = { path = "../engine-upgrade-utils" }
-reqwest = { version = "0.11.4", features = ["blocking"] }
+engine-upgrade-utils = { workspace = true }
+reqwest = { workspace = true, features = ["blocking"] }

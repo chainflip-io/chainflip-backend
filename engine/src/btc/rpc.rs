@@ -11,8 +11,8 @@ use serde_json::{json, Map};
 use bitcoin::{
 	absolute, block::Version, Amount, BlockHash, ScriptBuf, Sequence, Transaction, Txid,
 };
+use cf_utilities::make_periodic_tick;
 use tracing::error;
-use utilities::make_periodic_tick;
 
 use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, settings::HttpBasicAuthEndpoint};
 
@@ -373,7 +373,7 @@ impl BtcRpcApi for BtcRpcClient {
 	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid> {
 		let tx: Transaction = bitcoin::consensus::encode::deserialize(&transaction_bytes)
 			.map_err(|_| anyhow!("Failed to deserialize transaction"))?;
-		let derived_txid = tx.txid();
+		let derived_txid = tx.compute_txid();
 
 		match call_rpc_raw(
 			&self.client,
@@ -463,7 +463,7 @@ impl BtcRpcApi for BtcRpcClient {
 #[cfg(test)]
 mod tests {
 
-	use utilities::testing::logging::init_test_logger;
+	use cf_utilities::testing::logging::init_test_logger;
 
 	use super::*;
 
