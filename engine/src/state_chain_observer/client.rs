@@ -16,7 +16,7 @@ use futures::{StreamExt, TryStreamExt};
 use cf_primitives::CfeCompatibility;
 use futures_core::future::BoxFuture;
 use futures_util::FutureExt;
-use jsonrpsee::core::RpcResult;
+use jsonrpsee::core::ClientError;
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::{pin::Pin, sync::Arc, time::Duration};
@@ -84,6 +84,7 @@ impl From<state_chain_runtime::Header> for BlockInfo {
 }
 
 pub type DefaultRpcClient = base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>;
+pub(crate) type RpcResult<T> = Result<T, ClientError>;
 
 impl DefaultRpcClient {
 	pub async fn connect(ws_endpoint: &str) -> Result<Self> {
@@ -1050,6 +1051,7 @@ impl<
 
 #[cfg(test)]
 pub mod mocks {
+	use super::RpcResult;
 	use crate::state_chain_observer::client::{
 		extrinsic_api::{signed::SignedExtrinsicApi, unsigned::UnsignedExtrinsicApi},
 		storage_api::StorageApi,
@@ -1057,7 +1059,6 @@ pub mod mocks {
 	};
 	use async_trait::async_trait;
 	use frame_support::storage::types::QueryKindTrait;
-	use jsonrpsee::core::RpcResult;
 	use mockall::mock;
 	use sp_core::{storage::StorageKey, H256};
 	use state_chain_runtime::AccountId;
