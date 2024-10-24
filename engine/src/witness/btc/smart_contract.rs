@@ -140,11 +140,11 @@ pub fn try_extract_contract_call(
 			deposit_address: vault_address.clone(),
 		}),
 		broker_fees: Default::default(),
-		refund_params: Some(ChannelRefundParameters {
+		refund_params: Some(Box::new(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration as u32,
 			refund_address: ForeignChainAddress::Btc(refund_address),
 			min_price,
-		}),
+		})),
 		dca_params: Some(DcaParameters {
 			number_of_chunks: data.parameters.number_of_chunks as u32,
 			chunk_interval: data.parameters.chunk_interval as u32,
@@ -278,14 +278,14 @@ mod tests {
 					deposit_address: vault_deposit_address,
 				}),
 				broker_fees: Default::default(),
-				refund_params: Some(ChannelRefundParameters {
+				refund_params: Some(Box::new(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),
 					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
 						DEPOSIT_AMOUNT.into(),
 					)),
-				}),
+				})),
 				dca_params: Some(DcaParameters {
 					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks as u32,
 					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval as u32,

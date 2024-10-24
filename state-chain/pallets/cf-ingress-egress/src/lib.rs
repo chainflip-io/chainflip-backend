@@ -1198,7 +1198,7 @@ pub mod pallet {
 			tx_hash: TransactionHash,
 			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
 			broker_fees: Beneficiaries<T::AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<Box<ChannelRefundParameters>>,
 			dca_params: Option<DcaParameters>,
 			// This is only to be checked in the pre-witnessed version (not implemented yet)
 			boost_fee: BasisPoints,
@@ -1214,7 +1214,8 @@ pub mod pallet {
 				tx_hash,
 				*deposit_details,
 				broker_fees,
-				refund_params,
+				refund_params.map(|boxed| *boxed),
+				// refund_params.as_ref(),
 				dca_params,
 				boost_fee,
 			);
@@ -1234,7 +1235,7 @@ pub mod pallet {
 			tx_hash: TransactionHash,
 			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
 			broker_fees: Beneficiaries<T::AccountId>,
-			refund_params: Option<ChannelRefundParameters>,
+			refund_params: Option<Box<ChannelRefundParameters>>,
 			dca_params: Option<DcaParameters>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
@@ -1249,7 +1250,7 @@ pub mod pallet {
 				tx_hash,
 				*deposit_details,
 				broker_fees,
-				refund_params,
+				refund_params.map(|boxed| *boxed),
 				dca_params,
 				boost_fee,
 			);
