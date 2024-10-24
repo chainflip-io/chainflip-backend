@@ -65,8 +65,11 @@ where
 			)?;
 			Ok(Some((hash, response.context.slot)))
 		},
-		Some(_) =>
-			Err(anyhow!("Nonce data account encoding is not JsonParsed: {:?}", account_info)),
+		Some(_) => Err(anyhow!(
+			"Nonce data account encoding is not JsonParsed for account {:?}: {:?}",
+			nonce_account,
+			account_info
+		)),
 		None => Ok(None),
 	}
 }
