@@ -689,8 +689,17 @@ where
 										{
 											(
 												collected.fees - previous_collected.fees,
-												collected.sold_amount -
-													previous_collected.sold_amount,
+												collected
+													.sold_amount
+													.checked_sub(previous_collected.sold_amount)
+													.unwrap_or_else(|| {
+														log::info!(
+															"Ignored dust sold_amount underflow. Current: {}, Previous: {}",
+															collected.sold_amount,
+															previous_collected.sold_amount
+														);
+														0.into()
+													}),
 												collected.bought_amount -
 													previous_collected.bought_amount,
 											)
