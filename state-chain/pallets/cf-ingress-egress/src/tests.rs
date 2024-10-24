@@ -1788,6 +1788,7 @@ fn can_request_swap_via_extrinsic() {
 			OUTPUT_ASSET,
 			INPUT_AMOUNT,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
+			None,
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
 			Default::default(),
@@ -1830,13 +1831,13 @@ fn can_request_ccm_swap_via_extrinsic() {
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
-		assert_ok!(IngressEgress::contract_ccm_swap_request(
+		assert_ok!(IngressEgress::contract_swap_request(
 			RuntimeOrigin::root(),
 			INPUT_ASSET.try_into().unwrap(),
-			10_000,
 			OUTPUT_ASSET,
+			10_000,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
-			ccm_deposit_metadata.clone(),
+			Some(ccm_deposit_metadata.clone()),
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
 			Default::default(),
@@ -1882,6 +1883,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			Asset::Dot,
 			10000,
 			btc_encoded_address,
+			None,
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Default::default(),
@@ -1900,6 +1902,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			Asset::Btc,
 			10000,
 			EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
+			None,
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Default::default(),
@@ -1928,13 +1931,13 @@ fn failed_ccm_deposit_can_deposit_event() {
 
 	new_test_ext().execute_with(|| {
 		// CCM is not supported for Dot:
-		assert_ok!(IngressEgress::contract_ccm_swap_request(
+		assert_ok!(IngressEgress::contract_swap_request(
 			RuntimeOrigin::root(),
 			EthAsset::Flip,
-			10_000,
 			Asset::Dot,
+			10_000,
 			EncodedAddress::Dot(Default::default()),
-			ccm_deposit_metadata.clone(),
+			Some(ccm_deposit_metadata.clone()),
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Default::default(),
@@ -1954,13 +1957,13 @@ fn failed_ccm_deposit_can_deposit_event() {
 		System::reset_events();
 
 		// Insufficient deposit amount:
-		assert_ok!(IngressEgress::contract_ccm_swap_request(
+		assert_ok!(IngressEgress::contract_swap_request(
 			RuntimeOrigin::root(),
 			EthAsset::Flip,
-			GAS_BUDGET - 1,
 			Asset::Eth,
+			GAS_BUDGET - 1,
 			EncodedAddress::Eth(Default::default()),
-			ccm_deposit_metadata,
+			Some(ccm_deposit_metadata),
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Default::default(),

@@ -572,12 +572,12 @@ fn can_process_ccm_via_direct_deposit() {
 		let deposit_amount = 100_000_000_000;
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-				source_asset: EthAsset::Flip,
+			pallet_cf_ingress_egress::Call::contract_swap_request {
+				input_asset: EthAsset::Flip,
+				output_asset: Asset::Usdc,
 				deposit_amount,
-				destination_asset: Asset::Usdc,
 				destination_address: EncodedAddress::Eth([0x02; 20]),
-				deposit_metadata: ccm_deposit_metadata_mock(),
+				deposit_metadata: Some(ccm_deposit_metadata_mock()),
 				tx_hash: Default::default(),
 				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
 				broker_fees: Default::default(),
@@ -623,11 +623,12 @@ fn failed_swaps_are_rolled_back() {
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::contract_swap_request {
-				from: EthAsset::Eth,
-				to: Asset::Flip,
+				input_asset: EthAsset::Eth,
+				output_asset: Asset::Flip,
 				deposit_amount: 10_000 * DECIMALS,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				tx_hash: Default::default(),
+				deposit_metadata: None,
 				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
 				broker_fees: Default::default(),
 				refund_params: None,
@@ -783,12 +784,12 @@ fn can_resign_failed_ccm() {
 			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
 			witness_call(RuntimeCall::EthereumIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: EthAsset::Flip,
+				pallet_cf_ingress_egress::Call::contract_swap_request {
+					input_asset: EthAsset::Flip,
+					output_asset: Asset::Usdc,
 					deposit_amount: 10_000_000_000_000,
-					destination_asset: Asset::Usdc,
 					destination_address: EncodedAddress::Eth([0x02; 20]),
-					deposit_metadata: ccm_deposit_metadata_mock(),
+					deposit_metadata: Some(ccm_deposit_metadata_mock()),
 					tx_hash: Default::default(),
 					deposit_details: Box::new(DepositDetails { tx_hashes: None }),
 					broker_fees: Default::default(),

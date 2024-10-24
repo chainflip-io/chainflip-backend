@@ -129,8 +129,8 @@ pub fn try_extract_contract_call(
 	let tx_id: [u8; 32] = tx.txid.to_byte_array();
 
 	Some(BtcIngressEgressCall::contract_swap_request {
-		from: NATIVE_ASSET,
-		to: data.output_asset,
+		input_asset: NATIVE_ASSET,
+		output_asset: data.output_asset,
 		deposit_amount,
 		destination_address: data.output_address,
 		tx_hash: tx_id,
@@ -139,6 +139,7 @@ pub fn try_extract_contract_call(
 			utxo_id: UtxoId { tx_id: tx_id.into(), vout: 0 },
 			deposit_address: vault_address.clone(),
 		}),
+		deposit_metadata: None, // No ccm for BTC (yet?)
 		broker_fees: Default::default(),
 		refund_params: Some(Box::new(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration as u32,
@@ -268,8 +269,8 @@ mod tests {
 		assert_eq!(
 			try_extract_contract_call(&tx, &vault_deposit_address),
 			Some(BtcIngressEgressCall::contract_swap_request {
-				from: NATIVE_ASSET,
-				to: MOCK_SWAP_PARAMS.output_asset,
+				input_asset: NATIVE_ASSET,
+				output_asset: MOCK_SWAP_PARAMS.output_asset,
 				deposit_amount: DEPOSIT_AMOUNT,
 				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
 				tx_hash: tx.hash.to_byte_array(),
@@ -278,6 +279,7 @@ mod tests {
 					deposit_address: vault_deposit_address,
 				}),
 				broker_fees: Default::default(),
+				deposit_metadata: None,
 				refund_params: Some(Box::new(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),

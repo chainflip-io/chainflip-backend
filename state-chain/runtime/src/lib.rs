@@ -1886,12 +1886,12 @@ impl_runtime_apis! {
 					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
 						match call {
 							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
-								from: swap_from, to: swap_to, deposit_amount, ..
+								input_asset: swap_from, output_asset: swap_to, deposit_amount, ..
 							}) if from == swap_from.into() && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
 							}
 							RuntimeCall::ArbitrumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
-								from: swap_from, to: swap_to, deposit_amount, ..
+								input_asset: swap_from, output_asset: swap_to, deposit_amount, ..
 							}) if from == swap_from.into() && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
 							}

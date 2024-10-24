@@ -300,10 +300,11 @@ mod benchmarks {
 
 		let witness_origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let call = Call::<T, I>::contract_swap_request {
-			from: Asset::Usdc.try_into().unwrap(),
-			to: Asset::Eth,
+			input_asset: Asset::Usdc.try_into().unwrap(),
+			output_asset: Asset::Eth,
 			deposit_amount: deposit_amount.into(),
 			destination_address: EncodedAddress::benchmark_value(),
+			deposit_metadata: None,
 			tx_hash: [0; 32],
 			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
 			broker_fees: Default::default(),
@@ -330,12 +331,12 @@ mod benchmarks {
 				cf_parameters: Default::default(),
 			},
 		};
-		let call = Call::<T, I>::contract_ccm_swap_request {
-			source_asset: BenchmarkValue::benchmark_value(),
+		let call = Call::<T, I>::contract_swap_request {
+			input_asset: BenchmarkValue::benchmark_value(),
 			deposit_amount: 1_000u32.into(),
-			destination_asset: Asset::Eth,
+			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::benchmark_value(),
-			deposit_metadata,
+			deposit_metadata: Some(deposit_metadata),
 			tx_hash: Default::default(),
 			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
 			broker_fees: Default::default(),

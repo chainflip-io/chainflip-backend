@@ -427,12 +427,12 @@ fn solana_ccm_fails_with_invalid_input() {
 
 			// Contract call fails with invalid CCM
 			assert_ok!(RuntimeCall::SolanaIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: SolAsset::Sol,
+				pallet_cf_ingress_egress::Call::contract_swap_request {
+					input_asset: SolAsset::Sol,
+					output_asset: Asset::SolUsdc,
 					deposit_amount: 1_000_000_000_000u64,
-					destination_asset: Asset::SolUsdc,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
-					deposit_metadata: invalid_ccm,
+					deposit_metadata: Some(invalid_ccm),
 					tx_hash: Default::default(),
 					deposit_details: Box::new(()),
 					broker_fees: Default::default(),
@@ -481,12 +481,12 @@ fn solana_ccm_fails_with_invalid_input() {
 			};
 
 			witness_call(RuntimeCall::SolanaIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: SolAsset::Sol,
+				pallet_cf_ingress_egress::Call::contract_swap_request {
+					input_asset: SolAsset::Sol,
+					output_asset: Asset::SolUsdc,
 					deposit_amount: 1_000_000_000_000u64,
-					destination_asset: Asset::SolUsdc,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
-					deposit_metadata: ccm,
+					deposit_metadata: Some(ccm),
 					tx_hash: Default::default(),
 					deposit_details: Box::new(()),
 					broker_fees: Default::default(),
@@ -705,12 +705,12 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 				},
 			};
 			witness_call(RuntimeCall::SolanaIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: SolAsset::Sol,
+				pallet_cf_ingress_egress::Call::contract_swap_request {
+					input_asset: SolAsset::Sol,
+					output_asset: Asset::SolUsdc,
 					deposit_amount: 1_000_000_000_000u64,
-					destination_asset: Asset::SolUsdc,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
-					deposit_metadata: ccm,
+					deposit_metadata: Some(ccm),
 					tx_hash: Default::default(),
 					deposit_details: Box::new(()),
 					broker_fees: Default::default(),

@@ -235,39 +235,19 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		tx_hash: TransactionHash,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
-			if let Some(deposit_metadata) = deposit_metadata {
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: source_asset.try_into().expect("invalid asset for chain"),
-					destination_asset,
-					deposit_amount,
-					destination_address,
-					deposit_metadata,
-					tx_hash,
-					deposit_details: Box::new(DepositDetails {
-						tx_hashes: Some(vec![tx_hash.into()]),
-					}),
-					broker_fees: Default::default(),
-					// TODO: use real parameters when we can decode them
-					boost_fee: 0,
-					dca_params: None,
-					refund_params: None,
-				}
-			} else {
-				pallet_cf_ingress_egress::Call::contract_swap_request {
-					from: source_asset.try_into().expect("invalid asset for chain"),
-					to: destination_asset,
-					deposit_amount,
-					destination_address,
-					tx_hash,
-					deposit_details: Box::new(DepositDetails {
-						tx_hashes: Some(vec![tx_hash.into()]),
-					}),
-					broker_fees: Default::default(),
-					// TODO: use real parameters when we can decode them
-					boost_fee: 0,
-					dca_params: None,
-					refund_params: None,
-				}
+			pallet_cf_ingress_egress::Call::contract_swap_request {
+				input_asset: source_asset.try_into().expect("invalid asset for chain"),
+				output_asset: destination_asset,
+				deposit_amount,
+				destination_address,
+				deposit_metadata,
+				tx_hash,
+				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) }),
+				broker_fees: Default::default(),
+				// TODO: use real parameters when we can decode them
+				boost_fee: 0,
+				dca_params: None,
+				refund_params: None,
 			},
 		)
 	}

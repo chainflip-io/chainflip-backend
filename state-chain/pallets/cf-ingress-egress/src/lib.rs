@@ -1187,75 +1187,36 @@ pub mod pallet {
 			Ok(())
 		}
 
+		// TODO: remove these deprecated calls after runtime version 1.8
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::contract_swap_request())]
-		pub fn contract_swap_request(
+		pub fn contract_swap_request_deprecated(
 			origin: OriginFor<T>,
-			from: TargetChainAsset<T, I>,
-			to: Asset,
-			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
-			destination_address: EncodedAddress,
-			tx_hash: TransactionHash,
-			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
-			broker_fees: Beneficiaries<T::AccountId>,
-			refund_params: Option<Box<ChannelRefundParameters>>,
-			dca_params: Option<DcaParameters>,
-			// This is only to be checked in the pre-witnessed version (not implemented yet)
-			boost_fee: BasisPoints,
+			_from: Asset,
+			_to: Asset,
+			_deposit_amount: AssetAmount,
+			_destination_address: EncodedAddress,
+			_tx_hash: TransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			Self::process_contract_swap_request(
-				from,
-				deposit_amount,
-				to,
-				destination_address,
-				None,
-				tx_hash,
-				*deposit_details,
-				broker_fees,
-				refund_params.map(|boxed| *boxed),
-				// refund_params.as_ref(),
-				dca_params,
-				boost_fee,
-			);
-
-			Ok(())
+			Err(DispatchError::Other("deprecated"))
 		}
 
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::contract_ccm_swap_request())]
-		pub fn contract_ccm_swap_request(
+		pub fn contract_ccm_swap_request_deprecated(
 			origin: OriginFor<T>,
-			source_asset: TargetChainAsset<T, I>,
-			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
-			destination_asset: Asset,
-			destination_address: EncodedAddress,
-			deposit_metadata: CcmDepositMetadata,
-			tx_hash: TransactionHash,
-			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
-			broker_fees: Beneficiaries<T::AccountId>,
-			refund_params: Option<Box<ChannelRefundParameters>>,
-			dca_params: Option<DcaParameters>,
-			boost_fee: BasisPoints,
+			_source_asset: Asset,
+			_deposit_amount: AssetAmount,
+			_destination_asset: Asset,
+			_destination_address: EncodedAddress,
+			_deposit_metadata: CcmDepositMetadata,
+			_tx_hash: TransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			Self::process_contract_swap_request(
-				source_asset,
-				deposit_amount,
-				destination_asset,
-				destination_address,
-				Some(deposit_metadata),
-				tx_hash,
-				*deposit_details,
-				broker_fees,
-				refund_params.map(|boxed| *boxed),
-				dca_params,
-				boost_fee,
-			);
-
-			Ok(())
+			Err(DispatchError::Other("deprecated"))
 		}
 
 		#[pallet::call_index(12)]
@@ -1267,6 +1228,41 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(T::AllowTransactionReports::get(), Error::<T, I>::UnsupportedChain);
 			Self::mark_transaction_as_tainted_inner(account_id, tx_id)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(13)]
+		#[pallet::weight(T::WeightInfo::contract_ccm_swap_request())]
+		pub fn contract_swap_request(
+			origin: OriginFor<T>,
+			input_asset: TargetChainAsset<T, I>,
+			output_asset: Asset,
+			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
+			destination_address: EncodedAddress,
+			deposit_metadata: Option<CcmDepositMetadata>,
+			tx_hash: TransactionHash,
+			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
+			broker_fees: Beneficiaries<T::AccountId>,
+			refund_params: Option<Box<ChannelRefundParameters>>,
+			dca_params: Option<DcaParameters>,
+			boost_fee: BasisPoints,
+		) -> DispatchResult {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			Self::process_contract_swap_request(
+				input_asset,
+				deposit_amount,
+				output_asset,
+				destination_address,
+				deposit_metadata,
+				tx_hash,
+				*deposit_details,
+				broker_fees,
+				refund_params.map(|boxed| *boxed),
+				dca_params,
+				boost_fee,
+			);
+
 			Ok(())
 		}
 	}
