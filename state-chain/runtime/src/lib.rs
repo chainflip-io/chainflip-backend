@@ -2147,7 +2147,8 @@ impl_runtime_apis! {
 		}
 
 		fn cf_suspended_validators() -> Vec<(Offence, u32)> {
-			pallet_cf_reputation::Suspensions::<Runtime>::iter().map(|(key, elem)| (key, elem.len() as u32)).collect()
+			let current_block = <frame_system::Pallet<Runtime>>::block_number();
+			pallet_cf_reputation::Suspensions::<Runtime>::iter().map(|(key, elem)| (key, elem.iter().filter(|(suspended_until, _)| *suspended_until < current_block).collect::<Vec<_>>().len() as u32)).collect()
 		}
 		fn cf_epoch_state() -> EpochState {
 			let auction_params = Validator::auction_parameters();
