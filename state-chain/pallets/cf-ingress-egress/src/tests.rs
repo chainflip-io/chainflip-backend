@@ -1782,7 +1782,7 @@ fn can_request_swap_via_extrinsic() {
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			INPUT_ASSET.try_into().unwrap(),
 			OUTPUT_ASSET,
@@ -1831,7 +1831,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			INPUT_ASSET.try_into().unwrap(),
 			OUTPUT_ASSET,
@@ -1877,7 +1877,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			MockAddressConverter::to_encoded_address(ForeignChainAddress::Btc(script_pubkey));
 
 		// Is valid Bitcoin address, but asset is Dot, so not compatible
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			EthAsset::Eth,
 			Asset::Dot,
@@ -1896,7 +1896,7 @@ fn rejects_invalid_swap_by_witnesser() {
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 		// Invalid BTC address:
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			EthAsset::Eth,
 			Asset::Btc,
@@ -1931,7 +1931,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 
 	new_test_ext().execute_with(|| {
 		// CCM is not supported for Dot:
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			EthAsset::Flip,
 			Asset::Dot,
@@ -1957,7 +1957,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 		System::reset_events();
 
 		// Insufficient deposit amount:
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			EthAsset::Flip,
 			Asset::Eth,

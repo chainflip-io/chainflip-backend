@@ -3,8 +3,8 @@ use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
 	assets::btc::Asset as BtcAsset,
 	btc::{
-		deposit_address::DepositAddress, smart_contract_encoding::UtxoEncodedData,
-		BtcDepositDetails, ScriptPubkey, UtxoId,
+		deposit_address::DepositAddress, vault_swap_encoding::UtxoEncodedData, BtcDepositDetails,
+		ScriptPubkey, UtxoId,
 	},
 	ChannelRefundParameters, ForeignChainAddress,
 };
@@ -79,7 +79,7 @@ fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 type BtcIngressEgressCall =
 	pallet_cf_ingress_egress::Call<state_chain_runtime::Runtime, BitcoinInstance>;
 
-pub fn try_extract_contract_call(
+pub fn try_extract_vault_swap_call(
 	tx: &VerboseTransaction,
 	vault_address: &DepositAddress,
 ) -> Option<BtcIngressEgressCall> {
@@ -128,7 +128,7 @@ pub fn try_extract_contract_call(
 
 	let tx_id: [u8; 32] = tx.txid.to_byte_array();
 
-	Some(BtcIngressEgressCall::contract_swap_request {
+	Some(BtcIngressEgressCall::vault_swap_request {
 		input_asset: NATIVE_ASSET,
 		output_asset: data.output_asset,
 		deposit_amount,
@@ -172,7 +172,7 @@ mod tests {
 
 	use super::*;
 
-	use cf_chains::btc::smart_contract_encoding::*;
+	use cf_chains::btc::vault_swap_encoding::*;
 
 	const MOCK_DOT_ADDRESS: [u8; 32] = [9u8; 32];
 
@@ -267,8 +267,8 @@ mod tests {
 		);
 
 		assert_eq!(
-			try_extract_contract_call(&tx, &vault_deposit_address),
-			Some(BtcIngressEgressCall::contract_swap_request {
+			try_extract_vault_swap_call(&tx, &vault_deposit_address),
+			Some(BtcIngressEgressCall::vault_swap_request {
 				input_asset: NATIVE_ASSET,
 				output_asset: MOCK_SWAP_PARAMS.output_asset,
 				deposit_amount: DEPOSIT_AMOUNT,

@@ -28,7 +28,7 @@ import { SwapContext, SwapStatus } from './swap_context';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
-export async function executeContractSwap(
+export async function executeVaultSwap(
   srcAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -71,14 +71,14 @@ export async function executeContractSwap(
 
   return receipt;
 }
-export type ContractSwapParams = {
+export type VaultSwapParams = {
   sourceAsset: Asset;
   destAsset: Asset;
   destAddress: string;
   txHash: string;
 };
 
-export async function performSwapViaContract(
+export async function performVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -86,12 +86,12 @@ export async function performSwapViaContract(
   messageMetadata?: CcmDepositMetadata,
   swapContext?: SwapContext,
   log = true,
-): Promise<ContractSwapParams> {
+): Promise<VaultSwapParams> {
   const tag = swapTag ?? '';
 
   const srcChain = chainFromAsset(sourceAsset);
 
-  // Generate a new wallet for each contract swap to prevent nonce issues when running in parallel
+  // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
   // with other swaps via deposit channels.
   const mnemonic = Wallet.createRandom().mnemonic?.phrase ?? '';
   if (mnemonic === '') {
@@ -122,14 +122,14 @@ export async function performSwapViaContract(
     if (log) {
       console.log(`${tag} Old balance: ${oldBalance}`);
       console.log(
-        `${tag} Executing (${sourceAsset}) contract swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
+        `${tag} Executing (${sourceAsset}) vault swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
       );
     }
 
-    // To uniquely identify the contractSwap, we need to use the TX hash. This is only known
+    // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
-    const receipt = await executeContractSwap(
+    const receipt = await executeVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,

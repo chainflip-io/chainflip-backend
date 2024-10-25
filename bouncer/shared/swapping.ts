@@ -16,7 +16,7 @@ import {
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { performSwapViaContract } from '../shared/contract_swap';
+import { performVaultSwap } from '../shared/vault_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 
 enum SolidityType {
@@ -236,7 +236,7 @@ export async function testSwap(
     swapContext,
   );
 }
-export async function testSwapViaContract(
+export async function testVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
@@ -250,12 +250,12 @@ export async function testSwapViaContract(
     destAsset,
     addressType,
     messageMetadata,
-    (tagSuffix ?? '') + ' Contract',
+    (tagSuffix ?? '') + ' Vault',
     log,
     swapContext,
   );
 
-  return performSwapViaContract(
+  return performVaultSwap(
     sourceAsset,
     destAsset,
     destAddress,
