@@ -7,7 +7,7 @@ import {
   Chains,
   Chain,
 } from '@chainflip/cli';
-import { HDNodeWallet, Wallet } from 'ethers';
+import { HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import {
   observeBalanceIncrease,
