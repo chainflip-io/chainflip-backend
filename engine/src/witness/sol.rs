@@ -141,6 +141,7 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 	}
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 struct SolanaVaultSwapsVoter {
 	client: SolRetryRpcClient,

@@ -1,7 +1,8 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::{
-	api::SolanaApi, SolAddress, SolHash, SolMessage, SolSignature, SolTrackedData, SolTransaction,
+	api::{ContractSwapAccountAndSender, SolanaApi},
+	SolAddress, SolHash, SolMessage, SolSignature, SolTrackedData, SolTransaction,
 	SolanaTransactionData,
 };
 
@@ -25,7 +26,6 @@ impl BenchmarkValue for SolTrackedData {
 	}
 }
 
-#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for SolMessage {
 	fn benchmark_value() -> Self {
 		Self::new_with_blockhash(&[], None, &SolHash::default().into())
@@ -64,5 +64,14 @@ impl<E: crate::sol::api::SolanaEnvironment> BenchmarkValue for SolanaApi<E> {
 	fn benchmark_value() -> Self {
 		SolanaApi::<E>::rotate_agg_key([8u8; 32].into())
 			.expect("Benchmark value for SolApi must work.")
+	}
+}
+
+impl BenchmarkValue for ContractSwapAccountAndSender {
+	fn benchmark_value() -> Self {
+		Self {
+			swap_sender: BenchmarkValue::benchmark_value(),
+			contract_swap_account: BenchmarkValue::benchmark_value(),
+		}
 	}
 }
