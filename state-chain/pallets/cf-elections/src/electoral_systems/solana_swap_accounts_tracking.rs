@@ -3,6 +3,9 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
+#[cfg(feature = "runtime-benchmarks")]
+use cf_chains::benchmarking_value::BenchmarkValue;
+
 use crate::{
 	electoral_system::{
 		AuthorityVoteOf, ConsensusVotes, ElectionReadAccess, ElectionWriteAccess, ElectoralSystem,
@@ -12,7 +15,7 @@ use crate::{
 	CorruptStorageError, ElectionIdentifier,
 };
 use cf_chains::sol::{
-	MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
+	api::ContractSwapAccountAndSender, MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
 	MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
 	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
 };
@@ -36,6 +39,17 @@ pub struct SolanaVaultSwapsElectoralState<Account: Ord, BlockNumber> {
 	pub block_number_last_closed_accounts: BlockNumber,
 	pub witnessed_open_accounts: Vec<Account>,
 	pub closure_initiated_accounts: BTreeSet<Account>,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for SolanaVaultSwapsElectoralState<ContractSwapAccountAndSender, u32> {
+	fn benchmark_value() -> Self {
+		Self {
+			block_number_last_closed_accounts: 1u32,
+			witnessed_open_accounts: vec![BenchmarkValue::benchmark_value()],
+			closure_initiated_accounts: BTreeSet::from([BenchmarkValue::benchmark_value()]),
+		}
+	}
 }
 
 #[derive(

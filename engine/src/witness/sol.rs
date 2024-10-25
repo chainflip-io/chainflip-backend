@@ -175,6 +175,7 @@ impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
 	}
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 struct SolanaVaultSwapsVoter {
 	client: SolRetryRpcClient,
