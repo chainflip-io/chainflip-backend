@@ -134,7 +134,7 @@ impl CryptoScheme for BtcCryptoScheme {
 	) -> anyhow::Result<()> {
 		let secp = secp256k1::Secp256k1::new();
 		let raw_sig = secp256k1::schnorr::Signature::from_slice(&signature.to_raw()).unwrap();
-		let raw_msg = secp256k1::Message::from_slice(&payload.0).unwrap();
+		let raw_msg = secp256k1::Message::from_digest_slice(&payload.0).unwrap();
 
 		secp.verify_schnorr(&raw_sig, &raw_msg, public_key)
 			.context("Failed to verify Bitcoin signature")?;

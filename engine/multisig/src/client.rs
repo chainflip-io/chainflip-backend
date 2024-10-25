@@ -16,7 +16,7 @@ pub mod ceremony_manager;
 
 use std::collections::BTreeSet;
 
-use utilities::{format_iterator, threshold_from_share_count};
+use cf_utilities::{format_iterator, threshold_from_share_count};
 
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use futures::{future::BoxFuture, FutureExt};

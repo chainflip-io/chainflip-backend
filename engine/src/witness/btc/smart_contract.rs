@@ -1,22 +1,24 @@
-use bitcoin::{opcodes::all::OP_RETURN, ScriptBuf};
+use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN, ScriptBuf};
 use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
+	assets::btc::Asset as BtcAsset,
 	btc::{
 		deposit_address::DepositAddress, smart_contract_encoding::UtxoEncodedData,
 		BtcDepositDetails, ScriptPubkey, UtxoId,
 	},
 	ChannelRefundParameters, ForeignChainAddress,
 };
-use cf_primitives::{Asset, DcaParameters};
+use cf_primitives::DcaParameters;
+use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
 use state_chain_runtime::BitcoinInstance;
-use utilities::SliceToArray;
 
 use crate::btc::rpc::VerboseTransaction;
 
 const OP_PUSHBYTES_75: u8 = 0x4b;
 const OP_PUSHDATA1: u8 = 0x4c;
+const NATIVE_ASSET: BtcAsset = BtcAsset::Btc;
 
 fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 	let bytes = script.as_script().as_bytes();
@@ -58,11 +60,11 @@ fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 		ScriptPubkey::P2PKH(data_from_script(script, 3))
 	} else if script.is_p2sh() {
 		ScriptPubkey::P2SH(data_from_script(script, 2))
-	} else if script.is_v1_p2tr() {
+	} else if script.is_p2tr() {
 		ScriptPubkey::Taproot(data_from_script(script, 2))
-	} else if script.is_v0_p2wsh() {
+	} else if script.is_p2wsh() {
 		ScriptPubkey::P2WSH(data_from_script(script, 2))
-	} else if script.is_v0_p2wpkh() {
+	} else if script.is_p2wpkh() {
 		ScriptPubkey::P2WPKH(data_from_script(script, 2))
 	} else {
 		ScriptPubkey::OtherSegwit {
@@ -124,13 +126,11 @@ pub fn try_extract_contract_call(
 		deposit_amount.into(),
 	));
 
-	use secp256k1::hashes::Hash as secp256k1Hash;
-
 	let tx_id: [u8; 32] = tx.txid.to_byte_array();
 
 	Some(BtcIngressEgressCall::contract_swap_request {
-		from: Asset::Btc,
-		to: data.output_asset,
+		input_asset: NATIVE_ASSET,
+		output_asset: data.output_asset,
 		deposit_amount,
 		destination_address: data.output_address,
 		tx_hash: tx_id,
@@ -139,11 +139,13 @@ pub fn try_extract_contract_call(
 			utxo_id: UtxoId { tx_id: tx_id.into(), vout: 0 },
 			deposit_address: vault_address.clone(),
 		}),
-		refund_params: Some(ChannelRefundParameters {
+		deposit_metadata: None, // No ccm for BTC (yet?)
+		broker_fees: Default::default(),
+		refund_params: Some(Box::new(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration as u32,
 			refund_address: ForeignChainAddress::Btc(refund_address),
 			min_price,
-		}),
+		})),
 		dca_params: Some(DcaParameters {
 			number_of_chunks: data.parameters.number_of_chunks as u32,
 			chunk_interval: data.parameters.chunk_interval as u32,
@@ -157,11 +159,13 @@ pub fn try_extract_contract_call(
 mod tests {
 
 	use bitcoin::{
-		address::WitnessProgram, key::TweakedPublicKey, PubkeyHash, ScriptHash, WPubkeyHash,
-		WScriptHash,
+		blockdata::script::{witness_program::WitnessProgram, witness_version::WitnessVersion},
+		hashes::Hash,
+		key::TweakedPublicKey,
+		PubkeyHash, ScriptHash, WPubkeyHash, WScriptHash,
 	};
 	use cf_chains::address::EncodedAddress;
-	use secp256k1::{hashes::Hash, XOnlyPublicKey};
+	use secp256k1::XOnlyPublicKey;
 	use sp_core::bounded_vec;
 
 	use crate::{btc::rpc::VerboseTxOut, witness::btc::deposits::tests::fake_transaction};
@@ -173,7 +177,7 @@ mod tests {
 	const MOCK_DOT_ADDRESS: [u8; 32] = [9u8; 32];
 
 	const MOCK_SWAP_PARAMS: UtxoEncodedData = UtxoEncodedData {
-		output_asset: Asset::Dot,
+		output_asset: cf_primitives::Asset::Dot,
 		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
 		parameters: SharedCfParameters {
 			retry_duration: 5,
@@ -197,22 +201,22 @@ mod tests {
 				ScriptPubkey::P2SH([7; 20]),
 			),
 			(
-				ScriptBuf::new_v1_p2tr_tweaked(TweakedPublicKey::dangerous_assume_tweaked(
+				ScriptBuf::new_p2tr_tweaked(TweakedPublicKey::dangerous_assume_tweaked(
 					XOnlyPublicKey::from_slice(&[7; 32]).unwrap(),
 				)),
 				ScriptPubkey::Taproot([7; 32]),
 			),
 			(
-				ScriptBuf::new_v0_p2wsh(&WScriptHash::from_byte_array([7; 32])),
+				ScriptBuf::new_p2wsh(&WScriptHash::from_byte_array([7; 32])),
 				ScriptPubkey::P2WSH([7; 32]),
 			),
 			(
-				ScriptBuf::new_v0_p2wpkh(&WPubkeyHash::from_byte_array([7; 20])),
+				ScriptBuf::new_p2wpkh(&WPubkeyHash::from_byte_array([7; 20])),
 				ScriptPubkey::P2WPKH([7; 20]),
 			),
 			(
 				ScriptBuf::new_witness_program(
-					&WitnessProgram::new(bitcoin::address::WitnessVersion::V2, [7; 40]).unwrap(),
+					&WitnessProgram::new(WitnessVersion::V2, &[7; 40]).unwrap(),
 				),
 				ScriptPubkey::OtherSegwit { version: 2, program: bounded_vec![7; 40] },
 			),
@@ -265,8 +269,8 @@ mod tests {
 		assert_eq!(
 			try_extract_contract_call(&tx, &vault_deposit_address),
 			Some(BtcIngressEgressCall::contract_swap_request {
-				from: Asset::Btc,
-				to: MOCK_SWAP_PARAMS.output_asset,
+				input_asset: NATIVE_ASSET,
+				output_asset: MOCK_SWAP_PARAMS.output_asset,
 				deposit_amount: DEPOSIT_AMOUNT,
 				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
 				tx_hash: tx.hash.to_byte_array(),
@@ -274,14 +278,16 @@ mod tests {
 					utxo_id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
 					deposit_address: vault_deposit_address,
 				}),
-				refund_params: Some(ChannelRefundParameters {
+				broker_fees: Default::default(),
+				deposit_metadata: None,
+				refund_params: Some(Box::new(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),
 					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
 						DEPOSIT_AMOUNT.into(),
 					)),
-				}),
+				})),
 				dca_params: Some(DcaParameters {
 					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks as u32,
 					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval as u32,

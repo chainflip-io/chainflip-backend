@@ -42,7 +42,7 @@ pub use cf_chains::instances::{
 use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
-	btc::{BitcoinCrypto, BitcoinRetryPolicy},
+	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
@@ -381,6 +381,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -407,6 +408,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -433,6 +435,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<true>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -459,6 +462,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -485,6 +489,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -611,7 +616,7 @@ impl pallet_aura::Config for Runtime {
 }
 
 parameter_types! {
-	pub storage BlocksPerEpoch: u64 = Validator::blocks_per_epoch().into();
+	pub storage BlocksPerEpoch: u64 = Validator::epoch_duration().into();
 }
 
 type KeyOwnerIdentification<T, Id> =
@@ -707,7 +712,7 @@ impl pallet_cf_governance::Config for Runtime {
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 	type UpgradeCondition = (
 		pallet_cf_validator::NotDuringRotation<Runtime>,
-		pallet_cf_swapping::NoPendingSwaps<Runtime>,
+		(pallet_cf_swapping::NoPendingSwaps<Runtime>, pallet_cf_environment::NoUsedNonce<Runtime>),
 	);
 	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 	type CompatibleCfeVersions = Environment;
@@ -1231,6 +1236,7 @@ type AllMigrations = (
 	MigrationsForV1_7,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
+	chainflip::solana_elections::old::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1383,7 +1389,7 @@ impl_runtime_apis! {
 			Environment::current_release_version()
 		}
 		fn cf_epoch_duration() -> u32 {
-			Validator::blocks_per_epoch()
+			Validator::epoch_duration()
 		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
@@ -1486,7 +1492,7 @@ impl_runtime_apis! {
 			.ok()
 			.map(|auction_outcome| auction_outcome.bond);
 			AuctionState {
-				blocks_per_epoch: Validator::blocks_per_epoch(),
+				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
@@ -1880,13 +1886,13 @@ impl_runtime_apis! {
 					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
 						match call {
 							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
-								from: swap_from, to: swap_to, deposit_amount, ..
-							}) if from == swap_from && to == swap_to => {
+								input_asset: swap_from, output_asset: swap_to, deposit_amount, ..
+							}) if from == swap_from.into() && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
 							}
 							RuntimeCall::ArbitrumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
-								from: swap_from, to: swap_to, deposit_amount, ..
-							}) if from == swap_from && to == swap_to => {
+								input_asset: swap_from, output_asset: swap_to, deposit_amount, ..
+							}) if from == swap_from.into() && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
 							}
 							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits::<_, EthereumInstance> {
@@ -2105,8 +2111,32 @@ impl_runtime_apis! {
 
 		fn cf_btc_utxos() -> BtcUtxos {
 			let utxos = pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
+			let mut btc_balance = utxos.iter().fold(0, |acc, elem| acc + elem.amount);
+			//Sum the btc balance contained in the change utxos to the btc "free_balance"
+			let btc_ceremonies = pallet_cf_threshold_signature::PendingCeremonies::<Runtime,BitcoinInstance>::iter_values().map(|ceremony|{
+				ceremony.request_context.request_id
+			}).collect::<Vec<_>>();
+			let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
+				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
+				.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
+			for ceremony in btc_ceremonies {
+				if let RuntimeCall::BitcoinBroadcaster(pallet_cf_broadcast::pallet::Call::on_signature_ready{ api_call, ..}) = pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::get(ceremony).unwrap() {
+					if let BitcoinApi::BatchTransfer(batch_transfer) = *api_call {
+						for output in batch_transfer.bitcoin_transaction.outputs {
+							if [
+								ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
+								ScriptPubkey::Taproot(btc_key.current),
+							]
+							.contains(&output.script_pubkey)
+							{
+								btc_balance += output.amount;
+							}
+						}
+					}
+				}
+			}
 			BtcUtxos {
-				total_balance: utxos.iter().fold(0, |acc, elem| acc + elem.amount),
+				total_balance: btc_balance,
 				count: utxos.len() as u32,
 			}
 		}
@@ -2134,7 +2164,7 @@ impl_runtime_apis! {
 			.ok()
 			.map(|auction_outcome| auction_outcome.bond);
 			EpochState {
-				blocks_per_epoch: Validator::blocks_per_epoch(),
+				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				current_epoch_index: Validator::current_epoch(),
 				min_active_bid,

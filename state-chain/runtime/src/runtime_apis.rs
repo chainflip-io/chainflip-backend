@@ -12,7 +12,7 @@ use cf_primitives::{
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
-use core::ops::Range;
+use core::{ops::Range, str};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::OwedAmount;
@@ -107,7 +107,7 @@ pub struct RuntimeApiPenalty {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct AuctionState {
-	pub blocks_per_epoch: u32,
+	pub epoch_duration: u32,
 	pub current_epoch_started_at: u32,
 	pub redemption_period_as_percentage: u8,
 	pub min_funding: u128,
@@ -161,6 +161,21 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 		}
 	}
 }
+#[cfg(feature = "std")]
+impl core::fmt::Display for DispatchErrorWithMessage {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+		match self {
+			DispatchErrorWithMessage::Module(message) => write!(
+				f,
+				"{}",
+				str::from_utf8(message).unwrap_or("<Error message is not valid UTF-8>")
+			),
+			DispatchErrorWithMessage::Other(error) => write!(f, "{:?}", error),
+		}
+	}
+}
+#[cfg(feature = "std")]
+impl std::error::Error for DispatchErrorWithMessage {}
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct FailingWitnessValidators {

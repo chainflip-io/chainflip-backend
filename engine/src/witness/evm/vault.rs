@@ -76,11 +76,10 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
+				vault_swap_parameters.broker_fees,
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
-				// TODO: Add broker_fees. Probably pass None for now as it'll need decoding id ->
-				// account_id
 			))
 		},
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
@@ -104,11 +103,10 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
+				vault_swap_parameters.broker_fees,
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
-				// TODO: Add broker_fees. Probably pass None for now as it'll need decoding id ->
-				// account_id
 			))
 		},
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
@@ -146,11 +144,10 @@ where
 					},
 				}),
 				event.tx_hash.into(),
+				vault_swap_parameters.broker_fees,
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
-				// TODO: Add broker_fees. Probably pass None for now as it'll need decoding id ->
-				// account_id
 			))
 		},
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
@@ -191,11 +188,10 @@ where
 					},
 				}),
 				event.tx_hash.into(),
+				vault_swap_parameters.broker_fees,
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
-				// TODO: Add broker_fees. Probably pass None for now as it'll need decoding id ->
-				// account_id
 			))
 		},
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
@@ -239,6 +235,7 @@ pub trait IngressCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: cf_primitives::TransactionHash,
+		broker_fees: cf_primitives::Beneficiaries<ShortId>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		boost_fee: Option<BasisPoints>,

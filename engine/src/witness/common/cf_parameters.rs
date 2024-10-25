@@ -14,15 +14,13 @@ pub struct CfParameters<CcmData = ()> {
 pub type CcmCfParameters = CfParameters<CcmAdditionalData>;
 
 // TODO: Define this / implement it on the SC.
-type ShortId = u8;
+pub type ShortId = u8;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub struct VaultSwapParameters {
 	pub refund_params: ChannelRefundParameters,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: Option<BasisPoints>,
-	// TODO: Should we make broker mandatory? Should we have a separate fields or
-	// we just pass the array to the SC and it will handle it?
 	pub broker_fees: Beneficiaries<ShortId>,
 }
 

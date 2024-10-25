@@ -15,6 +15,11 @@ use std::{
 
 use crate::common::Signal;
 use anyhow::Result;
+use cf_utilities::{
+	metrics::{RPC_RETRIER_REQUESTS, RPC_RETRIER_TOTAL_REQUESTS},
+	task_scope::Scope,
+	UnendingStream,
+};
 use core::cmp::min;
 use futures::{Future, FutureExt};
 use futures_util::stream::FuturesUnordered;
@@ -24,11 +29,6 @@ use std::{
 	fmt::{Display, Formatter},
 };
 use tokio::sync::{mpsc, oneshot};
-use utilities::{
-	metrics::{RPC_RETRIER_REQUESTS, RPC_RETRIER_TOTAL_REQUESTS},
-	task_scope::Scope,
-	UnendingStream,
-};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RetryLimit {
@@ -294,7 +294,7 @@ impl<Client: Send + Sync + Clone + 'static> ClientSelector<Client> {
 		retry_limit: RetryLimit,
 	) -> Option<(Client, PrimaryOrBackup)> {
 		let client_select_fut = futures::future::select_all(
-			utilities::conditional::conditional(
+			cf_utilities::conditional::conditional(
 				&self.backup_signal,
 				|backup_signal| {
 					// If we have two clients, then we should bias the requested one, but if it's
@@ -414,7 +414,7 @@ where
 			ClientSelector::new(scope, primary_client_fut, backup_client_fut);
 
 		scope.spawn(async move {
-			utilities::loop_select! {
+			cf_utilities::loop_select! {
 				if let Some((response_sender, request_log, closure, retry_limit)) = request_receiver.recv() => {
 					RPC_RETRIER_REQUESTS.inc(&[name, request_log.rpc_method.as_str()]);
 					let request_id = request_holder.next_request_id();
@@ -547,10 +547,10 @@ where
 mod tests {
 	use std::any::Any;
 
+	use cf_utilities::task_scope::task_scope;
 	use fmt::Debug;
 	use futures_util::FutureExt;
 	use tokio::time::timeout;
-	use utilities::task_scope::task_scope;
 
 	use super::*;
 

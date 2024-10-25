@@ -28,8 +28,9 @@ use state_chain_runtime::{
 	SolanaInstance,
 };
 
+use cf_utilities::{task_scope, task_scope::Scope};
+use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
 use std::{str::FromStr, sync::Arc};
-use utilities::{task_scope, task_scope::Scope};
 
 #[derive(Clone)]
 struct SolanaBlockHeightTrackingVoter {
@@ -113,12 +114,16 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 		properties: <SolanaNonceTracking as ElectoralSystem>::ElectionProperties,
 	) -> Result<<<SolanaNonceTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error>
 	{
-		let (nonce_account, previous_nonce) = properties;
-		Ok(nonce_witnessing::get_durable_nonce(&self.client, nonce_account)
-			.await?
-			// If the nonce is not found, we default to the previous nonce.
-			// The `Change` electoral system ensure this vote is filtered.
-			.unwrap_or(previous_nonce))
+		let (nonce_account, previous_nonce, previous_slot) = properties;
+
+		let nonce_and_slot =
+			nonce_witnessing::get_durable_nonce(&self.client, nonce_account, previous_slot)
+				.await?
+				.map(|(nonce, slot)| MonotonicChangeVote { value: nonce, block: slot });
+		// If the nonce is not found, we default to the previous nonce and slot.
+		// The `MonotonicChange` electoral system ensure this vote is filtered.
+		Ok(nonce_and_slot
+			.unwrap_or(MonotonicChangeVote { value: previous_nonce, block: previous_slot }))
 	}
 }
 

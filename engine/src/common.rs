@@ -53,7 +53,7 @@ impl<T> Mutex<T> {
 
 #[cfg(test)]
 mod tests {
-	use utilities::assert_future_panics;
+	use cf_utilities::assert_future_panics;
 
 	use super::*;
 	use std::sync::Arc;

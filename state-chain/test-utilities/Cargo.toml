@@ -1,22 +1,22 @@
 [package]
-name = 'cf-test-utilities'
-version = '0.1.0'
-edition = '2021'
-authors = ['Chainflip <https://chainflip.io>']
-description = 'Chainflip test utilities used in multiple crates'
+name = "cf-test-utilities"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chainflip <https://chainflip.io>"]
+description = "Chainflip test utilities used in multiple crates"
 
 [lints]
 workspace = true
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.6.12" }
+codec = { workspace = true }
 
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
 
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-io = { workspace = true }
+sp-core = { workspace = true }
+sp-runtime = { workspace = true }
 
 [dev-dependencies]
-scale-info = { version = "2.11.1", features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }

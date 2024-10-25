@@ -51,11 +51,11 @@ pub mod queries;
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
+use cf_utilities::{clean_hex_address, rpc::NumberOrHex, task_scope::Scope};
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
 };
-use utilities::{clean_hex_address, rpc::NumberOrHex, task_scope::Scope};
 
 lazy_static::lazy_static! {
 	static ref API_VERSION: SemVer = SemVer {

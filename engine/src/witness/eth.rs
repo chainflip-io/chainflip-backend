@@ -4,10 +4,10 @@ mod state_chain_gateway;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{evm::DepositDetails, Ethereum};
-use cf_primitives::{chains::assets::eth, EpochIndex};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, EpochIndex};
+use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use sp_core::H160;
-use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
@@ -19,7 +19,10 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+	witness::{
+		common::cf_parameters::ShortId,
+		evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+	},
 };
 
 use super::{common::epoch_source::EpochSourceBuilder, evm::source::EvmSource};
@@ -76,22 +79,21 @@ where
 		.await
 		.expect(STATE_CHAIN_CONNECTION);
 
-	let supported_erc20_tokens: HashMap<cf_primitives::chains::assets::eth::Asset, H160> =
-		state_chain_client
-			.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
-				state_chain_client.latest_finalized_block().hash,
-			)
-			.await
-			.context("Failed to fetch Ethereum supported assets")?;
+	let supported_erc20_tokens: HashMap<EthAsset, H160> = state_chain_client
+		.storage_map::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>, _>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.context("Failed to fetch Ethereum supported assets")?;
 
 	let usdc_contract_address =
-		*supported_erc20_tokens.get(&eth::Asset::Usdc).context("USDC not supported")?;
+		*supported_erc20_tokens.get(&EthAsset::Usdc).context("USDC not supported")?;
 
 	let flip_contract_address =
-		*supported_erc20_tokens.get(&eth::Asset::Flip).context("FLIP not supported")?;
+		*supported_erc20_tokens.get(&EthAsset::Flip).context("FLIP not supported")?;
 
 	let usdt_contract_address =
-		*supported_erc20_tokens.get(&eth::Asset::Usdt).context("USDT not supported")?;
+		*supported_erc20_tokens.get(&EthAsset::Usdt).context("USDT not supported")?;
 
 	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
 		.into_iter()
@@ -155,7 +157,7 @@ where
 		.erc20_deposits::<_, _, _, UsdcEvents>(
 			process_call.clone(),
 			eth_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Usdc,
+			EthAsset::Usdc,
 			usdc_contract_address,
 		)
 		.await?
@@ -168,7 +170,7 @@ where
 		.erc20_deposits::<_, _, _, FlipEvents>(
 			process_call.clone(),
 			eth_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Flip,
+			EthAsset::Flip,
 			flip_contract_address,
 		)
 		.await?
@@ -181,7 +183,7 @@ where
 		.erc20_deposits::<_, _, _, UsdtEvents>(
 			process_call.clone(),
 			eth_client.clone(),
-			cf_primitives::chains::assets::eth::Asset::Usdt,
+			EthAsset::Usdt,
 			usdt_contract_address,
 		)
 		.await?
@@ -194,7 +196,7 @@ where
 		.ethereum_deposits(
 			process_call.clone(),
 			eth_client.clone(),
-			eth::Asset::Eth,
+			EthAsset::Eth,
 			address_checker_address,
 			vault_address,
 		)
@@ -220,7 +222,9 @@ where
 }
 
 use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ChannelRefundParameters};
-use cf_primitives::{Asset, AssetAmount, BasisPoints, DcaParameters, TransactionHash};
+use cf_primitives::{
+	Asset, AssetAmount, BasisPoints, Beneficiaries, DcaParameters, TransactionHash,
+};
 
 pub struct EthCallBuilder {}
 
@@ -234,38 +238,26 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
+		_broker_fees: Beneficiaries<ShortId>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		// This is only to be checked in the pre-witnessed version
 		boost_fee: Option<BasisPoints>,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
-			if let Some(deposit_metadata) = deposit_metadata {
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset,
-					destination_asset,
-					deposit_amount,
-					destination_address,
-					deposit_metadata,
-					tx_hash,
-					boost_fee,
-					dca_params,
-					refund_params,
-				}
-			} else {
-				pallet_cf_ingress_egress::Call::contract_swap_request {
-					from: source_asset,
-					to: destination_asset,
-					deposit_amount,
-					destination_address,
-					tx_hash,
-					deposit_details: Box::new(DepositDetails {
-						tx_hashes: Some(vec![tx_hash.into()]),
-					}),
-					boost_fee: boost_fee.unwrap_or_default(),
-					dca_params,
-					refund_params,
-				}
+			pallet_cf_ingress_egress::Call::contract_swap_request {
+				input_asset: source_asset.try_into().expect("invalid asset for chain"),
+				output_asset: destination_asset,
+				deposit_amount,
+				destination_address,
+				deposit_metadata,
+				tx_hash,
+				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) }),
+				// Defaulting to no broker fees until PRO-1743 is completed.
+				broker_fees: Default::default(),
+				boost_fee: boost_fee.unwrap_or_default(),
+				dca_params,
+				refund_params: refund_params.map(Box::new),
 			},
 		)
 	}

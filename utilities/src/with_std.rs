@@ -241,8 +241,8 @@ pub fn repository_link() -> Option<impl core::fmt::Display> {
 #[macro_export]
 macro_rules! here {
 	() => {
-		utilities::internal_lazy_format!(
-			if let Some(repository_link) = utilities::repository_link() => (
+		cf_utilities::internal_lazy_format!(
+			if let Some(repository_link) = cf_utilities::repository_link() => (
 				"{}/{}#L{}#C{}",
 				repository_link,
 				file!(),
@@ -276,7 +276,7 @@ macro_rules! context {
 			})
 		}
 
-		get_expr_type($e, utilities::here!())
+		get_expr_type($e, cf_utilities::here!())
 	}};
 }
 

@@ -5,6 +5,8 @@ use crate::{SwapLimits, SwapLimitsProvider};
 pub struct MockSwapLimitsProvider;
 
 impl SwapLimitsProvider for MockSwapLimitsProvider {
+	type AccountId = u64;
+
 	fn get_swap_limits() -> SwapLimits {
 		SwapLimits {
 			max_swap_retry_duration_blocks: 600_u32,
@@ -40,6 +42,18 @@ impl SwapLimitsProvider for MockSwapLimitsProvider {
 				return Err(DispatchError::Other("Invalid DCA parameters"));
 			}
 		}
+		Ok(())
+	}
+
+	fn validate_broker_fees(
+		broker_fees: &cf_primitives::Beneficiaries<Self::AccountId>,
+	) -> Result<(), DispatchError> {
+		let total_bps = broker_fees.iter().fold(0u16, |total, fee| total.saturating_add(fee.bps));
+
+		if total_bps > 1000 {
+			return Err(DispatchError::Other("Broker fees too high"));
+		};
+
 		Ok(())
 	}
 }

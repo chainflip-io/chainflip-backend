@@ -3,18 +3,18 @@ use crate::witness::common::chunked_chain_source::chunked_by_vault::{
 };
 use cf_chains::Chain;
 use cf_primitives::EpochIndex;
+use cf_utilities::{future_map::FutureMap, loop_select, rle_bitmap::RleBitmap};
 use core::iter::Step;
 use futures_util::stream;
 use std::sync::Arc;
-use utilities::{future_map::FutureMap, loop_select, rle_bitmap::RleBitmap};
 
 use crate::{
 	db::PersistentKeyDB,
 	witness::common::chain_source::{ChainClient, ChainStream},
 };
+use cf_utilities::UnendingStream;
 use futures::{FutureExt, StreamExt};
 use serde::{de::DeserializeOwned, Serialize};
-use utilities::UnendingStream;
 
 pub trait Storage<Index: Ord>: Send + Sync {
 	fn load(&self, epoch: EpochIndex) -> Result<Option<RleBitmap<Index>>, anyhow::Error>;

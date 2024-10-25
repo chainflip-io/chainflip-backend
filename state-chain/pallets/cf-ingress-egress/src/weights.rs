@@ -45,6 +45,7 @@ pub trait WeightInfo {
 	fn deposit_boosted() -> Weight;
 	fn boost_finalised() -> Weight;
 	fn create_boost_pools() -> Weight;
+	fn mark_transaction_as_tainted() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -306,6 +307,15 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+
+	/// TODO: This needs to get generated during the reals benchmarking.
+	fn mark_transaction_as_tainted() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 0 picoseconds.
+		Weight::from_parts(0, 0)
+	}
 }
 
 // For backwards compatibility and tests
@@ -565,5 +575,14 @@ impl WeightInfo for () {
 		Weight::from_parts(13_219_000, 3671)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+
+	/// TODO: This needs to get generated during the reals benchmarking.
+	fn mark_transaction_as_tainted() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 0 picoseconds.
+		Weight::from_parts(0, 0)
 	}
 }

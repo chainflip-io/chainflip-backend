@@ -1,103 +1,86 @@
 [package]
-name = 'cf-chains'
-version = '0.1.0'
-authors = ['Chainflip <https://chainflip.io>']
-edition = '2021'
-description = 'Shared Chain-specific functionality for use in the substrate runtime.'
+name = "cf-chains"
+version = "0.1.0"
+authors = ["Chainflip <https://chainflip.io>"]
+edition = "2021"
+description = "Shared Chain-specific functionality for use in the substrate runtime."
 
 [lints]
 workspace = true
 
 [dependencies]
-cf-primitives = { path = '../primitives', default-features = false }
-cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
-cf-runtime-utilities = { path = '../runtime-utilities', default-features = false }
+cf-primitives = { workspace = true }
+cf-utilities = { workspace = true }
+cf-runtime-utilities = { workspace = true }
 
 # Cryptography
-digest = { version = "0.10" }
-libsecp256k1 = { default-features = false, version = '0.7', features = [
-  'static-context',
-] }
-sha2 = { version = "0.10", default-features = false }
+digest = { workspace = true }
+libsecp256k1 = { workspace = true, features = ["static-context"] }
+sha2 = { workspace = true }
 
 # Solana
-sol-prim = { path = "../../foreign-chains/solana/sol-prim", default-features = false, features = [
-  "pda",
-  "str",
-  "serde",
-  "scale",
-] }
+sol-prim = { workspace = true, features = ["pda", "str", "serde", "scale"] }
 
 # Ethereum
-ethabi = { default-features = false, version = '18.0' }
-ethereum-types = { default-features = false, version = '0.14.1' }
-ethereum = { default-features = false, version = '0.14' }
-rlp = { default-features = false, version = '0.5' }
+ethabi = { workspace = true }
+ethereum-types = { workspace = true }
+ethereum = { workspace = true }
+rlp = { workspace = true }
 
 # Bitcoin
-bech32 = { default-features = false, version = '0.9.1' }
+bech32 = { workspace = true }
 
 # Solana
-borsh = { version = "1.2.1", default-features = false, features = [
+borsh = { workspace = true, features = [
   "derive",
   "unstable__schema",
   "hashbrown",
 ] }
-serde_with = { version = "2.3.3", default-features = false, features = [
-  "macros",
-] }
-generic-array = { version = "0.14.7", default-features = false, features = [
-  "serde",
-  "more_lengths",
-] }
-bs58 = { version = "0.5.1", default-features = false, features = ["alloc"] }
+serde_with = { workspace = true, features = ["macros"] }
+generic-array = { workspace = true, features = ["serde"] }
+bs58 = { workspace = true, features = ["alloc"] }
+
+# Special case for Solana: We use bincode 2 for its no-std support.
 bincode = { version = "2.0.0-rc.3", default-features = false, features = [
   "alloc",
   "serde",
 ] }
-curve25519-dalek = { version = "4.1.3", optional = true }
-sha2-const = { version = "0.1.2", default-features = false }
-ed25519-dalek = { version = "2.1.1", optional = true }
+curve25519-dalek = { workspace = true, optional = true }
+sha2-const = { workspace = true }
+ed25519-dalek = { workspace = true, optional = true }
 
 # Other
-anyhow = { version = "1.0", default-features = false, optional = true }
-hex = { default-features = false, version = "0.4", features = ["serde"] }
-hex-literal = { version = "0.4.1", default-features = false }
-serde = { version = "1.0.197", default-features = false, features = [
-  "alloc",
-  "derive",
-] }
-serde_bytes = { version = "0.11.14", default-features = false }
-log = { version = "0.4.16", default-features = false }
-itertools = { version = "0.13", default-features = false }
-arrayref = "0.3.6"
-strum = { default-features = false, version = "0.24" }
-thiserror = { version = "1.0.50", optional = true }
-rand = { version = "0.8.4", optional = true }
+anyhow = { workspace = true, optional = true }
+hex = { workspace = true, features = ["serde"] }
+hex-literal = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
+serde_bytes = { workspace = true }
+log = { workspace = true }
+itertools = { workspace = true }
+arrayref = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
 
 # Substrate packages
-ss58-registry = { version = "1.41", optional = true }
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
-  "derive",
-] }
-scale-info = { version = "2.11.1", default-features = false, features = [
-  "derive",
-] }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+ss58-registry = { workspace = true, optional = true }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
+frame-support = { workspace = true }
+sp-std = { workspace = true }
+sp-core = { workspace = true }
+sp-io = { workspace = true }
+sp-runtime = { workspace = true }
 
 [dev-dependencies]
-cf-test-utilities = { path = '../test-utilities' }
-serde_json = "1.0"
-heck = "0.5.0"
-rand = "0.8.4"
-ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
+cf-test-utilities = { workspace = true }
+serde_json = { workspace = true }
+heck = { workspace = true }
+rand = { workspace = true, features = ["std"] }
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
   "bech32/std",
   "cf-primitives/std",
@@ -137,9 +120,9 @@ std = [
   # "borsh/std" not needed, it conflicts with borsh/hashbrown.
 ]
 runtime-benchmarks = [
-  'frame-support/runtime-benchmarks',
-  'sp-runtime/runtime-benchmarks',
+  "frame-support/runtime-benchmarks",
+  "sp-runtime/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime", "sp-runtime/try-runtime"]
 
-runtime-integration-tests = ['std', 'dep:rand', 'ed25519-dalek/rand_core']
+runtime-integration-tests = ["std", "dep:rand", "ed25519-dalek/rand_core"]

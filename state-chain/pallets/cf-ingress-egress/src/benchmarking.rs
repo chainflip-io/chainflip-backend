@@ -7,6 +7,7 @@ use cf_chains::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	DepositChannel,
 };
+use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -61,6 +62,7 @@ mod benchmarks {
 		DepositChannelLookup::<T, I>::insert(
 			&deposit_address,
 			DepositChannelDetails {
+				owner: account("doogle", 0, 0),
 				opened_at: block_number,
 				expires_at: block_number,
 				deposit_channel:
@@ -71,6 +73,7 @@ mod benchmarks {
 					.unwrap(),
 				action: ChannelAction::<T::AccountId>::LiquidityProvision {
 					lp_account: account("doogle", 0, 0),
+					refund_address: None,
 				},
 				boost_fee: 0,
 				boost_status: BoostStatus::NotBoosted,
@@ -102,6 +105,7 @@ mod benchmarks {
 			let block_number = TargetChainBlockNumber::<T, I>::benchmark_value();
 			let mut channel =
 				DepositChannelDetails::<T, I> {
+					owner: account("doogle", 0, 0),
 					opened_at: block_number,
 					expires_at: block_number,
 					deposit_channel: DepositChannel::generate_new::<
@@ -110,6 +114,7 @@ mod benchmarks {
 					.unwrap(),
 					action: ChannelAction::<T::AccountId>::LiquidityProvision {
 						lp_account: account("doogle", 0, 0),
+						refund_address: None,
 					},
 					boost_fee: 0,
 					boost_status: BoostStatus::NotBoosted,
@@ -227,7 +232,10 @@ mod benchmarks {
 		let (_channel_id, deposit_address, ..) = Pallet::<T, I>::open_channel(
 			lp_account,
 			asset,
-			ChannelAction::LiquidityProvision { lp_account: lp_account.clone() },
+			ChannelAction::LiquidityProvision {
+				lp_account: lp_account.clone(),
+				refund_address: None,
+			},
 			fee_tier,
 		)
 		.unwrap();
@@ -292,12 +300,14 @@ mod benchmarks {
 
 		let witness_origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let call = Call::<T, I>::contract_swap_request {
-			from: Asset::Usdc,
-			to: Asset::Eth,
+			input_asset: Asset::Usdc.try_into().unwrap(),
+			output_asset: Asset::Eth,
 			deposit_amount: deposit_amount.into(),
 			destination_address: EncodedAddress::benchmark_value(),
+			deposit_metadata: None,
 			tx_hash: [0; 32],
 			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
+			broker_fees: Default::default(),
 			refund_params: None,
 			dca_params: None,
 			boost_fee: 0,
@@ -321,16 +331,18 @@ mod benchmarks {
 				ccm_additional_data: Default::default(),
 			},
 		};
-		let call = Call::<T, I>::contract_ccm_swap_request {
-			source_asset: Asset::Usdc,
-			deposit_amount: 1_000,
-			destination_asset: Asset::Eth,
+		let call = Call::<T, I>::contract_swap_request {
+			input_asset: BenchmarkValue::benchmark_value(),
+			deposit_amount: 1_000u32.into(),
+			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::benchmark_value(),
-			deposit_metadata,
+			deposit_metadata: Some(deposit_metadata),
 			tx_hash: Default::default(),
+			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
+			broker_fees: Default::default(),
 			refund_params: None,
 			dca_params: None,
-			boost_fee: None,
+			boost_fee: 0,
 		};
 
 		#[block]
@@ -404,7 +416,10 @@ mod benchmarks {
 		let (_channel_id, deposit_address, ..) = Pallet::<T, I>::open_channel(
 			&boosters[0],
 			asset,
-			ChannelAction::LiquidityProvision { lp_account: boosters[0].clone() },
+			ChannelAction::LiquidityProvision {
+				lp_account: boosters[0].clone(),
+				refund_address: None,
+			},
 			TIER_5_BPS,
 		)
 		.unwrap();
@@ -509,6 +524,26 @@ mod benchmarks {
 		assert_eq!(BoostPools::<T, I>::iter().count(), 1);
 	}
 
+	#[benchmark]
+	fn mark_transaction_as_tainted() {
+		let caller =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+		let tx_id = <<T as Config<I>>::TargetChain as Chain>::DepositDetails::benchmark_value();
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T, I>::mark_transaction_as_tainted_inner(
+				caller.clone(),
+				tx_id.clone(),
+			));
+		}
+
+		assert!(
+			TaintedTransactions::<T, I>::get(caller, tx_id).is_some(),
+			"No tainted transactions found"
+		);
+	}
+
 	#[cfg(test)]
 	use crate::mock_eth::*;
 
@@ -552,6 +587,9 @@ mod benchmarks {
 		});
 		new_test_ext().execute_with(|| {
 			_contract_ccm_swap_request::<Test, ()>(true);
+		});
+		new_test_ext().execute_with(|| {
+			_mark_transaction_as_tainted::<Test, ()>(true);
 		});
 	}
 }

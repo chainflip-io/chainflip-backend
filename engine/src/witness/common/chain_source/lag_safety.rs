@@ -76,7 +76,7 @@ where
 						// cause multiple new blocks to become safe, in which case this would be needed.
 						Some(safe_header)
 					} else {
-						utilities::loop_select!(
+						cf_utilities::loop_select!(
 							if let Some(header) = chain_stream.next() => {
 								let header_index = header.index;
 								assert!(<InnerSource::Chain as Chain>::is_block_witness_root(header_index));

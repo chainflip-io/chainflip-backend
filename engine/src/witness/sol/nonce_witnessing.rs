@@ -10,16 +10,17 @@ use crate::sol::{
 };
 use anyhow::{anyhow, Result};
 use serde_json::Value;
+use sol_prim::SlotNumber;
 use std::str::FromStr;
-
 pub async fn get_durable_nonce<SolRetryRpcClient>(
 	sol_client: &SolRetryRpcClient,
 	nonce_account: SolAddress,
-) -> Result<Option<SolHash>>
+	previous_slot: SlotNumber,
+) -> Result<Option<(SolHash, SlotNumber)>>
 where
 	SolRetryRpcClient: SolRetryRpcApi + Send + Sync + Clone,
 {
-	let account_info = sol_client
+	let response = sol_client
 		.get_multiple_accounts(
 			&[nonce_account],
 			RpcAccountInfoConfig {
@@ -29,10 +30,11 @@ where
 				encoding: Some(UiAccountEncoding::JsonParsed),
 				data_slice: None,
 				commitment: Some(CommitmentConfig::finalized()),
-				min_context_slot: None,
+				min_context_slot: Some(previous_slot),
 			},
 		)
-		.await
+		.await;
+	let account_info = response
 		.value
 		.into_iter()
 		.exactly_one()
@@ -61,11 +63,13 @@ where
 					.and_then(Value::as_str)
 					.ok_or_else(|| anyhow!("Blockhash not found"))?,
 			)?;
-
-			Ok(Some(hash))
+			Ok(Some((hash, response.context.slot)))
 		},
-		Some(_) =>
-			Err(anyhow!("Nonce data account encoding is not JsonParsed: {:?}", account_info)),
+		Some(_) => Err(anyhow!(
+			"Nonce data account encoding is not JsonParsed for account {:?}: {:?}",
+			nonce_account,
+			account_info
+		)),
 		None => Ok(None),
 	}
 }
@@ -77,8 +81,8 @@ mod tests {
 		sol::retry_rpc::SolRetryRpcClient,
 	};
 	use cf_chains::{Chain, Solana};
+	use cf_utilities::task_scope::task_scope;
 	use futures::FutureExt;
-	use utilities::task_scope::task_scope;
 
 	use super::*;
 
@@ -104,6 +108,7 @@ mod tests {
 				let nonce_account = get_durable_nonce(
 					&retry_client,
 					SolAddress::from_str("6TcAavZQgsTCGJkrxrtu8X26H7DuzMH4Y9FfXXgoyUGe").unwrap(),
+					0,
 				)
 				.await
 				.unwrap()
@@ -111,7 +116,7 @@ mod tests {
 
 				println!("Durable Nonce Info: {:?}", nonce_account);
 				assert_eq!(
-					nonce_account,
+					nonce_account.0,
 					SolHash::from_str("F9X2sMsGGJUGrVPs42vQc3fyi9rGqd7NFUWKT8SQTkCW").unwrap(),
 				);
 

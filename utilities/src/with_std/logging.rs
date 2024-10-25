@@ -50,7 +50,7 @@ macro_rules! print_start_and_end {
 					},
 					Err(error) => {
 						println!("Exiting {} due to error: {error:?}", env!("CARGO_PKG_NAME"));
-						Err(utilities::logging::ErrorType::Error(error))
+						Err(cf_utilities::logging::ErrorType::Error(error))
 					},
 				},
 				Err(panic) => {
@@ -60,7 +60,7 @@ macro_rules! print_start_and_end {
 						env!("CARGO_PKG_NAME"),
 						panic.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.downcast_ref::<String>().cloned())
 					);
-					Err(utilities::logging::ErrorType::Panic)
+					Err(cf_utilities::logging::ErrorType::Panic)
 				},
 			}
 		}

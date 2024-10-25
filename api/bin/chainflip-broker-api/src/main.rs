@@ -12,18 +12,54 @@ use chainflip_api::{
 	SwapDepositAddress, SwapPayload, WithdrawFeesDetail,
 };
 use clap::Parser;
-use custom_rpc::to_rpc_error;
 use futures::FutureExt;
 use jsonrpsee::{
-	core::{async_trait, RpcResult},
+	core::{async_trait, ClientError},
 	proc_macros::rpc,
 	server::ServerBuilder,
+	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
 };
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
 };
 use tracing::log;
+
+#[derive(thiserror::Error, Debug)]
+pub enum BrokerApiError {
+	#[error(transparent)]
+	ErrorObject(#[from] ErrorObjectOwned),
+	#[error(transparent)]
+	ClientError(#[from] jsonrpsee::core::ClientError),
+	#[error(transparent)]
+	Other(#[from] anyhow::Error),
+}
+
+type RpcResult<T> = Result<T, BrokerApiError>;
+
+impl From<BrokerApiError> for ErrorObjectOwned {
+	fn from(error: BrokerApiError) -> Self {
+		match error {
+			BrokerApiError::ErrorObject(error) => error,
+			BrokerApiError::ClientError(error) => match error {
+				ClientError::Call(obj) => obj,
+				internal => {
+					log::error!("Internal rpc client error: {internal:?}");
+					ErrorObject::owned(
+						ErrorCode::InternalError.code(),
+						"Internal rpc client error",
+						None::<()>,
+					)
+				},
+			},
+			BrokerApiError::Other(error) => jsonrpsee::types::error::ErrorObjectOwned::owned(
+				ErrorCode::ServerError(0xcf).code(),
+				error.to_string(),
+				None::<()>,
+			),
+		}
+	}
+}
 
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
@@ -90,8 +126,7 @@ impl RpcServer for RpcServerImpl {
 			.operator_api()
 			.register_account_role(AccountRole::Broker)
 			.await
-			.map(|tx_hash| format!("{tx_hash:#x}"))
-			.map_err(to_rpc_error)?)
+			.map(|tx_hash| format!("{tx_hash:#x}"))?)
 	}
 
 	async fn request_swap_deposit_address(
@@ -120,8 +155,7 @@ impl RpcServer for RpcServerImpl {
 				refund_parameters,
 				dca_parameters,
 			)
-			.await
-			.map_err(to_rpc_error)?)
+			.await?)
 	}
 
 	async fn withdraw_fees(
@@ -129,12 +163,7 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
-		Ok(self
-			.api
-			.broker_api()
-			.withdraw_fees(asset, destination_address)
-			.await
-			.map_err(to_rpc_error)?)
+		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
 	}
 
 	async fn request_swap_parameter_encoding(
@@ -157,14 +186,13 @@ impl RpcServer for RpcServerImpl {
 				destination_asset,
 				destination_address,
 				broker_commission,
-				try_parse_number_or_hex(min_output_amount).map_err(to_rpc_error)?,
+				try_parse_number_or_hex(min_output_amount)?,
 				retry_duration,
 				boost_fee,
 				affiliate_fees,
 				dca_parameters,
 			)
-			.await
-			.map_err(to_rpc_error)?)
+			.await?)
 	}
 }
 
@@ -222,11 +250,9 @@ async fn main() -> anyhow::Result<()> {
 			let server = ServerBuilder::default()
 				.max_connections(opts.max_connections)
 				.build(format!("0.0.0.0:{}", opts.port))
-				.await
-				.map_err(to_rpc_error)?;
+				.await?;
 			let server_addr = server.local_addr()?;
-			let server = server
-				.start(RpcServerImpl::new(scope, opts).await.map_err(to_rpc_error)?.into_rpc());
+			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc());
 
 			log::info!("🎙 Server is listening on {server_addr}.");
 

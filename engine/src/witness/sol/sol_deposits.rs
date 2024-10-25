@@ -247,7 +247,8 @@ fn parse_account_amount_from_data(
 						.map_err(|_| anyhow::anyhow!("Failed to parse string to u128"))
 				},
 				_ => Err(anyhow::anyhow!(
-					"Data account encoding is not JsonParsed: {:?}",
+					"Data account encoding is not JsonParsed for account {:?}: {:?}",
+					deposit_channel.address_to_witness(),
 					deposit_channel_info.data
 				)),
 			}
@@ -324,9 +325,9 @@ mod tests {
 	};
 
 	use cf_chains::{sol::SolAddress, Chain, Solana};
+	use cf_utilities::task_scope;
 	use futures_util::FutureExt;
 	use std::str::FromStr;
-	use utilities::task_scope;
 
 	use super::*;
 

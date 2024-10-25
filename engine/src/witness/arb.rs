@@ -2,11 +2,11 @@ mod chain_tracking;
 
 use std::{collections::HashMap, sync::Arc};
 
-use cf_chains::{evm::DepositDetails, Arbitrum};
+use cf_chains::{assets::arb::Asset as ArbAsset, evm::DepositDetails, Arbitrum};
 use cf_primitives::EpochIndex;
+use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use sp_core::H160;
-use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
@@ -18,7 +18,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::usdc::UsdcEvents,
+	witness::{common::cf_parameters::ShortId, evm::erc20_deposits::usdc::UsdcEvents},
 };
 
 use super::{
@@ -70,16 +70,15 @@ where
 		.await
 		.expect(STATE_CHAIN_CONNECTION);
 
-	let supported_arb_erc20_assets: HashMap<cf_primitives::chains::assets::arb::Asset, H160> =
-		state_chain_client
-			.storage_map::<pallet_cf_environment::ArbitrumSupportedAssets<state_chain_runtime::Runtime>, _>(
-				state_chain_client.latest_finalized_block().hash,
-			)
-			.await
-			.context("Failed to fetch Arbitrum supported assets")?;
+	let supported_arb_erc20_assets: HashMap<ArbAsset, H160> = state_chain_client
+		.storage_map::<pallet_cf_environment::ArbitrumSupportedAssets<state_chain_runtime::Runtime>, _>(
+			state_chain_client.latest_finalized_block().hash,
+		)
+		.await
+		.context("Failed to fetch Arbitrum supported assets")?;
 
 	let usdc_contract_address = *supported_arb_erc20_assets
-		.get(&cf_primitives::chains::assets::arb::Asset::ArbUsdc)
+		.get(&ArbAsset::ArbUsdc)
 		.context("ArbitrumSupportedAssets does not include USDC")?;
 
 	let supported_arb_erc20_assets: HashMap<H160, cf_primitives::Asset> =
@@ -136,7 +135,7 @@ where
 		.erc20_deposits::<_, _, _, UsdcEvents>(
 			process_call.clone(),
 			arb_client.clone(),
-			cf_primitives::chains::assets::arb::Asset::ArbUsdc,
+			ArbAsset::ArbUsdc,
 			usdc_contract_address,
 		)
 		.await?
@@ -149,7 +148,7 @@ where
 		.ethereum_deposits(
 			process_call.clone(),
 			arb_client.clone(),
-			cf_primitives::chains::assets::arb::Asset::ArbEth,
+			ArbAsset::ArbEth,
 			address_checker_address,
 			vault_address,
 		)
@@ -177,7 +176,9 @@ where
 struct ArbCallBuilder {}
 
 use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ChannelRefundParameters};
-use cf_primitives::{Asset, AssetAmount, BasisPoints, DcaParameters, TransactionHash};
+use cf_primitives::{
+	Asset, AssetAmount, BasisPoints, Beneficiaries, DcaParameters, TransactionHash,
+};
 
 impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 	type Chain = Arbitrum;
@@ -189,38 +190,26 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
+		_broker_fees: Beneficiaries<ShortId>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		// This is only to be checked in the pre-witnessed version
 		boost_fee: Option<BasisPoints>,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
-			if let Some(deposit_metadata) = deposit_metadata {
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset,
-					destination_asset,
-					deposit_amount,
-					destination_address,
-					deposit_metadata,
-					tx_hash,
-					boost_fee,
-					dca_params,
-					refund_params,
-				}
-			} else {
-				pallet_cf_ingress_egress::Call::contract_swap_request {
-					from: source_asset,
-					to: destination_asset,
-					deposit_amount,
-					destination_address,
-					tx_hash,
-					deposit_details: Box::new(DepositDetails {
-						tx_hashes: Some(vec![tx_hash.into()]),
-					}),
-					boost_fee: boost_fee.unwrap_or_default(),
-					dca_params,
-					refund_params,
-				}
+			pallet_cf_ingress_egress::Call::contract_swap_request {
+				input_asset: source_asset.try_into().expect("invalid asset for chain"),
+				output_asset: destination_asset,
+				deposit_amount,
+				destination_address,
+				deposit_metadata,
+				tx_hash,
+				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) }),
+				// Defaulting to no broker fees until PRO-1743 is completed.
+				broker_fees: Default::default(),
+				boost_fee: boost_fee.unwrap_or_default(),
+				dca_params,
+				refund_params: refund_params.map(Box::new),
 			},
 		)
 	}
@@ -254,11 +243,11 @@ mod tests {
 		witness::common::epoch_source::EpochSource,
 	};
 
-	use futures::FutureExt;
-	use utilities::{
+	use cf_utilities::{
 		logging::LoggingSettings, task_scope::task_scope,
 		testing::new_temp_directory_with_nonexistent_file,
 	};
+	use futures::FutureExt;
 
 	use super::*;
 
@@ -266,7 +255,7 @@ mod tests {
 	#[tokio::test]
 	async fn run_arb_witnessing() {
 		let _start_logger_server_fn = Some(
-			utilities::logging::init_json_logger(LoggingSettings {
+			cf_utilities::logging::init_json_logger(LoggingSettings {
 				span_lifecycle: false,
 				command_server_port: 6666,
 			})

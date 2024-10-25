@@ -1,9 +1,9 @@
 use crate::store::RedisStore;
+use cf_utilities::task_scope;
 use chainflip_engine::settings::CfSettings;
 use clap::Parser;
 use futures::FutureExt;
 use settings::{DepositTrackerSettings, TrackerOptions};
-use utilities::task_scope;
 
 mod settings;
 mod store;
