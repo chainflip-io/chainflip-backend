@@ -2,7 +2,6 @@ import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli
 import { randomBytes } from 'crypto';
 import assert from 'assert';
 import {
-  createEvmWalletAndFund,
   newAddress,
   observeBalanceIncrease,
   observeSwapRequested,
@@ -75,13 +74,10 @@ async function testDCASwap(
     await send(inputAsset, swapRequest.depositAddress, amount.toString());
     testDCASwaps.log(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
-    const wallet = await createEvmWalletAndFund(inputAsset);
-
-    const contractSwapParams = await executeContractSwap(
+    const receipt = await executeContractSwap(
       inputAsset,
       destAsset,
       destAddress,
-      wallet,
       undefined,
       amount.toString(),
       undefined,
@@ -89,13 +85,13 @@ async function testDCASwap(
       dcaParams,
     );
 
-    testDCASwaps.log(`Contract swap executed, tx hash: ${contractSwapParams.hash}`);
+    testDCASwaps.log(`Contract swap executed, tx hash: ${receipt.hash}`);
 
     // Look after Swap Requested of data.origin.Vault.tx_hash
     swapRequestedHandle = observeSwapRequested(
       inputAsset,
       destAsset,
-      contractSwapParams.hash,
+      receipt.hash,
       SwapRequestType.Regular,
     );
   }

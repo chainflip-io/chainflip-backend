@@ -31,12 +31,12 @@ export async function executeContractSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  wallet: HDNodeWallet,
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
+  wallet?: HDNodeWallet,
 ): ReturnType<typeof executeSwap> {
   const srcChain = chainFromAsset(sourceAsset);
   const destChain = chainFromAsset(destAsset);
@@ -49,8 +49,20 @@ export async function executeContractSwap(
     minPriceX128: '0',
   };
 
+  const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
+
+  if (erc20Assets.includes(sourceAsset)) {
+    // Doing effectively infinite approvals to make sure it doesn't fail.
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    await approveTokenVault(
+      sourceAsset,
+      (BigInt(amountToFineAmount(amountToSwap, assetDecimals(sourceAsset))) * 100n).toString(),
+      evmWallet,
+    );
+  }
+
   const networkOptions = {
-    signer: wallet,
+    signer: evmWallet,
     network: 'localnet',
     vaultContractAddress: getContractAddress(srcChain, 'VAULT'),
     srcTokenContractAddress: getContractAddress(srcChain, sourceAsset),
@@ -117,19 +129,9 @@ export async function performSwapViaContract(
   if (mnemonic === '') {
     throw new Error('Failed to create random mnemonic');
   }
-  const wallet = await createEvmWalletAndFund(sourceAsset);
 
   try {
-    if (erc20Assets.includes(sourceAsset)) {
-      // Doing effectively infinite approvals to make sure it doesn't fail.
-      // eslint-disable-next-line @typescript-eslint/no-use-before-define
-      await approveTokenVault(
-        sourceAsset,
-        (BigInt(amountToFineAmount(amountToSwap, assetDecimals(sourceAsset))) * 100n).toString(),
-        wallet,
-      );
-    }
-    swapContext?.updateStatus(swapTag, SwapStatus.ContractApproved);
+    const wallet = await createEvmWalletAndFund(sourceAsset);
 
     const oldBalance = await getBalance(destAsset, destAddress);
     if (log) {
@@ -146,12 +148,12 @@ export async function performSwapViaContract(
       sourceAsset,
       destAsset,
       destAddress,
-      wallet,
       messageMetadata,
       amountToSwap,
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
+      wallet,
     );
     swapContext?.updateStatus(swapTag, SwapStatus.ContractExecuted);
 
