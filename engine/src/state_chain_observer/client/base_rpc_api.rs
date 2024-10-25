@@ -18,9 +18,9 @@ use sc_rpc_api::{
 	system::{Health, SystemApiClient},
 };
 
-use futures::future::BoxFuture;
+use futures::{future::BoxFuture, Stream};
 use serde_json::value::RawValue;
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 use subxt::backend::rpc::RawRpcSubscription;
 
 use super::RpcResult;
@@ -75,6 +75,14 @@ impl<
 {
 }
 
+pub type WatchExtrinsicStream = Pin<
+	Box<
+		dyn Stream<
+				Item = Result<TransactionStatus<sp_core::H256, sp_core::H256>, serde_json::Error>,
+			> + Send,
+	>,
+>;
+
 /// Wraps the substrate client library methods. This trait allows us to mock a State Chain RPC.
 /// It assumes that provided block_hash's are valid as we would have gotten them from the
 /// RPC itself, and so it panics if a provided block_hash is invalid i.e. doesn't exist.
@@ -99,7 +107,7 @@ pub trait BaseRpcApi {
 	async fn submit_and_watch_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,
-	) -> RpcResult<Subscription<TransactionStatus<sp_core::H256, sp_core::H256>>>;
+	) -> RpcResult<WatchExtrinsicStream>;
 
 	async fn storage(
 		&self,
@@ -215,8 +223,10 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 	async fn submit_and_watch_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,
-	) -> RpcResult<Subscription<TransactionStatus<sp_core::H256, sp_core::H256>>> {
-		self.raw_rpc_client.watch_extrinsic(Bytes::from(extrinsic.encode())).await
+	) -> RpcResult<WatchExtrinsicStream> {
+		let subscription =
+			self.raw_rpc_client.watch_extrinsic(Bytes::from(extrinsic.encode())).await?;
+		Ok(Box::pin(subscription) as WatchExtrinsicStream)
 	}
 
 	async fn storage(
