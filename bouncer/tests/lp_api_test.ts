@@ -41,9 +41,9 @@ const amountToProvide = testAmount * 50; // Provide plenty of the asset for the 
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function lpApiRpc(method: string, params: any[]): Promise<any> {
+export async function lpApiRpc(method: string, params: any[], retries = 3): Promise<any> {
   // The port for the lp api is defined in `chainflip-lp-api.service`
-  return jsonRpc(method, params, 'http://127.0.0.1:10589');
+  return jsonRpc(method, params, 'http://127.0.0.1:10589', retries);
 }
 
 async function provideLiquidityAndTestAssetBalances() {
@@ -197,7 +197,7 @@ async function testTransferAsset() {
 
 async function testRegisterWithExistingLpAccount() {
   try {
-    await lpApiRpc(`lp_register_account`, []);
+    await lpApiRpc(`lp_register_account`, [], 0);
     throw new Error(`Unexpected lp_register_account result`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {

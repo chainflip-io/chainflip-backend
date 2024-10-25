@@ -4,6 +4,7 @@ export async function jsonRpc(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: any[],
   endpoint?: string,
+  retries: number = 0,
 ): Promise<JSON> {
   console.log('Sending json RPC', method);
 
@@ -15,20 +16,30 @@ export async function jsonRpc(
     id,
   });
 
+  let retry = 0;
   const fetchEndpoint = endpoint ?? 'http://127.0.0.1:9944';
-  const response = await fetch(`${fetchEndpoint}`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: request,
-  });
+  for (;;) {
+    const response = await fetch(`${fetchEndpoint}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: request,
+    });
 
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(`JSON Rpc request ${request} failed: ${data.error.message}`);
-  } else {
-    return data.result;
+    const data = await response.json();
+    retry++;
+    if (data.error) {
+      if (retry > retries) {
+        throw new Error(`JSON Rpc request ${request} failed: ${data.error.message}`);
+      } else {
+        console.error(
+          `JSON Rpc request ${request} failed: ${data.error.message}. Retrying... ${retry}`,
+        );
+      }
+    } else {
+      return data.result;
+    }
   }
 }
