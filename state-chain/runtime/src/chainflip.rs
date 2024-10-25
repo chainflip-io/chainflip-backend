@@ -18,8 +18,8 @@ use crate::{
 	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	RuntimeOrigin, SolanaBroadcaster, SolanaChainTrackingProvider, SolanaIngressEgress,
-	SolanaThresholdSigner, System, Validator, YEAR,
+	SolanaBroadcaster, SolanaChainTrackingProvider, SolanaIngressEgress, SolanaThresholdSigner,
+	System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -60,15 +60,14 @@ use cf_chains::{
 	Solana, TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChannelId,
-	DcaParameters, TransactionHash,
+	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, BackupRewardsNotifier, BlockEmissions,
 	BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
 	EpochInfo, FetchesTransfersLimitProvider, Heartbeat, IngressEgressFeeApi, Issuance,
 	KeyProvider, OnBroadcastReady, OnDeposit, QualifyNode, RewardsDistribution, RuntimeUpgrade,
-	ScheduledEgressDetails, SolanaContractSwap,
+	ScheduledEgressDetails,
 };
 
 use codec::{Decode, Encode};
@@ -968,25 +967,5 @@ impl FetchesTransfersLimitProvider for EvmLimit {
 
 	fn maybe_fetches_limit() -> Option<usize> {
 		Some(20)
-	}
-}
-
-pub struct SolanaContractSwapper;
-impl SolanaContractSwap for SolanaContractSwapper {
-	fn initiate_contract_swap(
-		from: Asset,
-		to: Asset,
-		deposit_amount: AssetAmount,
-		destination_address: EncodedAddress,
-		tx_hash: TransactionHash,
-	) {
-		let _ = SolanaIngressEgress::contract_swap_request(
-			RuntimeOrigin::root(),
-			from,
-			to,
-			deposit_amount,
-			destination_address,
-			tx_hash,
-		);
 	}
 }

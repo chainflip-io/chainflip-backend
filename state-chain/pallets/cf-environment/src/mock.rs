@@ -4,18 +4,12 @@ use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
-	eth,
-	sol::{
-		api::{ContractSwapAccountAndSender, SolanaTransactionBuildingError},
-		SolanaCrypto,
-	},
-	ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, CloseSolanaVaultSwapAccounts, Polkadot, Solana,
+	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot, Solana,
 };
 use cf_primitives::SemVer;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	mocks::{broadcaster::MockBroadcaster, key_provider::MockKeyProvider},
-	GetBitcoinFeeInfo, SolanaContractSwap, VaultKeyWitnessedHandler,
+	mocks::key_provider::MockKeyProvider, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{derive_impl, parameter_types};
 use sp_core::{H160, H256};
@@ -164,70 +158,6 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
 pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Encode, Decode, TypeInfo)]
-pub struct MockCloseSolanaVaultSwapAccounts {
-	contract_swap_accounts_and_senders: Vec<ContractSwapAccountAndSender>,
-}
-
-impl CloseSolanaVaultSwapAccounts for MockCloseSolanaVaultSwapAccounts {
-	fn new_unsigned(
-		accounts: Vec<ContractSwapAccountAndSender>,
-	) -> Result<Self, SolanaTransactionBuildingError> {
-		Ok(Self { contract_swap_accounts_and_senders: accounts })
-	}
-}
-
-impl ApiCall<SolanaCrypto> for MockCloseSolanaVaultSwapAccounts {
-	fn threshold_signature_payload(
-		&self,
-	) -> <<Solana as Chain>::ChainCrypto as ChainCrypto>::Payload {
-		unimplemented!()
-	}
-
-	fn signed(
-		self,
-		_threshold_signature: &<<Solana as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature,
-		_signer: <<Solana as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-	) -> Self {
-		unimplemented!()
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		unimplemented!()
-	}
-
-	fn is_signed(&self) -> bool {
-		unimplemented!()
-	}
-
-	fn transaction_out_id(
-		&self,
-	) -> <<Solana as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
-		unimplemented!()
-	}
-
-	fn refresh_replay_protection(&mut self) {
-		unimplemented!()
-	}
-
-	fn signer(&self) -> Option<<SolanaCrypto as ChainCrypto>::AggKey> {
-		unimplemented!()
-	}
-}
-
-pub struct MockSolanaContractSwapper;
-impl SolanaContractSwap for MockSolanaContractSwapper {
-	fn initiate_contract_swap(
-		_from: cf_primitives::Asset,
-		_to: cf_primitives::Asset,
-		_deposit_amount: cf_primitives::AssetAmount,
-		_destination_address: cf_chains::address::EncodedAddress,
-		_tx_hash: cf_primitives::TransactionHash,
-	) {
-		unimplemented!()
-	}
-}
-
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
@@ -235,9 +165,6 @@ impl pallet_cf_environment::Config for Test {
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
 	type SolanaVaultKeyWitnessedHandler = MockSolanaVaultKeyWitnessedHandler;
 	type SolanaNonceWatch = ();
-	type CloseSolanaVaultSwapAccounts = MockCloseSolanaVaultSwapAccounts;
-	type SolanaBroadcaster = MockBroadcaster<(MockCloseSolanaVaultSwapAccounts, RuntimeCall)>;
-	type SolanaContractSwapper = MockSolanaContractSwapper;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type BitcoinKeyProvider = MockBitcoinKeyProvider;
 	type RuntimeSafeMode = MockRuntimeSafeMode;
