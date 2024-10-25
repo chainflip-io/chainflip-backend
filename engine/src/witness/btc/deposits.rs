@@ -76,7 +76,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				for vault_address in vault_addresses {
 					for tx in &txs {
 						if let Some(call) =
-							super::smart_contract::try_extract_contract_call(tx, &vault_address)
+							super::vault_swaps::try_extract_vault_swap_call(tx, &vault_address)
 						{
 							process_call(call.into(), epoch.index).await;
 						}

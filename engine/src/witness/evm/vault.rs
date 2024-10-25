@@ -64,7 +64,7 @@ where
 			amount,
 			sender: _,
 			cf_parameters: _,
-		}) => Some(CallBuilder::contract_swap_request(
+		}) => Some(CallBuilder::vault_swap_request(
 			native_asset,
 			try_into_primitive(amount)?,
 			try_into_primitive(dst_token)?,
@@ -80,7 +80,7 @@ where
 			amount,
 			sender: _,
 			cf_parameters: _,
-		}) => Some(CallBuilder::contract_swap_request(
+		}) => Some(CallBuilder::vault_swap_request(
 			*(supported_assets
 				.get(&src_token)
 				.ok_or(anyhow!("Source token {src_token:?} not found"))?),
@@ -100,7 +100,7 @@ where
 			gas_amount,
 			cf_parameters,
 		}) =>
-			Some(CallBuilder::contract_swap_request(
+			Some(CallBuilder::vault_swap_request(
 				native_asset,
 				try_into_primitive(amount)?,
 				try_into_primitive(dst_token)?,
@@ -136,7 +136,7 @@ where
 			gas_amount,
 			cf_parameters,
 		}) =>
-			Some(CallBuilder::contract_swap_request(
+			Some(CallBuilder::vault_swap_request(
 				*(supported_assets
 					.get(&src_token)
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
@@ -197,7 +197,7 @@ where
 pub trait IngressCallBuilder {
 	type Chain: cf_chains::Chain<ChainAccount = EthereumAddress>;
 
-	fn contract_swap_request(
+	fn vault_swap_request(
 		source_asset: Asset,
 		deposit_amount: cf_primitives::AssetAmount,
 		destination_asset: Asset,

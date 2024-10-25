@@ -1,8 +1,8 @@
 pub mod api;
 pub mod benchmarking;
 pub mod deposit_address;
-pub mod smart_contract_encoding;
 pub mod utxo_selection;
+pub mod vault_swap_encoding;
 
 extern crate alloc;
 use self::deposit_address::DepositAddress;

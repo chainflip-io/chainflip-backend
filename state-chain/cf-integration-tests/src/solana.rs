@@ -427,7 +427,7 @@ fn solana_ccm_fails_with_invalid_input() {
 
 			// Contract call fails with invalid CCM
 			assert_ok!(RuntimeCall::SolanaIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_swap_request {
+				pallet_cf_ingress_egress::Call::vault_swap_request {
 					input_asset: SolAsset::Sol,
 					output_asset: Asset::SolUsdc,
 					deposit_amount: 1_000_000_000_000u64,
@@ -481,7 +481,7 @@ fn solana_ccm_fails_with_invalid_input() {
 			};
 
 			witness_call(RuntimeCall::SolanaIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_swap_request {
+				pallet_cf_ingress_egress::Call::vault_swap_request {
 					input_asset: SolAsset::Sol,
 					output_asset: Asset::SolUsdc,
 					deposit_amount: 1_000_000_000_000u64,
@@ -705,7 +705,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 				},
 			};
 			witness_call(RuntimeCall::SolanaIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_swap_request {
+				pallet_cf_ingress_egress::Call::vault_swap_request {
 					input_asset: SolAsset::Sol,
 					output_asset: Asset::SolUsdc,
 					deposit_amount: 1_000_000_000_000u64,
