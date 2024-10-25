@@ -123,14 +123,9 @@ export async function performSwapViaContract(
   const tag = swapTag ?? '';
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
 
-  // Generate a new wallet for each contract swap to prevent nonce issues when running in parallel
-  // with other swaps via deposit channels.
-  const mnemonic = Wallet.createRandom().mnemonic?.phrase ?? '';
-  if (mnemonic === '') {
-    throw new Error('Failed to create random mnemonic');
-  }
-
   try {
+    // Generate a new wallet for each contract swap to prevent nonce issues when running in parallel
+    // with other swaps via deposit channels.
     const wallet = await createEvmWalletAndFund(sourceAsset);
 
     const oldBalance = await getBalance(destAsset, destAddress);

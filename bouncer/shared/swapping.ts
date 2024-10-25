@@ -250,7 +250,7 @@ export async function testSwapViaContract(
     destAsset,
     addressType,
     messageMetadata,
-    (tagSuffix ?? '') + ' Contract',
+    (tagSuffix ?? '') + 'Contract',
     log,
     swapContext,
   );
