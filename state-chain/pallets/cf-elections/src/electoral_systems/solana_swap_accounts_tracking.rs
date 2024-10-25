@@ -1,7 +1,7 @@
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 use crate::{
 	electoral_system::{
@@ -32,10 +32,18 @@ pub trait SolanaVaultSwapAccountsHook<Account, SwapDetails, E> {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
-pub struct SolanaVaultSwapsElectoralState<Account, BlockNumber> {
+pub struct SolanaVaultSwapsElectoralState<Account: Ord, BlockNumber> {
 	pub block_number_last_closed_accounts: BlockNumber,
 	pub witnessed_open_accounts: Vec<Account>,
-	pub closure_initiated_accounts: Vec<Account>,
+	pub closure_initiated_accounts: BTreeSet<Account>,
+}
+
+#[derive(
+	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, Ord, PartialOrd,
+)]
+pub struct SolanaVaultSwapsVote<Account: Ord, SwapDetails: Ord> {
+	pub new_accounts: BTreeSet<(Account, SwapDetails)>,
+	pub confirm_closed_accounts: BTreeSet<Account>,
 }
 
 pub struct SolanaVaultSwapAccounts<
@@ -78,8 +86,8 @@ impl<
 	type ElectionIdentifierExtra = ();
 	type ElectionProperties = ();
 	type ElectionState = ();
-	type Vote = vote_storage::bitmap::Bitmap<Vec<(Account, SwapDetails)>>;
-	type Consensus = Vec<(Account, SwapDetails)>;
+	type Vote = vote_storage::bitmap::Bitmap<SolanaVaultSwapsVote<Account, SwapDetails>>;
+	type Consensus = SolanaVaultSwapsVote<Account, SwapDetails>;
 	type OnFinalizeContext = BlockNumber;
 	type OnFinalizeReturn = ();
 
@@ -108,11 +116,15 @@ impl<
 				electoral_access.mutate_unsynchronised_state(
 					|_electoral_access, unsynchronised_state| {
 						unsynchronised_state.witnessed_open_accounts.extend(
-							consensus.into_iter().map(|(account, swap_details)| {
-								Hook::initiate_vault_swap(swap_details);
-								account
+							consensus.new_accounts.iter().map(|(account, swap_details)| {
+								Hook::initiate_vault_swap((*swap_details).clone());
+								(*account).clone()
 							}),
 						);
+
+						consensus.confirm_closed_accounts.into_iter().for_each(|acc| {
+							unsynchronised_state.closure_initiated_accounts.remove(&acc);
+						});
 
 						Ok(())
 					},
@@ -123,8 +135,6 @@ impl<
 		}
 
 		electoral_access.mutate_unsynchronised_state(|_, unsynchronised_state| {
-			//let current_block_number = BlockNumbrer;
-			// //frame_system::Pallet::<T>::current_block_number();
 			if Hook::get_number_of_available_sol_nonce_accounts() >
 				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
 				(unsynchronised_state.witnessed_open_accounts.len() >=

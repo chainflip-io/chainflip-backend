@@ -13,6 +13,12 @@ use cf_traits::{
 	IngressSource, SolanaNonceWatch,
 };
 
+use crate::{RuntimeOrigin, SolanaIngressEgress};
+use cf_chains::{
+	address::EncodedAddress, assets::any::Asset, sol::api::ContractSwapAccountAndSender,
+	CloseSolanaVaultSwapAccounts,
+};
+use cf_primitives::{AssetAmount, TransactionHash};
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
@@ -29,17 +35,10 @@ use pallet_cf_elections::{
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf,
 };
-
-use crate::{RuntimeOrigin, SolanaIngressEgress};
-use cf_chains::{
-	address::EncodedAddress, assets::any::Asset, sol::api::ContractSwapAccountAndSender,
-	CloseSolanaVaultSwapAccounts,
-};
-use cf_primitives::{AssetAmount, TransactionHash};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
@@ -79,7 +78,7 @@ pub fn initial_state(
 			SolanaVaultSwapsElectoralState {
 				block_number_last_closed_accounts: 0,
 				witnessed_open_accounts: vec![],
-				closure_initiated_accounts: vec![],
+				closure_initiated_accounts: BTreeSet::new(),
 			},
 		),
 		unsynchronised_settings: (
