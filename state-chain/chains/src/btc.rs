@@ -7,8 +7,8 @@ pub mod utxo_selection;
 extern crate alloc;
 use self::deposit_address::DepositAddress;
 use crate::{
-	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, DepositChannel, FeeEstimationApi,
-	FeeRefundCalculator, RetryPolicy,
+	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, DepositChannel,
+	DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
 };
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
@@ -382,6 +382,12 @@ pub struct UtxoId {
 impl From<&DepositChannel<Bitcoin>> for BitcoinFetchId {
 	fn from(channel: &DepositChannel<Bitcoin>) -> Self {
 		BitcoinFetchId(channel.channel_id)
+	}
+}
+
+impl DepositDetailsToTransactionInId<BitcoinCrypto> for BtcDepositDetails {
+	fn deposit_id(&self) -> Option<Hash> {
+		Some(self.utxo_id.tx_id)
 	}
 }
 

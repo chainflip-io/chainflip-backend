@@ -521,7 +521,8 @@ mod benchmarks {
 	fn mark_transaction_as_tainted() {
 		let caller =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
-		let tx_id = <<T as Config<I>>::TargetChain as Chain>::DepositDetails::benchmark_value();
+		// let tx_id = <<T as Config<I>>::TargetChain as Chain>::DepositDetails::benchmark_value();
+		let tx_id: TransactionInIdFor<T, I> = TransactionInIdFor::<T, I>::benchmark_value();
 
 		#[block]
 		{

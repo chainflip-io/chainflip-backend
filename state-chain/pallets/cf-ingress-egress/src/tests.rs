@@ -2031,7 +2031,7 @@ fn only_broker_can_mark_transaction_as_tainted() {
 #[test]
 fn tainted_transactions_expire_if_not_witnessed() {
 	new_test_ext().execute_with(|| {
-		let tx_id = DepositDetails::default();
+		let tx_id = H256::default();
 		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
 
 		let (_, address) = request_address_and_deposit(BROKER, eth::Asset::Eth);
@@ -2102,7 +2102,8 @@ fn setup_boost_swap() -> ForeignChainAddress {
 #[test]
 fn finalize_boosted_tx_if_tainted_after_prewitness() {
 	new_test_ext().execute_with(|| {
-		let tx_id = DepositDetails::default();
+		let tx_id = H256::default();
+		let deposit_details = DepositDetails::default();
 
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
 			&BROKER,
@@ -2115,7 +2116,7 @@ fn finalize_boosted_tx_if_tainted_after_prewitness() {
 				deposit_address: address,
 				asset: eth::Asset::Eth,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: tx_id.clone(),
+				deposit_details: deposit_details.clone(),
 			}],
 			10,
 		);
@@ -2129,7 +2130,7 @@ fn finalize_boosted_tx_if_tainted_after_prewitness() {
 			address,
 			eth::Asset::Eth,
 			DEFAULT_DEPOSIT_AMOUNT,
-			tx_id,
+			deposit_details,
 			Default::default()
 		));
 
@@ -2147,7 +2148,8 @@ fn finalize_boosted_tx_if_tainted_after_prewitness() {
 #[test]
 fn reject_tx_if_tainted_before_prewitness() {
 	new_test_ext().execute_with(|| {
-		let tx_id = DepositDetails::default();
+		let tx_id = H256::default();
+		let deposit_details = DepositDetails::default();
 
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
 			&BROKER,
@@ -2165,7 +2167,7 @@ fn reject_tx_if_tainted_before_prewitness() {
 				deposit_address: address,
 				asset: eth::Asset::Eth,
 				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: tx_id.clone(),
+				deposit_details: deposit_details.clone(),
 			}],
 			10,
 		);
@@ -2174,7 +2176,7 @@ fn reject_tx_if_tainted_before_prewitness() {
 			address,
 			eth::Asset::Eth,
 			DEFAULT_DEPOSIT_AMOUNT,
-			tx_id,
+			deposit_details,
 			Default::default()
 		));
 
@@ -2194,7 +2196,7 @@ fn reject_tx_if_tainted_before_prewitness() {
 #[test]
 fn do_not_expire_tainted_transactions_if_prewitnessed() {
 	new_test_ext().execute_with(|| {
-		let tx_id = DepositDetails::default();
+		let tx_id = H256::default();
 		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
 
 		TaintedTransactions::<Test, ()>::insert(
@@ -2217,10 +2219,11 @@ fn can_not_report_transaction_after_witnessing() {
 		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
 			&BROKER,
 		));
-		let unreported = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
-		let unseen = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
-		let prewitnessed = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
-		let boosted = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
+
+		let unreported = H256::random();
+		let unseen = H256::random();
+		let prewitnessed = H256::random();
+		let boosted = H256::random();
 
 		TaintedTransactions::<Test, ()>::insert(BROKER, &unseen, TaintedTransactionStatus::Unseen);
 		TaintedTransactions::<Test, ()>::insert(
@@ -2259,7 +2262,7 @@ fn send_funds_back_after_they_have_been_rejected() {
 			refund_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 			amount: DEFAULT_DEPOSIT_AMOUNT,
 			asset: eth::Asset::Eth,
-			tx_id: Default::default(),
+			deposit_details: Default::default(),
 		};
 
 		ScheduledTxForReject::<Test, ()>::append(tainted_tx_details);

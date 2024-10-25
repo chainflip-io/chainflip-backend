@@ -21,6 +21,8 @@ use serde::{Deserialize, Serialize};
 use sp_core::ConstBool;
 use sp_std::{convert::TryFrom, str, vec};
 
+use crate::DepositDetailsToTransactionInId;
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub struct DepositDetails {
 	// In the case of EVM Native Deposits (ETH or arbETH), because we need to detect ingresses by
@@ -649,6 +651,8 @@ pub struct TransactionFee {
 	pub effective_gas_price: EthAmount,
 	pub gas_used: u128,
 }
+
+impl DepositDetailsToTransactionInId<EvmCrypto> for DepositDetails {}
 
 #[cfg(test)]
 pub(crate) mod tests {

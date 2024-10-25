@@ -260,7 +260,10 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	type DepositChannelState: Member + Parameter + ChannelLifecycleHooks + Unpin;
 
 	/// Extra data associated with a deposit.
-	type DepositDetails: Member + Parameter + BenchmarkValue;
+	type DepositDetails: Member
+		+ Parameter
+		+ BenchmarkValue
+		+ DepositDetailsToTransactionInId<Self::ChainCrypto>;
 
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
 
@@ -830,4 +833,10 @@ pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 	True(Option<Api>),
 	False,
 	_Phantom(PhantomData<C>, Never),
+}
+
+pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
+	fn deposit_id(&self) -> Option<C::TransactionInId> {
+		None
+	}
 }
