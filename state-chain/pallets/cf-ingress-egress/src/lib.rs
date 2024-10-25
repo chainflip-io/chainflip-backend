@@ -725,12 +725,12 @@ pub mod pallet {
 		},
 		TaintedTransactionReportReceived {
 			account_id: T::AccountId,
-			tx_id: DepositId<T::TargetChain>,
+			tx_id: <T::TargetChain as Chain>::DepositDetails,
 			expires_at: BlockNumberFor<T>,
 		},
 		TaintedTransactionReportExpired {
 			account_id: T::AccountId,
-			tx_id: DepositId<T::TargetChain>,
+			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
 		CcmFallbackScheduled {
 			broadcast_id: BroadcastId,
@@ -738,7 +738,7 @@ pub mod pallet {
 		},
 		TaintedTransactionRejected {
 			broadcast_id: BroadcastId,
-			tx_id: DepositId<T::TargetChain>,
+			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
 	}
 
@@ -926,20 +926,19 @@ pub mod pallet {
 				}
 			}
 
-			for TaintedTransactionDetails { .. } in ScheduledTxForReject::<T, I>::take() {
+			for tx in ScheduledTxForReject::<T, I>::take() {
 				if let Some(refund_address) = tx.refund_address.clone() {
 					let egress_fee = T::ChainTracking::estimate_egress_fee(tx.asset);
 					if let Ok(api_call) =
 						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
-							deposit_details.into(),
+							tx.tx_id.clone(),
 							refund_address,
 							tx.amount - egress_fee,
 						) {
-						let (broadcast_id, _) =
-							T::Broadcaster::threshold_sign_and_broadcast(api_call);
+						let result = T::Broadcaster::threshold_sign_and_broadcast(api_call);
 						Self::deposit_event(Event::<T, I>::TaintedTransactionRejected {
-							broadcast_id,
-							tx_id: deposit_details.into(),
+							broadcast_id: result.0,
+							tx_id: tx.tx_id.clone(),
 						});
 					} else {
 						FailedRejections::<T, I>::append(tx);
@@ -1356,7 +1355,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::mark_transaction_as_tainted())]
 		pub fn mark_transaction_as_tainted(
 			origin: OriginFor<T>,
-			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
+			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(T::AllowTransactionReports::get(), Error::<T, I>::UnsupportedChain);
@@ -2028,7 +2027,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				refund_address,
 				amount: deposit_amount,
 				asset,
-				deposit_details: deposit_details.clone(),
+				tx_id: deposit_details.clone(),
 			};
 			ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
 

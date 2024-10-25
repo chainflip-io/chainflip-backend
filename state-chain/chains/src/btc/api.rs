@@ -165,7 +165,11 @@ where
 		};
 		Ok(Self::NoChangeTransfer(BitcoinTransaction::create_new_unsigned(
 			&agg_key,
-			vec![deposit_details],
+			vec![Utxo {
+				amount,
+				id: deposit_details.utxo_id,
+				deposit_address: deposit_details.deposit_address,
+			}],
 			vec![BitcoinOutput { amount, script_pubkey }],
 		)))
 	}
