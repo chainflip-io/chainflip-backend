@@ -683,6 +683,8 @@ pub mod pallet {
 		SwapRequestDurationTooLong,
 		/// Invalid DCA parameters.
 		InvalidDcaParameters,
+		/// The provided Refund address cannot be decoded into ForeignChainAddress.
+		InvalidRefundAddress,
 	}
 
 	#[pallet::genesis_config]
@@ -964,7 +966,7 @@ pub mod pallet {
 			channel_metadata: Option<CcmChannelMetadata>,
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<T::AccountId>,
-			refund_parameters: Option<ChannelRefundParameters>,
+			refund_parameters: Option<ChannelRefundParametersEncoded>,
 			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
@@ -994,6 +996,17 @@ pub mod pallet {
 				)
 				.map_err(address_error_to_pallet_error::<T>)?;
 
+			// Convert the refund parameter from `EncodedAddress` into `ForeignChainAddress` type.
+			let refund_params_internal = refund_parameters
+				.clone()
+				.map(|params| {
+					params.try_map_address(|addr| {
+						T::AddressConverter::try_from_encoded_address(addr)
+							.map_err(|_| Error::<T>::InvalidRefundAddress.into())
+					})
+				})
+				.transpose()?;
+
 			if let Some(ccm) = channel_metadata.as_ref() {
 				let destination_chain: ForeignChain = destination_asset.into();
 				ensure!(destination_chain.ccm_support(), Error::<T>::CcmUnsupportedForTargetChain);
@@ -1019,7 +1032,7 @@ pub mod pallet {
 					broker,
 					channel_metadata.clone(),
 					boost_fee,
-					refund_parameters.clone(),
+					refund_params_internal,
 					dca_parameters.clone(),
 				)?;
 
@@ -1035,8 +1048,7 @@ pub mod pallet {
 				boost_fee,
 				channel_opening_fee,
 				affiliate_fees,
-				refund_parameters: refund_parameters
-					.map(|params| params.map_address(T::AddressConverter::to_encoded_address)),
+				refund_parameters,
 				dca_parameters,
 			});
 
