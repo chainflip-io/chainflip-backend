@@ -13,7 +13,7 @@ pub struct CfParameters<CcmData = ()> {
 
 pub type CcmCfParameters = CfParameters<CcmAdditionalData>;
 
-// TODO: Define this / implement it on the SC.
+// TODO: Define this / implement it on the SC - PRO-1743.
 pub type ShortId = u8;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
