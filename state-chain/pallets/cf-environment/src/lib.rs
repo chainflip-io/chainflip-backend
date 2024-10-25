@@ -585,12 +585,8 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn add_bitcoin_utxo_to_list(
-		amount: BtcAmount,
-		utxo_id: UtxoId,
-		deposit_address: DepositAddress,
-	) {
-		BitcoinAvailableUtxos::<T>::append(Utxo { amount, id: utxo_id, deposit_address });
+	pub fn add_bitcoin_utxo_to_list(utxo: Utxo) {
+		BitcoinAvailableUtxos::<T>::append(utxo);
 	}
 
 	pub fn add_bitcoin_change_utxo(amount: BtcAmount, utxo_id: UtxoId, pubkey_x: [u8; 32]) {

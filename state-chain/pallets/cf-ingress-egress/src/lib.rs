@@ -30,7 +30,7 @@ use cf_chains::{
 	AllBatch, AllBatchError, CcmCfParameters, CcmChannelMetadata, CcmDepositMetadata,
 	CcmFailReason, CcmMessage, Chain, ChannelLifecycleHooks, ChannelRefundParameters,
 	ConsolidateCall, DepositChannel, ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress,
-	SwapOrigin, TransferAssetParams,
+	RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
@@ -408,7 +408,11 @@ pub mod pallet {
 		type ChainApiCall: AllBatch<Self::TargetChain>
 			+ ExecutexSwapAndCall<Self::TargetChain>
 			+ TransferFallback<Self::TargetChain>
-			+ ConsolidateCall<Self::TargetChain>;
+			+ ConsolidateCall<Self::TargetChain>
+			+ RejectCall<
+				Self::TargetChain,
+				DepositDetails = <Self::TargetChain as Chain>::DepositDetails,
+			>;
 
 		/// Get the latest chain state of the target chain.
 		type ChainTracking: GetBlockHeight<Self::TargetChain>
@@ -582,6 +586,11 @@ pub mod pallet {
 	pub(crate) type ScheduledTxForReject<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
 
+	/// Stores the details of the tainted transactions that failed to be rejected.
+	#[pallet::storage]
+	pub(crate) type FailedRejections<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -717,16 +726,20 @@ pub mod pallet {
 		},
 		TaintedTransactionReportReceived {
 			account_id: T::AccountId,
-			tx_id: <T::TargetChain as Chain>::DepositDetails,
+			tx_id: DepositId<T::TargetChain>,
 			expires_at: BlockNumberFor<T>,
 		},
 		TaintedTransactionReportExpired {
 			account_id: T::AccountId,
-			tx_id: <T::TargetChain as Chain>::DepositDetails,
+			tx_id: DepositId<T::TargetChain>,
 		},
 		CcmFallbackScheduled {
 			broadcast_id: BroadcastId,
 			egress_details: ScheduledEgressDetails<T::TargetChain>,
+		},
+		TaintedTransactionRejected {
+			broadcast_id: BroadcastId,
+			tx_id: DepositId<T::TargetChain>,
 		},
 	}
 
@@ -911,6 +924,31 @@ pub mod pallet {
 							call.broadcast_id,
 						);
 					},
+				}
+			}
+
+			for TaintedTransactionDetails { .. } in ScheduledTxForReject::<T, I>::take() {
+				if let Some(refund_address) = tx.refund_address.clone() {
+					let egress_fee = T::ChainTracking::estimate_egress_fee(tx.asset);
+					if let Ok(api_call) =
+						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
+							deposit_details.into(),
+							refund_address,
+							tx.amount - egress_fee,
+						) {
+						let (broadcast_id, _) =
+							T::Broadcaster::threshold_sign_and_broadcast(api_call);
+						Self::deposit_event(Event::<T, I>::TaintedTransactionRejected {
+							broadcast_id,
+							tx_id: deposit_details.into(),
+						});
+					} else {
+						FailedRejections::<T, I>::append(tx);
+						log_or_panic!("Failed to construct reject call.");
+					}
+				} else {
+					FailedRejections::<T, I>::append(tx);
+					log_or_panic!("Refund address is not available.");
 				}
 			}
 		}
@@ -1223,7 +1261,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::mark_transaction_as_tainted())]
 		pub fn mark_transaction_as_tainted(
 			origin: OriginFor<T>,
-			tx_id: <T::TargetChain as Chain>::DepositDetails,
+			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(T::AllowTransactionReports::get(), Error::<T, I>::UnsupportedChain);
@@ -1930,7 +1968,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				refund_address,
 				amount: deposit_amount,
 				asset,
-				tx_id: deposit_details.clone(),
+				deposit_details: deposit_details.clone(),
 			};
 			ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
 

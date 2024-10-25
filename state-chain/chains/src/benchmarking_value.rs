@@ -12,10 +12,11 @@ use ethereum_types::{H160, U256};
 #[cfg(feature = "runtime-benchmarks")]
 use sp_std::vec;
 
+use crate::btc::Utxo;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::{
 	address::{EncodedAddress, ForeignChainAddress},
-	btc::{BtcDepositDetails, UtxoId},
+	btc::UtxoId,
 	dot::PolkadotTransactionId,
 	evm::{DepositDetails, EvmFetchId, EvmTransactionMetadata},
 };
@@ -225,10 +226,10 @@ impl BenchmarkValue for DepositDetails {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for BtcDepositDetails {
+impl BenchmarkValue for Utxo {
 	fn benchmark_value() -> Self {
-		BtcDepositDetails {
-			utxo_id: UtxoId::benchmark_value(),
+		Utxo {
+			id: UtxoId { tx_id: Hash::benchmark_value(), vout: 0 },
 			deposit_address: crate::btc::deposit_address::DepositAddress::new([0; 32], 0),
 		}
 	}

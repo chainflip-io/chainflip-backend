@@ -145,6 +145,20 @@ where
 	}
 }
 
+impl<E> RejectCall<Polkadot> for PolkadotApi<E>
+where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
+{
+	type DepositDetails = <Polkadot as Chain>::DepositDetails;
+	fn new_unsigned(
+		_deposit_details: Self::DepositDetails,
+		_refund_address: ForeignChainAddress,
+		_amount: <Polkadot as Chain>::ChainAmount,
+	) -> Result<Self, RejectError> {
+		Err(RejectError::NotSupportedForAsset)
+	}
+}
+
 #[macro_export]
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {

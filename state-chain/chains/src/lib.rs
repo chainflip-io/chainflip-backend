@@ -260,7 +260,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	type DepositChannelState: Member + Parameter + ChannelLifecycleHooks + Unpin;
 
 	/// Extra data associated with a deposit.
-	type DepositDetails: Member + Parameter + BenchmarkValue;
+	type DepositDetails: Member + Parameter + BenchmarkValue + Into<DepositId<Self>>;
 
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
 
@@ -332,6 +332,8 @@ pub trait ChainCrypto: ChainCryptoInstanceAlias {
 	fn maybe_broadcast_barriers_on_rotation(rotation_broadcast_id: BroadcastId)
 		-> Vec<BroadcastId>;
 }
+
+pub type DepositId<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
 /// Provides chain-specific replay protection data.
 pub trait ReplayProtectionProvider<C: Chain> {
@@ -522,8 +524,23 @@ pub enum ConsolidationError {
 	Other,
 }
 
+#[derive(Debug)]
+pub enum RejectError {
+	NotSupportedForAsset,
+	Other,
+}
+
 pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
+}
+
+pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
+	type DepositDetails: Member + Parameter + Unpin + BenchmarkValue;
+	fn new_unsigned(
+		deposit_details: Self::DepositDetails,
+		refund_address: ForeignChainAddress,
+		amount: <C as Chain>::ChainAmount,
+	) -> Result<Self, RejectError>;
 }
 
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
