@@ -127,67 +127,62 @@ impl<
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
 				election_access.delete();
 				electoral_access.new_election((), (), ())?;
-				electoral_access.mutate_unsynchronised_state(
-					|_electoral_access, unsynchronised_state| {
-						unsynchronised_state.witnessed_open_accounts.extend(
-							consensus.new_accounts.iter().map(|(account, swap_details)| {
-								Hook::initiate_vault_swap((*swap_details).clone());
-								(*account).clone()
-							}),
-						);
+				electoral_access.mutate_unsynchronised_state(|_, unsynchronised_state| {
+					unsynchronised_state.witnessed_open_accounts.extend(
+						consensus.new_accounts.iter().map(|(account, swap_details)| {
+							Hook::initiate_vault_swap((*swap_details).clone());
+							(*account).clone()
+						}),
+					);
 
-						consensus.confirm_closed_accounts.into_iter().for_each(|acc| {
-							unsynchronised_state.closure_initiated_accounts.remove(&acc);
-						});
+					consensus.confirm_closed_accounts.into_iter().for_each(|acc| {
+						unsynchronised_state.closure_initiated_accounts.remove(&acc);
+					});
 
-						Ok(())
-					},
-				)?;
+					Ok(())
+				})?;
 			}
 		} else {
 			electoral_access.new_election((), (), ())?;
 		}
 
-		electoral_access.mutate_unsynchronised_state(|_, unsynchronised_state| {
-			if Hook::get_number_of_available_sol_nonce_accounts() >
-				NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
-				(unsynchronised_state.witnessed_open_accounts.len() >=
-					MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES ||
-					(*current_block_number)
-						.checked_sub(&unsynchronised_state.block_number_last_closed_accounts)
-						.expect("")
-						.into() >= MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS)
+		let mut unsynchronised_state = electoral_access.unsynchronised_state()?;
+		if Hook::get_number_of_available_sol_nonce_accounts() >
+			NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
+			(unsynchronised_state.witnessed_open_accounts.len() >=
+				MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES ||
+				(*current_block_number)
+					.checked_sub(&unsynchronised_state.block_number_last_closed_accounts)
+					.expect(
+						"current block number is always greater than when apicall was last created",
+					)
+					.into() >= MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS)
+		{
+			let accounts_to_close: Vec<_> = if unsynchronised_state.witnessed_open_accounts.len() >
+				MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES
 			{
-				let accounts_to_close: Vec<_> =
-					if unsynchronised_state.witnessed_open_accounts.len() >
-						MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES
-					{
-						unsynchronised_state
-							.witnessed_open_accounts
-							.drain(..MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES)
-							.collect()
-					} else {
-						sp_std::mem::take(&mut unsynchronised_state.witnessed_open_accounts)
-					};
-				match Hook::close_accounts(accounts_to_close.clone()) {
-					Ok(()) => {
-						unsynchronised_state.block_number_last_closed_accounts =
-							*current_block_number;
-						unsynchronised_state.closure_initiated_accounts.extend(accounts_to_close);
-						Ok(())
-					},
-					Err(e) => {
-						log::error!(
-							"failed to build Solana CloseSolanaVaultSwapAccounts apicall: {:?}",
-							e
-						);
-						Err(CorruptStorageError::new())
-					},
-				}
+				unsynchronised_state
+					.witnessed_open_accounts
+					.drain(..MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES)
+					.collect()
 			} else {
-				Ok(())
+				sp_std::mem::take(&mut unsynchronised_state.witnessed_open_accounts)
+			};
+			match Hook::close_accounts(accounts_to_close.clone()) {
+				Ok(()) => {
+					unsynchronised_state.block_number_last_closed_accounts = *current_block_number;
+					unsynchronised_state.closure_initiated_accounts.extend(accounts_to_close);
+					electoral_access.set_unsynchronised_state(unsynchronised_state)?;
+				},
+				Err(e) => {
+					log::error!(
+						"failed to build Solana CloseSolanaVaultSwapAccounts apicall: {:?}",
+						e
+					);
+				},
 			}
-		})
+		}
+		Ok(())
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
