@@ -1,29 +1,27 @@
 mod boost;
+mod screening;
 
 use crate::{
-	mock_eth::*, BoostPoolId, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
+	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ReportExpiresAt, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject,
-	TaintedTransactionDetails, TaintedTransactionStatus, TaintedTransactions,
-	TAINTED_TX_EXPIRATION_BLOCKS,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	btc::{BitcoinNetwork, ScriptPubkey},
-	evm::{self, DepositDetails, EvmFetchId},
+	evm::{DepositDetails, EvmFetchId},
 	mocks::MockEthereum,
 	CcmChannelMetadata, CcmFailReason, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
 	TransferAssetParams,
 };
-use cf_primitives::{chains::assets::eth, AssetAmount, Beneficiaries, ChannelId, ForeignChain};
+use cf_primitives::{chains::assets::eth, AssetAmount, ChannelId, ForeignChain};
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
 	mocks::{
 		self,
-		account_role_registry::MockAccountRoleRegistry,
 		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
@@ -35,17 +33,16 @@ use cf_traits::{
 		funding_info::MockFundingInfo,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	AccountRoleRegistry, BalanceApi, DepositApi, EgressApi, EpochInfo,
-	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode, ScheduledEgressDetails,
-	SwapRequestType,
+	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
+	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::{H160, H256};
-use sp_runtime::{DispatchError, DispatchError::BadOrigin};
+use sp_core::H160;
+use sp_runtime::DispatchError;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -1961,321 +1958,6 @@ fn failed_ccm_deposit_can_deposit_event() {
 			RuntimeEvent::IngressEgress(crate::Event::CcmFailed {
 				reason: CcmFailReason::InsufficientDepositAmount,
 				..
-			})
-		);
-	});
-}
-
-#[test]
-fn process_tainted_transaction_and_expect_refund() {
-	new_test_ext().execute_with(|| {
-		let (_, address) = request_address_and_deposit(BROKER, eth::Asset::Eth);
-		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
-
-		let deposit_details: cf_chains::evm::DepositDetails = Default::default();
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
-			OriginTrait::signed(BROKER),
-			Default::default(),
-		));
-
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			eth::Asset::Eth,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
-			Default::default()
-		));
-
-		assert_has_matching_event!(
-			Test,
-			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
-				deposit_address: _address,
-				asset: eth::Asset::Eth,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionTainted,
-			})
-		);
-
-		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), Some(1));
-	});
-}
-
-#[test]
-fn only_broker_can_mark_transaction_as_tainted() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(
-				OriginTrait::signed(ALICE),
-				Default::default(),
-			),
-			BadOrigin
-		);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
-			OriginTrait::signed(BROKER),
-			Default::default(),
-		));
-	});
-}
-
-#[test]
-fn tainted_transactions_expire_if_not_witnessed() {
-	new_test_ext().execute_with(|| {
-		let tx_id = H256::default();
-		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
-
-		let (_, address) = request_address_and_deposit(BROKER, eth::Asset::Eth);
-		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
-			OriginTrait::signed(BROKER),
-			Default::default(),
-		));
-
-		System::set_block_number(expiry_at);
-
-		IngressEgress::on_idle(expiry_at, Weight::MAX);
-
-		assert!(!TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id));
-
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
-			crate::Event::TaintedTransactionReportExpired {
-				account_id: BROKER,
-				tx_id: Default::default(),
-			},
-		));
-	});
-}
-
-fn setup_boost_swap() -> ForeignChainAddress {
-	assert_ok!(
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
-			&ALICE,
-		)
-	);
-
-	assert_ok!(IngressEgress::create_boost_pools(
-		RuntimeOrigin::root(),
-		vec![BoostPoolId { asset: eth::Asset::Eth, tier: 10 }],
-	));
-
-	<Test as crate::Config>::Balance::try_credit_account(&ALICE, eth::Asset::Eth.into(), 1000)
-		.unwrap();
-
-	let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
-		eth::Asset::Eth,
-		eth::Asset::Eth.into(),
-		ForeignChainAddress::Eth(Default::default()),
-		Beneficiaries::new(),
-		BROKER,
-		None,
-		10,
-		None,
-		None,
-	)
-	.unwrap();
-
-	assert_ok!(IngressEgress::add_boost_funds(
-		RuntimeOrigin::signed(ALICE),
-		eth::Asset::Eth,
-		1000,
-		10
-	));
-
-	address
-}
-
-#[test]
-fn finalize_boosted_tx_if_tainted_after_prewitness() {
-	new_test_ext().execute_with(|| {
-		let tx_id = H256::default();
-		let deposit_details = DepositDetails::default();
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		let address: <Ethereum as Chain>::ChainAccount = setup_boost_swap().try_into().unwrap();
-
-		let _ = IngressEgress::add_prewitnessed_deposits(
-			vec![DepositWitness {
-				deposit_address: address,
-				asset: eth::Asset::Eth,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: deposit_details.clone(),
-			}],
-			10,
-		);
-
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id.clone(),),
-			crate::Error::<Test, ()>::TransactionAlreadyPreWitnessed
-		);
-
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			eth::Asset::Eth,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
-			Default::default()
-		));
-
-		assert_has_matching_event!(
-			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised {
-				deposit_address: _,
-				asset: eth::Asset::Eth,
-				..
-			})
-		);
-	});
-}
-
-#[test]
-fn reject_tx_if_tainted_before_prewitness() {
-	new_test_ext().execute_with(|| {
-		let tx_id = H256::default();
-		let deposit_details = DepositDetails::default();
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		let address: <Ethereum as Chain>::ChainAccount = setup_boost_swap().try_into().unwrap();
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
-			OriginTrait::signed(BROKER),
-			tx_id.clone(),
-		));
-
-		let _ = IngressEgress::add_prewitnessed_deposits(
-			vec![DepositWitness {
-				deposit_address: address,
-				asset: eth::Asset::Eth,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: deposit_details.clone(),
-			}],
-			10,
-		);
-
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			eth::Asset::Eth,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
-			Default::default()
-		));
-
-		assert_has_matching_event!(
-			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
-				deposit_address: _,
-				asset: eth::Asset::Eth,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionTainted,
-			})
-		);
-	});
-}
-
-#[test]
-fn do_not_expire_tainted_transactions_if_prewitnessed() {
-	new_test_ext().execute_with(|| {
-		let tx_id = H256::default();
-		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
-
-		TaintedTransactions::<Test, ()>::insert(
-			BROKER,
-			&tx_id,
-			TaintedTransactionStatus::Prewitnessed,
-		);
-
-		ReportExpiresAt::<Test, ()>::insert(expiry_at, vec![(BROKER, tx_id.clone())]);
-
-		IngressEgress::on_idle(expiry_at, Weight::MAX);
-
-		assert!(TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id));
-	});
-}
-
-#[test]
-fn can_not_report_transaction_after_witnessing() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		let unreported = H256::random();
-		let unseen = H256::random();
-		let prewitnessed = H256::random();
-		let boosted = H256::random();
-
-		TaintedTransactions::<Test, ()>::insert(BROKER, &unseen, TaintedTransactionStatus::Unseen);
-		TaintedTransactions::<Test, ()>::insert(
-			BROKER,
-			&prewitnessed,
-			TaintedTransactionStatus::Prewitnessed,
-		);
-		TaintedTransactions::<Test, ()>::insert(
-			BROKER,
-			&boosted,
-			TaintedTransactionStatus::Boosted,
-		);
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
-			OriginTrait::signed(BROKER),
-			unreported,
-		));
-		assert_ok!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), unseen,)
-		);
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), prewitnessed,),
-			crate::Error::<Test, ()>::TransactionAlreadyPreWitnessed
-		);
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), boosted,),
-			crate::Error::<Test, ()>::TransactionAlreadyPreWitnessed
-		);
-	});
-}
-
-#[test]
-fn send_funds_back_after_they_have_been_rejected() {
-	new_test_ext().execute_with(|| {
-		let tainted_tx_details = TaintedTransactionDetails {
-			refund_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
-			amount: DEFAULT_DEPOSIT_AMOUNT,
-			asset: eth::Asset::Eth,
-			deposit_details: Default::default(),
-		};
-
-		ScheduledTxForReject::<Test, ()>::append(tainted_tx_details);
-
-		IngressEgress::on_finalize(1);
-
-		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), None);
-
-		assert_has_matching_event!(
-			Test,
-			RuntimeEvent::IngressEgress(crate::Event::TaintedTransactionRejected {
-				broadcast_id: _,
-				tx_id: _,
 			})
 		);
 	});

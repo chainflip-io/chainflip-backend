@@ -652,7 +652,11 @@ pub struct TransactionFee {
 	pub gas_used: u128,
 }
 
-impl DepositDetailsToTransactionInId<EvmCrypto> for DepositDetails {}
+impl DepositDetailsToTransactionInId<EvmCrypto> for DepositDetails {
+	fn deposit_id(&self) -> Option<H256> {
+		None
+	}
+}
 
 #[cfg(test)]
 pub(crate) mod tests {
