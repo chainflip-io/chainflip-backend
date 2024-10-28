@@ -411,10 +411,7 @@ pub mod pallet {
 			+ ExecutexSwapAndCall<Self::TargetChain>
 			+ TransferFallback<Self::TargetChain>
 			+ ConsolidateCall<Self::TargetChain>
-			+ RejectCall<
-				Self::TargetChain,
-				DepositDetails = <Self::TargetChain as Chain>::DepositDetails,
-			>;
+			+ RejectCall<Self::TargetChain>;
 
 		/// Get the latest chain state of the target chain.
 		type ChainTracking: GetBlockHeight<Self::TargetChain>
@@ -743,6 +740,9 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
+		FailedToRejectTaintedTransaction {
+			tx_id: <T::TargetChain as Chain>::DepositDetails,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -936,7 +936,8 @@ pub mod pallet {
 						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
 							tx.deposit_details.clone(),
 							refund_address,
-							tx.amount - egress_fee,
+							tx.amount,
+							egress_fee,
 						) {
 						let result = T::Broadcaster::threshold_sign_and_broadcast(api_call);
 						Self::deposit_event(Event::<T, I>::TaintedTransactionRejected {
@@ -944,12 +945,16 @@ pub mod pallet {
 							tx_id: tx.deposit_details.clone(),
 						});
 					} else {
-						FailedRejections::<T, I>::append(tx);
-						log_or_panic!("Failed to construct reject call.");
+						FailedRejections::<T, I>::append(tx.clone());
+						Self::deposit_event(Event::<T, I>::FailedToRejectTaintedTransaction {
+							tx_id: tx.deposit_details,
+						});
 					}
 				} else {
-					FailedRejections::<T, I>::append(tx);
-					log_or_panic!("Refund address is not available.");
+					FailedRejections::<T, I>::append(tx.clone());
+					Self::deposit_event(Event::<T, I>::FailedToRejectTaintedTransaction {
+						tx_id: tx.deposit_details,
+					});
 				}
 			}
 		}

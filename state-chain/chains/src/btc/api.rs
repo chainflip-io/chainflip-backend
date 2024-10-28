@@ -152,11 +152,11 @@ where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>
 		+ ChainEnvironment<(), AggKey>,
 {
-	type DepositDetails = <Bitcoin as Chain>::DepositDetails;
 	fn new_unsigned(
-		deposit_details: Self::DepositDetails,
+		deposit_details: <Bitcoin as Chain>::DepositDetails,
 		refund_address: ForeignChainAddress,
 		amount: <Bitcoin as Chain>::ChainAmount,
+		fees: <Bitcoin as Chain>::ChainAmount,
 	) -> Result<Self, RejectError> {
 		let agg_key = <E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(RejectError::Other)?;
 		let script_pubkey = match refund_address {
@@ -170,7 +170,7 @@ where
 				id: deposit_details.utxo_id,
 				deposit_address: deposit_details.deposit_address,
 			}],
-			vec![BitcoinOutput { amount, script_pubkey }],
+			vec![BitcoinOutput { amount: amount - fees, script_pubkey }],
 		)))
 	}
 }

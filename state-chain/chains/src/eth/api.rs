@@ -241,11 +241,11 @@ impl<E> RejectCall<Ethereum> for EthereumApi<E>
 where
 	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>,
 {
-	type DepositDetails = <Ethereum as Chain>::DepositDetails;
 	fn new_unsigned(
-		_deposit_details: Self::DepositDetails,
+		_deposit_details: <Ethereum as Chain>::DepositDetails,
 		_refund_address: ForeignChainAddress,
 		_amount: <Ethereum as Chain>::ChainAmount,
+		_fees: <Ethereum as Chain>::ChainAmount,
 	) -> Result<Self, RejectError> {
 		Err(RejectError::NotSupportedForAsset)
 	}
