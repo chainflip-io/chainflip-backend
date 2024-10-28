@@ -1,13 +1,14 @@
 use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN, ScriptBuf};
 use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
+	assets::btc::Asset as BtcAsset,
 	btc::{
 		deposit_address::DepositAddress, smart_contract_encoding::UtxoEncodedData,
 		BtcDepositDetails, ScriptPubkey, UtxoId,
 	},
 	ChannelRefundParameters, ForeignChainAddress,
 };
-use cf_primitives::{Asset, DcaParameters};
+use cf_primitives::DcaParameters;
 use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
@@ -17,6 +18,7 @@ use crate::btc::rpc::VerboseTransaction;
 
 const OP_PUSHBYTES_75: u8 = 0x4b;
 const OP_PUSHDATA1: u8 = 0x4c;
+const NATIVE_ASSET: BtcAsset = BtcAsset::Btc;
 
 fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 	let bytes = script.as_script().as_bytes();
@@ -127,8 +129,8 @@ pub fn try_extract_contract_call(
 	let tx_id: [u8; 32] = tx.txid.to_byte_array();
 
 	Some(BtcIngressEgressCall::contract_swap_request {
-		from: Asset::Btc,
-		to: data.output_asset,
+		input_asset: NATIVE_ASSET,
+		output_asset: data.output_asset,
 		deposit_amount,
 		destination_address: data.output_address,
 		tx_hash: tx_id,
@@ -137,11 +139,13 @@ pub fn try_extract_contract_call(
 			utxo_id: UtxoId { tx_id: tx_id.into(), vout: 0 },
 			deposit_address: vault_address.clone(),
 		}),
-		refund_params: Some(ChannelRefundParameters {
+		deposit_metadata: None, // No ccm for BTC (yet?)
+		broker_fees: Default::default(),
+		refund_params: Some(Box::new(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration as u32,
 			refund_address: ForeignChainAddress::Btc(refund_address),
 			min_price,
-		}),
+		})),
 		dca_params: Some(DcaParameters {
 			number_of_chunks: data.parameters.number_of_chunks as u32,
 			chunk_interval: data.parameters.chunk_interval as u32,
@@ -173,7 +177,7 @@ mod tests {
 	const MOCK_DOT_ADDRESS: [u8; 32] = [9u8; 32];
 
 	const MOCK_SWAP_PARAMS: UtxoEncodedData = UtxoEncodedData {
-		output_asset: Asset::Dot,
+		output_asset: cf_primitives::Asset::Dot,
 		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
 		parameters: SharedCfParameters {
 			retry_duration: 5,
@@ -265,8 +269,8 @@ mod tests {
 		assert_eq!(
 			try_extract_contract_call(&tx, &vault_deposit_address),
 			Some(BtcIngressEgressCall::contract_swap_request {
-				from: Asset::Btc,
-				to: MOCK_SWAP_PARAMS.output_asset,
+				input_asset: NATIVE_ASSET,
+				output_asset: MOCK_SWAP_PARAMS.output_asset,
 				deposit_amount: DEPOSIT_AMOUNT,
 				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
 				tx_hash: tx.hash.to_byte_array(),
@@ -274,14 +278,16 @@ mod tests {
 					utxo_id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
 					deposit_address: vault_deposit_address,
 				}),
-				refund_params: Some(ChannelRefundParameters {
+				broker_fees: Default::default(),
+				deposit_metadata: None,
+				refund_params: Some(Box::new(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),
 					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
 						DEPOSIT_AMOUNT.into(),
 					)),
-				}),
+				})),
 				dca_params: Some(DcaParameters {
 					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks as u32,
 					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval as u32,

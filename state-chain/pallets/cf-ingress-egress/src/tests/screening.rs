@@ -202,7 +202,7 @@ fn finalize_boosted_tx_if_tainted_after_prewitness() {
 
 		assert_noop!(
 			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,),
-			crate::Error::<Test, ()>::TransactionAlreadyPreWitnessed
+			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
 		);
 
 		assert_ok!(IngressEgress::process_single_deposit(
@@ -370,11 +370,11 @@ fn can_not_report_transaction_after_witnessing() {
 		);
 		assert_noop!(
 			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), prewitnessed,),
-			crate::Error::<Test, ()>::TransactionAlreadyPreWitnessed
+			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
 		);
 		assert_noop!(
 			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), boosted,),
-			crate::Error::<Test, ()>::TransactionAlreadyPreWitnessed
+			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
 		);
 	});
 }

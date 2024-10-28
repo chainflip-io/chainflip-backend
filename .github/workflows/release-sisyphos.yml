@@ -78,7 +78,7 @@ jobs:
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
-      full_bouncer: true
+      full-bouncer: true
   test-benchmarks:
     needs: [build-benchmarks]
     uses: ./.github/workflows/_41_test_benchmarks.yml

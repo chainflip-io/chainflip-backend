@@ -216,7 +216,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ FullCodec
 		+ Into<cf_primitives::Asset>
 		+ Into<cf_primitives::ForeignChain>
-		+ TryFrom<cf_primitives::Asset>
+		+ TryFrom<cf_primitives::Asset, Error: Debug>
 		+ IntoEnumIterator
 		+ Unpin;
 
@@ -671,7 +671,6 @@ pub enum CcmFailReason {
 	UnsupportedForTargetChain,
 	InsufficientDepositAmount,
 	InvalidMetadata,
-	InvalidDestinationAddress,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]

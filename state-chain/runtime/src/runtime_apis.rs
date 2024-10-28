@@ -107,7 +107,7 @@ pub struct RuntimeApiPenalty {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct AuctionState {
-	pub blocks_per_epoch: u32,
+	pub epoch_duration: u32,
 	pub current_epoch_started_at: u32,
 	pub redemption_period_as_percentage: u8,
 	pub min_funding: u128,

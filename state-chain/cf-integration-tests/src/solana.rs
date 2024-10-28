@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, marker::PhantomData};
 use super::*;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
-	assets::any::Asset,
+	assets::{any::Asset, sol::Asset as SolAsset},
 	ccm_checker::CcmValidityError,
 	sol::{
 		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
@@ -149,10 +149,10 @@ fn schedule_deposit_to_swap(
 
 #[test]
 fn can_build_solana_batch_all() {
-	const EPOCH_BLOCKS: u32 = 100;
+	const EPOCH_DURATION_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_DURATION_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -225,7 +225,7 @@ fn can_rotate_solana_vault() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -284,7 +284,7 @@ fn can_send_solana_ccm() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -363,7 +363,7 @@ fn solana_ccm_fails_with_invalid_input() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -427,13 +427,18 @@ fn solana_ccm_fails_with_invalid_input() {
 
 			// Contract call fails with invalid CCM
 			assert_ok!(RuntimeCall::SolanaIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: Asset::Sol,
-					deposit_amount: 1_000_000_000_000u128,
-					destination_asset: Asset::SolUsdc,
+				pallet_cf_ingress_egress::Call::contract_swap_request {
+					input_asset: SolAsset::Sol,
+					output_asset: Asset::SolUsdc,
+					deposit_amount: 1_000_000_000_000u64,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
-					deposit_metadata: invalid_ccm,
+					deposit_metadata: Some(invalid_ccm),
 					tx_hash: Default::default(),
+					deposit_details: Box::new(()),
+					broker_fees: Default::default(),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: 0,
 				}
 			)
 			.dispatch_bypass_filter(
@@ -476,13 +481,18 @@ fn solana_ccm_fails_with_invalid_input() {
 			};
 
 			witness_call(RuntimeCall::SolanaIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: Asset::Sol,
-					deposit_amount: 1_000_000_000_000u128,
-					destination_asset: Asset::SolUsdc,
+				pallet_cf_ingress_egress::Call::contract_swap_request {
+					input_asset: SolAsset::Sol,
+					output_asset: Asset::SolUsdc,
+					deposit_amount: 1_000_000_000_000u64,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
-					deposit_metadata: ccm,
+					deposit_metadata: Some(ccm),
 					tx_hash: Default::default(),
+					deposit_details: Box::new(()),
+					broker_fees: Default::default(),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: 0,
 				},
 			));
 			// Setting the current agg key will invalidate the CCM.
@@ -518,7 +528,7 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -580,7 +590,7 @@ fn solana_resigning() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -656,7 +666,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -695,13 +705,19 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 				},
 			};
 			witness_call(RuntimeCall::SolanaIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: Asset::Sol,
-					deposit_amount: 1_000_000_000_000u128,
-					destination_asset: Asset::SolUsdc,
+				pallet_cf_ingress_egress::Call::contract_swap_request {
+					input_asset: SolAsset::Sol,
+					output_asset: Asset::SolUsdc,
+					deposit_amount: 1_000_000_000_000u64,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
-					deposit_metadata: ccm,
+					deposit_metadata: Some(ccm),
 					tx_hash: Default::default(),
+					deposit_details: Box::new(()),
+					broker_fees: Default::default(),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: 0,
+
 				},
 			));
 
@@ -747,7 +763,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			assert!(matches!(pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, SolanaInstance>::get()[0],
 				FetchOrTransfer::Transfer {
 					egress_id: (ForeignChain::Solana, 2),
-					asset: cf_chains::assets::sol::Asset::SolUsdc,
+					asset: SolAsset::SolUsdc,
 					destination_address: FALLBACK_ADDRESS,
 					..
 				}
