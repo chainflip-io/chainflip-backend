@@ -19,10 +19,7 @@ use crate::{
 		},
 		Offence,
 	},
-	migrations::{
-		serialize_solana_broadcast::{NoopUpgrade, SerializeSolanaBroadcastMigration},
-		sol_api_environment::SolApiEnvironmentMigration,
-	},
+	migrations::serialize_solana_broadcast::{NoopUpgrade, SerializeSolanaBroadcastMigration},
 	monitoring_apis::{
 		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance, FlipSupply,
 		LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels, PendingBroadcasts,
@@ -1267,8 +1264,6 @@ type MigrationsForV1_7 = (
 	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 9>,
 	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 9>,
 	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 9>,
-	// Migration for Updating Solana's Api Environments.
-	VersionedMigration<pallet_cf_environment::Pallet<Runtime>, SolApiEnvironmentMigration, 12, 13>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]

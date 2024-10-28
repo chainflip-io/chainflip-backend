@@ -1,9 +1,8 @@
-use frame_support::traits::OnRuntimeUpgrade;
-
 use crate::*;
-use frame_support::pallet_prelude::Weight;
 
-use cf_chains::sol::SolAddress;
+use frame_support::{pallet_prelude::Weight, traits::OnRuntimeUpgrade};
+
+use cf_chains::{evm::H256, sol::SolAddress};
 use cf_utilities::bs58_array;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -22,15 +21,12 @@ pub mod old {
 	}
 }
 
-pub struct SolApiEnvironmentMigration;
+pub struct SolApiEnvironmentMigration<T>(PhantomData<T>);
 
-impl OnRuntimeUpgrade for SolApiEnvironmentMigration {
+impl<T: Config<Hash = H256>> OnRuntimeUpgrade for SolApiEnvironmentMigration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		log::info!("🌮 Running migration for Environment pallet: Updating SolApiEnvironment.");
-		let _ = pallet_cf_environment::SolanaApiEnvironment::<Runtime>::translate::<
-			old::SolApiEnvironment,
-			_,
-		>(|old_env| {
+		let _ = SolanaApiEnvironment::<T>::translate::<old::SolApiEnvironment, _>(|old_env| {
 			old_env.map(
 				|old::SolApiEnvironment {
 				     vault_program,
@@ -40,8 +36,7 @@ impl OnRuntimeUpgrade for SolApiEnvironmentMigration {
 				     usdc_token_vault_ata,
 				 }| {
 					let (swap_endpoint_program, swap_endpoint_program_data_account) =
-						match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>(
-						) {
+						match cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<T>() {
 							cf_runtime_upgrade_utilities::genesis_hashes::BERGHAIN => (
 								SolAddress(bs58_array(
 									"BnECXbsDFYPmhxcV57dodaWtJJjtGPE8Le3LAR7qieYb",
