@@ -23,7 +23,6 @@ use std::{
 	sync::Arc,
 };
 use tracing::{error, info, warn};
-use utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
 use voter_api::CompositeVoterApi;
 
 const MAXIMUM_CONCURRENT_FILTER_REQUESTS: usize = 16;
