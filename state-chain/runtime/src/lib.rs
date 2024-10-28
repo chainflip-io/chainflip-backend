@@ -79,7 +79,7 @@ use pallet_cf_swapping::SwapLegInfo;
 use pallet_cf_validator::SetSizeMaximisingAuctionResolver;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
 use scale_info::prelude::string::String;
-use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
+use sp_std::collections::btree_map::BTreeMap;
 
 pub use frame_support::{
 	debug, parameter_types,
@@ -2147,7 +2147,6 @@ impl_runtime_apis! {
 		}
 
 		fn cf_suspended_validators() -> Vec<(Offence, u32)> {
-			let current_block = <frame_system::Pallet<Runtime>>::block_number();
 			let suspended_for_keygen = match pallet_cf_validator::Pallet::<Runtime>::current_rotation_phase() {
 				pallet_cf_validator::RotationPhase::KeygensInProgress(rotation_state) |
 				pallet_cf_validator::RotationPhase::KeyHandoversInProgress(rotation_state) |
@@ -2155,16 +2154,11 @@ impl_runtime_apis! {
 				pallet_cf_validator::RotationPhase::NewKeysActivated(rotation_state) => { rotation_state.banned.len() as u32 },
 				_ => {0u32}
 			};
-			pallet_cf_reputation::Suspensions::<Runtime>::iter().map(|(key, elem)| {
+			pallet_cf_reputation::Suspensions::<Runtime>::iter().map(|(key, _)| {
 				if key == pallet_cf_threshold_signature::PalletOffence::FailedKeygen.into() {
 					return (key, suspended_for_keygen);
 				}
-				(key, elem.iter().filter_map(|(suspended_until, validator)| {
-					if *suspended_until > current_block {
-						return Some(validator);
-					}
-					None
-				}).collect::<BTreeSet<_>>().len() as u32)
+				(key, pallet_cf_reputation::Pallet::<Runtime>::validators_suspended_for(&[key]).len() as u32)
 			}).collect()
 		}
 		fn cf_epoch_state() -> EpochState {
