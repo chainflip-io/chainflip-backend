@@ -1,4 +1,3 @@
-#![feature(absolute_path)]
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
 	LiquidityProviderSubcommands, ValidatorSubcommands,
@@ -12,6 +11,7 @@ use api::{
 };
 use bigdecimal::BigDecimal;
 use cf_chains::eth::Address as EthereumAddress;
+use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
 	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
@@ -20,7 +20,6 @@ use clap::Parser;
 use futures::FutureExt;
 use serde::Serialize;
 use std::{io::Write, path::PathBuf, sync::Arc};
-use utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 mod settings;
 
 #[tokio::main]

@@ -84,11 +84,15 @@ where
 				.into_iter()
 				.filter_map(move |(deposit_channel, amount)| {
 					let amount: SolAmount = amount.saturated_into(); // TODO: Change the DeltaBasedIngress to not use the Chains Amount type but
-												 // instead use u256 or u128 or some generic.
-					let (_, current_total_ingressed) =
+													  // instead use u256 or u128 or some generic.
+					let (deposit_details, current_total_ingressed) =
 						deposit_channels.get(deposit_channel.address()).unwrap();
 					if amount != current_total_ingressed.amount ||
-						slot < current_total_ingressed.block_number
+						slot < current_total_ingressed.block_number ||
+						// We avoid submitting an extrinsic if the amount is unchanged. However, the delta_based_ingress election won't close a
+						// channel until at least one ingress submission reaches consensus. To ensure this happens, we submit the amount on the
+						// first witnessed slot after the deposit channel's close block.
+						slot >= deposit_details.close_block
 					{
 						Some((
 							*deposit_channel.address(),
@@ -242,7 +246,11 @@ fn parse_account_amount_from_data(
 						.parse()
 						.map_err(|_| anyhow::anyhow!("Failed to parse string to u128"))
 				},
-				_ => Err(anyhow::anyhow!("Data account encoding is not JsonParsed")),
+				_ => Err(anyhow::anyhow!(
+					"Data account encoding is not JsonParsed for account {:?}: {:?}",
+					deposit_channel.address_to_witness(),
+					deposit_channel_info.data
+				)),
 			}
 		},
 	}
@@ -317,9 +325,9 @@ mod tests {
 	};
 
 	use cf_chains::{sol::SolAddress, Chain, Solana};
+	use cf_utilities::task_scope;
 	use futures_util::FutureExt;
 	use std::str::FromStr;
-	use utilities::task_scope;
 
 	use super::*;
 

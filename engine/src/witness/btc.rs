@@ -1,5 +1,6 @@
 mod chain_tracking;
 mod deposits;
+pub mod smart_contract;
 pub mod source;
 
 use crate::{
@@ -14,14 +15,13 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 	},
 };
-use bitcoin::BlockHash;
+use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::btc::{self, deposit_address::DepositAddress, BlockNumber, CHANGE_ADDRESS_SALT};
 use cf_primitives::{EpochIndex, NetworkEnvironment};
+use cf_utilities::task_scope::Scope;
 use futures_core::Future;
-use secp256k1::hashes::Hash;
 use source::BtcSource;
 use std::sync::Arc;
-use utilities::task_scope::Scope;
 
 use super::common::{
 	chain_source::{extension::ChainSourceExt, Header},
@@ -212,15 +212,15 @@ mod tests {
 		let txs = vec![
 			fake_transaction(vec![], Some(Amount::from_sat(FEE_0))),
 			fake_transaction(
-				fake_verbose_vouts(vec![(2324, vec![0, 32, 121, 9])]),
+				fake_verbose_vouts(vec![(2324, &DepositAddress::new([0; 32], 0))]),
 				Some(Amount::from_sat(FEE_1)),
 			),
 			fake_transaction(
-				fake_verbose_vouts(vec![(232232, vec![32, 32, 121, 9])]),
+				fake_verbose_vouts(vec![(232232, &DepositAddress::new([32; 32], 0))]),
 				Some(Amount::from_sat(FEE_2)),
 			),
 			fake_transaction(
-				fake_verbose_vouts(vec![(232232, vec![32, 32, 121, 9])]),
+				fake_verbose_vouts(vec![(232232, &DepositAddress::new([32; 32], 0))]),
 				Some(Amount::from_sat(FEE_3)),
 			),
 		];

@@ -1,5 +1,5 @@
+use cf_utilities::cached_stream::CachedStream;
 use futures::Stream;
-use utilities::cached_stream::CachedStream;
 
 use super::BlockInfo;
 

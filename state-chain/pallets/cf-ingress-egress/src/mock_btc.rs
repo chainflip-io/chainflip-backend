@@ -26,10 +26,8 @@ use cf_traits::{
 	DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
 };
 use frame_support::derive_impl;
-use sp_core::H256;
-use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
+use sp_core::ConstBool;
 
-type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
@@ -41,29 +39,7 @@ frame_support::construct_runtime!(
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
-	type Nonce = u64;
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Block = Block;
-	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = frame_support::traits::ConstU64<250>;
-	type Version = ();
-	type PalletInfo = PalletInfo;
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = frame_support::traits::ConstU16<2112>;
-	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
 impl_mock_chainflip!(Test);
@@ -130,6 +106,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type SafeMode = MockRuntimeSafeMode;
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<true>;
 }
 
 impl_test_helpers! {

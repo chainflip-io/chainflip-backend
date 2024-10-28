@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-// `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 pub mod chainflip;
 pub mod constants;
@@ -21,9 +20,9 @@ use crate::{
 	},
 	migrations::serialize_solana_broadcast::{NoopUpgrade, SerializeSolanaBroadcastMigration},
 	monitoring_apis::{
-		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, FeeImbalance, FlipSupply,
-		LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels, PendingBroadcasts,
-		PendingTssCeremonies, RedemptionsInfo,
+		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
+		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
+		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, BoostPoolDepth,
@@ -43,11 +42,11 @@ pub use cf_chains::instances::{
 use cf_chains::{
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
-	btc::{BitcoinCrypto, BitcoinRetryPolicy},
+	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
-	sol::SolanaCrypto,
+	sol::{SolAddress, SolanaCrypto},
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
@@ -58,8 +57,12 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::instances::*;
+use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
+use migrations::{
+	add_liveness_electoral_system_solana::LivenessSettingsMigration,
+	solana_egress_success_witness::SolanaEgressSuccessWitnessMigration,
+};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
@@ -79,7 +82,7 @@ use scale_info::prelude::string::String;
 use sp_std::collections::btree_map::BTreeMap;
 
 pub use frame_support::{
-	construct_runtime, debug, parameter_types,
+	debug, parameter_types,
 	traits::{
 		ConstBool, ConstU128, ConstU16, ConstU32, ConstU64, ConstU8, Get, KeyOwnerProofSystem,
 		Randomness, StorageInfo,
@@ -104,13 +107,13 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	traits::{
-		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
-		One, OpaqueKeys, Saturating, UniqueSaturatedInto, Verify,
+		BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One, OpaqueKeys,
+		Saturating, UniqueSaturatedInto, Verify,
 	},
 	BoundedVec,
 };
 
-use frame_support::genesis_builder_helper::{build_config, create_default_config};
+use frame_support::genesis_builder_helper::build_state;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 use sp_runtime::{
@@ -378,6 +381,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -404,6 +408,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -430,6 +435,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<true>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -456,6 +462,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -482,6 +489,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AllowTransactionReports = ConstBool<false>;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -555,41 +563,22 @@ parameter_types! {
 }
 
 // Configure FRAME pallets to include in runtime.
+#[derive_impl(frame_system::config_preludes::SolochainDefaultConfig)]
 impl frame_system::Config for Runtime {
-	/// The basic call filter to use in dispatchable.
-	type BaseCallFilter = frame_support::traits::Everything;
 	/// The block type for the runtime.
 	type Block = Block;
 	/// Block & extrinsics weights: base values and limits.
 	type BlockWeights = BlockWeights;
 	/// The maximum length of a block (in bytes).
 	type BlockLength = BlockLength;
-	/// The identifier used to distinguish between accounts.
-	type AccountId = AccountId;
-	/// The aggregated dispatch type that is available for extrinsics.
-	type RuntimeCall = RuntimeCall;
-	/// The type for storing how many extrinsics an account has signed.
-	type Nonce = Nonce;
-	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
-	type Lookup = AccountIdLookup<AccountId, ()>;
-	/// The type for hashing blocks and tries.
-	type Hash = Hash;
 	/// The hashing algorithm used.
 	type Hashing = BlakeTwo256;
-	/// The ubiquitous event type.
-	type RuntimeEvent = RuntimeEvent;
-	/// The ubiquitous origin type.
-	type RuntimeOrigin = RuntimeOrigin;
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount = BlockHashCount;
 	/// The weight of database operations that the runtime can invoke.
 	type DbWeight = DbWeight;
 	/// Version of the runtime.
 	type Version = Version;
-	/// Converts a module to the index of the module in `construct_runtime!`.
-	///
-	/// This type is being generated by `construct_runtime!`.
-	type PalletInfo = PalletInfo;
 	/// What to do if a new account is created.
 	type OnNewAccount = AccountRoles;
 	/// What to do if an account is fully reaped from the system.
@@ -608,9 +597,8 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = weights::frame_system::SubstrateWeight<Runtime>;
 	/// This is used as an identifier of the chain.
 	type SS58Prefix = ConstU16<CHAINFLIP_SS58_PREFIX>;
-	/// The set code logic, just the default since we're not a parachain.
-	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
+
+	/// We don't use RuntimeTask.
 	type RuntimeTask = ();
 }
 
@@ -624,10 +612,11 @@ impl pallet_aura::Config for Runtime {
 	type DisabledValidators = ();
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 	type AllowMultipleBlocksPerSlot = ConstBool<false>;
+	type SlotDuration = ConstU64<SLOT_DURATION>;
 }
 
 parameter_types! {
-	pub storage BlocksPerEpoch: u64 = Validator::blocks_per_epoch().into();
+	pub storage BlocksPerEpoch: u64 = Validator::epoch_duration().into();
 }
 
 type KeyOwnerIdentification<T, Id> =
@@ -723,7 +712,7 @@ impl pallet_cf_governance::Config for Runtime {
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 	type UpgradeCondition = (
 		pallet_cf_validator::NotDuringRotation<Runtime>,
-		pallet_cf_swapping::NoPendingSwaps<Runtime>,
+		(pallet_cf_swapping::NoPendingSwaps<Runtime>, pallet_cf_environment::NoUsedNonce<Runtime>),
 	);
 	type RuntimeUpgrade = chainflip::RuntimeUpgradeManager;
 	type CompatibleCfeVersions = Environment;
@@ -1018,71 +1007,122 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 }
 
-construct_runtime!(
-	pub struct Runtime
-	{
-		System: frame_system,
-		Timestamp: pallet_timestamp,
-		Environment: pallet_cf_environment,
-		Flip: pallet_cf_flip,
-		Emissions: pallet_cf_emissions,
-		// AccountRoles after funding, since account creation comes first.
-		Funding: pallet_cf_funding,
-		AccountRoles: pallet_cf_account_roles,
-		TransactionPayment: pallet_transaction_payment,
-		Witnesser: pallet_cf_witnesser,
-		Validator: pallet_cf_validator,
-		Session: pallet_session,
-		Historical: session_historical::{Pallet},
-		Aura: pallet_aura,
-		Authorship: pallet_authorship,
-		Grandpa: pallet_grandpa,
-		Governance: pallet_cf_governance,
-		TokenholderGovernance: pallet_cf_tokenholder_governance,
-		Reputation: pallet_cf_reputation,
+#[frame_support::runtime]
+mod runtime {
+	#[runtime::runtime]
+	#[runtime::derive(RuntimeCall, RuntimeEvent, RuntimeError, RuntimeOrigin)]
+	pub struct Runtime;
 
-		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
-		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
-		BitcoinChainTracking: pallet_cf_chain_tracking::<Instance3>,
+	#[runtime::pallet_index(0)]
+	pub type System = frame_system;
+	#[runtime::pallet_index(1)]
+	pub type Timestamp = pallet_timestamp;
+	#[runtime::pallet_index(2)]
+	pub type Environment = pallet_cf_environment;
+	#[runtime::pallet_index(3)]
+	pub type Flip = pallet_cf_flip;
+	#[runtime::pallet_index(4)]
+	pub type Emissions = pallet_cf_emissions;
 
-		EthereumVault: pallet_cf_vaults::<Instance1>,
-		PolkadotVault: pallet_cf_vaults::<Instance2>,
-		BitcoinVault: pallet_cf_vaults::<Instance3>,
+	// AccountRoles after funding; since account creation comes first.
+	#[runtime::pallet_index(5)]
+	pub type Funding = pallet_cf_funding;
+	#[runtime::pallet_index(6)]
+	pub type AccountRoles = pallet_cf_account_roles;
+	#[runtime::pallet_index(7)]
+	pub type TransactionPayment = pallet_transaction_payment;
+	#[runtime::pallet_index(8)]
+	pub type Witnesser = pallet_cf_witnesser;
+	#[runtime::pallet_index(9)]
+	pub type Validator = pallet_cf_validator;
+	#[runtime::pallet_index(10)]
+	pub type Session = pallet_session;
+	#[runtime::pallet_index(11)]
+	pub type Historical = session_historical;
+	#[runtime::pallet_index(12)]
+	pub type Aura = pallet_aura;
+	#[runtime::pallet_index(13)]
+	pub type Authorship = pallet_authorship;
+	#[runtime::pallet_index(14)]
+	pub type Grandpa = pallet_grandpa;
+	#[runtime::pallet_index(15)]
+	pub type Governance = pallet_cf_governance;
+	#[runtime::pallet_index(16)]
+	pub type TokenholderGovernance = pallet_cf_tokenholder_governance;
+	#[runtime::pallet_index(17)]
+	pub type Reputation = pallet_cf_reputation;
 
-		EvmThresholdSigner: pallet_cf_threshold_signature::<Instance16>,
-		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
-		BitcoinThresholdSigner: pallet_cf_threshold_signature::<Instance3>,
+	#[runtime::pallet_index(18)]
+	pub type EthereumChainTracking = pallet_cf_chain_tracking<Instance1>;
+	#[runtime::pallet_index(19)]
+	pub type PolkadotChainTracking = pallet_cf_chain_tracking<Instance2>;
+	#[runtime::pallet_index(20)]
+	pub type BitcoinChainTracking = pallet_cf_chain_tracking<Instance3>;
 
-		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
-		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
-		BitcoinBroadcaster: pallet_cf_broadcast::<Instance3>,
+	#[runtime::pallet_index(21)]
+	pub type EthereumVault = pallet_cf_vaults<Instance1>;
+	#[runtime::pallet_index(22)]
+	pub type PolkadotVault = pallet_cf_vaults<Instance2>;
+	#[runtime::pallet_index(23)]
+	pub type BitcoinVault = pallet_cf_vaults<Instance3>;
 
-		Swapping: pallet_cf_swapping,
-		LiquidityProvider: pallet_cf_lp,
+	#[runtime::pallet_index(24)]
+	pub type EvmThresholdSigner = pallet_cf_threshold_signature<Instance16>;
+	#[runtime::pallet_index(25)]
+	pub type PolkadotThresholdSigner = pallet_cf_threshold_signature<Instance2>;
+	#[runtime::pallet_index(26)]
+	pub type BitcoinThresholdSigner = pallet_cf_threshold_signature<Instance3>;
 
-		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
-		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
-		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
+	#[runtime::pallet_index(27)]
+	pub type EthereumBroadcaster = pallet_cf_broadcast<Instance1>;
+	#[runtime::pallet_index(28)]
+	pub type PolkadotBroadcaster = pallet_cf_broadcast<Instance2>;
+	#[runtime::pallet_index(29)]
+	pub type BitcoinBroadcaster = pallet_cf_broadcast<Instance3>;
 
-		LiquidityPools: pallet_cf_pools,
+	#[runtime::pallet_index(30)]
+	pub type Swapping = pallet_cf_swapping;
+	#[runtime::pallet_index(31)]
+	pub type LiquidityProvider = pallet_cf_lp;
 
-		CfeInterface: pallet_cf_cfe_interface,
+	#[runtime::pallet_index(32)]
+	pub type EthereumIngressEgress = pallet_cf_ingress_egress<Instance1>;
+	#[runtime::pallet_index(33)]
+	pub type PolkadotIngressEgress = pallet_cf_ingress_egress<Instance2>;
+	#[runtime::pallet_index(34)]
+	pub type BitcoinIngressEgress = pallet_cf_ingress_egress<Instance3>;
 
-		ArbitrumChainTracking: pallet_cf_chain_tracking::<Instance4>,
-		ArbitrumVault: pallet_cf_vaults::<Instance4>,
-		ArbitrumBroadcaster: pallet_cf_broadcast::<Instance4>,
-		ArbitrumIngressEgress: pallet_cf_ingress_egress::<Instance4>,
+	#[runtime::pallet_index(35)]
+	pub type LiquidityPools = pallet_cf_pools;
 
-		SolanaVault: pallet_cf_vaults::<Instance5>,
-		SolanaThresholdSigner: pallet_cf_threshold_signature::<Instance5>,
-		SolanaBroadcaster: pallet_cf_broadcast::<Instance5>,
-		SolanaIngressEgress: pallet_cf_ingress_egress::<Instance5>,
-		SolanaElections: pallet_cf_elections::<Instance5>,
-		SolanaChainTracking: pallet_cf_chain_tracking::<Instance5>,
+	#[runtime::pallet_index(36)]
+	pub type CfeInterface = pallet_cf_cfe_interface;
 
-		AssetBalances: pallet_cf_asset_balances,
-	}
-);
+	#[runtime::pallet_index(37)]
+	pub type ArbitrumChainTracking = pallet_cf_chain_tracking<Instance4>;
+	#[runtime::pallet_index(38)]
+	pub type ArbitrumVault = pallet_cf_vaults<Instance4>;
+	#[runtime::pallet_index(39)]
+	pub type ArbitrumBroadcaster = pallet_cf_broadcast<Instance4>;
+	#[runtime::pallet_index(40)]
+	pub type ArbitrumIngressEgress = pallet_cf_ingress_egress<Instance4>;
+
+	#[runtime::pallet_index(41)]
+	pub type SolanaVault = pallet_cf_vaults<Instance5>;
+	#[runtime::pallet_index(42)]
+	pub type SolanaThresholdSigner = pallet_cf_threshold_signature<Instance5>;
+	#[runtime::pallet_index(43)]
+	pub type SolanaBroadcaster = pallet_cf_broadcast<Instance5>;
+	#[runtime::pallet_index(44)]
+	pub type SolanaIngressEgress = pallet_cf_ingress_egress<Instance5>;
+	#[runtime::pallet_index(45)]
+	pub type SolanaElections = pallet_cf_elections<Instance5>;
+	#[runtime::pallet_index(46)]
+	pub type SolanaChainTracking = pallet_cf_chain_tracking<Instance5>;
+
+	#[runtime::pallet_index(47)]
+	pub type AssetBalances = pallet_cf_asset_balances;
+}
 
 /// The address format for describing accounts.
 pub type Address = sp_runtime::MultiAddress<AccountId, ()>;
@@ -1110,7 +1150,6 @@ pub type UncheckedExtrinsic =
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra>;
-#[cfg(not(feature = "try-runtime"))]
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
@@ -1119,20 +1158,6 @@ pub type Executive = frame_executive::Executive<
 	Runtime,
 	PalletExecutionOrder,
 	AllMigrations,
->;
-
-// NOTE: This should be a temporary workaround. When paritytech/polkadot-sdk#2560 is merged into our
-// substrate fork, we can remove this.
-#[cfg(feature = "try-runtime")]
-/// Executive: handles dispatch to the various modules.
-pub type Executive = frame_executive::Executive<
-	Runtime,
-	Block,
-	frame_system::ChainContext<Runtime>,
-	Runtime,
-	PalletExecutionOrder,
-	AllMigrations,
-	AllPalletsWithoutSystem,
 >;
 
 pub type PalletExecutionOrder = (
@@ -1211,6 +1236,7 @@ type AllMigrations = (
 	MigrationsForV1_7,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
+	chainflip::solana_elections::old::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1260,10 +1286,24 @@ type MigrationsForV1_7 = (
 		8,
 		9,
 	>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 8, 9>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 9>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 9>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 9>,
+	// For clearing all Solana Egress Success election votes, and migrating Solana ApiCall to the
+	// newer version.
+	VersionedMigration<
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		SolanaEgressSuccessWitnessMigration,
+		9,
+		10,
+	>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 8, 10>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 10>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 10>,
+	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 10>,
+	VersionedMigration<
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		LivenessSettingsMigration,
+		0,
+		1,
+	>,
 );
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -1349,7 +1389,7 @@ impl_runtime_apis! {
 			Environment::current_release_version()
 		}
 		fn cf_epoch_duration() -> u32 {
-			Validator::blocks_per_epoch()
+			Validator::epoch_duration()
 		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
@@ -1452,7 +1492,7 @@ impl_runtime_apis! {
 			.ok()
 			.map(|auction_outcome| auction_outcome.bond);
 			AuctionState {
-				blocks_per_epoch: Validator::blocks_per_epoch(),
+				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
@@ -1799,6 +1839,10 @@ impl_runtime_apis! {
 			pallet_cf_swapping::Pallet::<Runtime>::get_swap_limits()
 		}
 
+		fn cf_minimum_chunk_size(asset: Asset) -> AssetAmount {
+			Swapping::minimum_chunk_size(asset)
+		}
+
 		/// This should *not* be fully trusted as if the deposits that are pre-witnessed will definitely go through.
 		/// This returns a list of swaps in the requested direction that are pre-witnessed in the current block.
 		fn cf_prewitness_swaps(base_asset: Asset, quote_asset: Asset, side: Side) -> Vec<AssetAmount> {
@@ -1842,13 +1886,13 @@ impl_runtime_apis! {
 					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
 						match call {
 							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
-								from: swap_from, to: swap_to, deposit_amount, ..
-							}) if from == swap_from && to == swap_to => {
+								input_asset: swap_from, output_asset: swap_to, deposit_amount, ..
+							}) if from == swap_from.into() && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
 							}
 							RuntimeCall::ArbitrumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
-								from: swap_from, to: swap_to, deposit_amount, ..
-							}) if from == swap_from && to == swap_to => {
+								input_asset: swap_from, output_asset: swap_to, deposit_amount, ..
+							}) if from == swap_from.into() && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
 							}
 							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits::<_, EthereumInstance> {
@@ -2020,6 +2064,14 @@ impl_runtime_apis! {
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>> {
 			LiquidityPools::pools()
 		}
+
+		fn cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> Result<(), DispatchErrorWithMessage> {
+			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&cf_primitives::DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
+		}
+
+		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage> {
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
+		}
 	}
 
 	impl monitoring_apis::MonitoringRuntimeApi<Block> for Runtime {
@@ -2059,8 +2111,32 @@ impl_runtime_apis! {
 
 		fn cf_btc_utxos() -> BtcUtxos {
 			let utxos = pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
+			let mut btc_balance = utxos.iter().fold(0, |acc, elem| acc + elem.amount);
+			//Sum the btc balance contained in the change utxos to the btc "free_balance"
+			let btc_ceremonies = pallet_cf_threshold_signature::PendingCeremonies::<Runtime,BitcoinInstance>::iter_values().map(|ceremony|{
+				ceremony.request_context.request_id
+			}).collect::<Vec<_>>();
+			let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
+				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
+				.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
+			for ceremony in btc_ceremonies {
+				if let RuntimeCall::BitcoinBroadcaster(pallet_cf_broadcast::pallet::Call::on_signature_ready{ api_call, ..}) = pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::get(ceremony).unwrap() {
+					if let BitcoinApi::BatchTransfer(batch_transfer) = *api_call {
+						for output in batch_transfer.bitcoin_transaction.outputs {
+							if [
+								ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
+								ScriptPubkey::Taproot(btc_key.current),
+							]
+							.contains(&output.script_pubkey)
+							{
+								btc_balance += output.amount;
+							}
+						}
+					}
+				}
+			}
 			BtcUtxos {
-				total_balance: utxos.iter().fold(0, |acc, elem| acc + elem.amount),
+				total_balance: btc_balance,
 				count: utxos.len() as u32,
 			}
 		}
@@ -2088,7 +2164,7 @@ impl_runtime_apis! {
 			.ok()
 			.map(|auction_outcome| auction_outcome.bond);
 			EpochState {
-				blocks_per_epoch: Validator::blocks_per_epoch(),
+				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				current_epoch_index: Validator::current_epoch(),
 				min_active_bid,
@@ -2154,6 +2230,31 @@ impl_runtime_apis! {
 				spec_name: info.spec_name,
 			}
 		}
+		fn cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds{
+			ActivateKeysBroadcastIds{
+				ethereum: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, EthereumInstance>::get().map(|val| val.1),
+				bitcoin: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, BitcoinInstance>::get().map(|val| val.1),
+				polkadot: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, PolkadotInstance>::get().map(|val| val.1),
+				arbitrum: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, ArbitrumInstance>::get().map(|val| val.1),
+				solana: {
+					let broadcast_id = pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, SolanaInstance>::get().map(|val| val.1);
+					(broadcast_id, pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::get(broadcast_id.unwrap_or_default()).map(|broadcast_data| broadcast_data.transaction_out_id))
+				}
+			}
+		}
+		fn cf_sol_nonces() -> SolanaNonces{
+			SolanaNonces {
+				available: pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::get(),
+				unavailable: pallet_cf_environment::SolanaUnavailableNonceAccounts::<Runtime>::iter_keys().collect()
+			}
+		}
+		fn cf_sol_aggkey() -> SolAddress{
+			let epoch = SolanaThresholdSigner::current_key_epoch().unwrap_or_default();
+			SolanaThresholdSigner::keys(epoch).unwrap_or_default()
+		}
+		fn cf_sol_onchain_key() -> SolAddress{
+			SolanaBroadcaster::current_on_chain_key().unwrap_or_default()
+		}
 		fn cf_monitoring_data() -> MonitoringData {
 			MonitoringData{
 				external_chains_height: Self::cf_external_chains_block_height(),
@@ -2173,6 +2274,10 @@ impl_runtime_apis! {
 					let flip = Self::cf_flip_supply();
 					FlipSupply { total_supply: flip.0, offchain_supply: flip.1}
 				},
+				sol_aggkey: Self::cf_sol_aggkey(),
+				sol_onchain_key: Self::cf_sol_onchain_key(),
+				sol_nonces: Self::cf_sol_nonces(),
+				activating_key_broadcast_ids: Self::cf_rotation_broadcast_ids(),
 			}
 		}
 		fn cf_accounts_info(accounts: BoundedVec<AccountId, ConstU32<10>>) -> Vec<ValidatorInfo> {
@@ -2192,7 +2297,7 @@ impl_runtime_apis! {
 			Executive::execute_block(block);
 		}
 
-		fn initialize_block(header: &<Block as BlockT>::Header) {
+		fn initialize_block(header: &<Block as BlockT>::Header) -> sp_runtime::ExtrinsicInclusionMode {
 			Executive::initialize_block(header)
 		}
 	}
@@ -2254,7 +2359,7 @@ impl_runtime_apis! {
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			Aura::authorities().into_inner()
+			pallet_aura::Authorities::<Runtime>::get().into_inner()
 		}
 	}
 
@@ -2379,12 +2484,16 @@ impl_runtime_apis! {
 	}
 
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
-		fn create_default_config() -> Vec<u8> {
-			create_default_config::<RuntimeGenesisConfig>()
+		fn build_state(config: Vec<u8>) -> sp_genesis_builder::Result {
+			build_state::<RuntimeGenesisConfig>(config)
 		}
 
-		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
-			build_config::<RuntimeGenesisConfig>(config)
+		fn get_preset(_id: &Option<sp_genesis_builder::PresetId>) -> Option<Vec<u8>> {
+			None
+		}
+
+		fn preset_names() -> Vec<sp_genesis_builder::PresetId> {
+			Default::default()
 		}
 	}
 
@@ -2409,6 +2518,7 @@ impl_runtime_apis! {
 			(list, storage_info)
 		}
 
+		#[allow(non_local_definitions)]
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
 		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {

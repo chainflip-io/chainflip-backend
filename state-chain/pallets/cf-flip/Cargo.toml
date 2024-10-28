@@ -1,16 +1,16 @@
 [package]
-name = 'pallet-cf-flip'
-version = '0.1.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'FRAME pallet for the FLIP token.'
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = '<TODO>'
+name = "pallet-cf-flip"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+description = "FRAME pallet for the FLIP token."
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "<TODO>"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [lints]
 workspace = true
@@ -18,56 +18,51 @@ workspace = true
 [dependencies]
 
 # Internal dependencies
-cf-primitives = { path = '../../primitives', default-features = false }
-cf-traits = { path = '../../traits', default-features = false }
+cf-primitives = { workspace = true }
+cf-traits = { workspace = true }
 
 # Parity deps
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
-  'derive',
-] }
-scale-info = { version = '2.10.0', default-features = false, features = [
-  'derive',
-] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true, default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-pallet-transaction-payment = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-benchmarking = { workspace = true, optional = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+pallet-transaction-payment = { workspace = true }
+sp-std = { workspace = true }
+sp-runtime = { workspace = true }
 
 [dev-dependencies]
-quickcheck = '1'
-quickcheck_macros = '1'
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-cf-test-utilities = { path = '../../test-utilities' }
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }
+sp-io = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+cf-test-utilities = { workspace = true, default-features = true }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'cf-primitives/std',
-  'cf-traits/std',
-  'codec/std',
-  'scale-info/std',
-  'frame-benchmarking?/std',
-  'frame-support/std',
-  'frame-system/std',
-  'pallet-transaction-payment/std',
-  'sp-runtime/std',
-  'sp-std/std',
+  "cf-primitives/std",
+  "cf-traits/std",
+  "codec/std",
+  "scale-info/std",
+  "frame-benchmarking?/std",
+  "frame-support/std",
+  "frame-system/std",
+  "pallet-transaction-payment/std",
+  "sp-runtime/std",
+  "sp-std/std",
 ]
 runtime-benchmarks = [
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
-  'cf-primitives/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks',
-  'sp-runtime/runtime-benchmarks',
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
+  "cf-traits/runtime-benchmarks",
+  "sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
-  'frame-support/try-runtime',
-  'frame-system/try-runtime',
-  'sp-runtime/try-runtime',
-  'pallet-transaction-payment/try-runtime',
+  "frame-support/try-runtime",
+  "frame-system/try-runtime",
+  "sp-runtime/try-runtime",
+  "pallet-transaction-payment/try-runtime",
 ]

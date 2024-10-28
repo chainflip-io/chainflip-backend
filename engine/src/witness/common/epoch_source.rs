@@ -16,10 +16,10 @@ use cf_chains::{
 	Chain, ChainCrypto,
 };
 use cf_primitives::{AccountId, EpochIndex};
+use cf_utilities::{spmc, task_scope::Scope};
 use futures::StreamExt;
 use futures_core::{Future, Stream};
 use futures_util::stream;
-use utilities::{spmc, task_scope::Scope};
 
 use super::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
 
@@ -120,7 +120,7 @@ impl EpochSource<(), ()> {
 		scope.spawn({
 			let state_chain_client = state_chain_client.clone();
 			async move {
-				utilities::loop_select! {
+				cf_utilities::loop_select! {
 					let _ = epoch_update_sender.closed() => { break Ok(()) },
 					if let Some(block) = state_chain_stream.next() => {
 						let old_current_epoch = std::mem::replace(&mut current_epoch, state_chain_client
@@ -352,7 +352,7 @@ impl<
 			let state_chain_client = state_chain_client.clone();
 			let mut epochs = epochs.keys().cloned().collect::<BTreeSet<_>>();
 			async move {
-				utilities::loop_select! {
+				cf_utilities::loop_select! {
 					let _ = epoch_update_sender.closed() => { break Ok(()) },
 					if let Some((epoch, block_hash, update)) = unmapped_epoch_update_receiver.next() => {
 						match update {

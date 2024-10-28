@@ -6,9 +6,9 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, Instrument};
 
 use crate::p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
+use cf_utilities::metrics::P2P_BAD_MSG;
 pub use multisig::p2p::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION};
 use multisig::ChainTag;
-use utilities::metrics::P2P_BAD_MSG;
 
 pub struct P2PMuxer {
 	all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
@@ -229,7 +229,7 @@ impl P2PMuxer {
 #[cfg(test)]
 mod tests {
 
-	use utilities::testing::expect_recv_with_timeout;
+	use cf_utilities::testing::expect_recv_with_timeout;
 
 	use super::*;
 

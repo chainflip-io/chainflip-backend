@@ -3,17 +3,17 @@ pub mod node_interface;
 
 use anyhow::bail;
 
+use cf_utilities::redact_endpoint_secret::SecretUrl;
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
 use futures_core::Future;
-use utilities::redact_endpoint_secret::SecretUrl;
 
 use crate::constants::{RPC_RETRY_CONNECTION_INTERVAL, SYNC_POLL_INTERVAL};
 use anyhow::{anyhow, Context, Result};
+use cf_utilities::make_periodic_tick;
 use std::{path::PathBuf, str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
-use utilities::make_periodic_tick;
 
-use utilities::read_clean_and_decode_hex_str_file;
+use cf_utilities::read_clean_and_decode_hex_str_file;
 
 struct NonceInfo {
 	next_nonce: U256,

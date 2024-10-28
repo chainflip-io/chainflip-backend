@@ -36,9 +36,10 @@ type CfeEvent = cfe_events::CfeEvent<<Runtime as Chainflip>::ValidatorId>;
 
 // TODO: Can we use the actual events here?
 // Events from ethereum contract
+
 #[derive(Debug, Clone)]
 pub enum ContractEvent {
-	Funded { node_id: NodeId, amount: FlipBalance, total: FlipBalance, epoch: EpochIndex },
+	Funded { node_id: NodeId, amount: FlipBalance, epoch: EpochIndex },
 
 	Redeemed { node_id: NodeId, amount: FlipBalance, epoch: EpochIndex },
 }
@@ -85,10 +86,9 @@ impl ScGatewayContract {
 	pub fn fund_account(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
 		assert!(amount >= MinimumFunding::<Runtime>::get());
 		let current_amount = self.balances.get(&node_id).unwrap_or(&0);
-		let total = current_amount + amount;
-		self.balances.insert(node_id.clone(), total);
+		self.balances.insert(node_id.clone(), current_amount + amount);
 
-		self.events.push(ContractEvent::Funded { node_id, amount, total, epoch });
+		self.events.push(ContractEvent::Funded { node_id, amount, epoch });
 	}
 
 	// We don't really care about the process of "registering" and then "executing" redemption here.
@@ -691,7 +691,7 @@ impl Network {
 	/// Move to the last block of the epoch - next block will start Authority rotation
 	pub fn move_to_the_end_of_epoch(&mut self) {
 		let current_block = System::block_number();
-		let target = Validator::current_epoch_started_at() + Validator::blocks_per_epoch();
+		let target = Validator::current_epoch_started_at() + Validator::epoch_duration();
 		if target > current_block {
 			self.move_forward_blocks(target - current_block - 1)
 		}

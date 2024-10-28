@@ -46,7 +46,7 @@ jobs:
         run: cargo llvm-cov --lib --features ${{ inputs.test_features}} --workspace --codecov --output-path lcov.info
 
       - name: Upload coverage to Codecov 📊
-        uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238
         with:
           token: ${{ secrets.CF_BACKEND_CODECOV_TOKEN }} # not required for public repos
           files: lcov.info

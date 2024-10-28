@@ -1,6 +1,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_utilities::{
+	all_same, assert_ok, assert_panics, split_at, success_threshold_from_share_count,
+	testing::expect_recv_with_timeout,
+};
 use futures::{stream, StreamExt};
 use itertools::{Either, Itertools};
 use lazy_static::lazy_static;
@@ -12,10 +16,6 @@ use std::{
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
-use utilities::{
-	all_same, assert_ok, assert_panics, split_at, success_threshold_from_share_count,
-	testing::expect_recv_with_timeout,
-};
 
 use crate::{
 	client::{

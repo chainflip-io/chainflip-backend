@@ -8,6 +8,7 @@ use crate::{settings::DepositTrackerSettings, store::RedisStore};
 use anyhow::anyhow;
 use cf_chains::dot::PolkadotHash;
 use cf_primitives::{chains::assets::eth::Asset, NetworkEnvironment};
+use cf_utilities::task_scope;
 use chainflip_engine::{
 	state_chain_observer::{
 		self,
@@ -19,7 +20,6 @@ use chainflip_engine::{
 };
 use sp_core::H160;
 use std::{collections::HashMap, ops::Deref};
-use utilities::task_scope;
 
 #[derive(Clone)]
 pub(super) struct EnvironmentParameters {

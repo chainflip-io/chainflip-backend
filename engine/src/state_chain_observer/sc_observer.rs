@@ -40,12 +40,12 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 	},
 };
+use cf_utilities::task_scope::{task_scope, Scope};
 use multisig::{
 	bitcoin::BtcCryptoScheme, client::MultisigClientApi, ed25519::SolCryptoScheme,
 	eth::EvmCryptoScheme, polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
 	SignatureToThresholdSignature,
 };
-use utilities::task_scope::{task_scope, Scope};
 
 use super::client::chain_api::ChainApi;
 

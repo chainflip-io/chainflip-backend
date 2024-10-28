@@ -1,7 +1,7 @@
+use cf_utilities::loop_select;
 use futures_core::{Future, Stream};
 use futures_util::{stream, FutureExt, StreamExt};
 use std::pin::Pin;
-use utilities::loop_select;
 
 use crate::witness::common::{
 	chain_source::{aliases, BoxChainStream, ChainStream, Header},

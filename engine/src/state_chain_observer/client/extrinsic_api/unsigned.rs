@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use cf_utilities::task_scope::{Scope, ScopedJoinHandle, UnwrapOrCancel};
+use jsonrpsee::core::ClientError;
 use sp_core::H256;
 use sp_runtime::{traits::Hash, transaction_validity::InvalidTransaction};
 use tokio::sync::{mpsc, oneshot};
-use utilities::task_scope::{Scope, ScopedJoinHandle, UnwrapOrCancel};
 
 use crate::state_chain_observer::client::extrinsic_api::common::invalid_err_obj;
 
@@ -54,7 +55,7 @@ impl UnsignedExtrinsicClient {
 						let extrinsic =
 							state_chain_runtime::UncheckedExtrinsic::new_unsigned(call.clone());
 						let expected_hash = sp_runtime::traits::BlakeTwo256::hash_of(&extrinsic);
-						match base_rpc_client.submit_extrinsic(extrinsic).await {
+						match base_rpc_client.submit_extrinsic(extrinsic.clone()).await {
 							Ok(tx_hash) => {
 								assert_eq!(tx_hash, expected_hash, "{SUBSTRATE_BEHAVIOUR}");
 								Ok(tx_hash)
@@ -69,9 +70,7 @@ impl UnsignedExtrinsicClient {
 									// that this particular extrinsic has already been
 									// submitted. And so we can ignore the error and return
 									// the transaction hash
-									jsonrpsee::core::Error::Call(
-										jsonrpsee::types::error::CallError::Custom(ref obj),
-									) if obj.code() == 1013 => {
+									ClientError::Call(obj) if obj.code() == 1013 => {
 										tracing::debug!(
 											"Already in pool with tx_hash: {expected_hash:#x}."
 										);
@@ -81,21 +80,25 @@ impl UnsignedExtrinsicClient {
 									// believe it has a similiar meaning to POOL_ALREADY_IMPORTED,
 									// but we don't know. We believe there maybe cases where we need
 									// to resubmit if this error occurs.
-									jsonrpsee::core::Error::Call(
-										jsonrpsee::types::error::CallError::Custom(ref obj),
-									) if obj.code() == 1012 => {
+									ClientError::Call(obj) if obj.code() == 1012 => {
 										tracing::debug!(
 											"Transaction is temporarily banned with tx_hash: {expected_hash:#x}."
 										);
 										Ok(expected_hash)
 									},
-									jsonrpsee::core::Error::Call(
-										jsonrpsee::types::error::CallError::Custom(ref obj),
-									) if obj == &invalid_err_obj(InvalidTransaction::Stale) => {
+									ClientError::Call(obj)
+										if obj == invalid_err_obj(InvalidTransaction::Stale) =>
+									{
 										tracing::debug!("Submission failed as the transaction is stale: {obj:?}");
 										Err(ExtrinsicError::Stale)
 									},
-									_ => return Err(rpc_err.into()),
+									err => {
+										return Err(anyhow::anyhow!(
+											"Unhandled error while submitting unsigned extrinsic {:?}: {}",
+											extrinsic,
+											err
+										));
+									},
 								}
 							},
 						}

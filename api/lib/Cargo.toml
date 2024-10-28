@@ -7,50 +7,51 @@ edition = "2021"
 workspace = true
 
 [dependencies]
-anyhow = "1.0"
-async-trait = "0.1.49"
-bs58 = "0.5.1"
-ed25519-dalek = "2.1.1"
-futures = "0.3.14"
-hex = "0.4.3"
-hmac-sha512 = "1.1.4"
-libsecp256k1 = { version = '0.7' }
-rand = "0.8.5"
-serde = { version = "1.0", features = ["derive"] }
-tiny-bip39 = "1.0.0"
-tokio = "1.28"
-tracing = "0.1"
-zeroize = "1.5.4"
-libp2p-identity = { version = "0.2", features = ["ed25519", "peerid"] }
-lazy_static = "1.4"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bs58 = { workspace = true, default-features = true }
+ed25519-dalek = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true, default-features = true}
+hmac-sha512 = { workspace = true }
+libsecp256k1 = { workspace = true, default-features = true }
+rand = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+tiny-bip39 = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+zeroize = { workspace = true }
+libp2p-identity = { workspace = true, features = ["ed25519", "peerid"] }
+lazy_static = { workspace = true }
+jsonrpsee = { workspace = true, features = ["full"] }
 
 # Local
-chainflip-engine = { path = "../../engine/" }
-utilities = { path = "../../utilities/" }
+chainflip-engine = { workspace = true }
+cf-utilities = { workspace = true, default-features = true }
 
 # State Chain
-cf-amm = { path = "../../state-chain/amm" }
-cf-chains = { path = "../../state-chain/chains" }
-cf-primitives = { path = "../../state-chain/primitives" }
-chainflip-node = { path = "../../state-chain/node" }
-custom-rpc = { path = "../../state-chain/custom-rpc" }
-pallet-cf-account-roles = { path = '../../state-chain/pallets/cf-account-roles' }
-pallet-cf-environment = { path = "../../state-chain/pallets/cf-environment" }
-pallet-cf-governance = { path = "../../state-chain/pallets/cf-governance" }
-pallet-cf-ingress-egress = { path = "../../state-chain/pallets/cf-ingress-egress" }
-pallet-cf-lp = { path = '../../state-chain/pallets/cf-lp' }
-pallet-cf-asset-balances = { path = '../../state-chain/pallets/cf-asset-balances' }
-pallet-cf-funding = { path = "../../state-chain/pallets/cf-funding" }
-pallet-cf-swapping = { path = '../../state-chain/pallets/cf-swapping' }
-pallet-cf-pools = { path = '../../state-chain/pallets/cf-pools' }
-pallet-cf-threshold-signature = { path = "../../state-chain/pallets/cf-threshold-signature" }
-pallet-cf-validator = { path = "../../state-chain/pallets/cf-validator" }
-state-chain-runtime = { path = "../../state-chain/runtime" }
+cf-amm = { workspace = true, default-features = true }
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
+chainflip-node = { workspace = true }
+custom-rpc = { workspace = true }
+pallet-cf-account-roles = { workspace = true, default-features = true }
+pallet-cf-environment = { workspace = true, default-features = true }
+pallet-cf-governance = { workspace = true, default-features = true }
+pallet-cf-ingress-egress = { workspace = true, default-features = true }
+pallet-cf-lp = { workspace = true, default-features = true }
+pallet-cf-asset-balances = { workspace = true, default-features = true }
+pallet-cf-funding = { workspace = true, default-features = true }
+pallet-cf-swapping = { workspace = true, default-features = true }
+pallet-cf-pools = { workspace = true, default-features = true }
+pallet-cf-threshold-signature = { workspace = true, default-features = true }
+pallet-cf-validator = { workspace = true, default-features = true }
+state-chain-runtime = { workspace = true, default-features = true }
 
 
 # Substrate
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-consensus-aura = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
-sp-core = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
-sp-consensus-grandpa = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
-codec = { package = "parity-scale-codec", version = "3.6.1" }
+frame-support = { workspace = true, default-features = true }
+sp-consensus-aura = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-consensus-grandpa = { workspace = true, default-features = true }
+codec = { workspace = true, default-features = true }

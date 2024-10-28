@@ -28,11 +28,11 @@ use custom_rpc::{
 };
 use futures::{try_join, FutureExt, StreamExt};
 use jsonrpsee::{
-	core::{async_trait, RpcResult},
+	core::{async_trait, ClientError},
 	proc_macros::rpc,
 	server::ServerBuilder,
-	types::SubscriptionResult,
-	SubscriptionSink,
+	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
+	PendingSubscriptionSink,
 };
 use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
 use rpc_types::{OpenSwapChannels, OrderIdJson, RangeOrderSizeJson};
@@ -234,6 +234,42 @@ impl RpcServerImpl {
 	}
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum LpApiError {
+	#[error(transparent)]
+	ErrorObject(#[from] ErrorObjectOwned),
+	#[error(transparent)]
+	ClientError(#[from] jsonrpsee::core::ClientError),
+	#[error(transparent)]
+	Other(#[from] anyhow::Error),
+}
+
+type RpcResult<T> = Result<T, LpApiError>;
+
+impl From<LpApiError> for ErrorObjectOwned {
+	fn from(error: LpApiError) -> Self {
+		match error {
+			LpApiError::ErrorObject(error) => error,
+			LpApiError::ClientError(error) => match error {
+				ClientError::Call(obj) => obj,
+				internal => {
+					log::error!("Internal rpc client error: {internal:?}");
+					ErrorObject::owned(
+						ErrorCode::InternalError.code(),
+						"Internal rpc client error",
+						None::<()>,
+					)
+				},
+			},
+			LpApiError::Other(error) => jsonrpsee::types::error::ErrorObjectOwned::owned(
+				ErrorCode::ServerError(0xcf).code(),
+				error.to_string(),
+				None::<()>,
+			),
+		}
+	}
+}
+
 #[async_trait]
 impl RpcServer for RpcServerImpl {
 	/// Returns a deposit address
@@ -299,7 +335,8 @@ impl RpcServer for RpcServerImpl {
 
 	/// Returns a list of all assets and their free balance in json format
 	async fn free_balances(&self) -> RpcResult<AssetMap<U256>> {
-		self.api
+		Ok(self
+			.api
 			.state_chain_client
 			.base_rpc_client
 			.raw_rpc_client
@@ -307,7 +344,7 @@ impl RpcServer for RpcServerImpl {
 				self.api.state_chain_client.account_id(),
 				Some(self.api.state_chain_client.latest_finalized_block().hash),
 			)
-			.await
+			.await?)
 	}
 
 	async fn update_range_order(
@@ -449,29 +486,27 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	fn subscribe_order_fills(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
-		sink.accept()?;
+	fn subscribe_order_fills(&self, pending_sink: PendingSubscriptionSink) {
 		let state_chain_client = self.api.state_chain_client.clone();
 		tokio::spawn(async move {
-			let mut finalized_block_stream = state_chain_client.finalized_block_stream().await;
-			while let Some(block) = finalized_block_stream.next().await {
-				if let Err(option_error) = order_fills(state_chain_client.clone(), block)
-					.await
-					.map_err(Some)
-					.and_then(|order_fills| match sink.send(&order_fills) {
-						Ok(true) => Ok(()),
-						Ok(false) => Err(None),
-						Err(error) => Err(Some(jsonrpsee::core::Error::ParseError(error))),
-					}) {
-					if let Some(error) = option_error {
-						sink.close(error);
+			if let Ok(sink) = pending_sink.accept().await {
+				let mut finalized_block_stream = state_chain_client.finalized_block_stream().await;
+				while let Some(block) = finalized_block_stream.next().await {
+					match order_fills(state_chain_client.clone(), block).await {
+						Ok(order_fills) => {
+							if sink
+								.send(sc_rpc::utils::to_sub_message(&sink, &order_fills))
+								.await
+								.is_err()
+							{
+								break;
+							}
+						},
+						Err(_) => break,
 					}
-					break
 				}
 			}
 		});
-
-		Ok(())
 	}
 
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>> {
@@ -574,7 +609,7 @@ impl RpcServer for RpcServerImpl {
 async fn order_fills<StateChainClient>(
 	state_chain_client: Arc<StateChainClient>,
 	block: BlockInfo,
-) -> Result<BlockUpdate<OrderFills>, jsonrpsee::core::Error>
+) -> RpcResult<BlockUpdate<OrderFills>>
 where
 	StateChainClient: StorageApi,
 {
@@ -605,7 +640,7 @@ where
 }
 
 #[derive(Parser, Debug, Clone, Default)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), short_flag = 'v')]
 pub struct LPOptions {
 	#[clap(
 		long = "port",
@@ -657,7 +692,7 @@ async fn main() -> anyhow::Result<()> {
 
 			let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
 			let server_addr = server.local_addr()?;
-			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
+			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc());
 
 			log::info!("🎙 Server is listening on {server_addr}.");
 

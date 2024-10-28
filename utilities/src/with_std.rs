@@ -93,9 +93,10 @@ pub fn assert_stream_send<'u, R>(
 	stream
 }
 
-/// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for
-/// some time) it will immediately output a single tick on the next call to tick() and resume
-/// ticking every duration.
+/// Makes a tick that outputs every duration.
+///
+/// If ticks are "missed" (as tick() wasn't called for some time) it will immediately output a
+/// single tick on the next call to tick() and resume ticking every duration.
 ///
 /// The supplied duration should be >> 5ms due to the underlying implementation of
 /// [Interval::poll_tick].
@@ -240,8 +241,8 @@ pub fn repository_link() -> Option<impl core::fmt::Display> {
 #[macro_export]
 macro_rules! here {
 	() => {
-		utilities::internal_lazy_format!(
-			if let Some(repository_link) = utilities::repository_link() => (
+		cf_utilities::internal_lazy_format!(
+			if let Some(repository_link) = cf_utilities::repository_link() => (
 				"{}/{}#L{}#C{}",
 				repository_link,
 				file!(),
@@ -275,7 +276,7 @@ macro_rules! context {
 			})
 		}
 
-		get_expr_type($e, utilities::here!())
+		get_expr_type($e, cf_utilities::here!())
 	}};
 }
 

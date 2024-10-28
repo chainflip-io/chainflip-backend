@@ -13,9 +13,58 @@ use serde::{Deserialize, Serialize};
 use sp_core::{ConstU32, U256};
 use sp_std::{
 	cmp::{Ord, PartialOrd},
+	fmt,
+	ops::{Deref, DerefMut},
 	vec::Vec,
 };
 pub mod chains;
+
+#[macro_export]
+macro_rules! define_wrapper_type {
+	($name: ident, $inner: ty $(, extra_derives: $( $extra_derive: ident ),*)? ) => {
+
+		#[derive(
+			Clone,
+			Copy,
+			RuntimeDebug,
+			PartialEq,
+			Eq,
+			Encode,
+			Decode,
+			TypeInfo,
+			MaxEncodedLen,
+			Default,
+			$($( $extra_derive ),*)?
+		)]
+		pub struct $name(pub $inner);
+
+		impl Deref for $name {
+			type Target = $inner;
+
+			fn deref(&self) -> &Self::Target {
+				&self.0
+			}
+		}
+
+		impl DerefMut for $name {
+			fn deref_mut(&mut self) -> &mut Self::Target {
+				&mut self.0
+			}
+		}
+
+		impl From<$inner> for $name {
+			fn from(value: $inner) -> Self {
+				$name(value)
+			}
+		}
+
+		impl fmt::Display for $name {
+			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+				write!(f, "{}", self.0)
+			}
+		}
+	};
+}
 
 pub use chains::{assets::any::Asset, ForeignChain};
 
@@ -44,20 +93,26 @@ pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;
 
-pub type SwapId = u64;
-pub type SwapRequestId = u64;
+define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize);
+
+define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize);
 
 pub type PrewitnessedDepositId = u64;
 
 pub type BoostPoolTier = u16;
 
-// TODO: Consider increasing Price to U512 or switch to a f64 (f64 would only be for the external
+// TODO: Consider alternative representation for Price:
+//
+// increasing Price to U512 or switch to a f64 (f64 would only be for the external
 // price representation), as at low ticks the precision in the price is VERY LOW, but this does not
 // cause any problems for the AMM code in terms of correctness
-/// This is the ratio of equivalently valued amounts of asset One and asset Zero. The price is
-/// always measured in amount of asset One per unit of asset Zero. Therefore as asset zero becomes
-/// more valuable relative to asset one the price's literal value goes up, and vice versa. This
-/// ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional bits.
+
+/// This is the ratio of equivalently valued amounts of asset One and asset Zero.
+///
+/// The price is always measured in amount of asset One per unit of asset Zero. Therefore as asset
+/// zero becomes more valuable relative to asset one the price's literal value goes up, and vice
+/// versa. This ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional
+/// bits.
 pub type Price = U256;
 
 /// The type of the Id given to threshold signature requests. Note a single request may
@@ -123,6 +178,7 @@ pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 51;
 pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 16;
 
 /// This determines the average expected block time that we are targeting.
+///
 /// Blocks will be produced at a minimum duration defined by `SLOT_DURATION`.
 /// `SLOT_DURATION` is picked up by `pallet_timestamp` which is in turn picked
 /// up by `pallet_aura` to implement `fn slot_duration()`.

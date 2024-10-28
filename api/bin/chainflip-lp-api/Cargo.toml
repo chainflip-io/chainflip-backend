@@ -22,26 +22,28 @@ name = "chainflip-lp-api"
 workspace = true
 
 [dependencies]
-anyhow = "1.0"
-clap = { version = "3.2.23", features = ["derive", "env"] }
-futures = "0.3"
-hex = "0.4.3"
-jsonrpsee = { version = "0.16.2", features = ["full"] }
-serde = { version = '1.0', features = ['derive'] }
-serde_json = "1.0"
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-tokio = "1.20.1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
-pallet-cf-pools = { path = '../../../state-chain/pallets/cf-pools' }
-cf-primitives = { path = "../../../state-chain/primitives" }
-custom-rpc = { path = "../../../state-chain/custom-rpc" }
-frame-system = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.6+1' }
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+futures = { workspace = true }
+hex = { workspace = true, default-features = true }
+jsonrpsee = { workspace = true, features = ["full"] }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true }
+sp-rpc = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+pallet-cf-pools = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
+custom-rpc = { workspace = true }
+frame-system = { workspace = true, default-features = true }
+sc-rpc = { workspace = true, default-features = true }
+thiserror = { workspace = true, default-features = true }
 
 # Local
-chainflip-api = { path = "../../lib" }
-cf-utilities = { package = "utilities", path = "../../../utilities" }
+chainflip-api = { workspace = true }
+cf-utilities = { workspace = true, default-features = true }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
+substrate-build-script-utils = { workspace = true }

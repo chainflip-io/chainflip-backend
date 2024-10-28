@@ -562,7 +562,7 @@ mod test {
 			.finalize_and_serialize()
 			.expect("Transaction serialization must succeed");
 
-		println!("Serialized tx length: {:?}", serialized_tx.len());
+		// println!("Serialized tx length: {:?}", serialized_tx.len());
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH);
 
 		if serialized_tx != expected_serialized_tx {

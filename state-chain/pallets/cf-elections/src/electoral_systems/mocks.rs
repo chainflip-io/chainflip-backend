@@ -6,6 +6,7 @@ use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 
 pub mod access;
 
+use crate::{vote_storage::VoteStorage, CorruptStorageError};
 pub use access::*;
 use itertools::Itertools;
 
@@ -76,7 +77,8 @@ where
 		Self { initial_election_state: Some((extra, properties, state)), ..self }
 	}
 
-	pub fn build(self) -> TestContext<ES> {
+	// Useful for testing check_consensus since we already have an election.
+	pub fn build_with_initial_election(self) -> TestContext<ES> {
 		let setup = self.clone();
 		let mut electoral_access = MockAccess::<ES>::new(
 			self.unsynchronised_state,
@@ -95,6 +97,19 @@ where
 		assert_eq!(election.check_consensus(None, ConsensusVotes { votes: vec![] }).unwrap(), None);
 
 		TestContext { setup, electoral_access }
+	}
+
+	// We may want to test initialisation of elections within on finalise, so *don't* want to
+	// initialise an election in the utilities.
+	pub fn build(self) -> TestContext<ES> {
+		TestContext {
+			setup: self.clone(),
+			electoral_access: MockAccess::<ES>::new(
+				self.unsynchronised_state,
+				self.unsynchronised_settings,
+				self.electoral_settings,
+			),
+		}
 	}
 }
 
@@ -122,7 +137,8 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 			.check_consensus(None, consensus_votes)
 			.unwrap();
 
-		assert_eq!(new_consensus, expected_consensus);
+		// Should assert on some condition about the consensus.
+		assert_eq!(new_consensus.clone(), expected_consensus);
 
 		self.inner_force_consensus_update(
 			current_election_id,
@@ -153,6 +169,10 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 
 	pub fn access(&self) -> &MockAccess<ES> {
 		&self.electoral_access
+	}
+
+	pub fn mut_access(&mut self) -> &mut MockAccess<ES> {
+		&mut self.electoral_access
 	}
 
 	#[track_caller]
@@ -196,6 +216,13 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 			check.check(&pre_finalize, &post_finalize);
 		}
 		self
+	}
+
+	pub fn is_vote_valid(
+		&self,
+		partial_vote: &<ES::Vote as VoteStorage>::PartialVote,
+	) -> Result<bool, CorruptStorageError> {
+		self.electoral_access.is_vote_valid(self.only_election_id(), partial_vote)
 	}
 }
 

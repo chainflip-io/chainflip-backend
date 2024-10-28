@@ -1,45 +1,46 @@
 [package]
-name = 'custom-rpc'
-version = '0.1.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2021'
+name = "custom-rpc"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+edition = "2021"
 
 [lints]
 workspace = true
 
 [dependencies]
-codec = { package = 'parity-scale-codec', version = '3.6.1' }
+codec = { workspace = true, default-features = true }
 
 # Chainflip Runtime
-state-chain-runtime = { path = '../runtime' }
+state-chain-runtime = { workspace = true, default-features = true }
 
-anyhow = "1.0"
-futures = "0.3.14"
-jsonrpsee = { version = "0.16.2", features = ["full"] }
-hex = '0.4.3'
-serde = { version = '1.0', features = ['derive'] }
-thiserror = "1.0"
-log = { version = '0.4' }
+anyhow = { workspace = true }
+futures = { workspace = true }
+jsonrpsee = { workspace = true, features = ["full"] }
+hex = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+thiserror = { workspace = true }
+log = { workspace = true }
 
-cf-chains = { path = '../chains' }
-cf-primitives = { path = '../primitives' }
-cf-utilities = { package = 'utilities', path = '../../utilities' }
-cf-amm = { path = '../amm' }
-pallet-cf-governance = { path = "../pallets/cf-governance" }
-pallet-cf-pools = { path = "../pallets/cf-pools" }
-pallet-cf-witnesser = { path = "../pallets/cf-witnesser" }
-pallet-cf-swapping = { path = "../pallets/cf-swapping" }
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
+cf-amm = { workspace = true, default-features = true }
+pallet-cf-governance = { workspace = true, default-features = true }
+pallet-cf-pools = { workspace = true, default-features = true }
+pallet-cf-witnesser = { workspace = true, default-features = true }
+pallet-cf-swapping = { workspace = true, default-features = true }
 
-sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sc-rpc-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sc-client-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
+sp-api = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-rpc = { workspace = true, default-features = true }
+sc-rpc = { workspace = true, default-features = true }
+sc-rpc-api = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-state-machine = { workspace = true, default-features = true }
+sc-client-api = { workspace = true, default-features = true }
+frame-system = { workspace = true, default-features = true }
+frame-support = { workspace = true, default-features = true }
 
 [dev-dependencies]
-insta = { version = "1.34.0", features = ["json"] }
-serde_json = { version = "1.0.111" }
+insta = { workspace = true, features = ["json"] }
+serde_json = { workspace = true }

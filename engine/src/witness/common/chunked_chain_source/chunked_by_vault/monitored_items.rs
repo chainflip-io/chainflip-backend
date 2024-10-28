@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use cf_chains::{instances::ChainInstanceFor, ChainState};
+use cf_utilities::{
+	loop_select,
+	task_scope::{Scope, UnwrapOrCancel},
+};
 use frame_support::CloneNoBound;
 use futures::Future;
 use futures_util::{stream, StreamExt};
 use tokio::sync::watch;
-use utilities::{
-	loop_select,
-	task_scope::{Scope, UnwrapOrCancel},
-};
 
 use crate::{
 	state_chain_observer::client::{
@@ -43,6 +43,7 @@ fn is_header_ready<Inner: ChunkedByVault>(
 ///   the same SC block 50.
 /// - The SC progresses to block 51, revealing that an address is to be witnessed.
 /// - There is a deposit at block 10 of X, which CFE B witnesses, but CFE A does not.
+///
 /// If CFE A does not wait until the block is ready to process it can miss witnesses and be out
 /// of sync with the other CFEs.
 #[derive(Clone)]
@@ -121,7 +122,7 @@ where
 		);
 
 		scope.spawn(async move {
-			utilities::loop_select! {
+			cf_utilities::loop_select! {
 				let _ = sender.closed() => { break Ok(()) },
 				if let Some(_block_header) = state_chain_stream.next() => {
 					// Note it is still possible for engines to inconsistently select addresses to witness for a

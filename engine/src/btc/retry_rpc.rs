@@ -1,5 +1,5 @@
 use bitcoin::{BlockHash, Txid};
-use utilities::task_scope::Scope;
+use cf_utilities::task_scope::Scope;
 
 use crate::{
 	retrier::{Attempt, RequestLog, RetrierClient},

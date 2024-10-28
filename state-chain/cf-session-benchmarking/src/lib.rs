@@ -9,6 +9,7 @@ use pallet_session::*;
 use rand::{RngCore, SeedableRng};
 use sp_std::{prelude::*, vec};
 
+#[allow(dead_code)]
 pub struct Pallet<T: Config>(pallet_session::Pallet<T>);
 pub trait Config: pallet_session::Config + pallet_session::historical::Config {}
 

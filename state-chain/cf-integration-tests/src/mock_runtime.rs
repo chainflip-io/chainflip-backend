@@ -39,6 +39,8 @@ pub const ACCRUAL_RATIO: (i32, u32) = (1, 1);
 
 const COMPUTE_PRICE: u64 = 1_000u64;
 
+const BLOCKS_BETWEEN_LIVENESS_CHECKS: u32 = 10;
+
 /// The offences committable within the protocol and their respective reputation penalty and
 /// suspension durations.
 pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
@@ -50,6 +52,7 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	// so there is no need to suspend them further.
 	(Offence::FailedToBroadcastTransaction, (10, 0)),
 	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
+	(Offence::FailedLivenessCheck(cf_chains::ForeignChain::Solana), (4, 0)),
 ];
 
 use crate::{
@@ -64,7 +67,7 @@ use cf_primitives::{
 pub struct ExtBuilder {
 	pub genesis_accounts: Vec<(AccountId, AccountRole, FlipBalance)>,
 	root: Option<AccountId>,
-	blocks_per_epoch: BlockNumber,
+	epoch_duration: BlockNumber,
 	max_authorities: AuthorityCount,
 	min_authorities: AuthorityCount,
 }
@@ -76,7 +79,7 @@ impl Default for ExtBuilder {
 			min_authorities: 1,
 			genesis_accounts: Default::default(),
 			root: Default::default(),
-			blocks_per_epoch: Default::default(),
+			epoch_duration: Default::default(),
 		}
 	}
 }
@@ -100,8 +103,8 @@ impl ExtBuilder {
 		self
 	}
 
-	pub fn blocks_per_epoch(mut self, blocks_per_epoch: BlockNumber) -> Self {
-		self.blocks_per_epoch = blocks_per_epoch;
+	pub fn epoch_duration(mut self, epoch_duration: BlockNumber) -> Self {
+		self.epoch_duration = epoch_duration;
 		self
 	}
 
@@ -181,7 +184,7 @@ impl ExtBuilder {
 					})
 					.collect(),
 				genesis_backups: Default::default(),
-				blocks_per_epoch: self.blocks_per_epoch,
+				epoch_duration: self.epoch_duration,
 				bond: self
 					.genesis_accounts
 					.iter()
@@ -303,12 +306,14 @@ impl ExtBuilder {
 						(),
 						(),
 						(),
+						(),
 					),
 					unsynchronised_settings: (
 						(),
 						SolanaFeeUnsynchronisedSettings {
 							fee_multiplier: FixedU128::from_u32(1u32),
 						},
+						(),
 						(),
 						(),
 						(),
@@ -322,6 +327,7 @@ impl ExtBuilder {
 						},
 						(),
 						(),
+						BLOCKS_BETWEEN_LIVENESS_CHECKS,
 					),
 				}),
 			},

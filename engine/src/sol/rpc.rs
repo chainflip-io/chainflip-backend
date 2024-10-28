@@ -4,11 +4,11 @@ use reqwest::{header::CONTENT_TYPE, Client};
 
 use serde_json::{from_value, json};
 
+use cf_utilities::make_periodic_tick;
 use tracing::error;
-use utilities::make_periodic_tick;
 
 use crate::{btc::rpc::Error, constants::RPC_RETRY_CONNECTION_INTERVAL};
-use utilities::redact_endpoint_secret::SecretUrl;
+use cf_utilities::redact_endpoint_secret::SecretUrl;
 
 use anyhow::{anyhow, Result};
 use tracing::warn;

@@ -1,26 +1,65 @@
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
+	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
+	try_parse_number_or_hex,
 };
 use chainflip_api::{
 	self,
 	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
 	settings::StateChain,
 	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
-	SwapDepositAddress, WithdrawFeesDetail,
+	SwapDepositAddress, SwapPayload, WithdrawFeesDetail,
 };
 use clap::Parser;
 use futures::FutureExt;
 use jsonrpsee::{
-	core::{async_trait, RpcResult},
+	core::{async_trait, ClientError},
 	proc_macros::rpc,
 	server::ServerBuilder,
+	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
 };
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
 };
 use tracing::log;
+
+#[derive(thiserror::Error, Debug)]
+pub enum BrokerApiError {
+	#[error(transparent)]
+	ErrorObject(#[from] ErrorObjectOwned),
+	#[error(transparent)]
+	ClientError(#[from] jsonrpsee::core::ClientError),
+	#[error(transparent)]
+	Other(#[from] anyhow::Error),
+}
+
+type RpcResult<T> = Result<T, BrokerApiError>;
+
+impl From<BrokerApiError> for ErrorObjectOwned {
+	fn from(error: BrokerApiError) -> Self {
+		match error {
+			BrokerApiError::ErrorObject(error) => error,
+			BrokerApiError::ClientError(error) => match error {
+				ClientError::Call(obj) => obj,
+				internal => {
+					log::error!("Internal rpc client error: {internal:?}");
+					ErrorObject::owned(
+						ErrorCode::InternalError.code(),
+						"Internal rpc client error",
+						None::<()>,
+					)
+				},
+			},
+			BrokerApiError::Other(error) => jsonrpsee::types::error::ErrorObjectOwned::owned(
+				ErrorCode::ServerError(0xcf).code(),
+				error.to_string(),
+				None::<()>,
+			),
+		}
+	}
+}
 
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
@@ -47,6 +86,20 @@ pub trait Rpc {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "request_swap_parameter_encoding", aliases = ["broker_requestSwapParameterEncoding"])]
+	async fn request_swap_parameter_encoding(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		min_output_amount: NumberOrHex,
+		retry_duration: u32,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<SwapPayload>;
 }
 
 pub struct RpcServerImpl {
@@ -98,7 +151,7 @@ impl RpcServer for RpcServerImpl {
 				broker_commission,
 				channel_metadata,
 				boost_fee,
-				affiliate_fees.unwrap_or_default(),
+				affiliate_fees,
 				refund_parameters,
 				dca_parameters,
 			)
@@ -112,10 +165,39 @@ impl RpcServer for RpcServerImpl {
 	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
 	}
+
+	async fn request_swap_parameter_encoding(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		min_output_amount: NumberOrHex,
+		retry_duration: u32,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<SwapPayload> {
+		Ok(self
+			.api
+			.broker_api()
+			.request_swap_parameter_encoding(
+				source_asset,
+				destination_asset,
+				destination_address,
+				broker_commission,
+				try_parse_number_or_hex(min_output_amount)?,
+				retry_duration,
+				boost_fee,
+				affiliate_fees,
+				dca_parameters,
+			)
+			.await?)
+	}
 }
 
 #[derive(Parser, Debug, Clone, Default)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"), version_short = 'v')]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
 pub struct BrokerOptions {
 	#[clap(
 		long = "port",
@@ -170,7 +252,7 @@ async fn main() -> anyhow::Result<()> {
 				.build(format!("0.0.0.0:{}", opts.port))
 				.await?;
 			let server_addr = server.local_addr()?;
-			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc())?;
+			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc());
 
 			log::info!("🎙 Server is listening on {server_addr}.");
 

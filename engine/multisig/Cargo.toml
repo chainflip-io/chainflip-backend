@@ -1,73 +1,80 @@
 [package]
-authors = ['Chainflip <https://chainflip.io>']
-description = 'Multisig component of the Chainflip Engine'
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = 'TBC'
-name = 'multisig'
-repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.1.0'
+authors = ["Chainflip <https://chainflip.io>"]
+description = "Multisig component of the Chainflip Engine"
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "TBC"
+name = "multisig"
+repository = "https://github.com/chainflip-io/chainflip-backend"
+version = "0.1.0"
 
 [lints]
 workspace = true
 
 [dependencies]
-mockall = { version = "0.11.0", optional = true }
-anyhow = "1.0"
-async-trait = "0.1.49"
-async-channel = "1.7.1"
-async-broadcast = "0.4.1"
-bincode = "1.3.3"
-futures = "0.3.14"
-futures-core = "0.3.14"
-futures-util = "0.3.14"
-hex = "0.4.3"
-itertools = "0.11"
-lazy_static = "1.4"
-secp256k1 = { version = "0.27", features = [
-  "serde",
-  "rand-std",
-  "global-context",
+mockall = { workspace = true, optional = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+async-channel = { workspace = true }
+async-broadcast = { workspace = true }
+bincode = { workspace = true }
+futures = { workspace = true }
+futures-core = { workspace = true }
+futures-util = { workspace = true }
+hex = { workspace = true, default-features = true }
+itertools = { workspace = true, default-features = true }
+lazy_static = { workspace = true }
+secp256k1 = { workspace = true, features = [
+	"serde",
+	"rand-std",
+	"global-context",
 ] }
-serde = { version = "1.0", features = ["derive", "rc"] }
-sha2 = "0.9.5"
-thiserror = "1.0.26"
-tokio = { version = "1.22", features = ["full", "test-util"] }
-tokio-stream = { version = "0.1.5", features = ["sync"] }
-num-bigint = "0.4"
-num-traits = "0.2"
-num-derive = "0.3"
-zeroize = "1.5.4"
-generic-array = "1.0"
-public-ip = "0.2.2"
-curve25519-dalek = { version = "4.1", features = ["serde"] }
-typenum = "1.15"
-schnorrkel = "0.11.4"
-rayon = "1.7.0"
-rand = "0.8.4"
-tracing = "0.1"
-strum = { default-features = false, version = '0.24' }
-strum_macros = { default-features = false, version = '0.24' }
-blake2 = "0.10"
+serde = { workspace = true, default-features = true, features = [
+	"derive",
+	"rc",
+] }
+sha2 = { workspace = true, default-features = true }
+thiserror = { workspace = true, default-features = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-stream = { workspace = true, features = ["sync"] }
+num-bigint = { workspace = true }
+num-traits = { workspace = true }
+num-derive = { workspace = true }
+zeroize = { workspace = true }
+generic-array = { workspace = true }
+public-ip = { workspace = true }
+curve25519-dalek = { workspace = true, default-features = true, features = [
+	"serde",
+] }
+typenum = { workspace = true }
+schnorrkel = { workspace = true }
+rayon = { workspace = true }
+rand = { workspace = true, default-features = true }
+tracing = { workspace = true }
+strum = { workspace = true, default-features = true }
+strum_macros = { workspace = true, default-features = true }
+blake2 = { workspace = true }
 
 # Local deps
-cf-chains = { path = "../../state-chain/chains" }
-cf-primitives = { path = "../../state-chain/primitives" }
-state-chain-runtime = { path = "../../state-chain/runtime" }
-utilities = { package = "utilities", path = "../../utilities" }
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
+state-chain-runtime = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
 
 # substrate deps
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-ed25519-dalek = "2.1.1"
+sp-core = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+ed25519-dalek = { workspace = true }
 
 [dev-dependencies]
-mockall = "0.11.0"
+mockall = { workspace = true }
+
 # Turn on the "test" feature flag for tests
-multisig = { path = ".", features = ["test"] }
-utilities = { package = "utilities", path = "../../utilities", features = [
-  "test-utils",
+multisig = { workspace = true, features = ["test"] }
+cf-utilities = { workspace = true, default-features = true, features = [
+	"test-utils",
 ] }
 
 [features]
-test = ['mockall']
+test = ["mockall"]
+std = []

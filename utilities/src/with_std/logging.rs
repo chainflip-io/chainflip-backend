@@ -50,7 +50,7 @@ macro_rules! print_start_and_end {
 					},
 					Err(error) => {
 						println!("Exiting {} due to error: {error:?}", env!("CARGO_PKG_NAME"));
-						Err(utilities::logging::ErrorType::Error(error))
+						Err(cf_utilities::logging::ErrorType::Error(error))
 					},
 				},
 				Err(panic) => {
@@ -60,18 +60,19 @@ macro_rules! print_start_and_end {
 						env!("CARGO_PKG_NAME"),
 						panic.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| panic.downcast_ref::<String>().cloned())
 					);
-					Err(utilities::logging::ErrorType::Panic)
+					Err(cf_utilities::logging::ErrorType::Panic)
 				},
 			}
 		}
 	};
 }
 
-/// Install a tracing subscriber that uses json formatting for the logs. The initial filtering
-/// directives can be set using the RUST_LOG environment variable, if it is not set the subscriber
-/// will default to INFO, meaning all INFO, WARN, or ERROR logs will be output, all the other logs
-/// will be ignored. The filtering directives can also be controlled via a REST api while the
-/// application is running, for example:
+/// Install a tracing subscriber that uses json formatting for the logs.
+///
+/// The initial filtering directives can be set using the RUST_LOG environment variable, if it is
+/// not set the subscriber will default to INFO, meaning all INFO, WARN, or ERROR logs will be
+/// output, all the other logs will be ignored. The filtering directives can also be controlled via
+/// a REST api while the application is running, for example:
 ///
 /// `curl -X GET 127.0.0.1:36079/tracing` - This returns the current filtering directives
 /// `curl --json '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"'

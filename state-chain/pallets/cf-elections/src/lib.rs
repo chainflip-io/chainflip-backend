@@ -102,7 +102,6 @@
 //! or reconstructed from the others is also configured via that trait.
 
 #![feature(try_find)]
-#![feature(option_take_if)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
@@ -110,6 +109,7 @@
 
 pub mod electoral_system;
 pub mod electoral_systems;
+pub mod migrations;
 mod mock;
 mod tests;
 pub mod vote_storage;
@@ -124,7 +124,7 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 pub use pallet::UniqueMonotonicIdentifier;
 
@@ -223,14 +223,14 @@ pub mod pallet {
 			Self(unique_monotonic, extra)
 		}
 
-		pub(crate) fn with_extra<OtherExtra>(
+		pub fn with_extra<OtherExtra>(
 			&self,
 			other_extra: OtherExtra,
 		) -> ElectionIdentifier<OtherExtra> {
 			ElectionIdentifier::new(*self.unique_monotonic(), other_extra)
 		}
 
-		pub(crate) fn unique_monotonic(&self) -> &UniqueMonotonicIdentifier {
+		pub fn unique_monotonic(&self) -> &UniqueMonotonicIdentifier {
 			&self.0
 		}
 
@@ -504,7 +504,7 @@ pub mod pallet {
 	/// Stores governance-controlled settings regarding the elections. These settings can be changed
 	/// at anytime, but that change will only affect newly created elections.
 	#[pallet::storage]
-	pub(crate) type ElectoralSettings<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type ElectoralSettings<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		UniqueMonotonicIdentifier,
@@ -546,7 +546,7 @@ pub mod pallet {
 	>;
 
 	#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo, Default)]
-	struct ConsensusHistory<T> {
+	pub struct ConsensusHistory<T> {
 		/// The most recent consensus the election had.
 		most_recent: T,
 		/// Indicates if consensus was lost after the `most_recent` consensus was gained. I.e. that
@@ -582,7 +582,7 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	pub(crate) mod access_impls {
+	pub mod access_impls {
 		use super::*;
 
 		/// Implements traits to allow electoral systems to read/write an Election's details.
@@ -591,9 +591,7 @@ pub mod pallet {
 			_phantom: core::marker::PhantomData<(T, I)>,
 		}
 		impl<T: Config<I>, I: 'static> ElectionAccess<T, I> {
-			pub(crate) fn new(
-				election_identifier: ElectionIdentifierOf<T::ElectoralSystem>,
-			) -> Self {
+			pub fn new(election_identifier: ElectionIdentifierOf<T::ElectoralSystem>) -> Self {
 				Self { election_identifier, _phantom: Default::default() }
 			}
 

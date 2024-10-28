@@ -37,6 +37,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// - A standard ETH transfer
 	/// - A transfer made via a contract, which would not be detected by checking the `to` field in
 	///   standard transfers since the `to` field would not be set
+	///
 	/// We do *not* officially support ETH deposited using Ethereum/Solidity's self-destruct.
 	/// See [below](`eth_ingresses_at_block`) for more details.
 	pub async fn ethereum_deposits<ProcessCall, ProcessingFut, EvmRetryRpcClient>(
@@ -178,7 +179,7 @@ where
 }
 
 /// To ensure we don't double witness deposits, we use the following pseudo-code, implemented by
-/// `eth_ingresses_at_block`.
+/// [eth_ingresses_at_block].
 ///
 /// if !address.hasContract:
 ///    swap = address.balanceAtCurrentBlock - address.balanceAtPreviousBlock
@@ -222,7 +223,7 @@ fn eth_ingresses_at_block<Addresses: IntoIterator<Item = (H160, (AddressState, A
 		.map(|(address, (previous_address_state, address_state))| {
 			let (ingress_amount, tx_hashes) = if !address_state.has_contract {
 				ensure!(!previous_address_state.has_contract);
-				ensure!(fetched_native_totals.get(&address).is_none());
+				ensure!(!fetched_native_totals.contains_key(&address));
 
 				(address_state.balance.saturating_sub(previous_address_state.balance), None)
 			} else {
@@ -254,9 +255,9 @@ mod tests {
 
 	use super::{super::contract_common::events_at_block, *};
 	use cf_chains::{Chain, Ethereum};
+	use cf_utilities::task_scope;
 	use ethers::prelude::U256;
 	use futures_util::FutureExt;
-	use utilities::task_scope;
 
 	use super::super::vault::VaultEvents;
 
