@@ -1,71 +1,37 @@
-use crate::mock_btc::*;
+use crate::{
+	mock_btc::*,
+	tests::{ALICE, BROKER},
+	BoostPoolId, DepositChannelLookup, DepositIgnoredReason, DepositWitness, ReportExpiresAt,
+	ScheduledTxForReject, TaintedTransactionDetails, TaintedTransactionStatus, TaintedTransactions,
+	TAINTED_TX_EXPIRATION_BLOCKS,
+};
 
-use cf_chains::btc::ScriptPubkey;
-
-use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
-
-use cf_primitives::{Beneficiaries, ChannelId};
-
-use cf_traits::DepositApi;
-
-use crate::DepositWitness;
-
-use cf_chains::btc::Hash;
-
-use sp_runtime::DispatchError::BadOrigin;
-
-use crate::TaintedTransactions;
-
-use crate::TaintedTransactionDetails;
-
-use cf_traits::BalanceApi;
-
-use cf_traits::AccountRoleRegistry;
-
-use crate::ReportExpiresAt;
-
-use crate::TaintedTransactionStatus;
-
-use cf_chains::ForeignChainAddress;
-
-use crate::TAINTED_TX_EXPIRATION_BLOCKS;
-
-use cf_chains::btc::deposit_address::DepositAddress;
-
-use cf_chains::btc::BtcDepositDetails;
-
-use cf_primitives::chains::assets::btc;
-
-use crate::tests::ALICE;
-
-use crate::BoostPoolId;
-
-use cf_chains::btc::UtxoId;
-
-const DEFAULT_DEPOSIT_AMOUNT: u64 = 1_000;
-
-use crate::DepositIgnoredReason;
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
 
+use cf_chains::{
+	btc::{deposit_address::DepositAddress, BtcDepositDetails, Hash, ScriptPubkey, UtxoId},
+	ForeignChainAddress,
+};
+
+use cf_traits::{
+	mocks::account_role_registry::MockAccountRoleRegistry, AccountRoleRegistry, BalanceApi,
+	DepositApi,
+};
+
+use cf_primitives::{chains::assets::btc, Beneficiaries, ChannelId};
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
+use sp_runtime::DispatchError::BadOrigin;
 
-use crate::tests::BROKER;
-
-use crate::{DepositChannelLookup, ScheduledTxForReject};
-
+const DEFAULT_DEPOSIT_AMOUNT: u64 = 1_000;
 const DEFAULT_BTC_ADDRESS: [u8; 20] = [0; 20];
 
 mod helpers {
 
 	use super::*;
-
-	pub fn generate_address(bytes: [u8; 20]) -> ForeignChainAddress {
-		ForeignChainAddress::Btc(ScriptPubkey::P2SH(bytes))
-	}
 
 	pub fn generate_btc_deposit(tx_in_id: Hash) -> BtcDepositDetails {
 		BtcDepositDetails {
@@ -83,7 +49,7 @@ mod helpers {
 			who,
 			asset,
 			0,
-			generate_address(DEFAULT_BTC_ADDRESS),
+			ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS)),
 		)
 		.unwrap();
 		let address: <Bitcoin as Chain>::ChainAccount = address.try_into().unwrap();
@@ -115,7 +81,7 @@ mod helpers {
 		let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
 			btc::Asset::Btc,
 			btc::Asset::Btc.into(),
-			generate_address(DEFAULT_BTC_ADDRESS),
+			ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS)),
 			Beneficiaries::new(),
 			BROKER,
 			None,
@@ -384,7 +350,7 @@ fn send_funds_back_after_they_have_been_rejected() {
 	new_test_ext().execute_with(|| {
 		let deposit_details = helpers::generate_btc_deposit(Hash::random());
 		let tainted_tx_details = TaintedTransactionDetails {
-			refund_address: Some(helpers::generate_address(DEFAULT_BTC_ADDRESS)),
+			refund_address: Some(ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS))),
 			amount: DEFAULT_DEPOSIT_AMOUNT,
 			asset: btc::Asset::Btc,
 			deposit_details,
