@@ -196,17 +196,40 @@ impl<
 		let active_votes = consensus_votes.active_votes();
 		let num_active_votes = active_votes.len() as u32;
 		Ok(if num_active_votes >= success_threshold {
-			let mut counts = BTreeMap::new();
+			let mut counts_votes = BTreeMap::new();
+			let mut counts_new_accounts = BTreeMap::new();
+			let mut counts_confirm_closed_accounts = BTreeMap::new();
+
 			for vote in active_votes {
-				counts.entry(vote).and_modify(|count| *count += 1).or_insert(1);
+				counts_votes.entry(vote).and_modify(|count| *count += 1).or_insert(1);
 			}
-			counts.iter().find_map(|(vote, count)| {
-				if *count >= success_threshold {
-					Some(vote.clone())
-				} else {
-					None
-				}
-			})
+
+			counts_votes.iter().for_each(|(vote, count)| {
+				vote.new_accounts.iter().for_each(|new_account| {
+					counts_new_accounts
+						.entry(new_account)
+						.and_modify(|c| *c += *count)
+						.or_insert(*count);
+				});
+				vote.confirm_closed_accounts.iter().for_each(|confirm_closed_account| {
+					counts_confirm_closed_accounts
+						.entry(confirm_closed_account)
+						.and_modify(|c| *c += *count)
+						.or_insert(*count);
+				});
+			});
+
+			counts_new_accounts.retain(|_, count| *count >= success_threshold);
+			let new_accounts = counts_new_accounts.into_keys().cloned().collect::<BTreeSet<_>>();
+			counts_confirm_closed_accounts.retain(|_, count| *count >= success_threshold);
+			let confirm_closed_accounts =
+				counts_confirm_closed_accounts.into_keys().cloned().collect::<BTreeSet<_>>();
+
+			if new_accounts.is_empty() && confirm_closed_accounts.is_empty() {
+				None
+			} else {
+				Some(SolanaVaultSwapsVote { new_accounts, confirm_closed_accounts })
+			}
 		} else {
 			None
 		})
