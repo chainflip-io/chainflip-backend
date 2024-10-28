@@ -36,7 +36,7 @@ pub trait SolanaVaultSwapAccountsHook<Account, SwapDetails, E> {
 
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
 pub struct SolanaVaultSwapsElectoralState<Account: Ord, BlockNumber> {
-	pub block_number_last_closed_accounts: BlockNumber,
+	pub accounts_last_closed_at: BlockNumber,
 	pub witnessed_open_accounts: Vec<Account>,
 	pub closure_initiated_accounts: BTreeSet<Account>,
 }
@@ -45,7 +45,7 @@ pub struct SolanaVaultSwapsElectoralState<Account: Ord, BlockNumber> {
 impl BenchmarkValue for SolanaVaultSwapsElectoralState<ContractSwapAccountAndSender, u32> {
 	fn benchmark_value() -> Self {
 		Self {
-			block_number_last_closed_accounts: 1u32,
+			accounts_last_closed_at: 1u32,
 			witnessed_open_accounts: vec![BenchmarkValue::benchmark_value()],
 			closure_initiated_accounts: BTreeSet::from([BenchmarkValue::benchmark_value()]),
 		}
@@ -152,7 +152,7 @@ impl<
 			(unsynchronised_state.witnessed_open_accounts.len() >=
 				MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES ||
 				(*current_block_number)
-					.checked_sub(&unsynchronised_state.block_number_last_closed_accounts)
+					.checked_sub(&unsynchronised_state.accounts_last_closed_at)
 					.expect(
 						"current block number is always greater than when apicall was last created",
 					)
@@ -170,7 +170,7 @@ impl<
 			};
 			match Hook::close_accounts(accounts_to_close.clone()) {
 				Ok(()) => {
-					unsynchronised_state.block_number_last_closed_accounts = *current_block_number;
+					unsynchronised_state.accounts_last_closed_at = *current_block_number;
 					unsynchronised_state.closure_initiated_accounts.extend(accounts_to_close);
 					electoral_access.set_unsynchronised_state(unsynchronised_state)?;
 				},

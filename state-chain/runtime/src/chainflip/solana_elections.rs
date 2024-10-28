@@ -76,7 +76,7 @@ pub fn initial_state(
 			(),
 			(),
 			SolanaVaultSwapsElectoralState {
-				block_number_last_closed_accounts: 0,
+				accounts_last_closed_at: 0,
 				witnessed_open_accounts: vec![],
 				closure_initiated_accounts: BTreeSet::new(),
 			},

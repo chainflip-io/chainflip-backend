@@ -306,7 +306,7 @@ impl ExtBuilder {
 						(),
 						(),
 						SolanaVaultSwapsElectoralState {
-							block_number_last_closed_accounts: Default::default(),
+							accounts_last_closed_at: Default::default(),
 							witnessed_open_accounts: Default::default(),
 							closure_initiated_accounts: Default::default(),
 						},
