@@ -1,262 +1,245 @@
 [package]
-name = 'state-chain-runtime'
-version = '1.7.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = '<TODO>'
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+name = "state-chain-runtime"
+version = "1.7.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "<TODO>"
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-substrate-wasm-builder = { git = 'https://github.com/chainflip-io/polkadot-sdk.git', tag = 'chainflip-substrate-1.15.2+2', optional = true }
+substrate-wasm-builder = { workspace = true, optional = true }
 
 [lints]
 workspace = true
 
 [dependencies]
-hex-literal = "0.4.1"
-hex = { version = "0.4.3", default-features = false }
-log = { version = '0.4.16', default-features = false }
-nanorand = { version = '0.7', default-features = false, features = ['wyrand'] }
-serde = { default-features = false, version = '1.0.197', features = [
-  'alloc',
-  'derive',
-] }
-
-ethabi = { default-features = false, version = '18.0' }
+hex-literal = { workspace = true }
+hex = { workspace = true }
+log = { workspace = true }
+nanorand = { workspace = true, features = ["wyrand"] }
+serde = { workspace = true, features = ["derive", "alloc"] }
+ethabi = { workspace = true }
+bitvec = { workspace = true }
 
 # Chainflip local dependencies
-cf-amm = { path = '../amm', default-features = false }
-cf-chains = { path = '../chains', default-features = false }
-cf-primitives = { path = '../primitives', default-features = false }
-cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true, default-features = false }
-cf-runtime-utilities = { path = '../runtime-utilities', default-features = false }
-cf-runtime-upgrade-utilities = { path = '../runtime-upgrade-utilities', default-features = false }
-cf-traits = { path = '../traits', default-features = false }
-cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+cf-amm = { workspace = true }
+cf-chains = { workspace = true }
+cf-primitives = { workspace = true }
+cf-session-benchmarking = { workspace = true, optional = true }
+cf-runtime-utilities = { workspace = true }
+cf-runtime-upgrade-utilities = { workspace = true }
+cf-traits = { workspace = true }
+cf-utilities = { workspace = true }
 
-sol-prim = { path = '../../foreign-chains/solana/sol-prim', default-features = false }
+sol-prim = { workspace = true }
 
-pallet-cf-account-roles = { path = '../pallets/cf-account-roles', default-features = false }
-pallet-cf-asset-balances = { path = "../pallets/cf-asset-balances", default-features = false }
-pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
-pallet-cf-chain-tracking = { path = '../pallets/cf-chain-tracking', default-features = false }
-pallet-cf-elections = { path = '../pallets/cf-elections', default-features = false }
-pallet-cf-emissions = { path = '../pallets/cf-emissions', default-features = false }
-pallet-cf-environment = { path = '../pallets/cf-environment', default-features = false }
-pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
-pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
-pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress', default-features = false }
-pallet-cf-lp = { path = '../pallets/cf-lp', default-features = false }
-pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false }
-pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
-pallet-cf-funding = { path = '../pallets/cf-funding', default-features = false }
-pallet-cf-swapping = { path = '../pallets/cf-swapping', default-features = false }
-pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', default-features = false }
-pallet-cf-tokenholder-governance = { path = '../pallets/cf-tokenholder-governance', default-features = false }
-pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
-pallet-cf-vaults = { path = '../pallets/cf-vaults', default-features = false }
-pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false }
-pallet-cf-cfe-interface = { path = '../pallets/cf-cfe-interface', default-features = false }
+pallet-cf-account-roles = { workspace = true }
+pallet-cf-asset-balances = { workspace = true }
+pallet-cf-broadcast = { workspace = true }
+pallet-cf-chain-tracking = { workspace = true }
+pallet-cf-elections = { workspace = true }
+pallet-cf-emissions = { workspace = true }
+pallet-cf-environment = { workspace = true }
+pallet-cf-flip = { workspace = true }
+pallet-cf-governance = { workspace = true }
+pallet-cf-ingress-egress = { workspace = true }
+pallet-cf-lp = { workspace = true }
+pallet-cf-pools = { workspace = true }
+pallet-cf-reputation = { workspace = true }
+pallet-cf-funding = { workspace = true }
+pallet-cf-swapping = { workspace = true }
+pallet-cf-threshold-signature = { workspace = true }
+pallet-cf-tokenholder-governance = { workspace = true }
+pallet-cf-validator = { workspace = true }
+pallet-cf-vaults = { workspace = true }
+pallet-cf-witnesser = { workspace = true }
+pallet-cf-cfe-interface = { workspace = true }
 
 # SCALE
-codec = { package = "parity-scale-codec", version = "3.6.12", default-features = false, features = [
-  'derive',
-] }
-scale-info = { version = "2.11.1", default-features = false, features = [
-  'derive',
-] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 
 # Additional FRAME pallets
-pallet-authorship = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-pallet-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false, features = [
-  'historical',
-] }
+pallet-authorship = { workspace = true }
+pallet-session = { workspace = true, features = ["historical"] }
 
 # Substrate dependencies
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true, default-features = false }
-frame-executive = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-frame-system-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", optional = true, default-features = false }
+frame-benchmarking = { workspace = true, optional = true }
+frame-executive = { workspace = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+frame-system-benchmarking = { workspace = true, optional = true }
 
-pallet-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-pallet-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-pallet-timestamp = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-pallet-transaction-payment = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+pallet-aura = { workspace = true }
+pallet-grandpa = { workspace = true }
+pallet-timestamp = { workspace = true }
+pallet-transaction-payment = { workspace = true }
 
-sp-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-block-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false, features = [
-  'serde',
-] }
-sp-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false, features = [
-  'serde',
-] }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false, features = [
-  'serde',
-] }
-sp-inherents = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false, features = [
-  'serde',
-] }
-sp-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-transaction-pool = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-sp-version = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-api = { workspace = true }
+sp-block-builder = { workspace = true }
+sp-consensus-aura = { workspace = true, features = ["serde"] }
+sp-consensus-grandpa = { workspace = true, features = ["serde"] }
+sp-core = { workspace = true, features = ["serde"] }
+sp-inherents = { workspace = true }
+sp-offchain = { workspace = true }
+sp-runtime = { workspace = true, features = ["serde"] }
+sp-session = { workspace = true }
+sp-std = { workspace = true }
+sp-transaction-pool = { workspace = true }
+sp-version = { workspace = true }
 
-sp-genesis-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+sp-genesis-builder = { workspace = true }
 
-frame-try-runtime = { optional = true, tag = 'chainflip-substrate-1.15.2+2', default-features = false, git = 'https://github.com/chainflip-io/polkadot-sdk.git' }
+frame-try-runtime = { workspace = true, optional = true }
 
 # Used for RPCs
-frame-system-rpc-runtime-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
-pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2", default-features = false }
+frame-system-rpc-runtime-api = { workspace = true }
+pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 
-cf-test-utilities = { path = '../test-utilities', optional = true }
+cf-test-utilities = { workspace = true, optional = true }
 
 [dev-dependencies]
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.15.2+2" }
+sp-io = { workspace = true, default-features = true }
 
 [features]
-default = ['std']
+default = ["std"]
 runtime-benchmarks = [
-  'cf-chains/runtime-benchmarks',
-  'cf-session-benchmarking/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system-benchmarking/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
-  'pallet-cf-account-roles/runtime-benchmarks',
-  'pallet-cf-asset-balances/runtime-benchmarks',
-  'pallet-cf-broadcast/runtime-benchmarks',
-  'pallet-cf-chain-tracking/runtime-benchmarks',
-  'pallet-cf-emissions/runtime-benchmarks',
-  'pallet-cf-environment/runtime-benchmarks',
-  'pallet-cf-elections/runtime-benchmarks',
-  'pallet-cf-flip/runtime-benchmarks',
-  'pallet-cf-funding/runtime-benchmarks',
-  'pallet-cf-governance/runtime-benchmarks',
-  'pallet-cf-ingress-egress/runtime-benchmarks',
-  'pallet-cf-lp/runtime-benchmarks',
-  'pallet-cf-pools/runtime-benchmarks',
-  'pallet-cf-reputation/runtime-benchmarks',
-  'pallet-cf-swapping/runtime-benchmarks',
-  'pallet-cf-threshold-signature/runtime-benchmarks',
-  'pallet-cf-tokenholder-governance/runtime-benchmarks',
-  'pallet-cf-validator/runtime-benchmarks',
-  'pallet-cf-vaults/runtime-benchmarks',
-  'pallet-cf-witnesser/runtime-benchmarks',
-  'pallet-cf-cfe-interface/runtime-benchmarks',
-  'pallet-grandpa/runtime-benchmarks',
-  'pallet-timestamp/runtime-benchmarks',
-  'sp-runtime/runtime-benchmarks',
+  "cf-chains/runtime-benchmarks",
+  "cf-session-benchmarking/runtime-benchmarks",
+  "cf-traits/runtime-benchmarks",
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system-benchmarking/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
+  "pallet-cf-account-roles/runtime-benchmarks",
+  "pallet-cf-asset-balances/runtime-benchmarks",
+  "pallet-cf-broadcast/runtime-benchmarks",
+  "pallet-cf-chain-tracking/runtime-benchmarks",
+  "pallet-cf-emissions/runtime-benchmarks",
+  "pallet-cf-environment/runtime-benchmarks",
+  "pallet-cf-elections/runtime-benchmarks",
+  "pallet-cf-flip/runtime-benchmarks",
+  "pallet-cf-funding/runtime-benchmarks",
+  "pallet-cf-governance/runtime-benchmarks",
+  "pallet-cf-ingress-egress/runtime-benchmarks",
+  "pallet-cf-lp/runtime-benchmarks",
+  "pallet-cf-pools/runtime-benchmarks",
+  "pallet-cf-reputation/runtime-benchmarks",
+  "pallet-cf-swapping/runtime-benchmarks",
+  "pallet-cf-threshold-signature/runtime-benchmarks",
+  "pallet-cf-tokenholder-governance/runtime-benchmarks",
+  "pallet-cf-validator/runtime-benchmarks",
+  "pallet-cf-vaults/runtime-benchmarks",
+  "pallet-cf-witnesser/runtime-benchmarks",
+  "pallet-cf-cfe-interface/runtime-benchmarks",
+  "pallet-grandpa/runtime-benchmarks",
+  "pallet-timestamp/runtime-benchmarks",
+  "sp-runtime/runtime-benchmarks",
 ]
 std = [
-  'cf-amm/std',
-  'cf-chains/std',
-  'cf-primitives/std',
-  'cf-runtime-utilities/std',
-  'cf-runtime-upgrade-utilities/std',
-  'cf-session-benchmarking?/std',
-  'cf-traits/std',
-  'cf-utilities/std',
-  'codec/std',
-  'ethabi/std',
-  'frame-benchmarking?/std',
-  'frame-executive/std',
-  'frame-support/std',
-  'frame-system-benchmarking?/std',
-  'frame-system-rpc-runtime-api/std',
-  'frame-system/std',
-  'frame-try-runtime?/std',
-  'hex/std',
-  'log/std',
-  'nanorand/std',
-  'pallet-aura/std',
-  'pallet-authorship/std',
-  'pallet-cf-account-roles/std',
-  'pallet-cf-asset-balances/std',
-  'pallet-cf-broadcast/std',
-  'pallet-cf-chain-tracking/std',
-  'pallet-cf-elections/std',
-  'pallet-cf-emissions/std',
-  'pallet-cf-environment/std',
-  'pallet-cf-flip/std',
-  'pallet-cf-funding/std',
-  'pallet-cf-governance/std',
-  'pallet-cf-ingress-egress/std',
-  'pallet-cf-lp/std',
-  'pallet-cf-pools/std',
-  'pallet-cf-reputation/std',
-  'pallet-cf-swapping/std',
-  'pallet-cf-threshold-signature/std',
-  'pallet-cf-tokenholder-governance/std',
-  'pallet-cf-validator/std',
-  'pallet-cf-vaults/std',
-  'pallet-cf-witnesser/std',
-  'pallet-grandpa/std',
-  'pallet-session/std',
-  'pallet-timestamp/std',
-  'pallet-transaction-payment-rpc-runtime-api/std',
-  'pallet-transaction-payment/std',
-  'pallet-cf-cfe-interface/std',
-  'scale-info/std',
-  'serde/std',
-  'sol-prim/std',
-  'sp-api/std',
-  'sp-block-builder/std',
-  'sp-consensus-aura/std',
-  'sp-consensus-grandpa/std',
-  'sp-core/std',
-  'sp-genesis-builder/std',
-  'sp-inherents/std',
-  'sp-offchain/std',
-  'sp-runtime/std',
-  'sp-session/std',
-  'sp-std/std',
-  'sp-transaction-pool/std',
-  'sp-version/std',
-  'dep:cf-test-utilities',
+  "cf-amm/std",
+  "cf-chains/std",
+  "cf-primitives/std",
+  "cf-runtime-utilities/std",
+  "cf-runtime-upgrade-utilities/std",
+  "cf-session-benchmarking?/std",
+  "cf-traits/std",
+  "cf-utilities/std",
+  "codec/std",
+  "ethabi/std",
+  "frame-benchmarking?/std",
+  "frame-executive/std",
+  "frame-support/std",
+  "frame-system-benchmarking?/std",
+  "frame-system-rpc-runtime-api/std",
+  "frame-system/std",
+  "frame-try-runtime?/std",
+  "hex/std",
+  "log/std",
+  "nanorand/std",
+  "pallet-aura/std",
+  "pallet-authorship/std",
+  "pallet-cf-account-roles/std",
+  "pallet-cf-asset-balances/std",
+  "pallet-cf-broadcast/std",
+  "pallet-cf-chain-tracking/std",
+  "pallet-cf-elections/std",
+  "pallet-cf-emissions/std",
+  "pallet-cf-environment/std",
+  "pallet-cf-flip/std",
+  "pallet-cf-funding/std",
+  "pallet-cf-governance/std",
+  "pallet-cf-ingress-egress/std",
+  "pallet-cf-lp/std",
+  "pallet-cf-pools/std",
+  "pallet-cf-reputation/std",
+  "pallet-cf-swapping/std",
+  "pallet-cf-threshold-signature/std",
+  "pallet-cf-tokenholder-governance/std",
+  "pallet-cf-validator/std",
+  "pallet-cf-vaults/std",
+  "pallet-cf-witnesser/std",
+  "pallet-grandpa/std",
+  "pallet-session/std",
+  "pallet-timestamp/std",
+  "pallet-transaction-payment-rpc-runtime-api/std",
+  "pallet-transaction-payment/std",
+  "pallet-cf-cfe-interface/std",
+  "scale-info/std",
+  "serde/std",
+  "sol-prim/std",
+  "sp-api/std",
+  "sp-block-builder/std",
+  "sp-consensus-aura/std",
+  "sp-consensus-grandpa/std",
+  "sp-core/std",
+  "sp-genesis-builder/std",
+  "sp-inherents/std",
+  "sp-offchain/std",
+  "sp-runtime/std",
+  "sp-session/std",
+  "sp-std/std",
+  "sp-transaction-pool/std",
+  "sp-version/std",
+  "dep:cf-test-utilities",
   "dep:substrate-wasm-builder",
 ]
 try-runtime = [
-  'cf-runtime-upgrade-utilities/try-runtime',
-  'frame-executive/try-runtime',
-  'frame-try-runtime/try-runtime',
-  'frame-system/try-runtime',
-  'frame-support/try-runtime',
-  'pallet-cf-account-roles/try-runtime',
-  'pallet-cf-asset-balances/try-runtime',
-  'pallet-cf-broadcast/try-runtime',
-  'pallet-cf-chain-tracking/try-runtime',
-  'pallet-cf-elections/try-runtime',
-  'pallet-cf-emissions/try-runtime',
-  'pallet-cf-environment/try-runtime',
-  'pallet-cf-flip/try-runtime',
-  'pallet-cf-governance/try-runtime',
-  'pallet-cf-ingress-egress/try-runtime',
-  'pallet-cf-lp/try-runtime',
-  'pallet-cf-pools/try-runtime',
-  'pallet-cf-reputation/try-runtime',
-  'pallet-cf-funding/try-runtime',
-  'pallet-cf-swapping/try-runtime',
-  'pallet-cf-threshold-signature/try-runtime',
-  'pallet-cf-tokenholder-governance/try-runtime',
-  'pallet-cf-validator/try-runtime',
-  'pallet-cf-vaults/try-runtime',
-  'pallet-cf-witnesser/try-runtime',
-  'pallet-cf-cfe-interface/try-runtime',
-  'pallet-timestamp/try-runtime',
-  'pallet-transaction-payment/try-runtime',
-  'pallet-aura/try-runtime',
-  'pallet-grandpa/try-runtime',
-  'pallet-session/try-runtime',
-  'pallet-authorship/try-runtime',
-  'sp-runtime/try-runtime',
+  "cf-runtime-upgrade-utilities/try-runtime",
+  "frame-executive/try-runtime",
+  "frame-try-runtime/try-runtime",
+  "frame-system/try-runtime",
+  "frame-support/try-runtime",
+  "pallet-cf-account-roles/try-runtime",
+  "pallet-cf-asset-balances/try-runtime",
+  "pallet-cf-broadcast/try-runtime",
+  "pallet-cf-chain-tracking/try-runtime",
+  "pallet-cf-elections/try-runtime",
+  "pallet-cf-emissions/try-runtime",
+  "pallet-cf-environment/try-runtime",
+  "pallet-cf-flip/try-runtime",
+  "pallet-cf-governance/try-runtime",
+  "pallet-cf-ingress-egress/try-runtime",
+  "pallet-cf-lp/try-runtime",
+  "pallet-cf-pools/try-runtime",
+  "pallet-cf-reputation/try-runtime",
+  "pallet-cf-funding/try-runtime",
+  "pallet-cf-swapping/try-runtime",
+  "pallet-cf-threshold-signature/try-runtime",
+  "pallet-cf-tokenholder-governance/try-runtime",
+  "pallet-cf-validator/try-runtime",
+  "pallet-cf-vaults/try-runtime",
+  "pallet-cf-witnesser/try-runtime",
+  "pallet-cf-cfe-interface/try-runtime",
+  "pallet-timestamp/try-runtime",
+  "pallet-transaction-payment/try-runtime",
+  "pallet-aura/try-runtime",
+  "pallet-grandpa/try-runtime",
+  "pallet-session/try-runtime",
+  "pallet-authorship/try-runtime",
+  "sp-runtime/try-runtime",
 ]

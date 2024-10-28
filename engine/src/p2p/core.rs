@@ -17,17 +17,17 @@ use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
 
 use auth::Authenticator;
-use serde::{Deserialize, Serialize};
-use state_chain_runtime::AccountId;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tracing::{debug, error, info, info_span, trace, warn, Instrument};
-use utilities::{
+use cf_utilities::{
 	make_periodic_tick,
 	metrics::{
 		P2P_ACTIVE_CONNECTIONS, P2P_BAD_MSG, P2P_MSG_RECEIVED, P2P_MSG_SENT, P2P_RECONNECT_PEERS,
 	},
 	Port,
 };
+use serde::{Deserialize, Serialize};
+use state_chain_runtime::AccountId;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 use x25519_dalek::StaticSecret;
 
 use crate::p2p::{pk_to_string, OutgoingMultisigStageMessages};

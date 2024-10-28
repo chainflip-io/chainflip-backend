@@ -62,7 +62,7 @@ mod tests {
 		let stored_keygen_result_info = key_data.values().next().unwrap().clone();
 
 		// A temp directory to store the key db for this test
-		let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
+		let (_dir, db_file) = cf_utilities::testing::new_temp_directory_with_nonexistent_file();
 
 		let key_id = KeyId::new(0, public_key);
 

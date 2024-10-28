@@ -16,6 +16,7 @@ import {
 import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
+import { Vector, bool, Struct, Bytes as TsBytes } from 'scale-ts';
 import BigNumber from 'bignumber.js';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import { ISubmittableResult } from '@polkadot/types/types';
@@ -50,6 +51,20 @@ const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
 export const solanaNumberOfNonces = 10;
+
+export const solCfParamsCodec = Struct({
+  cf_receiver: Struct({
+    pubkey: TsBytes(32),
+    is_writable: bool,
+  }),
+  remaining_accounts: Vector(
+    Struct({
+      pubkey: TsBytes(32),
+      is_writable: bool,
+    }),
+  ),
+  fallback_address: TsBytes(32),
+});
 
 export function getContractAddress(chain: Chain, contract: string): string {
   switch (chain) {
@@ -710,36 +725,6 @@ export async function observeSolanaCcmEvent(
   sourceAddress: string | null,
   messageMetadata: CcmDepositMetadata,
 ): Promise<ContractEvent> {
-  function decodeExpectedCfParameters(cfParametersHex: string) {
-    // Convert the hexadecimal string back to a byte array
-    const cfParameters = new Uint8Array(
-      cfParametersHex
-        .slice(2)
-        .match(/.{1,2}/g)
-        ?.map((byte) => parseInt(byte, 16)) ?? [],
-    );
-
-    const publicKeySize = 32;
-    const remainingAccountSize = publicKeySize + 1;
-
-    // Extra byte for the encoded length
-    const remainingAccountsBytes = cfParameters.slice(remainingAccountSize + 1);
-
-    const remainingAccounts = [];
-    const remainingIsWritable = [];
-
-    // Extract the remaining bytes in groups of publicKeySize + 1
-    for (let i = 0; i < remainingAccountsBytes.length; i += remainingAccountSize) {
-      const publicKeyBytes = remainingAccountsBytes.slice(i, i + publicKeySize);
-      const isWritable = remainingAccountsBytes[i + publicKeySize];
-
-      remainingAccounts.push(new PublicKey(publicKeyBytes));
-      remainingIsWritable.push(Boolean(isWritable));
-    }
-
-    return { remainingAccounts, remainingIsWritable };
-  }
-
   const connection = getSolConnection();
   const idl = cfTesterIdl;
   const cfTesterAddress = new PublicKey(getContractAddress('Solana', 'CFTESTER'));
@@ -761,31 +746,40 @@ export async function observeSolanaCcmEvent(
 
           // The message is being used as the main discriminator
           if (matchEventName && matchSourceChain && matchMessage) {
-            const {
-              remainingAccounts: expectedRemainingAccounts,
-              remainingIsWritable: expectedRemainingIsWritable,
-            } = decodeExpectedCfParameters(messageMetadata.cfParameters!);
+            const { remaining_accounts: expectedRemainingAccounts } = solCfParamsCodec.dec(
+              messageMetadata.cfParameters!,
+            );
 
             if (
-              expectedRemainingIsWritable.length !== event.data.remaining_is_writable.length ||
-              expectedRemainingIsWritable.toString() !== event.data.remaining_is_writable.toString()
+              expectedRemainingAccounts.length !== event.data.remaining_is_writable.length ||
+              expectedRemainingAccounts.length !== event.data.remaining_pubkeys.length
             ) {
               throw new Error(
-                `Unexpected remaining account is writable: ${event.data.remaining_is_writable}, expecting ${expectedRemainingIsWritable}`,
+                `Unexpected remaining accounts length: ${expectedRemainingAccounts.length}, expecting ${event.data.remaining_is_writable.length}, ${event.data.remaining_pubkeys.length}`,
               );
+            }
+
+            for (let index = 0; index < expectedRemainingAccounts.length; index++) {
+              if (
+                expectedRemainingAccounts[index].is_writable.toString() !==
+                event.data.remaining_is_writable[index].toString()
+              ) {
+                throw new Error(
+                  `Unexpected remaining account is_writable: ${event.data.remaining_is_writable[index]}, expecting ${expectedRemainingAccounts[index].is_writable}`,
+                );
+              }
+              const expectedPubkey = new PublicKey(
+                expectedRemainingAccounts[index].pubkey,
+              ).toString();
+              if (expectedPubkey !== event.data.remaining_pubkeys[index].toString()) {
+                throw new Error(
+                  `Unexpected remaining account pubkey: ${event.data.remaining_pubkeys[index].toString()}, expecting ${expectedPubkey}`,
+                );
+              }
             }
 
             if (event.data.remaining_is_signer.some((value: boolean) => value === true)) {
               throw new Error(`Expected all remaining accounts to be read-only`);
-            }
-
-            if (
-              expectedRemainingAccounts.length !== event.data.remaining_pubkeys.length ||
-              expectedRemainingAccounts.toString() !== event.data.remaining_pubkeys.toString()
-            ) {
-              throw new Error(
-                `Unexpected remaining accounts: ${event.data.remaining_pubkeys}, expecting ${expectedRemainingAccounts}`,
-              );
             }
 
             if (sourceAddress !== null) {

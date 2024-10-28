@@ -16,7 +16,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, BalanceApi, DepositApi, ExecutionCondition, IngressEgressFeeApi,
-	SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	SwapLimitsProvider, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -672,6 +673,16 @@ pub mod pallet {
 		ZeroSwapRetryDelayNotAllowed,
 		/// Setting the max swap request duration to less than the swap delay is not allowed.
 		MaxSwapRequestDurationTooShort,
+		/// Swap Retry duration is set above the max allowed.
+		RetryDurationTooHigh,
+		/// The number of DCA chunks must be greater than 0.
+		ZeroNumberOfChunksNotAllowed,
+		/// The chunk interval must be greater than the swap delay (2).
+		ChunkIntervalTooLow,
+		/// The total duration of a DCA swap request must be less then the max allowed.
+		SwapRequestDurationTooLong,
+		/// Invalid DCA parameters.
+		InvalidDcaParameters,
 	}
 
 	#[pallet::genesis_config]
@@ -957,7 +968,7 @@ pub mod pallet {
 			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
-			let (beneficiaries, total_bps) = {
+			let beneficiaries = {
 				let mut beneficiaries = Beneficiaries::new();
 				if broker_commission > 0 {
 					beneficiaries
@@ -971,13 +982,10 @@ pub mod pallet {
 							.expect("Cannot exceed MAX_BENEFICIARY size which is MAX_AFFILIATE + 1 (main broker)");
 					}
 				}
-				let total_bps = beneficiaries
-					.iter()
-					.fold(0, |total, Beneficiary { bps, .. }| total.saturating_add(*bps));
-				(beneficiaries, total_bps)
+				beneficiaries
 			};
 
-			ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
+			Pallet::<T>::validate_broker_fees(&beneficiaries)?;
 
 			let destination_address_internal =
 				T::AddressConverter::decode_and_validate_address_for_asset(
@@ -2268,12 +2276,57 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	}
 }
 
-impl<T: Config> cf_traits::SwapLimitsProvider for Pallet<T> {
+impl<T: Config> SwapLimitsProvider for Pallet<T> {
+	type AccountId = T::AccountId;
+
 	fn get_swap_limits() -> cf_traits::SwapLimits {
 		cf_traits::SwapLimits {
 			max_swap_retry_duration_blocks: MaxSwapRetryDurationBlocks::<T>::get(),
 			max_swap_request_duration_blocks: MaxSwapRequestDurationBlocks::<T>::get(),
 		}
+	}
+
+	fn validate_refund_params(retry_duration: u32) -> Result<(), DispatchError> {
+		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<T>::get();
+		if retry_duration > max_swap_retry_duration_blocks {
+			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));
+		}
+		Ok(())
+	}
+
+	fn validate_dca_params(params: &cf_primitives::DcaParameters) -> Result<(), DispatchError> {
+		let max_swap_request_duration_blocks = MaxSwapRequestDurationBlocks::<T>::get();
+
+		if params.number_of_chunks != 1 {
+			if params.number_of_chunks == 0 {
+				return Err(DispatchError::from(Error::<T>::ZeroNumberOfChunksNotAllowed));
+			}
+			if params.chunk_interval < SWAP_DELAY_BLOCKS {
+				return Err(DispatchError::from(Error::<T>::ChunkIntervalTooLow));
+			}
+			if let Some(total_swap_request_duration) =
+				params.number_of_chunks.saturating_sub(1).checked_mul(params.chunk_interval)
+			{
+				if total_swap_request_duration > max_swap_request_duration_blocks {
+					return Err(DispatchError::from(Error::<T>::SwapRequestDurationTooLong));
+				}
+			} else {
+				return Err(DispatchError::from(Error::<T>::InvalidDcaParameters));
+			}
+		}
+		Ok(())
+	}
+
+	fn validate_broker_fees(
+		broker_fees: &Beneficiaries<Self::AccountId>,
+	) -> Result<(), DispatchError> {
+		let total_bps = broker_fees
+			.iter()
+			.fold(0, |total, Beneficiary { bps, .. }| total.saturating_add(*bps));
+
+		ensure!(total_bps <= 1000, Error::<T>::BrokerCommissionBpsTooHigh);
+
+		Ok(())
 	}
 }
 

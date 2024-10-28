@@ -3,6 +3,7 @@ use std::pin::Pin;
 use async_trait::async_trait;
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
+use cf_utilities::redact_endpoint_secret::SecretUrl;
 use futures::{Stream, StreamExt, TryStreamExt};
 use sp_core::H256;
 use std::sync::Arc;
@@ -13,7 +14,6 @@ use subxt::{
 };
 use tokio::sync::RwLock;
 use tracing::warn;
-use utilities::redact_endpoint_secret::SecretUrl;
 
 use anyhow::{anyhow, bail, Result};
 

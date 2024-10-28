@@ -770,7 +770,7 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 	// Making a copy while we still have sharing parameters
 	let key_params = keygen_common.sharing_params.key_params;
 
-	let party_public_keys = utilities::task_scope::without_blocking(move || {
+	let party_public_keys = cf_utilities::task_scope::without_blocking(move || {
 		derive_local_pubkeys_for_parties(&keygen_common.sharing_params, &commitments)
 	})
 	.await

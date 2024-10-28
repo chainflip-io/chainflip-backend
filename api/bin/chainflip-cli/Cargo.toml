@@ -1,7 +1,7 @@
 [package]
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
-edition = '2021'
-build = 'build.rs'
+edition = "2021"
+build = "build.rs"
 name = "chainflip-cli"
 version = "1.7.0"
 
@@ -9,22 +9,22 @@ version = "1.7.0"
 workspace = true
 
 [dependencies]
-anyhow = "1.0"
-bigdecimal = "0.4.5"
-clap = { version = "4.5.3", features = ["derive", "env"] }
-config = "0.13.1"
-futures = "0.3.30"
-hex = { version = "0.4.3", features = ["serde"] }
-serde = { version = "1.0.197", features = ["derive", "rc"] }
-tokio = { version = "1.13.1", features = ["full"] }
-serde_json = "1.0"
+anyhow = { workspace = true }
+bigdecimal = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+config = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true, default-features = true, features = ["serde"] }
+serde = { workspace = true, default-features = true, features = ["derive", "rc"] }
+tokio = { workspace = true, features = ["full"] }
+serde_json = { workspace = true }
 
 # Local Deps
-chainflip-engine = { path = "../../../engine/" }
-chainflip-api = { path = "../../lib" }
-cf-chains = { path = "../../../state-chain/chains" }
-utilities = { path = "../../../utilities" }
-custom-rpc = { path = "../../../state-chain/custom-rpc" }
+chainflip-engine = { workspace = true }
+chainflip-api = { workspace = true }
+cf-chains = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
+custom-rpc = { workspace = true }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.15.2+2' }
+substrate-build-script-utils = { workspace = true }

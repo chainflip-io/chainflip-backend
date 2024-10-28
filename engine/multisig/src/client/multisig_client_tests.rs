@@ -16,8 +16,8 @@ use mockall::predicate;
 
 use crate::client::key_store_api::MockKeyStoreAPI;
 use cf_primitives::GENESIS_EPOCH;
+use cf_utilities::{assert_err, assert_ok, testing::assert_future_can_complete};
 use client::MultisigClient;
-use utilities::{assert_err, assert_ok, testing::assert_future_can_complete};
 
 #[tokio::test]
 async fn should_ignore_rts_for_unknown_key() {

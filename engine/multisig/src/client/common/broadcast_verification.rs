@@ -172,7 +172,8 @@ pub async fn verify_broadcasts_non_blocking<T>(
 where
 	T: Clone + std::fmt::Debug + Ord + Send + 'static,
 {
-	utilities::task_scope::without_blocking(move || verify_broadcasts(verification_messages)).await
+	cf_utilities::task_scope::without_blocking(move || verify_broadcasts(verification_messages))
+		.await
 }
 
 #[cfg(test)]

@@ -23,7 +23,7 @@ use cf_chains::{
 	assets::any::AssetMap,
 	sol::{SolAddress, SolHash},
 	ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto, ChannelRefundParameters,
-	DepositChannel, Ethereum,
+	Ethereum,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BlockNumber,
@@ -730,6 +730,7 @@ pub trait DepositApi<C: Chain> {
 		lp_account: Self::AccountId,
 		source_asset: C::ChainAsset,
 		boost_fee: BasisPoints,
+		refund_address: ForeignChainAddress,
 	) -> Result<(ChannelId, ForeignChainAddress, C::ChainBlockNumber, Self::Amount), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
@@ -897,12 +898,7 @@ pub trait FlipBurnInfo {
 
 /// The trait implementation is intentionally no-op by default
 pub trait OnDeposit<C: Chain> {
-	fn on_deposit_made(
-		_deposit_details: C::DepositDetails,
-		_amount: C::ChainAmount,
-		_channel: &DepositChannel<C>,
-	) {
-	}
+	fn on_deposit_made(_deposit_details: C::DepositDetails, _amount: C::ChainAmount) {}
 }
 
 pub trait NetworkEnvironmentProvider {
@@ -993,7 +989,14 @@ pub struct SwapLimits {
 	pub max_swap_request_duration_blocks: BlockNumber,
 }
 pub trait SwapLimitsProvider {
+	type AccountId;
+
 	fn get_swap_limits() -> SwapLimits;
+	fn validate_dca_params(dca_params: &DcaParameters) -> Result<(), DispatchError>;
+	fn validate_refund_params(retry_duration: u32) -> Result<(), DispatchError>;
+	fn validate_broker_fees(
+		broker_fees: &Beneficiaries<Self::AccountId>,
+	) -> Result<(), DispatchError>;
 }
 
 /// API for interacting with the asset-balance pallet.

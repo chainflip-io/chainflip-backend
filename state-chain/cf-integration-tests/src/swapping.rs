@@ -17,6 +17,7 @@ use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
 	assets::eth::Asset as EthAsset,
 	eth::{api::EthereumApi, EthereumTrackedData},
+	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, DefaultRetryPolicy, Ethereum,
 	ExecutexSwapAndCall, ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin,
 	TransactionBuilder, TransferAssetParams,
@@ -267,7 +268,7 @@ fn basic_pool_setup_provision_and_swap() {
 
 			let deposit_address =
 				<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
-					cf_primitives::chains::assets::eth::Asset::Eth,
+					EthAsset::Eth,
 					pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 				)
 				.unwrap();
@@ -278,8 +279,8 @@ fn basic_pool_setup_provision_and_swap() {
 				pallet_cf_ingress_egress::Call::process_deposits {
 					deposit_witnesses: vec![DepositWitness {
 						deposit_address,
-						asset: cf_primitives::chains::assets::eth::Asset::Eth,
-						amount: (DEPOSIT_AMOUNT + EthereumChainTracking::estimate_ingress_fee(cf_primitives::chains::assets::eth::Asset::Eth)),
+						asset: EthAsset::Eth,
+						amount: (DEPOSIT_AMOUNT + EthereumChainTracking::estimate_ingress_fee(EthAsset::Eth)),
 						deposit_details: Default::default(),
 					}],
 					block_height: 0,
@@ -571,13 +572,18 @@ fn can_process_ccm_via_direct_deposit() {
 		let deposit_amount = 100_000_000_000;
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-				source_asset: Asset::Flip,
+			pallet_cf_ingress_egress::Call::contract_swap_request {
+				input_asset: EthAsset::Flip,
+				output_asset: Asset::Usdc,
 				deposit_amount,
-				destination_asset: Asset::Usdc,
 				destination_address: EncodedAddress::Eth([0x02; 20]),
-				deposit_metadata: ccm_deposit_metadata_mock(),
+				deposit_metadata: Some(ccm_deposit_metadata_mock()),
 				tx_hash: Default::default(),
+				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
+				broker_fees: Default::default(),
+				refund_params: None,
+				dca_params: None,
+				boost_fee: 0,
 			},
 		));
 
@@ -617,11 +623,17 @@ fn failed_swaps_are_rolled_back() {
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::contract_swap_request {
-				from: Asset::Eth,
-				to: Asset::Flip,
+				input_asset: EthAsset::Eth,
+				output_asset: Asset::Flip,
 				deposit_amount: 10_000 * DECIMALS,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				tx_hash: Default::default(),
+				deposit_metadata: None,
+				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
+				broker_fees: Default::default(),
+				refund_params: None,
+				dca_params: None,
+				boost_fee: 0,
 			},
 		));
 
@@ -755,10 +767,10 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 
 #[test]
 fn can_resign_failed_ccm() {
-	const EPOCH_BLOCKS: u32 = 1000;
+	const EPOCH_DURATION_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_DURATION_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -772,14 +784,18 @@ fn can_resign_failed_ccm() {
 			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
 			witness_call(RuntimeCall::EthereumIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_ccm_swap_request {
-					source_asset: Asset::Flip,
+				pallet_cf_ingress_egress::Call::contract_swap_request {
+					input_asset: EthAsset::Flip,
+					output_asset: Asset::Usdc,
 					deposit_amount: 10_000_000_000_000,
-					destination_asset: Asset::Usdc,
 					destination_address: EncodedAddress::Eth([0x02; 20]),
-					deposit_metadata: ccm_deposit_metadata_mock(),
-					// deposit_metadata,
+					deposit_metadata: Some(ccm_deposit_metadata_mock()),
 					tx_hash: Default::default(),
+					deposit_details: Box::new(DepositDetails { tx_hashes: None }),
+					broker_fees: Default::default(),
+					refund_params: None,
+					dca_params: None,
+					boost_fee: 0,
 				},
 			));
 
@@ -866,7 +882,7 @@ fn can_handle_failed_vault_transfer() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -892,7 +908,7 @@ fn can_handle_failed_vault_transfer() {
 
 			// Report a failed vault transfer
 			let starting_epoch = Validator::current_epoch();
-			let asset = cf_chains::assets::eth::Asset::Eth;
+			let asset = EthAsset::Eth;
 			let amount = 1_000_000u128;
 			let destination_address = [0x00; 20].into();
 			let broadcast_id = 2;

@@ -3,6 +3,7 @@ use crate::{
 		ConsensusStatus, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
 		ElectionWriteAccess, ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess,
 	},
+	vote_storage::VoteStorage,
 	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
 use codec::Encode;
@@ -202,6 +203,14 @@ impl<ES: ElectoralSystem> MockAccess<ES> {
 
 	pub fn next_umi(&self) -> UniqueMonotonicIdentifier {
 		self.next_election_id
+	}
+
+	pub fn is_vote_valid(
+		&self,
+		election_identifier: ElectionIdentifierOf<ES>,
+		partial_vote: &<ES::Vote as VoteStorage>::PartialVote,
+	) -> Result<bool, CorruptStorageError> {
+		ES::is_vote_valid(election_identifier, &self.election(election_identifier)?, partial_vote)
 	}
 }
 

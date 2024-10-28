@@ -23,22 +23,22 @@ use pallet_cf_cfe_interface::{
 };
 use sp_runtime::AccountId32;
 
+use cf_utilities::cached_stream::MakeCachedStream;
 use sp_core::H256;
 use state_chain_runtime::{
 	AccountId, BitcoinInstance, EvmInstance, PolkadotInstance, Runtime, RuntimeCall,
 };
-use utilities::cached_stream::MakeCachedStream;
 
 use crate::{
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 };
+use cf_utilities::task_scope::task_scope;
 use multisig::{
 	client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
 	eth::EthSigning,
 	CryptoScheme, KeyId,
 };
-use utilities::task_scope::task_scope;
 
 use super::{crypto_compat::CryptoCompat, get_ceremony_id_counters_before_block};
 

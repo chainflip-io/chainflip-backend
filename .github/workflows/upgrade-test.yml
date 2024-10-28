@@ -60,7 +60,7 @@ jobs:
         if: inputs.run-job
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
-          node-version: 20
+          node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 

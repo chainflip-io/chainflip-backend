@@ -10,6 +10,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use cf_primitives::MILLISECONDS_PER_BLOCK;
+use cf_utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
 use futures::{stream, StreamExt, TryStreamExt};
 use pallet_cf_elections::{
 	electoral_system::{ElectionIdentifierOf, ElectoralSystem},
@@ -22,7 +23,6 @@ use std::{
 	sync::Arc,
 };
 use tracing::{error, info, warn};
-use utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};
 use voter_api::VoterApi;
 
 const MAXIMUM_CONCURRENT_FILTER_REQUESTS: usize = 16;
@@ -126,7 +126,7 @@ where
 			)
 		>::default();
 
-		utilities::loop_select! {
+		cf_utilities::loop_select! {
 			let _ = submit_interval.tick() => {
 				stream::iter(core::mem::take(&mut pending_submissions).into_iter()).chunks(MAXIMUM_VOTES_PER_EXTRINSIC as usize /*We use the same constant as if it is reasonable for the extrinsic maximum this should also be reasonable for the RPC maximum*/).map(|votes| {
 					let state_chain_client = &self.state_chain_client;

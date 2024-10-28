@@ -105,9 +105,9 @@ impl CryptoScheme for SolCryptoScheme {
 		use sha2::Digest;
 
 		let hash = sha2::Sha512::default()
-			.chain(nonce_commitment.as_bytes())
-			.chain(pubkey.as_bytes())
-			.chain(&payload.0);
+			.chain_update(nonce_commitment.as_bytes())
+			.chain_update(pubkey.as_bytes())
+			.chain_update(&payload.0);
 
 		let mut output = [0u8; 64];
 		output.copy_from_slice(hash.finalize().as_slice());

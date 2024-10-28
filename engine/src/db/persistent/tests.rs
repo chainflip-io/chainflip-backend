@@ -9,7 +9,7 @@ use multisig::{
 
 use super::*;
 use cf_primitives::GENESIS_EPOCH;
-use utilities::{assert_ok, testing::new_temp_directory_with_nonexistent_file};
+use cf_utilities::{assert_ok, testing::new_temp_directory_with_nonexistent_file};
 
 fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C> {
 	get_key_data_for_test::<C>(BTreeSet::from_iter([AccountId32::new([0; 32])]))
@@ -299,7 +299,7 @@ fn should_error_if_genesis_hash_is_different() {
 
 #[test]
 fn test_migration_to_latest_from_0() {
-	let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
+	let (_dir, db_file) = cf_utilities::testing::new_temp_directory_with_nonexistent_file();
 
 	{
 		let db = PersistentKeyDB::open_and_migrate_to_version(&db_file, None, 0).unwrap();

@@ -7,7 +7,7 @@ use crate::{
 	witness::common::{chain_source::Header, RuntimeCallHasChain, RuntimeHasChain},
 };
 use cf_chains::Chain;
-use utilities::metrics::CHAIN_TRACKING;
+use cf_utilities::metrics::CHAIN_TRACKING;
 
 use super::{builder::ChunkedByTimeBuilder, ChunkedByTime};
 

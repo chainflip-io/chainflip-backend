@@ -1,5 +1,5 @@
+use cf_utilities::task_scope::Scope;
 use futures_core::Future;
-use utilities::task_scope::Scope;
 
 use crate::witness::common::{
 	chunked_chain_source::{

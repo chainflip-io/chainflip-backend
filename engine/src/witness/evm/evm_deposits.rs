@@ -179,7 +179,7 @@ where
 }
 
 /// To ensure we don't double witness deposits, we use the following pseudo-code, implemented by
-/// `eth_ingresses_at_block`.
+/// [eth_ingresses_at_block].
 ///
 /// if !address.hasContract:
 ///    swap = address.balanceAtCurrentBlock - address.balanceAtPreviousBlock
@@ -255,9 +255,9 @@ mod tests {
 
 	use super::{super::contract_common::events_at_block, *};
 	use cf_chains::{Chain, Ethereum};
+	use cf_utilities::task_scope;
 	use ethers::prelude::U256;
 	use futures_util::FutureExt;
-	use utilities::task_scope;
 
 	use super::super::vault::VaultEvents;
 

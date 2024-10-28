@@ -3,14 +3,14 @@ use crate::p2p::{
 	core::{ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD},
 	OutgoingMultisigStageMessages, P2PKey,
 };
+use cf_utilities::{
+	testing::{expect_recv_with_timeout, recv_with_custom_timeout},
+	Port,
+};
 use sp_core::ed25519::Public;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
-use utilities::{
-	testing::{expect_recv_with_timeout, recv_with_custom_timeout},
-	Port,
-};
 
 fn create_node_info(id: AccountId, node_key: &ed25519_dalek::SigningKey, port: Port) -> PeerInfo {
 	use std::net::Ipv4Addr;

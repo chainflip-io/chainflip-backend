@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use cf_utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, UnwrapOrCancel};
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::{Deserialize, Serialize};
@@ -9,7 +10,6 @@ use sp_core::H256;
 use state_chain_runtime::{AccountId, Nonce};
 use tokio::sync::{mpsc, oneshot};
 use tracing::trace;
-use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle, UnwrapOrCancel};
 
 use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
 
@@ -206,7 +206,7 @@ impl SignedExtrinsicClient {
 							base_rpc_client.clone(),
 						);
 
-					utilities::loop_select! {
+					cf_utilities::loop_select! {
 						if let Some((call, until_in_block_sender, until_finalized_sender, strategy)) = request_receiver.recv() => {
 							submission_watcher.new_request(&mut requests, call, until_in_block_sender, until_finalized_sender, strategy).await?;
 						} else break Ok(()),
