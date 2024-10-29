@@ -20,6 +20,11 @@ async-channel = "1.7.1"
 async-trait = "0.1.49"
 bincode = "1.3.3"
 bitcoin = { version = "0.30.0", features = ["serde"] }
+borsh = { version = "1.2.1", default_features = false, features = [
+  "derive",
+  "unstable__schema",
+  "hashbrown",
+] }
 chrono = { version = "0.4.21", default_features = false, features = ["clock"] }
 clap = { version = "3.2.16", features = ["derive", "env"] }
 config = "0.13.1"

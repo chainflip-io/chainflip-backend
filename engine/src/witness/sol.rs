@@ -1,6 +1,7 @@
 mod egress_witnessing;
 mod fee_tracking;
 mod nonce_witnessing;
+mod program_swaps_witnessing;
 mod sol_deposits;
 
 use crate::{
