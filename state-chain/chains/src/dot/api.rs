@@ -145,18 +145,9 @@ where
 	}
 }
 
-impl<E> RejectCall<Polkadot> for PolkadotApi<E>
-where
-	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
+impl<E> RejectCall<Polkadot> for PolkadotApi<E> where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>
 {
-	fn new_unsigned(
-		_deposit_details: <Polkadot as Chain>::DepositDetails,
-		_refund_address: ForeignChainAddress,
-		_amount: <Polkadot as Chain>::ChainAmount,
-		_fees: <Polkadot as Chain>::ChainAmount,
-	) -> Result<Self, RejectError> {
-		Err(RejectError::NotSupportedForAsset)
-	}
 }
 
 #[macro_export]

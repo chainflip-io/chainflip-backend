@@ -341,9 +341,8 @@ impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 	fn new_unsigned(
 		_deposit_details: <Bitcoin as Chain>::DepositDetails,
-		_refund_address: ForeignChainAddress,
-		_amount: <Bitcoin as Chain>::ChainAmount,
-		_fees: <Bitcoin as Chain>::ChainAmount,
+		_refund_address: <Bitcoin as Chain>::ChainAccount,
+		_refund_amount: <Bitcoin as Chain>::ChainAmount,
 	) -> Result<Self, RejectError> {
 		Ok(Self::RejectCall)
 	}
@@ -352,9 +351,8 @@ impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 impl RejectCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn new_unsigned(
 		_deposit_details: <Ethereum as Chain>::DepositDetails,
-		_refund_address: ForeignChainAddress,
-		_amount: <Ethereum as Chain>::ChainAmount,
-		_fees: <Ethereum as Chain>::ChainAmount,
+		_refund_address: <Ethereum as Chain>::ChainAccount,
+		_refund_amount: <Ethereum as Chain>::ChainAmount,
 	) -> Result<Self, RejectError> {
 		Ok(Self::RejectCall)
 	}

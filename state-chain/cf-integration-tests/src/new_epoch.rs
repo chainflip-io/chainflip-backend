@@ -238,7 +238,7 @@ fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
 }
 
 fn add_utxo_amount(utxo: Utxo) {
-	Environment::add_bitcoin_utxo_to_list(utxo.amount, utxo.id, utxo.deposit_address);
+	Environment::add_bitcoin_utxo_to_list(utxo);
 }
 
 #[test]

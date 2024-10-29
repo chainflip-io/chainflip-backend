@@ -898,7 +898,7 @@ pub trait FlipBurnInfo {
 
 /// The trait implementation is intentionally no-op by default
 pub trait OnDeposit<C: Chain> {
-	fn on_deposit_made(_deposit_details: C::DepositDetails, _amount: C::ChainAmount) {}
+	fn on_deposit_made(_deposit_details: C::DepositDetails) {}
 }
 
 pub trait NetworkEnvironmentProvider {

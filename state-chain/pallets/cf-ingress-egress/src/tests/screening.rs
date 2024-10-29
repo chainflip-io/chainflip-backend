@@ -13,7 +13,7 @@ use frame_support::{
 };
 
 use cf_chains::{
-	btc::{deposit_address::DepositAddress, BtcDepositDetails, Hash, ScriptPubkey, UtxoId},
+	btc::{deposit_address::DepositAddress, Hash, ScriptPubkey, UtxoId},
 	ForeignChainAddress,
 };
 
@@ -32,10 +32,12 @@ const DEFAULT_BTC_ADDRESS: [u8; 20] = [0; 20];
 mod helpers {
 
 	use super::*;
+	use cf_chains::btc::Utxo;
 
-	pub fn generate_btc_deposit(tx_in_id: Hash) -> BtcDepositDetails {
-		BtcDepositDetails {
-			utxo_id: UtxoId { tx_id: tx_in_id, vout: 0 },
+	pub fn generate_btc_deposit(tx_id: Hash) -> Utxo {
+		Utxo {
+			amount: DEFAULT_DEPOSIT_AMOUNT,
+			id: UtxoId { tx_id, vout: 0 },
 			deposit_address: DepositAddress { pubkey_x: [0; 32], script_path: None },
 		}
 	}
@@ -43,7 +45,7 @@ mod helpers {
 	pub fn request_address_and_deposit(
 		who: ChannelId,
 		asset: btc::Asset,
-		deposit_details: BtcDepositDetails,
+		deposit_details: Utxo,
 	) -> (ChannelId, <Bitcoin as Chain>::ChainAccount) {
 		let (id, address, ..) = IngressEgress::request_liquidity_deposit_address(
 			who,

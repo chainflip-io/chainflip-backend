@@ -227,12 +227,6 @@ impl BitcoinFeeInfo {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
-pub struct BtcDepositDetails {
-	pub utxo_id: UtxoId,
-	pub deposit_address: DepositAddress,
-}
-
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
@@ -250,7 +244,7 @@ impl Chain for Bitcoin {
 	type ChainAccount = ScriptPubkey;
 	type DepositFetchId = BitcoinFetchId;
 	type DepositChannelState = DepositAddress;
-	type DepositDetails = BtcDepositDetails;
+	type DepositDetails = Utxo;
 	type Transaction = BitcoinTransactionData;
 	type TransactionMetadata = ();
 	type TransactionRef = Hash;
@@ -385,12 +379,6 @@ impl From<&DepositChannel<Bitcoin>> for BitcoinFetchId {
 	}
 }
 
-impl DepositDetailsToTransactionInId<BitcoinCrypto> for BtcDepositDetails {
-	fn deposit_id(&self) -> Option<Hash> {
-		Some(self.utxo_id.tx_id)
-	}
-}
-
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
@@ -409,6 +397,12 @@ pub struct Utxo {
 impl Utxo {
 	pub fn net_value(&self, fee_info: &BitcoinFeeInfo) -> BtcAmount {
 		self.amount.saturating_sub(fee_info.fee_for_utxo(self))
+	}
+}
+
+impl DepositDetailsToTransactionInId<BitcoinCrypto> for Utxo {
+	fn deposit_id(&self) -> Option<Hash> {
+		Some(self.id.tx_id)
 	}
 }
 

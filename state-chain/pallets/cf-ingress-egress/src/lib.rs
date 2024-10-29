@@ -931,19 +931,19 @@ pub mod pallet {
 			}
 
 			for tx in ScheduledTxForReject::<T, I>::take() {
-				if let Some(refund_address) = tx.refund_address.clone() {
-					let egress_fee = T::ChainTracking::estimate_egress_fee(tx.asset);
+				if let Some(Ok(refund_address)) = tx.refund_address.clone().map(TryInto::try_into) {
 					if let Ok(api_call) =
 						<T::ChainApiCall as RejectCall<T::TargetChain>>::new_unsigned(
 							tx.deposit_details.clone(),
 							refund_address,
-							tx.amount,
-							egress_fee,
+							tx.amount
+								.saturating_sub(T::ChainTracking::estimate_egress_fee(tx.asset)),
 						) {
-						let result = T::Broadcaster::threshold_sign_and_broadcast(api_call);
+						let (broadcast_id, _) =
+							T::Broadcaster::threshold_sign_and_broadcast(api_call);
 						Self::deposit_event(Event::<T, I>::TaintedTransactionRejected {
-							broadcast_id: result.0,
-							tx_id: tx.deposit_details.clone(),
+							broadcast_id,
+							tx_id: tx.deposit_details,
 						});
 					} else {
 						FailedRejections::<T, I>::append(tx.clone());
@@ -2004,7 +2004,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
 		// Add the deposit to the balance.
-		T::DepositHandler::on_deposit_made(deposit_details.clone(), deposit_amount);
+		T::DepositHandler::on_deposit_made(deposit_details.clone());
 
 		// We received a deposit on a channel. If channel has been boosted earlier
 		// (i.e. awaiting finalisation), *and* the boosted amount matches the amount
@@ -2125,7 +2125,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return;
 		}
 
-		T::DepositHandler::on_deposit_made(deposit_details, deposit_amount);
+		T::DepositHandler::on_deposit_made(deposit_details);
 
 		let destination_address_internal =
 			match T::AddressConverter::decode_and_validate_address_for_asset(

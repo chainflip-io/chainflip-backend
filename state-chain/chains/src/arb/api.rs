@@ -150,18 +150,9 @@ impl<E> From<EvmTransactionBuilder<transfer_fallback::TransferFallback>> for Arb
 	}
 }
 
-impl<E> RejectCall<Arbitrum> for ArbitrumApi<E>
-where
-	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>,
+impl<E> RejectCall<Arbitrum> for ArbitrumApi<E> where
+	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>
 {
-	fn new_unsigned(
-		_deposit_details: <Arbitrum as Chain>::DepositDetails,
-		_refund_address: ForeignChainAddress,
-		_amount: <Arbitrum as Chain>::ChainAmount,
-		_fees: <Arbitrum as Chain>::ChainAmount,
-	) -> Result<Self, RejectError> {
-		Err(RejectError::NotSupportedForAsset)
-	}
 }
 
 macro_rules! map_over_api_variants {

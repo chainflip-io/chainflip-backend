@@ -154,23 +154,14 @@ where
 {
 	fn new_unsigned(
 		deposit_details: <Bitcoin as Chain>::DepositDetails,
-		refund_address: ForeignChainAddress,
-		amount: <Bitcoin as Chain>::ChainAmount,
-		fees: <Bitcoin as Chain>::ChainAmount,
+		refund_address: <Bitcoin as Chain>::ChainAccount,
+		refund_amount: <Bitcoin as Chain>::ChainAmount,
 	) -> Result<Self, RejectError> {
 		let agg_key = <E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(RejectError::Other)?;
-		let script_pubkey = match refund_address {
-			ForeignChainAddress::Btc(script_pubkey) => script_pubkey,
-			_ => return Err(RejectError::Other),
-		};
 		Ok(Self::NoChangeTransfer(BitcoinTransaction::create_new_unsigned(
 			&agg_key,
-			vec![Utxo {
-				amount,
-				id: deposit_details.utxo_id,
-				deposit_address: deposit_details.deposit_address,
-			}],
-			vec![BitcoinOutput { amount: amount - fees, script_pubkey }],
+			vec![deposit_details],
+			vec![BitcoinOutput { amount: refund_amount, script_pubkey: refund_address }],
 		)))
 	}
 }

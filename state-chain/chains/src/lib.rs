@@ -537,11 +537,12 @@ pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 
 pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn new_unsigned(
-		deposit_details: C::DepositDetails,
-		refund_address: ForeignChainAddress,
-		amount: <C as Chain>::ChainAmount,
-		fees: <C as Chain>::ChainAmount,
-	) -> Result<Self, RejectError>;
+		_deposit_details: C::DepositDetails,
+		_refund_address: C::ChainAccount,
+		_refund_amount: C::ChainAmount,
+	) -> Result<Self, RejectError> {
+		Err(RejectError::NotSupportedForAsset)
+	}
 }
 
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
