@@ -5,6 +5,8 @@ use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
+#[cfg(feature = "runtime-benchmarks")]
+use cf_chains::sol::api::ContractSwapAccountAndSender;
 
 use crate::{
 	electoral_system::{
@@ -15,7 +17,7 @@ use crate::{
 	CorruptStorageError, ElectionIdentifier,
 };
 use cf_chains::sol::{
-	api::ContractSwapAccountAndSender, MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
+	MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
 	MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
 	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
 };
@@ -34,18 +36,18 @@ pub trait SolanaVaultSwapAccountsHook<Account, SwapDetails, E> {
 	fn get_number_of_available_sol_nonce_accounts() -> usize;
 }
 
+pub type SolanaVaultSwapAccountsLastClosedAt<BlockNumber> = BlockNumber;
+
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
-pub struct SolanaVaultSwapsElectoralState<Account: Ord, BlockNumber> {
-	pub accounts_last_closed_at: BlockNumber,
+pub struct SolanaVaultSwapsKnownAccounts<Account: Ord> {
 	pub witnessed_open_accounts: Vec<Account>,
 	pub closure_initiated_accounts: BTreeSet<Account>,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for SolanaVaultSwapsElectoralState<ContractSwapAccountAndSender, u32> {
+impl BenchmarkValue for SolanaVaultSwapsKnownAccounts<ContractSwapAccountAndSender> {
 	fn benchmark_value() -> Self {
 		Self {
-			accounts_last_closed_at: 1u32,
 			witnessed_open_accounts: vec![BenchmarkValue::benchmark_value()],
 			closure_initiated_accounts: BTreeSet::from([BenchmarkValue::benchmark_value()]),
 		}
@@ -91,14 +93,14 @@ impl<
 	for SolanaVaultSwapAccounts<Account, SwapDetails, BlockNumber, Settings, Hook, ValidatorId, E>
 {
 	type ValidatorId = ValidatorId;
-	type ElectoralUnsynchronisedState = SolanaVaultSwapsElectoralState<Account, BlockNumber>;
+	type ElectoralUnsynchronisedState = SolanaVaultSwapAccountsLastClosedAt<BlockNumber>;
 	type ElectoralUnsynchronisedStateMapKey = ();
 	type ElectoralUnsynchronisedStateMapValue = ();
 
 	type ElectoralUnsynchronisedSettings = ();
 	type ElectoralSettings = Settings;
 	type ElectionIdentifierExtra = ();
-	type ElectionProperties = ();
+	type ElectionProperties = SolanaVaultSwapsKnownAccounts<Account>;
 	type ElectionState = ();
 	type Vote = vote_storage::bitmap::Bitmap<SolanaVaultSwapsVote<Account, SwapDetails>>;
 	type Consensus = SolanaVaultSwapsVote<Account, SwapDetails>;
@@ -125,63 +127,64 @@ impl<
 		{
 			let mut election_access = electoral_access.election_mut(election_identifier)?;
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
+				let mut known_accounts = election_access.properties()?;
 				election_access.delete();
-				electoral_access.new_election((), (), ())?;
-				electoral_access.mutate_unsynchronised_state(|_, unsynchronised_state| {
-					unsynchronised_state.witnessed_open_accounts.extend(
-						consensus.new_accounts.iter().map(|(account, swap_details)| {
-							Hook::initiate_vault_swap((*swap_details).clone());
-							(*account).clone()
-						}),
-					);
+				known_accounts.witnessed_open_accounts.extend(consensus.new_accounts.iter().map(
+					|(account, swap_details)| {
+						Hook::initiate_vault_swap((*swap_details).clone());
+						(*account).clone()
+					},
+				));
+				consensus.confirm_closed_accounts.into_iter().for_each(|acc| {
+					known_accounts.closure_initiated_accounts.remove(&acc);
+				});
 
-					consensus.confirm_closed_accounts.into_iter().for_each(|acc| {
-						unsynchronised_state.closure_initiated_accounts.remove(&acc);
-					});
-
-					Ok(())
-				})?;
+				if Hook::get_number_of_available_sol_nonce_accounts() >
+					NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
+					(known_accounts.witnessed_open_accounts.len() >=
+						MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES ||
+						(*current_block_number)
+							.checked_sub(&electoral_access.unsynchronised_state()?)
+							.expect("current block number is always greater than when apicall was last created")
+							.into() >= MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS)
+				{
+					let accounts_to_close: Vec<_> = if known_accounts.witnessed_open_accounts.len() >
+						MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES
+					{
+						known_accounts
+							.witnessed_open_accounts
+							.drain(..MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES)
+							.collect()
+					} else {
+						sp_std::mem::take(&mut known_accounts.witnessed_open_accounts)
+					};
+					match Hook::close_accounts(accounts_to_close.clone()) {
+						Ok(()) => {
+							known_accounts.closure_initiated_accounts.extend(accounts_to_close);
+							electoral_access.set_unsynchronised_state(*current_block_number)?;
+						},
+						Err(e) => {
+							log::error!(
+								"failed to build Solana CloseSolanaVaultSwapAccounts apicall: {:?}",
+								e
+							);
+							known_accounts.witnessed_open_accounts.extend(accounts_to_close);
+						},
+					}
+				}
+				electoral_access.new_election((), known_accounts, ())?;
 			}
 		} else {
-			electoral_access.new_election((), (), ())?;
+			electoral_access.new_election(
+				(),
+				SolanaVaultSwapsKnownAccounts {
+					witnessed_open_accounts: Vec::new(),
+					closure_initiated_accounts: BTreeSet::new(),
+				},
+				(),
+			)?;
 		}
 
-		let mut unsynchronised_state = electoral_access.unsynchronised_state()?;
-		if Hook::get_number_of_available_sol_nonce_accounts() >
-			NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
-			(unsynchronised_state.witnessed_open_accounts.len() >=
-				MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES ||
-				(*current_block_number)
-					.checked_sub(&unsynchronised_state.accounts_last_closed_at)
-					.expect(
-						"current block number is always greater than when apicall was last created",
-					)
-					.into() >= MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS)
-		{
-			let accounts_to_close: Vec<_> = if unsynchronised_state.witnessed_open_accounts.len() >
-				MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES
-			{
-				unsynchronised_state
-					.witnessed_open_accounts
-					.drain(..MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES)
-					.collect()
-			} else {
-				sp_std::mem::take(&mut unsynchronised_state.witnessed_open_accounts)
-			};
-			match Hook::close_accounts(accounts_to_close.clone()) {
-				Ok(()) => {
-					unsynchronised_state.accounts_last_closed_at = *current_block_number;
-					unsynchronised_state.closure_initiated_accounts.extend(accounts_to_close);
-					electoral_access.set_unsynchronised_state(unsynchronised_state)?;
-				},
-				Err(e) => {
-					log::error!(
-						"failed to build Solana CloseSolanaVaultSwapAccounts apicall: {:?}",
-						e
-					);
-				},
-			}
-		}
 		Ok(())
 	}
 
