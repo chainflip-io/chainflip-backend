@@ -61,7 +61,7 @@ pub async fn get_program_swaps(
 	swap_endpoint_data_account_address: SolAddress,
 	sc_opened_accounts: Vec<SolAddress>,
 	_token_pubkey: SolAddress,
-) -> Result<Vec<SwapEvent>, anyhow::Error> {
+) -> Result<Vec<(SolAddress, SwapEvent)>, anyhow::Error> {
 	let (new_program_swap_accounts, _closed_accounts, slot) = get_changed_program_swap_accounts(
 		sol_rpc,
 		sc_opened_accounts,
@@ -77,8 +77,8 @@ pub async fn get_program_swaps(
 		.buffered(MAXIMUM_CONCURRENT_RPCS)
 		.map_ok(|program_swap_account_data_chunk| {
 			stream::iter(program_swap_account_data_chunk.into_iter().filter_map(
-				|program_swap_account_data| match program_swap_account_data {
-					Some(data) => Some(Ok(data)),
+				|(account, program_swap_account_data)| match program_swap_account_data {
+					Some(data) => Some(Ok((account, data))),
 					// It could happen that some account is closed between the queries. This should
 					// not happen because:
 					// 1. Accounts in `new_program_swap_accounts` can only be accounts that have
@@ -210,7 +210,7 @@ async fn get_program_swap_event_accounts_data(
 	sol_rpc: &SolRetryRpcClient,
 	program_swap_event_accounts: Vec<SolAddress>,
 	min_context_slot: u64,
-) -> Result<Vec<Option<SwapEvent>>, anyhow::Error> {
+) -> Result<Vec<(SolAddress, Option<SwapEvent>)>, anyhow::Error> {
 	let accounts_info_response = sol_rpc
 		.get_multiple_accounts(
 			program_swap_event_accounts.as_slice(),
@@ -228,9 +228,10 @@ async fn get_program_swap_event_accounts_data(
 
 	ensure!(accounts_info.len() == program_swap_event_accounts.len());
 
-	accounts_info
+	program_swap_event_accounts
 		.into_iter()
-		.map(|accounts_info| match accounts_info {
+		.zip(accounts_info.into_iter())
+		.map(|(account, accounts_info)| match accounts_info {
 			Some(UiAccount { data: UiAccountData::Binary(base64_string, encoding), .. }) => {
 				if encoding != UiAccountEncoding::Base64 {
 					return Err(anyhow!("Data account encoding is not base64"));
@@ -252,11 +253,11 @@ async fn get_program_swap_event_accounts_data(
 					deserialized_data.discriminator
 				);
 
-				Ok(Some(deserialized_data))
+				Ok((account, Some(deserialized_data)))
 			},
 			Some(_) =>
 				Err(anyhow!("Expected UiAccountData::Binary(String, UiAccountEncoding::Base64)")),
-			None => Ok(None),
+			None => Ok((account, None)),
 		})
 		.collect()
 }
