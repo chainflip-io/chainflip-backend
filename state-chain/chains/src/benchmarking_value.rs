@@ -15,6 +15,7 @@ use sp_std::vec;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::{
 	address::{EncodedAddress, ForeignChainAddress},
+	btc::{Utxo, UtxoId},
 	dot::PolkadotTransactionId,
 	evm::{DepositDetails, EvmFetchId, EvmTransactionMetadata},
 };
@@ -220,6 +221,17 @@ impl BenchmarkValue for DepositDetails {
 	fn benchmark_value() -> Self {
 		use sp_core::H256;
 		Self { tx_hashes: Some(vec![H256::default()]) }
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for Utxo {
+	fn benchmark_value() -> Self {
+		Utxo {
+			id: UtxoId::benchmark_value(),
+			amount: 10_000_000,
+			deposit_address: crate::btc::deposit_address::DepositAddress::new([0; 32], 0),
+		}
 	}
 }
 

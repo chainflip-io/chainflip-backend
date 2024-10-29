@@ -6,8 +6,8 @@ pub mod utxo_selection;
 extern crate alloc;
 use self::deposit_address::DepositAddress;
 use crate::{
-	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, DepositChannel, FeeEstimationApi,
-	FeeRefundCalculator, RetryPolicy,
+	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, DepositChannel,
+	DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
 };
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
@@ -240,7 +240,7 @@ impl Chain for Bitcoin {
 	type ChainAccount = ScriptPubkey;
 	type DepositFetchId = BitcoinFetchId;
 	type DepositChannelState = DepositAddress;
-	type DepositDetails = UtxoId;
+	type DepositDetails = Utxo;
 	type Transaction = BitcoinTransactionData;
 	type TransactionMetadata = ();
 	type TransactionRef = Hash;
@@ -393,6 +393,12 @@ pub struct Utxo {
 impl Utxo {
 	pub fn net_value(&self, fee_info: &BitcoinFeeInfo) -> BtcAmount {
 		self.amount.saturating_sub(fee_info.fee_for_utxo(self))
+	}
+}
+
+impl DepositDetailsToTransactionInId<BitcoinCrypto> for Utxo {
+	fn deposit_id(&self) -> Option<Hash> {
+		Some(self.id.tx_id)
 	}
 }
 

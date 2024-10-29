@@ -150,6 +150,11 @@ impl<E> From<EvmTransactionBuilder<transfer_fallback::TransferFallback>> for Arb
 	}
 }
 
+impl<E> RejectCall<Arbitrum> for ArbitrumApi<E> where
+	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>
+{
+}
+
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
 		match $self {

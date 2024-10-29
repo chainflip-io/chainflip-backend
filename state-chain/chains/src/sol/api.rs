@@ -1,3 +1,4 @@
+use crate::RejectCall;
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
@@ -530,3 +531,5 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 		})
 	}
 }
+
+impl<Env: 'static> RejectCall<Solana> for SolanaApi<Env> {}

@@ -145,6 +145,11 @@ where
 	}
 }
 
+impl<E> RejectCall<Polkadot> for PolkadotApi<E> where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>
+{
+}
+
 #[macro_export]
 macro_rules! map_over_api_variants {
 	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {

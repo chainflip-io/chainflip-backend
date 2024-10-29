@@ -147,8 +147,8 @@ impl From<DepositInfo<Bitcoin>> for WitnessInformation {
 			amount: value.amount.into(),
 			asset: value.asset.into(),
 			deposit_details: Some(DepositDetails::Bitcoin {
-				tx_id: value.deposit_details.tx_id,
-				vout: value.deposit_details.vout,
+				tx_id: value.deposit_details.id.tx_id,
+				vout: value.deposit_details.id.vout,
 			}),
 		}
 	}
