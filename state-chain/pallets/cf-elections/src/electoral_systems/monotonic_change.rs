@@ -115,7 +115,7 @@ impl<
 		partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
 	) -> Result<bool, CorruptStorageError> {
 		let (_, previous_value, previous_slot) = election_access.properties()?;
-		Ok(partial_vote.value != SharedDataHash::of(&previous_value) &&
+		Ok(partial_vote.value != election_access.shared_data_hash_of(previous_value) &&
 			partial_vote.block > previous_slot)
 	}
 	fn generate_vote_properties(

@@ -7,7 +7,7 @@ use sp_std::vec::Vec;
 
 use crate::{
 	vote_storage::{AuthorityVote, VoteStorage},
-	CorruptStorageError, ElectionIdentifier,
+	CorruptStorageError, ElectionIdentifier, SharedDataHash,
 };
 
 pub struct ConsensusVote<ES: ElectoralSystem> {
@@ -238,6 +238,7 @@ mod access {
 	//! correct ElectoralSystem implementation.
 
 	use super::{CorruptStorageError, ElectionIdentifierOf, ElectoralSystem};
+	use crate::{vote_storage::VoteStorage, SharedDataHash};
 
 	/// Represents the current consensus, and how it has changed since it was last checked (i.e.
 	/// 'check_consensus' was called).
@@ -311,6 +312,12 @@ mod access {
 		fn state(
 			&self,
 		) -> Result<<Self::ElectoralSystem as ElectoralSystem>::ElectionState, CorruptStorageError>;
+
+		fn shared_data_hash_of(
+			&self,
+			data: <<Self::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData,
+		) -> SharedDataHash;
+
 		#[cfg(test)]
 		fn election_identifier(
 			&self,

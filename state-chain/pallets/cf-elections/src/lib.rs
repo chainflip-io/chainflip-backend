@@ -637,6 +637,12 @@ pub mod pallet {
 				ElectionState::<T, I>::get(self.unique_monotonic_identifier())
 					.ok_or_else(CorruptStorageError::new)
 			}
+			fn shared_data_hash_of(
+				&self,
+				shared_data: <<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData,
+			) -> SharedDataHash {
+				todo!()
+			}
 			#[cfg(test)]
 			fn election_identifier(
 				&self,

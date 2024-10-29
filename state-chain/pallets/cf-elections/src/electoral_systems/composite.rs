@@ -52,6 +52,7 @@ macro_rules! generate_electoral_system_tuple_impls {
             };
 
             use crate::{
+                SharedDataHash,
                 CorruptStorageError,
                 electoral_system::{
                     ElectoralSystem,
@@ -72,7 +73,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                 },
                 ElectionIdentifier,
             };
-            use crate::vote_storage::composite::$module::{CompositeVoteProperties, CompositeVote, CompositePartialVote};
+            use crate::vote_storage::composite::$module::{CompositeVoteProperties, CompositeVote, CompositePartialVote, CompositeSharedData};
 
             use frame_support::{Parameter, pallet_prelude::{Member, MaybeSerializeDeserialize}};
 
@@ -440,6 +441,12 @@ macro_rules! generate_electoral_system_tuple_impls {
                     _ => Err(CorruptStorageError::new())
                 }
             }
+
+            // TODO: Push this into lower level
+            fn shared_data_hash_of(&self, data: <<Self::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData) -> SharedDataHash {
+                SharedDataHash::of(&CompositeSharedData::<$(<<$electoral_system as ElectoralSystem>::Vote as VoteStorage>::SharedData),*>::$current(data))
+            }
+
             #[cfg(test)]
             fn election_identifier(&self) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError> {
                 let composite_identifier = self.ea.borrow().election_identifier()?;
