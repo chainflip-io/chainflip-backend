@@ -3,8 +3,6 @@ import assert from 'assert';
 export enum SwapStatus {
   Initiated,
   Funded,
-  // Contract swap specific statuses
-  ContractApproved,
   ContractExecuted,
   SwapScheduled,
   Success,
@@ -37,16 +35,9 @@ export class SwapContext {
         );
         break;
       }
-      case SwapStatus.ContractApproved: {
-        assert(
-          currentStatus === SwapStatus.Initiated,
-          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
-        );
-        break;
-      }
       case SwapStatus.ContractExecuted: {
         assert(
-          currentStatus === SwapStatus.ContractApproved,
+          currentStatus === SwapStatus.Initiated,
           `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
         );
         break;
