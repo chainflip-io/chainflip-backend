@@ -40,16 +40,14 @@ use pallet_cf_elections::{
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
-		solana_swap_accounts_tracking::{
-			SolanaVaultSwapAccountsHook, SolanaVaultSwapsElectoralState,
-		},
+		solana_swap_accounts_tracking::SolanaVaultSwapAccountsHook,
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
-use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_std::vec::Vec;
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
@@ -92,11 +90,7 @@ pub fn initial_state(
 			(),
 			(),
 			(),
-			SolanaVaultSwapsElectoralState {
-				accounts_last_closed_at: 0,
-				witnessed_open_accounts: vec![],
-				closure_initiated_accounts: BTreeSet::new(),
-			},
+			0,
 		),
 		unsynchronised_settings: (
 			(),

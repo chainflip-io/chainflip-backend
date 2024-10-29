@@ -10,9 +10,7 @@ use chainflip_node::{
 	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
 	test_account_from_seed,
 };
-use pallet_cf_elections::{
-	electoral_systems::solana_swap_accounts_tracking::SolanaVaultSwapsElectoralState, InitialState,
-};
+use pallet_cf_elections::InitialState;
 use pallet_cf_validator::SetSizeParameters;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -309,11 +307,7 @@ impl ExtBuilder {
 						(),
 						(),
 						(),
-						SolanaVaultSwapsElectoralState {
-							accounts_last_closed_at: Default::default(),
-							witnessed_open_accounts: Default::default(),
-							closure_initiated_accounts: Default::default(),
-						},
+						Default::default(),
 					),
 					unsynchronised_settings: (
 						(),
