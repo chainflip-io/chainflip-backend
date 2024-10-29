@@ -237,6 +237,11 @@ where
 	}
 }
 
+impl<E> RejectCall<Ethereum> for EthereumApi<E> where
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>
+{
+}
+
 impl<E> From<EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>>
 	for EthereumApi<E>
 {
