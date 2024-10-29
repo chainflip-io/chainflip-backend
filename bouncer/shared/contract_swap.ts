@@ -40,7 +40,7 @@ import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0/
 import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0/types/vault';
 
 // Workaround because of anchor issue
-const { BN } = anchor.default;
+const { BN } = anchor;
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
