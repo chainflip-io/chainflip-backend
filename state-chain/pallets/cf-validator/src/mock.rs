@@ -190,7 +190,7 @@ cf_test_utilities::impl_test_helpers! {
 		validator_pallet: ValidatorPalletConfig {
 			genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
 			genesis_backups: Default::default(),
-			epoch_duration: EPOCH_DURATION,
+			blocks_per_epoch: EPOCH_DURATION,
 			bond: GENESIS_BOND,
 			redemption_period_as_percentage: REDEMPTION_PERCENTAGE_AT_GENESIS,
 			backup_reward_node_percentage: Percent::from_percent(34),
