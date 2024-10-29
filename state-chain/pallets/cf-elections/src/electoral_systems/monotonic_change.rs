@@ -4,7 +4,7 @@ use crate::{
 		ElectionWriteAccess, ElectoralSystem, ElectoralWriteAccess, VotePropertiesOf,
 	},
 	vote_storage::{self, VoteStorage},
-	CorruptStorageError, SharedDataHash,
+	CorruptStorageError,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_utilities::{success_threshold_from_share_count, threshold_from_share_count};
@@ -109,15 +109,6 @@ impl<
 		}
 	}
 
-	fn is_vote_valid<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifierOf<Self>,
-		election_access: &ElectionAccess,
-		partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
-	) -> Result<bool, CorruptStorageError> {
-		let (_, previous_value, previous_slot) = election_access.properties()?;
-		Ok(partial_vote.value != election_access.shared_data_hash_of(previous_value) &&
-			partial_vote.block > previous_slot)
-	}
 	fn generate_vote_properties(
 		_election_identifier: ElectionIdentifierOf<Self>,
 		_previous_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
@@ -143,7 +134,13 @@ impl<
 					electoral_access
 						.set_unsynchronised_state_map(identifier, Some(block_height))?;
 				} else {
-					log_or_panic!("Should be impossible to reach consensus with the same value and/or lower block_height");
+					// We don't expect this to be hit, since we should have filtered out any votes
+					// that would cause this in check_consensus.
+					log_or_panic!(
+						"No change detected for {:?}, election_identifier: {:?}",
+						identifier,
+						election_identifier
+					);
 				}
 			}
 		}
@@ -153,7 +150,7 @@ impl<
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
 		_election_identifier: ElectionIdentifierOf<Self>,
-		_election_access: &ElectionAccess,
+		election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: ConsensusVotes<Self>,
 	) -> Result<Option<Self::Consensus>, CorruptStorageError> {
@@ -161,9 +158,13 @@ impl<
 		let active_votes = consensus_votes.active_votes();
 		let num_active_votes = active_votes.len() as u32;
 		let success_threshold = success_threshold_from_share_count(num_authorities);
+		let (_, previous_value, previous_block) = election_access.properties()?;
 		Ok(if num_active_votes >= success_threshold {
 			let mut counts: BTreeMap<Value, Vec<BlockHeight>> = BTreeMap::new();
-			for vote in active_votes.clone() {
+			for vote in active_votes.clone().into_iter().filter(|monotonic_change_vote| {
+				monotonic_change_vote.block > previous_block &&
+					previous_value != monotonic_change_vote.value
+			}) {
 				counts
 					.entry(vote.value)
 					.and_modify(|blocks_height| blocks_height.push(vote.block))
