@@ -955,7 +955,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
-		#[pallet::call_index(10)]
+		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::request_swap_deposit_address_with_affiliates())]
 		pub fn request_swap_deposit_address_with_affiliates(
 			origin: OriginFor<T>,
