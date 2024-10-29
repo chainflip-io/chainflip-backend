@@ -341,7 +341,7 @@ impl fmt::Display for AddressString {
 	}
 }
 
-pub type RefundParametersString = ChannelRefundParametersGeneric<AddressString>;
+pub type RefundParameters = ChannelRefundParametersGeneric<AddressString>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SwapDepositAddress {
@@ -350,7 +350,7 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
 	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<RefundParametersString>,
+	pub refund_parameters: Option<RefundParameters>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -394,7 +394,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParametersString>,
+		refund_parameters: Option<RefundParameters>,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
 		let destination_address =
