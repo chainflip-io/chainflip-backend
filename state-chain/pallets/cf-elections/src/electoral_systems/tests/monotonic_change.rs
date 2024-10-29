@@ -76,17 +76,19 @@ fn generate_votes(
 
 fn generate_votes_with_different_slots(
 	correct_voters: AuthorityCount,
-	correct_value: MonotonicChangeVote<Value, Slot>,
+	correct_value: Value,
 	incorrect_voters: AuthorityCount,
 	incorrect_value: MonotonicChangeVote<Value, Slot>,
 ) -> ConsensusVotes<SimpleMonotonicChange> {
 	ConsensusVotes {
+		// we start from 1 so don't get a Default::default() conflict on vote validity.
 		votes: (0..correct_voters)
 			.enumerate()
 			.map(|(index, _)| ConsensusVote {
 				vote: Some((
 					(),
-					MonotonicChangeVote { value: correct_value.value, block: index as u32 },
+					// we add one so it's higher than 0 which is the default value.
+					MonotonicChangeVote { value: correct_value, block: (index + 1) as u32 },
 				)),
 				validator_id: (),
 			})
@@ -135,37 +137,45 @@ fn consensus_when_all_votes_the_same_but_different_blocks() {
 	with_default_state().expect_consensus(
 		generate_votes_with_different_slots(
 			SUCCESS_THRESHOLD,
-			MonotonicChangeVote { value: 1, block: 0 },
+			1,
 			3,
 			MonotonicChangeVote { value: 0, block: 0 },
 		),
-		Some((1, 6)),
+		Some((1, 7)),
 	);
 	with_default_state().expect_consensus(
 		generate_votes_with_different_slots(
 			AUTHORITY_COUNT,
-			MonotonicChangeVote { value: 1, block: 0 },
+			1,
 			0,
 			MonotonicChangeVote { value: 0, block: 0 },
 		),
-		Some((1, 6)),
+		Some((1, 7)),
 	);
 }
 
 #[test]
 fn no_consensus_when_votes_are_filtered_because_invalid() {
-	with_default_state()
-		.force_consensus_update(crate::electoral_system::ConsensusStatus::Gained {
-			most_recent: Some((10, 12)),
-			new: (11, 13),
-		})
+	TestSetup::<SimpleMonotonicChange>::default()
+		.with_initial_election_state((), ((), 1, 1), ())
+		.build_with_initial_election()
 		.expect_consensus(
 			generate_votes_with_different_slots(
 				0,
-				MonotonicChangeVote { value: 0, block: 0 },
+				0,
 				AUTHORITY_COUNT,
-				// neither the value has changed nor the block, both of which fail validity checks
-				MonotonicChangeVote { value: 11, block: 13 },
+				// block is valid, but value is invalid
+				MonotonicChangeVote { value: 1, block: 2 },
+			),
+			None,
+		)
+		.expect_consensus(
+			generate_votes_with_different_slots(
+				0,
+				0,
+				AUTHORITY_COUNT,
+				// value is valid but block is invalid
+				MonotonicChangeVote { value: 2, block: 0 },
 			),
 			None,
 		);

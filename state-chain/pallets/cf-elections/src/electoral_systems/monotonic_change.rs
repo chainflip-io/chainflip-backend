@@ -12,7 +12,7 @@ use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	Parameter,
 };
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// This electoral system detects if a value changes. The SC can request that it detects if a
 /// particular value, the instance of which is specified by an identifier, has changed from some
@@ -159,16 +159,14 @@ impl<
 		let num_active_votes = active_votes.len() as u32;
 		let success_threshold = success_threshold_from_share_count(num_authorities);
 		let (_, previous_value, previous_block) = election_access.properties()?;
+
 		Ok(if num_active_votes >= success_threshold {
 			let mut counts: BTreeMap<Value, Vec<BlockHeight>> = BTreeMap::new();
 			for vote in active_votes.clone().into_iter().filter(|monotonic_change_vote| {
 				monotonic_change_vote.block > previous_block &&
 					previous_value != monotonic_change_vote.value
 			}) {
-				counts
-					.entry(vote.value)
-					.and_modify(|blocks_height| blocks_height.push(vote.block))
-					.or_insert(vec![vote.block]);
+				counts.entry(vote.value).or_insert_with(Vec::new).push(vote.block);
 			}
 
 			counts.iter().find_map(|(vote, blocks_height)| {
