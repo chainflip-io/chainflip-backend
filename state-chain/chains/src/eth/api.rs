@@ -194,7 +194,7 @@ where
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
-		_cf_parameters: Vec<u8>,
+		_ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		let transfer_param = EncodableTransferAssetParams {
 			asset: E::token_address(transfer_param.asset)
@@ -235,6 +235,11 @@ where
 			transfer_fallback::TransferFallback::new(transfer_param),
 		)))
 	}
+}
+
+impl<E> RejectCall<Ethereum> for EthereumApi<E> where
+	E: EvmEnvironmentProvider<Ethereum> + ReplayProtectionProvider<Ethereum>
+{
 }
 
 impl<E> From<EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>>

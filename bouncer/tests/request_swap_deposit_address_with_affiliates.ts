@@ -40,7 +40,7 @@ const eventSchema = z
         destinationAsset: z.string(),
         brokerCommissionRate: numberSchema,
         channelMetadata: z
-          .object({ message: z.string(), gasBudget: bigintSchema, cfParameters: z.string() })
+          .object({ message: z.string(), gasBudget: bigintSchema, ccmAdditionalData: z.string() })
           .nullable(),
         boostFee: numberSchema,
         affiliateFees: z.array(z.object({ account: z.string(), bps: numberSchema })),
@@ -141,7 +141,7 @@ const requestSwapDepositAddress = async (
   if (params.ccmParams) {
     assert.strictEqual(event.channelMetadata?.message, params.ccmParams.message);
     assert.strictEqual(event.channelMetadata.gasBudget, BigInt(params.ccmParams.gasBudget));
-    assert.strictEqual(event.channelMetadata.cfParameters, params.ccmParams.cfParameters);
+    assert.strictEqual(event.channelMetadata.ccmAdditionalData, params.ccmParams.ccmAdditionalData);
   }
 };
 
@@ -215,7 +215,7 @@ const withCcm: NewSwapRequest = {
   ccmParams: {
     message: '0xcafebabe',
     gasBudget: '1000000',
-    cfParameters: '0xdeadbeef',
+    ccmAdditionalData: '0xdeadbeef',
   },
 };
 

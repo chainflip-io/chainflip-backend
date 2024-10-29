@@ -31,7 +31,7 @@ use cf_chains::{
 	assets::any::ForeignChainAndAsset,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, BtcDepositDetails, UtxoId,
+		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, Utxo, UtxoId,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotCrypto, PolkadotReplayProtection,
@@ -768,15 +768,8 @@ pub struct DepositHandler;
 impl OnDeposit<Ethereum> for DepositHandler {}
 impl OnDeposit<Polkadot> for DepositHandler {}
 impl OnDeposit<Bitcoin> for DepositHandler {
-	fn on_deposit_made(
-		deposit_details: BtcDepositDetails,
-		amount: <Bitcoin as Chain>::ChainAmount,
-	) {
-		Environment::add_bitcoin_utxo_to_list(
-			amount,
-			deposit_details.utxo_id,
-			deposit_details.deposit_address,
-		)
+	fn on_deposit_made(utxo: Utxo) {
+		Environment::add_bitcoin_utxo_to_list(utxo)
 	}
 }
 impl OnDeposit<Arbitrum> for DepositHandler {}
@@ -818,29 +811,26 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 	type ApiCall = BitcoinApi<BtcEnvironment>;
 
 	fn on_broadcast_ready(api_call: &Self::ApiCall) {
-		match api_call {
-			BitcoinApi::BatchTransfer(batch_transfer) => {
-				let tx_id = batch_transfer.bitcoin_transaction.txid();
-				let outputs = &batch_transfer.bitcoin_transaction.outputs;
-				let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
-					pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
-						.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
-				for (i, output) in outputs.iter().enumerate() {
-					if [
-						ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
-						ScriptPubkey::Taproot(btc_key.current),
-					]
-					.contains(&output.script_pubkey)
-					{
-						Environment::add_bitcoin_change_utxo(
-							output.amount,
-							UtxoId { tx_id, vout: i as u32 },
-							batch_transfer.change_utxo_key,
-						);
-					}
+		if let BitcoinApi::BatchTransfer(batch_transfer) = api_call {
+			let tx_id = batch_transfer.bitcoin_transaction.txid();
+			let outputs = &batch_transfer.bitcoin_transaction.outputs;
+			let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
+				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
+					.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
+			for (i, output) in outputs.iter().enumerate() {
+				if [
+					ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
+					ScriptPubkey::Taproot(btc_key.current),
+				]
+				.contains(&output.script_pubkey)
+				{
+					Environment::add_bitcoin_change_utxo(
+						output.amount,
+						UtxoId { tx_id, vout: i as u32 },
+						batch_transfer.change_utxo_key,
+					);
 				}
-			},
-			_ => unreachable!(),
+			}
 		}
 	}
 }
