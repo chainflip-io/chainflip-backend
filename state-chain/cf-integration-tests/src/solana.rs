@@ -149,10 +149,10 @@ fn schedule_deposit_to_swap(
 
 #[test]
 fn can_build_solana_batch_all() {
-	const EPOCH_DURATION_BLOCKS: u32 = 100;
+	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_DURATION_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -225,7 +225,7 @@ fn can_rotate_solana_vault() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -284,7 +284,7 @@ fn can_send_solana_ccm() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -363,7 +363,7 @@ fn solana_ccm_fails_with_invalid_input() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -392,7 +392,7 @@ fn solana_ccm_fails_with_invalid_input() {
 				channel_metadata: CcmChannelMetadata {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 0u128,
-					cf_parameters: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
+					ccm_additional_data: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 				},
 			};
 
@@ -466,7 +466,7 @@ fn solana_ccm_fails_with_invalid_input() {
 				channel_metadata: CcmChannelMetadata {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 0u128,
-					cf_parameters: SolCcmAccounts {
+					ccm_additional_data: SolCcmAccounts {
 						cf_receiver: SolCcmAddress { pubkey: receiver.into(), is_writable: true },
 						remaining_accounts: vec![
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },
@@ -515,7 +515,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					egress_id: (ForeignChain::Solana, 1u64),
 					error: ExecutexSwapAndCallError::FailedToBuildCcmForSolana(
 						SolanaTransactionBuildingError::InvalidCcm(
-							CcmValidityError::CfParametersContainsInvalidAccounts
+							CcmValidityError::CcmAdditionalDataContainsInvalidAccounts
 						)
 					),
 				}),
@@ -528,7 +528,7 @@ fn failed_ccm_does_not_consume_durable_nonce() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -590,7 +590,7 @@ fn solana_resigning() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -666,7 +666,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.with_additional_accounts(&[
 			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
@@ -691,7 +691,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 				channel_metadata: CcmChannelMetadata {
 					message: vec![0u8, 1u8, 2u8, 3u8].try_into().unwrap(),
 					gas_budget: 1_000_000_000u128,
-					cf_parameters: SolCcmAccounts {
+					ccm_additional_data: SolCcmAccounts {
 						cf_receiver: SolCcmAddress { pubkey: SolPubkey([0x10; 32]), is_writable: true },
 						remaining_accounts: vec![
 							SolCcmAddress { pubkey: SolPubkey([0x01; 32]), is_writable: false },

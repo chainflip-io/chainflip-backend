@@ -19,7 +19,7 @@ use crate::{
 use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::{
 	assets::btc,
-	btc::{deposit_address::DepositAddress, BtcDepositDetails, UtxoId},
+	btc::{deposit_address::DepositAddress, Utxo, UtxoId},
 	Bitcoin,
 };
 
@@ -115,12 +115,14 @@ fn deposit_witnesses(
 				.filter(|(_vout, tx_out)| tx_out.value.to_sat() > 0)
 				.filter_map(|(vout, tx_out)| {
 					deposit_addresses.get(tx_out.script_pubkey.as_bytes()).map(|deposit_address| {
+						let amount = tx_out.value.to_sat();
 						DepositWitness::<Bitcoin> {
 							deposit_address: deposit_address.script_pubkey(),
 							asset: btc::Asset::Btc,
-							amount: tx_out.value.to_sat(),
-							deposit_details: BtcDepositDetails {
-								utxo_id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout },
+							amount,
+							deposit_details: Utxo {
+								id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout },
+								amount,
 								deposit_address: deposit_address.clone(),
 							},
 						}

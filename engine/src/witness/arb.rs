@@ -18,7 +18,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::usdc::UsdcEvents,
+	witness::{common::cf_parameters::ShortId, evm::erc20_deposits::usdc::UsdcEvents},
 };
 
 use super::{
@@ -175,8 +175,10 @@ where
 
 struct ArbCallBuilder {}
 
-use cf_chains::{address::EncodedAddress, CcmDepositMetadata};
-use cf_primitives::{Asset, AssetAmount, TransactionHash};
+use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ChannelRefundParameters};
+use cf_primitives::{
+	Asset, AssetAmount, BasisPoints, Beneficiaries, DcaParameters, TransactionHash,
+};
 
 impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 	type Chain = Arbitrum;
@@ -188,6 +190,11 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
+		_broker_fees: Beneficiaries<ShortId>,
+		refund_params: Option<ChannelRefundParameters>,
+		dca_params: Option<DcaParameters>,
+		// This is only to be checked in the pre-witnessed version
+		boost_fee: Option<BasisPoints>,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
@@ -198,11 +205,11 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 				deposit_metadata,
 				tx_hash,
 				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) }),
+				// Defaulting to no broker fees until PRO-1743 is completed.
 				broker_fees: Default::default(),
-				// TODO: use real parameters when we can decode them
-				boost_fee: 0,
-				dca_params: None,
-				refund_params: None,
+				boost_fee: boost_fee.unwrap_or_default(),
+				dca_params,
+				refund_params: refund_params.map(Box::new),
 			},
 		)
 	}

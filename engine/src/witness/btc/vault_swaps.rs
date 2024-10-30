@@ -3,8 +3,8 @@ use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
 	assets::btc::Asset as BtcAsset,
 	btc::{
-		deposit_address::DepositAddress, vault_swap_encoding::UtxoEncodedData, BtcDepositDetails,
-		ScriptPubkey, UtxoId,
+		deposit_address::DepositAddress, vault_swap_encoding::UtxoEncodedData, ScriptPubkey, Utxo,
+		UtxoId,
 	},
 	ChannelRefundParameters, ForeignChainAddress,
 };
@@ -134,9 +134,10 @@ pub fn try_extract_vault_swap_call(
 		deposit_amount,
 		destination_address: data.output_address,
 		tx_hash: tx_id,
-		deposit_details: Box::new(BtcDepositDetails {
+		deposit_details: Box::new(Utxo {
 			// we require the deposit to be the first UTXO
-			utxo_id: UtxoId { tx_id: tx_id.into(), vout: 0 },
+			id: UtxoId { tx_id: tx_id.into(), vout: 0 },
+			amount: deposit_amount,
 			deposit_address: vault_address.clone(),
 		}),
 		deposit_metadata: None, // No ccm for BTC (yet?)
@@ -274,8 +275,9 @@ mod tests {
 				deposit_amount: DEPOSIT_AMOUNT,
 				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
 				tx_hash: tx.hash.to_byte_array(),
-				deposit_details: Box::new(BtcDepositDetails {
-					utxo_id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
+				deposit_details: Box::new(Utxo {
+					id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
+					amount: DEPOSIT_AMOUNT,
 					deposit_address: vault_deposit_address,
 				}),
 				broker_fees: Default::default(),
