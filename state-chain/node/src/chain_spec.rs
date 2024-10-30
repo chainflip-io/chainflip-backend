@@ -374,6 +374,7 @@ pub fn inner_cf_development_config(
 					100_000,
 					sol_vault_program,
 					sol_usdc_token_mint_pubkey,
+					sol_swap_endpoint_program_data_account,
 				)),
 			},
 		))
@@ -535,6 +536,7 @@ macro_rules! network_spec {
 								100000,
 								sol_vault_program,
 								sol_usdc_token_mint_pubkey,
+								sol_swap_endpoint_program_data_account,
 							)),
 						},
 					))

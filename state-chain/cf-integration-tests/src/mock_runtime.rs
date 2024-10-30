@@ -17,7 +17,9 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{FixedU128, Percent, Permill};
 use state_chain_runtime::{
 	chainflip::{
-		solana_elections::{SolanaFeeUnsynchronisedSettings, SolanaIngressSettings},
+		solana_elections::{
+			SolanaFeeUnsynchronisedSettings, SolanaIngressSettings, SolanaVaultSwapsSettings,
+		},
 		Offence,
 	},
 	constants::common::*,
@@ -324,7 +326,11 @@ impl ExtBuilder {
 						},
 						(),
 						(),
-						(),
+						SolanaVaultSwapsSettings {
+							swap_endpoint_data_account_address:
+								sol_test_values::SWAP_ENDPOINT_DATA_ACCOUNT_ADDRESS,
+							usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
+						},
 					),
 				}),
 			},
