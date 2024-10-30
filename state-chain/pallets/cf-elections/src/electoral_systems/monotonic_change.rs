@@ -167,7 +167,7 @@ impl<
 				monotonic_change_vote.block > previous_block &&
 					previous_value != monotonic_change_vote.value
 			}) {
-				counts.entry(vote.value).or_insert_with(Vec::new).push(vote.block);
+				counts.entry(vote.value).or_default().push(vote.block);
 			}
 
 			counts.iter().find_map(|(vote, blocks_height)| {
