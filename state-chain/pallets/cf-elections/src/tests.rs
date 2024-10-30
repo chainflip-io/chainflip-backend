@@ -151,7 +151,7 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 					.expect("New election should have an identifier.")
 					.unique_monotonic();
 
-				assert_eq!(Status::<Test, Instance1>::get(), Some(ElectoralSystemStatus::Running));
+				assert_eq!(Status::<Test, Instance1>::get(), Some(ElectionPalletStatus::Running));
 
 				Pallet::<Test, Instance1>::with_electoral_access(|electoral_access| {
 					electoral_access
