@@ -6,7 +6,7 @@
     "prettier:write": "prettier --write ."
   },
   "dependencies": {
-    "@chainflip/cli": "1.8.0-encoded-address.1",
+    "@chainflip/cli": "1.8.0-encoded-address.2",
     "@chainflip/utils": "^0.4.0",
     "@coral-xyz/anchor": "^0.30.1",
     "@iarna/toml": "^2.2.5",
