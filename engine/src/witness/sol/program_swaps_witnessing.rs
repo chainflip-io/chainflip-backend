@@ -9,7 +9,10 @@ use anyhow::ensure;
 use anyhow::{anyhow /* ensure */};
 use base64::Engine;
 use borsh::{BorshDeserialize, BorshSerialize};
-use cf_chains::sol::{api::ContractSwapAccountAndSender, SolAddress};
+use cf_chains::{
+	address::EncodedAddress,
+	sol::{api::ContractSwapAccountAndSender, SolAddress},
+};
 use cf_primitives::Asset;
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
@@ -97,9 +100,9 @@ pub async fn get_program_swaps(
 						}, SolanaVaultSwapDetails {
 							from: if data.src_token.is_none() {Asset::Sol} else {Asset::SolUsdc},
 							deposit_amount: data.amount.into(),
-							to: todo!(),
-							destination_address: todo!(),
-							tx_hash: todo!()
+							destination_address: EncodedAddress::from_chain_bytes(data.dst_chain.try_into().map_err(|e| warn!("error while parsing destination chain for solana vault swap:{}. Omitting swap", e)).ok()?, data.dst_address.to_vec()).map_err(|e| warn!("failed to decode the destination chain address for solana vault swap:{}. Omitting swap", e)).ok()?,
+							to: data.dst_token.try_into().map_err(|e| warn!("error while decoding destination token for solana vault swap: {}. Omitting swap", e)).ok()?,
+							tx_hash: Default::default(), // TODO
 						}))),
 					// It could happen that some account is closed between the queries. This should
 					// not happen because:
