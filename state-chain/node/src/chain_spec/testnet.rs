@@ -128,6 +128,12 @@ pub const SNOW_WHITE_SR25519: [u8; 32] =
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
 	vec![
 		(
+			get_account_id_from_seed::<sr25519::Public>("LP_API"),
+			AccountRole::LiquidityProvider,
+			100 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Testnet LP API".to_vec()),
+		),
+		(
 			get_account_id_from_seed::<sr25519::Public>("LP_1"),
 			AccountRole::LiquidityProvider,
 			100 * FLIPPERINOS_PER_FLIP,
