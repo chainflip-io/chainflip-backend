@@ -519,6 +519,44 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn open_private_channel() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		let caller = OriginTrait::signed(broker_id.clone());
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T, I>::open_private_channel(caller));
+		}
+
+		assert!(
+			BrokerPrivateChannels::<T, I>::contains_key(&broker_id),
+			"Private channel must have been created"
+		);
+	}
+
+	#[benchmark]
+	fn close_private_channel() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		let caller = OriginTrait::signed(broker_id.clone());
+
+		BrokerPrivateChannels::<T, I>::insert(&broker_id, 1);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T, I>::close_private_channel(caller));
+		}
+
+		assert!(
+			!BrokerPrivateChannels::<T, I>::contains_key(&broker_id),
+			"Private channel must have been closed"
+		);
+	}
+
 	#[cfg(test)]
 	use crate::mock_eth::*;
 

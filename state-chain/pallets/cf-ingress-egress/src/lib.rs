@@ -591,6 +591,10 @@ pub mod pallet {
 	pub(crate) type FailedRejections<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
 
+	#[pallet::storage]
+	pub(crate) type BrokerPrivateChannels<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, T::AccountId, ChannelId, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -744,6 +748,14 @@ pub mod pallet {
 		FailedToRejectTaintedTransaction {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
+		PrivateBrokerChannelOpened {
+			broker_id: T::AccountId,
+			channel_id: ChannelId,
+		},
+		PrivateBrokerChannelClosed {
+			broker_id: T::AccountId,
+			channel_id: ChannelId,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -787,6 +799,10 @@ pub mod pallet {
 		UnsupportedChain,
 		/// Transaction cannot be reported after being pre-witnessed or boosted.
 		TransactionAlreadyPrewitnessed,
+		/// Cannot open a private channel for a broker because one already exists.
+		PrivateChannelExistsForBroker,
+		/// Cannot close a private channel for a broker because it does not exist.
+		NoPrivateChannelExistsForBroker,
 	}
 
 	#[pallet::hooks]
@@ -1307,6 +1323,50 @@ pub mod pallet {
 				dca_params,
 				boost_fee,
 			);
+
+			Ok(())
+		}
+
+		#[pallet::call_index(14)]
+		#[pallet::weight(T::WeightInfo::open_private_channel())]
+		pub fn open_private_channel(origin: OriginFor<T>) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			ensure!(
+				!BrokerPrivateChannels::<T, I>::contains_key(&broker_id),
+				Error::<T, I>::PrivateChannelExistsForBroker
+			);
+
+			// TODO: burn fee for opening a channel?
+			let next_channel_id =
+				ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
+					*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
+					Ok(*id)
+				})?;
+
+			BrokerPrivateChannels::<T, I>::insert(broker_id.clone(), next_channel_id);
+
+			Self::deposit_event(Event::<T, I>::PrivateBrokerChannelOpened {
+				broker_id,
+				channel_id: next_channel_id,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(15)]
+		#[pallet::weight(T::WeightInfo::close_private_channel())]
+		pub fn close_private_channel(origin: OriginFor<T>) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let Some(channel_id) = BrokerPrivateChannels::<T, I>::take(&broker_id) else {
+				return Err(Error::<T, I>::NoPrivateChannelExistsForBroker.into())
+			};
+
+			Self::deposit_event(Event::<T, I>::PrivateBrokerChannelClosed {
+				broker_id,
+				channel_id,
+			});
 
 			Ok(())
 		}
