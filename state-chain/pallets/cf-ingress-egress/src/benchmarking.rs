@@ -295,32 +295,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn contract_swap_request() {
-		let deposit_amount = 1_000u32;
-
-		let witness_origin = T::EnsureWitnessed::try_successful_origin().unwrap();
-		let call = Call::<T, I>::contract_swap_request {
-			input_asset: Asset::Usdc.try_into().unwrap(),
-			output_asset: Asset::Eth,
-			deposit_amount: deposit_amount.into(),
-			destination_address: EncodedAddress::benchmark_value(),
-			deposit_metadata: None,
-			tx_hash: [0; 32],
-			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
-			broker_fees: Default::default(),
-			refund_params: None,
-			dca_params: None,
-			boost_fee: 0,
-		};
-
-		#[block]
-		{
-			assert_ok!(call.dispatch_bypass_filter(witness_origin));
-		}
-	}
-
-	#[benchmark]
-	fn contract_ccm_swap_request() {
+	fn vault_swap_request() {
 		let origin = T::EnsureWitnessed::try_successful_origin().unwrap();
 		let deposit_metadata = CcmDepositMetadata {
 			source_chain: ForeignChain::Ethereum,
@@ -328,10 +303,10 @@ mod benchmarks {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00].try_into().unwrap(),
 				gas_budget: 1,
-				cf_parameters: Default::default(),
+				ccm_additional_data: Default::default(),
 			},
 		};
-		let call = Call::<T, I>::contract_swap_request {
+		let call = Call::<T, I>::vault_swap_request {
 			input_asset: BenchmarkValue::benchmark_value(),
 			deposit_amount: 1_000u32.into(),
 			output_asset: Asset::Eth,
@@ -528,7 +503,7 @@ mod benchmarks {
 	fn mark_transaction_as_tainted() {
 		let caller =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
-		let tx_id = <<T as Config<I>>::TargetChain as Chain>::DepositDetails::benchmark_value();
+		let tx_id: TransactionInIdFor<T, I> = TransactionInIdFor::<T, I>::benchmark_value();
 
 		#[block]
 		{
@@ -583,10 +558,10 @@ mod benchmarks {
 			_create_boost_pools::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_contract_swap_request::<Test, ()>(true);
+			_vault_swap_request::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_contract_ccm_swap_request::<Test, ()>(true);
+			_vault_swap_request::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
 			_mark_transaction_as_tainted::<Test, ()>(true);

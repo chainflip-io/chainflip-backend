@@ -1,11 +1,12 @@
+use crate::evm::retry_rpc::EvmRetryRpcApi;
+use codec::Decode;
 use ethers::types::Bloom;
 use sp_core::H256;
 use std::collections::HashMap;
 
-use crate::evm::retry_rpc::EvmRetryRpcApi;
-
 use super::{
 	super::common::{
+		cf_parameters::*,
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
@@ -19,9 +20,9 @@ use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
-	CcmChannelMetadata, CcmDepositMetadata, Chain,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 };
-use cf_primitives::{Asset, ForeignChain};
+use cf_primitives::{Asset, BasisPoints, DcaParameters, ForeignChain};
 use ethers::prelude::*;
 use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
@@ -63,15 +64,24 @@ where
 			dst_token,
 			amount,
 			sender: _,
-			cf_parameters: _,
-		}) => Some(CallBuilder::contract_swap_request(
-			native_asset,
-			try_into_primitive(amount)?,
-			try_into_primitive(dst_token)?,
-			try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-			None,
-			event.tx_hash.into(),
-		)),
+			cf_parameters,
+		}) => {
+			let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
+				CfParameters::decode(&mut &cf_parameters[..])?;
+
+			Some(CallBuilder::vault_swap_request(
+				native_asset,
+				try_into_primitive(amount)?,
+				try_into_primitive(dst_token)?,
+				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				None,
+				event.tx_hash.into(),
+				vault_swap_parameters.broker_fees,
+				Some(vault_swap_parameters.refund_params),
+				vault_swap_parameters.dca_params,
+				vault_swap_parameters.boost_fee,
+			))
+		},
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
 			dst_chain,
 			dst_address,
@@ -79,17 +89,26 @@ where
 			src_token,
 			amount,
 			sender: _,
-			cf_parameters: _,
-		}) => Some(CallBuilder::contract_swap_request(
-			*(supported_assets
-				.get(&src_token)
-				.ok_or(anyhow!("Source token {src_token:?} not found"))?),
-			try_into_primitive(amount)?,
-			try_into_primitive(dst_token)?,
-			try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-			None,
-			event.tx_hash.into(),
-		)),
+			cf_parameters,
+		}) => {
+			let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
+				CfParameters::decode(&mut &cf_parameters[..])?;
+
+			Some(CallBuilder::vault_swap_request(
+				*(supported_assets
+					.get(&src_token)
+					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
+				try_into_primitive(amount)?,
+				try_into_primitive(dst_token)?,
+				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				None,
+				event.tx_hash.into(),
+				vault_swap_parameters.broker_fees,
+				Some(vault_swap_parameters.refund_params),
+				vault_swap_parameters.dca_params,
+				vault_swap_parameters.boost_fee,
+			))
+		},
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
 			dst_chain,
 			dst_address,
@@ -99,8 +118,11 @@ where
 			message,
 			gas_amount,
 			cf_parameters,
-		}) =>
-			Some(CallBuilder::contract_swap_request(
+		}) => {
+			let CfParameters { ccm_additional_data, vault_swap_parameters } =
+				CcmCfParameters::decode(&mut &cf_parameters[..])?;
+
+			Some(CallBuilder::vault_swap_request(
 				native_asset,
 				try_into_primitive(amount)?,
 				try_into_primitive(dst_token)?,
@@ -118,13 +140,16 @@ where
 							.try_into()
 							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
-						cf_parameters: cf_parameters.0.to_vec().try_into().map_err(|_| {
-							anyhow!("Failed to deposit CCM: `cf_parameters` too long.")
-						})?,
+						ccm_additional_data,
 					},
 				}),
 				event.tx_hash.into(),
-			)),
+				vault_swap_parameters.broker_fees,
+				Some(vault_swap_parameters.refund_params),
+				vault_swap_parameters.dca_params,
+				vault_swap_parameters.boost_fee,
+			))
+		},
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
 			dst_chain,
 			dst_address,
@@ -135,8 +160,11 @@ where
 			message,
 			gas_amount,
 			cf_parameters,
-		}) =>
-			Some(CallBuilder::contract_swap_request(
+		}) => {
+			let CfParameters { ccm_additional_data, vault_swap_parameters } =
+				CcmCfParameters::decode(&mut &cf_parameters[..])?;
+
+			Some(CallBuilder::vault_swap_request(
 				*(supported_assets
 					.get(&src_token)
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
@@ -156,13 +184,16 @@ where
 							.try_into()
 							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
 						gas_budget: try_into_primitive(gas_amount)?,
-						cf_parameters: cf_parameters.0.to_vec().try_into().map_err(|_| {
-							anyhow!("Failed to deposit CCM. cf_parameters too long.")
-						})?,
+						ccm_additional_data,
 					},
 				}),
 				event.tx_hash.into(),
-			)),
+				vault_swap_parameters.broker_fees,
+				Some(vault_swap_parameters.refund_params),
+				vault_swap_parameters.dca_params,
+				vault_swap_parameters.boost_fee,
+			))
+		},
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
 			recipient,
 			amount,
@@ -197,13 +228,17 @@ where
 pub trait IngressCallBuilder {
 	type Chain: cf_chains::Chain<ChainAccount = EthereumAddress>;
 
-	fn contract_swap_request(
+	fn vault_swap_request(
 		source_asset: Asset,
 		deposit_amount: cf_primitives::AssetAmount,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: cf_primitives::TransactionHash,
+		broker_fees: cf_primitives::Beneficiaries<ShortId>,
+		refund_params: Option<ChannelRefundParameters>,
+		dca_params: Option<DcaParameters>,
+		boost_fee: Option<BasisPoints>,
 	) -> state_chain_runtime::RuntimeCall;
 
 	fn vault_transfer_failed(
@@ -268,7 +303,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								process_call(call, epoch.index).await;
 							},
 						Err(message) => {
-							tracing::error!("Ignoring vault contract event: {message}");
+							tracing::warn!("Ignoring vault contract event: {message}");
 						},
 					}
 				}

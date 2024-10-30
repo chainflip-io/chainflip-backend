@@ -78,7 +78,7 @@ async function testNoDuplicateWitnessing(sourceAsset: Asset, destAsset: Asset) {
 }
 
 // Not supporting Btc to avoid adding more unnecessary complexity with address encoding.
-async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset) {
+async function testTxMultipleVaultSwaps(sourceAsset: Asset, destAsset: Asset) {
   const { destAddress, tag } = await prepareSwap(sourceAsset, destAsset);
 
   const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
@@ -97,7 +97,8 @@ async function testTxMultipleContractSwaps(sourceAsset: Asset, destAsset: Asset)
       assetContractId(destAsset),
       getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
       amount,
-      '0x',
+      // Encoded EVM refund address and no other swap parameters.
+      '0x0000000000000e879c89cad7076b347bde13c99cf2c33e7299b60000000000000000000000000000000000000000000000000000000000000000000000',
       numSwaps,
     )
     .encodeABI();
@@ -194,10 +195,10 @@ async function main() {
   ]);
 
   const multipleTxSwapsTest = Promise.all([
-    testTxMultipleContractSwaps('Eth', 'Dot'),
-    testTxMultipleContractSwaps('Eth', 'Flip'),
-    testTxMultipleContractSwaps('ArbEth', 'Dot'),
-    testTxMultipleContractSwaps('ArbEth', 'Flip'),
+    testTxMultipleVaultSwaps('Eth', 'Dot'),
+    testTxMultipleVaultSwaps('Eth', 'Flip'),
+    testTxMultipleVaultSwaps('ArbEth', 'Dot'),
+    testTxMultipleVaultSwaps('ArbEth', 'Flip'),
   ]);
 
   const doubleDepositTests = Promise.all([

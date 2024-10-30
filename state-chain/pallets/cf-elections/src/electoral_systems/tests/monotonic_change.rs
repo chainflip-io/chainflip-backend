@@ -2,10 +2,9 @@ use super::{mocks::*, register_checks};
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes},
 	electoral_systems::monotonic_change::*,
-	SharedDataHash,
 };
 
-use crate::{electoral_system::ElectoralWriteAccess, vote_storage::change::MonotonicChangeVote};
+use crate::vote_storage::change::MonotonicChangeVote;
 use cf_primitives::AuthorityCount;
 use cf_utilities::assert_panics;
 
@@ -53,9 +52,6 @@ const SUCCESS_THRESHOLD: AuthorityCount =
 fn with_default_state() -> TestContext<SimpleMonotonicChange> {
 	TestSetup::<SimpleMonotonicChange>::default().build_with_initial_election()
 }
-fn with_no_election() -> TestContext<SimpleMonotonicChange> {
-	TestSetup::<SimpleMonotonicChange>::default().build()
-}
 
 fn generate_votes(
 	correct_voters: AuthorityCount,
@@ -80,7 +76,7 @@ fn generate_votes(
 
 fn generate_votes_with_different_slots(
 	correct_voters: AuthorityCount,
-	correct_value: MonotonicChangeVote<Value, Slot>,
+	correct_value: Value,
 	incorrect_voters: AuthorityCount,
 	incorrect_value: MonotonicChangeVote<Value, Slot>,
 ) -> ConsensusVotes<SimpleMonotonicChange> {
@@ -90,7 +86,8 @@ fn generate_votes_with_different_slots(
 			.map(|(index, _)| ConsensusVote {
 				vote: Some((
 					(),
-					MonotonicChangeVote { value: correct_value.value, block: index as u32 },
+					// we add one so it's higher than 0 which is the default value.
+					MonotonicChangeVote { value: correct_value, block: (index + 1) as u32 },
 				)),
 				validator_id: (),
 			})
@@ -139,52 +136,48 @@ fn consensus_when_all_votes_the_same_but_different_blocks() {
 	with_default_state().expect_consensus(
 		generate_votes_with_different_slots(
 			SUCCESS_THRESHOLD,
-			MonotonicChangeVote { value: 1, block: 0 },
+			1,
 			3,
 			MonotonicChangeVote { value: 0, block: 0 },
 		),
-		Some((1, 6)),
+		Some((1, 7)),
 	);
 	with_default_state().expect_consensus(
 		generate_votes_with_different_slots(
 			AUTHORITY_COUNT,
-			MonotonicChangeVote { value: 1, block: 0 },
+			1,
 			0,
 			MonotonicChangeVote { value: 0, block: 0 },
 		),
-		Some((1, 6)),
+		Some((1, 7)),
 	);
 }
 
 #[test]
-fn votes_with_old_value_or_lower_block_are_rejected() {
-	const OLD_VALUE: u64 = 9;
-	const OLD_BLOCK: u32 = 7;
-	const NEW_VALUE: u64 = 10;
-	const NEW_BLOCK: u32 = 11;
-	let mut test = with_no_election();
-	let _ = test.mut_access().new_election((), ((), OLD_VALUE, OLD_BLOCK), ());
-	//new value but old block not valid
-	assert!(!test
-		.is_vote_valid(&MonotonicChangeVote {
-			value: SharedDataHash::of(&NEW_VALUE),
-			block: OLD_BLOCK
-		})
-		.unwrap());
-	//old value but new block not valid
-	assert!(!test
-		.is_vote_valid(&MonotonicChangeVote {
-			value: SharedDataHash::of(&OLD_VALUE),
-			block: NEW_BLOCK
-		})
-		.unwrap());
-	//old value and old block not valid
-	assert!(!test
-		.is_vote_valid(&MonotonicChangeVote {
-			value: SharedDataHash::of(&OLD_VALUE),
-			block: OLD_BLOCK
-		})
-		.unwrap());
+fn no_consensus_when_votes_are_filtered_because_invalid() {
+	TestSetup::<SimpleMonotonicChange>::default()
+		.with_initial_election_state((), ((), 1, 1), ())
+		.build_with_initial_election()
+		.expect_consensus(
+			generate_votes_with_different_slots(
+				0,
+				0,
+				AUTHORITY_COUNT,
+				// block is valid, but value is invalid
+				MonotonicChangeVote { value: 1, block: 2 },
+			),
+			None,
+		)
+		.expect_consensus(
+			generate_votes_with_different_slots(
+				0,
+				0,
+				AUTHORITY_COUNT,
+				// value is valid but block is invalid
+				MonotonicChangeVote { value: 2, block: 0 },
+			),
+			None,
+		);
 }
 
 #[test]

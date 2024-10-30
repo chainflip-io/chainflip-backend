@@ -44,23 +44,33 @@ export async function setupSwaps(): Promise<void> {
     createLpPool('SolUsdc', price.get('SolUsdc')!),
   ]);
 
-  console.log('LP Pools created');
-
-  await Promise.all([
-    // provide liquidity to LP_1
-    depositLiquidity('Usdc', deposits.get('Usdc')!),
-    depositLiquidity('Eth', deposits.get('Eth')!),
-    depositLiquidity('Dot', deposits.get('Dot')!),
-    depositLiquidity('Btc', deposits.get('Btc')!),
-    depositLiquidity('Flip', deposits.get('Flip')!),
-    depositLiquidity('Usdt', deposits.get('Usdt')!),
-    depositLiquidity('ArbEth', deposits.get('ArbEth')!),
-    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!),
-    depositLiquidity('Sol', deposits.get('Sol')!),
-    depositLiquidity('SolUsdc', deposits.get('SolUsdc')!),
+  const lp1Deposits = Promise.all([
+    depositLiquidity('Usdc', deposits.get('Usdc')!, false, '//LP_1'),
+    depositLiquidity('Eth', deposits.get('Eth')!, false, '//LP_1'),
+    depositLiquidity('Dot', deposits.get('Dot')!, false, '//LP_1'),
+    depositLiquidity('Btc', deposits.get('Btc')!, false, '//LP_1'),
+    depositLiquidity('Flip', deposits.get('Flip')!, false, '//LP_1'),
+    depositLiquidity('Usdt', deposits.get('Usdt')!, false, '//LP_1'),
+    depositLiquidity('ArbEth', deposits.get('ArbEth')!, false, '//LP_1'),
+    depositLiquidity('ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_1'),
+    depositLiquidity('Sol', deposits.get('Sol')!, false, '//LP_1'),
+    depositLiquidity('SolUsdc', deposits.get('SolUsdc')!, false, '//LP_1'),
   ]);
 
-  console.log('Liquidity provided');
+  const lpApiDeposits = Promise.all([
+    depositLiquidity('Usdc', 1000, false, '//LP_API'),
+    depositLiquidity('Eth', 100, false, '//LP_API'),
+    depositLiquidity('Dot', 2000, false, '//LP_API'),
+    depositLiquidity('Btc', 10, false, '//LP_API'),
+    depositLiquidity('Flip', 10000, false, '//LP_API'),
+    depositLiquidity('Usdt', 1000, false, '//LP_API'),
+    depositLiquidity('ArbEth', 10, false, '//LP_API'),
+    depositLiquidity('ArbUsdc', 1000, false, '//LP_API'),
+    depositLiquidity('Sol', 500, false, '//LP_API'),
+    depositLiquidity('SolUsdc', 1000, false, '//LP_API'),
+  ]);
+
+  await Promise.all([lp1Deposits, lpApiDeposits]);
 
   await Promise.all([
     rangeOrder('Eth', deposits.get('Eth')! * 0.9999),

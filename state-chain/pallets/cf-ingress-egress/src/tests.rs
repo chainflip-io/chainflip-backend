@@ -1,29 +1,28 @@
 mod boost;
+mod screening;
 
 use crate::{
-	mock_eth::*, BoostPoolId, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
+	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
 	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
 	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
 	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ReportExpiresAt, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, ScheduledTxForReject,
-	TaintedTransactionStatus, TaintedTransactions, TAINTED_TX_EXPIRATION_BLOCKS,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	assets::eth::Asset as EthAsset,
 	btc::{BitcoinNetwork, ScriptPubkey},
-	evm::{self, DepositDetails, EvmFetchId},
+	evm::{DepositDetails, EvmFetchId},
 	mocks::MockEthereum,
 	CcmChannelMetadata, CcmFailReason, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
 	TransferAssetParams,
 };
-use cf_primitives::{AssetAmount, Beneficiaries, ChannelId, ForeignChain};
+use cf_primitives::{AssetAmount, ChannelId, ForeignChain};
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
 	mocks::{
 		self,
-		account_role_registry::MockAccountRoleRegistry,
 		address_converter::MockAddressConverter,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
@@ -35,17 +34,16 @@ use cf_traits::{
 		funding_info::MockFundingInfo,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	AccountRoleRegistry, BalanceApi, DepositApi, EgressApi, EpochInfo,
-	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode, ScheduledEgressDetails,
-	SwapRequestType,
+	BalanceApi, DepositApi, EgressApi, EpochInfo, FetchesTransfersLimitProvider, FundingInfo,
+	GetBlockHeight, SafeMode, ScheduledEgressDetails, SwapRequestType,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::{H160, H256};
-use sp_runtime::{DispatchError, DispatchError::BadOrigin};
+use sp_core::H160;
+use sp_runtime::DispatchError;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -117,7 +115,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: 1_000,
-				cf_parameters: vec![].try_into().unwrap(),
+				ccm_additional_data: vec![].try_into().unwrap(),
 			},
 		};
 
@@ -151,7 +149,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 				message: ccm.channel_metadata.message.clone(),
 				source_chain: ForeignChain::Ethereum,
 				source_address: ccm.source_address.clone(),
-				cf_parameters: ccm.channel_metadata.cf_parameters,
+				ccm_additional_data: ccm.channel_metadata.ccm_additional_data,
 				gas_budget,
 			}]
 		);
@@ -487,7 +485,7 @@ fn can_egress_ccm() {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: GAS_BUDGET,
-				cf_parameters: vec![].try_into().unwrap(),
+				ccm_additional_data: vec![].try_into().unwrap(),
 			}
 		};
 
@@ -507,7 +505,7 @@ fn can_egress_ccm() {
 				amount,
 				destination_address,
 				message: ccm.channel_metadata.message.clone(),
-				cf_parameters: vec![].try_into().unwrap(),
+				ccm_additional_data: vec![].try_into().unwrap(),
 				source_chain: ForeignChain::Ethereum,
 				source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
 				gas_budget: GAS_BUDGET,
@@ -1736,7 +1734,7 @@ fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00, 0x01, 0x02].try_into().unwrap(),
 				gas_budget: 1_000,
-				cf_parameters: vec![].try_into().unwrap(),
+				ccm_additional_data: vec![].try_into().unwrap(),
 			},
 		};
 
@@ -1782,7 +1780,7 @@ fn can_request_swap_via_extrinsic() {
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			INPUT_ASSET.try_into().unwrap(),
 			OUTPUT_ASSET,
@@ -1824,14 +1822,14 @@ fn can_request_ccm_swap_via_extrinsic() {
 		channel_metadata: CcmChannelMetadata {
 			message: vec![0x01].try_into().unwrap(),
 			gas_budget: 1_000,
-			cf_parameters: Default::default(),
+			ccm_additional_data: Default::default(),
 		},
 	};
 
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			INPUT_ASSET.try_into().unwrap(),
 			OUTPUT_ASSET,
@@ -1877,7 +1875,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			MockAddressConverter::to_encoded_address(ForeignChainAddress::Btc(script_pubkey));
 
 		// Is valid Bitcoin address, but asset is Dot, so not compatible
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			EthAsset::Eth,
 			Asset::Dot,
@@ -1896,7 +1894,7 @@ fn rejects_invalid_swap_by_witnesser() {
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 		// Invalid BTC address:
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			EthAsset::Eth,
 			Asset::Btc,
@@ -1925,13 +1923,13 @@ fn failed_ccm_deposit_can_deposit_event() {
 		channel_metadata: CcmChannelMetadata {
 			message: vec![0x01].try_into().unwrap(),
 			gas_budget: GAS_BUDGET,
-			cf_parameters: Default::default(),
+			ccm_additional_data: Default::default(),
 		},
 	};
 
 	new_test_ext().execute_with(|| {
 		// CCM is not supported for Dot:
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			EthAsset::Flip,
 			Asset::Dot,
@@ -1957,7 +1955,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 		System::reset_events();
 
 		// Insufficient deposit amount:
-		assert_ok!(IngressEgress::contract_swap_request(
+		assert_ok!(IngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			EthAsset::Flip,
 			Asset::Eth,
@@ -1978,292 +1976,6 @@ fn failed_ccm_deposit_can_deposit_event() {
 				reason: CcmFailReason::InsufficientDepositAmount,
 				..
 			})
-		);
-	});
-}
-
-#[test]
-fn process_tainted_transaction_and_expect_refund() {
-	new_test_ext().execute_with(|| {
-		let (_, address) = request_address_and_deposit(BROKER, EthAsset::Eth);
-		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
-
-		let deposit_details: cf_chains::evm::DepositDetails = Default::default();
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
-			OriginTrait::signed(BROKER),
-			Default::default(),
-		));
-
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			EthAsset::Eth,
-			DEFAULT_DEPOSIT_AMOUNT,
-			deposit_details,
-			Default::default()
-		));
-
-		assert_has_matching_event!(
-			Test,
-			RuntimeEvent::IngressEgress(crate::Event::<Test, ()>::DepositIgnored {
-				deposit_address: _address,
-				asset: EthAsset::Eth,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionTainted,
-			})
-		);
-
-		assert_eq!(ScheduledTxForReject::<Test, ()>::decode_len(), Some(1));
-	});
-}
-
-#[test]
-fn only_broker_can_mark_transaction_as_tainted() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(
-				OriginTrait::signed(ALICE),
-				Default::default(),
-			),
-			BadOrigin
-		);
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
-			OriginTrait::signed(BROKER),
-			Default::default(),
-		));
-	});
-}
-
-#[test]
-fn tainted_transactions_expire_if_not_witnessed() {
-	new_test_ext().execute_with(|| {
-		let tx_id = DepositDetails::default();
-		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
-
-		let (_, address) = request_address_and_deposit(BROKER, EthAsset::Eth);
-		let _ = DepositChannelLookup::<Test, ()>::get(address).unwrap();
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
-			OriginTrait::signed(BROKER),
-			Default::default(),
-		));
-
-		System::set_block_number(expiry_at);
-
-		IngressEgress::on_idle(expiry_at, Weight::MAX);
-
-		assert!(!TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id));
-
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
-			crate::Event::TaintedTransactionReportExpired {
-				account_id: BROKER,
-				tx_id: Default::default(),
-			},
-		));
-	});
-}
-
-fn setup_boost_swap() -> ForeignChainAddress {
-	assert_ok!(
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
-			&ALICE,
-		)
-	);
-
-	assert_ok!(IngressEgress::create_boost_pools(
-		RuntimeOrigin::root(),
-		vec![BoostPoolId { asset: EthAsset::Eth, tier: 10 }],
-	));
-
-	<Test as crate::Config>::Balance::try_credit_account(&ALICE, EthAsset::Eth.into(), 1000)
-		.unwrap();
-
-	let (_, address, _, _) = IngressEgress::request_swap_deposit_address(
-		EthAsset::Eth,
-		EthAsset::Eth.into(),
-		ForeignChainAddress::Eth(Default::default()),
-		Beneficiaries::new(),
-		BROKER,
-		None,
-		10,
-		None,
-		None,
-	)
-	.unwrap();
-
-	assert_ok!(IngressEgress::add_boost_funds(
-		RuntimeOrigin::signed(ALICE),
-		EthAsset::Eth,
-		1000,
-		10
-	));
-
-	address
-}
-
-#[test]
-fn finalize_boosted_tx_if_tainted_after_prewitness() {
-	new_test_ext().execute_with(|| {
-		let tx_id = DepositDetails::default();
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		let address: <Ethereum as Chain>::ChainAccount = setup_boost_swap().try_into().unwrap();
-
-		let _ = IngressEgress::add_prewitnessed_deposits(
-			vec![DepositWitness {
-				deposit_address: address,
-				asset: EthAsset::Eth,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: tx_id.clone(),
-			}],
-			10,
-		);
-
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id.clone(),),
-			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
-		);
-
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			EthAsset::Eth,
-			DEFAULT_DEPOSIT_AMOUNT,
-			tx_id,
-			Default::default()
-		));
-
-		assert_has_matching_event!(
-			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositFinalised {
-				deposit_address: _,
-				asset: EthAsset::Eth,
-				..
-			})
-		);
-	});
-}
-
-#[test]
-fn reject_tx_if_tainted_before_prewitness() {
-	new_test_ext().execute_with(|| {
-		let tx_id = DepositDetails::default();
-
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		let address: <Ethereum as Chain>::ChainAccount = setup_boost_swap().try_into().unwrap();
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
-			OriginTrait::signed(BROKER),
-			tx_id.clone(),
-		));
-
-		let _ = IngressEgress::add_prewitnessed_deposits(
-			vec![DepositWitness {
-				deposit_address: address,
-				asset: EthAsset::Eth,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: tx_id.clone(),
-			}],
-			10,
-		);
-
-		assert_ok!(IngressEgress::process_single_deposit(
-			address,
-			EthAsset::Eth,
-			DEFAULT_DEPOSIT_AMOUNT,
-			tx_id,
-			Default::default()
-		));
-
-		assert_has_matching_event!(
-			Test,
-			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
-				deposit_address: _,
-				asset: EthAsset::Eth,
-				amount: DEFAULT_DEPOSIT_AMOUNT,
-				deposit_details: _,
-				reason: DepositIgnoredReason::TransactionTainted,
-			})
-		);
-	});
-}
-
-#[test]
-fn do_not_expire_tainted_transactions_if_prewitnessed() {
-	new_test_ext().execute_with(|| {
-		let tx_id = DepositDetails::default();
-		let expiry_at = System::block_number() + TAINTED_TX_EXPIRATION_BLOCKS as u64;
-
-		TaintedTransactions::<Test, ()>::insert(
-			BROKER,
-			&tx_id,
-			TaintedTransactionStatus::Prewitnessed,
-		);
-
-		ReportExpiresAt::<Test, ()>::insert(expiry_at, vec![(BROKER, tx_id.clone())]);
-
-		IngressEgress::on_idle(expiry_at, Weight::MAX);
-
-		assert!(TaintedTransactions::<Test, ()>::contains_key(BROKER, tx_id));
-	});
-}
-
-#[test]
-fn can_not_report_transaction_after_witnessing() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-		let unreported = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
-		let unseen = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
-		let prewitnessed = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
-		let boosted = evm::DepositDetails { tx_hashes: Some(vec![H256::random()]) };
-
-		TaintedTransactions::<Test, ()>::insert(BROKER, &unseen, TaintedTransactionStatus::Unseen);
-		TaintedTransactions::<Test, ()>::insert(
-			BROKER,
-			&prewitnessed,
-			TaintedTransactionStatus::Prewitnessed,
-		);
-		TaintedTransactions::<Test, ()>::insert(
-			BROKER,
-			&boosted,
-			TaintedTransactionStatus::Boosted,
-		);
-
-		assert_ok!(IngressEgress::mark_transaction_as_tainted(
-			OriginTrait::signed(BROKER),
-			unreported,
-		));
-		assert_ok!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), unseen,)
-		);
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), prewitnessed,),
-			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
-		);
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), boosted,),
-			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
 		);
 	});
 }

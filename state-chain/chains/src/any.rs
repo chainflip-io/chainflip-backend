@@ -1,7 +1,7 @@
 use crate::{
 	address::{ForeignChainAddress, IntoForeignChainAddress},
 	none::NoneChainCrypto,
-	Chain, FeeRefundCalculator,
+	Chain, DepositDetailsToTransactionInId, FeeRefundCalculator,
 };
 use codec::{FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
@@ -52,3 +52,5 @@ impl IntoForeignChainAddress<AnyChain> for ForeignChainAddress {
 		address
 	}
 }
+
+impl DepositDetailsToTransactionInId<NoneChainCrypto> for () {}
