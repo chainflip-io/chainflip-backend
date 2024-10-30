@@ -70,7 +70,7 @@ const requestSwapDepositAddress = async (
   const eventMatcher = chainflip.events.swapping.SwapDepositAddressReady;
 
   const unsubscribe = await chainflip.tx.swapping
-    .requestSwapDepositAddressWithAffiliates(...broker.buildExtrinsicPayload(params, 'backspin'))
+    .requestSwapDepositAddressWithAffiliates(...broker.buildExtrinsicPayload(params))
     .signAndSend(account, { nonce: getNonce() }, (result) => {
       if (!result.isInBlock) return;
 

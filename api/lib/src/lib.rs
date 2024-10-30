@@ -10,10 +10,11 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	evm::to_evm_address,
 	sol::SolAddress,
-	CcmChannelMetadata, ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
+	CcmChannelMetadata, ChannelRefundParametersEncoded, ChannelRefundParametersGeneric,
+	ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment, Price};
+use cf_primitives::{AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -340,12 +341,7 @@ impl fmt::Display for AddressString {
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RefundParameters {
-	pub retry_duration: BlockNumber,
-	pub refund_address: AddressString,
-	pub min_price: Price,
-}
+pub type RefundParameters = ChannelRefundParametersGeneric<AddressString>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SwapDepositAddress {
@@ -354,7 +350,7 @@ pub struct SwapDepositAddress {
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
 	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<ChannelRefundParametersGeneric<AddressString>>,
+	pub refund_parameters: Option<RefundParameters>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -403,12 +399,6 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	) -> Result<SwapDepositAddress> {
 		let destination_address =
 			destination_address.try_parse_to_encoded_address(destination_asset.into())?;
-		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;
-		let network: NetworkEnvironment = self
-			.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
-				block_hash,
-			)
-			.await?;
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
@@ -420,15 +410,12 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees: affiliate_fees.unwrap_or_default(),
 					refund_parameters: refund_parameters
-						.map(|rpc_params| {
-							Ok::<_, anyhow::Error>(ChannelRefundParametersGeneric {
+						.map(|rpc_params: ChannelRefundParametersGeneric<AddressString>| {
+							Ok::<_, anyhow::Error>(ChannelRefundParametersEncoded {
 								retry_duration: rpc_params.retry_duration,
 								refund_address: rpc_params
 									.refund_address
-									.try_parse_to_foreign_chain_address(
-										source_asset.into(),
-										network,
-									)?,
+									.try_parse_to_encoded_address(source_asset.into())?,
 								min_price: rpc_params.min_price,
 							})
 						})
