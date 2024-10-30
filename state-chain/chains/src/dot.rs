@@ -520,6 +520,8 @@ pub enum PolkadotRuntimeCall {
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum SystemCall {}
 
+impl DepositDetailsToTransactionInId<PolkadotCrypto> for u32 {}
+
 #[allow(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum BalancesCall {

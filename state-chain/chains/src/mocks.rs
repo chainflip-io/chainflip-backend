@@ -429,3 +429,9 @@ impl<C: Chain<Transaction = MockTransaction>, Call: ApiCall<C::ChainCrypto>>
 		}
 	}
 }
+
+impl DepositDetailsToTransactionInId<MockEthereumChainCrypto> for [u8; 4] {
+	fn deposit_id(&self) -> Option<[u8; 4]> {
+		Some(*self)
+	}
+}

@@ -70,7 +70,7 @@ where
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Arbitrum as Chain>::ChainAmount,
 		message: Vec<u8>,
-		_cf_parameters: Vec<u8>,
+		_ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		let transfer_param = EncodableTransferAssetParams {
 			asset: E::token_address(transfer_param.asset)
@@ -148,6 +148,11 @@ impl<E> From<EvmTransactionBuilder<transfer_fallback::TransferFallback>> for Arb
 	fn from(tx: EvmTransactionBuilder<transfer_fallback::TransferFallback>) -> Self {
 		Self::TransferFallback(tx)
 	}
+}
+
+impl<E> RejectCall<Arbitrum> for ArbitrumApi<E> where
+	E: EvmEnvironmentProvider<Arbitrum> + ReplayProtectionProvider<Arbitrum>
+{
 }
 
 macro_rules! map_over_api_variants {

@@ -13,18 +13,21 @@ import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
 import { getBalance } from '../shared/get_balance';
 import { observeEvent } from '../shared/utils/substrate';
-import { FillOrKillParamsX128 } from '../shared/new_swap';
+import { CcmDepositMetadata, FillOrKillParamsX128 } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
+import { executeContractSwap } from '../shared/contract_swap';
+import { newCcmMetadata } from '../shared/swapping';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testFillOrKill = new ExecutableTest('FoK', main, 600);
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
-async function testMinPriceRefund(inputAsset: Asset, amount: number) {
+async function testMinPriceRefund(inputAsset: Asset, amount: number, swapviaContract = false) {
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const refundAddress = await newAddress(inputAsset, randomBytes(32).toString('hex'));
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
   testFillOrKill.debugLog(`Swap destination address: ${destAddress}`);
+  testFillOrKill.debugLog(`Refund address: ${refundAddress}`);
 
   const refundBalanceBefore = await getBalance(inputAsset, refundAddress);
 
@@ -39,33 +42,66 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
     ),
   };
 
-  testFillOrKill.log(
-    `Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`,
-  );
-  const swapRequest = await requestNewSwap(
-    inputAsset,
-    destAsset,
-    destAddress,
-    'FoK_Test',
-    undefined, // messageMetadata
-    0, // brokerCommissionBps
-    false, // log
-    0, // boostFeeBps
-    refundParameters,
-  );
-  const depositAddress = swapRequest.depositAddress;
-  const depositChannelId = swapRequest.channelId;
+  let swapRequestedHandle;
 
-  const swapRequestedHandle = observeSwapRequested(
-    inputAsset,
-    destAsset,
-    depositChannelId,
-    SwapRequestType.Regular,
-  );
+  if (!swapviaContract) {
+    testFillOrKill.log(
+      `Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`,
+    );
+    const swapRequest = await requestNewSwap(
+      inputAsset,
+      destAsset,
+      destAddress,
+      'FoK_Test',
+      undefined, // messageMetadata
+      0, // brokerCommissionBps
+      false, // log
+      0, // boostFeeBps
+      refundParameters,
+    );
+    const depositAddress = swapRequest.depositAddress;
+    const depositChannelId = swapRequest.channelId;
 
-  // Deposit the asset
-  await send(inputAsset, depositAddress, amount.toString());
-  testFillOrKill.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
+    swapRequestedHandle = observeSwapRequested(
+      inputAsset,
+      destAsset,
+      depositChannelId,
+      SwapRequestType.Regular,
+    );
+
+    // Deposit the asset
+    await send(inputAsset, depositAddress, amount.toString());
+    testFillOrKill.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
+  } else {
+    testFillOrKill.log(
+      `Swapping via contract from ${inputAsset} to ${destAsset} with unrealistic min price`,
+    );
+
+    // Randomly use CCM to test different encodings
+    let ccmMetadata: CcmDepositMetadata | undefined;
+    if (Math.random() < 0.5) {
+      ccmMetadata = newCcmMetadata(inputAsset, destAsset, undefined, 100);
+      ccmMetadata.ccmAdditionalData =
+        Math.random() < 0.5 ? ccmMetadata.ccmAdditionalData : undefined;
+    }
+
+    const receipt = await executeContractSwap(
+      inputAsset,
+      destAsset,
+      destAddress,
+      undefined,
+      amount.toString(),
+      undefined,
+      refundParameters,
+    );
+
+    swapRequestedHandle = observeSwapRequested(
+      inputAsset,
+      destAsset,
+      receipt.hash,
+      SwapRequestType.Regular,
+    );
+  }
 
   const swapRequestedEvent = await swapRequestedHandle;
   const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
@@ -87,8 +123,6 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number) {
       `${inputAsset} swap ${swapRequestId} was executed instead of failing and being refunded`,
     );
   }
-
-  testFillOrKill.log(`FoK ${inputAsset} swap refunded`);
 }
 
 async function main() {
@@ -98,5 +132,8 @@ async function main() {
     testMinPriceRefund(Assets.Dot, 100),
     testMinPriceRefund(Assets.Btc, 0.1),
     testMinPriceRefund(Assets.Usdc, 1000),
+    testMinPriceRefund(Assets.Flip, 500, true),
+    testMinPriceRefund(Assets.Eth, 1, true),
+    testMinPriceRefund(Assets.ArbEth, 5, true),
   ]);
 }

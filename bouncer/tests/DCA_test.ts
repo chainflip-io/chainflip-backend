@@ -12,7 +12,8 @@ import { observeEvent, observeEvents } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
 import { ExecutableTest } from '../shared/executable_test';
 import { requestNewSwap } from '../shared/perform_swap';
-import { DcaParams } from '../shared/new_swap';
+import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
+import { executeContractSwap } from '../shared/contract_swap';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testDCASwaps = new ExecutableTest('DCA-Swaps', main, 150);
@@ -20,50 +21,85 @@ export const testDCASwaps = new ExecutableTest('DCA-Swaps', main, 150);
 // Requested number of blocks between each chunk
 const CHUNK_INTERVAL = 2;
 
-async function testDCASwap(inputAsset: Asset, amount: number, numberOfChunks: number) {
+async function testDCASwap(
+  inputAsset: Asset,
+  amount: number,
+  numberOfChunks: number,
+  swapviaContract = false,
+) {
   assert(numberOfChunks > 1, 'Number of chunks must be greater than 1');
 
-  const dcaParameters: DcaParams = {
+  const dcaParams: DcaParams = {
     numberOfChunks,
     chunkIntervalBlocks: CHUNK_INTERVAL,
   };
+  const fillOrKillParams: FillOrKillParamsX128 = {
+    refundAddress: '0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF',
+    minPriceX128: '1',
+    retryDurationBlocks: 100,
+  };
 
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
+
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
+
   const destBalanceBefore = await getBalance(inputAsset, destAddress);
   testDCASwaps.debugLog(`DCA destination address: ${destAddress}`);
 
-  const swapRequest = await requestNewSwap(
-    inputAsset,
-    destAsset,
-    destAddress,
-    'DCA_Test',
-    undefined, // messageMetadata
-    0, // brokerCommissionBps
-    false, // log
-    0, // boostFeeBps
-    {
-      refundAddress: '0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF',
-      minPriceX128: '1',
-      retryDurationBlocks: 100,
-    }, // FoK parameters
-    dcaParameters,
-  );
+  let swapRequestedHandle;
 
-  const depositChannelId = swapRequest.channelId;
-  const swapRequestedHandle = observeSwapRequested(
-    inputAsset,
-    destAsset,
-    depositChannelId,
-    SwapRequestType.Regular,
-  );
+  if (!swapviaContract) {
+    const swapRequest = await requestNewSwap(
+      inputAsset,
+      destAsset,
+      destAddress,
+      'DCA_Test',
+      undefined, // messageMetadata
+      0, // brokerCommissionBps
+      false, // log
+      0, // boostFeeBps
+      fillOrKillParams,
+      dcaParams,
+    );
 
-  // Deposit the asset
-  await send(inputAsset, swapRequest.depositAddress, amount.toString());
-  testDCASwaps.log(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
+    const depositChannelId = swapRequest.channelId;
+    swapRequestedHandle = observeSwapRequested(
+      inputAsset,
+      destAsset,
+      depositChannelId,
+      SwapRequestType.Regular,
+    );
+
+    // Deposit the asset
+    await send(inputAsset, swapRequest.depositAddress, amount.toString());
+    testDCASwaps.log(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
+  } else {
+    const receipt = await executeContractSwap(
+      inputAsset,
+      destAsset,
+      destAddress,
+      undefined,
+      amount.toString(),
+      undefined,
+      fillOrKillParams,
+      dcaParams,
+    );
+
+    testDCASwaps.log(`Contract swap executed, tx hash: ${receipt.hash}`);
+
+    // Look after Swap Requested of data.origin.Vault.tx_hash
+    swapRequestedHandle = observeSwapRequested(
+      inputAsset,
+      destAsset,
+      receipt.hash,
+      SwapRequestType.Regular,
+    );
+  }
 
   const swapRequestId = Number((await swapRequestedHandle).data.swapRequestId.replaceAll(',', ''));
-  testDCASwaps.debugLog(`${inputAsset} swap requested, swapRequestId: ${swapRequestId}`);
+  testDCASwaps.debugLog(
+    `${inputAsset} swap ${swapviaContract ? 'via contract' : ''}, swapRequestId: ${swapRequestId}`,
+  );
 
   // Wait for the swap to complete
   await observeEvent(`swapping:SwapRequestCompleted`, {
@@ -92,11 +128,12 @@ async function testDCASwap(inputAsset: Asset, amount: number, numberOfChunks: nu
       `Unexpected chunk interval between chunk ${i - 1} & ${i}`,
     );
   }
+
   testDCASwaps.log(`Chunk interval of ${CHUNK_INTERVAL} verified for all ${numberOfChunks} chunks`);
 
   await observeBalanceIncrease(destAsset, destAddress, destBalanceBefore);
 }
 
 export async function main() {
-  await testDCASwap(Assets.Eth, 1, 2);
+  await Promise.all([testDCASwap(Assets.Eth, 1, 2), testDCASwap(Assets.ArbEth, 1, 2, true)]);
 }

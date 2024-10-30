@@ -328,7 +328,7 @@ mod benchmarks {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![0x00].try_into().unwrap(),
 				gas_budget: 1,
-				cf_parameters: Default::default(),
+				ccm_additional_data: Default::default(),
 			},
 		};
 		let call = Call::<T, I>::contract_swap_request {
@@ -528,7 +528,7 @@ mod benchmarks {
 	fn mark_transaction_as_tainted() {
 		let caller =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
-		let tx_id = <<T as Config<I>>::TargetChain as Chain>::DepositDetails::benchmark_value();
+		let tx_id: TransactionInIdFor<T, I> = TransactionInIdFor::<T, I>::benchmark_value();
 
 		#[block]
 		{
