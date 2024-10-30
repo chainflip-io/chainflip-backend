@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use cf_primitives::EpochIndex;
+use cf_utilities::task_scope::Scope;
 use chainflip_engine::{
 	btc::retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
 	settings::NodeContainer,
@@ -14,7 +15,6 @@ use chainflip_engine::{
 	},
 };
 use futures::Future;
-use utilities::task_scope::Scope;
 
 use crate::DepositTrackerSettings;
 

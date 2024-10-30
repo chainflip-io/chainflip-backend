@@ -22,21 +22,22 @@ name = "chainflip-broker-api"
 workspace = true
 
 [dependencies]
-chainflip-api = { path = "../../lib" }
-cf-utilities = { package = "utilities", path = "../../../utilities" }
-custom-rpc = { path = "../../../state-chain/custom-rpc" }
+chainflip-api = { workspace = true }
+cf-utilities = { workspace = true, default-features = true }
+custom-rpc = { workspace = true }
 
-anyhow = "1.0.66"
-clap = { version = "3.2.23", features = ["derive"] }
-futures = "0.3"
-hex = "0.4.3"
-jsonrpsee = { version = "0.16.2", features = ["full"] }
-serde = { version = '1.0', features = ['derive'] }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-tokio = "1.20.1"
-tracing = "0.1.34"
-tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+futures = { workspace = true }
+hex = { workspace = true, default-features = true }
+jsonrpsee = { workspace = true, features = ["full"] }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+sp-core = { workspace = true }
+sp-rpc = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = 'chainflip-substrate-1.6+1' }
+substrate-build-script-utils = { workspace = true }

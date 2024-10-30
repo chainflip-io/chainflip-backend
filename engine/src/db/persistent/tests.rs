@@ -9,7 +9,7 @@ use multisig::{
 
 use super::*;
 use cf_primitives::GENESIS_EPOCH;
-use utilities::{assert_ok, testing::new_temp_directory_with_nonexistent_file};
+use cf_utilities::{assert_ok, testing::new_temp_directory_with_nonexistent_file};
 
 fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C> {
 	get_key_data_for_test::<C>(BTreeSet::from_iter([AccountId32::new([0; 32])]))
@@ -92,7 +92,7 @@ fn can_update_key() {
 
 	let keys_before = p_db.load_keys::<Scheme>();
 	// there should be no key [0; 33] yet
-	assert!(keys_before.get(&key_id).is_none());
+	assert!(!keys_before.contains_key(&key_id));
 
 	p_db.update_key::<Scheme>(
 		&key_id,
@@ -100,7 +100,7 @@ fn can_update_key() {
 	);
 
 	let keys_before = p_db.load_keys::<Scheme>();
-	assert!(keys_before.get(&key_id).is_some());
+	assert!(keys_before.contains_key(&key_id));
 }
 
 fn find_backups(temp_dir: &TempDir, db_path: PathBuf) -> Result<Vec<PathBuf>, std::io::Error> {
@@ -151,7 +151,7 @@ fn can_load_key_from_backup() {
 		let p_db =
 			PersistentKeyDB::open_and_migrate_to_latest(backups.first().unwrap(), None).unwrap();
 
-		assert!(p_db.load_keys::<Scheme>().get(&key_id).is_some());
+		assert!(p_db.load_keys::<Scheme>().contains_key(&key_id));
 	}
 }
 
@@ -299,7 +299,7 @@ fn should_error_if_genesis_hash_is_different() {
 
 #[test]
 fn test_migration_to_latest_from_0() {
-	let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
+	let (_dir, db_file) = cf_utilities::testing::new_temp_directory_with_nonexistent_file();
 
 	{
 		let db = PersistentKeyDB::open_and_migrate_to_version(&db_file, None, 0).unwrap();

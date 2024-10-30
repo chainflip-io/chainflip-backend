@@ -459,11 +459,13 @@ impl SolanaTransactionBuilder {
 		let number_of_accounts = contract_swap_accounts.len();
 		let swap_and_sender_vec: Vec<AccountMeta> = contract_swap_accounts
 			.into_iter()
+			// Both event account and payee should be writable and non-signers
 			.flat_map(|ContractSwapAccountAndSender { contract_swap_account, swap_sender }| {
-				vec![contract_swap_account, swap_sender]
+				vec![
+					AccountMeta::new(contract_swap_account.into(), false),
+					AccountMeta::new(swap_sender.into(), false),
+				]
 			})
-			// Both swap account and payee should be writable and non-signers
-			.map(|address| AccountMeta::new(address.into(), false))
 			.collect();
 
 		let instructions = vec![SwapEndpointProgram::with_id(swap_endpoint_program)
@@ -562,7 +564,7 @@ mod test {
 			.finalize_and_serialize()
 			.expect("Transaction serialization must succeed");
 
-		println!("Serialized tx length: {:?}", serialized_tx.len());
+		// println!("Serialized tx length: {:?}", serialized_tx.len());
 		assert!(serialized_tx.len() <= MAX_TRANSACTION_LENGTH);
 
 		if serialized_tx != expected_serialized_tx {

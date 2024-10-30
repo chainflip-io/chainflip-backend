@@ -41,7 +41,7 @@ use tokio::sync::{
 use tracing::{error, info_span, Instrument};
 use zeroize::Zeroizing;
 
-use utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
+use cf_utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
 
 type EdPublicKey = ed25519::Public;
 type XPublicKey = x25519_dalek::PublicKey;

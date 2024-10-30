@@ -1,103 +1,93 @@
 [package]
-name = 'pallet-cf-validator'
-version = '0.1.0'
-authors = ['Chainflip Team <https://github.com/chainflip-io>']
-edition = '2021'
-homepage = 'https://chainflip.io'
-license = '<TODO>'
+name = "pallet-cf-validator"
+version = "0.1.0"
+authors = ["Chainflip Team <https://github.com/chainflip-io>"]
+edition = "2021"
+homepage = "https://chainflip.io"
+license = "<TODO>"
 publish = false
-repository = 'https://github.com/chainflip-io/chainflip-backend'
+repository = "https://github.com/chainflip-io/chainflip-backend"
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [lints]
 workspace = true
 
 [dependencies]
 # Internal deps
-cf-primitives = { path = '../../primitives', default-features = false }
-cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
-cf-traits = { path = '../../traits', default-features = false }
-cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
+cf-primitives = { workspace = true }
+cf-runtime-upgrade-utilities = { workspace = true }
+cf-traits = { workspace = true }
+cf-utilities = { workspace = true }
 
 # Used for benchmarking
-pallet-cf-funding = { path = '../cf-funding', optional = true, default-features = false }
-pallet-cf-reputation = { path = '../cf-reputation', optional = true, default-features = false }
-pallet-cf-vaults = { path = '../cf-vaults', optional = true, default-features = false }
+pallet-cf-funding = { workspace = true, optional = true }
+pallet-cf-reputation = { workspace = true, optional = true }
+pallet-cf-vaults = { workspace = true, optional = true }
 
-log = { version = '0.4.16', default-features = false }
-nanorand = { version = '0.7.0', default-features = false, features = [
-  'wyrand',
-] }
-serde = { default_features = false, version = '1.0.195', features = [
-  'alloc',
-  'derive',
-] }
+log = { workspace = true }
+nanorand = { workspace = true, features = ["wyrand"] }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Parity deps
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
-  'derive',
-] }
-scale-info = { version = '2.10.0', default-features = false, features = [
-  'derive',
-] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", optional = true, default-features = false }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-application-crypto = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false, optional = true }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-benchmarking = { workspace = true, optional = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sp-application-crypto = { workspace = true, optional = true }
+sp-std = { workspace = true }
+sp-core = { workspace = true }
 
-pallet-session = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+pallet-session = { workspace = true }
 
 [dev-dependencies]
-cf-test-utilities = { path = '../../test-utilities' }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-lazy_static = "1.4"
+cf-test-utilities = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-io = { workspace = true, default-features = true }
+lazy_static = { workspace = true }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'cf-primitives/std',
-  'cf-runtime-upgrade-utilities/std',
-  'cf-traits/std',
-  'cf-utilities/std',
-  'codec/std',
-  'frame-benchmarking?/std',
-  'frame-support/std',
-  'frame-system/std',
-  'log/std',
-  'nanorand/std',
-  'pallet-cf-vaults/std',
-  'pallet-cf-funding/std',
-  'pallet-cf-reputation/std',
-  'pallet-session/std',
-  'scale-info/std',
-  'serde/std',
-  'sp-application-crypto/std',
-  'sp-core/std',
-  'sp-std/std',
+  "cf-primitives/std",
+  "cf-runtime-upgrade-utilities/std",
+  "cf-traits/std",
+  "cf-utilities/std",
+  "codec/std",
+  "frame-benchmarking?/std",
+  "frame-support/std",
+  "frame-system/std",
+  "log/std",
+  "nanorand/std",
+  "pallet-cf-vaults/std",
+  "pallet-cf-funding/std",
+  "pallet-cf-reputation/std",
+  "pallet-session/std",
+  "scale-info/std",
+  "serde/std",
+  "sp-application-crypto/std",
+  "sp-core/std",
+  "sp-std/std",
 ]
 runtime-benchmarks = [
-  'cf-primitives/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
-  'pallet-cf-funding/runtime-benchmarks',
-  'pallet-cf-reputation/runtime-benchmarks',
-  'pallet-cf-vaults/runtime-benchmarks',
-  'dep:sp-application-crypto',
+  "cf-traits/runtime-benchmarks",
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
+  "pallet-cf-funding/runtime-benchmarks",
+  "pallet-cf-reputation/runtime-benchmarks",
+  "pallet-cf-vaults/runtime-benchmarks",
+  "dep:sp-application-crypto",
 ]
 try-runtime = [
-  'frame-support/try-runtime',
-  'frame-system/try-runtime',
-  'cf-runtime-upgrade-utilities/try-runtime',
-  'pallet-cf-funding/try-runtime',
-  'pallet-cf-reputation/try-runtime',
-  'pallet-cf-vaults/try-runtime',
-  'pallet-session/try-runtime',
+  "frame-support/try-runtime",
+  "frame-system/try-runtime",
+  "cf-runtime-upgrade-utilities/try-runtime",
+  "pallet-cf-funding/try-runtime",
+  "pallet-cf-reputation/try-runtime",
+  "pallet-cf-vaults/try-runtime",
+  "pallet-session/try-runtime",
 ]

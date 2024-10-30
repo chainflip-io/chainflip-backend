@@ -4,14 +4,16 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
 	address::{try_from_encoded_address, EncodedAddress},
+	btc::smart_contract_encoding::{
+		encode_swap_params_in_nulldata_utxo, SharedCfParameters, UtxoEncodedData,
+	},
 	dot::PolkadotAccountId,
 	evm::to_evm_address,
 	sol::SolAddress,
 	CcmChannelMetadata, ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{BlockNumber, DcaParameters, NetworkEnvironment, Price};
-use futures::FutureExt;
+use cf_primitives::{AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment, Price};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -49,11 +51,11 @@ pub mod queries;
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
+use cf_utilities::{clean_hex_address, rpc::NumberOrHex, task_scope::Scope};
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
 };
-use utilities::{clean_hex_address, rpc::NumberOrHex, task_scope::Scope};
 
 lazy_static::lazy_static! {
 	static ref API_VERSION: SemVer = SemVer {
@@ -106,6 +108,11 @@ pub async fn request_block(
 		.block(block_hash)
 		.await?
 		.ok_or_else(|| anyhow!("unknown block hash"))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SwapPayload {
+	Bitcoin { nulldata_utxo: Bytes },
 }
 
 pub struct StateChainApi {
@@ -322,8 +329,8 @@ impl AddressString {
 			.map_err(|_| anyhow!("Failed to parse address"))
 	}
 
-	pub fn from_encoded_address(address: &EncodedAddress) -> Self {
-		Self(address.to_string())
+	pub fn from_encoded_address<T: std::borrow::Borrow<EncodedAddress>>(address: T) -> Self {
+		Self(address.borrow().to_string())
 	}
 }
 
@@ -333,14 +340,14 @@ impl fmt::Display for AddressString {
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RefundParameters {
 	pub retry_duration: BlockNumber,
 	pub refund_address: AddressString,
 	pub min_price: Price,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SwapDepositAddress {
 	pub address: AddressString,
 	pub issued_block: state_chain_runtime::BlockNumber,
@@ -350,7 +357,7 @@ pub struct SwapDepositAddress {
 	pub refund_parameters: Option<ChannelRefundParametersGeneric<AddressString>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WithdrawFeesDetail {
 	pub tx_hash: H256,
 	pub egress_id: (ForeignChain, u64),
@@ -390,7 +397,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		broker_commission: BasisPoints,
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Affiliates<AccountId32>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
 		refund_parameters: Option<RefundParameters>,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
@@ -411,7 +418,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					broker_commission,
 					channel_metadata,
 					boost_fee: boost_fee.unwrap_or_default(),
-					affiliate_fees,
+					affiliate_fees: affiliate_fees.unwrap_or_default(),
 					refund_parameters: refund_parameters
 						.map(|rpc_params| {
 							Ok::<_, anyhow::Error>(ChannelRefundParametersGeneric {
@@ -515,6 +522,78 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	async fn deregister_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
 			.await
+	}
+
+	async fn request_swap_parameter_encoding(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		min_output_amount: AssetAmount,
+		retry_duration: BlockNumber,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
+	) -> Result<SwapPayload> {
+		// Check if safe mode is active
+		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;
+		let safe_mode = self
+			.storage_value::<pallet_cf_environment::RuntimeSafeMode<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await?;
+		if !safe_mode.swapping.swaps_enabled {
+			bail!("Safe mode is active. Swaps are disabled.");
+		}
+
+		// Validate params
+		frame_support::ensure!(
+			broker_commission == 0 && affiliate_fees.map_or(true, |fees| fees.is_empty()),
+			anyhow!("Broker/Affi fees are not yet supported for vault swaps. Request a deposit address or remove the broker fees.")
+		);
+		self.base_rpc_api()
+			.validate_refund_params(retry_duration, Some(block_hash))
+			.await?;
+		if let Some(params) = dca_parameters.as_ref() {
+			self.base_rpc_api()
+				.validate_dca_params(
+					params.number_of_chunks,
+					params.chunk_interval,
+					Some(block_hash),
+				)
+				.await?;
+		}
+
+		// Encode swap
+		match ForeignChain::from(source_asset) {
+			ForeignChain::Bitcoin => {
+				let params = UtxoEncodedData {
+					output_asset: destination_asset,
+					output_address: destination_address
+						.try_parse_to_encoded_address(destination_asset.into())?,
+					parameters: SharedCfParameters {
+						retry_duration: retry_duration.try_into()?,
+						min_output_amount,
+						number_of_chunks: dca_parameters
+							.as_ref()
+							.map(|params| params.number_of_chunks)
+							.unwrap_or(1)
+							.try_into()?,
+						chunk_interval: dca_parameters
+							.as_ref()
+							.map(|params| params.chunk_interval)
+							.unwrap_or(2)
+							.try_into()?,
+						boost_fee: boost_fee.unwrap_or_default().try_into()?,
+					},
+				};
+				Ok(SwapPayload::Bitcoin {
+					nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw().into(),
+				})
+			},
+			_ => bail!("Unsupported input asset"),
+		}
 	}
 }
 

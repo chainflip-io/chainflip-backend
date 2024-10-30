@@ -60,7 +60,7 @@ jobs:
         if: inputs.run-job
         uses: actions/setup-node@8f152de45cc393bb48ce5d89d36b731f54556e65
         with:
-          node-version: 20
+          node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
@@ -77,7 +77,7 @@ jobs:
 
       - name: Download try-runtime binary 📥
         if: inputs.run-job
-        uses: jaxxstorm/action-install-gh-release@v1.10.0
+        uses: jaxxstorm/action-install-gh-release@25d5e2dd555cd74f1fab9ac1e6ea117acde2c0c4
         with:
           repo: paritytech/try-runtime-cli
           tag: v0.7.0
@@ -145,6 +145,7 @@ jobs:
           echo $MAIN_VERSION
 
       - name: Install solana ☀️
+        if: inputs.run-job
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/$SOLANA_VERSION/install)"
 

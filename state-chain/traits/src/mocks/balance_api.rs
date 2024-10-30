@@ -6,9 +6,6 @@ use frame_support::sp_runtime::{
 	DispatchError, DispatchResult,
 };
 
-#[cfg(feature = "runtime-benchmarks")]
-use cf_chains::ForeignChainAddress;
-
 use super::{MockPallet, MockPalletStorage};
 
 use crate::LpRegistration;
@@ -88,7 +85,7 @@ impl LpRegistration for MockLpRegistration {
 	type AccountId = u64;
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_liquidity_refund_address(_: &Self::AccountId, _: ForeignChainAddress) {}
+	fn register_liquidity_refund_address(_: &Self::AccountId, _: cf_chains::ForeignChainAddress) {}
 
 	fn ensure_has_refund_address_for_pair(
 		_who: &Self::AccountId,

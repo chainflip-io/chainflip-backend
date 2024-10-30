@@ -5,6 +5,11 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use cf_primitives::CfeCompatibility;
+use cf_utilities::{
+	future_map::FutureMap,
+	task_scope::{self, Scope},
+	UnendingStream,
+};
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
@@ -18,11 +23,6 @@ use state_chain_runtime::{BlockNumber, Nonce, UncheckedExtrinsic};
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{debug, error, info, warn};
-use utilities::{
-	future_map::FutureMap,
-	task_scope::{self, Scope},
-	UnendingStream,
-};
 
 use crate::state_chain_observer::client::{
 	base_rpc_api,
@@ -31,6 +31,7 @@ use crate::state_chain_observer::client::{
 	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
 };
+use jsonrpsee::{core::ClientError, types::ErrorObjectOwned};
 
 use super::signer;
 
@@ -50,13 +51,24 @@ pub enum ExtrinsicError<OtherError> {
 #[derive(Error, Debug)]
 pub enum DryRunError {
 	#[error(transparent)]
-	RpcCallError(#[from] jsonrpsee::core::Error),
+	RpcCallError(ErrorObjectOwned),
 	#[error("Unable to decode dry_run RPC result: {0}")]
 	CannotDecodeReply(#[from] codec::Error),
 	#[error("The transaction is invalid: {0}")]
 	InvalidTransaction(#[from] TransactionValidityError),
 	#[error("The transaction failed: {0}")]
 	Dispatch(#[from] DispatchError),
+	#[error(transparent)]
+	RpcError(ClientError),
+}
+
+impl From<ClientError> for DryRunError {
+	fn from(e: ClientError) -> Self {
+		match e {
+			ClientError::Call(obj) => Self::RpcCallError(obj),
+			e => Self::RpcError(e),
+		}
+	}
 }
 
 pub type ExtrinsicDetails =
@@ -205,7 +217,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				sp_core::blake2_256(&encoded).into()
 			};
 
-			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic).await {
+			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic.clone()).await {
 				Ok(mut transaction_status_stream) => {
 					request.pending_submissions.insert(request.next_submission_id, nonce);
 					self.submissions_by_nonce.entry(nonce).or_default().push(Submission {
@@ -239,23 +251,21 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						// This occurs when a transaction with the same nonce is in the
 						// transaction pool (and the priority is <= priority of that
 						// existing tx)
-						jsonrpsee::core::Error::Call(
-							jsonrpsee::types::error::CallError::Custom(ref obj),
-						) if obj.code() == 1014 => {
+						ClientError::Call(obj) if obj.code() == 1014 => {
 							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as transaction with same nonce found in transaction pool: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
 						// This occurs when the nonce has already been *consumed* i.e a
 						// transaction with that nonce is in a block
-						jsonrpsee::core::Error::Call(
-							jsonrpsee::types::error::CallError::Custom(ref obj),
-						) if obj == &invalid_err_obj(InvalidTransaction::Stale) => {
+						ClientError::Call(obj)
+							if obj == invalid_err_obj(InvalidTransaction::Stale) =>
+						{
 							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as the transaction is stale: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
-						jsonrpsee::core::Error::Call(
-							jsonrpsee::types::error::CallError::Custom(ref obj),
-						) if obj == &invalid_err_obj(InvalidTransaction::BadProof) => {
+						ClientError::Call(obj)
+							if obj == invalid_err_obj(InvalidTransaction::BadProof) =>
+						{
 							warn!(target: "state_chain_client", request_id = request.id, "Submission failed due to a bad proof: {obj:?}. Refetching the runtime version.");
 
 							// TODO: Check if hash and block number should also be updated
@@ -271,7 +281,12 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 							self.runtime_version = new_runtime_version;
 						},
-						err => break Err(err.into()),
+						err =>
+							break Err(anyhow!(
+								"Unhandled error while submitting signed extrinsic {:?}: {}",
+								signed_extrinsic,
+								err
+							)),
 					}
 				},
 			}
@@ -522,7 +537,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					_ => None,
 				})
 				.sorted_by_key(|(extrinsic_index, _)| *extrinsic_index)
-				.group_by(|(extrinsic_index, _)| *extrinsic_index)
+				.chunk_by(|(extrinsic_index, _)| *extrinsic_index)
 				.into_iter()
 				.map(|(extrinsic_index, extrinsic_events)| {
 					(extrinsic_index, extrinsic_events.map(|(_extrinsics_index, event)| event))

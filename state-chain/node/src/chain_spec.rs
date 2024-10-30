@@ -27,17 +27,17 @@ use state_chain_runtime::{
 		BLOCKS_PER_MINUTE_SOLANA,
 	},
 	opaque::SessionKeys,
-	AccountId, BlockNumber, FlipBalance, RuntimeGenesisConfig, SetSizeParameters, Signature,
-	SolanaElectionsConfig, WASM_BINARY,
+	AccountId, BlockNumber, FlipBalance, SetSizeParameters, Signature, SolanaElectionsConfig,
+	WASM_BINARY,
 };
 
+use cf_utilities::clean_hex_address;
 use std::{
 	collections::{BTreeMap, BTreeSet},
 	env,
 	str::FromStr,
 	time::{SystemTime, UNIX_EPOCH},
 };
-use utilities::clean_hex_address;
 
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -73,7 +73,7 @@ where
 }
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
-pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
+pub type ChainSpec = sc_service::GenericChainSpec;
 
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
@@ -296,7 +296,7 @@ pub fn inner_cf_development_config(
 		sol_swap_endpoint_program,
 		sol_swap_endpoint_program_data_account,
 	} = get_environment_or_defaults(testnet::ENV);
-	Ok(ChainSpec::builder(wasm_binary, None)
+	Ok(ChainSpec::builder(wasm_binary, Default::default())
 		.with_name("CF Develop")
 		.with_id("cf-dev")
 		.with_protocol_id("flip-dev")
@@ -438,7 +438,7 @@ macro_rules! network_spec {
 							.to_be_bytes()[4..],
 					)
 				);
-				Ok(ChainSpec::builder(wasm_binary, None)
+				Ok(ChainSpec::builder(wasm_binary, Default::default())
 					.with_name(NETWORK_NAME)
 					.with_id(NETWORK_NAME)
 					.with_protocol_id(&protocol_id)
@@ -568,7 +568,7 @@ fn testnet_genesis(
 	genesis_funding_amount: u128,
 	minimum_funding: u128,
 	redemption_tax: u128,
-	blocks_per_epoch: BlockNumber,
+	epoch_duration: BlockNumber,
 	redemption_ttl_secs: u64,
 	current_authority_emission_inflation_perbill: u32,
 	backup_node_emission_inflation_perbill: u32,
@@ -680,16 +680,15 @@ fn testnet_genesis(
 					}
 				})
 				.collect::<_>(),
-			blocks_per_epoch,
+			epoch_duration,
 			redemption_period_as_percentage,
 			backup_reward_node_percentage: Percent::from_percent(33),
 			bond: all_accounts
 				.iter()
 				.filter_map(|(id, _, funds)| authority_ids.contains(id).then_some(*funds))
 				.min()
-				.map(|bond| {
+				.inspect(|bond| {
 					log::info!("Bond will be set to {:?} Flip", bond / FLIPPERINOS_PER_FLIP);
-					bond
 				})
 				.expect("At least one authority is required"),
 			authority_set_min_size: min_authorities,

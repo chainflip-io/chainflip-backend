@@ -11,9 +11,9 @@ use base64::Engine;
 use borsh::{BorshDeserialize, BorshSerialize};
 use cf_chains::{
 	address::EncodedAddress,
+	assets::sol::Asset as SolAsset,
 	sol::{api::ContractSwapAccountAndSender, SolAddress},
 };
-use cf_primitives::Asset;
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use state_chain_runtime::chainflip::solana_elections::SolanaVaultSwapDetails;
@@ -98,8 +98,8 @@ pub async fn get_program_swaps(
 							contract_swap_account: account,
 							swap_sender: data.sender.into()
 						}, SolanaVaultSwapDetails {
-							from: if data.src_token.is_none() {Asset::Sol} else {Asset::SolUsdc},
-							deposit_amount: data.amount.into(),
+							from: if data.src_token.is_none() {SolAsset::Sol} else {SolAsset::SolUsdc},
+							deposit_amount: data.amount,
 							destination_address: EncodedAddress::from_chain_bytes(data.dst_chain.try_into().map_err(|e| warn!("error while parsing destination chain for solana vault swap:{}. Omitting swap", e)).ok()?, data.dst_address.to_vec()).map_err(|e| warn!("failed to decode the destination chain address for solana vault swap:{}. Omitting swap", e)).ok()?,
 							to: data.dst_token.try_into().map_err(|e| warn!("error while decoding destination token for solana vault swap: {}. Omitting swap", e)).ok()?,
 							tx_hash: Default::default(), // TODO

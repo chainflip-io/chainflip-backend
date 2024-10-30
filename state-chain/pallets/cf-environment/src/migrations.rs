@@ -8,6 +8,9 @@ use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+mod sol_api_environment;
+pub use sol_api_environment::SolApiEnvironmentMigration;
+
 pub struct VersionUpdate<T: Config>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
@@ -32,7 +35,16 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 12>;
+// Migration for Updating Solana's Api Environments.
+pub type PalletMigration<T> = (
+	cf_runtime_upgrade_utilities::VersionedMigration<
+		Pallet<T>,
+		SolApiEnvironmentMigration<T>,
+		12,
+		13,
+	>,
+	PlaceholderMigration<Pallet<T>, 13>,
+);
 
 #[cfg(test)]
 mod tests {

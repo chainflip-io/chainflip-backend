@@ -1,63 +1,54 @@
 [package]
-name = 'cf-traits'
-version = '0.1.0'
-edition = '2021'
-authors = ['Chainflip <https://chainflip.io>']
-description = 'Common traits used in the Chainflip runtime'
+name = "cf-traits"
+version = "0.1.0"
+edition = "2021"
+authors = ["Chainflip <https://chainflip.io>"]
+description = "Common traits used in the Chainflip runtime"
 
 [lints]
 workspace = true
 
 [dependencies]
-log = { version = '0.4.16', default-features = false }
+log = { workspace = true }
 
 # Internal
-cf-chains = { path = '../chains', default-features = false }
-cf-primitives = { path = '../primitives', default-features = false }
-cfe-events = { path = '../cfe-events', default-features = false }
-cf-amm = { path = "../amm", default-features = false}
+cf-chains = { workspace = true }
+cf-primitives = { workspace = true }
+cfe-events = { workspace = true }
+cf-amm = { workspace = true }
 
-# Parity deps
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
-  'derive',
-] }
-scale-info = { version = '2.10.0', default-features = false, features = [
-  'derive',
-] }
+# # Parity deps
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false, optional = true }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-frame-system = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+frame-benchmarking = { workspace = true, optional = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+sp-std = { workspace = true }
 
 [dev-dependencies]
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1" }
-serde = { default_features = false, version = '1.0.126', features = [
-  'alloc',
-  'derive',
-] }
+sp-io = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-  'cf-chains/std',
-  'cf-primitives/std',
-  'codec/std',
-  'frame-benchmarking?/std',
-  'frame-support/std',
-  'frame-system/std',
-  'log/std',
-  'scale-info/std',
-  'sp-std/std',
-  'serde/std',
-  'cf-amm/std',
+  "cf-chains/std",
+  "cf-primitives/std",
+  "codec/std",
+  "frame-benchmarking?/std",
+  "frame-support/std",
+  "frame-system/std",
+  "log/std",
+  "scale-info/std",
+  "sp-std/std",
+  "cf-amm/std",
 ]
 runtime-benchmarks = [
-  'cf-chains/runtime-benchmarks',
-  'cf-primitives/runtime-benchmarks',
-  'frame-benchmarking/runtime-benchmarks',
-  'frame-support/runtime-benchmarks',
-  'frame-system/runtime-benchmarks',
+  "cf-chains/runtime-benchmarks",
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-support/runtime-benchmarks",
+  "frame-system/runtime-benchmarks",
 ]
-try-runtime = ['frame-support/try-runtime', 'frame-system/try-runtime']
+try-runtime = ["frame-support/try-runtime", "frame-system/try-runtime"]

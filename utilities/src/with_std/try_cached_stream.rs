@@ -122,9 +122,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn next_and_cached() {
-		#[derive(Debug, PartialEq)]
-		struct Wrappedi32(i32);
-
 		let mut cached_stream = test_stream().make_try_cached(0);
 
 		assert_eq!(*cached_stream.cache(), 0);

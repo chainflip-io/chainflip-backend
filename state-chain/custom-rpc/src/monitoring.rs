@@ -1,18 +1,57 @@
-use crate::{
-	to_rpc_error, BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringData,
-};
-use cf_chains::dot::PolkadotAccountId;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use super::pass_through;
+use crate::{BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringData, RpcResult};
+use cf_chains::{dot::PolkadotAccountId, sol::SolAddress};
+use cf_utilities::rpc::NumberOrHex;
+use jsonrpsee::proc_macros::rpc;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
+use serde::{Deserialize, Serialize};
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
 use state_chain_runtime::{
 	chainflip::Offence,
 	monitoring_apis::{
-		AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight, LastRuntimeUpgradeInfo,
-		MonitoringRuntimeApi, OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies,
-		RedemptionsInfo,
+		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
+		LastRuntimeUpgradeInfo, MonitoringRuntimeApi, OpenDepositChannels, PendingBroadcasts,
+		PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 };
+impl From<EpochState> for RpcEpochState {
+	fn from(rotation_state: EpochState) -> Self {
+		Self {
+			epoch_duration: rotation_state.epoch_duration,
+			current_epoch_started_at: rotation_state.current_epoch_started_at,
+			current_epoch_index: rotation_state.current_epoch_index,
+			rotation_phase: rotation_state.rotation_phase,
+			min_active_bid: rotation_state.min_active_bid.map(Into::into),
+		}
+	}
+}
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RpcEpochState {
+	pub epoch_duration: u32,
+	pub current_epoch_started_at: u32,
+	pub current_epoch_index: u32,
+	pub min_active_bid: Option<NumberOrHex>,
+	pub rotation_phase: String,
+}
+
+// Temporary struct to hold the deprecated blocks_per_epoch field.
+// Can be deleted after v1.7 is released (meaning: after the version is bumped to 1.8).
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RpcEpochStateV2 {
+	#[deprecated(
+		since = "1.8.0",
+		note = "This field is deprecated and will be removed in v1.8. Use blocks_per_epoch instead."
+	)]
+	blocks_per_epoch: u32,
+	#[serde(flatten)]
+	epoch_state: RpcEpochState,
+}
+
+impl From<EpochState> for RpcEpochStateV2 {
+	fn from(epoch_state: EpochState) -> Self {
+		Self { blocks_per_epoch: epoch_state.epoch_duration, epoch_state: epoch_state.into() }
+	}
+}
 
 #[rpc(server, client, namespace = "cf_monitoring")]
 pub trait MonitoringApi {
@@ -33,7 +72,7 @@ pub trait MonitoringApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<(Offence, u32)>>;
 	#[method(name = "epoch_state")]
-	fn cf_epoch_state(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<EpochState>;
+	fn cf_epoch_state(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEpochStateV2>;
 	#[method(name = "redemptions")]
 	fn cf_redemptions(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RedemptionsInfo>;
 	#[method(name = "pending_broadcasts")]
@@ -61,6 +100,17 @@ pub trait MonitoringApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<LastRuntimeUpgradeInfo>;
+	#[method(name = "rotation_broadcast_ids")]
+	fn cf_rotation_broadcast_ids(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ActivateKeysBroadcastIds>;
+	#[method(name = "sol_nonces")]
+	fn cf_sol_nonces(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<SolanaNonces>;
+	#[method(name = "sol_aggkey")]
+	fn cf_sol_aggkey(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<SolAddress>;
+	#[method(name = "sol_onchain_key")]
+	fn cf_sol_onchain_key(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<SolAddress>;
 	#[method(name = "data")]
 	fn cf_monitoring_data(
 		&self,
@@ -72,20 +122,6 @@ pub trait MonitoringApi {
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>>;
-}
-
-macro_rules! pass_through {
-	($( $name:ident -> $result_type:ty ),+) => {
-
-		$(
-			fn $name(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<$result_type> {
-				self.client
-					.runtime_api()
-					.$name(self.unwrap_or_best(at))
-					.map_err(to_rpc_error)
-			}
-		)+
-	};
 }
 
 impl<C, B> MonitoringApiServer for CustomRpc<C, B>
@@ -100,51 +136,46 @@ where
 	C::Api: MonitoringRuntimeApi<B>,
 {
 	pass_through! {
-		cf_authorities -> AuthoritiesInfo,
-		cf_external_chains_block_height -> ExternalChainsBlockHeight,
-		cf_btc_utxos -> BtcUtxos,
-		cf_dot_aggkey -> PolkadotAccountId,
-		cf_suspended_validators -> Vec<(Offence, u32)>,
-		cf_epoch_state -> EpochState,
-		cf_redemptions -> RedemptionsInfo,
-		cf_pending_broadcasts_count -> PendingBroadcasts,
-		cf_pending_tss_ceremonies_count -> PendingTssCeremonies,
-		cf_pending_swaps_count -> u32,
-		cf_open_deposit_channels_count -> OpenDepositChannels,
-		cf_build_version -> LastRuntimeUpgradeInfo
+		cf_authorities() -> AuthoritiesInfo,
+		cf_external_chains_block_height() -> ExternalChainsBlockHeight,
+		cf_btc_utxos() -> BtcUtxos,
+		cf_dot_aggkey() -> PolkadotAccountId,
+		cf_suspended_validators() -> Vec<(Offence, u32)>,
+		cf_epoch_state() -> RpcEpochStateV2 [map: RpcEpochStateV2::from],
+		cf_redemptions() -> RedemptionsInfo,
+		cf_pending_broadcasts_count() -> PendingBroadcasts,
+		cf_pending_tss_ceremonies_count() -> PendingTssCeremonies,
+		cf_pending_swaps_count() -> u32,
+		cf_open_deposit_channels_count() -> OpenDepositChannels,
+		cf_build_version() -> LastRuntimeUpgradeInfo,
+		cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds,
+		cf_sol_nonces() -> SolanaNonces,
+		cf_sol_aggkey() -> SolAddress,
+		cf_sol_onchain_key() -> SolAddress
 	}
 
 	fn cf_fee_imbalance(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcFeeImbalance> {
-		self.client
-			.runtime_api()
-			.cf_fee_imbalance(self.unwrap_or_best(at))
+		self.with_runtime_api::<_, _>(at, |api, hash| api.cf_fee_imbalance(hash))
 			.map(|imbalance| imbalance.map(|i| (*i).into()))
-			.map_err(to_rpc_error)
 	}
 
 	fn cf_monitoring_data(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcMonitoringData> {
-		self.client
-			.runtime_api()
-			.cf_monitoring_data(self.unwrap_or_best(at))
+		self.with_runtime_api(at, |api, hash| api.cf_monitoring_data(hash))
 			.map(Into::into)
-			.map_err(to_rpc_error)
 	}
 	fn cf_accounts_info(
 		&self,
 		accounts: BoundedVec<state_chain_runtime::AccountId, ConstU32<10>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcAccountInfoV2>> {
-		let accounts_info = self
-			.client
-			.runtime_api()
-			.cf_accounts_info(self.unwrap_or_best(at), accounts)
-			.map_err(to_rpc_error)?;
+		let accounts_info =
+			self.with_runtime_api(at, |api, hash| api.cf_accounts_info(hash, accounts))?;
 		Ok(accounts_info
 			.into_iter()
 			.map(|account_info| RpcAccountInfoV2 {

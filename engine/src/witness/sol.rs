@@ -9,6 +9,7 @@ use crate::{
 	sol::{
 		commitment_config::CommitmentConfig,
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
+		rpc_client_api::RpcBlockConfig,
 	},
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
@@ -16,7 +17,7 @@ use crate::{
 	},
 };
 use anyhow::Result;
-use cf_chains::sol::api::ContractSwapAccountAndSender;
+use cf_chains::sol::{api::ContractSwapAccountAndSender, SolHash};
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
@@ -26,14 +27,15 @@ use pallet_cf_elections::{
 use state_chain_runtime::{
 	chainflip::solana_elections::{
 		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystem,
-		SolanaFeeTracking, SolanaIngressTracking, SolanaNonceTracking, SolanaVaultSwapTracking,
-		TransactionSuccessDetails,
+		SolanaFeeTracking, SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking,
+		SolanaVaultSwapTracking, TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
 
-use std::{collections::BTreeSet, sync::Arc};
-use utilities::{task_scope, task_scope::Scope};
+use cf_utilities::{task_scope, task_scope::Scope};
+use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
+use std::{collections::BTreeSet, str::FromStr, sync::Arc};
 
 #[derive(Clone)]
 struct SolanaBlockHeightTrackingVoter {
@@ -117,12 +119,16 @@ impl VoterApi<SolanaNonceTracking> for SolanaNonceTrackingVoter {
 		properties: <SolanaNonceTracking as ElectoralSystem>::ElectionProperties,
 	) -> Result<<<SolanaNonceTracking as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error>
 	{
-		let (nonce_account, previous_nonce) = properties;
-		Ok(nonce_witnessing::get_durable_nonce(&self.client, nonce_account)
-			.await?
-			// If the nonce is not found, we default to the previous nonce.
-			// The `Change` electoral system ensure this vote is filtered.
-			.unwrap_or(previous_nonce))
+		let (nonce_account, previous_nonce, previous_slot) = properties;
+
+		let nonce_and_slot =
+			nonce_witnessing::get_durable_nonce(&self.client, nonce_account, previous_slot)
+				.await?
+				.map(|(nonce, slot)| MonotonicChangeVote { value: nonce, block: slot });
+		// If the nonce is not found, we default to the previous nonce and slot.
+		// The `MonotonicChange` electoral system ensure this vote is filtered.
+		Ok(nonce_and_slot
+			.unwrap_or(MonotonicChangeVote { value: previous_nonce, block: previous_slot }))
 	}
 }
 
@@ -141,9 +147,31 @@ impl VoterApi<SolanaEgressWitnessing> for SolanaEgressWitnessingVoter {
 		<<SolanaEgressWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		Ok(TransactionSuccessDetails {
-			tx_fee: egress_witnessing::get_finalized_fee(&self.client, signature).await?,
-		})
+		egress_witnessing::get_finalized_fee_and_success_status(&self.client, signature)
+			.await
+			.map(|(tx_fee, transaction_successful)| TransactionSuccessDetails {
+				tx_fee,
+				transaction_successful,
+			})
+	}
+}
+
+#[derive(Clone)]
+struct SolanaLivenessVoter {
+	client: SolRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
+	async fn vote(
+		&self,
+		_settings: <SolanaLiveness as ElectoralSystem>::ElectoralSettings,
+		slot: <SolanaLiveness as ElectoralSystem>::ElectionProperties,
+	) -> Result<<<SolanaLiveness as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error> {
+		Ok(SolHash::from_str(
+			&self.client.get_block(slot, RpcBlockConfig::default()).await.blockhash,
+		)
+		.map_err(|e| anyhow::anyhow!("Failed to convert blockhash String to SolHash: {e}"))?)
 	}
 }
 
@@ -210,7 +238,8 @@ where
 						SolanaIngressTrackingVoter { client: client.clone() },
 						SolanaNonceTrackingVoter { client: client.clone() },
 						SolanaEgressWitnessingVoter { client: client.clone() },
-						SolanaVaultSwapsVoter { client },
+						SolanaVaultSwapsVoter { client: client.clone() },
+						SolanaLivenessVoter { client },
 					)),
 				)
 				.continuously_vote()

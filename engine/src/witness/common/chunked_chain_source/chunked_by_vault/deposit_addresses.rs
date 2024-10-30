@@ -1,7 +1,7 @@
 use cf_chains::{instances::ChainInstanceFor, Chain};
+use cf_utilities::task_scope::Scope;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use std::sync::Arc;
-use utilities::task_scope::Scope;
 
 use crate::{
 	state_chain_observer::client::{

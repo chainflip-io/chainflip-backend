@@ -13,7 +13,7 @@ use crate::{
 	client::{ceremony_manager::CeremonyTrait, MultisigMessage},
 	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
 };
-use utilities::metrics::CeremonyMetrics;
+use cf_utilities::metrics::CeremonyMetrics;
 
 pub use super::broadcast_verification::verify_broadcasts_non_blocking;
 

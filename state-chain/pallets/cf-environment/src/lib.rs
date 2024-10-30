@@ -20,8 +20,8 @@ use cf_primitives::{
 	NetworkEnvironment, SemVer,
 };
 use cf_traits::{
-	CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider, SafeMode,
-	SolanaNonceWatch,
+	CompatibleCfeVersions, ExecutionCondition, GetBitcoinFeeInfo, KeyProvider,
+	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -37,7 +37,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 pub mod migrations;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(12);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -756,5 +756,13 @@ impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 	fn get_network_environment() -> NetworkEnvironment {
 		Self::network_environment()
+	}
+}
+
+pub struct NoUsedNonce<T: Config>(PhantomData<T>);
+
+impl<T: Config> ExecutionCondition for NoUsedNonce<T> {
+	fn is_satisfied() -> bool {
+		SolanaUnavailableNonceAccounts::<T>::iter().next().is_none()
 	}
 }

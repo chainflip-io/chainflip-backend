@@ -119,8 +119,8 @@ fn can_process_ccms_via_swap_deposit_address() {
 			assert_eq!(
 				SwapQueue::<Test>::get(PRINCIPAL_SWAP_BLOCK),
 				vec![Swap::new(
-					1,
-					1,
+					1.into(),
+					1.into(),
 					Asset::Dot,
 					Asset::Eth,
 					DEPOSIT_AMOUNT - GAS_BUDGET,
@@ -135,8 +135,8 @@ fn can_process_ccms_via_swap_deposit_address() {
 			assert_eq!(
 				SwapQueue::<Test>::get(GAS_SWAP_BLOCK),
 				vec![Swap::new(
-					2,
-					1,
+					2.into(),
+					1.into(),
 					Asset::Dot,
 					Asset::Eth,
 					GAS_BUDGET,
@@ -147,7 +147,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 			);
 		})
 		.then_process_blocks_until_block(GAS_SWAP_BLOCK)
@@ -161,7 +161,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
 			);
 		});
 }
@@ -215,7 +215,7 @@ fn ccm_principal_swap_only() {
 			assert_eq!(
 				SwapQueue::<Test>::get(PRINCIPAL_SWAP_BLOCK),
 				vec![Swap::new(
-					1,
+					1.into(),
 					SWAP_REQUEST_ID,
 					INPUT_ASSET,
 					OUTPUT_ASSET,
@@ -229,7 +229,7 @@ fn ccm_principal_swap_only() {
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 			);
 
 			assert_has_matching_event!(
@@ -270,7 +270,7 @@ fn ccm_gas_swap_only() {
 			assert_eq!(
 				SwapQueue::<Test>::get(GAS_SWAP_BLOCK),
 				vec![Swap::new(
-					1,
+					1.into(),
 					SWAP_REQUEST_ID,
 					INPUT_ASSET,
 					GAS_ASSET,
@@ -284,7 +284,7 @@ fn ccm_gas_swap_only() {
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 			);
 
 			assert_has_matching_event!(

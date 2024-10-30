@@ -26,7 +26,7 @@ pub use sol_prim::{
 		LAMPORTS_PER_SIGNATURE, MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
 		MAX_TRANSACTION_LENGTH, MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
 		MICROLAMPORTS_PER_LAMPORT,
-		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
+		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES, TOKEN_ACCOUNT_RENT,
 	},
 	pda::{Pda as DerivedAddressBuilder, PdaError as AddressDerivationError},
 	Address as SolAddress, Amount as SolAmount, ComputeLimit as SolComputeLimit, Digest as SolHash,
@@ -86,6 +86,7 @@ impl Chain for Solana {
 pub struct SolanaCrypto;
 
 impl ChainCrypto for SolanaCrypto {
+	const NAME: &'static str = "Solana";
 	type UtxoChain = ConstBool<false>;
 	type KeyHandoverIsRequired = ConstBool<false>;
 
@@ -154,6 +155,7 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_CLOSE_CONTRACT_SWAP_ACCOUNTS: SolComputeLimit = 10_000u32;
 	pub const COMPUTE_UNITS_PER_CLOSE_ACCOUNT: SolComputeLimit = 10_000u32;
 
+	/// This is equivalent to a priority fee
 	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
 
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
@@ -180,6 +182,29 @@ pub struct SolTrackedData {
 	pub priority_fee: <Solana as Chain>::ChainAmount,
 }
 
+impl SolTrackedData {
+	// Calculate the estimated fee for broadcasting a transaction given its compute units
+	// and the current priority fee.
+	pub fn calculate_transaction_fee(
+		&self,
+		compute_units: SolComputeLimit,
+	) -> <Solana as crate::Chain>::ChainAmount {
+		use compute_units_costs::*;
+
+		// Match the minimum compute price that will be set on broadcast.
+		let priority_fee = sp_std::cmp::max(self.priority_fee, MIN_COMPUTE_PRICE);
+
+		LAMPORTS_PER_SIGNATURE.saturating_add(
+			// It should never approach overflow but just in case
+			sp_std::cmp::min(
+				SolAmount::MAX as u128,
+				(priority_fee as u128 * compute_units as u128)
+					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
+			) as SolAmount,
+		)
+	}
+}
+
 impl FeeEstimationApi<Solana> for SolTrackedData {
 	fn estimate_egress_fee(
 		&self,
@@ -195,14 +220,12 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		LAMPORTS_PER_SIGNATURE.saturating_add(
-			// It should never approach overflow but just in case
-			sp_std::cmp::min(
-				SolAmount::MAX as u128,
-				(self.priority_fee as u128 * compute_units_per_transfer as u128)
-					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
-			) as SolAmount,
-		)
+		let gas_fee = self.calculate_transaction_fee(compute_units_per_transfer);
+
+		match asset {
+			assets::sol::Asset::Sol => gas_fee,
+			assets::sol::Asset::SolUsdc => gas_fee.saturating_add(TOKEN_ACCOUNT_RENT),
+		}
 	}
 	fn estimate_ingress_fee(
 		&self,
@@ -218,14 +241,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				},
 		);
 
-		LAMPORTS_PER_SIGNATURE.saturating_add(
-			// It should never approach overflow but just in case
-			sp_std::cmp::min(
-				SolAmount::MAX as u128,
-				(self.priority_fee as u128 * compute_units_per_fetch as u128)
-					.div_ceil(MICROLAMPORTS_PER_LAMPORT.into()),
-			) as SolAmount,
-		)
+		self.calculate_transaction_fee(compute_units_per_fetch)
 	}
 }
 

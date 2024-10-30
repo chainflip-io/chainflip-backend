@@ -6,11 +6,13 @@
     "prettier:write": "prettier --write ."
   },
   "dependencies": {
-    "@chainflip/cli": "1.6.2",
+    "@chainflip/cli": "1.6.3",
+    "@chainflip/utils": "^0.4.0",
     "@coral-xyz/anchor": "^0.30.1",
     "@iarna/toml": "^2.2.5",
     "@polkadot/api": "^11.3.1",
     "@polkadot/keyring": "12.6.2",
+    "@polkadot/types": "^11.3.1",
     "@polkadot/util": "12.6.2",
     "@polkadot/util-crypto": "12.6.2",
     "@solana/spl-token": "^0.4.6",
@@ -28,6 +30,7 @@
     "md5": "^2.3.0",
     "minimist": "^1.2.8",
     "rxjs": "^7.8.1",
+    "scale-ts": "1.6.0",
     "tiny-secp256k1": "^2.2.1",
     "toml": "^3.0.0",
     "web3": "^1.9.0",

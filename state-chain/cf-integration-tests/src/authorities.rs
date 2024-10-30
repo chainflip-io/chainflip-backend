@@ -5,12 +5,13 @@ use crate::{
 };
 
 use frame_support::{assert_err, assert_ok};
+use pallet_cf_vaults::{PendingVaultActivation, VaultActivationStatus};
 use sp_runtime::AccountId32;
 use std::collections::{BTreeSet, HashMap};
 
 use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
 use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
-use pallet_cf_environment::SafeModeUpdate;
+use pallet_cf_environment::{PolkadotVaultAccountId, SafeModeUpdate};
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
 	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip, PolkadotInstance,
@@ -58,10 +59,10 @@ pub fn fund_authorities_and_join_auction(
 /// by going through the correct sequence in sync.
 #[test]
 fn authority_rotates_with_correct_sequence() {
-	const EPOCH_BLOCKS: u32 = 1000;
+	const EPOCH_DURATION_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_DURATION_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -161,7 +162,7 @@ fn authorities_earn_rewards_for_authoring_blocks() {
 	// set
 	const MAX_AUTHORITIES: AuthorityCount = 3;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -205,7 +206,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 	// set
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -272,7 +273,7 @@ fn authority_rotation_can_succeed_after_aborted_by_safe_mode() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -327,7 +328,7 @@ fn authority_rotation_cannot_be_aborted_after_key_handover_and_completes_even_on
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -370,7 +371,7 @@ fn authority_rotation_can_recover_after_keygen_fails() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -423,7 +424,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -501,7 +502,7 @@ fn can_move_through_multiple_epochs() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -523,7 +524,7 @@ fn cant_rotate_if_previous_rotation_is_pending() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.blocks_per_epoch(EPOCH_BLOCKS)
+		.epoch_duration(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -550,5 +551,66 @@ fn cant_rotate_if_previous_rotation_is_pending() {
 			witness_rotation_broadcasts([2, 1, 1, 1, 1]);
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 			assert_eq!(epoch_index + 1, Validator::epoch_index());
+		});
+}
+
+#[test]
+fn waits_for_governance_when_apicall_fails() {
+	const EPOCH_BLOCKS: u32 = 100;
+	const MAX_AUTHORITIES: AuthorityCount = 10;
+	super::genesis::with_test_defaults()
+		.epoch_duration(EPOCH_BLOCKS)
+		.max_authorities(MAX_AUTHORITIES)
+		.build()
+		.execute_with(|| {
+			let (mut testnet, _, _) = fund_authorities_and_join_auction(MAX_AUTHORITIES);
+			assert_eq!(GENESIS_EPOCH, Validator::epoch_index());
+			testnet.move_to_the_next_epoch();
+			witness_ethereum_rotation_broadcast(1);
+
+			let epoch_index = Validator::epoch_index();
+
+			PolkadotVaultAccountId::<Runtime>::set(None);
+			testnet.move_to_the_end_of_epoch();
+			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
+
+			// we are still in old epoch
+			assert_eq!(Validator::epoch_index(), epoch_index);
+			// rotation has not completed
+			assert!(matches!(
+				CurrentRotationPhase::<Runtime>::get(),
+				RotationPhase::ActivatingKeys(..)
+			));
+
+			assert!(matches!(
+				PendingVaultActivation::<Runtime, PolkadotInstance>::get().unwrap(),
+				VaultActivationStatus::ActivationFailedAwaitingGovernance { .. }
+			));
+
+			// move forward a few blocks
+			testnet.move_forward_blocks(10);
+
+			assert!(matches!(
+				PendingVaultActivation::<Runtime, PolkadotInstance>::get().unwrap(),
+				VaultActivationStatus::ActivationFailedAwaitingGovernance { .. }
+			));
+
+			// we are still in old epoch
+			assert_eq!(Validator::epoch_index(), epoch_index);
+			// rotation is still stalled
+			assert!(matches!(
+				CurrentRotationPhase::<Runtime>::get(),
+				RotationPhase::ActivatingKeys(..)
+			));
+
+			// manually setting the activation status to complete completes the rotation.
+			PendingVaultActivation::<Runtime, PolkadotInstance>::put(
+				VaultActivationStatus::Complete,
+			);
+			testnet.move_forward_blocks(5);
+
+			// we have moved to the new epoch
+			assert_eq!(Validator::epoch_index(), epoch_index + 1);
+			assert!(matches!(CurrentRotationPhase::<Runtime>::get(), RotationPhase::Idle));
 		});
 }

@@ -1,44 +1,37 @@
 [package]
 name = "cf-amm"
 version = "0.1.0"
-authors = ['Chainflip <https://chainflip.io>']
-edition = '2021'
+authors = ["Chainflip <https://chainflip.io>"]
+edition = "2021"
 description = "Chainflip's AMM Logic"
 
 [lints]
 workspace = true
 
 [dependencies]
-cf-primitives = { path = '../primitives', default-features = false }
-cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
-serde = { version = '1.0', default-features = false, features = [
-	'alloc',
-	'derive',
-] }
+cf-primitives = { workspace = true }
+cf-utilities = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Parity deps
-codec = { package = 'parity-scale-codec', version = '3.6.1', default-features = false, features = [
-	'derive',
-] }
-scale-info = { version = '2.10.0', default-features = false, features = [
-	'derive',
-] }
+codec = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, features = ["derive"] }
 
-sp-core = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
-sp-std = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.6+1", default-features = false }
+sp-core = { workspace = true }
+sp-std = { workspace = true }
 
 [dev-dependencies]
-rand = "0.8"
+rand = { workspace = true, features = ["std"] }
 
 [features]
-default = ['std']
+default = ["std"]
 slow-tests = []
 std = [
-	'cf-primitives/std',
-	'cf-utilities/std',
-	'codec/std',
-	'scale-info/std',
-	'sp-core/std',
-	'sp-std/std',
-	'serde/std',
+	"cf-primitives/std",
+	"cf-utilities/std",
+	"codec/std",
+	"scale-info/std",
+	"sp-core/std",
+	"sp-std/std",
+	"serde/std",
 ]

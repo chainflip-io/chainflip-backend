@@ -98,7 +98,7 @@ fn test_buy_back_flip() {
 			SwapQueue::<Test>::get(System::block_number() + u64::from(SWAP_DELAY_BLOCKS))
 				.first()
 				.expect("Should have scheduled a swap usdc -> flip"),
-			&Swap::new(1, 1, STABLE_ASSET, Asset::Flip, network_fee, None, [],)
+			&Swap::new(1.into(), 1.into(), STABLE_ASSET, Asset::Flip, network_fee, None, [],)
 		);
 	});
 }
@@ -350,8 +350,8 @@ fn input_amount_excludes_network_fee() {
 			let expected_input_amount = AMOUNT - network_fee;
 
 			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_request_id: 1,
-				swap_id: 1,
+				swap_request_id: 1.into(),
+				swap_id: 1.into(),
 				input_asset: FROM_ASSET,
 				output_asset: TO_ASSET,
 				network_fee,
@@ -435,8 +435,8 @@ fn expect_earned_fees_to_be_recorded() {
 		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
 		.then_execute_with(|_| {
 			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_request_id: 1,
-				swap_id: 1,
+				swap_request_id: 1.into(),
+				swap_id: 1.into(),
 				network_fee: NETWORK_FEE_1,
 				broker_fee: ALICE_FEE_1,
 				input_amount: INPUT_AMOUNT,
@@ -460,8 +460,8 @@ fn expect_earned_fees_to_be_recorded() {
 		.then_execute_with(|_| {
 			const AMOUNT_AFTER_FEES: AssetAmount = INPUT_AMOUNT - NETWORK_FEE_2 - ALICE_FEE_2;
 			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_request_id: 2,
-				swap_id: 2,
+				swap_request_id: 2.into(),
+				swap_id: 2.into(),
 				network_fee: NETWORK_FEE_2,
 				broker_fee: ALICE_FEE_2,
 				input_amount: AMOUNT_AFTER_FEES,
@@ -491,8 +491,8 @@ fn expect_earned_fees_to_be_recorded() {
 				INTERMEDIATE_AMOUNT - NETWORK_FEE_3 - TOTAL_BROKER_FEES;
 
 			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_request_id: 3,
-				swap_id: 3,
+				swap_request_id: 3.into(),
+				swap_id: 3.into(),
 				network_fee: NETWORK_FEE_3,
 				broker_fee: TOTAL_BROKER_FEES,
 				input_amount: INPUT_AMOUNT,

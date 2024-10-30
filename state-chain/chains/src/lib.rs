@@ -217,7 +217,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 		+ FullCodec
 		+ Into<cf_primitives::Asset>
 		+ Into<cf_primitives::ForeignChain>
-		+ TryFrom<cf_primitives::Asset>
+		+ TryFrom<cf_primitives::Asset, Error: Debug>
 		+ IntoEnumIterator
 		+ Unpin;
 
@@ -281,6 +281,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: ChainCryptoInstanceAlias {
+	const NAME: &'static str;
 	type UtxoChain: Get<bool>;
 
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
@@ -659,7 +660,6 @@ pub enum CcmFailReason {
 	UnsupportedForTargetChain,
 	InsufficientDepositAmount,
 	InvalidMetadata,
-	InvalidDestinationAddress,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]

@@ -93,6 +93,7 @@ pub trait SolanaEnvironment:
 }
 
 /// IMPORTANT: This should only be used if the nonce has not been used to sign a transaction.
+///
 /// Once a nonce is actually used, it should ONLY be recovered via Witnessing.
 /// Only use this if you know what you are doing.
 pub trait RecoverDurableNonce {
@@ -132,9 +133,13 @@ pub enum SolanaTransactionType {
 	BatchFetch,
 	Transfer,
 	RotateAggKey,
-	CcmTransfer,
+	#[deprecated]
+	CcmTransferLegacy,
 	SetGovKeyWithAggKey,
 	CloseEventAccounts,
+	CcmTransfer {
+		fallback: TransferAssetParams<Solana>,
+	},
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
@@ -251,7 +256,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			durable_nonce,
 			compute_price,
 		)
-		.map_err(|e| {
+		.inspect_err(|e| {
 			// Vault Rotation call building NOT transactional - meaning when this fails,
 			// storage is not rolled back. We must recover the durable nonce here,
 			// since it has been taken from storage but not actually used.
@@ -264,7 +269,6 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				durable_nonce
 			);
 			Environment::recover_durable_nonce(durable_nonce.0);
-			e
 		})?;
 
 		Ok(Self {
@@ -323,6 +327,12 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let compute_price = Environment::compute_price()?;
 		let durable_nonce = Environment::nonce_account()?;
 
+		let fallback = TransferAssetParams {
+			asset: transfer_param.asset,
+			amount: transfer_param.amount,
+			to: ccm_accounts.fallback_address.into(),
+		};
+
 		// Build the transaction
 		let transaction = match transfer_param.asset {
 			SolAsset::Sol => SolanaTransactionBuilder::ccm_transfer_native(
@@ -368,7 +378,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				)
 			},
 		}
-		.map_err(|e| {
+		.inspect_err(|e| {
 			// CCM call building is NOT transactional - meaning when this fails,
 			// storage is not rolled back. We must recover the durable nonce here,
 			// since it has been taken from storage but not actually used.
@@ -381,11 +391,10 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 				durable_nonce
 			);
 			Environment::recover_durable_nonce(durable_nonce.0);
-			e
 		})?;
 
 		Ok(Self {
-			call_type: SolanaTransactionType::CcmTransfer,
+			call_type: SolanaTransactionType::CcmTransfer { fallback },
 			transaction,
 			signer: None,
 			_phantom: Default::default(),

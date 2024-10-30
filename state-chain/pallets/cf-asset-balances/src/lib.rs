@@ -26,7 +26,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 

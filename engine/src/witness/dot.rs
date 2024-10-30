@@ -20,7 +20,7 @@ use tracing::error;
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use utilities::task_scope::Scope;
+use cf_utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
@@ -42,8 +42,8 @@ use super::common::{
 };
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
-// subxt metadata --format=json --pallets Proxy,Balances,TransactionPayment,System --url
-// wss://polkadot-rpc.dwellir.com:443 > metadata.polkadot.json.scale
+// subxt metadata --pallets Proxy,Balances,TransactionPayment,System --url
+// wss://polkadot-rpc.dwellir.com:443 > metadata.polkadot.scale
 #[subxt::subxt(runtime_metadata_path = "metadata.polkadot.scale")]
 pub mod polkadot {}
 
@@ -61,7 +61,7 @@ use polkadot::{
 };
 
 pub fn filter_map_events(
-	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::Error>,
+	res_event_details: Result<EventDetails<PolkadotConfig>, subxt::ext::subxt_core::error::Error>,
 ) -> Option<(Phase, EventWrapper)> {
 	match res_event_details {
 		Ok(event_details) => match (event_details.pallet_name(), event_details.variant_name()) {

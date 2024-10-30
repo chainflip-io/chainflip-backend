@@ -5,10 +5,10 @@ use std::{
 
 use anyhow::Result;
 
+use cf_utilities::Port;
 use codec::Encode;
 use sp_core::H256;
 use tracing::info;
-use utilities::Port;
 
 use crate::{
 	p2p::PeerInfo,
@@ -30,7 +30,7 @@ async fn update_registered_peer_id<StateChainClient>(
 where
 	StateChainClient: SignedExtrinsicApi,
 {
-	let peer_id = sp_core::ed25519::Public(p2p_key.signing_key.verifying_key().to_bytes());
+	let peer_id = sp_core::ed25519::Public::from(p2p_key.signing_key.verifying_key().to_bytes());
 
 	let signature = {
 		use ed25519_dalek::Signer;
@@ -44,7 +44,7 @@ where
 			port: cfe_port,
 			ip_address: ip_address.into(),
 			// We sign over our account id
-			signature: sp_core::ed25519::Signature(signature.to_bytes()),
+			signature: sp_core::ed25519::Signature::from(signature.to_bytes()),
 		})
 		.await
 		.until_finalized()

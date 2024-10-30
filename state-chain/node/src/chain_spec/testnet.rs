@@ -2,10 +2,10 @@ pub use super::common::*;
 use super::{get_account_id_from_seed, StateChainEnvironment};
 use cf_chains::{dot::RuntimeVersion, sol::SolAddress};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance, NetworkEnvironment};
+use cf_utilities::bs58_array;
 use sc_service::ChainType;
 use sol_prim::consts::{const_address, const_hash};
 use sp_core::{sr25519, H256};
-use utilities::bs58_array;
 
 pub struct Config;
 

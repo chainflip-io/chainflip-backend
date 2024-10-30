@@ -9,6 +9,7 @@ use cf_chains::{
 	Polkadot,
 };
 use cf_primitives::PolkadotBlockNumber;
+use cf_utilities::task_scope::Scope;
 use core::time::Duration;
 use futures_core::Stream;
 use sp_core::H256;
@@ -17,7 +18,6 @@ use subxt::{
 	backend::legacy::rpc_methods::Bytes, config::Header as SubxtHeader, events::Events,
 	PolkadotConfig,
 };
-use utilities::task_scope::Scope;
 
 use crate::retrier::{RequestLog, RetrierClient};
 
@@ -319,7 +319,7 @@ pub mod mocks {
 mod tests {
 	use futures_util::FutureExt;
 
-	use utilities::task_scope::task_scope;
+	use cf_utilities::task_scope::task_scope;
 
 	use crate::retrier::NoRetryLimit;
 

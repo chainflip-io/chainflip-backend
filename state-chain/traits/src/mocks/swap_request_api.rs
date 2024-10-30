@@ -74,6 +74,6 @@ where
 			_ => { /* do nothing */ },
 		};
 
-		id as SwapRequestId
+		(id as u64).into()
 	}
 }

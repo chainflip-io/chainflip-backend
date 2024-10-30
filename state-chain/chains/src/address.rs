@@ -340,8 +340,9 @@ impl ToHumanreadableAddress for PolkadotAccountId {
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
-/// A type that serializes the address in a human-readable way. This can only be
-/// serialized and not deserialized.
+/// A type that serializes the address in a human-readable way.
+///
+/// This can only be serialized and not deserialized.
 /// `deserialize` is not implemented for ForeignChainAddressHumanreadable
 /// because it is not possible to deserialize a human-readable address without
 /// further context around the asset and chain.
