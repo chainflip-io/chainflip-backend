@@ -81,7 +81,6 @@ fn generate_votes_with_different_slots(
 	incorrect_value: MonotonicChangeVote<Value, Slot>,
 ) -> ConsensusVotes<SimpleMonotonicChange> {
 	ConsensusVotes {
-		// we start from 1 so don't get a Default::default() conflict on vote validity.
 		votes: (0..correct_voters)
 			.enumerate()
 			.map(|(index, _)| ConsensusVote {
