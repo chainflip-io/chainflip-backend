@@ -10,6 +10,7 @@ import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 import { execWithLog } from './utils/exec_with_log';
 import { submitGovernanceExtrinsic } from './cf_governance';
+import { setupLpAccount } from './setup_lp_account';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -143,7 +144,7 @@ async function incompatibleUpgradeNoBuild(
   await killEngines();
   await startEngines(localnetInitPath, binaryPath, numberOfNodes);
 
-  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, true);
+  await submitRuntimeUpgradeWithRestrictions(runtimePath, undefined, undefined, false);
 
   console.log(
     'Check that the old engine has now shut down, and that the new engine is now running.',
@@ -335,6 +336,19 @@ export async function upgradeNetworkPrebuilt(
   if (compareSemVer(cleanOldVersion, nodeVersion) === 'greater') {
     throw new Error(
       "The version we're upgrading to is older than the version we're upgrading from. Ensure you selected the correct binaries.",
+    );
+  }
+
+  // Temp: until localnet/bouncer initialises to a version where the LP_API is funded already.
+  if (cleanOldVersion.startsWith('1.6')) {
+    console.log('Setting up LP account and adding liquidity for the LP-API.');
+    // Liquidity is provided as part of the LP-API test setup.
+    await setupLpAccount('//LP_API');
+    // Write LP_API key to keys/ so that the LP-API can use it - when upgrading the old version, which the upgrade-test is
+    // started from doesn't yet have this key.
+    await fs.writeFile(
+      `${localnetInitPath}/keys/LP_API`,
+      '8e1866e65039304e4142f09452a8305acd28d0ae0b833cd268b21a57d68782c1',
     );
   }
 
