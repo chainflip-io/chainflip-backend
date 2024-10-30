@@ -183,7 +183,7 @@ use cf_primitives::{
 impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 	type Chain = Arbitrum;
 
-	fn contract_swap_request(
+	fn vault_swap_request(
 		source_asset: Asset,
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
@@ -197,7 +197,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		boost_fee: Option<BasisPoints>,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_swap_request {
+			pallet_cf_ingress_egress::Call::vault_swap_request {
 				input_asset: source_asset.try_into().expect("invalid asset for chain"),
 				output_asset: destination_asset,
 				deposit_amount,

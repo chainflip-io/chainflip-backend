@@ -781,7 +781,7 @@ pub mod pallet {
 		DepositChannelCreationDisabled,
 		/// The specified boost pool does not exist.
 		BoostPoolDoesNotExist,
-		/// CCM parameters from a contract swap failed validity check.
+		/// CCM parameters from a vault swap failed validity check.
 		InvalidCcm,
 		/// Unsupported chain
 		UnsupportedChain,
@@ -1234,8 +1234,8 @@ pub mod pallet {
 
 		// TODO: remove these deprecated calls after runtime version 1.8
 		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::contract_swap_request())]
-		pub fn contract_swap_request_deprecated(
+		#[pallet::weight(T::WeightInfo::vault_swap_request())]
+		pub fn vault_swap_request_deprecated(
 			origin: OriginFor<T>,
 			_from: Asset,
 			_to: Asset,
@@ -1249,8 +1249,8 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(11)]
-		#[pallet::weight(T::WeightInfo::contract_ccm_swap_request())]
-		pub fn contract_ccm_swap_request_deprecated(
+		#[pallet::weight(T::WeightInfo::vault_swap_request())]
+		pub fn vault_ccm_swap_request_deprecated(
 			origin: OriginFor<T>,
 			_source_asset: Asset,
 			_deposit_amount: AssetAmount,
@@ -1277,8 +1277,8 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(13)]
-		#[pallet::weight(T::WeightInfo::contract_ccm_swap_request())]
-		pub fn contract_swap_request(
+		#[pallet::weight(T::WeightInfo::vault_swap_request())]
+		pub fn vault_swap_request(
 			origin: OriginFor<T>,
 			input_asset: TargetChainAsset<T, I>,
 			output_asset: Asset,
@@ -1294,7 +1294,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			Self::process_contract_swap_request(
+			Self::process_vault_swap_request(
 				input_asset,
 				deposit_amount,
 				output_asset,
@@ -2098,7 +2098,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	fn process_contract_swap_request(
+	fn process_vault_swap_request(
 		source_asset: TargetChainAsset<T, I>,
 		deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 		destination_asset: Asset,
@@ -2134,7 +2134,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			) {
 				Ok(address) => address,
 				Err(err) => {
-					log::warn!("Failed to process contract swap due to invalid destination address. Tx hash: {tx_hash:?}. Error: {err:?}");
+					log::warn!("Failed to process vault swap due to invalid destination address. Tx hash: {tx_hash:?}. Error: {err:?}");
 					return;
 				},
 			};
@@ -2184,7 +2184,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(params) = &refund_params {
 			if let Err(err) = T::SwapLimitsProvider::validate_refund_params(params.retry_duration) {
 				log::warn!(
-					"Failed to process contract swap due to invalid refund params. Tx hash: {tx_hash:?}. Error: {err:?}",
+					"Failed to process vault swap due to invalid refund params. Tx hash: {tx_hash:?}. Error: {err:?}",
 				);
 				return;
 			}
@@ -2193,7 +2193,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(params) = &dca_params {
 			if let Err(err) = T::SwapLimitsProvider::validate_dca_params(params) {
 				log::warn!(
-    				"Failed to process contract swap due to invalid dca params. Tx hash: {tx_hash:?}. Error: {err:?}",
+    				"Failed to process vault swap due to invalid dca params. Tx hash: {tx_hash:?}. Error: {err:?}",
     			);
 				return;
 			}
@@ -2201,7 +2201,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Err(err) = T::SwapLimitsProvider::validate_broker_fees(&broker_fees) {
 			log::warn!(
-				"Failed to process contract swap due to invalid broker fees. Tx hash: {tx_hash:?}. Error: {err:?}",
+				"Failed to process vault swap due to invalid broker fees. Tx hash: {tx_hash:?}. Error: {err:?}",
  			);
 			return;
 		}

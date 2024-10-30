@@ -110,7 +110,7 @@ export async function requestNewSwap(
 
 export enum SenderType {
   Address,
-  Contract,
+  Vault,
 }
 
 export async function doPerformSwap(

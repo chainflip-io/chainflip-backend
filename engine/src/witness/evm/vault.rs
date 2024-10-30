@@ -69,7 +69,7 @@ where
 			let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
 				CfParameters::decode(&mut &cf_parameters[..])?;
 
-			Some(CallBuilder::contract_swap_request(
+			Some(CallBuilder::vault_swap_request(
 				native_asset,
 				try_into_primitive(amount)?,
 				try_into_primitive(dst_token)?,
@@ -94,7 +94,7 @@ where
 			let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
 				CfParameters::decode(&mut &cf_parameters[..])?;
 
-			Some(CallBuilder::contract_swap_request(
+			Some(CallBuilder::vault_swap_request(
 				*(supported_assets
 					.get(&src_token)
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
@@ -122,7 +122,7 @@ where
 			let CfParameters { ccm_additional_data, vault_swap_parameters } =
 				CcmCfParameters::decode(&mut &cf_parameters[..])?;
 
-			Some(CallBuilder::contract_swap_request(
+			Some(CallBuilder::vault_swap_request(
 				native_asset,
 				try_into_primitive(amount)?,
 				try_into_primitive(dst_token)?,
@@ -164,7 +164,7 @@ where
 			let CfParameters { ccm_additional_data, vault_swap_parameters } =
 				CcmCfParameters::decode(&mut &cf_parameters[..])?;
 
-			Some(CallBuilder::contract_swap_request(
+			Some(CallBuilder::vault_swap_request(
 				*(supported_assets
 					.get(&src_token)
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
@@ -228,7 +228,7 @@ where
 pub trait IngressCallBuilder {
 	type Chain: cf_chains::Chain<ChainAccount = EthereumAddress>;
 
-	fn contract_swap_request(
+	fn vault_swap_request(
 		source_asset: Asset,
 		deposit_amount: cf_primitives::AssetAmount,
 		destination_asset: Asset,

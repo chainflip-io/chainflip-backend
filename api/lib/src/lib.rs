@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
 	address::{try_from_encoded_address, EncodedAddress},
-	btc::smart_contract_encoding::{
+	btc::vault_swap_encoding::{
 		encode_swap_params_in_nulldata_utxo, SharedCfParameters, UtxoEncodedData,
 	},
 	dot::PolkadotAccountId,
