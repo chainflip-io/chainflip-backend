@@ -1,7 +1,7 @@
 use crate::Pallet;
 use cf_runtime_upgrade_utilities::PlaceholderMigration;
 
-pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 4>;
+pub type PalletMigration<T> = PlaceholderMigration<4, Pallet<T>>;
 
 pub mod active_bidders_migration {
 	pub const APPLY_AT_FUNDING_STORAGE_VERSION: u16 = 4;

@@ -18,7 +18,7 @@ use crate::{
 		},
 		Offence,
 	},
-	migrations::serialize_solana_broadcast::{NoopUpgrade, SerializeSolanaBroadcastMigration},
+	migrations::serialize_solana_broadcast::SerializeSolanaBroadcastMigration,
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
 		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
@@ -50,14 +50,14 @@ use cf_chains::{
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
-use cf_runtime_upgrade_utilities::VersionedMigration;
+use cf_runtime_upgrade_utilities::NoopRuntimeUpgrade;
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*};
+use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use migrations::{
 	add_liveness_electoral_system_solana::LivenessSettingsMigration,
@@ -1281,28 +1281,55 @@ type PalletMigrations = (
 type MigrationsForV1_7 = (
 	// Only the Solana Transaction type has changed
 	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		SerializeSolanaBroadcastMigration,
 		8,
 		9,
+		SerializeSolanaBroadcastMigration,
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
 	>,
 	// For clearing all Solana Egress Success election votes, and migrating Solana ApiCall to the
 	// newer version.
 	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		SolanaEgressSuccessWitnessMigration,
 		9,
 		10,
+		SolanaEgressSuccessWitnessMigration,
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
 	>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 8, 10>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 10>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 10>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 10>,
 	VersionedMigration<
-		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-		LivenessSettingsMigration,
+		8,
+		10,
+		NoopRuntimeUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		8,
+		10,
+		NoopRuntimeUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		8,
+		10,
+		NoopRuntimeUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		8,
+		10,
+		NoopRuntimeUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
 		0,
 		1,
+		LivenessSettingsMigration,
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
 	>,
 );
 

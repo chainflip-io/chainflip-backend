@@ -16,7 +16,7 @@ use sp_std::vec::Vec;
 
 pub struct Migration;
 
-/// This migration reaps old accounts based on the following critera:
+/// This migration reaps old accounts based on the following criteria:
 /// - The account has no FLIP balance.
 /// - The account has no pending redemption.
 /// - The account has only one provider and one consumer.
