@@ -54,7 +54,8 @@ use state_chain_runtime::{
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi,
 		DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
+		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
+		TaintedBtcTransactionEvent, ValidatorInfo,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -953,6 +954,16 @@ pub trait CustomApi {
 		retry_duration: u32,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
+
+	#[method(name = "open_btc_deposit_channels")]
+	fn cf_open_btc_deposit_channels(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<<cf_chains::Bitcoin as Chain>::ChainAccount>>;
+
+	#[subscription(name = "subscribe_tainted_btc_transaction_events", item = BlockUpdate<Vec<TaintedBtcTransactionEvent>>)]
+	fn cf_subscribe_tainted_btc_transaction_events(&self);
 }
 
 /// An RPC extension for the state chain node.
@@ -1221,6 +1232,7 @@ where
 		) -> PoolPairsMap<AmmAmount>,
 		cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> (),
 		cf_validate_refund_params(retry_duration: u32) -> (),
+		cf_open_btc_deposit_channels(account_id: state_chain_runtime::AccountId) -> Vec<<cf_chains::Bitcoin as Chain>::ChainAccount>,
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
@@ -1741,6 +1753,18 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
+	}
+
+	fn cf_subscribe_tainted_btc_transaction_events(
+		&self,
+		sink: jsonrpsee::PendingSubscriptionSink,
+	) {
+		self.new_subscription(
+			false, /* only_on_changes */
+			true,  /* end_on_error */
+			sink,
+			|client, hash| Ok(client.runtime_api().cf_tainted_btc_transaction_events(hash)?),
+		)
 	}
 }
 

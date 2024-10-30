@@ -6,24 +6,30 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self,
-	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
+	primitives::{
+		state_chain_runtime::runtime_apis::TaintedBtcTransactionEvent, AccountRole, Affiliates,
+		Asset, BasisPoints, CcmChannelMetadata, DcaParameters,
+	},
 	settings::StateChain,
-	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
-	SwapDepositAddress, SwapPayload, WithdrawFeesDetail,
+	AccountId32, AddressString, BlockUpdate, BrokerApi, DepositMonitorApi, OperatorApi,
+	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, SwapPayload,
+	WithdrawFeesDetail,
 };
 use clap::Parser;
-use futures::FutureExt;
+use custom_rpc::CustomApiClient;
+use futures::{FutureExt, TryStreamExt};
 use jsonrpsee::{
 	core::{async_trait, ClientError},
 	proc_macros::rpc,
 	server::ServerBuilder,
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
+	PendingSubscriptionSink,
 };
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
 };
-use tracing::log;
+use tracing::{event, log, Level};
 
 #[derive(thiserror::Error, Debug)]
 pub enum BrokerApiError {
@@ -100,6 +106,17 @@ pub trait Rpc {
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapPayload>;
+
+	#[method(name = "mark_btc_transaction_as_tainted", aliases = ["broker_markBtcTransactionAsTainted"])]
+	async fn mark_btc_transaction_as_tainted(&self, tx_id: cf_chains::btc::Hash) -> RpcResult<()>;
+
+	#[method(name = "open_btc_deposit_channels", aliases = ["broker_openBtcDepositChannels"])]
+	async fn open_btc_deposit_channels(
+		&self,
+	) -> RpcResult<Vec<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>>;
+
+	#[subscription(name = "subscribe_tainted_btc_transaction_events", item = Result<BlockUpdate<Vec<TaintedBtcTransactionEvent>>,String>)]
+	async fn subscribe_tainted_btc_transaction_events(&self);
 }
 
 pub struct RpcServerImpl {
@@ -193,6 +210,56 @@ impl RpcServer for RpcServerImpl {
 				dca_parameters,
 			)
 			.await?)
+	}
+
+	async fn mark_btc_transaction_as_tainted(&self, tx_id: cf_chains::btc::Hash) -> RpcResult<()> {
+		self.api
+			.deposit_monitor_api()
+			.mark_btc_transaction_as_tainted(tx_id)
+			.await
+			.map_err(BrokerApiError::Other)
+	}
+
+	async fn open_btc_deposit_channels(
+		&self,
+	) -> RpcResult<Vec<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>> {
+		let account_id = self.api.state_chain_client.account_id();
+
+		self.api
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_open_btc_deposit_channels(account_id, None)
+			.await
+			.map_err(BrokerApiError::ClientError)
+	}
+
+	async fn subscribe_tainted_btc_transaction_events(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+	) {
+		let result = self
+			.api
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_subscribe_tainted_btc_transaction_events()
+			.await;
+
+		match result {
+			Ok(subscription) => {
+				tokio::spawn(async {
+					sc_rpc::utils::pipe_from_stream(
+						pending_sink,
+						subscription.map_err(|err| format!("{err}")),
+					)
+					.await
+				});
+			},
+			Err(err) => {
+				event!(Level::ERROR, "Could not subscribe to `tainted_btc_transaction_events` subscription on the node. Error: {err}");
+			},
+		}
 	}
 }
 

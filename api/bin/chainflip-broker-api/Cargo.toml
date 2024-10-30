@@ -23,6 +23,7 @@ workspace = true
 
 [dependencies]
 chainflip-api = { workspace = true }
+cf-chains = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
 custom-rpc = { workspace = true }
 
@@ -34,6 +35,7 @@ jsonrpsee = { workspace = true, features = ["full"] }
 serde = { workspace = true, default-features = true, features = ["derive"] }
 sp-core = { workspace = true }
 sp-rpc = { workspace = true }
+sc-rpc = { workspace = true, default-features = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

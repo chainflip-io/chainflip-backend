@@ -183,6 +183,24 @@ pub struct FailingWitnessValidators {
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub enum TaintedBtcTransactionEvent {
+	TaintedTransactionReportReceived {
+		account_id: <Runtime as frame_system::Config>::AccountId,
+		tx_id: <<cf_chains::Bitcoin as cf_chains::Chain>::ChainCrypto as cf_chains::ChainCrypto>::TransactionInId,
+	},
+
+	TaintedTransactionReportExpired {
+		account_id: <Runtime as frame_system::Config>::AccountId,
+		tx_id: <<cf_chains::Bitcoin as cf_chains::Chain>::ChainCrypto as cf_chains::ChainCrypto>::TransactionInId,
+	},
+
+	TaintedTransactionRejected {
+		broadcast_id: BroadcastId,
+		tx_id: <<cf_chains::Bitcoin as cf_chains::Chain>::ChainCrypto as cf_chains::ChainCrypto>::TransactionInId,
+	},
+}
+
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -306,6 +324,13 @@ decl_runtime_apis!(
 			chunk_interval: u32,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage>;
+		fn cf_open_btc_deposit_channels(
+			account_id: AccountId32,
+		) -> Result<
+			Vec<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>,
+			DispatchErrorWithMessage,
+		>;
+		fn cf_tainted_btc_transaction_events() -> Vec<TaintedBtcTransactionEvent>;
 	}
 );
 

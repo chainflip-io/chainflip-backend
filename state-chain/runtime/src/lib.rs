@@ -72,7 +72,7 @@ use pallet_cf_pools::{
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
 
-use crate::chainflip::EvmLimit;
+use crate::{chainflip::EvmLimit, runtime_apis::TaintedBtcTransactionEvent};
 
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::SwapLegInfo;
@@ -2100,7 +2100,40 @@ impl_runtime_apis! {
 		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage> {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
 		}
+
+		fn cf_open_btc_deposit_channels(account_id: AccountId) -> Result<Vec<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>, DispatchErrorWithMessage> {
+			Ok(pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter()
+				.map(|(_, value)| value)
+				.filter(|channel_details| channel_details.owner == account_id)
+				.filter(|channel_details| match channel_details.action {
+					ChannelAction::Swap {..} => true,
+					ChannelAction::CcmTransfer {..} => true,
+					ChannelAction::LiquidityProvision {..} => false,
+				})
+				.map(|channel_details| channel_details.deposit_channel.address)
+				.collect())
+		}
+
+		fn cf_tainted_btc_transaction_events() -> Vec<crate::runtime_apis::TaintedBtcTransactionEvent> {
+
+			System::read_events_no_consensus().filter_map(|event_record| {
+				if let RuntimeEvent::BitcoinIngressEgress(btc_ie_event) = event_record.event {
+					match btc_ie_event {
+						pallet_cf_ingress_egress::Event::TaintedTransactionReportExpired{ account_id, tx_id } =>
+							Some(TaintedBtcTransactionEvent::TaintedTransactionReportExpired{ account_id, tx_id }),
+						pallet_cf_ingress_egress::Event::TaintedTransactionReportReceived{ account_id, tx_id, expires_at: _ } =>
+							Some(TaintedBtcTransactionEvent::TaintedTransactionReportReceived{account_id, tx_id }),
+						pallet_cf_ingress_egress::Event::TaintedTransactionRejected{ broadcast_id, tx_id } =>
+							Some(TaintedBtcTransactionEvent::TaintedTransactionRejected{ broadcast_id, tx_id: tx_id.id.tx_id }),
+						_ => None,
+					}
+				} else {
+					None
+				}
+			}).collect()
+		}
 	}
+
 
 	impl monitoring_apis::MonitoringRuntimeApi<Block> for Runtime {
 
