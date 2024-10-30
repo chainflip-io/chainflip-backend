@@ -124,7 +124,7 @@ export async function performVaultSwap(
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
 
   try {
-    // Generate a new wallet for each contract swap to prevent nonce issues when running in parallel
+    // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
     // with other swaps via deposit channels.
     const wallet = await createEvmWalletAndFund(sourceAsset);
 
@@ -150,7 +150,7 @@ export async function performVaultSwap(
       dcaParams,
       wallet,
     );
-    swapContext?.updateStatus(swapTag, SwapStatus.ContractExecuted);
+    swapContext?.updateStatus(swapTag, SwapStatus.VaultContractExecuted);
 
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(

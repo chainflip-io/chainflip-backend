@@ -3,7 +3,7 @@ import assert from 'assert';
 export enum SwapStatus {
   Initiated,
   Funded,
-  ContractExecuted,
+  VaultContractExecuted,
   SwapScheduled,
   Success,
   Failure,
@@ -35,7 +35,7 @@ export class SwapContext {
         );
         break;
       }
-      case SwapStatus.ContractExecuted: {
+      case SwapStatus.VaultContractExecuted: {
         assert(
           currentStatus === SwapStatus.Initiated,
           `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
@@ -44,7 +44,7 @@ export class SwapContext {
       }
       case SwapStatus.SwapScheduled: {
         assert(
-          currentStatus === SwapStatus.ContractExecuted || currentStatus === SwapStatus.Funded,
+          currentStatus === SwapStatus.VaultContractExecuted || currentStatus === SwapStatus.Funded,
           `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
         );
         break;
@@ -52,7 +52,7 @@ export class SwapContext {
       case SwapStatus.Success: {
         assert(
           currentStatus === SwapStatus.SwapScheduled ||
-            currentStatus === SwapStatus.ContractExecuted,
+            currentStatus === SwapStatus.VaultContractExecuted,
           `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
         );
         break;
