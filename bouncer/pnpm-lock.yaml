@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@chainflip/cli':
-        specifier: 1.8.0-rc.0
-        version: 1.8.0-rc.0(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)
+        specifier: 1.8.0-rc.1
+        version: 1.8.0-rc.1(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)
       '@chainflip/utils':
         specifier: ^0.4.0
         version: 0.4.0
@@ -145,8 +145,8 @@ packages:
   '@chainflip/bitcoin@1.1.1':
     resolution: {integrity: sha512-Jr6X/0QTSFYpTp23ZPhyioL6wL9x3Xpj6OGjadQKZyhobRN4BZkhLogv20HDYTJcRzVphzrTJArbEaNie04XVA==}
 
-  '@chainflip/cli@1.8.0-rc.0':
-    resolution: {integrity: sha512-hTE7M2MjDs4slffFpy7kfWvYrxDe0StpxAgFYc24QEdGxwqldoM4jzrGnyOUEjh8QGp7BZy4wXKHJ5nWWsSUow==}
+  '@chainflip/cli@1.8.0-rc.1':
+    resolution: {integrity: sha512-e8TWjBCgwRmfcGbq59ELs1xQglXc4/lGGYiC0DwYIsN58NNFbFL04UDsS2rOivrnxlx9kwOihGU5AZABtup12g==}
     hasBin: true
     peerDependencies:
       axios: ^1.x
@@ -3169,7 +3169,7 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@chainflip/cli@1.8.0-rc.0(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)':
+  '@chainflip/cli@1.8.0-rc.1(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@chainflip/bitcoin': 1.1.1(typescript@5.5.3)
       '@chainflip/extrinsics': 1.6.1
