@@ -101,7 +101,8 @@ impl<
 		),
 	) -> bool {
 		match current_vote {
-			AuthorityVoteOf::<Self>::Vote(current_vote) => current_vote != proposed_vote,
+			AuthorityVoteOf::<Self>::Vote(current_vote) =>
+				current_vote.value != proposed_vote.value,
 			// Could argue for either true or false. If the `PartialVote` is never reconstructed and
 			// becomes invalid, then this function will be bypassed and the vote will be considered
 			// needed. So false is safe, and true will likely result in unneeded voting.
