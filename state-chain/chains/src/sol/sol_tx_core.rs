@@ -897,6 +897,8 @@ pub mod sol_test_values {
 	// stored There will be a different one per each supported spl-token
 	pub const USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: SolAddress =
 		const_address("GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd");
+	pub const SWAP_ENDPOINT_DATA_ACCOUNT_ADDRESS: SolAddress =
+		const_address("GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd");
 	pub const NONCE_ACCOUNTS: [SolAddress; 10] = [
 		const_address("2cNMwUCF51djw2xAiiU54wz1WrU8uG4Q8Kp8nfEuwghw"),
 		const_address("HVG21SovGzMBJDB9AQNuWb6XYq4dDZ6yUwCbRUuFnYDo"),

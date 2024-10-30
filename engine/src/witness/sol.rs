@@ -17,9 +17,16 @@ use crate::{
 	},
 };
 use anyhow::Result;
-use cf_chains::{sol::SolHash, Chain};
+use cf_chains::{
+	sol::{api::ContractSwapAccountAndSender, SolHash},
+	Chain,
+};
 use futures::FutureExt;
-use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
+use pallet_cf_elections::{
+	electoral_system::ElectoralSystem,
+	electoral_systems::solana_swap_accounts_tracking::SolanaVaultSwapsVote,
+	vote_storage::VoteStorage,
+};
 use state_chain_runtime::{
 	chainflip::solana_elections::{
 		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystem,
@@ -34,7 +41,8 @@ use cf_utilities::{
 	task_scope::{self, Scope},
 };
 use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
-use std::{str::FromStr, sync::Arc};
+use std::{collections::BTreeSet, str::FromStr, sync::Arc};
+use utilities::{task_scope, task_scope::Scope};
 
 #[derive(Clone)]
 struct SolanaBlockHeightTrackingVoter {
@@ -186,13 +194,30 @@ struct SolanaVaultSwapsVoter {
 impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 	async fn vote(
 		&self,
-		_settings: <SolanaVaultSwapTracking as ElectoralSystem>::ElectoralSettings,
-		_properties: <SolanaVaultSwapTracking as ElectoralSystem>::ElectionProperties,
+		settings: <SolanaVaultSwapTracking as ElectoralSystem>::ElectoralSettings,
+		properties: <SolanaVaultSwapTracking as ElectoralSystem>::ElectionProperties,
 	) -> Result<
 		<<SolanaVaultSwapTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		todo!()
+		program_swaps_witnessing::get_program_swaps(
+			&self.client,
+			settings.swap_endpoint_data_account_address,
+			properties
+				.witnessed_open_accounts
+				.into_iter()
+				.map(|ContractSwapAccountAndSender { contract_swap_account, .. }| {
+					contract_swap_account
+				})
+				.collect(),
+			properties.closure_initiated_accounts,
+			settings.usdc_token_mint_pubkey,
+		)
+		.await
+		.map(|(new_accounts, confirm_closed_accounts)| SolanaVaultSwapsVote {
+			new_accounts: new_accounts.into_iter().collect::<BTreeSet<_>>(),
+			confirm_closed_accounts: confirm_closed_accounts.into_iter().collect::<BTreeSet<_>>(),
+		})
 	}
 }
 

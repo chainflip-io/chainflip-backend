@@ -79,6 +79,7 @@ pub fn initial_state(
 	priority_fee: SolAmount,
 	vault_program: SolAddress,
 	usdc_token_mint_pubkey: SolAddress,
+	swap_endpoint_data_account_address: SolAddress,
 ) -> InitialStateOf<Runtime, Instance> {
 	InitialState {
 		unsynchronised_state: (
@@ -107,7 +108,7 @@ pub fn initial_state(
 			(),
 			(),
 			LIVENESS_CHECK_DURATION,
-			(),
+			SolanaVaultSwapsSettings { swap_endpoint_data_account_address, usdc_token_mint_pubkey },
 		),
 	}
 }
@@ -168,7 +169,7 @@ pub type SolanaVaultSwapTracking =
 		ContractSwapAccountAndSender,
 		SolanaVaultSwapDetails,
 		BlockNumberFor<Runtime>,
-		(),
+		SolanaVaultSwapsSettings,
 		SolanaVaultSwapsHandler,
 		<Runtime as Chainflip>::ValidatorId,
 		SolanaTransactionBuildingError,
@@ -520,11 +521,11 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, PartialOrd, Ord,
 )]
 pub struct SolanaVaultSwapDetails {
-	from: Asset,
-	to: Asset,
-	deposit_amount: AssetAmount,
-	destination_address: EncodedAddress,
-	tx_hash: TransactionHash,
+	pub from: Asset,
+	pub to: Asset,
+	pub deposit_amount: AssetAmount,
+	pub destination_address: EncodedAddress,
+	pub tx_hash: TransactionHash,
 }
 pub struct SolanaVaultSwapsHandler;
 
@@ -560,5 +561,23 @@ impl
 
 	fn get_number_of_available_sol_nonce_accounts() -> usize {
 		Environment::get_number_of_available_sol_nonce_accounts()
+	}
+}
+
+#[derive(
+	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, PartialOrd, Ord,
+)]
+pub struct SolanaVaultSwapsSettings {
+	pub swap_endpoint_data_account_address: SolAddress,
+	pub usdc_token_mint_pubkey: SolAddress,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for SolanaVaultSwapsSettings {
+	fn benchmark_value() -> Self {
+		Self {
+			swap_endpoint_data_account_address: BenchmarkValue::benchmark_value(),
+			usdc_token_mint_pubkey: BenchmarkValue::benchmark_value(),
+		}
 	}
 }

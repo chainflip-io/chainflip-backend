@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use crate::sol::{
 	commitment_config::CommitmentConfig,
@@ -9,9 +9,11 @@ use anyhow::ensure;
 use anyhow::{anyhow /* ensure */};
 use base64::Engine;
 use borsh::{BorshDeserialize, BorshSerialize};
-use cf_chains::sol::SolAddress;
+use cf_chains::sol::{api::ContractSwapAccountAndSender, SolAddress};
+use cf_primitives::Asset;
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
+use state_chain_runtime::chainflip::solana_elections::SolanaVaultSwapDetails;
 use tracing::warn;
 
 const MAXIMUM_CONCURRENT_RPCS: usize = 16;
@@ -59,17 +61,25 @@ pub struct CcmParams {
 pub async fn get_program_swaps(
 	sol_rpc: &SolRetryRpcClient,
 	swap_endpoint_data_account_address: SolAddress,
-	sc_opened_accounts: Vec<SolAddress>,
-	_token_pubkey: SolAddress,
-) -> Result<Vec<(SolAddress, SwapEvent)>, anyhow::Error> {
-	let (new_program_swap_accounts, _closed_accounts, slot) = get_changed_program_swap_accounts(
+	sc_open_accounts: Vec<SolAddress>,
+	sc_closure_initiated_accounts: BTreeSet<ContractSwapAccountAndSender>,
+	usdc_token_mint_pubkey: SolAddress,
+) -> Result<
+	(
+		Vec<(ContractSwapAccountAndSender, SolanaVaultSwapDetails)>,
+		Vec<ContractSwapAccountAndSender>,
+	),
+	anyhow::Error,
+> {
+	let (new_program_swap_accounts, closed_accounts, slot) = get_changed_program_swap_accounts(
 		sol_rpc,
-		sc_opened_accounts,
+		sc_open_accounts,
+		sc_closure_initiated_accounts,
 		swap_endpoint_data_account_address,
 	)
 	.await?;
 
-	stream::iter(new_program_swap_accounts)
+	let new_swaps = stream::iter(new_program_swap_accounts)
 		.chunks(MAX_MULTIPLE_EVENT_ACCOUNTS_QUERY)
 		.map(|new_program_swap_accounts_chunk| {
 			get_program_swap_event_accounts_data(sol_rpc, new_program_swap_accounts_chunk, slot)
@@ -78,7 +88,19 @@ pub async fn get_program_swaps(
 		.map_ok(|program_swap_account_data_chunk| {
 			stream::iter(program_swap_account_data_chunk.into_iter().filter_map(
 				|(account, program_swap_account_data)| match program_swap_account_data {
-					Some(data) => Some(Ok((account, data))),
+					Some(data)
+						if (data.src_token.is_none() ||
+							data.src_token.is_some_and(|addr| addr == usdc_token_mint_pubkey.0)) =>
+						Some(Ok((ContractSwapAccountAndSender {
+							contract_swap_account: account,
+							swap_sender: data.sender.into()
+						}, SolanaVaultSwapDetails {
+							from: if data.src_token.is_none() {Asset::Sol} else {Asset::SolUsdc},
+							deposit_amount: data.amount.into(),
+							to: todo!(),
+							destination_address: todo!(),
+							tx_hash: todo!()
+						}))),
 					// It could happen that some account is closed between the queries. This should
 					// not happen because:
 					// 1. Accounts in `new_program_swap_accounts` can only be accounts that have
@@ -95,17 +117,18 @@ pub async fn get_program_swaps(
 						warn!("Event account not found for solana event account");
 						None
 					},
+					_ => {
+						warn!("Unsupported input token for the witnessed solana vault swap, omitting the swap and the swap account.");
+						None
+					},
 				},
 			))
 		})
 		.try_flatten()
 		.try_collect()
-		.await
+		.await;
 
-	// TODO: Submit closed_accounts and new opened accounts from SwapEvents. The only additional
-	// step required is checking the SwapEvent's src_token. If empty, submit it as native. Otherwise
-	// it should match token_pubkey. A token not matching the token_pubkey should never happen.
-	// The submission might be done in a layer above (sol.rs).
+	new_swaps.map(|swaps| (swaps, closed_accounts))
 
 	// TODO: When submitting data we could technically submit the slot when the SwapEvent was
 	// queried for the new opened accounts. However, it's just easier to submit the slot when the
@@ -115,26 +138,34 @@ pub async fn get_program_swaps(
 async fn get_changed_program_swap_accounts(
 	sol_rpc: &SolRetryRpcClient,
 	sc_opened_accounts: Vec<SolAddress>,
+	sc_closure_initiated_accounts: BTreeSet<ContractSwapAccountAndSender>,
 	swap_endpoint_data_account_address: SolAddress,
-) -> Result<(Vec<SolAddress>, Vec<SolAddress>, u64), anyhow::Error> {
+) -> Result<(Vec<SolAddress>, Vec<ContractSwapAccountAndSender>, u64), anyhow::Error> {
 	let (_historical_number_event_accounts, open_event_accounts, slot) =
 		get_swap_endpoint_data(sol_rpc, swap_endpoint_data_account_address)
 			.await
 			.expect("Failed to get the event accounts");
 
 	let sc_opened_accounts_hashset: HashSet<_> = sc_opened_accounts.iter().collect();
+	let sc_closure_initiated_accounts_hashset = sc_closure_initiated_accounts
+		.iter()
+		.map(|ContractSwapAccountAndSender { contract_swap_account, .. }| contract_swap_account)
+		.collect::<HashSet<_>>();
+
 	let mut new_program_swap_accounts = Vec::new();
 	let mut closed_accounts = Vec::new();
 
 	for account in &open_event_accounts {
-		if !sc_opened_accounts_hashset.contains(account) {
+		if !sc_opened_accounts_hashset.contains(account) &&
+			!sc_closure_initiated_accounts_hashset.contains(account)
+		{
 			new_program_swap_accounts.push(*account);
 		}
 	}
 
 	let open_event_accounts_hashset: HashSet<_> = open_event_accounts.iter().collect();
-	for account in sc_opened_accounts {
-		if !open_event_accounts_hashset.contains(&account) {
+	for account in sc_closure_initiated_accounts {
+		if !open_event_accounts_hashset.contains(&account.contract_swap_account) {
 			closed_accounts.push(account);
 		}
 	}
