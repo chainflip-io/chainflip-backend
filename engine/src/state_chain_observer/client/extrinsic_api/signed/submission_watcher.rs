@@ -31,6 +31,7 @@ use crate::state_chain_observer::client::{
 	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
 };
+use futures::StreamExt;
 use jsonrpsee::{core::ClientError, types::ErrorObjectOwned};
 
 use super::signer;
