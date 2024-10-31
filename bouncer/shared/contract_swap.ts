@@ -39,7 +39,7 @@ import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-en
 import { getSolanaSwapEndpointIdl, getSolanaVaultIdl } from './contract_interfaces';
 
 // Workaround because of anchor issue
-const { BN } = anchor;
+const { BN } = anchor.default;
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
@@ -125,13 +125,15 @@ export async function executeSolContractSwap(
   const fetchedDataAccount = await vaultProgram.account.dataAccount.fetch(solanaVaultDataAccount);
   const aggKey = fetchedDataAccount.aggKey;
 
+  const amount = new BN(
+    amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
+  );
+
   const tx =
     srcAsset === 'Sol'
       ? await cfSwapEndpointProgram.methods
           .xSwapNative({
-            amount: new BN(
-              amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
-            ),
+            amount,
             dstChain: Number(destChain),
             dstAddress: Buffer.from(destAddress),
             dstToken: Number(stateChainAssetFromAsset(destAsset)),
@@ -155,9 +157,7 @@ export async function executeSolContractSwap(
           .transaction()
       : await cfSwapEndpointProgram.methods
           .xSwapToken({
-            amount: new BN(
-              amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
-            ),
+            amount,
             dstChain: Number(destChain),
             dstAddress: Buffer.from(destAddress),
             dstToken: Number(stateChainAssetFromAsset(destAsset)),
