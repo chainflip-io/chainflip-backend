@@ -115,6 +115,14 @@ impl<
 		Ok(())
 	}
 
+	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
+		_election_identifier_with_extra: crate::electoral_system::ElectionIdentifierOf<Self>,
+		_election_access: &ElectionAccess,
+		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
+	) -> Result<bool, CorruptStorageError> {
+		Ok(true)
+	}
+
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
 		electoral_access: &mut ElectoralAccess,
 		election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
