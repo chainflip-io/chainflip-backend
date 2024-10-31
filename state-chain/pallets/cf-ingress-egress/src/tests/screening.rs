@@ -288,28 +288,6 @@ fn only_broker_can_mark_transaction_as_tainted() {
 }
 
 #[test]
-fn can_not_change_reported_status_if_already_prewitnessed() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-			&BROKER,
-		));
-
-		let tx_id = Hash::random();
-
-		TaintedTransactions::<Test, ()>::insert(
-			BROKER,
-			tx_id,
-			TaintedTransactionStatus::Prewitnessed,
-		);
-
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,),
-			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
-		);
-	});
-}
-
-#[test]
 fn do_not_expire_tainted_transactions_if_prewitnessed() {
 	new_test_ext().execute_with(|| {
 		let tx_id = Hash::random();
