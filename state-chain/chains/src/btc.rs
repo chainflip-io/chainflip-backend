@@ -1,14 +1,14 @@
 pub mod api;
 pub mod benchmarking;
 pub mod deposit_address;
-pub mod smart_contract_encoding;
 pub mod utxo_selection;
+pub mod vault_swap_encoding;
 
 extern crate alloc;
 use self::deposit_address::DepositAddress;
 use crate::{
-	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, DepositChannel, FeeEstimationApi,
-	FeeRefundCalculator, RetryPolicy,
+	benchmarking_value::BenchmarkValue, Chain, ChainCrypto, DepositChannel,
+	DepositDetailsToTransactionInId, FeeEstimationApi, FeeRefundCalculator, RetryPolicy,
 };
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
@@ -227,12 +227,6 @@ impl BitcoinFeeInfo {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
-pub struct BtcDepositDetails {
-	pub utxo_id: UtxoId,
-	pub deposit_address: DepositAddress,
-}
-
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const GAS_ASSET: Self::ChainAsset = assets::btc::Asset::Btc;
@@ -250,7 +244,7 @@ impl Chain for Bitcoin {
 	type ChainAccount = ScriptPubkey;
 	type DepositFetchId = BitcoinFetchId;
 	type DepositChannelState = DepositAddress;
-	type DepositDetails = BtcDepositDetails;
+	type DepositDetails = Utxo;
 	type Transaction = BitcoinTransactionData;
 	type TransactionMetadata = ();
 	type TransactionRef = Hash;
@@ -403,6 +397,12 @@ pub struct Utxo {
 impl Utxo {
 	pub fn net_value(&self, fee_info: &BitcoinFeeInfo) -> BtcAmount {
 		self.amount.saturating_sub(fee_info.fee_for_utxo(self))
+	}
+}
+
+impl DepositDetailsToTransactionInId<BitcoinCrypto> for Utxo {
+	fn deposit_id(&self) -> Option<Hash> {
+		Some(self.id.tx_id)
 	}
 }
 

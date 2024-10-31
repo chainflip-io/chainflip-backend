@@ -20,7 +20,6 @@
 
 import { testBrokerFeeCollection } from '../tests/broker_fee_collection';
 import { testBtcUtxoConsolidation } from '../tests/btc_utxo_consolidation';
-import { testDCASwaps } from '../tests/DCA_test';
 import { testEvmDeposits } from '../tests/evm_deposits';
 import { testFillOrKill } from '../tests/fill_or_kill';
 import { testFundRedeem } from '../tests/fund_redeem';
@@ -40,6 +39,7 @@ import { ConsoleColors, ConsoleLogColors } from '../shared/utils';
 import { testDeltaBasedIngress } from '../tests/delta_based_ingress';
 import { testCancelOrdersBatch } from '../tests/create_and_delete_multiple_orders';
 import { depositChannelCreation } from '../tests/request_swap_deposit_address_with_affiliates';
+import { testDCASwaps } from '../tests/DCA_test';
 
 async function main() {
   const testName = process.argv[2];

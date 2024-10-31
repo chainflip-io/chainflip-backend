@@ -399,13 +399,26 @@ pub type Affiliates<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_AFFILIATES>>;
 
 pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<{ MAX_AFFILIATES + 1 }>>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, MaxEncodedLen, Encode, Decode, TypeInfo, Serialize, Deserialize,
+)]
 pub struct Beneficiary<Id> {
 	pub account: Id,
 	pub bps: BasisPoints,
 }
 
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub struct DcaParameters {
 	/// The number of individual swaps to be executed
 	pub number_of_chunks: u32,

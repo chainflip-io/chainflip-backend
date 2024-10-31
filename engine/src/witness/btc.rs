@@ -1,7 +1,7 @@
 mod chain_tracking;
 mod deposits;
-pub mod smart_contract;
 pub mod source;
+pub mod vault_swaps;
 
 use crate::{
 	btc::{

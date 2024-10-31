@@ -260,7 +260,10 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	type DepositChannelState: Member + Parameter + ChannelLifecycleHooks + Unpin;
 
 	/// Extra data associated with a deposit.
-	type DepositDetails: Member + Parameter + BenchmarkValue;
+	type DepositDetails: Member
+		+ Parameter
+		+ BenchmarkValue
+		+ DepositDetailsToTransactionInId<Self::ChainCrypto>;
 
 	type Transaction: Member + Parameter + BenchmarkValue + FeeRefundCalculator<Self>;
 
@@ -522,8 +525,24 @@ pub enum ConsolidationError {
 	Other,
 }
 
+#[derive(Debug)]
+pub enum RejectError {
+	NotSupportedForAsset,
+	Other,
+}
+
 pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
+}
+
+pub trait RejectCall<C: Chain>: ApiCall<C::ChainCrypto> {
+	fn new_unsigned(
+		_deposit_details: C::DepositDetails,
+		_refund_address: C::ChainAccount,
+		_refund_amount: C::ChainAmount,
+	) -> Result<Self, RejectError> {
+		Err(RejectError::NotSupportedForAsset)
+	}
 }
 
 pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -550,7 +569,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: C::ChainAmount,
 		message: Vec<u8>,
-		cf_parameters: Vec<u8>,
+		ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
@@ -589,10 +608,10 @@ pub enum SwapOrigin {
 }
 
 pub const MAX_CCM_MSG_LENGTH: u32 = 10_000;
-pub const MAX_CCM_CF_PARAM_LENGTH: u32 = 1_000;
+pub const MAX_CCM_ADDITIONAL_DATA_LENGTH: u32 = 1_000;
 
 pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
-pub type CcmCfParameters = BoundedVec<u8, ConstU32<MAX_CCM_CF_PARAM_LENGTH>>;
+pub type CcmAdditionalData = BoundedVec<u8, ConstU32<MAX_CCM_ADDITIONAL_DATA_LENGTH>>;
 
 #[cfg(feature = "std")]
 mod bounded_hex {
@@ -637,7 +656,7 @@ pub struct CcmChannelMetadata {
 		feature = "std",
 		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
 	)]
-	pub cf_parameters: CcmCfParameters,
+	pub ccm_additional_data: CcmAdditionalData,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -808,10 +827,26 @@ impl<A: Clone> ChannelRefundParametersGeneric<A> {
 			min_price: self.min_price,
 		}
 	}
+	pub fn try_map_address<B, F: FnOnce(A) -> Result<B, sp_runtime::DispatchError>>(
+		&self,
+		f: F,
+	) -> Result<ChannelRefundParametersGeneric<B>, sp_runtime::DispatchError> {
+		Ok(ChannelRefundParametersGeneric {
+			retry_duration: self.retry_duration,
+			refund_address: f(self.refund_address.clone())?,
+			min_price: self.min_price,
+		})
+	}
 }
 
 pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 	True(Option<Api>),
 	False,
 	_Phantom(PhantomData<C>, Never),
+}
+
+pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
+	fn deposit_id(&self) -> Option<C::TransactionInId> {
+		None
+	}
 }

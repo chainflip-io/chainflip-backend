@@ -6,7 +6,6 @@ use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 
 pub mod access;
 
-use crate::{vote_storage::VoteStorage, CorruptStorageError};
 pub use access::*;
 use itertools::Itertools;
 
@@ -216,13 +215,6 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 			check.check(&pre_finalize, &post_finalize);
 		}
 		self
-	}
-
-	pub fn is_vote_valid(
-		&self,
-		partial_vote: &<ES::Vote as VoteStorage>::PartialVote,
-	) -> Result<bool, CorruptStorageError> {
-		self.electoral_access.is_vote_valid(self.only_election_id(), partial_vote)
 	}
 }
 

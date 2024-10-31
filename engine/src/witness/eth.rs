@@ -19,7 +19,10 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+	witness::{
+		common::cf_parameters::ShortId,
+		evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+	},
 };
 
 use super::{common::epoch_source::EpochSourceBuilder, evm::source::EvmSource};
@@ -218,24 +221,31 @@ where
 	Ok(())
 }
 
-use cf_chains::{address::EncodedAddress, CcmDepositMetadata};
-use cf_primitives::{Asset, AssetAmount, TransactionHash};
+use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ChannelRefundParameters};
+use cf_primitives::{
+	Asset, AssetAmount, BasisPoints, Beneficiaries, DcaParameters, TransactionHash,
+};
 
 pub struct EthCallBuilder {}
 
 impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 	type Chain = Ethereum;
 
-	fn contract_swap_request(
+	fn vault_swap_request(
 		source_asset: Asset,
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
+		_broker_fees: Beneficiaries<ShortId>,
+		refund_params: Option<ChannelRefundParameters>,
+		dca_params: Option<DcaParameters>,
+		// This is only to be checked in the pre-witnessed version
+		boost_fee: Option<BasisPoints>,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_swap_request {
+			pallet_cf_ingress_egress::Call::vault_swap_request {
 				input_asset: source_asset.try_into().expect("invalid asset for chain"),
 				output_asset: destination_asset,
 				deposit_amount,
@@ -243,11 +253,11 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 				deposit_metadata,
 				tx_hash,
 				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) }),
+				// Defaulting to no broker fees until PRO-1743 is completed.
 				broker_fees: Default::default(),
-				// TODO: use real parameters when we can decode them
-				boost_fee: 0,
-				dca_params: None,
-				refund_params: None,
+				boost_fee: boost_fee.unwrap_or_default(),
+				dca_params,
+				refund_params: refund_params.map(Box::new),
 			},
 		)
 	}

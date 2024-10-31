@@ -12,11 +12,11 @@ import {
   defaultAssetAmounts,
   ccmSupportedChains,
   assetDecimals,
-  solCfParamsCodec,
+  solCcmAdditionalDataCodec,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { performSwapViaContract } from '../shared/contract_swap';
+import { performVaultSwap } from '../shared/vault_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 
 enum SolidityType {
@@ -69,7 +69,7 @@ function newAbiEncodedMessage(types?: SolidityType[]): string {
   return web3.eth.abi.encodeParameters(typesArray, variables);
 }
 
-export function newSolanaCfParameters(maxAccounts: number) {
+export function newSolanaCcmAdditionalData(maxAccounts: number) {
   const cfReceiverAddress = getContractAddress('Solana', 'CFTESTER');
 
   const fallbackAddress = Keypair.generate().publicKey.toBytes();
@@ -93,7 +93,7 @@ export function newSolanaCfParameters(maxAccounts: number) {
     fallback_address: fallbackAddress,
   };
 
-  return u8aToHex(solCfParamsCodec.enc(cfParameters));
+  return u8aToHex(solCcmAdditionalDataCodec.enc(cfParameters));
 }
 
 // Solana CCM-related parameters. These are values in the protocol.
@@ -107,7 +107,7 @@ function newCcmArbitraryBytes(maxLength: number): string {
   return randomAsHex(Math.floor(Math.random() * Math.max(0, maxLength - 10)) + 10);
 }
 
-function newCfParameters(destAsset: Asset, message?: string): string {
+function newCcmAdditionalData(destAsset: Asset, message?: string): string {
   const destChain = chainFromAsset(destAsset);
   switch (destChain) {
     case 'Ethereum':
@@ -123,7 +123,7 @@ function newCfParameters(destAsset: Asset, message?: string): string {
 
       // The maximum number of extra accounts that can be passed is limited by the tx size
       // and therefore also depends on the message length.
-      return newSolanaCfParameters(maxAccounts);
+      return newSolanaCcmAdditionalData(maxAccounts);
     }
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
@@ -151,7 +151,7 @@ export function newCcmMetadata(
   cfParamsArray?: string,
 ): CcmDepositMetadata {
   const message = ccmMessage ?? newCcmMessage(destAsset);
-  const cfParameters = cfParamsArray ?? newCfParameters(destAsset, message);
+  const ccmAdditionalData = cfParamsArray ?? newCcmAdditionalData(destAsset, message);
   const gasDiv = gasBudgetFraction ?? 2;
 
   const gasBudget = Math.floor(
@@ -162,7 +162,7 @@ export function newCcmMetadata(
   return {
     message,
     gasBudget,
-    cfParameters,
+    ccmAdditionalData,
   };
 }
 
@@ -236,7 +236,7 @@ export async function testSwap(
     swapContext,
   );
 }
-export async function testSwapViaContract(
+export async function testVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
@@ -250,12 +250,12 @@ export async function testSwapViaContract(
     destAsset,
     addressType,
     messageMetadata,
-    (tagSuffix ?? '') + ' Contract',
+    (tagSuffix ?? '') + 'Vault',
     log,
     swapContext,
   );
 
-  return performSwapViaContract(
+  return performVaultSwap(
     sourceAsset,
     destAsset,
     destAddress,

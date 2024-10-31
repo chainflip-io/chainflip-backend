@@ -1,8 +1,8 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import { ContractSwapParams } from '../shared/contract_swap';
+import { VaultSwapParams } from '../shared/vault_swap';
 import { ExecutableTest } from '../shared/executable_test';
 import { SwapParams } from '../shared/perform_swap';
-import { newCcmMetadata, testSwap, testSwapViaContract } from '../shared/swapping';
+import { newCcmMetadata, testSwap, testVaultSwap } from '../shared/swapping';
 import { btcAddressTypes } from '../shared/new_btc_address';
 import { ccmSupportedChains, chainFromAsset } from '../shared/utils';
 
@@ -10,12 +10,12 @@ import { ccmSupportedChains, chainFromAsset } from '../shared/utils';
 export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
 
 async function main() {
-  const allSwaps: Promise<SwapParams | ContractSwapParams>[] = [];
+  const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];
 
   function appendSwap(
     sourceAsset: Asset,
     destAsset: Asset,
-    functionCall: typeof testSwap | typeof testSwapViaContract,
+    functionCall: typeof testSwap | typeof testVaultSwap,
     ccmSwap: boolean = false,
   ) {
     if (destAsset === 'Btc') {
@@ -52,12 +52,12 @@ async function main() {
         const sourceChain = chainFromAsset(sourceAsset);
         const destChain = chainFromAsset(destAsset);
         if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
-          // Contract Swaps
-          appendSwap(sourceAsset, destAsset, testSwapViaContract);
+          // Vault Swaps
+          appendSwap(sourceAsset, destAsset, testVaultSwap);
 
           if (ccmSupportedChains.includes(destChain)) {
-            // CCM contract swaps
-            appendSwap(sourceAsset, destAsset, testSwapViaContract, true);
+            // CCM Vault swaps
+            appendSwap(sourceAsset, destAsset, testVaultSwap, true);
           }
         }
 

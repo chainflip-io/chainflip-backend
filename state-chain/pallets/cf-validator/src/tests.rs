@@ -1263,33 +1263,25 @@ fn validator_registration_and_deregistration() {
 #[test]
 fn validator_deregistration_after_expired_epoch() {
 	new_test_ext().execute_with(|| {
-		const RETIRING_VALIDATOR: u64 = GENESIS_AUTHORITIES[0];
-		const REMAINING_AUTHORITIES: [u64; 2] = [GENESIS_AUTHORITIES[1], GENESIS_AUTHORITIES[2]];
-		const BOND: u128 = 100;
+		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(ALICE),));
+		ValidatorPallet::transition_to_next_epoch(vec![1, ALICE], 100);
+		let first_epoch_to_expire = ValidatorPallet::current_epoch();
 
-		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
-
+		// Can't deregister
 		assert_noop!(
-			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(RETIRING_VALIDATOR),),
-			Error::<Test>::StillBidding
-		);
-
-		assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(RETIRING_VALIDATOR)));
-
-		assert_noop!(
-			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(RETIRING_VALIDATOR),),
+			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),),
 			Error::<Test>::StillKeyHolder
 		);
 
-		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
-		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
+		ValidatorPallet::transition_to_next_epoch(vec![1, ALICE], 100);
+		let second_epoch_to_expire = ValidatorPallet::current_epoch();
+		ValidatorPallet::transition_to_next_epoch(vec![1, 2], 100);
 
-		ValidatorPallet::expire_epochs_up_to(ValidatorPallet::current_epoch() - 1);
+		ValidatorPallet::expire_epoch(second_epoch_to_expire);
+		ValidatorPallet::expire_epoch(first_epoch_to_expire);
 
 		// Now you can deregister
-		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(
-			RETIRING_VALIDATOR
-		),));
+		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),));
 	});
 }
 
@@ -1371,7 +1363,7 @@ fn can_determine_is_auction_phase() {
 
 		// In Idle phase, must be within certain % of epoch progress.
 		CurrentEpochStartedAt::<Test>::set(1_000);
-		EpochDuration::<Test>::set(100);
+		BlocksPerEpoch::<Test>::set(100);
 		RedemptionPeriodAsPercentage::<Test>::set(Percent::from_percent(85));
 
 		// First block of auction phase = 1_000 + 100 * 85% = 1085
@@ -1454,7 +1446,7 @@ fn can_update_all_config_items() {
 		assert_ne!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
 		assert_ne!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
 		assert_ne!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
-		assert_ne!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
+		assert_ne!(BlocksPerEpoch::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_ne!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
 		assert_ne!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
 		assert_ne!(
@@ -1503,7 +1495,7 @@ fn can_update_all_config_items() {
 		assert_eq!(RegistrationBondPercentage::<Test>::get(), NEW_REGISTRATION_BOND_PERCENTAGE);
 		assert_eq!(AuthoritySetMinSize::<Test>::get(), NEW_AUTHORITY_SET_MIN_SIZE);
 		assert_eq!(BackupRewardNodePercentage::<Test>::get(), NEW_BACKUP_REWARD_NODE_PERCENTAGE);
-		assert_eq!(EpochDuration::<Test>::get(), NEW_EPOCH_DURATION as u64);
+		assert_eq!(BlocksPerEpoch::<Test>::get(), NEW_EPOCH_DURATION as u64);
 		assert_eq!(AuctionParameters::<Test>::get(), NEW_AUCTION_PARAMETERS);
 		assert_eq!(MinimumReportedCfeVersion::<Test>::get(), NEW_MINIMUM_REPORTED_CFE_VERSION);
 		assert_eq!(
@@ -1521,28 +1513,5 @@ fn can_update_all_config_items() {
 			),
 			sp_runtime::traits::BadOrigin
 		);
-	});
-}
-
-#[test]
-fn should_expire_all_previous_epochs() {
-	new_test_ext().execute_with(|| {
-		const ID: u64 = 1;
-		const BOND: u128 = 100;
-		ValidatorPallet::transition_to_next_epoch(vec![ID], BOND);
-		let first_epoch = ValidatorPallet::current_epoch();
-		ValidatorPallet::transition_to_next_epoch(vec![ID], BOND);
-		let second_epoch = ValidatorPallet::current_epoch();
-		ValidatorPallet::transition_to_next_epoch(vec![ID], BOND);
-		let third_epoch = ValidatorPallet::current_epoch();
-
-		assert_eq!(
-			HistoricalActiveEpochs::<Test>::get(ID),
-			vec![first_epoch, second_epoch, third_epoch]
-		);
-
-		ValidatorPallet::expire_epochs_up_to(second_epoch);
-
-		assert_eq!(HistoricalActiveEpochs::<Test>::get(ID), vec![third_epoch]);
 	});
 }

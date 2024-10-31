@@ -17,9 +17,9 @@ use state_chain_runtime::{
 
 #[test]
 fn auction_repeats_after_failure_because_of_liveness() {
-	const EPOCH_DURATION_BLOCKS: BlockNumber = 1000;
+	const EPOCH_BLOCKS: BlockNumber = 1000;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_DURATION_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		// As we run a rotation at genesis we will need accounts to support
 		// having 5 authorities as the default is 3 (Alice, Bob and Charlie)
 		.accounts(vec![
@@ -107,7 +107,7 @@ fn epoch_rotates() {
 	const EPOCH_BLOCKS: BlockNumber = 1000;
 	const MAX_SET_SIZE: AuthorityCount = 5;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.min_authorities(MAX_SET_SIZE)
 		.build()
 		.execute_with(|| {
@@ -238,7 +238,7 @@ fn utxo(amount: BtcAmount, salt: u32, pub_key: Option<[u8; 32]>) -> Utxo {
 }
 
 fn add_utxo_amount(utxo: Utxo) {
-	Environment::add_bitcoin_utxo_to_list(utxo.amount, utxo.id, utxo.deposit_address);
+	Environment::add_bitcoin_utxo_to_list(utxo);
 }
 
 #[test]
@@ -247,7 +247,7 @@ fn can_consolidate_bitcoin_utxos() {
 	const MAX_AUTHORITIES: AuthorityCount = 5;
 	const CONSOLIDATION_SIZE: u32 = 2;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.build()
 		.execute_with(|| {
 			let (mut testnet, _, _) =
