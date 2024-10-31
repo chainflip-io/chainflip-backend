@@ -277,43 +277,32 @@ export async function performVaultSwap(
       );
     }
 
-
     // TODO: Temporary before the SDK implements this.
     if (evmChains.includes(srcChain)) {
-    // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
-    // after sending the transaction, so we send it first and observe the events afterwards.
-    // There are still multiple blocks of safety margin inbetween before the event is emitted
-    const receipt = await executeVaultSwap(
-      sourceAsset,
-      destAsset,
-      destAddress,
-      messageMetadata,
-      amountToSwap,
-      boostFeeBps,
-      fillOrKillParams,
-      dcaParams,
-      wallet,
-    );txHash = receipt.hash;
-    sourceAddress = wallet!.address.toLowerCase();
-  } else {
-    txHash = await executeSolContractSwap(
-      sourceAsset,
-      destAsset,
-      destAddress,
-      messageMetadata,
-    );
-    sourceAddress = getSolWhaleKeyPair().publicKey.toBase58();
-  }
+      // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
+      // after sending the transaction, so we send it first and observe the events afterwards.
+      // There are still multiple blocks of safety margin inbetween before the event is emitted
+      const receipt = await executeVaultSwap(
+        sourceAsset,
+        destAsset,
+        destAddress,
+        messageMetadata,
+        amountToSwap,
+        boostFeeBps,
+        fillOrKillParams,
+        dcaParams,
+        wallet,
+      );
+      txHash = receipt.hash;
+      sourceAddress = wallet!.address.toLowerCase();
+    } else {
+      txHash = await executeSolContractSwap(sourceAsset, destAsset, destAddress, messageMetadata);
+      sourceAddress = getSolWhaleKeyPair().publicKey.toBase58();
+    }
     swapContext?.updateStatus(swapTag, SwapStatus.VaultContractExecuted);
 
     const ccmEventEmitted = messageMetadata
-      ? observeCcmReceived(
-          sourceAsset,
-          destAsset,
-          destAddress,
-          messageMetadata,
-          sourceAddress,
-        )
+      ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
       : Promise.resolve();
 
     const [newBalance] = await Promise.all([
