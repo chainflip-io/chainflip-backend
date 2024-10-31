@@ -9,6 +9,7 @@ import {
   Asset as SCAsset,
   Chains,
   Chain,
+  assetConstants,
 } from '@chainflip/cli';
 import { HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
@@ -28,6 +29,7 @@ import {
   evmChains,
   getSolWhaleKeyPair,
   getSolConnection,
+  chainContractId,
 } from './utils';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
@@ -116,7 +118,7 @@ export async function executeVaultSwap(
   return receipt;
 }
 // Temporary before the SDK implements this.
-export async function executeSolContractSwap(
+export async function executeSolVaultSwap(
   srcAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -163,9 +165,9 @@ export async function executeSolContractSwap(
       ? await cfSwapEndpointProgram.methods
           .xSwapNative({
             amount,
-            dstChain: Number(destChain),
-            dstAddress: Buffer.from(destAddress),
-            dstToken: Number(stateChainAssetFromAsset(destAsset)),
+            dstChain: chainContractId(destChain),
+            dstAddress: Buffer.from(destAddress.slice(2), 'hex'),
+            dstToken: assetConstants[destAsset].contractId,
             ccmParameters: messageMetadata
               ? {
                   message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
@@ -297,7 +299,7 @@ export async function performVaultSwap(
       txHash = receipt.hash;
       sourceAddress = wallet!.address.toLowerCase();
     } else {
-      txHash = await executeSolContractSwap(sourceAsset, destAsset, destAddress, messageMetadata);
+      txHash = await executeSolVaultSwap(sourceAsset, destAsset, destAddress, messageMetadata);
       sourceAddress = getSolWhaleKeyPair().publicKey.toBase58();
     }
     swapContext?.updateStatus(swapTag, SwapStatus.VaultContractExecuted);
