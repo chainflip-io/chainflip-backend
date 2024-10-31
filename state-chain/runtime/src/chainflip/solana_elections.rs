@@ -13,7 +13,7 @@ use cf_chains::{
 		},
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
-	Chain, CloseSolanaVaultSwapAccounts, FeeEstimationApi, ForeignChain, Solana,
+	Chain, CloseSolanaVaultSwapAccounts, FeeEstimationApi, ForeignChain, Solana,CcmDepositMetadata
 };
 use cf_primitives::TransactionHash;
 use cf_runtime_utilities::log_or_panic;
@@ -900,6 +900,7 @@ pub struct SolanaVaultSwapDetails {
 	pub to: Asset,
 	pub deposit_amount: SolAmount,
 	pub destination_address: EncodedAddress,
+	pub deposit_metadata: Option<CcmDepositMetadata>,
 	pub tx_hash: TransactionHash,
 }
 pub struct SolanaVaultSwapsHandler;
@@ -918,7 +919,7 @@ impl
 			swap_details.to,
 			swap_details.deposit_amount,
 			swap_details.destination_address,
-			Default::default(),
+			swap_details.deposit_metadata,
 			swap_details.tx_hash,
 			Default::default(),
 			Default::default(),

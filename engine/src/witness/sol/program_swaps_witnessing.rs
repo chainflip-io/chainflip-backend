@@ -102,6 +102,7 @@ pub async fn get_program_swaps(
 							deposit_amount: data.amount,
 							destination_address: EncodedAddress::from_chain_bytes(data.dst_chain.try_into().map_err(|e| warn!("error while parsing destination chain for solana vault swap:{}. Omitting swap", e)).ok()?, data.dst_address.to_vec()).map_err(|e| warn!("failed to decode the destination chain address for solana vault swap:{}. Omitting swap", e)).ok()?,
 							to: data.dst_token.try_into().map_err(|e| warn!("error while decoding destination token for solana vault swap: {}. Omitting swap", e)).ok()?,
+							deposit_metadata: None, // TODO
 							tx_hash: Default::default(), // TODO
 						}))),
 					// It could happen that some account is closed between the queries. This should
@@ -130,6 +131,9 @@ pub async fn get_program_swaps(
 		.try_flatten()
 		.try_collect()
 		.await;
+
+	println!("DEBUGDEBUG new_swaps:       {:?}", new_swaps);
+	println!("DEBUGDEBUG closed_accounts: {:?}", closed_accounts);
 
 	new_swaps.map(|swaps| (swaps, closed_accounts))
 
