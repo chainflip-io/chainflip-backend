@@ -136,7 +136,6 @@ pub mod pallet {
 	use cf_chains::benchmarking_value::BenchmarkValue;
 	use cf_primitives::{AuthorityCount, EpochIndex};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
-	use frame_support::sp_runtime::traits::{Header, HeaderProvider};
 
 	use crate::electoral_system::{ConsensusVote, ConsensusVotes};
 	use access_impls::{ElectionAccess, ElectoralAccess};
@@ -357,7 +356,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		type ElectoralSystem: ElectoralSystem<
-			OnFinalizeContext = <<Self::Block as HeaderProvider>::HeaderT as Header>::Number,
+			OnFinalizeContext = (),
 			ValidatorId = <Self as Chainflip>::ValidatorId,
 		>;
 
@@ -1639,7 +1638,7 @@ pub mod pallet {
 								T::ElectoralSystem::on_finalize(
 									electoral_access,
 									election_identifiers,
-									&frame_system::Pallet::<T>::current_block_number(),
+									&(),
 								)?;
 
 								Ok(())

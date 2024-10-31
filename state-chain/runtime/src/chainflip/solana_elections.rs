@@ -1,6 +1,6 @@
 use crate::{
-	Environment, Offence, Reputation, Runtime, RuntimeOrigin, SolanaBroadcaster,
-	SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner,
+	Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
+	SolanaIngressEgress, SolanaThresholdSigner,
 };
 use cf_chains::{
 	address::EncodedAddress,
@@ -599,7 +599,7 @@ impl
 		SolanaLiveness,
 	> for SolanaElectionHooks
 {
-	type OnFinalizeContext = BlockNumberFor<Runtime>;
+	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
 
 	fn on_finalize<
@@ -669,7 +669,7 @@ impl
 			>,
 			Vec<ElectionIdentifier<<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra>>,
 		),
-		context: &Self::OnFinalizeContext,
+		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		let block_height = SolanaBlockHeightTracking::on_finalize(
 			&mut block_height_translator.translate_electoral_access(generic_electoral_access),
@@ -704,7 +704,7 @@ impl
 		SolanaVaultSwapTracking::on_finalize(
 			&mut vault_swap_translator.translate_electoral_access(generic_electoral_access),
 			vault_swap_identifiers,
-			context,
+			&crate::System::current_block_number(),
 		)?;
 		Ok(())
 	}
@@ -916,19 +916,18 @@ impl
 	> for SolanaVaultSwapsHandler
 {
 	fn initiate_vault_swap(swap_details: SolanaVaultSwapDetails) {
-		let _ = SolanaIngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
+		SolanaIngressEgress::process_vault_swap_request(
 			swap_details.from.into(),
-			swap_details.to,
 			swap_details.deposit_amount,
+			swap_details.to,
 			swap_details.destination_address,
 			swap_details.deposit_metadata,
-			Default::default(), // todo
-			Default::default(),
-			Default::default(),
-			Default::default(),
-			Default::default(),
-			Default::default(),
+			Default::default(), // TODO
+			Default::default(), // TODO
+			Default::default(), // TODO
+			Default::default(), // TODO
+			Default::default(), // TODO
+			Default::default(), // TODO
 		);
 	}
 
