@@ -633,7 +633,7 @@ impl pallet_aura::Config for Runtime {
 }
 
 parameter_types! {
-	pub storage BlocksPerEpoch: u64 = Validator::blocks_per_epoch().into();
+	pub storage BlocksPerEpoch: u64 = Validator::epoch_duration().into();
 }
 
 type KeyOwnerIdentification<T, Id> =
@@ -1431,7 +1431,7 @@ impl_runtime_apis! {
 			Environment::current_release_version()
 		}
 		fn cf_epoch_duration() -> u32 {
-			Validator::blocks_per_epoch()
+			Validator::epoch_duration()
 		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
@@ -1535,7 +1535,7 @@ impl_runtime_apis! {
 			.ok()
 			.map(|auction_outcome| auction_outcome.bond);
 			AuctionState {
-				blocks_per_epoch: Validator::blocks_per_epoch(),
+				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
@@ -2388,7 +2388,7 @@ impl_runtime_apis! {
 			.ok()
 			.map(|auction_outcome| auction_outcome.bond);
 			EpochState {
-				blocks_per_epoch: Validator::blocks_per_epoch(),
+				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				current_epoch_index: Validator::current_epoch(),
 				min_active_bid,
