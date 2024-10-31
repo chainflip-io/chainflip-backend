@@ -2119,7 +2119,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	fn process_vault_swap_request(
+	pub fn process_vault_swap_request(
 		source_asset: TargetChainAsset<T, I>,
 		deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 		destination_asset: Asset,

@@ -540,13 +540,18 @@ impl
 	> for SolanaVaultSwapsHandler
 {
 	fn initiate_vault_swap(swap_details: SolanaVaultSwapDetails) {
-		let _ = SolanaIngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			swap_details.from,
-			swap_details.to,
+		SolanaIngressEgress::process_vault_swap_request(
+			swap_details.from.into(),
 			swap_details.deposit_amount,
+			swap_details.to,
 			swap_details.destination_address,
+			Default::default(), // TODO
 			swap_details.tx_hash,
+			Default::default(), // TODO
+			Default::default(), // TODO
+			Default::default(), // TODO
+			Default::default(), // TODO
+			Default::default(), // TODO
 		);
 	}
 
