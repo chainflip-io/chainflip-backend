@@ -8,8 +8,8 @@ use cf_chains::{
 	instances::ChainInstanceAlias,
 	sol::{
 		api::{
-			VaultSwapAccountAndSender, SolanaApi, SolanaTransactionBuildingError,
-			SolanaTransactionType,
+			SolanaApi, SolanaTransactionBuildingError, SolanaTransactionType,
+			VaultSwapAccountAndSender,
 		},
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
@@ -598,7 +598,7 @@ impl
 		SolanaLiveness,
 	> for SolanaElectionHooks
 {
-	type OnFinalizeContext = BlockNumberFor<Runtime>;
+	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
 
 	fn on_finalize<
@@ -668,7 +668,7 @@ impl
 			>,
 			Vec<ElectionIdentifier<<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra>>,
 		),
-		context: &Self::OnFinalizeContext,
+		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		let block_height = SolanaBlockHeightTracking::on_finalize(
 			&mut block_height_translator.translate_electoral_access(generic_electoral_access),
@@ -703,7 +703,7 @@ impl
 		SolanaVaultSwapTracking::on_finalize(
 			&mut vault_swap_translator.translate_electoral_access(generic_electoral_access),
 			vault_swap_identifiers,
-			context,
+			&crate::System::current_block_number(),
 		)?;
 		Ok(())
 	}
