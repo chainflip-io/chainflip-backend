@@ -847,7 +847,7 @@ pub mod pallet {
 							Ok(())
 						},
 						_ => {
-							// Don't apply the mutation. We expect the pre-witnessed/boosted
+							// Don't apply the mutation. We expect the pre-witnessed
 							// transaction to eventually be fully witnessed.
 							Err(())
 						},

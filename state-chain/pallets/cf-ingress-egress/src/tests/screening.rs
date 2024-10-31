@@ -290,6 +290,28 @@ fn only_broker_can_mark_transaction_as_tainted() {
 }
 
 #[test]
+fn can_not_change_reported_status_if_already_prewitnessed() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		let tx_id = Hash::random();
+
+		TaintedTransactions::<Test, ()>::insert(
+			BROKER,
+			tx_id,
+			TaintedTransactionStatus::Prewitnessed,
+		);
+
+		assert_noop!(
+			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,),
+			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
+		);
+	});
+}
+
+#[test]
 fn do_not_expire_tainted_transactions_if_prewitnessed() {
 	new_test_ext().execute_with(|| {
 		let tx_id = Hash::random();
@@ -363,6 +385,53 @@ fn send_funds_back_after_they_have_been_rejected() {
 			RuntimeEvent::IngressEgress(crate::Event::TaintedTransactionRejected {
 				broadcast_id: _,
 				tx_id: _,
+			})
+		);
+	});
+}
+
+#[test]
+fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
+	new_test_ext().execute_with(|| {
+		let tx_id = Hash::random();
+		let deposit_details = helpers::generate_btc_deposit(tx_id);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		let (_id, address, ..) = IngressEgress::request_liquidity_deposit_address(
+			BROKER,
+			btc::Asset::Btc,
+			0,
+			ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS)),
+		)
+		.unwrap();
+
+		let deposit_address = match address {
+			ForeignChainAddress::Btc(script_pubkey) => script_pubkey,
+			_ => unreachable!(),
+		};
+
+		let deposit_witnesses = vec![DepositWitness {
+			deposit_address,
+			asset: btc::Asset::Btc,
+			amount: DEFAULT_DEPOSIT_AMOUNT,
+			deposit_details,
+		}];
+
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone(), 10,));
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,));
+		assert_ok!(IngressEgress::process_deposit_witnesses(deposit_witnesses, 10,));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
+				deposit_address: _,
+				asset: btc::Asset::Btc,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: _,
+				reason: DepositIgnoredReason::TransactionTainted,
 			})
 		);
 	});
