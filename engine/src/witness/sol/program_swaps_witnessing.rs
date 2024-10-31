@@ -12,7 +12,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use cf_chains::{
 	address::EncodedAddress,
 	assets::sol::Asset as SolAsset,
-	sol::{api::ContractSwapAccountAndSender, SolAddress},
+	sol::{api::VaultSwapAccountAndSender, SolAddress},
 };
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
@@ -65,12 +65,12 @@ pub async fn get_program_swaps(
 	sol_rpc: &SolRetryRpcClient,
 	swap_endpoint_data_account_address: SolAddress,
 	sc_open_accounts: Vec<SolAddress>,
-	sc_closure_initiated_accounts: BTreeSet<ContractSwapAccountAndSender>,
+	sc_closure_initiated_accounts: BTreeSet<VaultSwapAccountAndSender>,
 	usdc_token_mint_pubkey: SolAddress,
 ) -> Result<
 	(
-		Vec<(ContractSwapAccountAndSender, SolanaVaultSwapDetails)>,
-		Vec<ContractSwapAccountAndSender>,
+		Vec<(VaultSwapAccountAndSender, SolanaVaultSwapDetails)>,
+		Vec<VaultSwapAccountAndSender>,
 	),
 	anyhow::Error,
 > {
@@ -94,8 +94,8 @@ pub async fn get_program_swaps(
 					Some(data)
 						if (data.src_token.is_none() ||
 							data.src_token.is_some_and(|addr| addr == usdc_token_mint_pubkey.0)) =>
-						Some(Ok((ContractSwapAccountAndSender {
-							contract_swap_account: account,
+						Some(Ok((VaultSwapAccountAndSender {
+							vault_swap_account: account,
 							swap_sender: data.sender.into()
 						}, SolanaVaultSwapDetails {
 							from: if data.src_token.is_none() {SolAsset::Sol} else {SolAsset::SolUsdc},
@@ -141,9 +141,9 @@ pub async fn get_program_swaps(
 async fn get_changed_program_swap_accounts(
 	sol_rpc: &SolRetryRpcClient,
 	sc_opened_accounts: Vec<SolAddress>,
-	sc_closure_initiated_accounts: BTreeSet<ContractSwapAccountAndSender>,
+	sc_closure_initiated_accounts: BTreeSet<VaultSwapAccountAndSender>,
 	swap_endpoint_data_account_address: SolAddress,
-) -> Result<(Vec<SolAddress>, Vec<ContractSwapAccountAndSender>, u64), anyhow::Error> {
+) -> Result<(Vec<SolAddress>, Vec<VaultSwapAccountAndSender>, u64), anyhow::Error> {
 	let (_historical_number_event_accounts, open_event_accounts, slot) =
 		get_swap_endpoint_data(sol_rpc, swap_endpoint_data_account_address)
 			.await
@@ -152,7 +152,7 @@ async fn get_changed_program_swap_accounts(
 	let sc_opened_accounts_hashset: HashSet<_> = sc_opened_accounts.iter().collect();
 	let sc_closure_initiated_accounts_hashset = sc_closure_initiated_accounts
 		.iter()
-		.map(|ContractSwapAccountAndSender { contract_swap_account, .. }| contract_swap_account)
+		.map(|VaultSwapAccountAndSender { vault_swap_account, .. }| vault_swap_account)
 		.collect::<HashSet<_>>();
 
 	let mut new_program_swap_accounts = Vec::new();
@@ -168,7 +168,7 @@ async fn get_changed_program_swap_accounts(
 
 	let open_event_accounts_hashset: HashSet<_> = open_event_accounts.iter().collect();
 	for account in sc_closure_initiated_accounts {
-		if !open_event_accounts_hashset.contains(&account.contract_swap_account) {
+		if !open_event_accounts_hashset.contains(&account.vault_swap_account) {
 			closed_accounts.push(account);
 		}
 	}

@@ -4,7 +4,7 @@
 #![feature(split_array)]
 
 use core::{fmt::Display, iter::Step};
-use sol::api::ContractSwapAccountAndSender;
+use sol::api::VaultSwapAccountAndSender;
 use sp_std::marker::PhantomData;
 
 use crate::{
@@ -492,7 +492,7 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 
 pub trait CloseSolanaVaultSwapAccounts: ApiCall<<Solana as Chain>::ChainCrypto> {
 	fn new_unsigned(
-		accounts: Vec<ContractSwapAccountAndSender>,
+		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError>;
 }
 

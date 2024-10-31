@@ -17,7 +17,7 @@ use crate::{
 	},
 };
 use anyhow::Result;
-use cf_chains::{sol::{api::ContractSwapAccountAndSender, SolHash}, Chain};
+use cf_chains::{sol::{api::VaultSwapAccountAndSender, SolHash}, Chain};
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
@@ -202,8 +202,8 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 			properties
 				.witnessed_open_accounts
 				.into_iter()
-				.map(|ContractSwapAccountAndSender { contract_swap_account, .. }| {
-					contract_swap_account
+				.map(|VaultSwapAccountAndSender { vault_swap_account, .. }| {
+					vault_swap_account
 				})
 				.collect(),
 			properties.closure_initiated_accounts,
