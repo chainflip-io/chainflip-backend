@@ -62,6 +62,21 @@ pub struct SolanaVaultSwapsVote<Account: Ord, SwapDetails: Ord> {
 	pub confirm_closed_accounts: BTreeSet<Account>,
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl<Account: Ord + BenchmarkValue, SwapDetails: Ord + BenchmarkValue> BenchmarkValue
+	for SolanaVaultSwapsVote<Account, SwapDetails>
+{
+	fn benchmark_value() -> Self {
+		Self {
+			new_accounts: BTreeSet::from([
+				BenchmarkValue::benchmark_value(),
+				BenchmarkValue::benchmark_value(),
+			]),
+			confirm_closed_accounts: BTreeSet::from([BenchmarkValue::benchmark_value()]),
+		}
+	}
+}
+
 pub struct SolanaVaultSwapAccounts<
 	Account,
 	SwapDetails,
