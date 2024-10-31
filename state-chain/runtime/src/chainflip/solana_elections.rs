@@ -1,6 +1,6 @@
 use crate::{
-	Environment, Offence, Reputation, Runtime, RuntimeOrigin, SolanaBroadcaster,
-	SolanaChainTracking, SolanaIngressEgress, SolanaThresholdSigner,
+	Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
+	SolanaIngressEgress, SolanaThresholdSigner,
 };
 use cf_chains::{
 	address::EncodedAddress,
@@ -912,19 +912,18 @@ impl
 	> for SolanaVaultSwapsHandler
 {
 	fn initiate_vault_swap(swap_details: SolanaVaultSwapDetails) {
-		let _ = SolanaIngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
+		SolanaIngressEgress::process_vault_swap_request(
 			swap_details.from.into(),
-			swap_details.to,
 			swap_details.deposit_amount,
+			swap_details.to,
 			swap_details.destination_address,
-			Default::default(),
+			Default::default(), // TODO
 			swap_details.tx_hash,
-			Default::default(),
-			Default::default(),
-			Default::default(),
-			Default::default(),
-			Default::default(),
+			Default::default(), // TODO
+			Default::default(), // TODO
+			Default::default(), // TODO
+			Default::default(), // TODO
+			Default::default(), // TODO
 		);
 	}
 
