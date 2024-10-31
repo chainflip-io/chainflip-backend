@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::{
-	api::{VaultSwapAccountAndSender, SolanaApi},
+	api::{SolanaApi, VaultSwapAccountAndSender},
 	SolAddress, SolHash, SolMessage, SolSignature, SolTrackedData, SolTransaction,
 	SolanaTransactionData,
 };

@@ -258,3 +258,4 @@ impl_tuple_benchmark_value!(A, B, C);
 impl_tuple_benchmark_value!(A, B, C, D);
 impl_tuple_benchmark_value!(A, B, C, D, EE);
 impl_tuple_benchmark_value!(A, B, C, D, EE, F);
+impl_tuple_benchmark_value!(A, B, C, D, EE, F, GG);
