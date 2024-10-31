@@ -81,11 +81,9 @@ pub enum BoostStatus<ChainAmount> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub enum TaintedTransactionStatus {
-	/// Transaction was boosted, can't be rejected.
-	Boosted,
 	/// Transaction was prewitnessed but not boosted due to being reported.
 	Prewitnessed,
-	/// Transaction has been reported but not neither prewitnessed nor boosted.
+	/// Transaction has been reported but was not prewitnessed.
 	#[default]
 	Unseen,
 }
@@ -853,7 +851,7 @@ pub mod pallet {
 							Ok(())
 						},
 						_ => {
-							// Don't apply the mutation. We expect the pre-witnessed/boosted
+							// Don't apply the mutation. We expect the pre-witnessed
 							// transaction to eventually be fully witnessed.
 							Err(())
 						},
@@ -1781,16 +1779,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							*status = TaintedTransactionStatus::Prewitnessed;
 							true
 						},
+						// Pre-witnessing twice is unlikely but possible. Either way we don't want
+						// to change the status and we don't want to allow boosting.
+						Some(TaintedTransactionStatus::Prewitnessed) => true,
 						// Transaction has not been reported, mark it as boosted to prevent further
 						// reports.
-						None => {
-							let _ = opt.insert(TaintedTransactionStatus::Boosted);
-							false
-						},
-						// Pre-witnessing twice or pre-witnessing after boosting is unlikely but
-						// possible. Either way we don't want to change the status.
-						Some(TaintedTransactionStatus::Prewitnessed) |
-						Some(TaintedTransactionStatus::Boosted) => true,
+						None => false,
 					}
 				}) {
 					continue;
@@ -2019,8 +2013,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let channel_owner = deposit_channel_details.owner.clone();
 
 		if let Some(tx_id) = deposit_details.deposit_id() {
-			if matches!(TaintedTransactions::<T, I>::take(&channel_owner, &tx_id),
-			Some(status) if status != TaintedTransactionStatus::Boosted)
+			if TaintedTransactions::<T, I>::take(&channel_owner, &tx_id).is_some() &&
+				!matches!(deposit_channel_details.boost_status, BoostStatus::Boosted { .. })
 			{
 				let refund_address = match deposit_channel_details.action.clone() {
 					ChannelAction::Swap { refund_params, .. } => refund_params
