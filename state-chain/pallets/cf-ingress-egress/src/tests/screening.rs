@@ -168,10 +168,8 @@ fn finalize_boosted_tx_if_tainted_after_prewitness() {
 			10,
 		);
 
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,),
-			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
-		);
+		// It's possible to report the tx, but reporting will have no effect.
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,),);
 
 		assert_ok!(IngressEgress::process_single_deposit(
 			address,
@@ -319,7 +317,6 @@ fn can_not_report_transaction_after_witnessing() {
 		let unreported = Hash::random();
 		let unseen = Hash::random();
 		let prewitnessed = Hash::random();
-		let boosted = Hash::random();
 
 		TaintedTransactions::<Test, ()>::insert(BROKER, unseen, TaintedTransactionStatus::Unseen);
 		TaintedTransactions::<Test, ()>::insert(
@@ -327,7 +324,6 @@ fn can_not_report_transaction_after_witnessing() {
 			prewitnessed,
 			TaintedTransactionStatus::Prewitnessed,
 		);
-		TaintedTransactions::<Test, ()>::insert(BROKER, boosted, TaintedTransactionStatus::Boosted);
 
 		assert_ok!(IngressEgress::mark_transaction_as_tainted(
 			OriginTrait::signed(BROKER),
@@ -338,10 +334,6 @@ fn can_not_report_transaction_after_witnessing() {
 		);
 		assert_noop!(
 			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), prewitnessed,),
-			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
-		);
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), boosted,),
 			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
 		);
 	});
@@ -369,6 +361,53 @@ fn send_funds_back_after_they_have_been_rejected() {
 			RuntimeEvent::IngressEgress(crate::Event::TaintedTransactionRejected {
 				broadcast_id: _,
 				tx_id: _,
+			})
+		);
+	});
+}
+
+#[test]
+fn can_report_between_prewitness_and_witness_if_tx_was_not_boosted() {
+	new_test_ext().execute_with(|| {
+		let tx_id = Hash::random();
+		let deposit_details = helpers::generate_btc_deposit(tx_id);
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER,
+		));
+
+		let (_id, address, ..) = IngressEgress::request_liquidity_deposit_address(
+			BROKER,
+			btc::Asset::Btc,
+			0,
+			ForeignChainAddress::Btc(ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS)),
+		)
+		.unwrap();
+
+		let deposit_address = match address {
+			ForeignChainAddress::Btc(script_pubkey) => script_pubkey,
+			_ => unreachable!(),
+		};
+
+		let deposit_witnesses = vec![DepositWitness {
+			deposit_address,
+			asset: btc::Asset::Btc,
+			amount: DEFAULT_DEPOSIT_AMOUNT,
+			deposit_details,
+		}];
+
+		assert_ok!(IngressEgress::add_prewitnessed_deposits(deposit_witnesses.clone(), 10,));
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,));
+		assert_ok!(IngressEgress::process_deposit_witnesses(deposit_witnesses, 10,));
+
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::DepositIgnored {
+				deposit_address: _,
+				asset: btc::Asset::Btc,
+				amount: DEFAULT_DEPOSIT_AMOUNT,
+				deposit_details: _,
+				reason: DepositIgnoredReason::TransactionTainted,
 			})
 		);
 	});
