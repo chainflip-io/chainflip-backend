@@ -54,6 +54,7 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use scale_info::{
 	build::{Fields, Variants},
+	prelude::string::String,
 	Path, Type,
 };
 use sp_runtime::traits::UniqueSaturatedInto;
@@ -743,6 +744,17 @@ pub mod pallet {
 		},
 		FailedToRejectTaintedTransaction {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
+		},
+		DebugEvent {
+			message: u32,
+		},
+		DebugEvent2 {
+			channel_owner: T::AccountId,
+			channel_id: ChannelId,
+		},
+		DebugEvent3 {
+			tx_id: TransactionInIdFor<T, I>,
+			status: TaintedTransactionStatus,
 		},
 	}
 
@@ -1718,7 +1730,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
 			if let Some(tx_id) = deposit_details.deposit_id() {
-				if TaintedTransactions::<T, I>::mutate(&owner, &tx_id, |opt| {
+				if TaintedTransactions::<T, I>::mutate(&owner, tx_id.clone(), |opt| {
 					match opt.as_mut() {
 						// Transaction has been reported, mark it as pre-witnessed.
 						Some(status @ TaintedTransactionStatus::Unseen) => {
@@ -1728,6 +1740,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// Transaction has not been reported, mark it as boosted to prevent further
 						// reports.
 						None => {
+							Self::deposit_event(Event::<T, I>::DebugEvent3 {
+								tx_id: tx_id.clone(),
+								status: TaintedTransactionStatus::Boosted,
+							});
 							let _ = opt.insert(TaintedTransactionStatus::Boosted);
 							false
 						},
@@ -1739,6 +1755,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}) {
 					continue;
 				}
+			} else {
+				Self::deposit_event(Event::<T, I>::DebugEvent { message: 1 });
 			}
 
 			let prewitnessed_deposit_id =
@@ -1963,6 +1981,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let channel_owner = deposit_channel_details.owner.clone();
 
 		if let Some(tx_id) = deposit_details.deposit_id() {
+			let status = TaintedTransactions::<T, I>::get(&channel_owner, &tx_id).unwrap();
+			Self::deposit_event(Event::<T, I>::DebugEvent3 { tx_id: tx_id.clone(), status });
 			if matches!(TaintedTransactions::<T, I>::take(&channel_owner, &tx_id),
 			Some(status) if status != TaintedTransactionStatus::Boosted)
 			{

@@ -1,18 +1,20 @@
 import { ExecutableTest } from '../shared/executable_test';
-import { sendBtcAndReturnTxId } from '../shared/send_btc';
+import { sendBtcAndReturnTxId, sendBtcFireAndForget } from '../shared/send_btc';
 import { randomBytes } from 'crypto';
-import { newAddress } from '../shared/utils';
+import { hexStringToBytesArray, newAddress, sleep } from '../shared/utils';
 import { handleSubstrateError } from '../shared/utils';
 import { brokerMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
 import { requestNewSwap } from '../shared/perform_swap';
+import { stringToU8a } from '@polkadot/util'
+import { execSync } from 'child_process';
 
 const keyring = new Keyring({ type: 'sr25519' });
 
 export const testBrokerLevelScreening = new ExecutableTest('Broker-Level-Screening', main, 300);
 
-const broker = keyring.createFromUri('//BROKER_FEE_TEST');
+const broker = keyring.createFromUri('//BROKER_1');
 
 export async function submitTxAsTainted(tx_id: unknown) {
     await using chainflip = await getChainflipApi();
@@ -21,6 +23,18 @@ export async function submitTxAsTainted(tx_id: unknown) {
             .markTransactionAsTainted(tx_id)
             .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
     );
+}
+
+function pause_btc_block_production(command: boolean): boolean {
+    let start = "docker exec bitcoin rm /root/mine_blocks";
+    let stop = "docker exec bitcoin touch /root/mine_blocks";
+    try {
+        execSync(command ? start : stop);
+        return true;
+    } catch (error) {
+        console.error(error);
+        return false;
+    }
 }
 
 async function main() {
@@ -43,9 +57,15 @@ async function main() {
         0,
         refundParameters,
     );
+    console.log(`Paused block production: ${pause_btc_block_production(true)}`);
     let tx_id = await sendBtcAndReturnTxId(swapParams.depositAddress, BTC_AMOUNT);
     console.log(`Btc tx_id: ${tx_id}`);
-    await submitTxAsTainted(tx_id);
+    console.log(`Deposit address: ${swapParams.depositAddress}`);
+    let tx_id_u8a = hexStringToBytesArray(tx_id);
+    console.log(`Tx_id_u8a: ${tx_id_u8a}`);
+    await submitTxAsTainted(tx_id_u8a);
+    await sleep(6000);
+    console.log(`Resumed block production: ${pause_btc_block_production(false)}`);
     console.log('Waiting for tx to be refunded');
     const txRefunded = await observeEvent('bitcoinIngressEgress:DepositIgnored').event;
     console.log(`Tx refunded: ${txRefunded}`);
