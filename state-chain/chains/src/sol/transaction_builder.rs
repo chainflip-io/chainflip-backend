@@ -12,12 +12,12 @@ use sol_prim::consts::{
 use crate::{
 	sol::{
 		api::{
-			ContractSwapAccountAndSender, DurableNonceAndAccount, SolanaTransactionBuildingError,
+			VaultSwapAccountAndSender, DurableNonceAndAccount, SolanaTransactionBuildingError,
 		},
 		compute_units_costs::{
 			compute_limit_with_buffer, BASE_COMPUTE_UNITS_PER_TX,
 			COMPUTE_UNITS_PER_BUMP_DERIVATION, COMPUTE_UNITS_PER_CLOSE_ACCOUNT,
-			COMPUTE_UNITS_PER_CLOSE_CONTRACT_SWAP_ACCOUNTS, COMPUTE_UNITS_PER_FETCH_NATIVE,
+			COMPUTE_UNITS_PER_CLOSE_VAULT_SWAP_ACCOUNTS, COMPUTE_UNITS_PER_FETCH_NATIVE,
 			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_ROTATION,
 			COMPUTE_UNITS_PER_SET_GOV_KEY, COMPUTE_UNITS_PER_TRANSFER_NATIVE,
 			COMPUTE_UNITS_PER_TRANSFER_TOKEN,
@@ -447,8 +447,8 @@ impl SolanaTransactionBuilder {
 
 	/// Creates an instruction to close a number of open event swap accounts created via program
 	/// swap.
-	pub fn close_contract_swap_accounts(
-		contract_swap_accounts: Vec<ContractSwapAccountAndSender>,
+	pub fn close_vault_swap_accounts(
+		vault_swap_accounts: Vec<VaultSwapAccountAndSender>,
 		vault_program_data_account: SolAddress,
 		swap_endpoint_program: SolAddress,
 		swap_endpoint_data_account: SolAddress,
@@ -456,13 +456,13 @@ impl SolanaTransactionBuilder {
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
 	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
-		let number_of_accounts = contract_swap_accounts.len();
-		let swap_and_sender_vec: Vec<AccountMeta> = contract_swap_accounts
+		let number_of_accounts = vault_swap_accounts.len();
+		let swap_and_sender_vec: Vec<AccountMeta> = vault_swap_accounts
 			.into_iter()
 			// Both event account and payee should be writable and non-signers
-			.flat_map(|ContractSwapAccountAndSender { contract_swap_account, swap_sender }| {
+			.flat_map(|VaultSwapAccountAndSender { vault_swap_account, swap_sender }| {
 				vec![
-					AccountMeta::new(contract_swap_account.into(), false),
+					AccountMeta::new(vault_swap_account.into(), false),
 					AccountMeta::new(swap_sender.into(), false),
 				]
 			})
@@ -478,7 +478,7 @@ impl SolanaTransactionBuilder {
 			agg_key.into(),
 			compute_price,
 			compute_limit_with_buffer(
-				COMPUTE_UNITS_PER_CLOSE_CONTRACT_SWAP_ACCOUNTS +
+				COMPUTE_UNITS_PER_CLOSE_VAULT_SWAP_ACCOUNTS +
 					COMPUTE_UNITS_PER_CLOSE_ACCOUNT * number_of_accounts as u32,
 			),
 		)
@@ -727,11 +727,11 @@ mod test {
 	}
 
 	#[test]
-	fn can_close_contract_swap_accounts() {
+	fn can_close_vault_swap_accounts() {
 		let env = api_env();
-		let contract_swap_accounts = vec![EVENT_AND_SENDER_ACCOUNTS[0]];
-		let transaction = SolanaTransactionBuilder::close_contract_swap_accounts(
-			contract_swap_accounts,
+		let vault_swap_accounts = vec![EVENT_AND_SENDER_ACCOUNTS[0]];
+		let transaction = SolanaTransactionBuilder::close_vault_swap_accounts(
+			vault_swap_accounts,
 			env.vault_program_data_account,
 			env.swap_endpoint_program,
 			env.swap_endpoint_program_data_account,
@@ -741,18 +741,18 @@ mod test {
 		)
 		.unwrap();
 
-		// Serialized tx built in `close_contract_swap_accounts` test
+		// Serialized tx built in `close_vault_swap_accounts` test
 		let expected_serialized_tx = hex_literal::hex!("01026e2d4bdca9e638b59507a70ea62ad88f098ffb25df028a19288702698fdf6d1cf77618b2123c0205a8e8d272ba8ea645b7e75c606ca3aa4356b65fa52ca20b0100050af79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17e5cc1f4d51a40626e11c783b75a45a4922615ecd7f5320b9d4d46481a196a317eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921c1f0efc91eeb48bb80c90cf97775cd5d843a96f16500266cee2c20d053152d2665730decf59d4cd6db8437dab77302287431eb7562b5997601851a0eab6946f00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e091ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc1622938c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004050302070004040000000600090340420f000000000006000502307500000905080003010408a5663d01b94dbd79").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
 
 	#[test]
-	fn can_close_max_contract_swap_accounts() {
+	fn can_close_max_vault_swap_accounts() {
 		let env = api_env();
 
 		// We can close 11 accounts without reaching the transaction length limit.
-		let transaction = SolanaTransactionBuilder::close_contract_swap_accounts(
+		let transaction = SolanaTransactionBuilder::close_vault_swap_accounts(
 			EVENT_AND_SENDER_ACCOUNTS.to_vec(),
 			env.vault_program_data_account,
 			env.swap_endpoint_program,

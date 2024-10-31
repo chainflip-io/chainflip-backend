@@ -568,7 +568,7 @@ fn testnet_genesis(
 	genesis_funding_amount: u128,
 	minimum_funding: u128,
 	redemption_tax: u128,
-	epoch_duration: BlockNumber,
+	blocks_per_epoch: BlockNumber,
 	redemption_ttl_secs: u64,
 	current_authority_emission_inflation_perbill: u32,
 	backup_node_emission_inflation_perbill: u32,
@@ -680,7 +680,7 @@ fn testnet_genesis(
 					}
 				})
 				.collect::<_>(),
-			epoch_duration,
+			blocks_per_epoch,
 			redemption_period_as_percentage,
 			backup_reward_node_percentage: Percent::from_percent(33),
 			bond: all_accounts

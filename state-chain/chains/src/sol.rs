@@ -6,7 +6,10 @@ use sp_std::{vec, vec::Vec};
 
 use sol_prim::{AccountBump, SlotNumber};
 
-use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
+use crate::{
+	address, assets, DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi,
+	FeeRefundCalculator, TypeInfo,
+};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{sp_runtime::RuntimeDebug, Parameter};
 use serde::{Deserialize, Serialize};
@@ -23,7 +26,7 @@ pub use crate::assets::sol::Asset as SolAsset;
 use crate::benchmarking_value::BenchmarkValue;
 pub use sol_prim::{
 	consts::{
-		LAMPORTS_PER_SIGNATURE, MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
+		LAMPORTS_PER_SIGNATURE, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 		MAX_TRANSACTION_LENGTH, MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
 		MICROLAMPORTS_PER_LAMPORT,
 		NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES, TOKEN_ACCOUNT_RENT,
@@ -152,7 +155,7 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
-	pub const COMPUTE_UNITS_PER_CLOSE_CONTRACT_SWAP_ACCOUNTS: SolComputeLimit = 10_000u32;
+	pub const COMPUTE_UNITS_PER_CLOSE_VAULT_SWAP_ACCOUNTS: SolComputeLimit = 10_000u32;
 	pub const COMPUTE_UNITS_PER_CLOSE_ACCOUNT: SolComputeLimit = 10_000u32;
 
 	/// This is equivalent to a priority fee
@@ -395,3 +398,5 @@ pub struct SolApiEnvironment {
 	pub swap_endpoint_program: SolAddress,
 	pub swap_endpoint_program_data_account: SolAddress,
 }
+
+impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}

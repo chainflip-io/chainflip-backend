@@ -1,6 +1,6 @@
 use super::*;
 use cf_chains::{
-	btc::{deposit_address::DepositAddress, ScriptPubkey},
+	btc::{deposit_address::DepositAddress, ScriptPubkey, Utxo},
 	AllBatch, Bitcoin, ForeignChain, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::btc, AuthorityCount, BroadcastId};
@@ -12,10 +12,10 @@ use state_chain_runtime::{
 
 #[test]
 fn bitcoin_broadcast_delay_works() {
-	const EPOCH_DURATION_BLOCKS: u32 = 200;
+	const EPOCH_BLOCKS: u32 = 200;
 	const MAX_AUTHORITIES: AuthorityCount = 150;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_DURATION_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -26,11 +26,11 @@ fn bitcoin_broadcast_delay_works() {
 			let epoch = Validator::epoch_index();
 			let bitcoin_agg_key = BitcoinThresholdSigner::keys(epoch).unwrap().current;
 			let egress_id = (ForeignChain::Bitcoin, 1u64);
-			Environment::add_bitcoin_utxo_to_list(
-				1_000_000_000_000u64,
-				Default::default(),
-				DepositAddress::new(bitcoin_agg_key, 0u32),
-			);
+			Environment::add_bitcoin_utxo_to_list(Utxo {
+				id: Default::default(),
+				amount: 1_000_000_000_000u64,
+				deposit_address: DepositAddress::new(bitcoin_agg_key, 0u32),
+			});
 
 			// Cause bitcoin vault to rotate - but stop the broadcasting.
 			let (bitcoin_call, _egress_ids) = AllBatch::<Bitcoin>::new_unsigned(

@@ -874,7 +874,7 @@ impl FromStr for Hash {
 pub mod sol_test_values {
 	use crate::{
 		sol::{
-			api::ContractSwapAccountAndSender, signing_key::SolSigningKey,
+			api::VaultSwapAccountAndSender, signing_key::SolSigningKey,
 			sol_tx_core::signer::Signer, SolAddress, SolAmount, SolAsset, SolCcmAccounts,
 			SolCcmAddress, SolComputeLimit, SolHash,
 		},
@@ -916,49 +916,49 @@ pub mod sol_test_values {
 		const_address("35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT");
 	pub const SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT: SolAddress =
 		const_address("2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9");
-	pub const EVENT_AND_SENDER_ACCOUNTS: [ContractSwapAccountAndSender; 11] = [
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("2cHcSNtikMpjxJfwwoYL3udpy7hedRExyhakk2eZ6cYA"),
+	pub const EVENT_AND_SENDER_ACCOUNTS: [VaultSwapAccountAndSender; 11] = [
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("2cHcSNtikMpjxJfwwoYL3udpy7hedRExyhakk2eZ6cYA"),
 			swap_sender: const_address("7tVhSXxGfZyHQem8MdZVB6SoRsrvV4H8h1rX6hwBuvEA"),
 		},
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("6uuU1NFyThN3KJpU9mYXkGSmd8Qgncmd9aYAWYN71VkC"),
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("6uuU1NFyThN3KJpU9mYXkGSmd8Qgncmd9aYAWYN71VkC"),
 			swap_sender: const_address("P3GYr1Z67jdBVimzFjMXQpeuew5TY5txoZ9CvqASpaP"),
 		},
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("DmAom3kp2ZKk9cnbWEsnbkLHkp3sx9ef1EX6GWj1JRUB"),
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("DmAom3kp2ZKk9cnbWEsnbkLHkp3sx9ef1EX6GWj1JRUB"),
 			swap_sender: const_address("CS7yX5TKX36ugF4bycmVQ5vqB2ZbNVC5tvtrtLP92GDW"),
 		},
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("CJSdHgxwHLEbTsxKsJk9UyJxUEgku2UC9GXRTzR2ieSh"),
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("CJSdHgxwHLEbTsxKsJk9UyJxUEgku2UC9GXRTzR2ieSh"),
 			swap_sender: const_address("2taCR53epDtdrFZBxzKcbmv3cb5Umc5x9k2YCjmTDAnH"),
 		},
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("7DGwjsQEFA7XzZS9z5YbMhYGzWJSh5T78hRrU47RDTd2"),
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("7DGwjsQEFA7XzZS9z5YbMhYGzWJSh5T78hRrU47RDTd2"),
 			swap_sender: const_address("FDPzoZj951Hq92jhoFdyzAVyUjyXhL8VEnqBhyjsDhow"),
 		},
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("A6yYXUmZHa32mcFRnwwq8ZQKCEYUn9ewF1vWn2wsXN5a"),
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("A6yYXUmZHa32mcFRnwwq8ZQKCEYUn9ewF1vWn2wsXN5a"),
 			swap_sender: const_address("9bNNNU9B52VPVGm6zRccwPEexDHD1ntndD2aNu2un3ca"),
 		},
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("2F3365PULNzt7moa9GgHARy7Lumj5ptDQF7wDt6xeuHK"),
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("2F3365PULNzt7moa9GgHARy7Lumj5ptDQF7wDt6xeuHK"),
 			swap_sender: const_address("4m5t38fJsvULKaPyWZKWjzfbvnzBGL86BTRNk5vLLUrh"),
 		},
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("8sCBWv9tzdf2iC4GNj61UBN6TZpzsLP5Ppv9x1ENX4HT"),
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("8sCBWv9tzdf2iC4GNj61UBN6TZpzsLP5Ppv9x1ENX4HT"),
 			swap_sender: const_address("A3P5kfRU1vgZn7GjNMomS8ye6GHsoHC4JoVNUotMbDPE"),
 		},
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("3b1FkNvnvKJ4TzKeft7wA47VfYpjkoHPE4ER13ZTNecX"),
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("3b1FkNvnvKJ4TzKeft7wA47VfYpjkoHPE4ER13ZTNecX"),
 			swap_sender: const_address("ERwuPnX66dCZqj85kH9QQJmwcVrzcczBnu8onJY2R7tG"),
 		},
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("Bnrp9X562krXVfaY8FnwJa3Mxp1gbDCrvGNW1qc99rKe"),
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("Bnrp9X562krXVfaY8FnwJa3Mxp1gbDCrvGNW1qc99rKe"),
 			swap_sender: const_address("2aoZg41FFnTBnuHpkfHdFsCuPz8DhN4dsUW5386XwE8g"),
 		},
-		ContractSwapAccountAndSender {
-			contract_swap_account: const_address("EuLceVgXMaJNPT7C88pnL7DRWcf1poy9BCeWY1GL8Agd"),
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("EuLceVgXMaJNPT7C88pnL7DRWcf1poy9BCeWY1GL8Agd"),
 			swap_sender: const_address("G1iXMtwUU76JGau9cJm6N8wBTmcsvyXuJcC7PtfU1TXZ"),
 		},
 	];
@@ -1003,7 +1003,7 @@ pub mod sol_test_values {
 			channel_metadata: CcmChannelMetadata {
 				message: vec![124u8, 29u8, 15u8, 7u8].try_into().unwrap(), // CCM message
 				gas_budget: 0u128,                                         // unused
-				cf_parameters: codec::Encode::encode(&ccm_accounts())
+				ccm_additional_data: codec::Encode::encode(&ccm_accounts())
 					.try_into()
 					.expect("Test data cannot be too long"), // Extra addresses
 			},

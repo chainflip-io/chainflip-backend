@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@chainflip/cli':
-        specifier: 1.6.3
-        version: 1.6.3(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)
+        specifier: 1.8.0-rc.1
+        version: 1.8.0-rc.1(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)
       '@chainflip/utils':
         specifier: ^0.4.0
         version: 0.4.0
@@ -145,8 +145,8 @@ packages:
   '@chainflip/bitcoin@1.1.1':
     resolution: {integrity: sha512-Jr6X/0QTSFYpTp23ZPhyioL6wL9x3Xpj6OGjadQKZyhobRN4BZkhLogv20HDYTJcRzVphzrTJArbEaNie04XVA==}
 
-  '@chainflip/cli@1.6.3':
-    resolution: {integrity: sha512-isbPdFbO0tmQ7+7OjWSyzKtuog7FOgvkeb7fIini88LHsTjTXf8UvoKGYncOgwvLVQIY+J7NDnSQQmKdBg7PUw==}
+  '@chainflip/cli@1.8.0-rc.1':
+    resolution: {integrity: sha512-e8TWjBCgwRmfcGbq59ELs1xQglXc4/lGGYiC0DwYIsN58NNFbFL04UDsS2rOivrnxlx9kwOihGU5AZABtup12g==}
     hasBin: true
     peerDependencies:
       axios: ^1.x
@@ -155,8 +155,8 @@ packages:
   '@chainflip/extrinsics@1.6.1':
     resolution: {integrity: sha512-sm3v2QguNW4/RiIZYHd+VRSxup2q4cVBY0VjbQJw6xYqhNCzZlt+Hl38Kni+TCHQu3hP/WgIF72yvvSs7/PBdg==}
 
-  '@chainflip/rpc@1.6.7':
-    resolution: {integrity: sha512-OIE2cqzDy9Oq9sHuxJKOtbjP438QwMFdc6tuWdAmjjPcHGATI0Ft/lIKeCutD/8uH/CumOzaOoBaT2pI6G78Gg==}
+  '@chainflip/rpc@1.6.9':
+    resolution: {integrity: sha512-FtaoZBey4kIFhWQY5mMMAGXIgzSpZCX0DTnXQqPEn9q5qvt6FoQLDQk9k2IYKOTiIP+XsLy9w/WPPiH7+3BpnQ==}
 
   '@chainflip/solana@1.0.2':
     resolution: {integrity: sha512-8M+z0yjVCZBMpdCTGuBRt/Ns9NBJCNFvnSOjDu/kyaBRvxdUvECJOIseL0ENLBd0J/YmO9TcrZ30M0po3a96BA==}
@@ -3169,11 +3169,11 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@chainflip/cli@1.6.3(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)':
+  '@chainflip/cli@1.8.0-rc.1(axios@1.7.2)(bufferutil@4.0.8)(ethers@6.13.2(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.5.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@chainflip/bitcoin': 1.1.1(typescript@5.5.3)
       '@chainflip/extrinsics': 1.6.1
-      '@chainflip/rpc': 1.6.7
+      '@chainflip/rpc': 1.6.9
       '@chainflip/solana': 1.0.2
       '@chainflip/utils': 0.4.0
       axios: 1.7.2
@@ -3189,7 +3189,7 @@ snapshots:
 
   '@chainflip/extrinsics@1.6.1': {}
 
-  '@chainflip/rpc@1.6.7':
+  '@chainflip/rpc@1.6.9':
     dependencies:
       '@chainflip/utils': 0.3.0
       zod: 3.23.8

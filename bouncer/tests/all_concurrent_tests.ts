@@ -10,10 +10,10 @@ import { testBrokerFeeCollection } from './broker_fee_collection';
 import { testBoostingSwap } from './boost';
 import { observeBadEvent } from '../shared/utils/substrate';
 import { testFillOrKill } from './fill_or_kill';
-import { testDCASwaps } from './DCA_test';
 import { testCancelOrdersBatch } from './create_and_delete_multiple_orders';
 import { testAllSwaps } from './all_swaps';
 import { depositChannelCreation } from './request_swap_deposit_address_with_affiliates';
+import { testDCASwaps } from './DCA_test';
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.

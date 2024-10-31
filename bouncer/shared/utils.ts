@@ -1,5 +1,6 @@
 import { execSync } from 'child_process';
 import * as crypto from 'crypto';
+import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, Keyring } from '@polkadot/api';
@@ -31,6 +32,7 @@ import { SwapParams } from './perform_swap';
 import { newSolAddress } from './new_sol_address';
 import { getChainflipApi, observeBadEvent, observeEvent } from './utils/substrate';
 import { execWithLog } from './utils/exec_with_log';
+import { send } from './send';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -53,7 +55,7 @@ const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 
 export const solanaNumberOfNonces = 10;
 
-export const solCfParamsCodec = Struct({
+export const solCcmAdditionalDataCodec = Struct({
   cf_receiver: Struct({
     pubkey: TsBytes(32),
     is_writable: bool,
@@ -497,7 +499,7 @@ function checkRequestTypeMatches(actual: object | string, expected: SwapRequestT
 export async function observeSwapRequested(
   sourceAsset: Asset,
   destAsset: Asset,
-  channelId: number,
+  id: number | string,
   swapRequestType: SwapRequestType,
 ) {
   // need to await this to prevent the chainflip api from being disposed prematurely
@@ -505,9 +507,12 @@ export async function observeSwapRequested(
     test: (event) => {
       const data = event.data;
 
-      if (typeof data.origin === 'object' && 'DepositChannel' in data.origin) {
+      if (typeof data.origin === 'object') {
         const channelMatches =
-          Number(data.origin.DepositChannel.channelId.replaceAll(',', '')) === channelId;
+          (typeof id === 'number' &&
+            'DepositChannel' in data.origin &&
+            Number(data.origin.DepositChannel.channelId.replaceAll(',', '')) === id) ||
+          (typeof id === 'string' && 'Vault' in data.origin && data.origin.Vault.txHash === id);
         const sourceAssetMatches = sourceAsset === (data.inputAsset as Asset);
         const destAssetMatches = destAsset === (data.outputAsset as Asset);
         const requestTypeMatches = checkRequestTypeMatches(data.requestType, swapRequestType);
@@ -759,8 +764,8 @@ export async function observeSolanaCcmEvent(
 
           // The message is being used as the main discriminator
           if (matchEventName && matchSourceChain && matchMessage) {
-            const { remaining_accounts: expectedRemainingAccounts } = solCfParamsCodec.dec(
-              messageMetadata.cfParameters!,
+            const { remaining_accounts: expectedRemainingAccounts } = solCcmAdditionalDataCodec.dec(
+              messageMetadata.ccmAdditionalData!,
             );
 
             if (
@@ -1164,4 +1169,17 @@ export function getTimeStamp(): string {
   const minutes = now.getMinutes().toString().padStart(2, '0');
   const seconds = now.getSeconds().toString().padStart(2, '0');
   return `${hours}:${minutes}:${seconds}`;
+}
+
+export async function createEvmWalletAndFund(asset: Asset): Promise<HDNodeWallet> {
+  const chain = chainFromAsset(asset);
+
+  const mnemonic = Wallet.createRandom().mnemonic?.phrase ?? '';
+  if (mnemonic === '') {
+    throw new Error('Failed to create random mnemonic');
+  }
+  const wallet = Wallet.fromPhrase(mnemonic).connect(getDefaultProvider(getEvmEndpoint(chain)));
+  await send(chainGasAsset(chain) as SDKAsset, wallet.address, undefined, false);
+  await send(asset, wallet.address, undefined, false);
+  return wallet;
 }

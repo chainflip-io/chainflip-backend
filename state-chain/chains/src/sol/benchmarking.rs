@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::{
-	api::{ContractSwapAccountAndSender, SolanaApi},
+	api::{VaultSwapAccountAndSender, SolanaApi},
 	SolAddress, SolHash, SolMessage, SolSignature, SolTrackedData, SolTransaction,
 	SolanaTransactionData,
 };
@@ -67,11 +67,11 @@ impl<E: crate::sol::api::SolanaEnvironment> BenchmarkValue for SolanaApi<E> {
 	}
 }
 
-impl BenchmarkValue for ContractSwapAccountAndSender {
+impl BenchmarkValue for VaultSwapAccountAndSender {
 	fn benchmark_value() -> Self {
 		Self {
 			swap_sender: BenchmarkValue::benchmark_value(),
-			contract_swap_account: BenchmarkValue::benchmark_value(),
+			vault_swap_account: BenchmarkValue::benchmark_value(),
 		}
 	}
 }

@@ -141,27 +141,6 @@ pub trait ElectoralSystem: 'static + Sized {
 		true
 	}
 
-	/// This is used in the vote extrinsic to disallow a validator from providing votes that do not
-	/// pass this check. It is guaranteed that any vote values provided to
-	/// `generate_vote_properties`, or `check_consensus` have past this check.
-	///
-	/// We only pass the `PartialVote` into the validity check, instead of the `AuthorityVote` or
-	/// `Vote`, to ensure the check's logic is consistent regardless of if the authority provides a
-	/// `Vote` or `PartialVote`. If the check was different depending on if the authority voted with
-	/// a `PartialVote` or `Vote`, then check only guarantees of the intersection of the two
-	/// variations.
-	///
-	/// You should *NEVER* update the epoch during this call. And in general updating any other
-	/// state of any pallet is ill advised, and should instead be done in the 'on_finalize'
-	/// function.
-	fn is_vote_valid<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifierOf<Self>,
-		_election_access: &ElectionAccess,
-		_partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
-	) -> Result<bool, CorruptStorageError> {
-		Ok(true)
-	}
-
 	/// This is called every time a vote occurs. It associates the vote with a `Properties`
 	/// value.
 	///
@@ -311,6 +290,7 @@ mod access {
 		fn state(
 			&self,
 		) -> Result<<Self::ElectoralSystem as ElectoralSystem>::ElectionState, CorruptStorageError>;
+
 		#[cfg(test)]
 		fn election_identifier(
 			&self,

@@ -17,7 +17,7 @@ use crate::{
 	},
 };
 use anyhow::Result;
-use cf_chains::sol::{api::ContractSwapAccountAndSender, SolHash};
+use cf_chains::{sol::{api::VaultSwapAccountAndSender, SolHash}, Chain};
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
@@ -33,7 +33,10 @@ use state_chain_runtime::{
 	SolanaInstance,
 };
 
-use cf_utilities::{task_scope, task_scope::Scope};
+use cf_utilities::{
+	metrics::CHAIN_TRACKING,
+	task_scope::{self, Scope},
+};
 use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
 use std::{collections::BTreeSet, str::FromStr, sync::Arc};
 
@@ -52,7 +55,9 @@ impl VoterApi<SolanaBlockHeightTracking> for SolanaBlockHeightTrackingVoter {
 		<<SolanaBlockHeightTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		Ok(self.client.get_slot(CommitmentConfig::finalized()).await)
+		let slot = self.client.get_slot(CommitmentConfig::finalized()).await;
+		CHAIN_TRACKING.set(&[cf_chains::Solana::NAME], Into::<u64>::into(slot));
+		Ok(slot)
 	}
 }
 
@@ -197,8 +202,8 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 			properties
 				.witnessed_open_accounts
 				.into_iter()
-				.map(|ContractSwapAccountAndSender { contract_swap_account, .. }| {
-					contract_swap_account
+				.map(|VaultSwapAccountAndSender { vault_swap_account, .. }| {
+					vault_swap_account
 				})
 				.collect(),
 			properties.closure_initiated_accounts,
