@@ -1728,7 +1728,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// Transaction has not been reported, mark it as boosted to prevent further
 						// reports.
 						None => {
-							let _ = opt.insert(TaintedTransactionStatus::Boosted);
+							let _ = opt.insert(TaintedTransactionStatus::Prewitnessed);
 							false
 						},
 						// Pre-witnessing twice or pre-witnessing after boosting is unlikely but
@@ -1763,6 +1763,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									pools: used_pools.keys().cloned().collect(),
 									amount,
 								};
+								if let Some(tx_id) = deposit_details.deposit_id() {
+									TaintedTransactions::<T, I>::insert(&details.owner, &tx_id, TaintedTransactionStatus::Boosted);
+								}
 							}
 						});
 
