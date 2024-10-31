@@ -6,7 +6,7 @@ use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
 #[cfg(feature = "runtime-benchmarks")]
-use cf_chains::sol::api::ContractSwapAccountAndSender;
+use cf_chains::sol::api::VaultSwapAccountAndSender;
 
 use crate::{
 	electoral_system::{
@@ -17,7 +17,7 @@ use crate::{
 	CorruptStorageError, ElectionIdentifier,
 };
 use cf_chains::sol::{
-	MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES,
+	MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
 	MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
 	NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES,
 };
@@ -45,10 +45,10 @@ pub struct SolanaVaultSwapsKnownAccounts<Account: Ord> {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for SolanaVaultSwapsKnownAccounts<ContractSwapAccountAndSender> {
+impl BenchmarkValue for SolanaVaultSwapsKnownAccounts<VaultSwapAccountAndSender> {
 	fn benchmark_value() -> Self {
 		Self {
-			witnessed_open_accounts: vec![BenchmarkValue::benchmark_value()],
+			witnessed_open_accounts: sp_std::vec![BenchmarkValue::benchmark_value()],
 			closure_initiated_accounts: BTreeSet::from([BenchmarkValue::benchmark_value()]),
 		}
 	}
@@ -142,18 +142,18 @@ impl<
 				if Hook::get_number_of_available_sol_nonce_accounts() >
 					NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
 					(known_accounts.witnessed_open_accounts.len() >=
-						MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES ||
+						MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES ||
 						(*current_block_number)
 							.checked_sub(&electoral_access.unsynchronised_state()?)
 							.expect("current block number is always greater than when apicall was last created")
 							.into() >= MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS)
 				{
 					let accounts_to_close: Vec<_> = if known_accounts.witnessed_open_accounts.len() >
-						MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES
+						MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES
 					{
 						known_accounts
 							.witnessed_open_accounts
-							.drain(..MAX_BATCH_SIZE_OF_CONTRACT_SWAP_ACCOUNT_CLOSURES)
+							.drain(..MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES)
 							.collect()
 					} else {
 						sp_std::mem::take(&mut known_accounts.witnessed_open_accounts)

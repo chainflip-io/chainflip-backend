@@ -874,8 +874,9 @@ impl FromStr for Hash {
 pub mod sol_test_values {
 	use crate::{
 		sol::{
-			signing_key::SolSigningKey, sol_tx_core::signer::Signer, SolAddress, SolAmount,
-			SolAsset, SolCcmAccounts, SolCcmAddress, SolComputeLimit, SolHash,
+			api::VaultSwapAccountAndSender, signing_key::SolSigningKey,
+			sol_tx_core::signer::Signer, SolAddress, SolAmount, SolAsset, SolCcmAccounts,
+			SolCcmAddress, SolComputeLimit, SolHash,
 		},
 		CcmChannelMetadata, CcmDepositMetadata, ForeignChain, ForeignChainAddress,
 	};
@@ -915,51 +916,51 @@ pub mod sol_test_values {
 		const_address("35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT");
 	pub const SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT: SolAddress =
 		const_address("2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9");
-	pub const EVENT_AND_SENDER_ACCOUNTS: [(SolAddress, SolAddress); 11] = [
-		(
-			const_address("2cHcSNtikMpjxJfwwoYL3udpy7hedRExyhakk2eZ6cYA"),
-			const_address("7tVhSXxGfZyHQem8MdZVB6SoRsrvV4H8h1rX6hwBuvEA"),
-		),
-		(
-			const_address("6uuU1NFyThN3KJpU9mYXkGSmd8Qgncmd9aYAWYN71VkC"),
-			const_address("P3GYr1Z67jdBVimzFjMXQpeuew5TY5txoZ9CvqASpaP"),
-		),
-		(
-			const_address("DmAom3kp2ZKk9cnbWEsnbkLHkp3sx9ef1EX6GWj1JRUB"),
-			const_address("CS7yX5TKX36ugF4bycmVQ5vqB2ZbNVC5tvtrtLP92GDW"),
-		),
-		(
-			const_address("CJSdHgxwHLEbTsxKsJk9UyJxUEgku2UC9GXRTzR2ieSh"),
-			const_address("2taCR53epDtdrFZBxzKcbmv3cb5Umc5x9k2YCjmTDAnH"),
-		),
-		(
-			const_address("7DGwjsQEFA7XzZS9z5YbMhYGzWJSh5T78hRrU47RDTd2"),
-			const_address("FDPzoZj951Hq92jhoFdyzAVyUjyXhL8VEnqBhyjsDhow"),
-		),
-		(
-			const_address("A6yYXUmZHa32mcFRnwwq8ZQKCEYUn9ewF1vWn2wsXN5a"),
-			const_address("9bNNNU9B52VPVGm6zRccwPEexDHD1ntndD2aNu2un3ca"),
-		),
-		(
-			const_address("2F3365PULNzt7moa9GgHARy7Lumj5ptDQF7wDt6xeuHK"),
-			const_address("4m5t38fJsvULKaPyWZKWjzfbvnzBGL86BTRNk5vLLUrh"),
-		),
-		(
-			const_address("8sCBWv9tzdf2iC4GNj61UBN6TZpzsLP5Ppv9x1ENX4HT"),
-			const_address("A3P5kfRU1vgZn7GjNMomS8ye6GHsoHC4JoVNUotMbDPE"),
-		),
-		(
-			const_address("3b1FkNvnvKJ4TzKeft7wA47VfYpjkoHPE4ER13ZTNecX"),
-			const_address("ERwuPnX66dCZqj85kH9QQJmwcVrzcczBnu8onJY2R7tG"),
-		),
-		(
-			const_address("Bnrp9X562krXVfaY8FnwJa3Mxp1gbDCrvGNW1qc99rKe"),
-			const_address("2aoZg41FFnTBnuHpkfHdFsCuPz8DhN4dsUW5386XwE8g"),
-		),
-		(
-			const_address("EuLceVgXMaJNPT7C88pnL7DRWcf1poy9BCeWY1GL8Agd"),
-			const_address("G1iXMtwUU76JGau9cJm6N8wBTmcsvyXuJcC7PtfU1TXZ"),
-		),
+	pub const EVENT_AND_SENDER_ACCOUNTS: [VaultSwapAccountAndSender; 11] = [
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("2cHcSNtikMpjxJfwwoYL3udpy7hedRExyhakk2eZ6cYA"),
+			swap_sender: const_address("7tVhSXxGfZyHQem8MdZVB6SoRsrvV4H8h1rX6hwBuvEA"),
+		},
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("6uuU1NFyThN3KJpU9mYXkGSmd8Qgncmd9aYAWYN71VkC"),
+			swap_sender: const_address("P3GYr1Z67jdBVimzFjMXQpeuew5TY5txoZ9CvqASpaP"),
+		},
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("DmAom3kp2ZKk9cnbWEsnbkLHkp3sx9ef1EX6GWj1JRUB"),
+			swap_sender: const_address("CS7yX5TKX36ugF4bycmVQ5vqB2ZbNVC5tvtrtLP92GDW"),
+		},
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("CJSdHgxwHLEbTsxKsJk9UyJxUEgku2UC9GXRTzR2ieSh"),
+			swap_sender: const_address("2taCR53epDtdrFZBxzKcbmv3cb5Umc5x9k2YCjmTDAnH"),
+		},
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("7DGwjsQEFA7XzZS9z5YbMhYGzWJSh5T78hRrU47RDTd2"),
+			swap_sender: const_address("FDPzoZj951Hq92jhoFdyzAVyUjyXhL8VEnqBhyjsDhow"),
+		},
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("A6yYXUmZHa32mcFRnwwq8ZQKCEYUn9ewF1vWn2wsXN5a"),
+			swap_sender: const_address("9bNNNU9B52VPVGm6zRccwPEexDHD1ntndD2aNu2un3ca"),
+		},
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("2F3365PULNzt7moa9GgHARy7Lumj5ptDQF7wDt6xeuHK"),
+			swap_sender: const_address("4m5t38fJsvULKaPyWZKWjzfbvnzBGL86BTRNk5vLLUrh"),
+		},
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("8sCBWv9tzdf2iC4GNj61UBN6TZpzsLP5Ppv9x1ENX4HT"),
+			swap_sender: const_address("A3P5kfRU1vgZn7GjNMomS8ye6GHsoHC4JoVNUotMbDPE"),
+		},
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("3b1FkNvnvKJ4TzKeft7wA47VfYpjkoHPE4ER13ZTNecX"),
+			swap_sender: const_address("ERwuPnX66dCZqj85kH9QQJmwcVrzcczBnu8onJY2R7tG"),
+		},
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("Bnrp9X562krXVfaY8FnwJa3Mxp1gbDCrvGNW1qc99rKe"),
+			swap_sender: const_address("2aoZg41FFnTBnuHpkfHdFsCuPz8DhN4dsUW5386XwE8g"),
+		},
+		VaultSwapAccountAndSender {
+			vault_swap_account: const_address("EuLceVgXMaJNPT7C88pnL7DRWcf1poy9BCeWY1GL8Agd"),
+			swap_sender: const_address("G1iXMtwUU76JGau9cJm6N8wBTmcsvyXuJcC7PtfU1TXZ"),
+		},
 	];
 	pub const RAW_KEYPAIR: [u8; 32] = [
 		6, 151, 150, 20, 145, 210, 176, 113, 98, 200, 192, 80, 73, 63, 133, 232, 208, 124, 81, 213,

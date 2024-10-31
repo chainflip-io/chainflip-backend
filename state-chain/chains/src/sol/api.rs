@@ -53,8 +53,8 @@ pub type DurableNonceAndAccount = (SolAddress, SolHash);
 	PartialOrd,
 	Eq,
 )]
-pub struct ContractSwapAccountAndSender {
-	pub contract_swap_account: SolAddress,
+pub struct VaultSwapAccountAndSender {
+	pub vault_swap_account: SolAddress,
 	pub swap_sender: SolAddress,
 }
 
@@ -404,8 +404,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		})
 	}
 
-	pub fn batch_close_event_accounts(
-		event_accounts: Vec<EventAccountAndSender>,
+	pub fn batch_close_vault_swap_accounts(
+		vault_swap_accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
 		// Lookup environment variables, such as aggkey and durable nonce.
 		let agg_key = Environment::current_agg_key()?;
@@ -414,8 +414,8 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let durable_nonce = Environment::nonce_account()?;
 
 		// Build the transaction
-		let transaction = SolanaTransactionBuilder::close_event_accounts(
-			event_accounts,
+		let transaction = SolanaTransactionBuilder::close_vault_swap_accounts(
+			vault_swap_accounts,
 			sol_api_environment.vault_program_data_account,
 			sol_api_environment.swap_endpoint_program,
 			sol_api_environment.swap_endpoint_program_data_account,
@@ -543,9 +543,9 @@ impl<Env: 'static> TransferFallback<Solana> for SolanaApi<Env> {
 
 impl<Env: 'static + SolanaEnvironment> CloseSolanaVaultSwapAccounts for SolanaApi<Env> {
 	fn new_unsigned(
-		accounts: Vec<ContractSwapAccountAndSender>,
+		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<Self, SolanaTransactionBuildingError> {
-		Self::batch_close_contract_swap_accounts(accounts)
+		Self::batch_close_vault_swap_accounts(accounts)
 	}
 }
 

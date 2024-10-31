@@ -5,8 +5,11 @@ use crate::{
 use cf_chains::{
 	instances::{ChainInstanceAlias, SolanaInstance},
 	sol::{
-		api::SolanaTransactionType, SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData,
-		SolanaCrypto,
+		api::{
+			SolanaApi, SolanaTransactionBuildingError, SolanaTransactionType,
+			VaultSwapAccountAndSender,
+		},
+		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
 	Chain, FeeEstimationApi, ForeignChain, Solana,
 };
@@ -531,13 +534,13 @@ pub struct SolanaVaultSwapsHandler;
 
 impl
 	SolanaVaultSwapAccountsHook<
-		ContractSwapAccountAndSender,
+		VaultSwapAccountAndSender,
 		SolanaVaultSwapDetails,
 		SolanaTransactionBuildingError,
 	> for SolanaVaultSwapsHandler
 {
 	fn initiate_vault_swap(swap_details: SolanaVaultSwapDetails) {
-		let _ = SolanaIngressEgress::contract_swap_request(
+		let _ = SolanaIngressEgress::vault_swap_request(
 			RuntimeOrigin::root(),
 			swap_details.from,
 			swap_details.to,
@@ -548,7 +551,7 @@ impl
 	}
 
 	fn close_accounts(
-		accounts: Vec<ContractSwapAccountAndSender>,
+		accounts: Vec<VaultSwapAccountAndSender>,
 	) -> Result<(), SolanaTransactionBuildingError> {
 		<SolanaApi<SolEnvironment> as CloseSolanaVaultSwapAccounts>::new_unsigned(accounts).map(
 			|apicall| {
