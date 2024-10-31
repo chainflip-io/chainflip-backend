@@ -38,7 +38,7 @@ import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-en
 import { getSolanaSwapEndpointIdl, getSolanaVaultIdl } from './contract_interfaces';
 
 // Workaround because of anchor issue
-const { BN } = anchor;
+const { BN } = anchor.default;
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 

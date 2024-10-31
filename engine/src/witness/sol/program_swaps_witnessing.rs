@@ -37,6 +37,7 @@ struct SwapEndpointDataAccount {
 #[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
 pub struct SwapEvent {
 	discriminator: [u8; 8],
+	creation_slot: u64,
 	sender: [u8; sol_prim::consts::SOLANA_ADDRESS_LEN],
 	dst_chain: u32,
 	dst_address: Vec<u8>,
@@ -68,10 +69,7 @@ pub async fn get_program_swaps(
 	sc_closure_initiated_accounts: BTreeSet<VaultSwapAccountAndSender>,
 	usdc_token_mint_pubkey: SolAddress,
 ) -> Result<
-	(
-		Vec<(VaultSwapAccountAndSender, SolanaVaultSwapDetails)>,
-		Vec<VaultSwapAccountAndSender>,
-	),
+	(Vec<(VaultSwapAccountAndSender, SolanaVaultSwapDetails)>, Vec<VaultSwapAccountAndSender>),
 	anyhow::Error,
 > {
 	let (new_program_swap_accounts, closed_accounts, slot) = get_changed_program_swap_accounts(
@@ -81,6 +79,9 @@ pub async fn get_program_swaps(
 		swap_endpoint_data_account_address,
 	)
 	.await?;
+
+	println!("DEBUGDEBUG new_program_swap_accounts: {:?}", new_program_swap_accounts);
+	println!("DEBUGDEBUG closed_accounts: {:?}", closed_accounts);
 
 	let new_swaps = stream::iter(new_program_swap_accounts)
 		.chunks(MAX_MULTIPLE_EVENT_ACCOUNTS_QUERY)
@@ -103,7 +104,9 @@ pub async fn get_program_swaps(
 							destination_address: EncodedAddress::from_chain_bytes(data.dst_chain.try_into().map_err(|e| warn!("error while parsing destination chain for solana vault swap:{}. Omitting swap", e)).ok()?, data.dst_address.to_vec()).map_err(|e| warn!("failed to decode the destination chain address for solana vault swap:{}. Omitting swap", e)).ok()?,
 							to: data.dst_token.try_into().map_err(|e| warn!("error while decoding destination token for solana vault swap: {}. Omitting swap", e)).ok()?,
 							deposit_metadata: None, // TODO
-							tx_hash: Default::default(), // TODO
+							// TODO: These two will potentially be a TransactionId type
+							swap_account: account,
+							creation_slot: data.creation_slot,
 						}))),
 					// It could happen that some account is closed between the queries. This should
 					// not happen because:
@@ -133,7 +136,6 @@ pub async fn get_program_swaps(
 		.await;
 
 	println!("DEBUGDEBUG new_swaps:       {:?}", new_swaps);
-	println!("DEBUGDEBUG closed_accounts: {:?}", closed_accounts);
 
 	new_swaps.map(|swaps| (swaps, closed_accounts))
 
@@ -148,10 +150,12 @@ async fn get_changed_program_swap_accounts(
 	sc_closure_initiated_accounts: BTreeSet<VaultSwapAccountAndSender>,
 	swap_endpoint_data_account_address: SolAddress,
 ) -> Result<(Vec<SolAddress>, Vec<VaultSwapAccountAndSender>, u64), anyhow::Error> {
-	let (_historical_number_event_accounts, open_event_accounts, slot) =
+	let (historical_number_event_accounts, open_event_accounts, slot) =
 		get_swap_endpoint_data(sol_rpc, swap_endpoint_data_account_address)
 			.await
 			.expect("Failed to get the event accounts");
+	println!("DEBUGDEBUG historical_number_event_accounts: {:?}", historical_number_event_accounts);
+	println!("DEBUGDEBUG open_event_accounts: {:?}", open_event_accounts);
 
 	let sc_opened_accounts_hashset: HashSet<_> = sc_opened_accounts.iter().collect();
 	let sc_closure_initiated_accounts_hashset = sc_closure_initiated_accounts
@@ -266,7 +270,7 @@ async fn get_program_swap_event_accounts_data(
 
 	ensure!(accounts_info.len() == program_swap_event_accounts.len());
 
-	program_swap_event_accounts
+	let program_swap_event_accounts_iter = program_swap_event_accounts
 		.into_iter()
 		.zip(accounts_info.into_iter())
 		.map(|(account, accounts_info)| match accounts_info {
@@ -297,7 +301,9 @@ async fn get_program_swap_event_accounts_data(
 				Err(anyhow!("Expected UiAccountData::Binary(String, UiAccountEncoding::Base64)")),
 			None => Ok((account, None)),
 		})
-		.collect()
+		.collect();
+	println!("DEBUGDEBUG program_swap_event_accounts_iter: {:?}", program_swap_event_accounts_iter);
+	program_swap_event_accounts_iter
 }
 
 #[cfg(test)]
@@ -308,9 +314,9 @@ mod tests {
 	};
 
 	use cf_chains::{Chain, Solana};
+	use cf_utilities::task_scope;
 	use futures_util::FutureExt;
 	use std::str::FromStr;
-	use utilities::task_scope;
 
 	use super::*;
 

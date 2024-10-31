@@ -649,7 +649,18 @@ mod bounded_hex {
 
 /// Deposit channel Metadata for Cross-Chain-Message.
 #[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize, MaxEncodedLen, PartialOrd, Ord
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	MaxEncodedLen,
+	PartialOrd,
+	Ord,
 )]
 pub struct CcmChannelMetadata {
 	/// Call data used after the message is egressed.
@@ -681,7 +692,9 @@ pub enum CcmFailReason {
 	InvalidMetadata,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
+)]
 pub struct CcmDepositMetadataGeneric<Address> {
 	pub channel_metadata: CcmChannelMetadata,
 	pub source_chain: ForeignChain,

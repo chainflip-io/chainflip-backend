@@ -8,12 +8,13 @@ use cf_chains::{
 	instances::ChainInstanceAlias,
 	sol::{
 		api::{
-			VaultSwapAccountAndSender, SolanaApi, SolanaTransactionBuildingError,
-			SolanaTransactionType,
+			SolanaApi, SolanaTransactionBuildingError, SolanaTransactionType,
+			VaultSwapAccountAndSender,
 		},
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
-	Chain, CloseSolanaVaultSwapAccounts, FeeEstimationApi, ForeignChain, Solana,CcmDepositMetadata
+	CcmDepositMetadata, Chain, CloseSolanaVaultSwapAccounts, FeeEstimationApi, ForeignChain,
+	Solana,
 };
 use cf_primitives::TransactionHash;
 use cf_runtime_utilities::log_or_panic;
@@ -901,7 +902,9 @@ pub struct SolanaVaultSwapDetails {
 	pub deposit_amount: SolAmount,
 	pub destination_address: EncodedAddress,
 	pub deposit_metadata: Option<CcmDepositMetadata>,
-	pub tx_hash: TransactionHash,
+	// TODO: These two will potentially be a TransactionId type
+	pub swap_account: SolAddress,
+	pub creation_slot: u64,
 }
 pub struct SolanaVaultSwapsHandler;
 
@@ -920,7 +923,7 @@ impl
 			swap_details.deposit_amount,
 			swap_details.destination_address,
 			swap_details.deposit_metadata,
-			swap_details.tx_hash,
+			Default::default(), // todo
 			Default::default(),
 			Default::default(),
 			Default::default(),

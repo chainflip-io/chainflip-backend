@@ -11,9 +11,7 @@ use sol_prim::consts::{
 
 use crate::{
 	sol::{
-		api::{
-			VaultSwapAccountAndSender, DurableNonceAndAccount, SolanaTransactionBuildingError,
-		},
+		api::{DurableNonceAndAccount, SolanaTransactionBuildingError, VaultSwapAccountAndSender},
 		compute_units_costs::{
 			compute_limit_with_buffer, BASE_COMPUTE_UNITS_PER_TX,
 			COMPUTE_UNITS_PER_BUMP_DERIVATION, COMPUTE_UNITS_PER_CLOSE_ACCOUNT,
