@@ -168,9 +168,9 @@ fn finalize_boosted_tx_if_tainted_after_prewitness() {
 			10,
 		);
 
-		assert_noop!(
+		// It's possible to report the tx, but reporting will have no effect.
+		assert_ok!(
 			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,),
-			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
 		);
 
 		assert_ok!(IngressEgress::process_single_deposit(
@@ -319,7 +319,6 @@ fn can_not_report_transaction_after_witnessing() {
 		let unreported = Hash::random();
 		let unseen = Hash::random();
 		let prewitnessed = Hash::random();
-		let boosted = Hash::random();
 
 		TaintedTransactions::<Test, ()>::insert(BROKER, unseen, TaintedTransactionStatus::Unseen);
 		TaintedTransactions::<Test, ()>::insert(
@@ -327,7 +326,6 @@ fn can_not_report_transaction_after_witnessing() {
 			prewitnessed,
 			TaintedTransactionStatus::Prewitnessed,
 		);
-		TaintedTransactions::<Test, ()>::insert(BROKER, boosted, TaintedTransactionStatus::Boosted);
 
 		assert_ok!(IngressEgress::mark_transaction_as_tainted(
 			OriginTrait::signed(BROKER),
@@ -338,10 +336,6 @@ fn can_not_report_transaction_after_witnessing() {
 		);
 		assert_noop!(
 			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), prewitnessed,),
-			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
-		);
-		assert_noop!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), boosted,),
 			crate::Error::<Test, ()>::TransactionAlreadyPrewitnessed
 		);
 	});
