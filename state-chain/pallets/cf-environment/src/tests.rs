@@ -28,11 +28,11 @@ fn utxo_with_key(pub_key: [u8; 32]) -> Utxo {
 }
 
 fn add_utxo_amount(amount: BtcAmount, salt: u32) {
-	Environment::add_bitcoin_utxo_to_list(
+	Environment::add_bitcoin_utxo_to_list(Utxo {
+		id: Default::default(),
 		amount,
-		Default::default(),
-		DepositAddress::new(Default::default(), salt),
-	);
+		deposit_address: DepositAddress::new(Default::default(), salt),
+	});
 }
 
 #[test]

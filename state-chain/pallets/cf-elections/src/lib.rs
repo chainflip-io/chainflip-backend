@@ -1278,19 +1278,6 @@ pub mod pallet {
 					},
 				};
 
-				ensure!(
-					Self::with_electoral_access(
-						|electoral_access| -> Result<_, CorruptStorageError> {
-							<T::ElectoralSystem as ElectoralSystem>::is_vote_valid(
-								election_identifier,
-								&electoral_access.election(election_identifier)?,
-								&partial_vote,
-							)
-						}
-					)?,
-					Error::<T, I>::InvalidVote
-				);
-
 				Self::handle_corrupt_storage(Self::take_vote_and_then(
 					epoch_index,
 					unique_monotonic_identifier,

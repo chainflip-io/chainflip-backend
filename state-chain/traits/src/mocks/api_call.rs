@@ -3,8 +3,8 @@ use core::marker::PhantomData;
 use cf_chains::{
 	btc::BitcoinCrypto, evm::EvmCrypto, AllBatch, AllBatchError, ApiCall, Bitcoin, Chain,
 	ChainCrypto, ChainEnvironment, ConsolidationError, Ethereum, ExecutexSwapAndCall,
-	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, TransferAssetParams,
-	TransferFallback, TransferFallbackError,
+	ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress, RejectCall, RejectError,
+	TransferAssetParams, TransferFallback, TransferFallbackError,
 };
 use cf_primitives::{chains::assets, EgressId, ForeignChain};
 use codec::{Decode, Encode};
@@ -36,6 +36,7 @@ pub enum MockEthereumApiCall<MockEvmEnvironment> {
 	AllBatch(MockEthAllBatch<MockEvmEnvironment>),
 	ExecutexSwapAndCall(MockEthExecutexSwapAndCall<MockEvmEnvironment>),
 	TransferFallback(MockEthTransferFallback<MockEvmEnvironment>),
+	RejectCall,
 }
 
 impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
@@ -149,7 +150,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Ethereum as Chain>::ChainAmount,
 		message: Vec<u8>,
-		_cf_parameters: Vec<u8>,
+		_ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockEvmEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
@@ -206,6 +207,7 @@ pub enum MockBitcoinApiCall<MockBtcEnvironment> {
 	AllBatch(MockBtcAllBatch<MockBtcEnvironment>),
 	ExecutexSwapAndCall(MockBtcExecutexSwapAndCall<MockBtcEnvironment>),
 	TransferFallback(MockBtcTransferFallback<MockBtcEnvironment>),
+	RejectCall,
 }
 
 impl ApiCall<BitcoinCrypto> for MockBitcoinApiCall<MockBtcEnvironment> {
@@ -285,7 +287,7 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		source_address: Option<ForeignChainAddress>,
 		gas_budget: <Bitcoin as Chain>::ChainAmount,
 		message: Vec<u8>,
-		_cf_parameters: Vec<u8>,
+		_ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError> {
 		if MockBtcEnvironment::lookup(transfer_param.asset).is_none() {
 			Err(ExecutexSwapAndCallError::DispatchError(DispatchError::CannotLookup))
@@ -333,5 +335,25 @@ impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		} else {
 			Err(AllBatchError::UnsupportedToken)
 		}
+	}
+}
+
+impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
+	fn new_unsigned(
+		_deposit_details: <Bitcoin as Chain>::DepositDetails,
+		_refund_address: <Bitcoin as Chain>::ChainAccount,
+		_refund_amount: <Bitcoin as Chain>::ChainAmount,
+	) -> Result<Self, RejectError> {
+		Ok(Self::RejectCall)
+	}
+}
+
+impl RejectCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
+	fn new_unsigned(
+		_deposit_details: <Ethereum as Chain>::DepositDetails,
+		_refund_address: <Ethereum as Chain>::ChainAccount,
+		_refund_amount: <Ethereum as Chain>::ChainAmount,
+	) -> Result<Self, RejectError> {
+		Ok(Self::RejectCall)
 	}
 }

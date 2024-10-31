@@ -374,7 +374,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 		let message = CcmChannelMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 			gas_budget: GAS_BUDGET,
-			cf_parameters: Default::default(),
+			ccm_additional_data: Default::default(),
 		};
 
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
@@ -559,7 +559,7 @@ fn ccm_deposit_metadata_mock() -> CcmDepositMetadata {
 		channel_metadata: CcmChannelMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8].try_into().unwrap(),
 			gas_budget: 100_000_000,
-			cf_parameters: Default::default(),
+			ccm_additional_data: Default::default(),
 		},
 	}
 }
@@ -572,7 +572,7 @@ fn can_process_ccm_via_direct_deposit() {
 		let deposit_amount = 100_000_000_000;
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_swap_request {
+			pallet_cf_ingress_egress::Call::vault_swap_request {
 				input_asset: EthAsset::Flip,
 				output_asset: Asset::Usdc,
 				deposit_amount,
@@ -622,7 +622,7 @@ fn failed_swaps_are_rolled_back() {
 		let flip_pool = get_pool(Asset::Flip);
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_swap_request {
+			pallet_cf_ingress_egress::Call::vault_swap_request {
 				input_asset: EthAsset::Eth,
 				output_asset: Asset::Flip,
 				deposit_amount: 10_000 * DECIMALS,
@@ -767,10 +767,10 @@ fn ethereum_ccm_can_calculate_gas_limits() {
 
 #[test]
 fn can_resign_failed_ccm() {
-	const EPOCH_DURATION_BLOCKS: u32 = 1000;
+	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_DURATION_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
@@ -784,7 +784,7 @@ fn can_resign_failed_ccm() {
 			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
 			witness_call(RuntimeCall::EthereumIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_swap_request {
+				pallet_cf_ingress_egress::Call::vault_swap_request {
 					input_asset: EthAsset::Flip,
 					output_asset: Asset::Usdc,
 					deposit_amount: 10_000_000_000_000,
@@ -882,7 +882,7 @@ fn can_handle_failed_vault_transfer() {
 	const EPOCH_BLOCKS: u32 = 1000;
 	const MAX_AUTHORITIES: AuthorityCount = 10;
 	super::genesis::with_test_defaults()
-		.epoch_duration(EPOCH_BLOCKS)
+		.blocks_per_epoch(EPOCH_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {

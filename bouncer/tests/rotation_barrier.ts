@@ -1,7 +1,7 @@
 #!/usr/bin/env -S pnpm tsx
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import { ExecutableTest } from '../shared/executable_test';
-import { testSwapViaContract } from '../shared/swapping';
+import { testVaultSwap } from '../shared/swapping';
 import { observeEvent, observeBadEvent } from '../shared/utils/substrate';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
@@ -22,7 +22,7 @@ async function main() {
   const broadcastAborted = observeBadEvent(':BroadcastAborted', { label: 'Rotate and swap' });
 
   // Using Arbitrum as the ingress chain to make the swap as fast as possible
-  await testSwapViaContract('ArbEth', 'Eth');
+  await testVaultSwap('ArbEth', 'Eth');
 
   await broadcastAborted.stop();
 }

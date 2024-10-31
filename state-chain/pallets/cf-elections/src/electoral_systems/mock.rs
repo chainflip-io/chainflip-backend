@@ -193,12 +193,4 @@ impl ElectoralSystem for MockElectoralSystem {
 	) -> bool {
 		Self::vote_needed()
 	}
-
-	fn is_vote_valid<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
-		_election_access: &ElectionAccess,
-		_partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
-	) -> Result<bool, CorruptStorageError> {
-		Ok(Self::vote_valid())
-	}
 }
