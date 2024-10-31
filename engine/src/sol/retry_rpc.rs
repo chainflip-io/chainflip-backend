@@ -33,7 +33,7 @@ const MAX_BROADCAST_RETRIES: Attempt = 5;
 const GET_STATUS_BROADCAST_DELAY: u64 = 500u64;
 const GET_STATUS_BROADCAST_RETRIES: u64 = 10;
 
-const GET_SIGNATURE_STATUS_RETRY_LIMIT: Attempt = 4;
+const GET_SIGNATURE_STATUS_RETRY_LIMIT: Attempt = 10;
 
 impl SolRetryRpcClient {
 	pub async fn new(
