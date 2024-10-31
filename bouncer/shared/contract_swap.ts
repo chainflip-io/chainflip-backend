@@ -34,10 +34,9 @@ import { CcmDepositMetadata } from '../shared/new_swap';
 import { send } from './send';
 import { SwapContext, SwapStatus } from './swap_context';
 
-import VaultIdl from '../../contract-interfaces/sol-program-idls/v1.0.0/vault.json';
-import SwapEndpointIdl from '../../contract-interfaces/sol-program-idls/v1.0.0/swap_endpoint.json';
-import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0/types/swap_endpoint';
-import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0/types/vault';
+import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/swap_endpoint';
+import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/vault';
+import { getSolanaSwapEndpointIdl, getSolanaVaultIdl } from './contract_interfaces';
 
 // Workaround because of anchor issue
 const { BN } = anchor;
@@ -117,9 +116,11 @@ export async function executeSolContractSwap(
   process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
 
   const connection = getSolConnection();
+  const VaultIdl: any = await getSolanaVaultIdl();
+  const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();
+
   const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(SwapEndpointIdl as SwapEndpoint);
   const vaultProgram = new anchor.Program<Vault>(VaultIdl as Vault);
-
   const newEventAccountKeypair = Keypair.generate();
   const fetchedDataAccount = await vaultProgram.account.dataAccount.fetch(solanaVaultDataAccount);
   const aggKey = fetchedDataAccount.aggKey;
