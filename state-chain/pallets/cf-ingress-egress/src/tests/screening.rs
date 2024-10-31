@@ -169,9 +169,7 @@ fn finalize_boosted_tx_if_tainted_after_prewitness() {
 		);
 
 		// It's possible to report the tx, but reporting will have no effect.
-		assert_ok!(
-			IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,),
-		);
+		assert_ok!(IngressEgress::mark_transaction_as_tainted(OriginTrait::signed(BROKER), tx_id,),);
 
 		assert_ok!(IngressEgress::process_single_deposit(
 			address,
