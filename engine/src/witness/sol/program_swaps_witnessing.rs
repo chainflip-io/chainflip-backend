@@ -83,6 +83,10 @@ pub async fn get_program_swaps(
 	println!("DEBUGDEBUG new_program_swap_accounts: {:?}", new_program_swap_accounts);
 	println!("DEBUGDEBUG closed_accounts: {:?}", closed_accounts);
 
+	if new_program_swap_accounts.is_empty() {
+		return Ok((vec![], closed_accounts));
+	}
+
 	let new_swaps = stream::iter(new_program_swap_accounts)
 		.chunks(MAX_MULTIPLE_EVENT_ACCOUNTS_QUERY)
 		.map(|new_program_swap_accounts_chunk| {
@@ -150,11 +154,11 @@ async fn get_changed_program_swap_accounts(
 	sc_closure_initiated_accounts: BTreeSet<VaultSwapAccountAndSender>,
 	swap_endpoint_data_account_address: SolAddress,
 ) -> Result<(Vec<SolAddress>, Vec<VaultSwapAccountAndSender>, u64), anyhow::Error> {
-	let (historical_number_event_accounts, open_event_accounts, slot) =
+	let (_historical_number_event_accounts, open_event_accounts, slot) =
 		get_swap_endpoint_data(sol_rpc, swap_endpoint_data_account_address)
 			.await
 			.expect("Failed to get the event accounts");
-	println!("DEBUGDEBUG historical_number_event_accounts: {:?}", historical_number_event_accounts);
+
 	println!("DEBUGDEBUG open_event_accounts: {:?}", open_event_accounts);
 
 	let sc_opened_accounts_hashset: HashSet<_> = sc_opened_accounts.iter().collect();
@@ -253,6 +257,8 @@ async fn get_program_swap_event_accounts_data(
 	program_swap_event_accounts: Vec<SolAddress>,
 	min_context_slot: u64,
 ) -> Result<Vec<(SolAddress, Option<SwapEvent>)>, anyhow::Error> {
+	println!("DEBUGDEBUG getting swap event accounts: {:?}", program_swap_event_accounts);
+
 	let accounts_info_response = sol_rpc
 		.get_multiple_accounts(
 			program_swap_event_accounts.as_slice(),
