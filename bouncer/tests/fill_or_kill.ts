@@ -15,14 +15,14 @@ import { getBalance } from '../shared/get_balance';
 import { observeEvent } from '../shared/utils/substrate';
 import { CcmDepositMetadata, FillOrKillParamsX128 } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
-import { executeContractSwap } from '../shared/contract_swap';
+import { executeVaultSwap } from '../shared/vault_swap';
 import { newCcmMetadata } from '../shared/swapping';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testFillOrKill = new ExecutableTest('FoK', main, 600);
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
-async function testMinPriceRefund(inputAsset: Asset, amount: number, swapviaContract = false) {
+async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVault = false) {
   const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const refundAddress = await newAddress(inputAsset, randomBytes(32).toString('hex'));
   const destAddress = await newAddress(destAsset, randomBytes(32).toString('hex'));
@@ -44,7 +44,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapviaCont
 
   let swapRequestedHandle;
 
-  if (!swapviaContract) {
+  if (!swapViaVault) {
     testFillOrKill.log(
       `Requesting swap from ${inputAsset} to ${destAsset} with unrealistic min price`,
     );
@@ -74,7 +74,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapviaCont
     testFillOrKill.log(`Sent ${amount} ${inputAsset} to ${depositAddress}`);
   } else {
     testFillOrKill.log(
-      `Swapping via contract from ${inputAsset} to ${destAsset} with unrealistic min price`,
+      `Swapping via vault from ${inputAsset} to ${destAsset} with unrealistic min price`,
     );
 
     // Randomly use CCM to test different encodings
@@ -85,7 +85,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapviaCont
         Math.random() < 0.5 ? ccmMetadata.ccmAdditionalData : undefined;
     }
 
-    const receipt = await executeContractSwap(
+    const receipt = await executeVaultSwap(
       inputAsset,
       destAsset,
       destAddress,

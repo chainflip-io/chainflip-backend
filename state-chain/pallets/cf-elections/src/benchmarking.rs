@@ -124,7 +124,7 @@ mod benchmarks {
 
 		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id.clone()]);
 
-		Status::<T, I>::put(ElectoralSystemStatus::Running);
+		Status::<T, I>::put(ElectionPalletStatus::Running);
 
 		#[extrinsic_call]
 		stop_ignoring_my_votes(RawOrigin::Signed(caller));
@@ -141,7 +141,7 @@ mod benchmarks {
 
 		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id.clone()]);
 
-		Status::<T, I>::put(ElectoralSystemStatus::Running);
+		Status::<T, I>::put(ElectionPalletStatus::Running);
 
 		assert!(
 			!ContributingAuthorities::<T, I>::contains_key(validator_id.clone()),
@@ -274,7 +274,7 @@ mod benchmarks {
 		assert!(ElectoralUnsynchronisedState::<T, I>::get().is_some());
 		assert!(ElectoralUnsynchronisedSettings::<T, I>::get().is_some());
 		assert!(ElectoralSettings::<T, I>::get(NextElectionIdentifier::<T, I>::get()).is_some());
-		assert_eq!(Status::<T, I>::get(), Some(ElectoralSystemStatus::Running));
+		assert_eq!(Status::<T, I>::get(), Some(ElectionPalletStatus::Running));
 	}
 
 	#[benchmark]
@@ -403,7 +403,7 @@ mod benchmarks {
 		// Ensure elections are paused
 		assert_eq!(
 			Status::<T, I>::get(),
-			Some(ElectoralSystemStatus::Paused { detected_corrupt_storage: false })
+			Some(ElectionPalletStatus::Paused { detected_corrupt_storage: false })
 		);
 	}
 
@@ -416,7 +416,7 @@ mod benchmarks {
 			.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
 		assert_eq!(
 			Status::<T, I>::get(),
-			Some(ElectoralSystemStatus::Paused { detected_corrupt_storage: false })
+			Some(ElectionPalletStatus::Paused { detected_corrupt_storage: false })
 		);
 		assert_ok!(Call::<T, I>::clear_all_votes {
 			limit: 100u32,
@@ -434,7 +434,7 @@ mod benchmarks {
 		}
 
 		// Ensure elections are unpaused
-		assert_eq!(Status::<T, I>::get(), Some(ElectoralSystemStatus::Running));
+		assert_eq!(Status::<T, I>::get(), Some(ElectionPalletStatus::Running));
 	}
 
 	#[benchmark]
@@ -444,7 +444,7 @@ mod benchmarks {
 		// Pause the election, and set corrupt storage to `true`
 		assert_ok!(Call::<T, I>::pause_elections {}
 			.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap()));
-		Status::<T, I>::put(ElectoralSystemStatus::Paused { detected_corrupt_storage: true });
+		Status::<T, I>::put(ElectionPalletStatus::Paused { detected_corrupt_storage: true });
 
 		let call = Call::<T, I>::validate_storage {};
 
@@ -457,7 +457,7 @@ mod benchmarks {
 
 		assert_eq!(
 			Status::<T, I>::get(),
-			Some(ElectoralSystemStatus::Paused { detected_corrupt_storage: false })
+			Some(ElectionPalletStatus::Paused { detected_corrupt_storage: false })
 		);
 	}
 

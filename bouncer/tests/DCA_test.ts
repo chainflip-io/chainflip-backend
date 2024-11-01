@@ -13,7 +13,7 @@ import { getBalance } from '../shared/get_balance';
 import { ExecutableTest } from '../shared/executable_test';
 import { requestNewSwap } from '../shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
-import { executeContractSwap } from '../shared/contract_swap';
+import { executeVaultSwap } from '../shared/vault_swap';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testDCASwaps = new ExecutableTest('DCA-Swaps', main, 150);
@@ -25,7 +25,7 @@ async function testDCASwap(
   inputAsset: Asset,
   amount: number,
   numberOfChunks: number,
-  swapviaContract = false,
+  swapViaVault = false,
 ) {
   assert(numberOfChunks > 1, 'Number of chunks must be greater than 1');
 
@@ -48,7 +48,7 @@ async function testDCASwap(
 
   let swapRequestedHandle;
 
-  if (!swapviaContract) {
+  if (!swapViaVault) {
     const swapRequest = await requestNewSwap(
       inputAsset,
       destAsset,
@@ -74,7 +74,7 @@ async function testDCASwap(
     await send(inputAsset, swapRequest.depositAddress, amount.toString());
     testDCASwaps.log(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
-    const receipt = await executeContractSwap(
+    const receipt = await executeVaultSwap(
       inputAsset,
       destAsset,
       destAddress,
@@ -85,7 +85,7 @@ async function testDCASwap(
       dcaParams,
     );
 
-    testDCASwaps.log(`Contract swap executed, tx hash: ${receipt.hash}`);
+    testDCASwaps.log(`Vault swap executed, tx hash: ${receipt.hash}`);
 
     // Look after Swap Requested of data.origin.Vault.tx_hash
     swapRequestedHandle = observeSwapRequested(
@@ -98,7 +98,7 @@ async function testDCASwap(
 
   const swapRequestId = Number((await swapRequestedHandle).data.swapRequestId.replaceAll(',', ''));
   testDCASwaps.debugLog(
-    `${inputAsset} swap ${swapviaContract ? 'via contract' : ''}, swapRequestId: ${swapRequestId}`,
+    `${inputAsset} swap ${swapViaVault ? 'via vault' : ''}, swapRequestId: ${swapRequestId}`,
   );
 
   // Wait for the swap to complete

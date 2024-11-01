@@ -276,7 +276,7 @@ engine-proc-macros = { path = "engine-proc-macros" }
 cf-runtime-macros = { path = "state-chain/runtime-utilities/macros", default-features = false }
 cf-runtime-upgrade-utilities = { path = "state-chain/runtime-upgrade-utilities", default-features = false }
 cf-runtime-utilities = { path = "state-chain/runtime-utilities", default-features = false }
-cf-test-utilities = { path = "state-chain/test-utilities", default-features = false }
+cf-test-utilities = { path = "state-chain/test-utilities" }
 cf-utilities = { package = "utilities", path = "utilities", default-features = false }
 cfe-events = { path = "state-chain/cfe-events", default-features = false }
 engine-upgrade-utils = { path = "engine-upgrade-utils" }

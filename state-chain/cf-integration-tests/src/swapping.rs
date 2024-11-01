@@ -572,7 +572,7 @@ fn can_process_ccm_via_direct_deposit() {
 		let deposit_amount = 100_000_000_000;
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_swap_request {
+			pallet_cf_ingress_egress::Call::vault_swap_request {
 				input_asset: EthAsset::Flip,
 				output_asset: Asset::Usdc,
 				deposit_amount,
@@ -622,7 +622,7 @@ fn failed_swaps_are_rolled_back() {
 		let flip_pool = get_pool(Asset::Flip);
 
 		witness_call(RuntimeCall::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Call::contract_swap_request {
+			pallet_cf_ingress_egress::Call::vault_swap_request {
 				input_asset: EthAsset::Eth,
 				output_asset: Asset::Flip,
 				deposit_amount: 10_000 * DECIMALS,
@@ -784,7 +784,7 @@ fn can_resign_failed_ccm() {
 			setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip], OrderType::LimitOrder);
 
 			witness_call(RuntimeCall::EthereumIngressEgress(
-				pallet_cf_ingress_egress::Call::contract_swap_request {
+				pallet_cf_ingress_egress::Call::vault_swap_request {
 					input_asset: EthAsset::Flip,
 					output_asset: Asset::Usdc,
 					deposit_amount: 10_000_000_000_000,

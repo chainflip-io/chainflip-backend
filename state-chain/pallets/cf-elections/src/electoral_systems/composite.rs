@@ -263,22 +263,6 @@ macro_rules! generate_electoral_system_tuple_impls {
                     }
                 }
 
-
-                fn is_vote_valid<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-                    election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
-                    election_access: &ElectionAccess,
-                    partial_vote: &<Self::Vote as VoteStorage>::PartialVote,
-                ) -> Result<bool, CorruptStorageError> {
-                    Ok(match (*election_identifier.extra(), partial_vote) {
-                        $((CompositeElectionIdentifierExtra::$electoral_system(extra), CompositePartialVote::$electoral_system(partial_vote)) => <$electoral_system as ElectoralSystem>::is_vote_valid(
-                            election_identifier.with_extra(extra),
-                            &CompositeElectionAccess::<tags::$electoral_system, _, ElectionAccess>::new(election_access),
-                            partial_vote,
-                        )?,)*
-                        _ => false,
-                    })
-                }
-
                 fn generate_vote_properties(
                     election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
                     previous_vote: Option<(
@@ -440,6 +424,7 @@ macro_rules! generate_electoral_system_tuple_impls {
                     _ => Err(CorruptStorageError::new())
                 }
             }
+
             #[cfg(test)]
             fn election_identifier(&self) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError> {
                 let composite_identifier = self.ea.borrow().election_identifier()?;
