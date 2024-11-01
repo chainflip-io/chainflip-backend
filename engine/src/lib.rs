@@ -14,7 +14,6 @@ pub mod p2p;
 pub mod retrier;
 pub mod settings;
 pub mod state_chain_observer;
-pub mod stream_utils;
 pub mod witness;
 
 // Blockchains
