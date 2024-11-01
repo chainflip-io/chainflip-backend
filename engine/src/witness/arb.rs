@@ -3,7 +3,7 @@ mod chain_tracking;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{assets::arb::Asset as ArbAsset, evm::DepositDetails, Arbitrum};
-use cf_primitives::EpochIndex;
+use cf_primitives::{EpochIndex, ShortId};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use sp_core::H160;
@@ -18,7 +18,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::{common::cf_parameters::ShortId, evm::erc20_deposits::usdc::UsdcEvents},
+	witness::evm::erc20_deposits::usdc::UsdcEvents,
 };
 
 use super::{

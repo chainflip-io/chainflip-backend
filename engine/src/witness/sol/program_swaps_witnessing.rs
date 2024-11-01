@@ -1,3 +1,5 @@
+use super::super::common::cf_parameters::*;
+use codec::Decode;
 use std::collections::{BTreeSet, HashSet};
 
 use crate::sol::{
@@ -13,6 +15,7 @@ use cf_chains::{
 	address::EncodedAddress,
 	assets::sol::Asset as SolAsset,
 	sol::{api::VaultSwapAccountAndSender, SolAddress},
+	CcmChannelMetadata, CcmDepositMetadata, ForeignChainAddress,
 };
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
@@ -98,20 +101,56 @@ pub async fn get_program_swaps(
 				|(account, program_swap_account_data)| match program_swap_account_data {
 					Some(data)
 						if (data.src_token.is_none() ||
-							data.src_token.is_some_and(|addr| addr == usdc_token_mint_pubkey.0)) =>
-						Some(Ok((VaultSwapAccountAndSender {
-							vault_swap_account: account,
-							swap_sender: data.sender.into()
-						}, SolanaVaultSwapDetails {
-							from: if data.src_token.is_none() {SolAsset::Sol} else {SolAsset::SolUsdc},
-							deposit_amount: data.amount,
-							destination_address: EncodedAddress::from_chain_bytes(data.dst_chain.try_into().map_err(|e| warn!("error while parsing destination chain for solana vault swap:{}. Omitting swap", e)).ok()?, data.dst_address.to_vec()).map_err(|e| warn!("failed to decode the destination chain address for solana vault swap:{}. Omitting swap", e)).ok()?,
-							to: data.dst_token.try_into().map_err(|e| warn!("error while decoding destination token for solana vault swap: {}. Omitting swap", e)).ok()?,
-							deposit_metadata: None, // TODO
-							// TODO: These two will potentially be a TransactionId type
-							swap_account: account,
-							creation_slot: data.creation_slot,
-						}))),
+							data.src_token.is_some_and(|addr| addr == usdc_token_mint_pubkey.0)) => {
+
+								let (deposit_metadata, vault_swap_parameters) = match data.ccm_parameters {
+									None => {
+										let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
+											CfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding CfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
+										(None, vault_swap_parameters)
+									},
+									Some(ccm_parameters) => {
+										let CfParameters { ccm_additional_data, vault_swap_parameters } =
+											CcmCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding CcmCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
+
+										let deposit_metadata = Some(CcmDepositMetadata {
+											source_chain: cf_primitives::ForeignChain::Solana, // TODO: Pass chain id from above?
+											source_address: Some(ForeignChainAddress::Sol(data.sender.into())),
+											channel_metadata: CcmChannelMetadata {
+												message: ccm_parameters.message
+													.to_vec()
+													.try_into()
+													.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long.")).ok()?,
+												gas_budget: ccm_parameters.gas_amount.try_into().map_err(|_| anyhow!("Failed to deposit CCM: `gas_amount` too long.")).ok()?,
+												ccm_additional_data,
+											},
+										});
+										(deposit_metadata, vault_swap_parameters)
+									}
+								};
+
+								println!("DEBUGDEBUG deposit_metadata: {:?}", deposit_metadata);
+								println!("DEBUGDEBUG vault_swap_parameters: {:?}", vault_swap_parameters);
+
+								Some(Ok((VaultSwapAccountAndSender {
+									vault_swap_account: account,
+									swap_sender: data.sender.into()
+								}, SolanaVaultSwapDetails {
+									from: if data.src_token.is_none() {SolAsset::Sol} else {SolAsset::SolUsdc},
+									deposit_amount: data.amount,
+									destination_address: EncodedAddress::from_chain_bytes(data.dst_chain.try_into().map_err(|e| warn!("error while parsing destination chain for solana vault swap:{}. Omitting swap", e)).ok()?, data.dst_address.to_vec()).map_err(|e| warn!("failed to decode the destination chain address for solana vault swap:{}. Omitting swap", e)).ok()?,
+									to: data.dst_token.try_into().map_err(|e| warn!("error while decoding destination token for solana vault swap: {}. Omitting swap", e)).ok()?,
+									deposit_metadata,
+									// TODO: These two will potentially be a TransactionId type
+									swap_account: account,
+									creation_slot: data.creation_slot,
+									broker_fees: vault_swap_parameters.broker_fees,
+									refund_params: Some(vault_swap_parameters.refund_params),
+									dca_params: vault_swap_parameters.dca_params,
+									boost_fee: vault_swap_parameters.boost_fee,
+								})))
+							}
+
 					// It could happen that some account is closed between the queries. This should
 					// not happen because:
 					// 1. Accounts in `new_program_swap_accounts` can only be accounts that have

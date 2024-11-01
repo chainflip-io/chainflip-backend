@@ -1,6 +1,5 @@
 import * as anchor from '@coral-xyz/anchor';
 // import NodeWallet from '@coral-xyz/anchor/dist/cjs/nodewallet';￼
-
 import {
   InternalAsset as Asset,
   executeSwap,
@@ -30,6 +29,8 @@ import {
   getSolWhaleKeyPair,
   getSolConnection,
   chainContractId,
+  decodeSolAddress,
+  decodeDotAddressForContract,
 } from './utils';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
@@ -43,6 +44,7 @@ import { getSolanaSwapEndpointIdl, getSolanaVaultIdl } from './contract_interfac
 const { BN } = anchor.default;
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
+
 
 export async function executeVaultSwap(
   sourceAsset: Asset,
@@ -160,6 +162,35 @@ export async function executeSolVaultSwap(
 
   const amount = new BN(amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)));
 
+  let cfParameters;
+
+  if (messageMetadata) {
+    // TODO: Currently manually encoded. To use SDK/BrokerApi.
+    switch (destChain) {
+      case Chains.Ethereum:
+      case Chains.Arbitrum:
+        cfParameters = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        break;
+      default:
+        throw new Error(`Unsupported chain: ${destChain}`);
+    }
+  } else {
+    // TODO: Currently manually encoded. To use SDK/BrokerApi.
+    switch (destChain) {
+      case Chains.Ethereum:
+      case Chains.Arbitrum:
+        cfParameters = "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        break;
+      case Chains.Polkadot:
+        cfParameters = "0x000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        destAddress = decodeDotAddressForContract(destAddress);
+        break;
+      // TODO: Not supporting BTC for now because the encoding is annoying.
+      default:
+        throw new Error(`Unsupported chain: ${destChain}`);
+    }
+  }
+
   const tx =
     srcAsset === 'Sol'
       ? await cfSwapEndpointProgram.methods
@@ -174,8 +205,7 @@ export async function executeSolVaultSwap(
                   gasAmount: new BN(messageMetadata.gasBudget),
                 }
               : null,
-            // TODO: Encode cfParameters from ccmAdditionalData and other vault swap parameters
-            cfParameters: Buffer.from(messageMetadata?.ccmAdditionalData?.slice(2) ?? '', 'hex'),
+            cfParameters: Buffer.from(cfParameters!.slice(2) ?? '', 'hex'),
           })
           .accountsPartial({
             dataAccount: solanaVaultDataAccount,
@@ -190,17 +220,16 @@ export async function executeSolVaultSwap(
       : await cfSwapEndpointProgram.methods
           .xSwapToken({
             amount,
-            dstChain: Number(destChain),
-            dstAddress: Buffer.from(destAddress),
-            dstToken: Number(stateChainAssetFromAsset(destAsset)),
+            dstChain: chainContractId(destChain),
+            dstAddress: Buffer.from(destAddress.slice(2), 'hex'),
+            dstToken: assetConstants[destAsset].contractId,
             ccmParameters: messageMetadata
               ? {
                   message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
                   gasAmount: new BN(messageMetadata.gasBudget),
                 }
               : null,
-            // TODO: Encode cfParameters from ccmAdditionalData and other vault swap parameters
-            cfParameters: Buffer.from(messageMetadata?.ccmAdditionalData?.slice(2) ?? '', 'hex'),
+            cfParameters: Buffer.from(cfParameters!.slice(2) ?? '', 'hex'),
             decimals: assetDecimals(srcAsset),
           })
           .accountsPartial({
@@ -300,7 +329,7 @@ export async function performVaultSwap(
       sourceAddress = wallet!.address.toLowerCase();
     } else {
       txHash = await executeSolVaultSwap(sourceAsset, destAsset, destAddress, messageMetadata);
-      sourceAddress = getSolWhaleKeyPair().publicKey.toBase58();
+      sourceAddress = decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58());
     }
     swapContext?.updateStatus(swapTag, SwapStatus.VaultContractExecuted);
 
