@@ -45,8 +45,6 @@ pub trait WeightInfo {
 	fn boost_finalised() -> Weight;
 	fn create_boost_pools() -> Weight;
 	fn mark_transaction_as_tainted() -> Weight;
-	fn open_private_channel() -> Weight;
-	fn close_private_channel() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -292,22 +290,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 	/// TODO: This needs to get generated during the reals benchmarking.
 	fn mark_transaction_as_tainted() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 0 picoseconds.
-		Weight::from_parts(0, 0)
-	}
-
-	fn open_private_channel() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 0 picoseconds.
-		Weight::from_parts(0, 0)
-	}
-
-	fn close_private_channel() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
@@ -563,33 +545,5 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 0 picoseconds.
 		Weight::from_parts(0, 0)
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::BrokerPrivateChannels` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BrokerPrivateChannels` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::ChannelIdCounter` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::ChannelIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn open_private_channel() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `710`
-		//  Estimated: `4175`
-		// Minimum execution time: 15_000_000 picoseconds.
-		Weight::from_parts(15_000_000, 4175)
-			.saturating_add(RocksDbWeight::get().reads(3_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::BrokerPrivateChannels` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::BrokerPrivateChannels` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn close_private_channel() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `783`
-		//  Estimated: `4248`
-		// Minimum execution time: 15_000_000 picoseconds.
-		Weight::from_parts(16_000_000, 4248)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 }

@@ -1109,3 +1109,18 @@ impl<C: ChainCrypto> ElectionEgressWitnesser for DummyEgressSuccessWitnesser<C> 
 pub trait RotationBroadcastsPending {
 	fn rotation_broadcasts_pending() -> bool;
 }
+
+pub trait PrivateChannelManager {
+	type AccountId;
+
+	/// Opens a private channel for `broker_id` by allocated a channel id which can be used
+	/// to derive deposit addresses uniquely identifying the broker.
+	fn open_private_channel(broker_id: &Self::AccountId) -> Result<ChannelId, DispatchError>;
+
+	/// Closes a private channel for `broker_id` if exists; returns channel_id of the closed
+	/// channel if successful.
+	fn close_private_channel(broker_id: &Self::AccountId) -> Result<ChannelId, DispatchError>;
+
+	/// Returns channel id allocated to `broker_id` if any
+	fn private_channel_lookup(broker_id: &Self::AccountId) -> Option<ChannelId>;
+}

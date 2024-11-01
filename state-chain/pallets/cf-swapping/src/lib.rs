@@ -16,8 +16,8 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, BalanceApi, DepositApi, ExecutionCondition, IngressEgressFeeApi,
-	SwapLimitsProvider, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi,
+	PrivateChannelManager, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -441,6 +441,10 @@ pub mod pallet {
 
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
+		type PrivateChannelManager: PrivateChannelManager<
+			AccountId = <Self as frame_system::Config>::AccountId,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -642,6 +646,14 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 		},
+		PrivateBrokerChannelOpened {
+			broker_id: T::AccountId,
+			channel_id: ChannelId,
+		},
+		PrivateBrokerChannelClosed {
+			broker_id: T::AccountId,
+			channel_id: ChannelId,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -683,6 +695,10 @@ pub mod pallet {
 		SwapRequestDurationTooLong,
 		/// Invalid DCA parameters.
 		InvalidDcaParameters,
+		/// Private channels are not supported for chain.
+		NoPrivateChannelsForChain,
+		/// Broker must close their private channels before deregistering
+		PrivateChannelNotClosed,
 	}
 
 	#[pallet::genesis_config]
@@ -939,6 +955,11 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
 			ensure!(
+				T::PrivateChannelManager::private_channel_lookup(&account_id).is_none(),
+				Error::<T>::PrivateChannelNotClosed
+			);
+
+			ensure!(
 				T::BalanceApi::free_balances(&account_id).iter().all(|(_, amount)| *amount == 0),
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
@@ -1039,6 +1060,34 @@ pub mod pallet {
 					.map(|params| params.map_address(T::AddressConverter::to_encoded_address)),
 				dca_parameters,
 			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight(T::WeightInfo::open_private_channel())]
+		pub fn open_private_channel(origin: OriginFor<T>, chain: ForeignChain) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			ensure!(chain == ForeignChain::Bitcoin, Error::<T>::NoPrivateChannelsForChain);
+
+			let channel_id = T::PrivateChannelManager::open_private_channel(&broker_id)?;
+
+			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened { broker_id, channel_id });
+
+			Ok(())
+		}
+
+		#[pallet::call_index(12)]
+		#[pallet::weight(T::WeightInfo::close_private_channel())]
+		pub fn close_private_channel(origin: OriginFor<T>, chain: ForeignChain) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			ensure!(chain == ForeignChain::Bitcoin, Error::<T>::NoPrivateChannelsForChain);
+
+			let channel_id = T::PrivateChannelManager::close_private_channel(&broker_id)?;
+
+			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed { broker_id, channel_id });
 
 			Ok(())
 		}

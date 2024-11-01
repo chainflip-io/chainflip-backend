@@ -1983,7 +1983,8 @@ fn failed_ccm_deposit_can_deposit_event() {
 mod private_broker_channels {
 
 	use super::*;
-	use crate::Event;
+
+	use cf_traits::PrivateChannelManager;
 
 	#[test]
 	fn opening_new_channel() {
@@ -1991,12 +1992,6 @@ mod private_broker_channels {
 			const REGULAR_CHANNEL_ID_1: u64 = 1;
 			const PRIVATE_CHANNEL_ID: u64 = 2;
 			const REGULAR_CHANNEL_ID_2: u64 = 3;
-
-			// Only brokers can open private channels
-			assert_noop!(
-				IngressEgress::open_private_channel(OriginTrait::signed(ALICE)),
-				BadOrigin
-			);
 
 			let open_regular_channel_expecting_id = |expected_channel_id: u64| {
 				let (channel_id, ..) = IngressEgress::open_channel(
@@ -2018,24 +2013,15 @@ mod private_broker_channels {
 
 			// Opening a private channel should succeed:
 			{
-				assert_ok!(
-					<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-						&BROKER,
-					)
-				);
-				assert_ok!(IngressEgress::open_private_channel(OriginTrait::signed(BROKER)));
+				assert_eq!(IngressEgress::open_private_channel(&BROKER), Ok(PRIVATE_CHANNEL_ID));
 
 				assert_eq!(
 					crate::BrokerPrivateChannels::<Test, ()>::get(&BROKER),
 					Some(PRIVATE_CHANNEL_ID)
 				);
-
-				assert_has_matching_event!(
-					Test,
-					RuntimeEvent::IngressEgress(Event::PrivateBrokerChannelOpened {
-						broker_id: BROKER,
-						channel_id: PRIVATE_CHANNEL_ID,
-					})
+				assert_eq!(
+					IngressEgress::private_channel_lookup(&BROKER),
+					Some(PRIVATE_CHANNEL_ID)
 				);
 			}
 
@@ -2046,7 +2032,7 @@ mod private_broker_channels {
 			// The same broker should not be able to open another private channel:
 			{
 				assert_noop!(
-					IngressEgress::open_private_channel(OriginTrait::signed(BROKER)),
+					IngressEgress::open_private_channel(&BROKER),
 					crate::Error::<Test, ()>::PrivateChannelExistsForBroker
 				);
 			}
@@ -2056,30 +2042,25 @@ mod private_broker_channels {
 	#[test]
 	fn closing_channel() {
 		new_test_ext().execute_with(|| {
-			// Only brokers can close private channels
-			assert_noop!(
-				IngressEgress::close_private_channel(OriginTrait::signed(ALICE)),
-				BadOrigin
-			);
-
-			assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
-				&BROKER,
-			));
-
 			// Channel not opened yet:
 			assert_noop!(
-				IngressEgress::close_private_channel(OriginTrait::signed(BROKER)),
+				IngressEgress::close_private_channel(&BROKER),
 				crate::Error::<Test, ()>::NoPrivateChannelExistsForBroker
 			);
 
-			assert_ok!(IngressEgress::open_private_channel(OriginTrait::signed(BROKER)));
+			assert_eq!(IngressEgress::private_channel_lookup(&BROKER), None);
+
+			let channel_id = IngressEgress::open_private_channel(&BROKER)
+				.expect("should be able to open a private channel");
 
 			assert!(crate::BrokerPrivateChannels::<Test, ()>::get(&BROKER).is_some());
+			assert_eq!(IngressEgress::private_channel_lookup(&BROKER), Some(channel_id));
 
 			// Should succeed now that the channel has been opened:
-			assert_ok!(IngressEgress::close_private_channel(OriginTrait::signed(BROKER)));
+			assert_eq!(IngressEgress::close_private_channel(&BROKER), Ok(channel_id));
 
 			assert_eq!(crate::BrokerPrivateChannels::<Test, ()>::get(&BROKER), None);
+			assert_eq!(IngressEgress::private_channel_lookup(&BROKER), None);
 		});
 	}
 }

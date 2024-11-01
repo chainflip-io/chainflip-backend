@@ -159,6 +159,9 @@ impl_test_helpers! {
 				priority_fee: Default::default()
 			}
 		);
+
+		<MockAccountRoleRegistry as cf_traits::AccountRoleRegistry<Test>>::register_as_broker(&BROKER).unwrap();
+
 	}
 }
 

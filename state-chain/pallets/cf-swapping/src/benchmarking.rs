@@ -8,7 +8,7 @@ use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	traits::{OnNewAccount, UnfilteredDispatchable},
+	traits::{OnNewAccount, OriginTrait, UnfilteredDispatchable},
 };
 use frame_system::RawOrigin;
 
@@ -125,6 +125,49 @@ mod benchmarks {
 
 		T::AccountRoleRegistry::ensure_broker(RawOrigin::Signed(caller).into())
 			.expect_err("Caller should no longer be registered as broker");
+	}
+
+	#[benchmark]
+	fn open_private_channel() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		let caller = OriginFor::<T>::signed(broker_id.clone());
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::open_private_channel(caller, ForeignChain::Bitcoin));
+		}
+
+		assert!(
+			T::PrivateChannelManager::private_channel_lookup(&broker_id).is_some(),
+			"Private channel must have been opened"
+		);
+	}
+
+	#[benchmark]
+	fn close_private_channel() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		let caller = OriginFor::<T>::signed(broker_id.clone());
+
+		assert_ok!(Pallet::<T>::open_private_channel(caller.clone(), ForeignChain::Bitcoin));
+
+		assert!(
+			T::PrivateChannelManager::private_channel_lookup(&broker_id).is_some(),
+			"Private channel must have been opened"
+		);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::close_private_channel(caller, ForeignChain::Bitcoin));
+		}
+
+		assert!(
+			T::PrivateChannelManager::private_channel_lookup(&broker_id).is_none(),
+			"Private channel must have been closed"
+		);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
