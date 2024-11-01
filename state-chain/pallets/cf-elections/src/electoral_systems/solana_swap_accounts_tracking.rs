@@ -138,6 +138,20 @@ impl<
 		Ok(true)
 	}
 
+	fn is_vote_needed(
+		(_, current_partial_vote, _): (
+			VotePropertiesOf<Self>,
+			<Self::Vote as VoteStorage>::PartialVote,
+			AuthorityVoteOf<Self>,
+		),
+		(proposed_partial_vote, _): (
+			<Self::Vote as VoteStorage>::PartialVote,
+			<Self::Vote as VoteStorage>::Vote,
+		),
+	) -> bool {
+		current_partial_vote != proposed_partial_vote
+	}
+
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
 		electoral_access: &mut ElectoralAccess,
 		election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
