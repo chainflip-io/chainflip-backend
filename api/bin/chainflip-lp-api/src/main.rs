@@ -28,7 +28,7 @@ use custom_rpc::{
 };
 use futures::{try_join, FutureExt, StreamExt};
 use jsonrpsee::{
-	core::{async_trait, ClientError},
+	core::{async_trait, ClientError, SubscriptionResult},
 	proc_macros::rpc,
 	server::ServerBuilder,
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
@@ -199,7 +199,7 @@ pub trait Rpc {
 	) -> RpcResult<Hash>;
 
 	#[subscription(name = "subscribe_order_fills", item = BlockUpdate<OrderFills>)]
-	fn subscribe_order_fills(&self);
+	async fn subscribe_order_fills(&self) -> SubscriptionResult;
 
 	#[method(name = "order_fills")]
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
@@ -486,27 +486,33 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	fn subscribe_order_fills(&self, pending_sink: PendingSubscriptionSink) {
+	async fn subscribe_order_fills(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+	) -> SubscriptionResult {
 		let state_chain_client = self.api.state_chain_client.clone();
+		let sink = pending_sink.accept().await.map_err(|e| e.to_string())?;
 		tokio::spawn(async move {
-			if let Ok(sink) = pending_sink.accept().await {
-				let mut finalized_block_stream = state_chain_client.finalized_block_stream().await;
-				while let Some(block) = finalized_block_stream.next().await {
-					match order_fills(state_chain_client.clone(), block).await {
-						Ok(order_fills) => {
-							if sink
-								.send(sc_rpc::utils::to_sub_message(&sink, &order_fills))
-								.await
-								.is_err()
-							{
-								break;
-							}
-						},
-						Err(_) => break,
-					}
+			// Note we construct the subscription here rather than relying on the custom-rpc
+			// subscription. This is because we want to use finalized blocks.
+			// TODO: allow custom rpc subscriptions to use finalized blocks.
+			let mut finalized_block_stream = state_chain_client.finalized_block_stream().await;
+			while let Some(block) = finalized_block_stream.next().await {
+				match order_fills(state_chain_client.clone(), block).await {
+					Ok(order_fills) => {
+						if sink
+							.send(sc_rpc::utils::to_sub_message(&sink, &order_fills))
+							.await
+							.is_err()
+						{
+							break;
+						}
+					},
+					Err(_) => break,
 				}
 			}
 		});
+		Ok(())
 	}
 
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>> {
