@@ -16,7 +16,7 @@ use cf_chains::{
 	CcmDepositMetadata, Chain, ChannelRefundParameters, CloseSolanaVaultSwapAccounts,
 	FeeEstimationApi, ForeignChain, Solana,
 };
-use cf_primitives::{BasisPoints, DcaParameters, ShortId, TransactionHash};
+use cf_primitives::{BasisPoints, DcaParameters, ShortId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
@@ -57,8 +57,8 @@ pub type SolanaElectoralSystem = Composite<
 		SolanaIngressTracking,
 		SolanaNonceTracking,
 		SolanaEgressWitnessing,
-		SolanaVaultSwapTracking,
 		SolanaLiveness,
+		SolanaVaultSwapTracking,
 	),
 	<Runtime as Chainflip>::ValidatorId,
 	SolanaElectionHooks,
@@ -93,8 +93,8 @@ pub mod old {
 			SolanaIngressTracking,
 			SolanaNonceTrackingOld,
 			SolanaEgressWitnessing,
-			SolanaVaultSwapTracking,
 			SolanaLiveness,
+			SolanaVaultSwapTracking,
 		),
 		<Runtime as Chainflip>::ValidatorId,
 		SolanaElectionHooksOld,
@@ -107,8 +107,8 @@ pub mod old {
 			SolanaIngressTracking,
 			SolanaNonceTrackingOld,
 			SolanaEgressWitnessing,
-			SolanaVaultSwapTracking,
 			SolanaLiveness,
+			SolanaVaultSwapTracking,
 		> for SolanaElectionHooksOld
 	{
 		type OnFinalizeContext = ();
@@ -121,8 +121,8 @@ pub mod old {
 			IngressTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaIngressTracking>,
 			OldNonceTrackingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = old::SolanaNonceTrackingOld>,
 			EgressWitnessingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaEgressWitnessing>,
-			VaultSwapTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaVaultSwapTracking>,
 			LivenessTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaLiveness>,
+			VaultSwapTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaVaultSwapTracking>,
 		>(
 			generic_electoral_access: &mut GenericElectoralAccess,
 			(
@@ -131,16 +131,16 @@ pub mod old {
 				ingress_translator,
 				old_nonce_translator,
 				egress_witnessing_translator,
-				vault_swap_translator,
 				liveness_translator,
+				vault_swap_translator,
 			): (
 				BlockHeightTranslator,
 				FeeTranslator,
 				IngressTranslator,
 				OldNonceTrackingTranslator,
 				EgressWitnessingTranslator,
-				VaultSwapTranslator,
 				LivenessTranslator,
+				VaultSwapTranslator,
 			),
 			(
 				block_height_identifiers,
@@ -148,8 +148,8 @@ pub mod old {
 				ingress_identifiers,
 				old_nonce_identifiers,
 				egress_witnessing_identifiers,
-				vault_swap_identifiers,
 				liveness_identifiers,
+				vault_swap_identifiers,
 			): (
 				Vec<
 					ElectionIdentifier<
@@ -178,12 +178,12 @@ pub mod old {
 				>,
 				Vec<
 					ElectionIdentifier<
-						<SolanaVaultSwapTracking as ElectoralSystem>::ElectionIdentifierExtra,
+						<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra,
 					>,
 				>,
 				Vec<
 					ElectionIdentifier<
-						<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra,
+						<SolanaVaultSwapTracking as ElectoralSystem>::ElectionIdentifierExtra,
 					>,
 				>,
 			),
@@ -429,8 +429,8 @@ pub fn initial_state(
 			(),
 			(),
 			(),
-			0,
 			(),
+			0,
 		),
 		unsynchronised_settings: (
 			(),
@@ -447,8 +447,8 @@ pub fn initial_state(
 			SolanaIngressSettings { vault_program, usdc_token_mint_pubkey },
 			(),
 			(),
-			SolanaVaultSwapsSettings { swap_endpoint_data_account_address, usdc_token_mint_pubkey },
 			LIVENESS_CHECK_DURATION,
+			SolanaVaultSwapsSettings { swap_endpoint_data_account_address, usdc_token_mint_pubkey },
 		),
 	}
 }
@@ -489,6 +489,14 @@ pub type SolanaEgressWitnessing = electoral_systems::egress_success::EgressSucce
 	<Runtime as Chainflip>::ValidatorId,
 >;
 
+pub type SolanaLiveness = electoral_systems::liveness::Liveness<
+	<Solana as Chain>::ChainBlockNumber,
+	SolHash,
+	cf_primitives::BlockNumber,
+	OnCheckCompleteHook,
+	<Runtime as Chainflip>::ValidatorId,
+>;
+
 pub type SolanaVaultSwapTracking =
 	electoral_systems::solana_swap_accounts_tracking::SolanaVaultSwapAccounts<
 		VaultSwapAccountAndSender,
@@ -499,13 +507,6 @@ pub type SolanaVaultSwapTracking =
 		<Runtime as Chainflip>::ValidatorId,
 		SolanaTransactionBuildingError,
 	>;
-pub type SolanaLiveness = electoral_systems::liveness::Liveness<
-	<Solana as Chain>::ChainBlockNumber,
-	SolHash,
-	cf_primitives::BlockNumber,
-	OnCheckCompleteHook,
-	<Runtime as Chainflip>::ValidatorId,
->;
 
 pub struct OnCheckCompleteHook;
 
@@ -595,8 +596,8 @@ impl
 		SolanaIngressTracking,
 		SolanaNonceTracking,
 		SolanaEgressWitnessing,
-		SolanaVaultSwapTracking,
 		SolanaLiveness,
+		SolanaVaultSwapTracking,
 	> for SolanaElectionHooks
 {
 	type OnFinalizeContext = ();
@@ -609,8 +610,8 @@ impl
 		IngressTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaIngressTracking>,
 		NonceTrackingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaNonceTracking>,
 		EgressWitnessingTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaEgressWitnessing>,
-		VaultSwapTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaVaultSwapTracking>,
 		LivenessTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaLiveness>,
+		VaultSwapTranslator: Translator<GenericElectoralAccess, ElectoralSystem = SolanaVaultSwapTracking>,
 	>(
 		generic_electoral_access: &mut GenericElectoralAccess,
 		(
@@ -619,16 +620,16 @@ impl
 			ingress_translator,
 			nonce_tracking_translator,
 			egress_witnessing_translator,
-			vault_swap_translator,
 			liveness_translator,
+			vault_swap_translator,
 		): (
 			BlockHeightTranslator,
 			FeeTranslator,
 			IngressTranslator,
 			NonceTrackingTranslator,
 			EgressWitnessingTranslator,
-			VaultSwapTranslator,
 			LivenessTranslator,
+			VaultSwapTranslator,
 		),
 		(
 			block_height_identifiers,
@@ -636,8 +637,8 @@ impl
 			ingress_identifiers,
 			nonce_tracking_identifiers,
 			egress_witnessing_identifiers,
-			vault_swap_identifiers,
 			liveness_identifiers,
+			vault_swap_identifiers,
 		): (
 			Vec<
 				ElectionIdentifier<
@@ -662,12 +663,12 @@ impl
 					<SolanaEgressWitnessing as ElectoralSystem>::ElectionIdentifierExtra,
 				>,
 			>,
+			Vec<ElectionIdentifier<<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra>>,
 			Vec<
 				ElectionIdentifier<
 					<SolanaVaultSwapTracking as ElectoralSystem>::ElectionIdentifierExtra,
 				>,
 			>,
-			Vec<ElectionIdentifier<<SolanaLiveness as ElectoralSystem>::ElectionIdentifierExtra>>,
 		),
 		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
@@ -919,7 +920,13 @@ impl BenchmarkValue for SolanaVaultSwapDetails {
 			to: BenchmarkValue::benchmark_value(),
 			deposit_amount: BenchmarkValue::benchmark_value(),
 			destination_address: BenchmarkValue::benchmark_value(),
-			tx_hash: BenchmarkValue::benchmark_value(),
+			deposit_metadata: Some(BenchmarkValue::benchmark_value()),
+			swap_account: BenchmarkValue::benchmark_value(),
+			creation_slot: BenchmarkValue::benchmark_value(),
+			broker_fees: BenchmarkValue::benchmark_value(),
+			refund_params: Some(BenchmarkValue::benchmark_value()),
+			dca_params: Some(BenchmarkValue::benchmark_value()),
+			boost_fee: Some(BenchmarkValue::benchmark_value()),
 		}
 	}
 }
@@ -941,7 +948,7 @@ impl
 			swap_details.destination_address,
 			swap_details.deposit_metadata,
 			Default::default(), // TODO txHash PRO-1760
-			Default::default(),
+			(),
 			Default::default(), // TODO in PRO-1743
 			swap_details.refund_params,
 			swap_details.dca_params,

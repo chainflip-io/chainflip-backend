@@ -308,8 +308,8 @@ impl ExtBuilder {
 						(),
 						(),
 						(),
-						Default::default(),
 						(),
+						Default::default(),
 					),
 					unsynchronised_settings: (
 						(),
@@ -331,12 +331,12 @@ impl ExtBuilder {
 						},
 						(),
 						(),
+						BLOCKS_BETWEEN_LIVENESS_CHECKS,
 						SolanaVaultSwapsSettings {
 							swap_endpoint_data_account_address:
 								sol_test_values::SWAP_ENDPOINT_DATA_ACCOUNT_ADDRESS,
 							usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
 						},
-						BLOCKS_BETWEEN_LIVENESS_CHECKS,
 					),
 				}),
 			},

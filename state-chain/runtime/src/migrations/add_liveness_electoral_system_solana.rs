@@ -31,7 +31,9 @@ impl OnRuntimeUpgrade for LivenessSettingsMigration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		for (.., liveness_duration) in ElectoralSettings::<Runtime, SolanaInstance>::iter_values() {
+		for (.., liveness_duration, _) in
+			ElectoralSettings::<Runtime, SolanaInstance>::iter_values()
+		{
 			assert_eq!(liveness_duration, LIVENESS_CHECK_DURATION);
 		}
 		Ok(())
