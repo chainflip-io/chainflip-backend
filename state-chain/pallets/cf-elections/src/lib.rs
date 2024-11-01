@@ -285,7 +285,7 @@ pub mod pallet {
 	pub use corrupt_storage_error::CorruptStorageError;
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
-	pub enum ElectoralSystemStatus {
+	pub enum ElectionPalletStatus {
 		Paused { detected_corrupt_storage: bool },
 		Running,
 	}
@@ -578,7 +578,7 @@ pub mod pallet {
 	/// this is None, the pallet is considered uninitialized.
 	#[pallet::storage]
 	pub type Status<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, ElectoralSystemStatus, OptionQuery>;
+		StorageValue<_, ElectionPalletStatus, OptionQuery>;
 
 	// ---------------------------------------------------------------------------------------- //
 
@@ -1277,19 +1277,6 @@ pub mod pallet {
 					},
 				};
 
-				ensure!(
-					Self::with_electoral_access(
-						|electoral_access| -> Result<_, CorruptStorageError> {
-							<T::ElectoralSystem as ElectoralSystem>::is_vote_valid(
-								election_identifier,
-								&electoral_access.election(election_identifier)?,
-								&partial_vote,
-							)
-						}
-					)?,
-					Error::<T, I>::InvalidVote
-				);
-
 				Self::handle_corrupt_storage(Self::take_vote_and_then(
 					epoch_index,
 					unique_monotonic_identifier,
@@ -1506,9 +1493,9 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			match Status::<T, I>::get() {
 				None => Err(Error::<T, I>::Uninitialized.into()),
-				Some(ElectoralSystemStatus::Paused { .. }) => Err(Error::<T, I>::Paused.into()),
+				Some(ElectionPalletStatus::Paused { .. }) => Err(Error::<T, I>::Paused.into()),
 				Some(_) => {
-					Status::<T, I>::put(ElectoralSystemStatus::Paused {
+					Status::<T, I>::put(ElectionPalletStatus::Paused {
 						detected_corrupt_storage: false,
 					});
 					Ok(())
@@ -1525,9 +1512,9 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			match Status::<T, I>::get() {
 				None => Err(Error::<T, I>::Uninitialized.into()),
-				Some(ElectoralSystemStatus::Paused { detected_corrupt_storage: true }) =>
+				Some(ElectionPalletStatus::Paused { detected_corrupt_storage: true }) =>
 					Err(Error::<T, I>::CorruptStorage.into()),
-				Some(ElectoralSystemStatus::Paused { .. }) => {
+				Some(ElectionPalletStatus::Paused { .. }) => {
 					ensure!(
 						!require_votes_cleared ||
 							(SharedDataReferenceCount::<T, I>::iter_keys().next().is_none() &&
@@ -1539,7 +1526,7 @@ pub mod pallet {
 									.is_none()),
 						Error::<T, I>::VotesNotCleared
 					);
-					Status::<T, I>::put(ElectoralSystemStatus::Running);
+					Status::<T, I>::put(ElectionPalletStatus::Running);
 					Ok(())
 				},
 				Some(_) => Err(Error::<T, I>::NotPaused.into()),
@@ -1589,8 +1576,8 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			match Status::<T, I>::get() {
 				None => Err(Error::<T, I>::Uninitialized.into()),
-				Some(ElectoralSystemStatus::Paused { .. }) => {
-					Status::<T, I>::put(ElectoralSystemStatus::Paused {
+				Some(ElectionPalletStatus::Paused { .. }) => {
+					Status::<T, I>::put(ElectionPalletStatus::Paused {
 						detected_corrupt_storage: false,
 					});
 					Ok(())
@@ -1607,11 +1594,11 @@ pub mod pallet {
 		fn on_finalize(block_number: BlockNumberFor<T>) {
 			if let Some(status) = Status::<T, I>::get() {
 				match status {
-					ElectoralSystemStatus::Paused { detected_corrupt_storage } =>
+					ElectionPalletStatus::Paused { detected_corrupt_storage } =>
 						if detected_corrupt_storage {
 							Self::deposit_event(Event::<T, I>::CorruptStorage);
 						},
-					ElectoralSystemStatus::Running => {
+					ElectionPalletStatus::Running => {
 						let _ = Self::with_electoral_access_and_identifiers(
 							|electoral_access, election_identifiers| {
 								if Into::<sp_core::U256>::into(block_number) %
@@ -1698,7 +1685,7 @@ pub mod pallet {
 				NextElectionIdentifier::<T, I>::get(),
 				initial_state.settings,
 			);
-			Status::<T, I>::put(ElectoralSystemStatus::Running);
+			Status::<T, I>::put(ElectionPalletStatus::Running);
 			Ok(())
 		}
 
@@ -2069,7 +2056,7 @@ pub mod pallet {
 			let authority_index = T::EpochInfo::authority_index(epoch_index, &validator_id);
 			ensure!(authority_index.is_some(), Error::<T, I>::Unauthorised);
 			ensure!(
-				matches!(Status::<T, I>::get(), Some(ElectoralSystemStatus::Running)),
+				matches!(Status::<T, I>::get(), Some(ElectionPalletStatus::Running)),
 				Error::<T, I>::Paused
 			);
 			Ok((epoch_index, validator_id, authority_index.unwrap()))
@@ -2083,7 +2070,7 @@ pub mod pallet {
 				ensure!(
 					!matches!(
 						status,
-						ElectoralSystemStatus::Paused { detected_corrupt_storage: true }
+						ElectionPalletStatus::Paused { detected_corrupt_storage: true }
 					) || matches!(ignore_corrupt_storage, CorruptStorageAdherance::Ignore),
 					Error::<T, I>::CorruptStorage
 				);
@@ -2109,7 +2096,7 @@ pub mod pallet {
 				Ok(ok) => Ok(ok),
 				Err(_) => {
 					Self::deposit_event(Event::<T, I>::CorruptStorage);
-					Status::<T, I>::put(ElectoralSystemStatus::Paused {
+					Status::<T, I>::put(ElectionPalletStatus::Paused {
 						detected_corrupt_storage: true,
 					});
 					Err(Error::<T, I>::CorruptStorage)

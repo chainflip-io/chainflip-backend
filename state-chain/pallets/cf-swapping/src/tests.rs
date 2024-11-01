@@ -1021,9 +1021,9 @@ fn swaps_get_retried_after_failure() {
 #[test]
 fn deposit_address_ready_event_contains_correct_parameters() {
 	new_test_ext().execute_with(|| {
-		let refund_parameters = ChannelRefundParameters {
+		let refund_parameters = ChannelRefundParametersEncoded {
 			retry_duration: 10,
-			refund_address: ForeignChainAddress::Eth([10; 20].into()),
+			refund_address: EncodedAddress::Eth([10; 20]),
 			min_price: 100.into(),
 		};
 
@@ -1049,7 +1049,7 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 				refund_parameters: Some(ref refund_params_in_event),
 				dca_parameters: Some(ref dca_params_in_event),
 				..
-			}) if refund_params_in_event == &refund_parameters.map_address(MockAddressConverter::to_encoded_address) && dca_params_in_event == &dca_parameters
+			}) if *refund_params_in_event == refund_parameters && dca_params_in_event == &dca_parameters
 		);
 	});
 }

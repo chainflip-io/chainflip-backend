@@ -16,7 +16,7 @@ use crate::{
 	},
 };
 use anyhow::Result;
-use cf_chains::sol::SolHash;
+use cf_chains::{sol::SolHash, Chain};
 use futures::FutureExt;
 use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
 use state_chain_runtime::{
@@ -28,7 +28,10 @@ use state_chain_runtime::{
 	SolanaInstance,
 };
 
-use cf_utilities::{task_scope, task_scope::Scope};
+use cf_utilities::{
+	metrics::CHAIN_TRACKING,
+	task_scope::{self, Scope},
+};
 use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
 use std::{str::FromStr, sync::Arc};
 
@@ -47,7 +50,9 @@ impl VoterApi<SolanaBlockHeightTracking> for SolanaBlockHeightTrackingVoter {
 		<<SolanaBlockHeightTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		Ok(self.client.get_slot(CommitmentConfig::finalized()).await)
+		let slot = self.client.get_slot(CommitmentConfig::finalized()).await;
+		CHAIN_TRACKING.set(&[cf_chains::Solana::NAME], Into::<u64>::into(slot));
+		Ok(slot)
 	}
 }
 

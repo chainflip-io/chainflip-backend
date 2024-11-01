@@ -827,6 +827,16 @@ impl<A: Clone> ChannelRefundParametersGeneric<A> {
 			min_price: self.min_price,
 		}
 	}
+	pub fn try_map_address<B, F: FnOnce(A) -> Result<B, sp_runtime::DispatchError>>(
+		&self,
+		f: F,
+	) -> Result<ChannelRefundParametersGeneric<B>, sp_runtime::DispatchError> {
+		Ok(ChannelRefundParametersGeneric {
+			retry_duration: self.retry_duration,
+			refund_address: f(self.refund_address.clone())?,
+			min_price: self.min_price,
+		})
+	}
 }
 
 pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {

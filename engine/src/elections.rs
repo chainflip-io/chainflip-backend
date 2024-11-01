@@ -240,7 +240,9 @@ where
 							}
 						}
 					} else {
-						return Err(anyhow!("Validator as been unexpectedly set as not contributing."));
+						// We expect this to happen when a validator joins the set, since they won't be contributing, but will be a validator.
+						// Therefore they get Some() from `electoral_data` but `contributing` is false, until we reset the voting by throwing an error here.
+						return Err(anyhow!("Validator has just joined the authority set, or has been unexpectedly set as not contributing."));
 					}
 				} else {
 					info!("Not voting as not an authority.");

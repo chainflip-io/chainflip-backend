@@ -9,14 +9,16 @@ description = "Chainflip test utilities used in multiple crates"
 workspace = true
 
 [dependencies]
-codec = { workspace = true }
+codec = { workspace = true, default-features = true }
 
-frame-support = { workspace = true }
-frame-system = { workspace = true }
+frame-support = { workspace = true, default-features = true }
+frame-system = { workspace = true, default-features = true }
 
-sp-io = { workspace = true }
-sp-core = { workspace = true }
-sp-runtime = { workspace = true }
+sp-io = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
 
 [dev-dependencies]
-scale-info = { workspace = true, features = ["derive"] }
+scale-info = { workspace = true, default-features = true, features = [
+    "derive",
+] }
