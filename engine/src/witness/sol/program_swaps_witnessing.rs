@@ -303,7 +303,7 @@ async fn get_program_swap_event_accounts_data(
 
 	ensure!(accounts_info.len() == program_swap_event_accounts.len());
 
-	let program_swap_event_accounts_iter = program_swap_event_accounts
+	program_swap_event_accounts
 		.into_iter()
 		.zip(accounts_info.into_iter())
 		.map(|(account, accounts_info)| match accounts_info {
@@ -334,8 +334,7 @@ async fn get_program_swap_event_accounts_data(
 				Err(anyhow!("Expected UiAccountData::Binary(String, UiAccountEncoding::Base64)")),
 			None => Ok((account, None)),
 		})
-		.collect();
-	program_swap_event_accounts_iter
+		.collect()
 }
 
 #[cfg(test)]
