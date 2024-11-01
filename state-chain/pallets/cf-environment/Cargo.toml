@@ -22,7 +22,7 @@ cf-traits = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 hex-literal = { workspace = true }
 log = { workspace = true }
-cf-runtime-upgrade-utilities = { workspace = true }
+cf-runtime-utilities = { workspace = true }
 
 # Parity deps
 codec = { workspace = true, features = ["derive"] }
@@ -53,17 +53,18 @@ std = [
   "serde/std",
   "sp-std/std",
   "log/std",
-  "cf-runtime-upgrade-utilities/std",
+  "cf-runtime-utilities/std",
 ]
 runtime-benchmarks = [
   "cf-chains/runtime-benchmarks",
   "cf-traits/runtime-benchmarks",
+  "cf-runtime-utilities/runtime-benchmarks",
   "frame-benchmarking/runtime-benchmarks",
   "frame-support/runtime-benchmarks",
   "frame-system/runtime-benchmarks",
 ]
 try-runtime = [
-  "cf-runtime-upgrade-utilities/try-runtime",
+  "cf-runtime-utilities/try-runtime",
   "frame-support/try-runtime",
   "frame-system/try-runtime",
 ]

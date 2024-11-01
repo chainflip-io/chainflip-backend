@@ -17,7 +17,7 @@ workspace = true
 [dependencies]
 # Internal deps
 cf-primitives = { workspace = true }
-cf-runtime-upgrade-utilities = { workspace = true }
+cf-runtime-utilities = { workspace = true }
 cf-traits = { workspace = true }
 cf-utilities = { workspace = true }
 
@@ -53,7 +53,7 @@ lazy_static = { workspace = true }
 default = ["std"]
 std = [
   "cf-primitives/std",
-  "cf-runtime-upgrade-utilities/std",
+  "cf-runtime-utilities/std",
   "cf-traits/std",
   "cf-utilities/std",
   "codec/std",
@@ -74,6 +74,7 @@ std = [
 ]
 runtime-benchmarks = [
   "cf-traits/runtime-benchmarks",
+  "cf-runtime-utilities/runtime-benchmarks",
   "frame-benchmarking/runtime-benchmarks",
   "frame-support/runtime-benchmarks",
   "frame-system/runtime-benchmarks",
@@ -85,7 +86,7 @@ runtime-benchmarks = [
 try-runtime = [
   "frame-support/try-runtime",
   "frame-system/try-runtime",
-  "cf-runtime-upgrade-utilities/try-runtime",
+  "cf-runtime-utilities/try-runtime",
   "pallet-cf-funding/try-runtime",
   "pallet-cf-reputation/try-runtime",
   "pallet-cf-vaults/try-runtime",

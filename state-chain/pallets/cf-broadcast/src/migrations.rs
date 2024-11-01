@@ -1,5 +1,5 @@
 use crate::Pallet;
-use cf_runtime_upgrade_utilities::PlaceholderMigration;
+use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
 mod initialize_broadcast_timeout_storage;

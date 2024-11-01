@@ -1,4 +1,4 @@
-use cf_runtime_upgrade_utilities::PlaceholderMigration;
+use cf_runtime_utilities::PlaceholderMigration;
 
 use crate::{Config, Pallet};
 use frame_support::traits::OnRuntimeUpgrade;

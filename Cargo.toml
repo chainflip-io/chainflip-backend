@@ -44,7 +44,6 @@ members = [
   "state-chain/pallets/cf-witnesser",
   "state-chain/primitives",
   "state-chain/runtime",
-  "state-chain/runtime-upgrade-utilities",
   "state-chain/runtime-utilities",
   "state-chain/runtime-utilities/macros",
   "state-chain/test-utilities",
@@ -274,7 +273,6 @@ engine-proc-macros = { path = "engine-proc-macros" }
 
 # Chainflip utilities and others
 cf-runtime-macros = { path = "state-chain/runtime-utilities/macros", default-features = false }
-cf-runtime-upgrade-utilities = { path = "state-chain/runtime-upgrade-utilities", default-features = false }
 cf-runtime-utilities = { path = "state-chain/runtime-utilities", default-features = false }
 cf-test-utilities = { path = "state-chain/test-utilities", default-features = false }
 cf-utilities = { package = "utilities", path = "utilities", default-features = false }
