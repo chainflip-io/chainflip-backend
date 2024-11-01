@@ -403,7 +403,18 @@ pub type Affiliates<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_AFFILIATES>>;
 pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIARIES>>;
 
 #[derive(
-	Clone, Debug, PartialEq, Eq, MaxEncodedLen, Encode, Decode, TypeInfo, Serialize, Deserialize,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	MaxEncodedLen,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 pub struct Beneficiary<Id> {
 	pub account: Id,
@@ -421,6 +432,8 @@ pub struct Beneficiary<Id> {
 	TypeInfo,
 	Serialize,
 	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 pub struct DcaParameters {
 	/// The number of individual swaps to be executed
@@ -428,3 +441,6 @@ pub struct DcaParameters {
 	/// The interval in blocks between each swap.
 	pub chunk_interval: u32,
 }
+
+// TODO: Define this / implement it on the SC - PRO-1743.
+pub type ShortId = u8;

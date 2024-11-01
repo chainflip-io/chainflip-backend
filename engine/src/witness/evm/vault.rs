@@ -12,7 +12,7 @@ use super::{
 	},
 	contract_common::{events_at_block, Event},
 };
-use cf_primitives::{AffiliateShortId, AssetAmount, EpochIndex};
+use cf_primitives::{AffiliateShortId, AssetAmount, EpochIndex, ShortId};
 use futures_core::Future;
 
 use anyhow::{anyhow, Result};

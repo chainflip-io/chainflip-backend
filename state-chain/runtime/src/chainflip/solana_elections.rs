@@ -11,8 +11,10 @@ use cf_chains::{
 		},
 		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
 	},
-	Chain, FeeEstimationApi, ForeignChain, Solana,
+	CcmDepositMetadata, Chain, ChannelRefundParameters, CloseSolanaVaultSwapAccounts,
+	FeeEstimationApi, ForeignChain, Solana,
 };
+use cf_primitives::{BasisPoints, DcaParameters, ShortId, TransactionHash};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	instances::ChainInstanceAlias,
@@ -528,7 +530,14 @@ pub struct SolanaVaultSwapDetails {
 	pub to: Asset,
 	pub deposit_amount: AssetAmount,
 	pub destination_address: EncodedAddress,
-	pub tx_hash: TransactionHash,
+	pub deposit_metadata: Option<CcmDepositMetadata>,
+	// TODO: These two will potentially be a TransactionId type
+	pub swap_account: SolAddress,
+	pub creation_slot: u64,
+	pub broker_fees: cf_primitives::Beneficiaries<ShortId>,
+	pub refund_params: Option<ChannelRefundParameters>,
+	pub dca_params: Option<DcaParameters>,
+	pub boost_fee: Option<BasisPoints>,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -559,13 +568,13 @@ impl
 			swap_details.deposit_amount,
 			swap_details.to,
 			swap_details.destination_address,
-			Default::default(), // TODO
-			swap_details.tx_hash,
-			Default::default(), // TODO
-			Default::default(), // TODO
-			Default::default(), // TODO
-			Default::default(), // TODO
-			Default::default(), // TODO
+			swap_details.deposit_metadata,
+			Default::default(), // TODO txHash PRO-1760
+			Default::default(),
+			Default::default(), // TODO in PRO-1743
+			swap_details.refund_params,
+			swap_details.dca_params,
+			swap_details.boost_fee.unwrap_or_default(),
 		);
 	}
 

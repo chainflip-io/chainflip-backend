@@ -529,6 +529,10 @@
         "kind": "struct",
         "fields": [
           {
+            "name": "creation_slot",
+            "type": "u64"
+          },
+          {
             "name": "sender",
             "type": "pubkey"
           },

@@ -1,6 +1,5 @@
 import * as anchor from '@coral-xyz/anchor';
 // import NodeWallet from '@coral-xyz/anchor/dist/cjs/nodewallet';￼
-
 import {
   InternalAsset as Asset,
   executeSwap,
@@ -9,6 +8,7 @@ import {
   Asset as SCAsset,
   Chains,
   Chain,
+  assetConstants,
 } from '@chainflip/cli';
 import { HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
@@ -28,19 +28,20 @@ import {
   evmChains,
   getSolWhaleKeyPair,
   getSolConnection,
+  chainContractId,
+  decodeSolAddress,
+  decodeDotAddressForContract,
 } from './utils';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 
-import VaultIdl from '../../contract-interfaces/sol-program-idls/v1.0.0/vault.json';
-import SwapEndpointIdl from '../../contract-interfaces/sol-program-idls/v1.0.0/swap_endpoint.json';
-
-import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0/types/swap_endpoint';
-import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0/types/vault';
+import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/swap_endpoint';
+import { Vault } from '../../contract-interfaces/sol-program-idls/v1.0.0-swap-endpoint/vault';
+import { getSolanaSwapEndpointIdl, getSolanaVaultIdl } from './contract_interfaces';
 
 // Workaround because of anchor issue
-const { BN } = anchor;
+const { BN } = anchor.default;
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
@@ -118,7 +119,7 @@ export async function executeVaultSwap(
   return receipt;
 }
 // Temporary before the SDK implements this.
-export async function executeSolContractSwap(
+export async function executeSolVaultSwap(
   srcAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -146,6 +147,11 @@ export async function executeSolContractSwap(
   process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
 
   const connection = getSolConnection();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const VaultIdl: any = await getSolanaVaultIdl();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();
+
   const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(SwapEndpointIdl as SwapEndpoint);
   const vaultProgram = new anchor.Program<Vault>(VaultIdl as Vault);
 
@@ -153,24 +159,57 @@ export async function executeSolContractSwap(
   const fetchedDataAccount = await vaultProgram.account.dataAccount.fetch(solanaVaultDataAccount);
   const aggKey = fetchedDataAccount.aggKey;
 
+  const amount = new BN(amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)));
+
+  let cfParameters;
+
+  if (messageMetadata) {
+    // TODO: Currently manually encoded. To use SDK/BrokerApi.
+    switch (destChain) {
+      case Chains.Ethereum:
+      case Chains.Arbitrum:
+        cfParameters =
+          '0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
+        break;
+      default:
+        throw new Error(`Unsupported chain: ${destChain}`);
+    }
+  } else {
+    // TODO: Currently manually encoded. To use SDK/BrokerApi.
+    switch (destChain) {
+      case Chains.Ethereum:
+      case Chains.Arbitrum:
+        cfParameters =
+          '0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
+        break;
+      case Chains.Polkadot:
+        cfParameters =
+          '0x000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
+        break;
+      // TODO: Not supporting BTC for now because the encoding is annoying.
+      default:
+        throw new Error(`Unsupported chain: ${destChain}`);
+    }
+  }
+
+  const destinationAddress =
+    destChain === Chains.Polkadot ? decodeDotAddressForContract(destAddress) : destAddress;
+
   const tx =
     srcAsset === 'Sol'
       ? await cfSwapEndpointProgram.methods
           .xSwapNative({
-            amount: new BN(
-              amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
-            ),
-            dstChain: Number(destChain),
-            dstAddress: Buffer.from(destAddress),
-            dstToken: Number(stateChainAssetFromAsset(destAsset)),
+            amount,
+            dstChain: chainContractId(destChain),
+            dstAddress: Buffer.from(destinationAddress.slice(2), 'hex'),
+            dstToken: assetConstants[destAsset].contractId,
             ccmParameters: messageMetadata
               ? {
                   message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
                   gasAmount: new BN(messageMetadata.gasBudget),
                 }
               : null,
-            // TODO: Encode cfParameters from ccmAdditionalData and other vault swap parameters
-            cfParameters: Buffer.from(messageMetadata?.ccmAdditionalData?.slice(2) ?? '', 'hex'),
+            cfParameters: Buffer.from(cfParameters!.slice(2) ?? '', 'hex'),
           })
           .accountsPartial({
             dataAccount: solanaVaultDataAccount,
@@ -184,20 +223,17 @@ export async function executeSolContractSwap(
           .transaction()
       : await cfSwapEndpointProgram.methods
           .xSwapToken({
-            amount: new BN(
-              amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals(srcAsset)),
-            ),
-            dstChain: Number(destChain),
-            dstAddress: Buffer.from(destAddress),
-            dstToken: Number(stateChainAssetFromAsset(destAsset)),
+            amount,
+            dstChain: chainContractId(destChain),
+            dstAddress: Buffer.from(destinationAddress.slice(2), 'hex'),
+            dstToken: assetConstants[destAsset].contractId,
             ccmParameters: messageMetadata
               ? {
                   message: Buffer.from(messageMetadata.message.slice(2), 'hex'),
                   gasAmount: new BN(messageMetadata.gasBudget),
                 }
               : null,
-            // TODO: Encode cfParameters from ccmAdditionalData and other vault swap parameters
-            cfParameters: Buffer.from(messageMetadata?.ccmAdditionalData?.slice(2) ?? '', 'hex'),
+            cfParameters: Buffer.from(cfParameters!.slice(2) ?? '', 'hex'),
             decimals: assetDecimals(srcAsset),
           })
           .accountsPartial({
@@ -296,8 +332,8 @@ export async function performVaultSwap(
       txHash = receipt.hash;
       sourceAddress = wallet!.address.toLowerCase();
     } else {
-      txHash = await executeSolContractSwap(sourceAsset, destAsset, destAddress, messageMetadata);
-      sourceAddress = getSolWhaleKeyPair().publicKey.toBase58();
+      txHash = await executeSolVaultSwap(sourceAsset, destAsset, destAddress, messageMetadata);
+      sourceAddress = decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58());
     }
     swapContext?.updateStatus(swapTag, SwapStatus.VaultContractExecuted);
 
