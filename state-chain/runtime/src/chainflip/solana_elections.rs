@@ -14,7 +14,7 @@ use cf_chains::{
 	CcmDepositMetadata, Chain, ChannelRefundParameters, CloseSolanaVaultSwapAccounts,
 	FeeEstimationApi, ForeignChain, Solana,
 };
-use cf_primitives::{BasisPoints, DcaParameters, ShortId, TransactionHash};
+use cf_primitives::{BasisPoints, DcaParameters, ShortId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	instances::ChainInstanceAlias,
@@ -548,7 +548,13 @@ impl BenchmarkValue for SolanaVaultSwapDetails {
 			to: BenchmarkValue::benchmark_value(),
 			deposit_amount: BenchmarkValue::benchmark_value(),
 			destination_address: BenchmarkValue::benchmark_value(),
-			tx_hash: BenchmarkValue::benchmark_value(),
+			deposit_metadata: Some(BenchmarkValue::benchmark_value()),
+			swap_account: BenchmarkValue::benchmark_value(),
+			creation_slot: BenchmarkValue::benchmark_value(),
+			broker_fees: BenchmarkValue::benchmark_value(),
+			refund_params: Some(BenchmarkValue::benchmark_value()),
+			dca_params: Some(BenchmarkValue::benchmark_value()),
+			boost_fee: Some(BenchmarkValue::benchmark_value()),
 		}
 	}
 }
@@ -570,7 +576,7 @@ impl
 			swap_details.destination_address,
 			swap_details.deposit_metadata,
 			Default::default(), // TODO txHash PRO-1760
-			Default::default(),
+			(),
 			Default::default(), // TODO in PRO-1743
 			swap_details.refund_params,
 			swap_details.dca_params,

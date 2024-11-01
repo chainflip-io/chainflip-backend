@@ -245,6 +245,7 @@ where
 						SolanaIngressTrackingVoter { client: client.clone() },
 						SolanaNonceTrackingVoter { client: client.clone() },
 						SolanaEgressWitnessingVoter { client: client.clone() },
+						SolanaLivenessVoter { client: client.clone() },
 						SolanaVaultSwapsVoter { client },
 					)),
 				)

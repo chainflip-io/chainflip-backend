@@ -677,6 +677,17 @@ pub struct CcmChannelMetadata {
 	pub ccm_additional_data: CcmAdditionalData,
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for CcmChannelMetadata {
+	fn benchmark_value() -> Self {
+		Self {
+			message: BenchmarkValue::benchmark_value(),
+			gas_budget: BenchmarkValue::benchmark_value(),
+			ccm_additional_data: BenchmarkValue::benchmark_value(),
+		}
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct CcmSwapAmounts {
 	pub principal_swap_amount: AssetAmount,
@@ -699,6 +710,17 @@ pub struct CcmDepositMetadataGeneric<Address> {
 	pub channel_metadata: CcmChannelMetadata,
 	pub source_chain: ForeignChain,
 	pub source_address: Option<Address>,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<Address: BenchmarkValue> BenchmarkValue for CcmDepositMetadataGeneric<Address> {
+	fn benchmark_value() -> Self {
+		Self {
+			channel_metadata: BenchmarkValue::benchmark_value(),
+			source_chain: BenchmarkValue::benchmark_value(),
+			source_address: Some(BenchmarkValue::benchmark_value()),
+		}
+	}
 }
 
 impl<Address> CcmDepositMetadataGeneric<Address> {
@@ -845,6 +867,17 @@ pub struct ChannelRefundParametersGeneric<A> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
 	pub min_price: Price,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
+	fn benchmark_value() -> Self {
+		Self {
+			retry_duration: BenchmarkValue::benchmark_value(),
+			refund_address: BenchmarkValue::benchmark_value(),
+			min_price: BenchmarkValue::benchmark_value(),
+		}
+	}
 }
 
 pub type ChannelRefundParameters = ChannelRefundParametersGeneric<ForeignChainAddress>;

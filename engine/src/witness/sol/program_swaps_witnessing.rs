@@ -119,7 +119,7 @@ pub async fn get_program_swaps(
 													.to_vec()
 													.try_into()
 													.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long.")).ok()?,
-												gas_budget: ccm_parameters.gas_amount.try_into().map_err(|_| anyhow!("Failed to deposit CCM: `gas_amount` too long.")).ok()?,
+												gas_budget: ccm_parameters.gas_amount.into(),
 												ccm_additional_data,
 											},
 										});
