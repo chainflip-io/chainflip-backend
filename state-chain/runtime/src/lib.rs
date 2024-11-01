@@ -1413,6 +1413,7 @@ impl_runtime_apis! {
 				.collect()
 		}
 		fn cf_free_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
+			LiquidityPools::sweep(&account_id).unwrap();
 			AssetBalances::free_balances(&account_id)
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
