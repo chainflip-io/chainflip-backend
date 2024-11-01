@@ -2292,11 +2292,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_channel.asset = source_asset;
 			(deposit_channel, channel_id)
 		} else {
-			let next_channel_id =
-				ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
-					*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
-					Ok(*id)
-				})?;
+			let next_channel_id = Self::allocate_next_channel_id()?;
 			(
 				DepositChannel::generate_new::<T::AddressDerivation>(next_channel_id, source_asset)
 					.map_err(|e| match e {
@@ -2425,6 +2421,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Err(e) => log::error!("Ccm fallback failed to schedule the fallback egress: Target chain: {:?}, broadcast_id: {:?}, error: {:?}", T::TargetChain::get(), broadcast_id, e),
 		}
 	}
+
+	fn allocate_next_channel_id() -> Result<ChannelId, Error<T, I>> {
+		ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
+			*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
+			Ok(*id)
+		})
+	}
 }
 
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
@@ -2516,10 +2519,7 @@ impl<T: Config<I>, I: 'static> PrivateChannelManager for Pallet<T, I> {
 		);
 
 		// TODO: burn fee for opening a channel?
-		let next_channel_id = ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
-			*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
-			Ok(*id)
-		})?;
+		let next_channel_id = Self::allocate_next_channel_id()?;
 
 		BrokerPrivateChannels::<T, I>::insert(broker_id.clone(), next_channel_id);
 
