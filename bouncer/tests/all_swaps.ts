@@ -69,13 +69,13 @@ async function main() {
   });
 
   // Not doing BTC due to encoding issues in vault_swap
-  appendSwap("Sol", "Eth", testVaultSwap);
-  appendSwap("Sol", "Usdc", testVaultSwap, true);
-  appendSwap("Sol", "ArbEth", testVaultSwap);
-  appendSwap("Sol", "ArbEth", testVaultSwap, true);
-  appendSwap("Sol", "Dot", testVaultSwap);
-  appendSwap("SolUsdc", "Eth", testVaultSwap);
-  appendSwap("SolUsdc", "Flip", testVaultSwap, true);
+  appendSwap('Sol', 'Eth', testVaultSwap);
+  appendSwap('Sol', 'Usdc', testVaultSwap, true);
+  appendSwap('Sol', 'ArbEth', testVaultSwap);
+  appendSwap('Sol', 'ArbEth', testVaultSwap, true);
+  appendSwap('Sol', 'Dot', testVaultSwap);
+  appendSwap('SolUsdc', 'Eth', testVaultSwap);
+  appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
 
   await Promise.all(allSwaps);
 }

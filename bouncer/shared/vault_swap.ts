@@ -45,7 +45,6 @@ const { BN } = anchor.default;
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
 
-
 export async function executeVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
@@ -169,7 +168,8 @@ export async function executeSolVaultSwap(
     switch (destChain) {
       case Chains.Ethereum:
       case Chains.Arbitrum:
-        cfParameters = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        cfParameters =
+          '0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
         break;
       default:
         throw new Error(`Unsupported chain: ${destChain}`);
@@ -179,11 +179,12 @@ export async function executeSolVaultSwap(
     switch (destChain) {
       case Chains.Ethereum:
       case Chains.Arbitrum:
-        cfParameters = "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        cfParameters =
+          '0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
         break;
       case Chains.Polkadot:
-        cfParameters = "0x000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        destAddress = decodeDotAddressForContract(destAddress);
+        cfParameters =
+          '0x000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
         break;
       // TODO: Not supporting BTC for now because the encoding is annoying.
       default:
@@ -191,13 +192,16 @@ export async function executeSolVaultSwap(
     }
   }
 
+  const destinationAddress =
+    destChain === Chains.Polkadot ? decodeDotAddressForContract(destAddress) : destAddress;
+
   const tx =
     srcAsset === 'Sol'
       ? await cfSwapEndpointProgram.methods
           .xSwapNative({
             amount,
             dstChain: chainContractId(destChain),
-            dstAddress: Buffer.from(destAddress.slice(2), 'hex'),
+            dstAddress: Buffer.from(destinationAddress.slice(2), 'hex'),
             dstToken: assetConstants[destAsset].contractId,
             ccmParameters: messageMetadata
               ? {
@@ -221,7 +225,7 @@ export async function executeSolVaultSwap(
           .xSwapToken({
             amount,
             dstChain: chainContractId(destChain),
-            dstAddress: Buffer.from(destAddress.slice(2), 'hex'),
+            dstAddress: Buffer.from(destinationAddress.slice(2), 'hex'),
             dstToken: assetConstants[destAsset].contractId,
             ccmParameters: messageMetadata
               ? {

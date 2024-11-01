@@ -926,7 +926,7 @@ impl
 			swap_details.to,
 			swap_details.destination_address,
 			swap_details.deposit_metadata,
-			Default::default(), // TODO txHash
+			Default::default(), // TODO txHash PRO-1760
 			Default::default(),
 			Default::default(), // TODO in PRO-1743
 			swap_details.refund_params,
