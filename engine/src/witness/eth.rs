@@ -4,7 +4,7 @@ mod state_chain_gateway;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{evm::DepositDetails, Ethereum};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, EpochIndex};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, EpochIndex, ShortId};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use sp_core::H160;
@@ -19,10 +19,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::{
-		common::cf_parameters::ShortId,
-		evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
-	},
+	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
 };
 
 use super::{common::epoch_source::EpochSourceBuilder, evm::source::EvmSource};
