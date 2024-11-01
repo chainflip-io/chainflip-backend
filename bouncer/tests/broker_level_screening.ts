@@ -1,5 +1,5 @@
 import { ExecutableTest } from '../shared/executable_test';
-import { sendBtcAndReturnTxId, sendBtcFireAndForget } from '../shared/send_btc';
+import { sendBtcAndReturnTxId } from '../shared/send_btc';
 import { randomBytes } from 'crypto';
 import { hexStringToBytesArray, newAddress, sleep } from '../shared/utils';
 import { handleSubstrateError } from '../shared/utils';
@@ -7,8 +7,9 @@ import { brokerMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
 import { requestNewSwap } from '../shared/perform_swap';
-import { stringToU8a } from '@polkadot/util'
 import { execSync } from 'child_process';
+import { FillOrKillParamsX128 } from '../shared/new_swap';
+import { getBtcBalance } from '../shared/get_btc_balance';
 
 const keyring = new Keyring({ type: 'sr25519' });
 
@@ -16,7 +17,22 @@ export const testBrokerLevelScreening = new ExecutableTest('Broker-Level-Screeni
 
 const broker = keyring.createFromUri('//BROKER_1');
 
-export async function submitTxAsTainted(tx_id: unknown) {
+async function observeBtcAddressBalanceChange(address: string): Promise<number> {
+    let retryCount = 0;
+    while (true) {
+        await sleep(1000);
+        let balance = await getBtcBalance(address);
+        if (balance !== 0) {
+            return Promise.resolve(balance);
+        }
+        retryCount++;
+        if (retryCount > 16) {
+            throw new Error(`BTC balance for ${address} did not change after 16 seconds.`);
+        }
+    }
+}
+
+async function submitTxAsTainted(tx_id: unknown) {
     await using chainflip = await getChainflipApi();
     return brokerMutex.runExclusive(async () =>
         chainflip.tx.bitcoinIngressEgress
@@ -37,13 +53,17 @@ function pauseBtcBlockProduction(command: boolean): boolean {
     }
 }
 
-async function markTxAndExpectARefund() {
-    const BTC_AMOUNT = '100';
-    let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
+/** Tests the broker level screening mechanism.
+ * 
+ * @param amount - The amount of BTC to send.
+ * @param doBoost - Whether to boost the swap.
+ * @param stopBlockProductionFor - The number of milliseconds to pause block production for.
+ */
+async function brokerLevelScreeningTestScenario(amount: string, doBoost: boolean, refundAddress: string, stopBlockProductionFor = 0, waitBeforeReport = 0) {
     let destinationAddressForUsdc = await newAddress('Usdc', randomBytes(32).toString('hex'));
     const refundParameters: FillOrKillParamsX128 = {
         retryDurationBlocks: 0,
-        refundAddress: btcRefundAddress,
+        refundAddress: refundAddress,
         minPriceX128: '0',
     };
     const swapParams = await requestNewSwap(
@@ -54,54 +74,48 @@ async function markTxAndExpectARefund() {
         undefined,
         0,
         true,
-        0,
+        doBoost ? 100 : 0,
         refundParameters,
     );
-    console.log(`Paused block production: ${pauseBtcBlockProduction(true)}`);
-    let tx_id = await sendBtcAndReturnTxId(swapParams.depositAddress, BTC_AMOUNT);
-    console.log(`Btc tx_id: ${tx_id}`);
-    console.log(`Deposit address: ${swapParams.depositAddress}`);
-    let tx_id_u8a = hexStringToBytesArray(tx_id);
-    console.log(`Tx_id_u8a: ${tx_id_u8a}`);
-    await submitTxAsTainted(tx_id_u8a);
-    await sleep(6000);
-    console.log(`Resumed block production: ${pauseBtcBlockProduction(false)}`);
-    console.log('Waiting for tx to be refunded');
-    const txRefunded = await observeEvent('bitcoinIngressEgress:DepositIgnored').event;
-    console.log(`Tx refunded: ${txRefunded}`);
+    let tx_id = await sendBtcAndReturnTxId(swapParams.depositAddress, amount);
+    if (stopBlockProductionFor > 0) {
+        pauseBtcBlockProduction(true);
+    }
+    await sleep(waitBeforeReport);
+    await submitTxAsTainted(hexStringToBytesArray(tx_id).reverse());
+    await sleep(stopBlockProductionFor);
+    if (stopBlockProductionFor > 0) {
+        pauseBtcBlockProduction(false);
+    }
 }
 
 async function main() {
-    const BTC_AMOUNT = '12';
     const MILLI_SECS_PER_BLOCK = 6000;
-    const BLOCKS_TO_WAIT = 6
+    const BLOCKS_TO_WAIT = 2
+
+    // Test no boost and early tx report
+    testBrokerLevelScreening.log('Testing broker level screening with no boost...');
     let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
-    let destinationAddressForUsdc = await newAddress('Usdc', randomBytes(32).toString('hex'));
-    const refundParameters: FillOrKillParamsX128 = {
-        retryDurationBlocks: 0,
-        refundAddress: btcRefundAddress,
-        minPriceX128: '0',
-    };
-    const swapParams = await requestNewSwap(
-        'Btc',
-        'Usdc',
-        destinationAddressForUsdc,
-        'test',
-        undefined,
-        0,
-        true,
-        0,
-        refundParameters,
-    );
-    let tx_id = await sendBtcAndReturnTxId(swapParams.depositAddress, BTC_AMOUNT);
-    console.log(`Paused block production: ${pauseBtcBlockProduction(true)}`);
-    console.log(`Btc tx_id: ${tx_id}`);
-    console.log(`Deposit address: ${swapParams.depositAddress}`);
-    let tx_id_u8a = hexStringToBytesArray(tx_id);
-    // console.log(`Tx_id_u8a: ${tx_id_u8a}`);
-    await submitTxAsTainted(tx_id_u8a);
-    await sleep(MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT);
-    console.log(`Resumed block production: ${pauseBtcBlockProduction(false)}`);
-    const txRefunded = await observeEvent('bitcoinIngressEgress:DepositIgnored').event;
-    console.log(`Tx refunded 👍: ${txRefunded}`);
+    await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT);
+    await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
+    let btcBalance = await observeBtcAddressBalanceChange(btcRefundAddress);
+    testBrokerLevelScreening.log(`BTC balance: ${btcBalance}`);
+    testBrokerLevelScreening.log(`Tx was rejected and refunded 👍.`);
+
+    // Test boost and early tx report
+    testBrokerLevelScreening.log('Testing broker level screening with boost and a early tx report...');
+    btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
+    await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT);
+    await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
+    btcBalance = await observeBtcAddressBalanceChange(btcRefundAddress);
+    testBrokerLevelScreening.log(`BTC balance: ${btcBalance}`);
+    testBrokerLevelScreening.log(`Tx was rejected and refunded 👍.`);
+
+    // Test boost and late tx report
+    testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
+    btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
+    await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, MILLI_SECS_PER_BLOCK * 2);
+    await observeEvent('swapping:SwapExecuted').event;
+    testBrokerLevelScreening.log(`BTC balance: ${btcBalance}`);
+    testBrokerLevelScreening.log(`Swap was executed 👍.`);
 }

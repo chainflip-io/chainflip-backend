@@ -1,25 +1,7 @@
 import Client from 'bitcoin-core';
 import { sleep, btcClientMutex } from './utils';
 
-export async function sendBtcFireAndForget(address: string, amount: number | string): string {
-  const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
-  const client = new Client({
-    host: BTC_ENDPOINT.split(':')[1].slice(2),
-    port: Number(BTC_ENDPOINT.split(':')[2]),
-    username: 'flip',
-    password: 'flip',
-    wallet: 'whale',
-  });
-
-  const txid: string = await btcClientMutex.runExclusive(async () => {
-    let tx: string = await client.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1);
-    return tx;
-  });
-
-  return txid;
-}
-
-export async function sendBtcAndReturnTxId(address: string, amount: number | string): string {
+export async function sendBtcAndReturnTxId(address: string, amount: number | string): Promise<string> {
   const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
   const client = new Client({
     host: BTC_ENDPOINT.split(':')[1].slice(2),
