@@ -83,9 +83,6 @@ pub async fn get_program_swaps(
 	)
 	.await?;
 
-	println!("DEBUGDEBUG new_program_swap_accounts: {:?}", new_program_swap_accounts);
-	println!("DEBUGDEBUG closed_accounts: {:?}", closed_accounts);
-
 	if new_program_swap_accounts.is_empty() {
 		return Ok((vec![], closed_accounts));
 	}
@@ -128,9 +125,6 @@ pub async fn get_program_swaps(
 										(deposit_metadata, vault_swap_parameters)
 									}
 								};
-
-								println!("DEBUGDEBUG deposit_metadata: {:?}", deposit_metadata);
-								println!("DEBUGDEBUG vault_swap_parameters: {:?}", vault_swap_parameters);
 
 								Some(Ok((VaultSwapAccountAndSender {
 									vault_swap_account: account,
@@ -178,8 +172,6 @@ pub async fn get_program_swaps(
 		.try_collect()
 		.await;
 
-	println!("DEBUGDEBUG new_swaps:       {:?}", new_swaps);
-
 	new_swaps.map(|swaps| (swaps, closed_accounts))
 
 	// TODO: When submitting data we could technically submit the slot when the SwapEvent was
@@ -197,8 +189,6 @@ async fn get_changed_program_swap_accounts(
 		get_swap_endpoint_data(sol_rpc, swap_endpoint_data_account_address)
 			.await
 			.expect("Failed to get the event accounts");
-
-	println!("DEBUGDEBUG open_event_accounts: {:?}", open_event_accounts);
 
 	let sc_opened_accounts_hashset: HashSet<_> = sc_opened_accounts.iter().collect();
 	let sc_closure_initiated_accounts_hashset = sc_closure_initiated_accounts
@@ -296,8 +286,6 @@ async fn get_program_swap_event_accounts_data(
 	program_swap_event_accounts: Vec<SolAddress>,
 	min_context_slot: u64,
 ) -> Result<Vec<(SolAddress, Option<SwapEvent>)>, anyhow::Error> {
-	println!("DEBUGDEBUG getting swap event accounts: {:?}", program_swap_event_accounts);
-
 	let accounts_info_response = sol_rpc
 		.get_multiple_accounts(
 			program_swap_event_accounts.as_slice(),
@@ -347,7 +335,6 @@ async fn get_program_swap_event_accounts_data(
 			None => Ok((account, None)),
 		})
 		.collect();
-	println!("DEBUGDEBUG program_swap_event_accounts_iter: {:?}", program_swap_event_accounts_iter);
 	program_swap_event_accounts_iter
 }
 
