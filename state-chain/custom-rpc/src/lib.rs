@@ -19,6 +19,7 @@ use cf_primitives::{
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
+	core::async_trait,
 	proc_macros::rpc,
 	types::{
 		error::{ErrorObject, ErrorObjectOwned},
@@ -834,21 +835,26 @@ pub trait CustomApi {
 
 	#[method(name = "max_swap_amount")]
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>>;
-	#[subscription(name = "subscribe_pool_price", item = PoolPriceV1)]
-	fn cf_subscribe_pool_price(&self, from_asset: Asset, to_asset: Asset);
+	#[subscription(name = "subscribe_pool_price", item = BlockUpdate<PoolPriceV1>)]
+	async fn cf_subscribe_pool_price(&self, from_asset: Asset, to_asset: Asset);
 	#[subscription(name = "subscribe_pool_price_v2", item = BlockUpdate<PoolPriceV2>)]
-	fn cf_subscribe_pool_price_v2(&self, base_asset: Asset, quote_asset: Asset);
+	async fn cf_subscribe_pool_price_v2(&self, base_asset: Asset, quote_asset: Asset);
 	#[subscription(name = "subscribe_prewitness_swaps", item = BlockUpdate<RpcPrewitnessedSwap>)]
-	fn cf_subscribe_prewitness_swaps(&self, base_asset: Asset, quote_asset: Asset, side: Side);
+	async fn cf_subscribe_prewitness_swaps(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+	);
 
 	// Subscribe to a stream that on every block produces a list of all scheduled/pending
 	// swaps in the base_asset/quote_asset pool, including any "implicit" half-swaps (as a
 	// part of a swap involving two pools)
 	#[subscription(name = "subscribe_scheduled_swaps", item = BlockUpdate<SwapResponse>)]
-	fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
+	async fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
 
 	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
-	fn cf_subscribe_lp_order_fills(&self);
+	async fn cf_subscribe_lp_order_fills(&self);
 
 	#[method(name = "scheduled_swaps")]
 	fn cf_scheduled_swaps(
@@ -1139,6 +1145,7 @@ where
 	}
 }
 
+#[async_trait]
 impl<C, B> CustomApiServer for CustomRpc<C, B>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
@@ -1505,7 +1512,7 @@ where
 		})
 	}
 
-	fn cf_subscribe_pool_price(
+	async fn cf_subscribe_pool_price(
 		&self,
 		pending_sink: PendingSubscriptionSink,
 		from_asset: Asset,
@@ -1519,9 +1526,10 @@ where
 				Ok((*client.runtime_api()).cf_pool_price(hash, from_asset, to_asset)?)
 			},
 		)
+		.await
 	}
 
-	fn cf_subscribe_pool_price_v2(
+	async fn cf_subscribe_pool_price_v2(
 		&self,
 		pending_sink: PendingSubscriptionSink,
 		base_asset: Asset,
@@ -1543,9 +1551,10 @@ where
 				})
 			},
 		)
+		.await
 	}
 
-	fn cf_subscribe_scheduled_swaps(
+	async fn cf_subscribe_scheduled_swaps(
 		&self,
 		pending_sink: PendingSubscriptionSink,
 		base_asset: Asset,
@@ -1573,7 +1582,8 @@ where
 						.collect(),
 				})
 			},
-		);
+		)
+		.await;
 	}
 
 	fn cf_scheduled_swaps(
@@ -1598,7 +1608,7 @@ where
 			})
 	}
 
-	fn cf_subscribe_prewitness_swaps(
+	async fn cf_subscribe_prewitness_swaps(
 		&self,
 		pending_sink: PendingSubscriptionSink,
 		base_asset: Asset,
@@ -1622,6 +1632,7 @@ where
 				})
 			},
 		)
+		.await
 	}
 
 	fn cf_prewitness_swaps(
@@ -1645,7 +1656,7 @@ where
 		})
 	}
 
-	fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink) {
+	async fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink) {
 		self.new_subscription_with_state(
 			false, /* only_on_changes */
 			true,  /* end_on_error */
@@ -1670,6 +1681,7 @@ where
 				RpcResult::Ok((fills, pools))
 			},
 		)
+		.await
 	}
 
 	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
@@ -1743,7 +1755,7 @@ where
 		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
-	fn new_subscription<
+	async fn new_subscription<
 		T: Serialize + Send + Clone + Eq + 'static,
 		F: Fn(&C, state_chain_runtime::Hash) -> Result<T, CfApiError> + Send + Clone + 'static,
 	>(
@@ -1759,13 +1771,14 @@ where
 			sink,
 			move |client, hash, _state| f(client, hash).map(|res| (res, ())),
 		)
+		.await
 	}
 
 	/// The subscription will return the first value immediately and then either return new values
 	/// only when it changes, or every new block. Note in both cases this can skip blocks. Also this
 	/// subscription can either filter out, or end the stream if the provided async closure returns
 	/// an error.
-	fn new_subscription_with_state<
+	async fn new_subscription_with_state<
 		T: Serialize + Send + Clone + Eq + 'static,
 		// State to carry forward between calls to the closure.
 		S: 'static + Clone + Send,
@@ -1787,11 +1800,8 @@ where
 		let (initial_item, initial_state) = match f(&self.client, info.best_hash, None) {
 			Ok(initial) => initial,
 			Err(e) => {
-				self.executor.spawn(
-					"cf-rpc-update-subscription",
-					Some("rpc"),
-					pending_sink.reject(e).boxed(),
-				);
+				log::warn!(target: "cf-rpc", "Error in subscription initialization: {:?}", e);
+				pending_sink.reject(e).await;
 				return;
 			},
 		};
@@ -1824,12 +1834,22 @@ where
 									data: new_item,
 								}))
 							},
-							Err(error) if end_on_error => Some(Err(ErrorObjectOwned::from(error))),
+							Err(error) => {
+								log::warn!("Subscription Error: {error}.");
+								if end_on_error {
+									log::warn!("Closing Subscription.");
+									Some(Err(ErrorObjectOwned::from(error)))
+								} else {
+									None
+								}
+							},
 							_ => None,
 						})
 					}
 				}),
-		);
+		)
+		.take_while(|item| futures::future::ready(item.is_ok()))
+		.map(Result::unwrap);
 
 		self.executor.spawn(
 			"cf-rpc-update-subscription",
