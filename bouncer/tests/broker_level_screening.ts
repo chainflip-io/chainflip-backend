@@ -25,7 +25,7 @@ export async function submitTxAsTainted(tx_id: unknown) {
     );
 }
 
-function pause_btc_block_production(command: boolean): boolean {
+function pauseBtcBlockProduction(command: boolean): boolean {
     let start = "docker exec bitcoin rm /root/mine_blocks";
     let stop = "docker exec bitcoin touch /root/mine_blocks";
     try {
@@ -57,7 +57,7 @@ async function markTxAndExpectARefund() {
         0,
         refundParameters,
     );
-    console.log(`Paused block production: ${pause_btc_block_production(true)}`);
+    console.log(`Paused block production: ${pauseBtcBlockProduction(true)}`);
     let tx_id = await sendBtcAndReturnTxId(swapParams.depositAddress, BTC_AMOUNT);
     console.log(`Btc tx_id: ${tx_id}`);
     console.log(`Deposit address: ${swapParams.depositAddress}`);
@@ -65,14 +65,16 @@ async function markTxAndExpectARefund() {
     console.log(`Tx_id_u8a: ${tx_id_u8a}`);
     await submitTxAsTainted(tx_id_u8a);
     await sleep(6000);
-    console.log(`Resumed block production: ${pause_btc_block_production(false)}`);
+    console.log(`Resumed block production: ${pauseBtcBlockProduction(false)}`);
     console.log('Waiting for tx to be refunded');
     const txRefunded = await observeEvent('bitcoinIngressEgress:DepositIgnored').event;
     console.log(`Tx refunded: ${txRefunded}`);
 }
 
 async function main() {
-    const BTC_AMOUNT = '100';
+    const BTC_AMOUNT = '12';
+    const MILLI_SECS_PER_BLOCK = 6000;
+    const BLOCKS_TO_WAIT = 6
     let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
     let destinationAddressForUsdc = await newAddress('Usdc', randomBytes(32).toString('hex'));
     const refundParameters: FillOrKillParamsX128 = {
@@ -92,9 +94,14 @@ async function main() {
         refundParameters,
     );
     let tx_id = await sendBtcAndReturnTxId(swapParams.depositAddress, BTC_AMOUNT);
+    console.log(`Paused block production: ${pauseBtcBlockProduction(true)}`);
     console.log(`Btc tx_id: ${tx_id}`);
     console.log(`Deposit address: ${swapParams.depositAddress}`);
     let tx_id_u8a = hexStringToBytesArray(tx_id);
-    console.log(`Tx_id_u8a: ${tx_id_u8a}`);
+    // console.log(`Tx_id_u8a: ${tx_id_u8a}`);
     await submitTxAsTainted(tx_id_u8a);
+    await sleep(MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT);
+    console.log(`Resumed block production: ${pauseBtcBlockProduction(false)}`);
+    const txRefunded = await observeEvent('bitcoinIngressEgress:DepositIgnored').event;
+    console.log(`Tx refunded 👍: ${txRefunded}`);
 }
