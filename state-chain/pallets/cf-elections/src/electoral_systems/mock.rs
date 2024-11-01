@@ -130,7 +130,7 @@ impl ElectoralSystem for MockElectoralSystem {
 	type Vote =
 		vote_storage::individual::Individual<(), vote_storage::individual::shared::Shared<()>>;
 	type Consensus = AuthorityCount;
-	type OnFinalizeContext = u64;
+	type OnFinalizeContext = ();
 	type OnFinalizeReturn = ();
 
 	fn generate_vote_properties(

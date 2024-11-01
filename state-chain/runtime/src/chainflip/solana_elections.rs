@@ -910,6 +910,20 @@ pub struct SolanaVaultSwapDetails {
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: Option<BasisPoints>,
 }
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for SolanaVaultSwapDetails {
+	fn benchmark_value() -> Self {
+		Self {
+			from: BenchmarkValue::benchmark_value(),
+			to: BenchmarkValue::benchmark_value(),
+			deposit_amount: BenchmarkValue::benchmark_value(),
+			destination_address: BenchmarkValue::benchmark_value(),
+			tx_hash: BenchmarkValue::benchmark_value(),
+		}
+	}
+}
+
 pub struct SolanaVaultSwapsHandler;
 
 impl
@@ -921,7 +935,7 @@ impl
 {
 	fn initiate_vault_swap(swap_details: SolanaVaultSwapDetails) {
 		SolanaIngressEgress::process_vault_swap_request(
-			swap_details.from.into(),
+			swap_details.from,
 			swap_details.deposit_amount,
 			swap_details.to,
 			swap_details.destination_address,

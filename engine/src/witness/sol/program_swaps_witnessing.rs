@@ -448,8 +448,14 @@ mod tests {
 				let (new_program_swap_accounts, closed_accounts, _) =
 					get_changed_program_swap_accounts(
 						&client,
-						vec![SolAddress::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
-							.unwrap()],
+						vec![],
+						BTreeSet::from([VaultSwapAccountAndSender {
+							vault_swap_account: SolAddress::from_str(
+								"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+							)
+							.unwrap(),
+							swap_sender: Default::default(),
+						}]),
 						// Swap Endpoint Data Account Address with no opened accounts
 						SolAddress::from_str("BckDu65u2ofAfaSDDEPg2qJTufKB4PvGxwcYhJ2wkBTC")
 							.unwrap(),
@@ -460,15 +466,26 @@ mod tests {
 				assert_eq!(new_program_swap_accounts, vec![]);
 				assert_eq!(
 					closed_accounts,
-					vec![SolAddress::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
-						.unwrap()]
+					vec![VaultSwapAccountAndSender {
+						vault_swap_account: SolAddress::from_str(
+							"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+						)
+						.unwrap(),
+						swap_sender: Default::default(),
+					}]
 				);
 
 				let (new_program_swap_accounts, closed_accounts, _) =
 					get_changed_program_swap_accounts(
 						&client,
-						vec![SolAddress::from_str("HhxGAt8THMtsW97Zuo5ZrhKgqsdD5EBgCx9vZ4n62xpf")
-							.unwrap()],
+						vec![],
+						BTreeSet::from([VaultSwapAccountAndSender {
+							vault_swap_account: SolAddress::from_str(
+								"HhxGAt8THMtsW97Zuo5ZrhKgqsdD5EBgCx9vZ4n62xpf",
+							)
+							.unwrap(),
+							swap_sender: Default::default(),
+						}]),
 						// Swap Endpoint Data Account Address with two opened accounts
 						SolAddress::from_str("72HKrbbesW9FGuBoebns77uvY9fF9MEsw4HTMEeV53W9")
 							.unwrap(),
