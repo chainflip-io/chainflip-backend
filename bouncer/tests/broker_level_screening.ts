@@ -37,7 +37,7 @@ function pause_btc_block_production(command: boolean): boolean {
     }
 }
 
-async function main() {
+async function markTxAndExpectARefund() {
     const BTC_AMOUNT = '100';
     let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
     let destinationAddressForUsdc = await newAddress('Usdc', randomBytes(32).toString('hex'));
@@ -69,4 +69,32 @@ async function main() {
     console.log('Waiting for tx to be refunded');
     const txRefunded = await observeEvent('bitcoinIngressEgress:DepositIgnored').event;
     console.log(`Tx refunded: ${txRefunded}`);
+}
+
+async function main() {
+    const BTC_AMOUNT = '100';
+    let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
+    let destinationAddressForUsdc = await newAddress('Usdc', randomBytes(32).toString('hex'));
+    const refundParameters: FillOrKillParamsX128 = {
+        retryDurationBlocks: 0,
+        refundAddress: btcRefundAddress,
+        minPriceX128: '0',
+    };
+    const swapParams = await requestNewSwap(
+        'Btc',
+        'Usdc',
+        destinationAddressForUsdc,
+        'test',
+        undefined,
+        0,
+        true,
+        0,
+        refundParameters,
+    );
+    let tx_id = await sendBtcAndReturnTxId(swapParams.depositAddress, BTC_AMOUNT);
+    console.log(`Btc tx_id: ${tx_id}`);
+    console.log(`Deposit address: ${swapParams.depositAddress}`);
+    let tx_id_u8a = hexStringToBytesArray(tx_id);
+    console.log(`Tx_id_u8a: ${tx_id_u8a}`);
+    await submitTxAsTainted(tx_id_u8a);
 }
