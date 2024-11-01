@@ -195,7 +195,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 					sig_status_call,
 					// We expect it to work without search history, but if it doesn't we retry with
 					// search history enabled we have seen that the fallback to enabling search
-					// history works in the wild.
+					// history. We've seen this works in the wild.
 					GET_SIGNATURE_STATUS_RETRY_LIMIT,
 				)
 				.await
