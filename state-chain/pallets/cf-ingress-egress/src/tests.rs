@@ -2009,14 +2009,14 @@ mod private_broker_channels {
 			// and private channels do not overlap:
 			open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_1);
 
-			assert_eq!(crate::BrokerPrivateChannels::<Test, ()>::get(&BROKER), None);
+			assert_eq!(crate::BrokerPrivateChannels::<Test, ()>::get(BROKER), None);
 
 			// Opening a private channel should succeed:
 			{
 				assert_eq!(IngressEgress::open_private_channel(&BROKER), Ok(PRIVATE_CHANNEL_ID));
 
 				assert_eq!(
-					crate::BrokerPrivateChannels::<Test, ()>::get(&BROKER),
+					crate::BrokerPrivateChannels::<Test, ()>::get(BROKER),
 					Some(PRIVATE_CHANNEL_ID)
 				);
 				assert_eq!(
@@ -2053,13 +2053,13 @@ mod private_broker_channels {
 			let channel_id = IngressEgress::open_private_channel(&BROKER)
 				.expect("should be able to open a private channel");
 
-			assert!(crate::BrokerPrivateChannels::<Test, ()>::get(&BROKER).is_some());
+			assert!(crate::BrokerPrivateChannels::<Test, ()>::get(BROKER).is_some());
 			assert_eq!(IngressEgress::private_channel_lookup(&BROKER), Some(channel_id));
 
 			// Should succeed now that the channel has been opened:
 			assert_eq!(IngressEgress::close_private_channel(&BROKER), Ok(channel_id));
 
-			assert_eq!(crate::BrokerPrivateChannels::<Test, ()>::get(&BROKER), None);
+			assert_eq!(crate::BrokerPrivateChannels::<Test, ()>::get(BROKER), None);
 			assert_eq!(IngressEgress::private_channel_lookup(&BROKER), None);
 		});
 	}

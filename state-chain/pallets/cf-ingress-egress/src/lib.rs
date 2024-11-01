@@ -2521,7 +2521,7 @@ impl<T: Config<I>, I: 'static> PrivateChannelManager for Pallet<T, I> {
 	}
 
 	fn close_private_channel(broker_id: &Self::AccountId) -> Result<ChannelId, DispatchError> {
-		let Some(channel_id) = BrokerPrivateChannels::<T, I>::take(&broker_id) else {
+		let Some(channel_id) = BrokerPrivateChannels::<T, I>::take(broker_id) else {
 			return Err(Error::<T, I>::NoPrivateChannelExistsForBroker.into())
 		};
 
@@ -2529,7 +2529,7 @@ impl<T: Config<I>, I: 'static> PrivateChannelManager for Pallet<T, I> {
 	}
 
 	fn private_channel_lookup(broker_id: &Self::AccountId) -> Option<ChannelId> {
-		BrokerPrivateChannels::<T, I>::get(&broker_id)
+		BrokerPrivateChannels::<T, I>::get(broker_id)
 	}
 }
 

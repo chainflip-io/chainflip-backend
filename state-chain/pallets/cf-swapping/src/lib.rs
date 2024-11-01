@@ -1076,7 +1076,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(11)]
+		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::open_private_channel())]
 		pub fn open_private_channel(origin: OriginFor<T>, chain: ForeignChain) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
@@ -1090,7 +1090,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(12)]
+		#[pallet::call_index(13)]
 		#[pallet::weight(T::WeightInfo::close_private_channel())]
 		pub fn close_private_channel(origin: OriginFor<T>, chain: ForeignChain) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
