@@ -97,6 +97,7 @@ async fn call_rpc_raw(
 		.json(&request_body)
 		.send()
 		.await
+		.map_err(reqwest::Error::without_url)
 		.map_err(Error::Transport)?;
 
 	let mut json = response.json::<serde_json::Value>().await.map_err(Error::Transport)?;
