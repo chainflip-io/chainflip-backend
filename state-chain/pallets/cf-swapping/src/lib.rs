@@ -695,8 +695,6 @@ pub mod pallet {
 		SwapRequestDurationTooLong,
 		/// Invalid DCA parameters.
 		InvalidDcaParameters,
-		/// Private channels are not supported for chain.
-		NoPrivateChannelsForChain,
 		/// Broker must close their private channels before deregistering
 		PrivateChannelNotClosed,
 		/// The provided Refund address cannot be decoded into ForeignChainAddress.
@@ -1077,11 +1075,9 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(12)]
-		#[pallet::weight(T::WeightInfo::open_private_channel())]
-		pub fn open_private_channel(origin: OriginFor<T>, chain: ForeignChain) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::open_private_btc_channel())]
+		pub fn open_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-
-			ensure!(chain == ForeignChain::Bitcoin, Error::<T>::NoPrivateChannelsForChain);
 
 			let channel_id = T::PrivateChannelManager::open_private_channel(&broker_id)?;
 
@@ -1091,11 +1087,9 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(13)]
-		#[pallet::weight(T::WeightInfo::close_private_channel())]
-		pub fn close_private_channel(origin: OriginFor<T>, chain: ForeignChain) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::close_private_btc_channel())]
+		pub fn close_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
-
-			ensure!(chain == ForeignChain::Bitcoin, Error::<T>::NoPrivateChannelsForChain);
 
 			let channel_id = T::PrivateChannelManager::close_private_channel(&broker_id)?;
 

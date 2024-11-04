@@ -2503,6 +2503,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 	}
 }
 
+/// Private channels are only expected to be used for bitcoin.
 impl<T: Config<I>, I: 'static> PrivateChannelManager for Pallet<T, I> {
 	type AccountId = T::AccountId;
 

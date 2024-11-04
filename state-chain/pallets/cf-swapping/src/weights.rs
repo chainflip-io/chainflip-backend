@@ -37,8 +37,8 @@ pub trait WeightInfo {
 	fn withdraw() -> Weight;
 	fn register_as_broker() -> Weight;
 	fn deregister_as_broker() -> Weight;
-	fn open_private_channel() -> Weight;
-	fn close_private_channel() -> Weight;
+	fn open_private_btc_channel() -> Weight;
+	fn close_private_btc_channel() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -173,7 +173,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `BitcoinIngressEgress::BrokerPrivateChannels` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `BitcoinIngressEgress::ChannelIdCounter` (r:1 w:1)
 	/// Proof: `BitcoinIngressEgress::ChannelIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn open_private_channel() -> Weight {
+	fn open_private_btc_channel() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `579`
 		//  Estimated: `4044`
@@ -186,7 +186,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `BitcoinIngressEgress::BrokerPrivateChannels` (r:1 w:1)
 	/// Proof: `BitcoinIngressEgress::BrokerPrivateChannels` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn close_private_channel() -> Weight {
+	fn close_private_btc_channel() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `670`
 		//  Estimated: `4135`
@@ -329,7 +329,7 @@ impl WeightInfo for () {
 	/// Proof: `BitcoinIngressEgress::BrokerPrivateChannels` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `BitcoinIngressEgress::ChannelIdCounter` (r:1 w:1)
 	/// Proof: `BitcoinIngressEgress::ChannelIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn open_private_channel() -> Weight {
+	fn open_private_btc_channel() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `579`
 		//  Estimated: `4044`
@@ -342,7 +342,7 @@ impl WeightInfo for () {
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	/// Storage: `BitcoinIngressEgress::BrokerPrivateChannels` (r:1 w:1)
 	/// Proof: `BitcoinIngressEgress::BrokerPrivateChannels` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn close_private_channel() -> Weight {
+	fn close_private_btc_channel() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `670`
 		//  Estimated: `4135`

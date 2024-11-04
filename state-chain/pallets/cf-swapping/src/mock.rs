@@ -138,11 +138,11 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_parts(100, 0)
 	}
 
-	fn open_private_channel() -> Weight {
+	fn open_private_btc_channel() -> Weight {
 		Weight::from_parts(100, 0)
 	}
 
-	fn close_private_channel() -> Weight {
+	fn close_private_btc_channel() -> Weight {
 		Weight::from_parts(100, 0)
 	}
 }

@@ -1255,20 +1255,14 @@ fn broker_deregistration_checks_private_channels() {
 		.expect("BROKER was registered in test setup.");
 
 		// Create a private broker channel
-		assert_ok!(Swapping::open_private_channel(
-			OriginTrait::signed(BROKER),
-			ForeignChain::Bitcoin
-		));
+		assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
 
 		assert_noop!(
 			Swapping::deregister_as_broker(OriginTrait::signed(BROKER)),
 			Error::<Test>::PrivateChannelNotClosed,
 		);
 
-		assert_ok!(Swapping::close_private_channel(
-			OriginTrait::signed(BROKER),
-			ForeignChain::Bitcoin
-		));
+		assert_ok!(Swapping::close_private_btc_channel(OriginTrait::signed(BROKER)));
 
 		assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(BROKER)));
 
@@ -1659,24 +1653,12 @@ mod private_channels {
 	use sp_runtime::DispatchError::BadOrigin;
 
 	#[test]
-	fn open_private_channel() {
+	fn open_private_btc_channel() {
 		new_test_ext().execute_with(|| {
 			// Only brokers can open private channels
-			assert_noop!(
-				Swapping::open_private_channel(OriginTrait::signed(ALICE), ForeignChain::Bitcoin),
-				BadOrigin
-			);
+			assert_noop!(Swapping::open_private_btc_channel(OriginTrait::signed(ALICE)), BadOrigin);
 
-			// Only Bitcoin is supported
-			assert_noop!(
-				Swapping::open_private_channel(OriginTrait::signed(BROKER), ForeignChain::Ethereum),
-				Error::<Test>::NoPrivateChannelsForChain
-			);
-
-			assert_ok!(Swapping::open_private_channel(
-				OriginTrait::signed(BROKER),
-				ForeignChain::Bitcoin
-			),);
+			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
 
 			System::assert_has_event(RuntimeEvent::Swapping(
 				Event::<Test>::PrivateBrokerChannelOpened { broker_id: BROKER, channel_id: 1 },
@@ -1685,27 +1667,15 @@ mod private_channels {
 	}
 
 	#[test]
-	fn close_private_channel() {
+	fn close_private_btc_channel() {
 		new_test_ext().execute_with(|| {
-			// Only brokers can  channels
+			// Only brokers can open channels
 			assert_noop!(
-				Swapping::close_private_channel(OriginTrait::signed(ALICE), ForeignChain::Bitcoin),
+				Swapping::close_private_btc_channel(OriginTrait::signed(ALICE)),
 				BadOrigin
 			);
 
-			// Only Bitcoin is supported
-			assert_noop!(
-				Swapping::close_private_channel(
-					OriginTrait::signed(BROKER),
-					ForeignChain::Ethereum
-				),
-				Error::<Test>::NoPrivateChannelsForChain
-			);
-
-			assert_ok!(Swapping::close_private_channel(
-				OriginTrait::signed(BROKER),
-				ForeignChain::Bitcoin
-			),);
+			assert_ok!(Swapping::close_private_btc_channel(OriginTrait::signed(BROKER)));
 
 			System::assert_has_event(RuntimeEvent::Swapping(
 				Event::<Test>::PrivateBrokerChannelClosed { broker_id: BROKER, channel_id: 1 },

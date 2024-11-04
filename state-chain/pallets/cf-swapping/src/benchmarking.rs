@@ -128,7 +128,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn open_private_channel() {
+	fn open_private_btc_channel() {
 		let broker_id =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
 
@@ -136,7 +136,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T>::open_private_channel(caller, ForeignChain::Bitcoin));
+			assert_ok!(Pallet::<T>::open_private_btc_channel(caller));
 		}
 
 		assert!(
@@ -146,13 +146,13 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn close_private_channel() {
+	fn close_private_btc_channel() {
 		let broker_id =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
 
 		let caller = OriginFor::<T>::signed(broker_id.clone());
 
-		assert_ok!(Pallet::<T>::open_private_channel(caller.clone(), ForeignChain::Bitcoin));
+		assert_ok!(Pallet::<T>::open_private_btc_channel(caller.clone()));
 
 		assert!(
 			T::PrivateChannelManager::private_channel_lookup(&broker_id).is_some(),
@@ -161,7 +161,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T>::close_private_channel(caller, ForeignChain::Bitcoin));
+			assert_ok!(Pallet::<T>::close_private_btc_channel(caller));
 		}
 
 		assert!(
