@@ -1669,6 +1669,8 @@ mod private_channels {
 	#[test]
 	fn close_private_btc_channel() {
 		new_test_ext().execute_with(|| {
+			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
+
 			// Only brokers can open channels
 			assert_noop!(
 				Swapping::close_private_btc_channel(OriginTrait::signed(ALICE)),
