@@ -51,7 +51,7 @@ async function provideLiquidityAndTestAssetBalances() {
     amountToFineAmount(amountToProvide.toString(), assetDecimals('Eth')),
   );
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
-  await depositLiquidity(testAsset, amountToProvide, true);
+  await depositLiquidity(testAsset, amountToProvide, true, '//LP_API');
 
   // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
   let retryCount = 0;
@@ -154,7 +154,7 @@ async function testTransferAsset() {
 
   const keyring = new Keyring({ type: 'sr25519' });
 
-  const sourceLpAccount = keyring.createFromUri('//LP_1');
+  const sourceLpAccount = keyring.createFromUri('//LP_API');
   const destinationLpAccount = keyring.createFromUri('//LP_2');
 
   const oldBalanceSource = await getLpBalance(sourceLpAccount.address);

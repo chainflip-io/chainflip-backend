@@ -31,7 +31,6 @@ cf-chains = { workspace = true }
 cf-primitives = { workspace = true }
 cf-session-benchmarking = { workspace = true, optional = true }
 cf-runtime-utilities = { workspace = true }
-cf-runtime-upgrade-utilities = { workspace = true }
 cf-traits = { workspace = true }
 cf-utilities = { workspace = true }
 
@@ -111,6 +110,7 @@ runtime-benchmarks = [
   "cf-chains/runtime-benchmarks",
   "cf-session-benchmarking/runtime-benchmarks",
   "cf-traits/runtime-benchmarks",
+  "cf-runtime-utilities/runtime-benchmarks",
   "frame-benchmarking/runtime-benchmarks",
   "frame-support/runtime-benchmarks",
   "frame-system-benchmarking/runtime-benchmarks",
@@ -145,7 +145,6 @@ std = [
   "cf-chains/std",
   "cf-primitives/std",
   "cf-runtime-utilities/std",
-  "cf-runtime-upgrade-utilities/std",
   "cf-session-benchmarking?/std",
   "cf-traits/std",
   "cf-utilities/std",
@@ -209,7 +208,7 @@ std = [
   "dep:substrate-wasm-builder",
 ]
 try-runtime = [
-  "cf-runtime-upgrade-utilities/try-runtime",
+  "cf-runtime-utilities/try-runtime",
   "frame-executive/try-runtime",
   "frame-try-runtime/try-runtime",
   "frame-system/try-runtime",

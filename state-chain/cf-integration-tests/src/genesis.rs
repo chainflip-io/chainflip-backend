@@ -14,7 +14,7 @@ use state_chain_runtime::{
 };
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
-const EPOCH_DURATION: u32 = 1000;
+const BLOCKS_PER_EPOCH: u32 = 1000;
 
 pub fn with_test_defaults() -> ExtBuilder {
 	ExtBuilder::default()
@@ -26,7 +26,7 @@ pub fn with_test_defaults() -> ExtBuilder {
 			(AccountId::from(LIQUIDITY_PROVIDER), AccountRole::LiquidityProvider, GENESIS_BALANCE),
 		])
 		.root(AccountId::from(ERIN))
-		.epoch_duration(EPOCH_DURATION)
+		.blocks_per_epoch(BLOCKS_PER_EPOCH)
 }
 
 #[test]
@@ -62,8 +62,8 @@ fn state_of_genesis_is_as_expected() {
 		}
 
 		assert_eq!(
-			Validator::epoch_duration(),
-			EPOCH_DURATION,
+			Validator::blocks_per_epoch(),
+			BLOCKS_PER_EPOCH,
 			"epochs will not rotate automatically from genesis"
 		);
 

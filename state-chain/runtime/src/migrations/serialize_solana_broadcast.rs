@@ -1,4 +1,4 @@
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::traits::UncheckedOnRuntimeUpgrade;
 use pallet_cf_broadcast::BroadcastData;
 
 use crate::*;
@@ -33,7 +33,7 @@ pub struct SerializeSolanaBroadcastMigration;
 
 // Tests for this migration are in:
 // state-chain/cf-integration-tests/src/migrations/serialize_solana_broadcast.rs
-impl OnRuntimeUpgrade for SerializeSolanaBroadcastMigration {
+impl UncheckedOnRuntimeUpgrade for SerializeSolanaBroadcastMigration {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		pre_upgrade_check()
@@ -80,12 +80,4 @@ pub fn post_upgrade_check(state: Vec<u8>) -> Result<(), DispatchError> {
 
 	assert_eq!(pre_awaiting_broadcast_count, post_awaiting_broadcast_count);
 	Ok(())
-}
-
-pub struct NoopUpgrade;
-
-impl OnRuntimeUpgrade for NoopUpgrade {
-	fn on_runtime_upgrade() -> Weight {
-		Weight::zero()
-	}
 }

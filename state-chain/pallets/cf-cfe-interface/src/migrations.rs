@@ -1,4 +1,4 @@
-use cf_runtime_upgrade_utilities::PlaceholderMigration;
+use cf_runtime_utilities::PlaceholderMigration;
 
 use crate::{Config, Pallet};
 use frame_support::traits::OnRuntimeUpgrade;
@@ -7,7 +7,7 @@ use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
-pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 0>;
+pub type PalletMigration<T> = PlaceholderMigration<0, Pallet<T>>;
 
 // This migration should only be run at the start of all migrations, in case another migration
 // needs to trigger an event like a Broadcast for example

@@ -6,7 +6,10 @@ use sp_std::{vec, vec::Vec};
 
 use sol_prim::{AccountBump, SlotNumber};
 
-use crate::{address, assets, DepositChannel, FeeEstimationApi, FeeRefundCalculator, TypeInfo};
+use crate::{
+	address, assets, DepositChannel, DepositDetailsToTransactionInId, FeeEstimationApi,
+	FeeRefundCalculator, TypeInfo,
+};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{sp_runtime::RuntimeDebug, Parameter};
 use serde::{Deserialize, Serialize};
@@ -387,3 +390,5 @@ pub struct SolApiEnvironment {
 	pub usdc_token_mint_pubkey: SolAddress,
 	pub usdc_token_vault_ata: SolAddress,
 }
+
+impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}

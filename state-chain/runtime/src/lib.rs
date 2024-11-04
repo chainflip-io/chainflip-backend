@@ -18,7 +18,7 @@ use crate::{
 		},
 		Offence,
 	},
-	migrations::serialize_solana_broadcast::{NoopUpgrade, SerializeSolanaBroadcastMigration},
+	migrations::serialize_solana_broadcast::SerializeSolanaBroadcastMigration,
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
 		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
@@ -50,14 +50,14 @@ use cf_chains::{
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
-use cf_runtime_upgrade_utilities::VersionedMigration;
+use cf_runtime_utilities::NoopRuntimeUpgrade;
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*};
+use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use migrations::{
 	add_liveness_electoral_system_solana::LivenessSettingsMigration,
@@ -616,7 +616,7 @@ impl pallet_aura::Config for Runtime {
 }
 
 parameter_types! {
-	pub storage BlocksPerEpoch: u64 = Validator::epoch_duration().into();
+	pub storage BlocksPerEpoch: u64 = Validator::blocks_per_epoch().into();
 }
 
 type KeyOwnerIdentification<T, Id> =
@@ -1281,28 +1281,55 @@ type PalletMigrations = (
 type MigrationsForV1_7 = (
 	// Only the Solana Transaction type has changed
 	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		SerializeSolanaBroadcastMigration,
 		8,
 		9,
+		SerializeSolanaBroadcastMigration,
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
 	>,
 	// For clearing all Solana Egress Success election votes, and migrating Solana ApiCall to the
 	// newer version.
 	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		SolanaEgressSuccessWitnessMigration,
 		9,
 		10,
+		SolanaEgressSuccessWitnessMigration,
+		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
 	>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 8, 10>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 10>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 10>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 10>,
 	VersionedMigration<
-		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-		LivenessSettingsMigration,
+		8,
+		10,
+		NoopRuntimeUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		8,
+		10,
+		NoopRuntimeUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		8,
+		10,
+		NoopRuntimeUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		8,
+		10,
+		NoopRuntimeUpgrade,
+		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
 		0,
 		1,
+		LivenessSettingsMigration,
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
 	>,
 );
 
@@ -1389,7 +1416,7 @@ impl_runtime_apis! {
 			Environment::current_release_version()
 		}
 		fn cf_epoch_duration() -> u32 {
-			Validator::epoch_duration()
+			Validator::blocks_per_epoch()
 		}
 		fn cf_current_epoch_started_at() -> u32 {
 			Validator::current_epoch_started_at()
@@ -1413,6 +1440,7 @@ impl_runtime_apis! {
 				.collect()
 		}
 		fn cf_free_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
+			LiquidityPools::sweep(&account_id).unwrap();
 			AssetBalances::free_balances(&account_id)
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
@@ -1492,7 +1520,7 @@ impl_runtime_apis! {
 			.ok()
 			.map(|auction_outcome| auction_outcome.bond);
 			AuctionState {
-				epoch_duration: Validator::epoch_duration(),
+				blocks_per_epoch: Validator::blocks_per_epoch(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				redemption_period_as_percentage: Validator::redemption_period_as_percentage().deconstruct(),
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
@@ -1885,12 +1913,12 @@ impl_runtime_apis! {
 				match *event {
 					frame_system::EventRecord::<RuntimeEvent, sp_core::H256> { event: RuntimeEvent::Witnesser(pallet_cf_witnesser::Event::Prewitnessed { call }), ..} => {
 						match call {
-							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
+							RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::vault_swap_request {
 								input_asset: swap_from, output_asset: swap_to, deposit_amount, ..
 							}) if from == swap_from.into() && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
 							}
-							RuntimeCall::ArbitrumIngressEgress(pallet_cf_ingress_egress::Call::contract_swap_request {
+							RuntimeCall::ArbitrumIngressEgress(pallet_cf_ingress_egress::Call::vault_swap_request {
 								input_asset: swap_from, output_asset: swap_to, deposit_amount, ..
 							}) if from == swap_from.into() && to == swap_to => {
 								all_prewitnessed_swaps.push(deposit_amount);
@@ -2176,7 +2204,7 @@ impl_runtime_apis! {
 			.ok()
 			.map(|auction_outcome| auction_outcome.bond);
 			EpochState {
-				epoch_duration: Validator::epoch_duration(),
+				blocks_per_epoch: Validator::blocks_per_epoch(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				current_epoch_index: Validator::current_epoch(),
 				min_active_bid,
