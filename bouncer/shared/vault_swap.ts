@@ -407,8 +407,6 @@ export async function checkSolEventAccountsClosure(
 
   const maxRetries = 50; // 300 seconds
 
-  console.log('eventAccounts', eventAccounts);
-
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const swapEndpointDataAccount =
       await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
