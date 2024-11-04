@@ -10,11 +10,18 @@ use crate::sol::{
 use anyhow::ensure;
 use anyhow::{anyhow /* ensure */};
 use base64::Engine;
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshDeserialize;
 use cf_chains::{
 	address::EncodedAddress,
 	assets::sol::Asset as SolAsset,
-	sol::{api::VaultSwapAccountAndSender, SolAddress},
+	sol::{
+		api::VaultSwapAccountAndSender,
+		sol_tx_core::program_instructions::{
+			SwapEndpointDataAccount, SwapEvent, ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
+			SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR, SWAP_EVENT_ACCOUNT_DISCRIMINATOR,
+		},
+		SolAddress,
+	},
 	CcmChannelMetadata, CcmDepositMetadata, ForeignChainAddress,
 };
 use futures::{stream, StreamExt, TryStreamExt};
@@ -23,40 +30,10 @@ use state_chain_runtime::chainflip::solana_elections::SolanaVaultSwapDetails;
 use tracing::warn;
 
 const MAXIMUM_CONCURRENT_RPCS: usize = 16;
-const ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH: u8 = 8;
-const SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] = [79, 152, 191, 225, 128, 108, 11, 139];
-const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] = [150, 251, 114, 94, 200, 113, 248, 70];
 // Querying less than 100 (rpc call max) as those event accounts can be quite big.
 // Max length ~ 1300 bytes per account. We set it to 10 as an arbitrary number to
 // avoid large queries.
 const MAX_MULTIPLE_EVENT_ACCOUNTS_QUERY: usize = 10;
-
-#[derive(BorshDeserialize, BorshSerialize, Debug)]
-struct SwapEndpointDataAccount {
-	discriminator: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH],
-	historical_number_event_accounts: u128,
-	open_event_accounts: Vec<[u8; sol_prim::consts::SOLANA_ADDRESS_LEN]>,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
-pub struct SwapEvent {
-	discriminator: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH],
-	creation_slot: u64,
-	sender: [u8; sol_prim::consts::SOLANA_ADDRESS_LEN],
-	dst_chain: u32,
-	dst_address: Vec<u8>,
-	dst_token: u32,
-	amount: u64,
-	src_token: Option<[u8; sol_prim::consts::SOLANA_ADDRESS_LEN]>,
-	ccm_parameters: Option<CcmParams>,
-	cf_parameters: Vec<u8>,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
-pub struct CcmParams {
-	message: Vec<u8>,
-	gas_amount: u64,
-}
 
 // 1. Query the on-chain list of opened accounts from SwapEndpointDataAccount.
 // 2. Check the returned accounts against the SC opened_accounts. The SC is the source of truth for
