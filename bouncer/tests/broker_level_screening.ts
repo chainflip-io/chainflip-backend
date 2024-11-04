@@ -83,6 +83,7 @@ function pauseBtcBlockProduction(pause: boolean): boolean {
  * @param refundAddress - The address to refund to.
  * @param stopBlockProductionFor - The number of blocks to stop block production for. We need this to ensure that the tainted tx is on chain before the deposit is witnessed/prewitnessed.
  * @param waitBeforeReport - The number of milliseconds to wait before reporting the tx as tainted.
+ * @returns - The the channel id of the deposit channel.
  */
 async function brokerLevelScreeningTestScenario(
   amount: string,
@@ -90,7 +91,7 @@ async function brokerLevelScreeningTestScenario(
   refundAddress: string,
   stopBlockProductionFor = 0,
   waitBeforeReport = 0,
-) {
+): Promise<string> {
   const destinationAddressForUsdc = await newAddress('Usdc', randomBytes(32).toString('hex'));
   const refundParameters: FillOrKillParamsX128 = {
     retryDurationBlocks: 0,
@@ -121,6 +122,7 @@ async function brokerLevelScreeningTestScenario(
   if (stopBlockProductionFor > 0) {
     pauseBtcBlockProduction(false);
   }
+  return Promise.resolve(swapParams.channelId.toString());
 }
 
 // -- Test suite for broker level screening --
@@ -176,8 +178,17 @@ async function main() {
   testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
   btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
 
-  await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, MILLI_SECS_PER_BLOCK * 2);
-  await observeEvent('swapping:SwapExecuted').event;
+  const channelId = await brokerLevelScreeningTestScenario(
+    '0.2',
+    true,
+    btcRefundAddress,
+    0,
+    MILLI_SECS_PER_BLOCK * 2,
+  );
+
+  await observeEvent('bitcoinIngressEgress:DepositFinalised', {
+    test: (event) => event.data.channelId === channelId,
+  }).event;
 
   testBrokerLevelScreening.log(`Swap was executed and tainted transaction was not refunded 👍.`);
 }
