@@ -3,7 +3,7 @@ use crate::{
 	Weight,
 };
 use cf_chains::{instances::SolanaInstance, sol::api::SolanaApi, TransferAssetParams};
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::traits::UncheckedOnRuntimeUpgrade;
 
 use pallet_cf_elections::{
 	access_impls::ElectionAccess, electoral_system::ElectionWriteAccess,
@@ -69,7 +69,7 @@ mod old {
 	}
 }
 
-impl OnRuntimeUpgrade for SolanaEgressSuccessWitnessMigration {
+impl UncheckedOnRuntimeUpgrade for SolanaEgressSuccessWitnessMigration {
 	fn on_runtime_upgrade() -> Weight {
 		log::info!("🥮 Running Solana Success witnessing migration.");
 

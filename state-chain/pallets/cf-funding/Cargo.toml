@@ -19,7 +19,7 @@ workspace = true
 # Internal deps
 cf-chains = { workspace = true }
 cf-primitives = { workspace = true }
-cf-runtime-upgrade-utilities = { workspace = true }
+cf-runtime-utilities = { workspace = true }
 cf-traits = { workspace = true }
 
 # Non-substrate external deps
@@ -47,7 +47,7 @@ default = ["std"]
 std = [
   "cf-chains/std",
   "cf-primitives/std",
-  "cf-runtime-upgrade-utilities/std",
+  "cf-runtime-utilities/std",
   "cf-traits/std",
   "codec/std",
   "frame-benchmarking?/std",
@@ -61,12 +61,13 @@ std = [
 runtime-benchmarks = [
   "cf-chains/runtime-benchmarks",
   "cf-traits/runtime-benchmarks",
+  "cf-runtime-utilities/runtime-benchmarks",
   "frame-benchmarking/runtime-benchmarks",
   "frame-support/runtime-benchmarks",
   "frame-system/runtime-benchmarks",
 ]
 try-runtime = [
-  "cf-runtime-upgrade-utilities/try-runtime",
+  "cf-runtime-utilities/try-runtime",
   "frame-support/try-runtime",
   "frame-system/try-runtime",
 ]
