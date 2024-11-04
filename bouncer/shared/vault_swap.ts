@@ -31,6 +31,7 @@ import {
   chainContractId,
   decodeSolAddress,
   decodeDotAddressForContract,
+  sleep,
 } from './utils';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
@@ -44,6 +45,8 @@ import { getSolanaSwapEndpointIdl, getSolanaVaultIdl } from './contract_interfac
 const { BN } = anchor.default;
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'ArbUsdc'];
+
+const createdEventAccounts: PublicKey[] = [];
 
 export async function executeVaultSwap(
   sourceAsset: Asset,
@@ -156,6 +159,8 @@ export async function executeSolVaultSwap(
   const vaultProgram = new anchor.Program<Vault>(VaultIdl as Vault);
 
   const newEventAccountKeypair = Keypair.generate();
+  createdEventAccounts.push(newEventAccountKeypair.publicKey);
+
   const fetchedDataAccount = await vaultProgram.account.dataAccount.fetch(solanaVaultDataAccount);
   const aggKey = fetchedDataAccount.aggKey;
 
@@ -388,4 +393,44 @@ export async function approveTokenVault(sourceAsset: Asset, amount: string, wall
       nonce: 0,
     },
   );
+}
+
+export async function checkSolEventAccountsClosure(
+  eventAccounts: PublicKey[] = createdEventAccounts,
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const SwapEndpointIdl: any = await getSolanaSwapEndpointIdl();
+  const cfSwapEndpointProgram = new anchor.Program<SwapEndpoint>(SwapEndpointIdl as SwapEndpoint);
+  const swapEndpointDataAccountAddress = new PublicKey(
+    getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
+  );
+
+  const maxRetries = 50; // 300 seconds
+
+  console.log('eventAccounts', eventAccounts);
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const swapEndpointDataAccount =
+      await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
+        swapEndpointDataAccountAddress,
+      );
+    const onChainOpenedAccounts = swapEndpointDataAccount.openEventAccounts.map((element) =>
+      element.toString(),
+    );
+
+    if (swapEndpointDataAccount.openEventAccounts.length >= 10) {
+      await sleep(6000);
+    } else {
+      for (const eventAccount of eventAccounts) {
+        if (!onChainOpenedAccounts.includes(eventAccount.toString())) {
+          const accountInfo = await getSolConnection().getAccountInfo(eventAccount);
+          if (accountInfo !== null) {
+            throw new Error('Event account still exists, should have been closed');
+          }
+        }
+      }
+      return;
+    }
+  }
+  throw new Error('Timed out waiting for event accounts to be closed');
 }
