@@ -39,27 +39,30 @@ impl SolRpcClient {
 			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
 			loop {
 				poll_interval.tick().await;
-				match get_genesis_hash(&client, &endpoint).await {
-					Ok(genesis_hash) => match expected_genesis_hash {
-						None => {
-							warn!("Skipping Solana genesis hash check");
-							break;
-						},
-						Some(expected_hash) if expected_hash == genesis_hash => {
-							break;
-						},
-						Some(_) => {
-							error!(
-                                        "Connected to Solana node at {0} but the genesis hash {genesis_hash} does not match the expected genesis hash. Please check your CFE configuration file.", endpoint
-                                    )
+				match expected_genesis_hash {
+					None => {
+						warn!("Skipping Solana genesis hash check");
+						break;
+					},
+					Some(expected_hash) => match get_genesis_hash(&client, &endpoint).await {
+						Ok(genesis_hash) =>
+							if expected_hash == genesis_hash {
+								break;
+							} else {
+								error!(
+								"Connected to Solana node at {0} but the genesis hash {genesis_hash} does not match the expected genesis hash. Please check your CFE configuration file.",
+								endpoint
+							)
+							},
+						Err(e) => {
+							tracing::error!(
+								"Cannot connect to Solana node at {1} with error: {e}. \
+											Please check your CFE configuration file. Retrying in {:?}...",
+								poll_interval.period(),
+								endpoint
+							)
 						},
 					},
-					Err(e) => tracing::error!(
-						"Cannot connect to Solana node at {1} with error: {e}. \
-                                Please check your CFE configuration file. Retrying in {:?}...",
-						poll_interval.period(),
-						endpoint
-					),
 				}
 			}
 			Self { client, endpoint }
