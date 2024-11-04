@@ -1,4 +1,4 @@
-use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 
 use crate::*;
 mod old {
@@ -49,7 +49,7 @@ mod old {
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
-impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
+impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		DepositChannelLookup::<T, I>::translate(
 			|_account, channel_details: old::DepositChannelDetails<T, I>| {

@@ -1,7 +1,7 @@
 use crate::{Config, Pallet};
 #[cfg(feature = "try-runtime")]
 use crate::{CurrentReleaseVersion, Get};
-use cf_runtime_upgrade_utilities::PlaceholderMigration;
+use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
@@ -32,7 +32,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 12>;
+pub type PalletMigration<T> = PlaceholderMigration<12, Pallet<T>>;
 
 #[cfg(test)]
 mod tests {

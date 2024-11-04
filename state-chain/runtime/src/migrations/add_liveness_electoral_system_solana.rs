@@ -1,5 +1,5 @@
 use crate::*;
-use frame_support::{pallet_prelude::Weight, storage::unhashed, traits::OnRuntimeUpgrade};
+use frame_support::{pallet_prelude::Weight, storage::unhashed, traits::UncheckedOnRuntimeUpgrade};
 use frame_system::pallet_prelude::BlockNumberFor;
 
 use pallet_cf_elections::{electoral_system::ElectoralSystem, Config, ElectoralSettings};
@@ -14,7 +14,7 @@ const LIVENESS_CHECK_DURATION: BlockNumberFor<Runtime> = 10;
 
 // Because the Liveness electoral system is added to the end, and the rest of its types are the same
 // we can simply append the encoded bytes to the raw storage.
-impl OnRuntimeUpgrade for LivenessSettingsMigration {
+impl UncheckedOnRuntimeUpgrade for LivenessSettingsMigration {
 	fn on_runtime_upgrade() -> Weight {
 		for key in ElectoralSettings::<Runtime, SolanaInstance>::iter_keys() {
 			let mut raw_storage_at_key = unhashed::get_raw(&ElectoralSettings::<

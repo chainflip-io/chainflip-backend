@@ -1,4 +1,4 @@
-use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 use old::maybe_get_timeout_for_type;
 
 use crate::*;
@@ -52,7 +52,7 @@ mod old {
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
-impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
+impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		if let Some(timeout) = maybe_get_timeout_for_type::<T, I>() {
 			BroadcastTimeout::<T, I>::set(timeout);

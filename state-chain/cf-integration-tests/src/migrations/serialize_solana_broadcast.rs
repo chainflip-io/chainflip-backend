@@ -7,7 +7,7 @@ use cf_chains::sol::{SolHash, SolanaTransactionData};
 use genesis::with_test_defaults;
 use sp_runtime::AccountId32;
 
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::traits::UncheckedOnRuntimeUpgrade;
 use pallet_cf_broadcast::BroadcastData;
 use state_chain_runtime::{
 	migrations::serialize_solana_broadcast::{self, old, SerializeSolanaBroadcastMigration},
