@@ -23,8 +23,9 @@ use state_chain_runtime::chainflip::solana_elections::SolanaVaultSwapDetails;
 use tracing::warn;
 
 const MAXIMUM_CONCURRENT_RPCS: usize = 16;
-const SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR: [u8; 8] = [79, 152, 191, 225, 128, 108, 11, 139];
-const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; 8] = [150, 251, 114, 94, 200, 113, 248, 70];
+const ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH: u8 = 8;
+const SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] = [79, 152, 191, 225, 128, 108, 11, 139];
+const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] = [150, 251, 114, 94, 200, 113, 248, 70];
 // Querying less than 100 (rpc call max) as those event accounts can be quite big.
 // Max length ~ 1300 bytes per account. We set it to 10 as an arbitrary number to
 // avoid large queries.
@@ -32,14 +33,14 @@ const MAX_MULTIPLE_EVENT_ACCOUNTS_QUERY: usize = 10;
 
 #[derive(BorshDeserialize, BorshSerialize, Debug)]
 struct SwapEndpointDataAccount {
-	discriminator: [u8; 8],
+	discriminator: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH],
 	historical_number_event_accounts: u128,
 	open_event_accounts: Vec<[u8; sol_prim::consts::SOLANA_ADDRESS_LEN]>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
 pub struct SwapEvent {
-	discriminator: [u8; 8],
+	discriminator: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH],
 	creation_slot: u64,
 	sender: [u8; sol_prim::consts::SOLANA_ADDRESS_LEN],
 	dst_chain: u32,
@@ -252,7 +253,7 @@ async fn get_swap_endpoint_data(
 				.expect("Failed to decode base64 string");
 
 			// 8 Discriminator + 16 Historical Number Event Accounts + 4 bytes vector length + data
-			if bytes.len() < 28 {
+			if bytes.len() < ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH + 20 {
 				return Err(anyhow!("Expected account to have at least 28 bytes"));
 			}
 
@@ -315,8 +316,8 @@ async fn get_program_swap_event_accounts_data(
 					.decode(base64_string)
 					.expect("Failed to decode base64 string");
 
-				if bytes.len() < 8 {
-					return Err(anyhow!("Expected account to have at least 28 bytes"));
+				if bytes.len() < ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH {
+					return Err(anyhow!("Expected account to have at least 8 bytes"));
 				}
 
 				let deserialized_data: SwapEvent = SwapEvent::try_from_slice(&bytes)

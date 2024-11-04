@@ -27,7 +27,7 @@ pub use sol_prim::consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID};
 // 16 (u128) + 8 (discriminator)
 const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
-const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
+const FETCH_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] = [188, 68, 197, 38, 48, 192, 81, 100];
 const MAXIMUM_CONCURRENT_RPCS: usize = 16;
 
 /// We track Solana (Sol and SPL-token) deposits by periodically querying the
@@ -276,7 +276,7 @@ fn parse_fetch_account_amount(
 
 			ensure!(bytes.len() == FETCH_ACCOUNT_BYTE_LENGTH);
 
-			let discriminator: Vec<u8> = bytes.drain(..8).collect();
+			let discriminator: Vec<u8> = bytes.drain(..ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH).collect();
 
 			ensure!(
 				discriminator == FETCH_ACCOUNT_DISCRIMINATOR,
