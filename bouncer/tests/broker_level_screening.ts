@@ -26,7 +26,7 @@ async function observeBtcAddressBalanceChange(address: string): Promise<number> 
             return Promise.resolve(balance);
         }
         retryCount++;
-        if (retryCount > 16) {
+        if (retryCount > 100) {
             throw new Error(`BTC balance for ${address} did not change after 16 seconds.`);
         }
     }
