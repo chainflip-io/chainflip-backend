@@ -1,7 +1,10 @@
 import Client from 'bitcoin-core';
 import { sleep, btcClientMutex } from './utils';
 
-export async function sendBtcAndReturnTxId(address: string, amount: number | string): Promise<string> {
+export async function sendBtcAndReturnTxId(
+  address: string,
+  amount: number | string,
+): Promise<string> {
   const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
   const client = new Client({
     host: BTC_ENDPOINT.split(':')[1].slice(2),
@@ -13,7 +16,18 @@ export async function sendBtcAndReturnTxId(address: string, amount: number | str
 
   // Btc client has a limit on the number of concurrent requests
   const txid: string = await btcClientMutex.runExclusive(async () => {
-    let tx: string = await client.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1);
+    let tx: string = await client.sendToAddress(
+      address,
+      amount,
+      '',
+      '',
+      false,
+      true,
+      null,
+      'unset',
+      null,
+      1,
+    );
     return tx;
   });
 
