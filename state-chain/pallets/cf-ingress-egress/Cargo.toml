@@ -18,7 +18,6 @@ cf-chains = { workspace = true }
 cf-primitives = { workspace = true }
 cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true, features = ["derive"] }
-cf-runtime-upgrade-utilities = { workspace = true }
 
 log = { workspace = true }
 strum = { workspace = true }
@@ -49,7 +48,6 @@ std = [
   "cf-chains/std",
   "cf-primitives/std",
   "cf-traits/std",
-  "cf-runtime-upgrade-utilities/std",
   "cf-runtime-utilities/std",
   "codec/std",
   "frame-benchmarking?/std",
@@ -65,6 +63,7 @@ std = [
 runtime-benchmarks = [
   "cf-chains/runtime-benchmarks",
   "cf-traits/runtime-benchmarks",
+  "cf-runtime-utilities/runtime-benchmarks",
   "frame-benchmarking/runtime-benchmarks",
   "frame-support/runtime-benchmarks",
   "frame-system/runtime-benchmarks",
@@ -75,6 +74,6 @@ try-runtime = [
   "frame-support/try-runtime",
   "frame-system/try-runtime",
   "sp-runtime/try-runtime",
-  "cf-runtime-upgrade-utilities/try-runtime",
+  "cf-runtime-utilities/try-runtime",
   "cf-traits/try-runtime",
 ]

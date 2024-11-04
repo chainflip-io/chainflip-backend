@@ -1,4 +1,6 @@
-use frame_support::{pallet_prelude::ValueQuery, traits::OnRuntimeUpgrade, weights::Weight};
+use frame_support::{
+	pallet_prelude::ValueQuery, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
+};
 
 use crate::*;
 
@@ -17,7 +19,7 @@ mod old {
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
-impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
+impl<T: Config<I>, I: 'static> UncheckedOnRuntimeUpgrade for Migration<T, I> {
 	fn on_runtime_upgrade() -> Weight {
 		// Instead of trying to translate the previous timeout into external chain blocks,
 		// we simply reset the remaining timeout duration to the new `BroadcastTimeout` value.

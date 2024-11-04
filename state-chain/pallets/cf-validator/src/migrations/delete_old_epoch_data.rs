@@ -1,10 +1,10 @@
-use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 
 use crate::*;
 
 pub struct Migration<T: Config>(PhantomData<T>);
 
-impl<T: Config> OnRuntimeUpgrade for Migration<T> {
+impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		pub fn delete_all_old<Iter, Index, Item, Relevant, IterRes, Remove>(
 			iter: Iter,

@@ -1,6 +1,6 @@
 use crate::Runtime;
 use cf_chains::instances::{ArbitrumInstance, EthereumInstance, PolkadotInstance};
-use cf_runtime_upgrade_utilities::genesis_hashes;
+use cf_runtime_utilities::genesis_hashes;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use pallet_cf_broadcast::migrations::remove_aborted_broadcasts;
 #[cfg(feature = "try-runtime")]

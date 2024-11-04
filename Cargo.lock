@@ -1428,27 +1428,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "cf-runtime-upgrade-utilities"
+name = "cf-runtime-utilities"
 version = "0.1.0"
 dependencies = [
+ "cf-runtime-macros",
  "frame-support",
  "frame-system",
  "hex-literal",
  "log",
  "parity-scale-codec",
  "sp-core 34.0.0",
- "sp-io 38.0.0",
- "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2+2)",
-]
-
-[[package]]
-name = "cf-runtime-utilities"
-version = "0.1.0"
-dependencies = [
- "cf-runtime-macros",
- "frame-support",
- "log",
- "parity-scale-codec",
  "sp-io 38.0.0",
  "sp-runtime 39.0.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2+2)",
@@ -7665,7 +7654,7 @@ name = "pallet-cf-account-roles"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7686,7 +7675,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -7710,7 +7698,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -7734,7 +7721,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-traits",
  "cfe-events",
  "frame-benchmarking",
@@ -7751,7 +7738,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7797,7 +7784,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7821,7 +7808,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7865,7 +7852,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7887,7 +7874,7 @@ name = "pallet-cf-governance"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7907,7 +7894,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -7935,7 +7921,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7958,7 +7944,6 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -7983,7 +7968,7 @@ name = "pallet-cf-reputation"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -8008,7 +7993,6 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -8034,7 +8018,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -8062,7 +8045,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -8082,7 +8065,7 @@ name = "pallet-cf-validator"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -8112,7 +8095,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -13061,7 +13043,6 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-session-benchmarking",
  "cf-test-utilities",

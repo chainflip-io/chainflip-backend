@@ -19,7 +19,6 @@ workspace = true
 # Chainflip
 cf-chains = { workspace = true }
 cf-primitives = { workspace = true }
-cf-runtime-upgrade-utilities = { workspace = true }
 cf-traits = { workspace = true }
 cfe-events = { workspace = true }
 cf-runtime-utilities = { workspace = true }
@@ -47,8 +46,6 @@ std = [
   "cf-chains/std",
   "cfe-events/std",
   "cf-primitives/std",
-  "cf-runtime-upgrade-utilities/std",
-  "cf-runtime-utilities/std",
   "cf-traits/std",
   "codec/std",
   "frame-benchmarking?/std",
@@ -61,7 +58,6 @@ std = [
   "cf-chains/std",
   "cfe-events/std",
   "cf-primitives/std",
-  "cf-runtime-upgrade-utilities/std",
   "cf-runtime-utilities/std",
   "cf-traits/std",
   "codec/std",
@@ -79,9 +75,10 @@ runtime-benchmarks = [
   "frame-benchmarking/runtime-benchmarks",
   "frame-support/runtime-benchmarks",
   "frame-system/runtime-benchmarks",
+  "cf-runtime-utilities/runtime-benchmarks",
 ]
 try-runtime = [
-  "cf-runtime-upgrade-utilities/try-runtime",
+  "cf-runtime-utilities/try-runtime",
   "cf-traits/try-runtime",
   "frame-support/try-runtime",
   "frame-system/try-runtime",
