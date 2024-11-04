@@ -29,10 +29,11 @@ export const testBrokerLevelScreening = new ExecutableTest('Broker-Level-Screeni
  */
 async function observeBtcAddressBalanceChange(address: string): Promise<boolean> {
   const MAX_RETRIES = 100;
+  const initialBalance = await getBtcBalance(address);
   for (let i = 0; i < MAX_RETRIES; i++) {
     await sleep(1000);
     const balance = await getBtcBalance(address);
-    if (balance !== 0) {
+    if (balance !== initialBalance) {
       return Promise.resolve(true);
     }
   }
@@ -57,14 +58,16 @@ async function submitTxAsTainted(txId: number[]) {
 /**
  * Pauses or resumes the bitcoin block production. We send a command to the docker container to start or stop mining blocks.
  *
- * @param command - Whether to pause or resume the block production.
+ * @param pause - Whether to pause or resume the block production.
  * @returns - Whether the command was successful.
  */
-function pauseBtcBlockProduction(command: boolean): boolean {
-  const start = 'docker exec bitcoin rm /root/mine_blocks';
-  const stop = 'docker exec bitcoin touch /root/mine_blocks';
+function pauseBtcBlockProduction(pause: boolean): boolean {
   try {
-    execSync(command ? start : stop);
+    execSync(
+      pause
+        ? 'docker exec bitcoin rm /root/mine_blocks'
+        : 'docker exec bitcoin touch /root/mine_blocks',
+    );
     return true;
   } catch (error) {
     console.error(error);
@@ -120,6 +123,13 @@ async function brokerLevelScreeningTestScenario(
   }
 }
 
+// -- Test suite for broker level screening --
+//
+// In this tests we are interested in the following scenarios:
+//
+// 1. No boost and early tx report -> Tainted tx is reported early and the swap is refunded.
+// 2. Boost and early tx report -> Tainted tx is reported early and the swap is refunded.
+// 3. Boost and late tx report -> Tainted tx is reported late and the swap is not refunded.
 async function main() {
   const MILLI_SECS_PER_BLOCK = 6000;
   const BLOCKS_TO_WAIT = 2;
@@ -137,9 +147,7 @@ async function main() {
 
   await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
-    throw new Error(
-      `Didn't receive funds refund to address ${btcRefundAddress} within the timeout!`,
-    );
+    throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
 
   testBrokerLevelScreening.log(`Tainted transaction was rejected and refunded 👍.`);
@@ -159,9 +167,7 @@ async function main() {
   await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
 
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
-    throw new Error(
-      `Didn't receive funds refund to address ${btcRefundAddress} within the timeout!`,
-    );
+    throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
   testBrokerLevelScreening.log(`Tainted transaction was rejected and refunded 👍.`);
 
