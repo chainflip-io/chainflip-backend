@@ -284,12 +284,14 @@ macro_rules! solana_program {
 				}
 			),+ $(,)?
 		}
-        $(, accounts: [
-            $(
-                $account_name:ident: { account_type: $account_type:ty, discriminator: $discriminator:expr }
-            ),*
-            $(,)?
-        ])?
+		$(,
+			accounts: [
+				$(
+					{ name: $account_type:ty, discriminator: $discriminator:expr }
+				),+
+				$(,)?
+			]
+		)?
 	) => {
 		pub struct $program {
 			program_id: Pubkey,
@@ -340,6 +342,14 @@ macro_rules! solana_program {
 			}
 		)+
 
+		$(
+			$(
+				impl AccountExt for $account_type {
+					const DISCRIMINATOR: [u8; 8] = $discriminator;
+				}
+			)+
+		)?
+
 		#[cfg(test)]
 		mod test {
 			use super::*;
@@ -372,22 +382,26 @@ macro_rules! solana_program {
 			}
 
 			// TODO: Complete check for account type and discriminator
-            $(
+			$(
 				#[test]
 				fn account_exist_in_idl() {
-					use heck::ToUpperCamelCase;
-
 					test(|idl| {
 						let defined_in_idl = idl.accounts.iter().map(|acc| acc.name.clone()).collect::<BTreeSet<_>>();
 						let defined_in_code = [
 							$(
-								stringify!($account_name).to_owned().to_upper_camel_case(),
-							)*
+								stringify!($account_type).to_owned(),
+							)+
 						].into_iter().collect::<BTreeSet<_>>();
-						assert!(defined_in_code.is_subset(&defined_in_idl), "Some accounts are not defined in the IDL {:?}", defined_in_code);
+						assert!(defined_in_code.is_subset(&defined_in_idl), "Some accounts are not defined in the IDL: {:?}", defined_in_code.difference(&defined_in_idl).cloned().collect::<Vec<_>>());
+						$(
+							assert_eq!(
+								<$account_type as AccountExt>::DISCRIMINATOR,
+								idl.accounts.iter().find(|acc| acc.name == stringify!($account_type)).unwrap().discriminator
+							);
+						)+
 					});
 				}
-			)*
+			)?
 
 			$(
 				#[cfg(test)]
@@ -661,9 +675,8 @@ pub const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LE
 
 #[derive(BorshDeserialize, BorshSerialize, Debug)]
 pub struct SwapEndpointDataAccount {
-	pub discriminator: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH],
 	pub historical_number_event_accounts: u128,
-	pub open_event_accounts: Vec<[u8; sol_prim::consts::SOLANA_ADDRESS_LEN]>,
+	pub open_event_accounts: Vec<Pubkey>,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
@@ -674,16 +687,19 @@ pub struct CcmParams {
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
 pub struct SwapEvent {
-	pub discriminator: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH],
 	pub creation_slot: u64,
-	pub sender: [u8; sol_prim::consts::SOLANA_ADDRESS_LEN],
+	pub sender: Pubkey,
 	pub dst_chain: u32,
 	pub dst_address: Vec<u8>,
 	pub dst_token: u32,
 	pub amount: u64,
-	pub src_token: Option<[u8; sol_prim::consts::SOLANA_ADDRESS_LEN]>,
+	pub src_token: Option<Pubkey>,
 	pub ccm_parameters: Option<CcmParams>,
 	pub cf_parameters: Vec<u8>,
+}
+
+pub trait AccountExt {
+	const DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH];
 }
 
 pub mod swap_endpoints {
@@ -706,8 +722,8 @@ pub mod swap_endpoints {
 			}
 		},
 		accounts: [
-			swap_event: {account_type: SwapEvent, discriminator: SWAP_EVENT_ACCOUNT_DISCRIMINATOR},
-			swap_endpoint_data_account: {account_type: SwapEndpointDataAccount, discriminator: SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR},
+			{ name: SwapEvent, discriminator: SWAP_EVENT_ACCOUNT_DISCRIMINATOR },
+			{ name: SwapEndpointDataAccount, discriminator: SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR },
 		]
 	);
 }

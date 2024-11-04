@@ -658,6 +658,7 @@ pub struct CompiledInstruction {
 	PartialOrd,
 	Copy,
 	BorshSerialize,
+	BorshDeserialize,
 )]
 pub struct Pubkey(pub [u8; 32]);
 

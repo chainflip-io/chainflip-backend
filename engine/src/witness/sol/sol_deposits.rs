@@ -284,13 +284,11 @@ fn parse_fetch_account_amount(
 				bytes.drain(..ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH).collect();
 
 			ensure!(
-				discriminator == FETCH_ACCOUNT_DISCRIMINATOR,
+				bytes[..ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] == FETCH_ACCOUNT_DISCRIMINATOR,
 				"Discriminator does not match expected value"
 			);
 
-			let array: [u8; 16] = bytes.try_into().expect("Byte slice length doesn't match u128");
-
-			Ok(u128::from_le_bytes(array))
+			Ok(u128::decode(&mut &bytes[ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH..]))
 		},
 		_ => Err(anyhow::anyhow!("Data account encoding is not base64")),
 	}
