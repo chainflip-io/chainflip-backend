@@ -412,13 +412,13 @@ export async function checkSolEventAccountsClosure(
       await cfSwapEndpointProgram.account.swapEndpointDataAccount.fetch(
         swapEndpointDataAccountAddress,
       );
-    const onChainOpenedAccounts = swapEndpointDataAccount.openEventAccounts.map((element) =>
-      element.toString(),
-    );
 
     if (swapEndpointDataAccount.openEventAccounts.length >= 10) {
       await sleep(6000);
     } else {
+      const onChainOpenedAccounts = swapEndpointDataAccount.openEventAccounts.map((element) =>
+        element.toString(),
+      );
       for (const eventAccount of eventAccounts) {
         if (!onChainOpenedAccounts.includes(eventAccount.toString())) {
           const accountInfo = await getSolConnection().getAccountInfo(eventAccount);

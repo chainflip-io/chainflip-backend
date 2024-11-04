@@ -57,9 +57,9 @@ async function runAllConcurrentTests() {
 
   await Promise.all([broadcastAborted.stop(), feeDeficitRefused.stop()]);
 
-  await checkAvailabilityAllSolanaNonces();
-
   await checkSolEventAccountsClosure();
+
+  await checkAvailabilityAllSolanaNonces();
 }
 
 await runAllConcurrentTests().catch((e) => {
