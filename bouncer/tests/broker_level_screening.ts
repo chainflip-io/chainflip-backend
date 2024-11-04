@@ -1,54 +1,55 @@
+import { randomBytes } from 'crypto';
+import { execSync } from 'child_process';
 import { ExecutableTest } from '../shared/executable_test';
 import { sendBtcAndReturnTxId } from '../shared/send_btc';
-import { randomBytes } from 'crypto';
-import { hexStringToBytesArray, newAddress, sleep } from '../shared/utils';
-import { handleSubstrateError } from '../shared/utils';
-import { brokerMutex } from '../shared/utils';
+import {
+  hexStringToBytesArray,
+  newAddress,
+  sleep,
+  handleSubstrateError,
+  brokerMutex,
+} from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
 import { requestNewSwap } from '../shared/perform_swap';
-import { execSync } from 'child_process';
 import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { getBtcBalance } from '../shared/get_btc_balance';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const broker = keyring.createFromUri('//BROKER_1');
 
+/* eslint-disable @typescript-eslint/no-use-before-define */
 export const testBrokerLevelScreening = new ExecutableTest('Broker-Level-Screening', main, 300);
 
 /**
- * Observes the balance of a BTC address and returns true if the balance changes.
+ * Observes the balance of a BTC address and returns true if the balance changes. Times out after 100 seconds and returns false if the balance does not change.
  *
  * @param address - The address to observe the balance of.
  * @returns - Whether the balance changed.
  */
 async function observeBtcAddressBalanceChange(address: string): Promise<boolean> {
   const MAX_RETRIES = 100;
-  let retryCount = 0;
-  while (true) {
+  for (let i = 0; i < MAX_RETRIES; i++) {
     await sleep(1000);
-    let balance = await getBtcBalance(address);
+    const balance = await getBtcBalance(address);
     if (balance !== 0) {
       return Promise.resolve(true);
     }
-    retryCount++;
-    if (retryCount > MAX_RETRIES) {
-      console.error(`BTC balance for ${address} did not change after ${MAX_RETRIES} seconds.`);
-      return Promise.resolve(false);
-    }
   }
+  console.error(`BTC balance for ${address} did not change after ${MAX_RETRIES} seconds.`);
+  return Promise.resolve(false);
 }
 
 /**
  * Submits a transaction as tainted to the extrinsic on the state chain.
  *
- * @param tx_id - The tx_id to submit as tainted as byte array in the correct order.
+ * @param txId - The txId to submit as tainted as byte array in the correct order.
  */
-async function submitTxAsTainted(tx_id: number[]) {
+async function submitTxAsTainted(txId: number[]) {
   await using chainflip = await getChainflipApi();
   return brokerMutex.runExclusive(async () =>
     chainflip.tx.bitcoinIngressEgress
-      .markTransactionAsTainted(tx_id)
+      .markTransactionAsTainted(txId)
       .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
   );
 }
@@ -56,13 +57,12 @@ async function submitTxAsTainted(tx_id: number[]) {
 /**
  * Pauses or resumes the bitcoin block production. We send a command to the docker container to start or stop mining blocks.
  *
- *
  * @param command - Whether to pause or resume the block production.
  * @returns - Whether the command was successful.
  */
 function pauseBtcBlockProduction(command: boolean): boolean {
-  let start = 'docker exec bitcoin rm /root/mine_blocks';
-  let stop = 'docker exec bitcoin touch /root/mine_blocks';
+  const start = 'docker exec bitcoin rm /root/mine_blocks';
+  const stop = 'docker exec bitcoin touch /root/mine_blocks';
   try {
     execSync(command ? start : stop);
     return true;
@@ -88,10 +88,10 @@ async function brokerLevelScreeningTestScenario(
   stopBlockProductionFor = 0,
   waitBeforeReport = 0,
 ) {
-  let destinationAddressForUsdc = await newAddress('Usdc', randomBytes(32).toString('hex'));
+  const destinationAddressForUsdc = await newAddress('Usdc', randomBytes(32).toString('hex'));
   const refundParameters: FillOrKillParamsX128 = {
     retryDurationBlocks: 0,
-    refundAddress: refundAddress,
+    refundAddress,
     minPriceX128: '0',
   };
   const swapParams = await requestNewSwap(
@@ -105,15 +105,15 @@ async function brokerLevelScreeningTestScenario(
     doBoost ? 100 : 0,
     refundParameters,
   );
-  let tx_id = await sendBtcAndReturnTxId(swapParams.depositAddress, amount);
+  const txId = await sendBtcAndReturnTxId(swapParams.depositAddress, amount);
   if (stopBlockProductionFor > 0) {
     pauseBtcBlockProduction(true);
   }
   await sleep(waitBeforeReport);
-  // Note: The bitcoin core js lib returns the tx_id in reverse order.
-  // On chain we expect the tx_id to be in the correct order (like the Bitcoin internal representation).
-  // Because of this we need to reverse the tx_id before submitting it as tainted.
-  await submitTxAsTainted(hexStringToBytesArray(tx_id).reverse());
+  // Note: The bitcoin core js lib returns the txId in reverse order.
+  // On chain we expect the txId to be in the correct order (like the Bitcoin internal representation).
+  // Because of this we need to reverse the txId before submitting it as tainted.
+  await submitTxAsTainted(hexStringToBytesArray(txId).reverse());
   await sleep(stopBlockProductionFor);
   if (stopBlockProductionFor > 0) {
     pauseBtcBlockProduction(false);
@@ -124,7 +124,7 @@ async function main() {
   const MILLI_SECS_PER_BLOCK = 6000;
   const BLOCKS_TO_WAIT = 2;
 
-  //1. -- Test no boost and early tx report --
+  // 1. -- Test no boost and early tx report --
   testBrokerLevelScreening.log('Testing broker level screening with no boost...');
   let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
 
@@ -144,7 +144,7 @@ async function main() {
 
   testBrokerLevelScreening.log(`Tainted transaction was rejected and refunded 👍.`);
 
-  //2. -- Test boost and early tx report --
+  // 2. -- Test boost and early tx report --
   testBrokerLevelScreening.log(
     'Testing broker level screening with boost and a early tx report...',
   );
@@ -165,8 +165,8 @@ async function main() {
   }
   testBrokerLevelScreening.log(`Tainted transaction was rejected and refunded 👍.`);
 
-  //3. -- Test boost and late tx report --
-  // Note: We expect the swap to be executed and not refunded because the tainted tx is on chain.
+  // 3. -- Test boost and late tx report --
+  // Note: We expect the swap to be executed and not refunded because the tainted tx was to late reported.
   testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
   btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
 

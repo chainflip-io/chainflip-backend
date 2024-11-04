@@ -15,21 +15,9 @@ export async function sendBtcAndReturnTxId(
   });
 
   // Btc client has a limit on the number of concurrent requests
-  const txid: string = await btcClientMutex.runExclusive(async () => {
-    let tx: string = await client.sendToAddress(
-      address,
-      amount,
-      '',
-      '',
-      false,
-      true,
-      null,
-      'unset',
-      null,
-      1,
-    );
-    return tx;
-  });
+  const txid: string = await btcClientMutex.runExclusive(async () =>
+    client.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
+  );
 
   for (let i = 0; i < 50; i++) {
     const transactionDetails = await client.getTransaction(txid);
