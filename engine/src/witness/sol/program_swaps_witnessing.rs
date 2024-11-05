@@ -112,7 +112,6 @@ pub async fn get_program_swaps(
 									destination_address: EncodedAddress::from_chain_bytes(data.dst_chain.try_into().map_err(|e| warn!("error while parsing destination chain for solana vault swap:{}. Omitting swap", e)).ok()?, data.dst_address.to_vec()).map_err(|e| warn!("failed to decode the destination chain address for solana vault swap:{}. Omitting swap", e)).ok()?,
 									to: data.dst_token.try_into().map_err(|e| warn!("error while decoding destination token for solana vault swap: {}. Omitting swap", e)).ok()?,
 									deposit_metadata,
-									// TODO: These two will potentially be a TransactionId type
 									swap_account: account,
 									creation_slot: data.creation_slot,
 									broker_fees: vault_swap_parameters.broker_fees,
@@ -184,9 +183,8 @@ async fn get_changed_program_swap_accounts(
 		}
 	}
 
-	let open_event_accounts_hashset: HashSet<_> = open_event_accounts.iter().collect();
 	for account in sc_closure_initiated_accounts {
-		if !open_event_accounts_hashset.contains(&account.vault_swap_account) {
+		if !open_event_accounts.contains(&account.vault_swap_account) {
 			closed_accounts.push(account);
 		}
 	}
@@ -199,7 +197,7 @@ async fn get_changed_program_swap_accounts(
 async fn get_swap_endpoint_data(
 	sol_rpc: &SolRetryRpcClient,
 	swap_endpoint_data_account_address: SolAddress,
-) -> Result<(u128, Vec<SolAddress>, u64), anyhow::Error> {
+) -> Result<(u128, HashSet<SolAddress>, u64), anyhow::Error> {
 	let accounts_info_response = sol_rpc
 		.get_multiple_accounts(
 			&[swap_endpoint_data_account_address],
@@ -243,7 +241,7 @@ async fn get_swap_endpoint_data(
 					.open_event_accounts
 					.into_iter()
 					.map(|acc| acc.into())
-					.collect(),
+					.collect::<HashSet<_>>(),
 				slot,
 			))
 		},
@@ -367,6 +365,8 @@ mod tests {
 						SolAddress::from_str("E81G7Q1BjierakQCfL9B5Tm485eiaRPb22bcKD2vtRfU")
 							.unwrap()
 					]
+					.into_iter()
+					.collect()
 				);
 
 				Ok(())
