@@ -442,5 +442,4 @@ pub struct DcaParameters {
 	pub chunk_interval: u32,
 }
 
-// TODO: Define this / implement it on the SC - PRO-1743.
 pub type ShortId = u8;
