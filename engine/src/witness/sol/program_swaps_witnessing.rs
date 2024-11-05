@@ -7,8 +7,7 @@ use crate::sol::{
 	retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
 	rpc_client_api::{RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding},
 };
-use anyhow::ensure;
-use anyhow::{anyhow /* ensure */};
+use anyhow::{anyhow, ensure};
 use base64::Engine;
 use cf_chains::{
 	address::EncodedAddress,
