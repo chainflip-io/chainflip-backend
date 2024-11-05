@@ -40,6 +40,7 @@ import { ConsoleColors, ConsoleLogColors } from '../shared/utils';
 import { testDeltaBasedIngress } from '../tests/delta_based_ingress';
 import { testCancelOrdersBatch } from '../tests/create_and_delete_multiple_orders';
 import { depositChannelCreation } from '../tests/request_swap_deposit_address_with_affiliates';
+import { testBtcVaultSwap } from '../tests/btc_vault_swap';
 
 async function main() {
   const testName = process.argv[2];
@@ -67,6 +68,7 @@ async function main() {
     testDeltaBasedIngress,
     testCancelOrdersBatch,
     depositChannelCreation,
+    testBtcVaultSwap,
   ];
 
   // Help message
