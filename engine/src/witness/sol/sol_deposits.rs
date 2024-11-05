@@ -1,12 +1,10 @@
 use anyhow::ensure;
 use base64::Engine;
-use borsh::BorshDeserialize;
 use cf_chains::sol::{
 	sol_tx_core::{
 		address_derivation::{derive_associated_token_account, derive_fetch_account},
 		program_instructions::{
-			DepositChannelHistoricalFetch, ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
-			FETCH_ACCOUNT_DISCRIMINATOR,
+			types::DepositChannelHistoricalFetch, ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
 		},
 	},
 	SolAddress, SolAmount,
@@ -282,16 +280,9 @@ fn parse_fetch_account_amount(
 
 			ensure!(bytes.len() == FETCH_ACCOUNT_BYTE_LENGTH);
 
-			ensure!(
-				bytes[..ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] == FETCH_ACCOUNT_DISCRIMINATOR,
-				"Discriminator does not match expected value"
-			);
-
 			let deserialized_data: DepositChannelHistoricalFetch =
-				DepositChannelHistoricalFetch::try_from_slice(
-					&bytes[ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH..],
-				)
-				.map_err(|e| anyhow::anyhow!("Failed to deserialize data: {:?}", e))?;
+				DepositChannelHistoricalFetch::check_and_deserialize(&bytes[..])
+					.map_err(|e| anyhow::anyhow!("Failed to deserialize data: {:?}", e))?;
 
 			Ok(deserialized_data.amount)
 		},

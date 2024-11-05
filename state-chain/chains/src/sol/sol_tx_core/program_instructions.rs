@@ -285,9 +285,25 @@ macro_rules! solana_program {
 			),+ $(,)?
 		}
 		$(,
+			types: [
+				$(
+					$type_name:ident {
+						$(
+							$type_arg:ident: $type_arg_type:ty
+						),+
+						$(,)?
+					}
+				),+
+				$(,)?
+			]
+		)?
+		$(,
 			accounts: [
 				$(
-					{ name: $account_type:ty, discriminator: $discriminator:expr }
+					{
+						$account_type:ident,
+						discriminator: $discriminator:expr $(,)?
+					}
 				),+
 				$(,)?
 			]
@@ -343,11 +359,43 @@ macro_rules! solana_program {
 		)+
 
 		$(
-			$(
-				impl AccountExt for $account_type {
-					const DISCRIMINATOR: [u8; 8] = $discriminator;
-				}
-			)+
+			pub mod types {
+				use super::*;
+
+				$(
+					#[derive(BorshDeserialize, BorshSerialize, Debug, Default, Clone, PartialEq, Eq)]
+					pub struct $type_name {
+						$(
+							pub $type_arg: $type_arg_type,
+						)+
+					}
+				)+
+			}
+		)?
+
+		$(
+			pub mod accounts {
+				use super::*;
+				$(
+					impl super::types::$account_type {
+						pub const fn discriminator() -> [u8; 8] {
+							$discriminator
+						}
+
+						pub fn check_and_deserialize(bytes: &[u8]) -> borsh::io::Result<Self> {
+							use borsh::io::{ErrorKind, Error};
+							if bytes.len() < ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH {
+								return Err(Error::new(ErrorKind::Other, "No account discriminator"));
+							}
+							let (discriminator, rest) = bytes.split_at(ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH);
+							if discriminator != Self::discriminator() {
+								return Err(Error::new(ErrorKind::Other, "Unexpected account discriminator"));
+							}
+							Self::try_from_slice(rest)
+						}
+					}
+				)+
+			}
 		)?
 
 		#[cfg(test)]
@@ -381,10 +429,32 @@ macro_rules! solana_program {
 				});
 			}
 
-			// TODO: Complete check for account type
+
 			$(
 				#[test]
-				fn account_exist_in_idl() {
+				fn types_exist_in_idl() {
+					use std::collections::BTreeMap;
+					test(|idl| {
+						$(
+							let ty = idl.types.iter().find(|ty| ty.name == stringify!($type_name)).expect("Type not found in IDL").ty.clone();
+							assert!(ty.kind == "struct", "Non-struct IDL types not supported.");
+							let fields = ty.fields.into_iter().map(|field| (field.name, field.ty)).collect::<BTreeMap<_,_>>();
+							$(
+								assert_eq!(
+									fields.get(stringify!($type_arg)).map(|f| f.to_string()),
+									Some(stringify!($type_arg_type).to_owned()),
+									"Field {} of type {} not found in IDL",
+									stringify!($type_arg),
+									stringify!($type_arg_type),
+								);
+							)+
+						)+
+					});
+				}
+			)?
+			$(
+				#[test]
+				fn accounts_exist_in_idl() {
 					test(|idl| {
 						let defined_in_idl = idl.accounts.iter().map(|acc| acc.name.clone()).collect::<BTreeSet<_>>();
 						let defined_in_code = [
@@ -392,10 +462,14 @@ macro_rules! solana_program {
 								stringify!($account_type).to_owned(),
 							)+
 						].into_iter().collect::<BTreeSet<_>>();
-						assert!(defined_in_code.is_subset(&defined_in_idl), "Some accounts are not defined in the IDL: {:?}", defined_in_code.difference(&defined_in_idl).cloned().collect::<Vec<_>>());
+						assert!(
+							defined_in_code.is_subset(&defined_in_idl),
+							"Some accounts are not defined in the IDL: {:?}",
+							defined_in_code.difference(&defined_in_idl).cloned().collect::<Vec<_>>()
+						);
 						$(
 							assert_eq!(
-								<$account_type as AccountExt>::DISCRIMINATOR,
+								types::$account_type::discriminator(),
 								idl.accounts.iter().find(|acc| acc.name == stringify!($account_type)).unwrap().discriminator
 							);
 						)+
@@ -665,54 +739,23 @@ solana_program!(
 			]
 		},
 	},
+	types: [
+		DepositChannelHistoricalFetch {
+			amount: u128,
+		}
+	],
 	accounts: [
-		{ name: DepositChannelHistoricalFetch, discriminator: FETCH_ACCOUNT_DISCRIMINATOR },
+		{
+			DepositChannelHistoricalFetch,
+			discriminator: [188, 68, 197, 38, 48, 192, 81, 100],
+		},
 	]
 );
 
-pub const ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH: usize = 8;
-
-pub const SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
-	[79, 152, 191, 225, 128, 108, 11, 139];
-#[derive(BorshDeserialize, BorshSerialize, Debug)]
-pub struct SwapEndpointDataAccount {
-	pub historical_number_event_accounts: u128,
-	pub open_event_accounts: Vec<Pubkey>,
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
-pub struct CcmParams {
-	pub message: Vec<u8>,
-	pub gas_amount: u64,
-}
-
-pub const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
-	[150, 251, 114, 94, 200, 113, 248, 70];
-
-#[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
-pub struct SwapEvent {
-	pub creation_slot: u64,
-	pub sender: Pubkey,
-	pub dst_chain: u32,
-	pub dst_address: Vec<u8>,
-	pub dst_token: u32,
-	pub amount: u64,
-	pub src_token: Option<Pubkey>,
-	pub ccm_parameters: Option<CcmParams>,
-	pub cf_parameters: Vec<u8>,
-}
-
 pub const FETCH_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
-	[188, 68, 197, 38, 48, 192, 81, 100];
+	types::DepositChannelHistoricalFetch::discriminator();
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
-pub struct DepositChannelHistoricalFetch {
-	pub amount: u128,
-}
-
-pub trait AccountExt {
-	const DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH];
-}
+pub const ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH: usize = 8;
 
 pub mod swap_endpoints {
 	use super::*;
@@ -733,11 +776,43 @@ pub mod swap_endpoints {
 				]
 			}
 		},
+		types: [
+			CcmParams {
+				message: Vec<u8>,
+				gas_amount: u64,
+			},
+			SwapEvent {
+				creation_slot: u64,
+				sender: Pubkey,
+				dst_chain: u32,
+				dst_address: Vec<u8>,
+				dst_token: u32,
+				amount: u64,
+				src_token: Option<Pubkey>,
+				ccm_parameters: Option<CcmParams>,
+				cf_parameters: Vec<u8>,
+			},
+			SwapEndpointDataAccount {
+				historical_number_event_accounts: u128,
+				open_event_accounts: Vec<Pubkey>,
+			},
+		],
 		accounts: [
-			{ name: SwapEvent, discriminator: SWAP_EVENT_ACCOUNT_DISCRIMINATOR },
-			{ name: SwapEndpointDataAccount, discriminator: SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR },
+			{
+				SwapEvent,
+				discriminator: [150, 251, 114, 94, 200, 113, 248, 70],
+			},
+			{
+				SwapEndpointDataAccount,
+				discriminator: [79, 152, 191, 225, 128, 108, 11, 139],
+			},
 		]
 	);
+
+	pub const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
+		types::SwapEvent::discriminator();
+	pub const SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
+		types::SwapEndpointDataAccount::discriminator();
 }
 
 #[cfg(test)]
