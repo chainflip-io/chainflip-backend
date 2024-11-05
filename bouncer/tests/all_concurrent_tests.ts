@@ -14,6 +14,7 @@ import { testCancelOrdersBatch } from './create_and_delete_multiple_orders';
 import { testAllSwaps } from './all_swaps';
 import { depositChannelCreation } from './request_swap_deposit_address_with_affiliates';
 import { testDCASwaps } from './DCA_test';
+import { testBrokerLevelScreening } from './broker_level_screening';
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.
@@ -21,6 +22,8 @@ async function runAllConcurrentTests() {
   const match = process.argv[2] ? process.argv[2].match(/\d+/) : null;
   const givenNumberOfNodes = match ? parseInt(match[0]) : null;
   const numberOfNodes = givenNumberOfNodes ?? 1;
+  // If the third argument is not explicitly false, we assume it's true and we are in a localnet environment.
+  const addConcurrentLocalNetTests = process.argv[3] !== 'false';
 
   const broadcastAborted = observeBadEvent(':BroadcastAborted', {
     label: 'Concurrent broadcast aborted',
@@ -50,6 +53,12 @@ async function runAllConcurrentTests() {
     console.log(`Also running multi-node tests (${numberOfNodes} nodes)`);
     const multiNodeTests = [testPolkadotRuntimeUpdate.run()];
     tests.push(...multiNodeTests);
+  }
+
+  // Tests that only work with localnet but can be run concurrent.
+  if (addConcurrentLocalNetTests) {
+    const localnetTests = [testBrokerLevelScreening.run()];
+    tests.push(...localnetTests);
   }
 
   await Promise.all(tests);
