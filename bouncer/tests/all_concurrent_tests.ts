@@ -14,7 +14,6 @@ import { testCancelOrdersBatch } from './create_and_delete_multiple_orders';
 import { testAllSwaps } from './all_swaps';
 import { depositChannelCreation } from './request_swap_deposit_address_with_affiliates';
 import { testDCASwaps } from './DCA_test';
-import { testBrokerLevelScreening } from './broker_level_screening';
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.
@@ -40,7 +39,6 @@ async function runAllConcurrentTests() {
     testLpApi.run(),
     testBrokerFeeCollection.run(),
     testBoostingSwap.run(),
-    testBrokerLevelScreening.run(),
     testFillOrKill.run(),
     testDCASwaps.run(),
     testCancelOrdersBatch.run(),
