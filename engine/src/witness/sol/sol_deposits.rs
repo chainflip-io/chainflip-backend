@@ -1,7 +1,12 @@
 use anyhow::ensure;
 use base64::Engine;
 use cf_chains::sol::{
-	sol_tx_core::address_derivation::{derive_associated_token_account, derive_fetch_account},
+	sol_tx_core::{
+		address_derivation::{derive_associated_token_account, derive_fetch_account},
+		program_instructions::{
+			types::DepositChannelHistoricalFetch, ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
+		},
+	},
 	SolAddress, SolAmount,
 };
 use cf_primitives::chains::assets::sol::Asset;
@@ -25,9 +30,8 @@ use crate::sol::{
 pub use sol_prim::consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID};
 
 // 16 (u128) + 8 (discriminator)
-const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
+const FETCH_ACCOUNT_BYTE_LENGTH: usize = 16 + ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
-const FETCH_ACCOUNT_DISCRIMINATOR: [u8; 8] = [188, 68, 197, 38, 48, 192, 81, 100];
 const MAXIMUM_CONCURRENT_RPCS: usize = 16;
 
 /// We track Solana (Sol and SPL-token) deposits by periodically querying the
@@ -270,22 +274,17 @@ fn parse_fetch_account_amount(
 				return Err(anyhow::anyhow!("Data account encoding is not base64"));
 			}
 
-			let mut bytes = base64::engine::general_purpose::STANDARD
+			let bytes = base64::engine::general_purpose::STANDARD
 				.decode(base64_string)
 				.expect("Failed to decode base64 string");
 
 			ensure!(bytes.len() == FETCH_ACCOUNT_BYTE_LENGTH);
 
-			let discriminator: Vec<u8> = bytes.drain(..8).collect();
+			let deserialized_data: DepositChannelHistoricalFetch =
+				DepositChannelHistoricalFetch::check_and_deserialize(&bytes[..])
+					.map_err(|e| anyhow::anyhow!("Failed to deserialize data: {:?}", e))?;
 
-			ensure!(
-				discriminator == FETCH_ACCOUNT_DISCRIMINATOR,
-				"Discriminator does not match expected value"
-			);
-
-			let array: [u8; 16] = bytes.try_into().expect("Byte slice length doesn't match u128");
-
-			Ok(u128::from_le_bytes(array))
+			Ok(deserialized_data.amount)
 		},
 		_ => Err(anyhow::anyhow!("Data account encoding is not base64")),
 	}

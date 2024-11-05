@@ -1,6 +1,6 @@
 use super::{AccountMeta, Instruction, Pubkey};
 
-use borsh::BorshSerialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 use cf_utilities::SliceToArray;
 use core::str::FromStr;
 use scale_info::prelude::string::String;
@@ -284,6 +284,30 @@ macro_rules! solana_program {
 				}
 			),+ $(,)?
 		}
+		$(,
+			types: [
+				$(
+					$type_name:ident {
+						$(
+							$type_arg:ident: $type_arg_type:ty
+						),+
+						$(,)?
+					}
+				),+
+				$(,)?
+			]
+		)?
+		$(,
+			accounts: [
+				$(
+					{
+						$account_type:ident,
+						discriminator: $discriminator:expr $(,)?
+					}
+				),+
+				$(,)?
+			]
+		)?
 	) => {
 		pub struct $program {
 			program_id: Pubkey,
@@ -334,6 +358,46 @@ macro_rules! solana_program {
 			}
 		)+
 
+		$(
+			pub mod types {
+				use super::*;
+
+				$(
+					#[derive(BorshDeserialize, BorshSerialize, Debug, Default, Clone, PartialEq, Eq)]
+					pub struct $type_name {
+						$(
+							pub $type_arg: $type_arg_type,
+						)+
+					}
+				)+
+			}
+		)?
+
+		$(
+			pub mod accounts {
+				use super::*;
+				$(
+					impl super::types::$account_type {
+						pub const fn discriminator() -> [u8; 8] {
+							$discriminator
+						}
+
+						pub fn check_and_deserialize(bytes: &[u8]) -> borsh::io::Result<Self> {
+							use borsh::io::{ErrorKind, Error};
+							if bytes.len() < ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH {
+								return Err(Error::new(ErrorKind::Other, "No account discriminator"));
+							}
+							let (discriminator, rest) = bytes.split_at(ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH);
+							if discriminator != Self::discriminator() {
+								return Err(Error::new(ErrorKind::Other, "Unexpected account discriminator"));
+							}
+							Self::try_from_slice(rest)
+						}
+					}
+				)+
+			}
+		)?
+
 		#[cfg(test)]
 		mod test {
 			use super::*;
@@ -364,6 +428,54 @@ macro_rules! solana_program {
 					assert!(defined_in_code.is_subset(&defined_in_idl), "Some instructions are not defined in the IDL");
 				});
 			}
+
+
+			$(
+				#[test]
+				fn types_exist_in_idl() {
+					use std::collections::BTreeMap;
+					test(|idl| {
+						$(
+							let ty = idl.types.iter().find(|ty| ty.name == stringify!($type_name)).expect("Type not found in IDL").ty.clone();
+							assert!(ty.kind == "struct", "Non-struct IDL types not supported.");
+							let fields = ty.fields.into_iter().map(|field| (field.name, field.ty)).collect::<BTreeMap<_,_>>();
+							$(
+								assert_eq!(
+									fields.get(stringify!($type_arg)).map(|f| f.to_string()),
+									Some(stringify!($type_arg_type).to_owned()),
+									"Field {} of type {} not found in IDL",
+									stringify!($type_arg),
+									stringify!($type_arg_type),
+								);
+							)+
+						)+
+					});
+				}
+			)?
+			$(
+				#[test]
+				fn accounts_exist_in_idl() {
+					test(|idl| {
+						let defined_in_idl = idl.accounts.iter().map(|acc| acc.name.clone()).collect::<BTreeSet<_>>();
+						let defined_in_code = [
+							$(
+								stringify!($account_type).to_owned(),
+							)+
+						].into_iter().collect::<BTreeSet<_>>();
+						assert!(
+							defined_in_code.is_subset(&defined_in_idl),
+							"Some accounts are not defined in the IDL: {:?}",
+							defined_in_code.difference(&defined_in_idl).cloned().collect::<Vec<_>>()
+						);
+						$(
+							assert_eq!(
+								types::$account_type::discriminator(),
+								idl.accounts.iter().find(|acc| acc.name == stringify!($account_type)).unwrap().discriminator
+							);
+						)+
+					});
+				}
+			)?
 
 			$(
 				#[cfg(test)]
@@ -626,8 +738,24 @@ solana_program!(
 				bpf_loader_upgradeable: { signer: false, writable: false },
 			]
 		},
-	}
+	},
+	types: [
+		DepositChannelHistoricalFetch {
+			amount: u128,
+		}
+	],
+	accounts: [
+		{
+			DepositChannelHistoricalFetch,
+			discriminator: [188, 68, 197, 38, 48, 192, 81, 100],
+		},
+	]
 );
+
+pub const FETCH_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
+	types::DepositChannelHistoricalFetch::discriminator();
+
+pub const ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH: usize = 8;
 
 pub mod swap_endpoints {
 	use super::*;
@@ -646,9 +774,45 @@ pub mod swap_endpoints {
 					agg_key: { signer: true, writable: true },
 					swap_endpoint_data_account: { signer: false, writable: true },
 				]
+			}
+		},
+		types: [
+			CcmParams {
+				message: Vec<u8>,
+				gas_amount: u64,
 			},
-		}
+			SwapEvent {
+				creation_slot: u64,
+				sender: Pubkey,
+				dst_chain: u32,
+				dst_address: Vec<u8>,
+				dst_token: u32,
+				amount: u64,
+				src_token: Option<Pubkey>,
+				ccm_parameters: Option<CcmParams>,
+				cf_parameters: Vec<u8>,
+			},
+			SwapEndpointDataAccount {
+				historical_number_event_accounts: u128,
+				open_event_accounts: Vec<Pubkey>,
+			},
+		],
+		accounts: [
+			{
+				SwapEvent,
+				discriminator: [150, 251, 114, 94, 200, 113, 248, 70],
+			},
+			{
+				SwapEndpointDataAccount,
+				discriminator: [79, 152, 191, 225, 128, 108, 11, 139],
+			},
+		]
 	);
+
+	pub const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
+		types::SwapEvent::discriminator();
+	pub const SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
+		types::SwapEndpointDataAccount::discriminator();
 }
 
 #[cfg(test)]
@@ -668,35 +832,39 @@ mod idl {
 	pub struct IdlArg {
 		pub name: String,
 		#[serde(rename = "type")]
-		pub ty: IdlType,
+		pub ty: IdlFieldType,
 	}
 
 	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 	#[serde(rename_all = "camelCase")]
-	pub enum IdlType {
+	pub enum IdlFieldType {
 		Bytes,
 		U8,
 		U16,
 		U64,
 		U32,
+		U128,
 		Bool,
 		Pubkey,
 		Defined { name: String },
-		Option(Box<IdlType>),
+		Option(Box<IdlFieldType>),
+		Vec(Box<IdlFieldType>),
 	}
 
-	impl std::fmt::Display for IdlType {
+	impl std::fmt::Display for IdlFieldType {
 		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 			match self {
-				IdlType::Bytes => write!(f, "Vec<u8>"),
-				IdlType::U8 => write!(f, "u8"),
-				IdlType::U16 => write!(f, "u16"),
-				IdlType::U64 => write!(f, "u64"),
-				IdlType::U32 => write!(f, "u32"),
-				IdlType::Bool => write!(f, "bool"),
-				IdlType::Pubkey => write!(f, "Pubkey"),
-				IdlType::Defined { name } => write!(f, "{}", name),
-				IdlType::Option(ty) => write!(f, "Option<{}>", ty),
+				IdlFieldType::Bytes => write!(f, "Vec<u8>"),
+				IdlFieldType::U8 => write!(f, "u8"),
+				IdlFieldType::U16 => write!(f, "u16"),
+				IdlFieldType::U64 => write!(f, "u64"),
+				IdlFieldType::U32 => write!(f, "u32"),
+				IdlFieldType::U128 => write!(f, "u128"),
+				IdlFieldType::Bool => write!(f, "bool"),
+				IdlFieldType::Pubkey => write!(f, "Pubkey"),
+				IdlFieldType::Defined { name } => write!(f, "{}", name),
+				IdlFieldType::Option(ty) => write!(f, "Option<{}>", ty),
+				IdlFieldType::Vec(ty) => write!(f, "Vec<{}>", ty),
 			}
 		}
 	}
@@ -728,11 +896,35 @@ mod idl {
 	}
 
 	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub struct IdlAccount {
+		pub name: String,
+		pub discriminator: [u8; 8],
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub struct IdlType {
+		pub kind: String,
+		pub fields: Vec<IdlArg>,
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+	#[serde(rename_all = "camelCase")]
+	pub struct IdlTypes {
+		pub name: String,
+		#[serde(rename = "type")]
+		pub ty: IdlType,
+	}
+
+	#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 	pub struct Idl {
 		pub address: String,
 		pub metadata: IdlMetadata,
 		pub instructions: Vec<IdlInstruction>,
 		pub errors: Vec<IdlError>,
+		pub accounts: Vec<IdlAccount>,
+		pub types: Vec<IdlTypes>,
 	}
 
 	impl Idl {
@@ -741,6 +933,12 @@ mod idl {
 				.iter()
 				.find(|instr| instr.name == name)
 				.expect("instruction not found")
+		}
+		pub fn account(&self, name: &str) -> &IdlAccount {
+			self.accounts
+				.iter()
+				.find(|account| account.name == name)
+				.expect("account not found")
 		}
 	}
 }

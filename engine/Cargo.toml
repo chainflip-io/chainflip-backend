@@ -20,11 +20,6 @@ async-channel = { workspace = true }
 async-trait = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true, features = ["serde"] }
-borsh = { workspace = true, default_features = false, features = [
-  "derive",
-  "unstable__schema",
-  "hashbrown",
-] }
 chrono = { workspace = true, features = ["clock"] }
 clap = { workspace = true, features = ["derive", "env"] }
 config = { workspace = true }
