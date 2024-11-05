@@ -167,17 +167,13 @@ async fn get_changed_program_swap_accounts(
 			.expect("Failed to get the event accounts");
 
 	let sc_opened_accounts_hashset: HashSet<_> = sc_opened_accounts.iter().collect();
-	let sc_closure_initiated_accounts_hashset = sc_closure_initiated_accounts
-		.iter()
-		.map(|VaultSwapAccountAndSender { vault_swap_account, .. }| vault_swap_account)
-		.collect::<HashSet<_>>();
 
 	let mut new_program_swap_accounts = Vec::new();
 	let mut closed_accounts = Vec::new();
 
 	for account in &open_event_accounts {
 		if !sc_opened_accounts_hashset.contains(account) &&
-			!sc_closure_initiated_accounts_hashset.contains(account)
+			!sc_closure_initiated_accounts.iter().any(|x| &x.vault_swap_account == account)
 		{
 			new_program_swap_accounts.push(*account);
 		}
