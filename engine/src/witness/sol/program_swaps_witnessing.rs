@@ -84,7 +84,7 @@ pub async fn get_program_swaps(
 										(None, vault_swap_parameters)
 									},
 									Some(ccm_parameters) => {
-										let CfParameters { ccm_additional_data, vault_swap_parameters } =
+										let CcmCfParameters { ccm_additional_data, vault_swap_parameters } =
 											CcmCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding CcmCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
 
 										let deposit_metadata = Some(CcmDepositMetadata {
