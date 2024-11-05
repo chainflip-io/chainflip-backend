@@ -7,29 +7,30 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	primitives::{
-		state_chain_runtime::runtime_apis::TaintedBtcTransactionEvent, AccountRole, Affiliates,
-		Asset, BasisPoints, CcmChannelMetadata, DcaParameters,
+		state_chain_runtime::runtime_apis::{ChainAccounts, TaintedTransactionEvents},
+		AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters,
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, BrokerApi, DepositMonitorApi, OperatorApi,
 	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, SwapPayload,
-	WithdrawFeesDetail,
+	TransactionInId, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
-use futures::{FutureExt, TryStreamExt};
+use futures::{FutureExt, StreamExt};
 use jsonrpsee::{
-	core::{async_trait, ClientError},
+	core::{async_trait, ClientError, SubscriptionResult},
 	proc_macros::rpc,
 	server::ServerBuilder,
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
 	PendingSubscriptionSink,
 };
+use serde::{Deserialize, Serialize};
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
 };
-use tracing::{event, log, Level};
+use tracing::log;
 
 #[derive(thiserror::Error, Debug)]
 pub enum BrokerApiError {
@@ -65,6 +66,12 @@ impl From<BrokerApiError> for ErrorObjectOwned {
 			),
 		}
 	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum GetOpenDepositChannelsQuery {
+	All,
+	Mine,
 }
 
 #[rpc(server, client, namespace = "broker")]
@@ -107,16 +114,17 @@ pub trait Rpc {
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapPayload>;
 
-	#[method(name = "mark_btc_transaction_as_tainted", aliases = ["broker_markBtcTransactionAsTainted"])]
-	async fn mark_btc_transaction_as_tainted(&self, tx_id: cf_chains::btc::Hash) -> RpcResult<()>;
+	#[method(name = "mark_transaction_as_tainted", aliases = ["broker_markTransactionAsTainted"])]
+	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> RpcResult<()>;
 
-	#[method(name = "open_btc_deposit_channels", aliases = ["broker_openBtcDepositChannels"])]
-	async fn open_btc_deposit_channels(
+	#[method(name = "get_open_deposit_channels", aliases = ["broker_getOpenDepositChannels"])]
+	async fn get_open_deposit_channels(
 		&self,
-	) -> RpcResult<Vec<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>>;
+		query: GetOpenDepositChannelsQuery,
+	) -> RpcResult<ChainAccounts>;
 
-	#[subscription(name = "subscribe_tainted_btc_transaction_events", item = Result<BlockUpdate<Vec<TaintedBtcTransactionEvent>>,String>)]
-	async fn subscribe_tainted_btc_transaction_events(&self);
+	#[subscription(name = "subscribe_tainted_transaction_events", item = BlockUpdate<TaintedTransactionEvents>)]
+	async fn subscribe_tainted_transaction_events(&self) -> SubscriptionResult;
 }
 
 pub struct RpcServerImpl {
@@ -212,54 +220,60 @@ impl RpcServer for RpcServerImpl {
 			.await?)
 	}
 
-	async fn mark_btc_transaction_as_tainted(&self, tx_id: cf_chains::btc::Hash) -> RpcResult<()> {
+	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> RpcResult<()> {
 		self.api
 			.deposit_monitor_api()
-			.mark_btc_transaction_as_tainted(tx_id)
+			.mark_transaction_as_tainted(tx_id)
 			.await
-			.map_err(BrokerApiError::Other)
+			.map_err(BrokerApiError::Other)?;
+		Ok(())
 	}
 
-	async fn open_btc_deposit_channels(
+	async fn get_open_deposit_channels(
 		&self,
-	) -> RpcResult<Vec<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>> {
-		let account_id = self.api.state_chain_client.account_id();
+		query: GetOpenDepositChannelsQuery,
+	) -> RpcResult<ChainAccounts> {
+		let account_id = match query {
+			GetOpenDepositChannelsQuery::All => None,
+			GetOpenDepositChannelsQuery::Mine => Some(self.api.state_chain_client.account_id()),
+		};
 
 		self.api
 			.state_chain_client
 			.base_rpc_client
 			.raw_rpc_client
-			.cf_open_btc_deposit_channels(account_id, None)
+			.cf_get_open_deposit_channels(account_id, None)
 			.await
 			.map_err(BrokerApiError::ClientError)
 	}
 
-	async fn subscribe_tainted_btc_transaction_events(
+	async fn subscribe_tainted_transaction_events(
 		&self,
 		pending_sink: PendingSubscriptionSink,
-	) {
-		let result = self
+	) -> SubscriptionResult {
+		let subscription_stream = self
 			.api
 			.state_chain_client
 			.base_rpc_client
 			.raw_rpc_client
-			.cf_subscribe_tainted_btc_transaction_events()
-			.await;
+			.cf_subscribe_tainted_transaction_events()
+			.await?
+			.take_while(|item| {
+				futures::future::ready(
+					item.as_ref()
+						.inspect_err(|err| {
+							tracing::error!("Subscription error, could not deserialize message: {err}. Closing subscription.")
+						})
+						.is_ok(),
+				)
+			})
+			.map(Result::unwrap);
 
-		match result {
-			Ok(subscription) => {
-				tokio::spawn(async {
-					sc_rpc::utils::pipe_from_stream(
-						pending_sink,
-						subscription.map_err(|err| format!("{err}")),
-					)
-					.await
-				});
-			},
-			Err(err) => {
-				event!(Level::ERROR, "Could not subscribe to `tainted_btc_transaction_events` subscription on the node. Error: {err}");
-			},
-		}
+		tokio::spawn(async {
+			sc_rpc::utils::pipe_from_stream(pending_sink, subscription_stream).await
+		});
+
+		Ok(())
 	}
 }
 

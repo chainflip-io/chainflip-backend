@@ -28,7 +28,8 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TaintedTransactionEvents,
+		ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -71,8 +72,9 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
+use runtime_apis::ChainAccounts;
 
-use crate::{chainflip::EvmLimit, runtime_apis::TaintedBtcTransactionEvent};
+use crate::{chainflip::EvmLimit, runtime_apis::TaintedTransactionEvent};
 
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::SwapLegInfo;
@@ -2101,36 +2103,43 @@ impl_runtime_apis! {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
 		}
 
-		fn cf_open_btc_deposit_channels(account_id: AccountId) -> Result<Vec<<cf_chains::Bitcoin as cf_chains::Chain>::ChainAccount>, DispatchErrorWithMessage> {
-			Ok(pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter()
+		fn cf_get_open_deposit_channels(account_id: Option<AccountId>) -> ChainAccounts {
+			let btc_chain_accounts = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter()
 				.map(|(_, value)| value)
-				.filter(|channel_details| channel_details.owner == account_id)
+				.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id.as_ref())
 				.filter(|channel_details| match channel_details.action {
 					ChannelAction::Swap {..} => true,
 					ChannelAction::CcmTransfer {..} => true,
 					ChannelAction::LiquidityProvision {..} => false,
 				})
 				.map(|channel_details| channel_details.deposit_channel.address)
-				.collect())
+				.collect::<Vec<_>>();
+
+			ChainAccounts {
+				btc_chain_accounts
+			}
 		}
 
-		fn cf_tainted_btc_transaction_events() -> Vec<crate::runtime_apis::TaintedBtcTransactionEvent> {
-
-			System::read_events_no_consensus().filter_map(|event_record| {
+		fn cf_tainted_transaction_events() -> crate::runtime_apis::TaintedTransactionEvents {
+			let btc_events = System::read_events_no_consensus().filter_map(|event_record| {
 				if let RuntimeEvent::BitcoinIngressEgress(btc_ie_event) = event_record.event {
 					match btc_ie_event {
 						pallet_cf_ingress_egress::Event::TaintedTransactionReportExpired{ account_id, tx_id } =>
-							Some(TaintedBtcTransactionEvent::TaintedTransactionReportExpired{ account_id, tx_id }),
+							Some(TaintedTransactionEvent::TaintedTransactionReportExpired{ account_id, tx_id }),
 						pallet_cf_ingress_egress::Event::TaintedTransactionReportReceived{ account_id, tx_id, expires_at: _ } =>
-							Some(TaintedBtcTransactionEvent::TaintedTransactionReportReceived{account_id, tx_id }),
+							Some(TaintedTransactionEvent::TaintedTransactionReportReceived{account_id, tx_id }),
 						pallet_cf_ingress_egress::Event::TaintedTransactionRejected{ broadcast_id, tx_id } =>
-							Some(TaintedBtcTransactionEvent::TaintedTransactionRejected{ broadcast_id, tx_id: tx_id.id.tx_id }),
+							Some(TaintedTransactionEvent::TaintedTransactionRejected{ broadcast_id, tx_id: tx_id.id.tx_id }),
 						_ => None,
 					}
 				} else {
 					None
 				}
-			}).collect()
+			}).collect();
+
+			TaintedTransactionEvents {
+				btc_events
+			}
 		}
 	}
 
