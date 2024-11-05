@@ -964,6 +964,12 @@ pub trait CustomApi {
 
 	#[subscription(name = "subscribe_tainted_transaction_events", item = BlockUpdate<TaintedTransactionEvents>)]
 	async fn cf_subscribe_tainted_transaction_events(&self);
+
+	#[method(name = "get_tainted_transaction_events")]
+	fn cf_get_tainted_transaction_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<TaintedTransactionEvents>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1766,6 +1772,13 @@ where
 			|client, hash| Ok(client.runtime_api().cf_tainted_transaction_events(hash)?),
 		)
 		.await
+	}
+
+	fn cf_get_tainted_transaction_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<TaintedTransactionEvents> {
+		self.with_runtime_api(at, |api, hash| api.cf_tainted_transaction_events(hash))
 	}
 }
 
