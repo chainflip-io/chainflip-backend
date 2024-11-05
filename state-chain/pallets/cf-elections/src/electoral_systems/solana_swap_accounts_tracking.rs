@@ -168,8 +168,8 @@ impl<
 				election_access.delete();
 				known_accounts.witnessed_open_accounts.extend(consensus.new_accounts.iter().map(
 					|(account, swap_details)| {
-						Hook::initiate_vault_swap((*swap_details).clone());
-						(*account).clone()
+						Hook::initiate_vault_swap(swap_details.clone());
+						account.clone()
 					},
 				));
 				consensus.confirm_closed_accounts.into_iter().for_each(|acc| {
@@ -199,7 +199,7 @@ impl<
 						},
 						Err(e) => {
 							log::error!(
-								"failed to close accounts: {:?}",
+								"Failed to initiate account closure: {:?}",
 								e
 							);
 							known_accounts.witnessed_open_accounts.extend(accounts_to_close);
