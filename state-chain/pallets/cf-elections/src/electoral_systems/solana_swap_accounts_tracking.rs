@@ -185,16 +185,13 @@ impl<
 							.expect("current block number is always greater than when apicall was last created")
 							.into() >= MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS)
 				{
-					let accounts_to_close: Vec<_> = if known_accounts.witnessed_open_accounts.len() >
+					let accounts_to_close: Vec<_> = known_accounts
+					.witnessed_open_accounts
+					.drain(..sp_std::cmp::min(
+						known_accounts.witnessed_open_accounts.len(),
 						MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES
-					{
-						known_accounts
-							.witnessed_open_accounts
-							.drain(..MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES)
-							.collect()
-					} else {
-						sp_std::mem::take(&mut known_accounts.witnessed_open_accounts)
-					};
+					))
+					.collect();
 					match Hook::close_accounts(accounts_to_close.clone()) {
 						Ok(()) => {
 							known_accounts.closure_initiated_accounts.extend(accounts_to_close);
@@ -202,7 +199,7 @@ impl<
 						},
 						Err(e) => {
 							log::error!(
-								"failed to build Solana CloseSolanaVaultSwapAccounts apicall: {:?}",
+								"failed to close accounts: {:?}",
 								e
 							);
 							known_accounts.witnessed_open_accounts.extend(accounts_to_close);
