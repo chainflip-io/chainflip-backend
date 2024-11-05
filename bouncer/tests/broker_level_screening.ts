@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto';
 import { execSync } from 'child_process';
+import { InternalAsset } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
 import { sendBtcAndReturnTxId } from '../shared/send_btc';
 import {
@@ -42,9 +43,21 @@ async function observeBtcAddressBalanceChange(address: string): Promise<boolean>
 }
 
 /**
+ * Generates a new address for an asset.
+ *
+ * @param asset - The asset to generate an address for.
+ * @param seed - The seed to generate the address with. If no seed is provided, a random one is generated.
+ * @returns - The new address.
+ */
+async function newAssetAddress(asset: InternalAsset, seed = null): Promise<string> {
+  return Promise.resolve(newAddress(asset, seed || randomBytes(32).toString('hex')));
+}
+
+/**
  * Submits a transaction as tainted to the extrinsic on the state chain.
  *
- * @param txId - The txId to submit as tainted as byte array in the correct order.
+ * @param txId - The txId to submit as tainted as byte array in the order it is on the Bitcoin chain - which
+ * is reverse of how it's normally displayed in block explorers.
  */
 async function submitTxAsTainted(txId: number[]) {
   await using chainflip = await getChainflipApi();
@@ -92,7 +105,7 @@ async function brokerLevelScreeningTestScenario(
   stopBlockProductionFor = 0,
   waitBeforeReport = 0,
 ): Promise<string> {
-  const destinationAddressForUsdc = await newAddress('Usdc', randomBytes(32).toString('hex'));
+  const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const refundParameters: FillOrKillParamsX128 = {
     retryDurationBlocks: 0,
     refundAddress,
@@ -102,7 +115,7 @@ async function brokerLevelScreeningTestScenario(
     'Btc',
     'Usdc',
     destinationAddressForUsdc,
-    'test',
+    'brokerLevelScreeningTest',
     undefined,
     0,
     true,
@@ -138,7 +151,7 @@ async function main() {
 
   // 1. -- Test no boost and early tx report --
   testBrokerLevelScreening.log('Testing broker level screening with no boost...');
-  let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
+  let btcRefundAddress = await newAssetAddress('Btc');
 
   await brokerLevelScreeningTestScenario(
     '0.2',
@@ -158,7 +171,7 @@ async function main() {
   testBrokerLevelScreening.log(
     'Testing broker level screening with boost and a early tx report...',
   );
-  btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
+  btcRefundAddress = await newAssetAddress('Btc');
 
   await brokerLevelScreeningTestScenario(
     '0.2',
@@ -174,16 +187,16 @@ async function main() {
   testBrokerLevelScreening.log(`Tainted transaction was rejected and refunded 👍.`);
 
   // 3. -- Test boost and late tx report --
-  // Note: We expect the swap to be executed and not refunded because the tainted tx was to late reported.
+  // Note: We expect the swap to be executed and not refunded because the tainted tx was reported too late.
   testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
-  btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
+  btcRefundAddress = await newAssetAddress('Btc');
 
   const channelId = await brokerLevelScreeningTestScenario(
     '0.2',
     true,
     btcRefundAddress,
     0,
-    MILLI_SECS_PER_BLOCK * 2,
+    MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT,
   );
 
   await observeEvent('bitcoinIngressEgress:DepositFinalised', {

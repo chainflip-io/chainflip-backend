@@ -27,7 +27,7 @@ export async function sendBtcAndReturnTxId(
     if (confirmations < 1) {
       await sleep(1000);
     } else {
-      return Promise.resolve(txId);
+      break;
     }
   }
   return Promise.resolve(txId);
