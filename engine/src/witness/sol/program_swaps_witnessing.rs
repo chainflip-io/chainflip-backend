@@ -76,7 +76,7 @@ pub async fn get_program_swaps(
 				|(account, program_swap_account_data)| match program_swap_account_data {
 					Some(data)
 						if (data.src_token.is_none() ||
-							data.src_token.is_some_and(|addr| addr == usdc_token_mint_pubkey.0)) => {
+							data.src_token.is_some_and(|addr| addr == usdc_token_mint_pubkey.into())) => {
 
 								let (deposit_metadata, vault_swap_parameters) = match data.ccm_parameters {
 									None => {
@@ -225,7 +225,7 @@ async fn get_swap_endpoint_data(
 			if encoding != UiAccountEncoding::Base64 {
 				return Err(anyhow!("Data account encoding is not base64"));
 			}
-			let bytes = base64::engine::general_purpose::STANDARD
+			let mut bytes = base64::engine::general_purpose::STANDARD
 				.decode(base64_string)
 				.expect("Failed to decode base64 string");
 
@@ -234,19 +234,26 @@ async fn get_swap_endpoint_data(
 				return Err(anyhow!("Expected account to have at least 28 bytes"));
 			}
 
+			let discriminator: Vec<u8> =
+				bytes.drain(..ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH).collect();
+
+			ensure!(
+				discriminator == SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR,
+				"Discriminator does not match. Found: {:?}",
+				discriminator
+			);
+
 			let deserialized_data: SwapEndpointDataAccount =
 				SwapEndpointDataAccount::try_from_slice(&bytes)
 					.map_err(|e| anyhow!("Failed to deserialize data: {:?}", e))?;
 
-			ensure!(
-				deserialized_data.discriminator == SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR,
-				"Discriminator does not match. Found: {:?}",
-				deserialized_data.discriminator
-			);
-
 			Ok((
 				deserialized_data.historical_number_event_accounts,
-				deserialized_data.open_event_accounts.into_iter().map(SolAddress).collect(),
+				deserialized_data
+					.open_event_accounts
+					.into_iter()
+					.map(|acc| acc.into())
+					.collect(),
 				slot,
 			))
 		},
@@ -289,7 +296,7 @@ async fn get_program_swap_event_accounts_data(
 				if encoding != UiAccountEncoding::Base64 {
 					return Err(anyhow!("Data account encoding is not base64"));
 				}
-				let bytes = base64::engine::general_purpose::STANDARD
+				let mut bytes = base64::engine::general_purpose::STANDARD
 					.decode(base64_string)
 					.expect("Failed to decode base64 string");
 
@@ -297,14 +304,17 @@ async fn get_program_swap_event_accounts_data(
 					return Err(anyhow!("Expected account to have at least 8 bytes"));
 				}
 
-				let deserialized_data: SwapEvent = SwapEvent::try_from_slice(&bytes)
-					.map_err(|e| anyhow!("Failed to deserialize data: {:?}", e))?;
+				let discriminator: Vec<u8> =
+					bytes.drain(..ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH).collect();
 
 				ensure!(
-					deserialized_data.discriminator == SWAP_EVENT_ACCOUNT_DISCRIMINATOR,
+					discriminator == SWAP_EVENT_ACCOUNT_DISCRIMINATOR,
 					"Discriminator does not match. Found: {:?}",
-					deserialized_data.discriminator
+					discriminator
 				);
+
+				let deserialized_data: SwapEvent = SwapEvent::try_from_slice(&bytes)
+					.map_err(|e| anyhow!("Failed to deserialize data: {:?}", e))?;
 
 				Ok((account, Some(deserialized_data)))
 			},

@@ -1,9 +1,13 @@
 use anyhow::ensure;
 use base64::Engine;
+use borsh::BorshDeserialize;
 use cf_chains::sol::{
 	sol_tx_core::{
 		address_derivation::{derive_associated_token_account, derive_fetch_account},
-		program_instructions::ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
+		program_instructions::{
+			DepositChannelHistoricalFetch, ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
+			FETCH_ACCOUNT_DISCRIMINATOR,
+		},
 	},
 	SolAddress, SolAmount,
 };
@@ -28,10 +32,8 @@ use crate::sol::{
 pub use sol_prim::consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID};
 
 // 16 (u128) + 8 (discriminator)
-const FETCH_ACCOUNT_BYTE_LENGTH: usize = 24;
+const FETCH_ACCOUNT_BYTE_LENGTH: usize = 16 + ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH;
 const MAX_MULTIPLE_ACCOUNTS_QUERY: usize = 100;
-const FETCH_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
-	[188, 68, 197, 38, 48, 192, 81, 100];
 const MAXIMUM_CONCURRENT_RPCS: usize = 16;
 
 /// We track Solana (Sol and SPL-token) deposits by periodically querying the
@@ -274,21 +276,24 @@ fn parse_fetch_account_amount(
 				return Err(anyhow::anyhow!("Data account encoding is not base64"));
 			}
 
-			let mut bytes = base64::engine::general_purpose::STANDARD
+			let bytes = base64::engine::general_purpose::STANDARD
 				.decode(base64_string)
 				.expect("Failed to decode base64 string");
 
 			ensure!(bytes.len() == FETCH_ACCOUNT_BYTE_LENGTH);
-
-			let discriminator: Vec<u8> =
-				bytes.drain(..ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH).collect();
 
 			ensure!(
 				bytes[..ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] == FETCH_ACCOUNT_DISCRIMINATOR,
 				"Discriminator does not match expected value"
 			);
 
-			Ok(u128::decode(&mut &bytes[ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH..]))
+			let deserialized_data: DepositChannelHistoricalFetch =
+				DepositChannelHistoricalFetch::try_from_slice(
+					&bytes[ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH..],
+				)
+				.map_err(|e| anyhow::anyhow!("Failed to deserialize data: {:?}", e))?;
+
+			Ok(deserialized_data.amount)
 		},
 		_ => Err(anyhow::anyhow!("Data account encoding is not base64")),
 	}

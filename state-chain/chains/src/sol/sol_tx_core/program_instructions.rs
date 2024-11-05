@@ -381,7 +381,7 @@ macro_rules! solana_program {
 				});
 			}
 
-			// TODO: Complete check for account type and discriminator
+			// TODO: Complete check for account type
 			$(
 				#[test]
 				fn account_exist_in_idl() {
@@ -664,15 +664,16 @@ solana_program!(
 				bpf_loader_upgradeable: { signer: false, writable: false },
 			]
 		},
-	}
+	},
+	accounts: [
+		{ name: DepositChannelHistoricalFetch, discriminator: FETCH_ACCOUNT_DISCRIMINATOR },
+	]
 );
 
 pub const ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH: usize = 8;
+
 pub const SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
 	[79, 152, 191, 225, 128, 108, 11, 139];
-pub const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
-	[150, 251, 114, 94, 200, 113, 248, 70];
-
 #[derive(BorshDeserialize, BorshSerialize, Debug)]
 pub struct SwapEndpointDataAccount {
 	pub historical_number_event_accounts: u128,
@@ -685,6 +686,9 @@ pub struct CcmParams {
 	pub gas_amount: u64,
 }
 
+pub const SWAP_EVENT_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
+	[150, 251, 114, 94, 200, 113, 248, 70];
+
 #[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
 pub struct SwapEvent {
 	pub creation_slot: u64,
@@ -696,6 +700,14 @@ pub struct SwapEvent {
 	pub src_token: Option<Pubkey>,
 	pub ccm_parameters: Option<CcmParams>,
 	pub cf_parameters: Vec<u8>,
+}
+
+pub const FETCH_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
+	[188, 68, 197, 38, 48, 192, 81, 100];
+
+#[derive(BorshDeserialize, BorshSerialize, Debug, Default)]
+pub struct DepositChannelHistoricalFetch {
+	pub amount: u128,
 }
 
 pub trait AccountExt {
