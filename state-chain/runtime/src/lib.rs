@@ -2107,11 +2107,6 @@ impl_runtime_apis! {
 			let btc_chain_accounts = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter()
 				.map(|(_, value)| value)
 				.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id.as_ref())
-				.filter(|channel_details| match channel_details.action {
-					ChannelAction::Swap {..} => true,
-					ChannelAction::CcmTransfer {..} => true,
-					ChannelAction::LiquidityProvision {..} => false,
-				})
 				.map(|channel_details| channel_details.deposit_channel.address)
 				.collect::<Vec<_>>();
 
