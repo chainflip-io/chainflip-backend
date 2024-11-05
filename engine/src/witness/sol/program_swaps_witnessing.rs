@@ -145,6 +145,7 @@ pub async fn get_program_swaps(
 			))
 		})
 		.try_flatten()
+		.filter(|item| futures::future::ready(item.is_ok()))
 		.try_collect()
 		.await;
 
