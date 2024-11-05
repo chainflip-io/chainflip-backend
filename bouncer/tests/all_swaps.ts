@@ -68,7 +68,7 @@ async function main() {
       });
   });
 
-  // Not doing BTC due to encoding issues in vault_swap
+  // Not doing BTC due to encoding complexity in vault_swap. Will be fixed once SDK supports it.
   appendSwap('Sol', 'Eth', testVaultSwap);
   appendSwap('Sol', 'Usdc', testVaultSwap, true);
   appendSwap('Sol', 'ArbEth', testVaultSwap);
