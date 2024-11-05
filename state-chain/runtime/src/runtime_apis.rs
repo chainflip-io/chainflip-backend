@@ -7,8 +7,9 @@ use cf_chains::{
 	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
-	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
+	PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
@@ -30,7 +31,19 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
 };
+
 type VanityName = Vec<u8>;
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+pub struct VaultSwapDetails {
+	pub deposit_address: ForeignChainAddress,
+	pub encoded_params: EncodedVaultSwapParams,
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+pub enum EncodedVaultSwapParams {
+	Bitcoin { nulldata_utxo: Vec<u8> },
+}
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
 pub enum BackupOrPassive {
@@ -306,6 +319,18 @@ decl_runtime_apis!(
 			chunk_interval: u32,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage>;
+		fn cf_get_vault_swap_details(
+			broker: AccountId32,
+			source_asset: Asset,
+			destination_asset: Asset,
+			destination_address: ForeignChainAddress,
+			broker_commission: BasisPoints,
+			min_output_amount: AssetAmount,
+			retry_duration: u32,
+			boost_fee: Option<BasisPoints>,
+			affiliate_fees: Option<Affiliates<AccountId32>>,
+			dca_parameters: Option<DcaParameters>,
+		) -> Result<VaultSwapDetails, DispatchErrorWithMessage>;
 	}
 );
 

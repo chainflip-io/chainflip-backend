@@ -9,12 +9,12 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
-	Chain,
+	Chain, ForeignChainAddress,
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, ForeignChain,
-	NetworkEnvironment, SemVer, SwapId, SwapRequestId,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -37,7 +37,7 @@ use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::{ApiError, CallApiAt};
-use sp_core::U256;
+use sp_core::{Bytes, U256};
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
 	Permill,
@@ -53,8 +53,9 @@ use state_chain_runtime::{
 	},
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi,
-		DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
+		DispatchErrorWithMessage, ElectoralRuntimeApi, EncodedVaultSwapParams,
+		FailingWitnessValidators, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+		RuntimeApiPenalty, ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -67,6 +68,33 @@ use std::{
 
 pub mod monitoring;
 pub mod order_fills;
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct VaultSwapDetailsHumanreadable {
+	pub deposit_address: ForeignChainAddressHumanreadable,
+	pub encoded_params: EncodedVaultSwapParamsBytes,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum EncodedVaultSwapParamsBytes {
+	Bitcoin { nulldata_utxo: Bytes },
+}
+
+impl VaultSwapDetailsHumanreadable {
+	fn from(
+		details: VaultSwapDetails,
+		network: NetworkEnvironment,
+	) -> VaultSwapDetailsHumanreadable {
+		match details.encoded_params {
+			EncodedVaultSwapParams::Bitcoin { nulldata_utxo } => VaultSwapDetailsHumanreadable {
+				deposit_address: details.deposit_address.to_humanreadable(network),
+				encoded_params: EncodedVaultSwapParamsBytes::Bitcoin {
+					nulldata_utxo: nulldata_utxo.into(),
+				},
+			},
+		}
+	}
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEpochState {
@@ -953,6 +981,22 @@ pub trait CustomApi {
 		retry_duration: u32,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
+
+	#[method(name = "get_vault_swap_details")]
+	fn cf_get_vault_swap_details(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: ForeignChainAddress,
+		broker_commission: BasisPoints,
+		min_output_amount: AssetAmount,
+		retry_duration: u32,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
+		dca_parameters: Option<DcaParameters>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<VaultSwapDetailsHumanreadable>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1741,6 +1785,40 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
+	}
+
+	fn cf_get_vault_swap_details(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: ForeignChainAddress,
+		broker_commission: BasisPoints,
+		min_output_amount: AssetAmount,
+		retry_duration: u32,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
+		dca_parameters: Option<DcaParameters>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<VaultSwapDetailsHumanreadable> {
+		self.with_runtime_api(at, |api, hash| {
+			Ok::<_, CfApiError>(VaultSwapDetailsHumanreadable::from(
+				api.cf_get_vault_swap_details(
+					hash,
+					broker,
+					source_asset,
+					destination_asset,
+					destination_address,
+					broker_commission,
+					min_output_amount,
+					retry_duration,
+					boost_fee,
+					affiliate_fees,
+					dca_parameters,
+				)??,
+				api.cf_network_environment(hash)?,
+			))
+		})
 	}
 }
 
