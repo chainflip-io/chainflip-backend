@@ -12,8 +12,8 @@ use chainflip_api::{
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, DepositMonitorApi, OperatorApi,
-	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress,
-	SwapPayload, TransactionInId, WithdrawFeesDetail,
+	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, SwapPayload,
+	TransactionInId, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -269,7 +269,7 @@ impl RpcServer for RpcServerImpl {
 						// We only want to send a notification if there have been events.
 						// If other chains are added, they have to be considered here as
 						// well.
-						if events.btc_events.len() == 0 {
+						if events.btc_events.is_empty() {
 							continue;
 						}
 
