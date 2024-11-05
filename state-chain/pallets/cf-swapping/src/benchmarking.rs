@@ -140,7 +140,7 @@ mod benchmarks {
 		}
 
 		assert!(
-			T::PrivateChannelManager::private_channel_lookup(&broker_id).is_some(),
+			BrokerPrivateBtcChannels::<T>::contains_key(&broker_id),
 			"Private channel must have been opened"
 		);
 	}
@@ -155,7 +155,7 @@ mod benchmarks {
 		assert_ok!(Pallet::<T>::open_private_btc_channel(caller.clone()));
 
 		assert!(
-			T::PrivateChannelManager::private_channel_lookup(&broker_id).is_some(),
+			BrokerPrivateBtcChannels::<T>::contains_key(&broker_id),
 			"Private channel must have been opened"
 		);
 
@@ -165,7 +165,7 @@ mod benchmarks {
 		}
 
 		assert!(
-			T::PrivateChannelManager::private_channel_lookup(&broker_id).is_none(),
+			!BrokerPrivateBtcChannels::<T>::contains_key(&broker_id),
 			"Private channel must have been closed"
 		);
 	}

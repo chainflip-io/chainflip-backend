@@ -298,7 +298,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
-	type PrivateChannelManager = BitcoinIngressEgress;
+	type ChannelIdAllocator = BitcoinIngressEgress;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {

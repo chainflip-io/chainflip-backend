@@ -15,8 +15,8 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, BalanceApi, DepositApi, ExecutionCondition, IngressEgressFeeApi,
-	PrivateChannelManager, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
+	impl_pallet_safe_mode, BalanceApi, ChannelIdAllocator, DepositApi, ExecutionCondition,
+	IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
 	SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
@@ -442,9 +442,7 @@ pub mod pallet {
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
-		type PrivateChannelManager: PrivateChannelManager<
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
+		type ChannelIdAllocator: ChannelIdAllocator;
 	}
 
 	#[pallet::pallet]
@@ -517,6 +515,10 @@ pub mod pallet {
 	#[pallet::getter(fn minimum_chunk_size)]
 	pub type MinimumChunkSize<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+
+	#[pallet::storage]
+	pub(crate) type BrokerPrivateBtcChannels<T: Config> =
+		StorageMap<_, Identity, T::AccountId, ChannelId, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -695,10 +697,12 @@ pub mod pallet {
 		SwapRequestDurationTooLong,
 		/// Invalid DCA parameters.
 		InvalidDcaParameters,
-		/// Broker must close their private channels before deregistering
-		PrivateChannelNotClosed,
 		/// The provided Refund address cannot be decoded into ForeignChainAddress.
 		InvalidRefundAddress,
+		/// Broker cannot deregister or open a new private channel because one already exists.
+		PrivateChannelExistsForBroker,
+		/// Cannot close a private channel for a broker because it does not exist.
+		NoPrivateChannelExistsForBroker,
 	}
 
 	#[pallet::genesis_config]
@@ -955,8 +959,8 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
 			ensure!(
-				T::PrivateChannelManager::private_channel_lookup(&account_id).is_none(),
-				Error::<T>::PrivateChannelNotClosed
+				!BrokerPrivateBtcChannels::<T>::contains_key(&account_id),
+				Error::<T>::PrivateChannelExistsForBroker
 			);
 
 			ensure!(
@@ -1079,7 +1083,15 @@ pub mod pallet {
 		pub fn open_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let channel_id = T::PrivateChannelManager::open_private_channel(&broker_id)?;
+			ensure!(
+				!BrokerPrivateBtcChannels::<T>::contains_key(&broker_id),
+				Error::<T>::PrivateChannelExistsForBroker
+			);
+
+			// TODO: burn fee for opening a channel?
+			let channel_id = T::ChannelIdAllocator::allocate_private_channel_id()?;
+
+			BrokerPrivateBtcChannels::<T>::insert(broker_id.clone(), channel_id);
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened { broker_id, channel_id });
 
@@ -1091,7 +1103,9 @@ pub mod pallet {
 		pub fn close_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let channel_id = T::PrivateChannelManager::close_private_channel(&broker_id)?;
+			let Some(channel_id) = BrokerPrivateBtcChannels::<T>::take(&broker_id) else {
+				return Err(Error::<T>::NoPrivateChannelExistsForBroker.into())
+			};
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed { broker_id, channel_id });
 

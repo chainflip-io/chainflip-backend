@@ -12,7 +12,7 @@ use cf_traits::{
 		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
-	AccountRoleRegistry, PrivateChannelManager, SwappingApi,
+	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
 };
 use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use sp_core::ConstU32;
@@ -44,7 +44,7 @@ parameter_types! {
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
 	pub static SwapRate: f64 = DEFAULT_SWAP_RATE as f64;
 	pub storage Liquidity: BoundedBTreeMap<Asset, AssetAmount, ConstU32<100>> = Default::default();
-	pub storage PrivateChannels: BoundedBTreeMap<u64, ChannelId, ConstU32<100>> = Default::default();
+	pub storage NextChannelId: u64 = 0;
 }
 
 thread_local! {
@@ -150,44 +150,13 @@ impl WeightInfo for MockWeightInfo {
 pub struct AlwaysValid;
 impl CcmValidityCheck for AlwaysValid {}
 
-pub struct MockPrivateChannelManager {}
+pub struct MockChannelIdAllocator {}
 
-impl PrivateChannelManager for MockPrivateChannelManager {
-	type AccountId = u64;
-
-	fn open_private_channel(broker_id: &Self::AccountId) -> Result<ChannelId, DispatchError> {
-		let private_channels = PrivateChannels::get();
-
-		// The id assignment isn't quite right (doesn't take deletions into account), but works for
-		// the purposes of our tests. Future tests can improve this if required.
-		let next_channel_id = private_channels.len() as u64 + 1;
-
-		let private_channels = private_channels
-			.try_mutate(|liquidity| {
-				liquidity.insert(*broker_id, next_channel_id);
-			})
-			.unwrap();
-
-		PrivateChannels::set(&private_channels);
-
+impl ChannelIdAllocator for MockChannelIdAllocator {
+	fn allocate_private_channel_id() -> Result<ChannelId, DispatchError> {
+		let next_channel_id = NextChannelId::get();
+		NextChannelId::set(&(next_channel_id + 1));
 		Ok(next_channel_id)
-	}
-
-	fn close_private_channel(broker_id: &Self::AccountId) -> Result<ChannelId, DispatchError> {
-		let mut removed_channel = None;
-		let private_channels = PrivateChannels::get()
-			.try_mutate(|liquidity| {
-				removed_channel = liquidity.remove(broker_id);
-			})
-			.unwrap();
-
-		PrivateChannels::set(&private_channels);
-
-		removed_channel.ok_or(DispatchError::Other("no channel found"))
-	}
-
-	fn private_channel_lookup(broker_id: &Self::AccountId) -> Option<ChannelId> {
-		PrivateChannels::get().get(broker_id).copied()
 	}
 }
 
@@ -205,7 +174,7 @@ impl pallet_cf_swapping::Config for Test {
 	type BalanceApi = MockBalance;
 	type CcmValidityChecker = AlwaysValid;
 	type NetworkFee = NetworkFee;
-	type PrivateChannelManager = MockPrivateChannelManager;
+	type ChannelIdAllocator = MockChannelIdAllocator;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

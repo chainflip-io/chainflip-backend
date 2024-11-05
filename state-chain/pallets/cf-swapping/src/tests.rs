@@ -1259,7 +1259,7 @@ fn broker_deregistration_checks_private_channels() {
 
 		assert_noop!(
 			Swapping::deregister_as_broker(OriginTrait::signed(BROKER)),
-			Error::<Test>::PrivateChannelNotClosed,
+			Error::<Test>::PrivateChannelExistsForBroker,
 		);
 
 		assert_ok!(Swapping::close_private_btc_channel(OriginTrait::signed(BROKER)));
@@ -1650,38 +1650,88 @@ mod swap_batching {
 mod private_channels {
 
 	use super::*;
+	use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
 	use sp_runtime::DispatchError::BadOrigin;
 
 	#[test]
 	fn open_private_btc_channel() {
 		new_test_ext().execute_with(|| {
+			const FIRST_CHANNEL_ID: u64 = 0;
 			// Only brokers can open private channels
 			assert_noop!(Swapping::open_private_btc_channel(OriginTrait::signed(ALICE)), BadOrigin);
 
+			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), None);
+
 			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
 
+			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(FIRST_CHANNEL_ID));
+
 			System::assert_has_event(RuntimeEvent::Swapping(
-				Event::<Test>::PrivateBrokerChannelOpened { broker_id: BROKER, channel_id: 1 },
+				Event::<Test>::PrivateBrokerChannelOpened {
+					broker_id: BROKER,
+					channel_id: FIRST_CHANNEL_ID,
+				},
 			));
+
+			// The same broker should not be able to open another private channel:
+			{
+				assert_noop!(
+					Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)),
+					Error::<Test>::PrivateChannelExistsForBroker
+				);
+			}
+
+			// A different broker can still open another private channel:
+			{
+				const BROKER_2: u64 = 777;
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+					&BROKER_2,
+				)
+				.unwrap();
+
+				assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER_2)));
+
+				assert_eq!(
+					BrokerPrivateBtcChannels::<Test>::get(BROKER_2),
+					Some(FIRST_CHANNEL_ID + 1)
+				);
+			}
 		});
 	}
 
 	#[test]
 	fn close_private_btc_channel() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
-
-			// Only brokers can open channels
+			const CHANNEL_ID: u64 = 0;
+			// Only brokers can close channels
 			assert_noop!(
 				Swapping::close_private_btc_channel(OriginTrait::signed(ALICE)),
 				BadOrigin
 			);
 
+			// Can't close a channel if one does not exist:
+			assert_noop!(
+				Swapping::close_private_btc_channel(OriginTrait::signed(BROKER)),
+				Error::<Test>::NoPrivateChannelExistsForBroker
+			);
+
+			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
+			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(CHANNEL_ID));
+
+			// Now closing should succeed:
 			assert_ok!(Swapping::close_private_btc_channel(OriginTrait::signed(BROKER)));
+			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), None);
 
 			System::assert_has_event(RuntimeEvent::Swapping(
-				Event::<Test>::PrivateBrokerChannelClosed { broker_id: BROKER, channel_id: 1 },
+				Event::<Test>::PrivateBrokerChannelClosed {
+					broker_id: BROKER,
+					channel_id: CHANNEL_ID,
+				},
 			));
+
+			// The same broker can re-open a (different) private channel:
+			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
+			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(CHANNEL_ID + 1));
 		});
 	}
 }

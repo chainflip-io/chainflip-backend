@@ -1980,87 +1980,35 @@ fn failed_ccm_deposit_can_deposit_event() {
 	});
 }
 
-mod private_broker_channels {
+#[test]
+fn private_and_regular_channel_ids_do_not_overlap() {
+	new_test_ext().execute_with(|| {
+		const REGULAR_CHANNEL_ID_1: u64 = 1;
+		const PRIVATE_CHANNEL_ID: u64 = 2;
+		const REGULAR_CHANNEL_ID_2: u64 = 3;
 
-	use super::*;
+		let open_regular_channel_expecting_id = |expected_channel_id: u64| {
+			let (channel_id, ..) = IngressEgress::open_channel(
+				&ALICE,
+				EthAsset::Eth,
+				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+				0,
+			)
+			.unwrap();
 
-	use cf_traits::PrivateChannelManager;
+			assert_eq!(channel_id, expected_channel_id);
+		};
 
-	#[test]
-	fn opening_new_channel() {
-		new_test_ext().execute_with(|| {
-			const REGULAR_CHANNEL_ID_1: u64 = 1;
-			const PRIVATE_CHANNEL_ID: u64 = 2;
-			const REGULAR_CHANNEL_ID_2: u64 = 3;
+		// Open a regular channel first to check that ids of regular
+		// and private channels do not overlap:
+		open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_1);
 
-			let open_regular_channel_expecting_id = |expected_channel_id: u64| {
-				let (channel_id, ..) = IngressEgress::open_channel(
-					&ALICE,
-					EthAsset::Eth,
-					ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
-					0,
-				)
-				.unwrap();
+		// This method is used, for example, by the swapping pallet when requesting
+		// a channel id for private broker channels:
+		assert_eq!(IngressEgress::allocate_next_channel_id(), Ok(PRIVATE_CHANNEL_ID));
 
-				assert_eq!(channel_id, expected_channel_id);
-			};
-
-			// Open a regular channel first to check that ids of regular
-			// and private channels do not overlap:
-			open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_1);
-
-			assert_eq!(crate::BrokerPrivateChannels::<Test, ()>::get(BROKER), None);
-
-			// Opening a private channel should succeed:
-			{
-				assert_eq!(IngressEgress::open_private_channel(&BROKER), Ok(PRIVATE_CHANNEL_ID));
-
-				assert_eq!(
-					crate::BrokerPrivateChannels::<Test, ()>::get(BROKER),
-					Some(PRIVATE_CHANNEL_ID)
-				);
-				assert_eq!(
-					IngressEgress::private_channel_lookup(&BROKER),
-					Some(PRIVATE_CHANNEL_ID)
-				);
-			}
-
-			// Open a regular channel again to check that opening a private channel
-			// updates the channel id counter:
-			open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_2);
-
-			// The same broker should not be able to open another private channel:
-			{
-				assert_noop!(
-					IngressEgress::open_private_channel(&BROKER),
-					crate::Error::<Test, ()>::PrivateChannelExistsForBroker
-				);
-			}
-		});
-	}
-
-	#[test]
-	fn closing_channel() {
-		new_test_ext().execute_with(|| {
-			// Channel not opened yet:
-			assert_noop!(
-				IngressEgress::close_private_channel(&BROKER),
-				crate::Error::<Test, ()>::NoPrivateChannelExistsForBroker
-			);
-
-			assert_eq!(IngressEgress::private_channel_lookup(&BROKER), None);
-
-			let channel_id = IngressEgress::open_private_channel(&BROKER)
-				.expect("should be able to open a private channel");
-
-			assert!(crate::BrokerPrivateChannels::<Test, ()>::get(BROKER).is_some());
-			assert_eq!(IngressEgress::private_channel_lookup(&BROKER), Some(channel_id));
-
-			// Should succeed now that the channel has been opened:
-			assert_eq!(IngressEgress::close_private_channel(&BROKER), Ok(channel_id));
-
-			assert_eq!(crate::BrokerPrivateChannels::<Test, ()>::get(BROKER), None);
-			assert_eq!(IngressEgress::private_channel_lookup(&BROKER), None);
-		});
-	}
+		// Open a regular channel again to check that opening a private channel
+		// updates the channel id counter:
+		open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_2);
+	});
 }

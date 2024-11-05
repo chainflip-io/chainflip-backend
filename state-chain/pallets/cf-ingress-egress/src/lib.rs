@@ -40,11 +40,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
-	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
-	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
-	IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit, PoolApi,
-	PrivateChannelManager, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler,
-	SwapRequestType,
+	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, ChannelIdAllocator, DepositApi,
+	EgressApi, EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight,
+	IngressEgressFeeApi, IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit,
+	PoolApi, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -590,10 +589,6 @@ pub mod pallet {
 	pub(crate) type FailedRejections<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
 
-	#[pallet::storage]
-	pub(crate) type BrokerPrivateChannels<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::AccountId, ChannelId, OptionQuery>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -790,10 +785,6 @@ pub mod pallet {
 		UnsupportedChain,
 		/// Transaction cannot be reported after being pre-witnessed or boosted.
 		TransactionAlreadyPrewitnessed,
-		/// Cannot open a private channel for a broker because one already exists.
-		PrivateChannelExistsForBroker,
-		/// Cannot close a private channel for a broker because it does not exist.
-		NoPrivateChannelExistsForBroker,
 	}
 
 	#[pallet::hooks]
@@ -2503,34 +2494,9 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 	}
 }
 
-/// Private channels are only expected to be used for bitcoin.
-impl<T: Config<I>, I: 'static> PrivateChannelManager for Pallet<T, I> {
-	type AccountId = T::AccountId;
-
-	fn open_private_channel(broker_id: &Self::AccountId) -> Result<ChannelId, DispatchError> {
-		ensure!(
-			!BrokerPrivateChannels::<T, I>::contains_key(broker_id),
-			Error::<T, I>::PrivateChannelExistsForBroker
-		);
-
-		// TODO: burn fee for opening a channel?
-		let next_channel_id = Self::allocate_next_channel_id()?;
-
-		BrokerPrivateChannels::<T, I>::insert(broker_id.clone(), next_channel_id);
-
-		Ok(next_channel_id)
-	}
-
-	fn close_private_channel(broker_id: &Self::AccountId) -> Result<ChannelId, DispatchError> {
-		let Some(channel_id) = BrokerPrivateChannels::<T, I>::take(broker_id) else {
-			return Err(Error::<T, I>::NoPrivateChannelExistsForBroker.into())
-		};
-
-		Ok(channel_id)
-	}
-
-	fn private_channel_lookup(broker_id: &Self::AccountId) -> Option<ChannelId> {
-		BrokerPrivateChannels::<T, I>::get(broker_id)
+impl<T: Config<I>, I: 'static> ChannelIdAllocator for Pallet<T, I> {
+	fn allocate_private_channel_id() -> Result<ChannelId, DispatchError> {
+		Ok(Self::allocate_next_channel_id()?)
 	}
 }
 
