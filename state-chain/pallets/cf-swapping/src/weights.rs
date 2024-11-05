@@ -37,6 +37,8 @@ pub trait WeightInfo {
 	fn withdraw() -> Weight;
 	fn register_as_broker() -> Weight;
 	fn deregister_as_broker() -> Weight;
+	fn open_private_btc_channel() -> Weight;
+	fn close_private_btc_channel() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -165,6 +167,35 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(11_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `BitcoinIngressEgress::BrokerPrivateChannels` (r:1 w:1)
+	/// Proof: `BitcoinIngressEgress::BrokerPrivateChannels` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `BitcoinIngressEgress::ChannelIdCounter` (r:1 w:1)
+	/// Proof: `BitcoinIngressEgress::ChannelIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn open_private_btc_channel() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `579`
+		//  Estimated: `4044`
+		// Minimum execution time: 12_000_000 picoseconds.
+		Weight::from_parts(12_000_000, 4044)
+			.saturating_add(T::DbWeight::get().reads(3_u64))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
+	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `BitcoinIngressEgress::BrokerPrivateChannels` (r:1 w:1)
+	/// Proof: `BitcoinIngressEgress::BrokerPrivateChannels` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn close_private_btc_channel() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `670`
+		//  Estimated: `4135`
+		// Minimum execution time: 13_000_000 picoseconds.
+		Weight::from_parts(14_000_000, 4135)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+
 }
 
 // For backwards compatibility and tests
@@ -290,6 +321,34 @@ impl WeightInfo for () {
 		// Minimum execution time: 45_173_000 picoseconds.
 		Weight::from_parts(45_894_000, 26353)
 			.saturating_add(RocksDbWeight::get().reads(11_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `BitcoinIngressEgress::BrokerPrivateChannels` (r:1 w:1)
+	/// Proof: `BitcoinIngressEgress::BrokerPrivateChannels` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `BitcoinIngressEgress::ChannelIdCounter` (r:1 w:1)
+	/// Proof: `BitcoinIngressEgress::ChannelIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn open_private_btc_channel() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `579`
+		//  Estimated: `4044`
+		// Minimum execution time: 12_000_000 picoseconds.
+		Weight::from_parts(12_000_000, 4044)
+			.saturating_add(RocksDbWeight::get().reads(3_u64))
+			.saturating_add(RocksDbWeight::get().writes(2_u64))
+	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `BitcoinIngressEgress::BrokerPrivateChannels` (r:1 w:1)
+	/// Proof: `BitcoinIngressEgress::BrokerPrivateChannels` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn close_private_btc_channel() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `670`
+		//  Estimated: `4135`
+		// Minimum execution time: 13_000_000 picoseconds.
+		Weight::from_parts(14_000_000, 4135)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 }

@@ -1979,3 +1979,36 @@ fn failed_ccm_deposit_can_deposit_event() {
 		);
 	});
 }
+
+#[test]
+fn private_and_regular_channel_ids_do_not_overlap() {
+	new_test_ext().execute_with(|| {
+		const REGULAR_CHANNEL_ID_1: u64 = 1;
+		const PRIVATE_CHANNEL_ID: u64 = 2;
+		const REGULAR_CHANNEL_ID_2: u64 = 3;
+
+		let open_regular_channel_expecting_id = |expected_channel_id: u64| {
+			let (channel_id, ..) = IngressEgress::open_channel(
+				&ALICE,
+				EthAsset::Eth,
+				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+				0,
+			)
+			.unwrap();
+
+			assert_eq!(channel_id, expected_channel_id);
+		};
+
+		// Open a regular channel first to check that ids of regular
+		// and private channels do not overlap:
+		open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_1);
+
+		// This method is used, for example, by the swapping pallet when requesting
+		// a channel id for private broker channels:
+		assert_eq!(IngressEgress::allocate_next_channel_id(), Ok(PRIVATE_CHANNEL_ID));
+
+		// Open a regular channel again to check that opening a private channel
+		// updates the channel id counter:
+		open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_2);
+	});
+}

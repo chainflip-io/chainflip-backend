@@ -2,7 +2,7 @@ use core::cell::Cell;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::{ccm_checker::CcmValidityCheck, AnyChain};
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, ChannelId};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
@@ -12,7 +12,7 @@ use cf_traits::{
 		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
-	AccountRoleRegistry, SwappingApi,
+	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
 };
 use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use sp_core::ConstU32;
@@ -44,6 +44,7 @@ parameter_types! {
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
 	pub static SwapRate: f64 = DEFAULT_SWAP_RATE as f64;
 	pub storage Liquidity: BoundedBTreeMap<Asset, AssetAmount, ConstU32<100>> = Default::default();
+	pub storage NextChannelId: u64 = 0;
 }
 
 thread_local! {
@@ -136,10 +137,28 @@ impl WeightInfo for MockWeightInfo {
 	fn deregister_as_broker() -> Weight {
 		Weight::from_parts(100, 0)
 	}
+
+	fn open_private_btc_channel() -> Weight {
+		Weight::from_parts(100, 0)
+	}
+
+	fn close_private_btc_channel() -> Weight {
+		Weight::from_parts(100, 0)
+	}
 }
 
 pub struct AlwaysValid;
 impl CcmValidityCheck for AlwaysValid {}
+
+pub struct MockChannelIdAllocator {}
+
+impl ChannelIdAllocator for MockChannelIdAllocator {
+	fn allocate_private_channel_id() -> Result<ChannelId, DispatchError> {
+		let next_channel_id = NextChannelId::get();
+		NextChannelId::set(&(next_channel_id + 1));
+		Ok(next_channel_id)
+	}
+}
 
 impl pallet_cf_swapping::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -155,14 +174,16 @@ impl pallet_cf_swapping::Config for Test {
 	type BalanceApi = MockBalance;
 	type CcmValidityChecker = AlwaysValid;
 	type NetworkFee = NetworkFee;
+	type ChannelIdAllocator = MockChannelIdAllocator;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig::default(),
 	|| {
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE).unwrap();
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&BROKER).unwrap();
 	},
 }
