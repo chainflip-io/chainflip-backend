@@ -2384,6 +2384,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_format"
+version = "0.2.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50c655d81ff1114fb0dcdea9225ea9f0cc712a6f8d189378e82bdf62a473a64b"
+dependencies = [
+ "const_format_proc_macros",
+]
+
+[[package]]
+name = "const_format_proc_macros"
+version = "0.2.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eff1a44b93f47b1bac19a27932f5c591e43d1ba357ee4f61526c8a25603f0eb1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-xid",
+]
+
+[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4616,6 +4636,16 @@ checksum = "e8c8444bc9d71b935156cc0ccab7f622180808af7867b1daae6547d773591703"
 dependencies = [
  "serde",
  "typenum",
+]
+
+[[package]]
+name = "generic-typeinfo-derive"
+version = "0.1.0"
+dependencies = [
+ "const_format",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.79",
 ]
 
 [[package]]
@@ -8100,6 +8130,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "log",
  "parity-scale-codec",
  "scale-info",
@@ -8297,6 +8328,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "hex-literal",
  "log",
  "nanorand",
@@ -8420,9 +8452,11 @@ dependencies = [
  "cf-test-utilities",
  "cf-traits",
  "cfe-events",
+ "const_format",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "hex-literal",
  "log",
  "pallet-cf-reputation",
