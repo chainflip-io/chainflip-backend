@@ -204,7 +204,7 @@ pub enum TaintedTransactionEvent<TxId> {
 	},
 
 	TaintedTransactionRejected {
-		broadcast_id: BroadcastId,
+		refund_broadcast_id: BroadcastId,
 		tx_id: TxId,
 	},
 }

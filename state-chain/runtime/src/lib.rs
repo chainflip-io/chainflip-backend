@@ -2104,8 +2104,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId>) -> ChainAccounts {
-			let btc_chain_accounts = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter()
-				.map(|(_, value)| value)
+			let btc_chain_accounts = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter_values()
 				.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id.as_ref())
 				.map(|channel_details| channel_details.deposit_channel.address)
 				.collect::<Vec<_>>();
@@ -2124,7 +2123,7 @@ impl_runtime_apis! {
 						pallet_cf_ingress_egress::Event::TaintedTransactionReportReceived{ account_id, tx_id, expires_at: _ } =>
 							Some(TaintedTransactionEvent::TaintedTransactionReportReceived{account_id, tx_id }),
 						pallet_cf_ingress_egress::Event::TaintedTransactionRejected{ broadcast_id, tx_id } =>
-							Some(TaintedTransactionEvent::TaintedTransactionRejected{ broadcast_id, tx_id: tx_id.id.tx_id }),
+							Some(TaintedTransactionEvent::TaintedTransactionRejected{ refund_broadcast_id: broadcast_id, tx_id: tx_id.id.tx_id }),
 						_ => None,
 					}
 				} else {
