@@ -1,75 +1,5 @@
 import { jsonRpc } from '../shared/json_rpc';
 import { sendBtc, sendBtcAndReturnTxIdWithoutWaiting } from '../shared/send_btc';
-import EventSource from 'eventsource';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function brokerApiRpc(method: string, params: any[]): Promise<any> {
-  return jsonRpc(method, params, 'http://127.0.0.1:10997');
-}
-
-
-function setTxRiskScore(tx_id: unknown, score: number) {
-
-  // We can use the `Headers` constructor to create headers
-  // and assign it as the type of the `headers` variable
-  const headers: Headers = new Headers()
-  // Add a few headers
-  headers.set('Content-Type', 'application/json')
-  headers.set('Accept', 'application/json')
-  // Add a custom header, which we can use to check
-//   headers.set('X-Custom-Header', 'CustomValue')
-
-  // Create the request object, which will be a RequestInfo type. 
-  // Here, we will pass in the URL as well as the options object as parameters.
-  const request: RequestInfo = new Request('http://127.0.0.1:6070/riskscore', {
-    method: 'POST',
-    headers: headers,
-    body: JSON.stringify(
-        [
-            tx_id,
-            {"risk_score": {"Score": score}, "unknown_contribution_percentage": 0.0, "analysis_provider": "elliptic_analysis_provider"}
-        ]
-    )
-  })
-
-
-
-  // For our example, the data is stored on a static `users.json` file
-  return fetch(request)
-    // the JSON body is taken from the response
-    .then(res => testBrokerLevelScreening.log("got response" + res));
-
-    
-
-    // await using chainflip = await brokerApiRpc();
-    // return brokerMutex.runExclusive(async () =>
-    //     chainflip.tx.bitcoinIngressEgress
-    //         .markTransactionAsTainted(tx_id)
-    //         .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
-    // );
-}
-
-
-async function test_monitoring() {
-    // stop btc block creation
-
-    // open swap channel
-
-    // txid = create new bitcoin transaction
-
-    // submit judgement for txid risk_score = 9.0
-
-    // mine next bitcoin block manually
-
-    // ensure that monitoring has submitted sucessfully
-
-    // reenable block creation
-}
-
-
-
-
-
 import { ExecutableTest } from '../shared/executable_test';
 import { sendBtcAndReturnTxId } from '../shared/send_btc';
 import { randomBytes } from 'crypto';
@@ -82,6 +12,79 @@ import { requestNewSwap } from '../shared/perform_swap';
 import { execSync } from 'child_process';
 import { FillOrKillParamsX128 } from '../shared/new_swap';
 import { getBtcBalance } from '../shared/get_btc_balance';
+import { HttpStatusCode } from 'axios';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function brokerApiRpc(method: string, params: any[]): Promise<any> {
+  return jsonRpc(method, params, 'http://127.0.0.1:10997');
+}
+
+function setTxRiskScore(tx_id: unknown, score: number) {
+
+  const headers: Headers = new Headers()
+  headers.set('Content-Type', 'application/json')
+  headers.set('Accept', 'application/json')
+  const request: RequestInfo = new Request('http://127.0.0.1:6070/riskscore', {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify(
+        [
+            tx_id,
+            {"risk_score": {"Score": score}, "unknown_contribution_percentage": 0.0, "analysis_provider": "elliptic_analysis_provider"}
+        ]
+    )
+  })
+
+  return fetch(request)
+    .then(res => testBrokerLevelScreening.log("got response" + JSON.stringify(res)));
+}
+
+async function ensureDepositMonitorHealth() {
+  const headers: Headers = new Headers()
+  headers.set('Content-Type', 'application/json')
+  headers.set('Accept', 'application/json')
+
+  const request: RequestInfo = new Request('http://127.0.0.1:6060/health', {
+    method: 'GET',
+    headers: headers,
+  })
+
+  let response_body = undefined;
+  for (let i = 0; i < 30; i++) {
+    let res = undefined;
+    try {
+        res = await fetch(request);
+    } catch {
+        testBrokerLevelScreening.log("Could not connect to deposit monitor, retrying.");
+        await sleep(1000);
+        continue;
+    }
+    const body = await res.json();
+
+    if (body.starting === false) {
+        response_body = body;
+        break;
+    } else {
+        testBrokerLevelScreening.log("Deposit monitor is starting...");
+        await sleep(500);
+    }
+  }
+
+  if (response_body === undefined) {
+    throw new Error("Could not ensure that deposit monitor is running.")
+  }
+
+  const body = response_body;
+  const health = body.transaction_processor && body.external_state_processor && body.analysis_processor && body.judgement_processor;
+  testBrokerLevelScreening.log("Deposit monitor health: " + health);
+  if (!health) {
+    testBrokerLevelScreening.log("Deposit monitor health response is:  " + JSON.stringify(body));
+    throw new Error("Could not ensure that deposit monitor is healthy.");
+  }
+  return health;
+}
+
+
 
 const keyring = new Keyring({ type: 'sr25519' });
 
@@ -105,33 +108,7 @@ async function observeBtcAddressBalanceChange(address: string): Promise<number> 
     }
 }
 
-async function submitTxAsTainted(tx_id: unknown) {
-    await using chainflip = await getChainflipApi();
-    return brokerMutex.runExclusive(async () =>
-        chainflip.tx.bitcoinIngressEgress
-            .markTransactionAsTainted(tx_id)
-            .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
-    );
-}
 
-function pauseBtcBlockProduction(command: boolean): boolean {
-    let start = "docker exec bitcoin rm /root/mine_blocks";
-    let stop = "docker exec bitcoin touch /root/mine_blocks";
-    try {
-        execSync(command ? start : stop);
-        return true;
-    } catch (error) {
-        console.error(error);
-        return false;
-    }
-}
-
-// type DepositMonitorScenario = {
-//     amount: string,
-//     boost: boolean,
-//     riskScore: number
-//     refundAddress: string,
-// }
 
 /** Tests the broker level screening mechanism.
  * 
@@ -139,13 +116,7 @@ function pauseBtcBlockProduction(command: boolean): boolean {
  * @param doBoost - Whether to boost the swap.
  * @param stopBlockProductionFor - The number of milliseconds to pause block production for.
  */
-async function brokerLevelScreeningTestScenario(amount: string, doBoost: boolean, refundAddress: string, riskScore: number, stopBlockProductionFor = 0, waitBeforeReport = 0) {
-
-    // testBrokerLevelScreening.log("stopping block production...");
-    // if (stopBlockProductionFor > 0) {
-    //     pauseBtcBlockProduction(true);
-    // }
-    // await sleep(500);
+async function brokerLevelScreeningTestScenario(amount: string, doBoost: boolean, refundAddress: string, riskScore: number, waitBeforeReport = 0) {
 
     let destinationAddressForUsdc = await newAddress('Usdc', randomBytes(32).toString('hex'));
     const refundParameters: FillOrKillParamsX128 = {
@@ -164,75 +135,51 @@ async function brokerLevelScreeningTestScenario(amount: string, doBoost: boolean
         doBoost ? 100 : 0,
         refundParameters,
     );
-    testBrokerLevelScreening.log("creating new tx to address: " + swapParams.depositAddress);
-    testBrokerLevelScreening.log("... and refund address: " + refundAddress);
+    testBrokerLevelScreening.log("Creating new tx...");
     let tx_id = await sendBtcAndReturnTxIdWithoutWaiting(swapParams.depositAddress, amount);
 
-    testBrokerLevelScreening.log("created and sent new tx with id: " + tx_id);
+    testBrokerLevelScreening.log("Created and sent new tx with id: " + tx_id);
 
+    if (waitBeforeReport > 0) {
+        testBrokerLevelScreening.log("Waiting before submitting risk score..." );
+        await sleep(waitBeforeReport);
+    }
     setTxRiskScore(tx_id, riskScore);
 
     testBrokerLevelScreening.log("setting risk score done, waiting for CFDM to process");
-
-    // await awaitDmEvent((data) => {
-    //     return (data.indexOf("PendingRefundConfirmation") >= 0)
-    // });
-    // await sleep(30000);
-
-    if (stopBlockProductionFor > 0) {
-        pauseBtcBlockProduction(false);
-    }
-
-    testBrokerLevelScreening.log("restarted block production");
 }
 
-async function awaitDmEvent(f: (a0: String) => boolean) {
-    const evtSource = new EventSource("http://localhost:6060/events");
-    let got_event = false;
-    evtSource.addEventListener("mylistener", (event) => {
-        testBrokerLevelScreening.log("got event: " + event.data);
-        if (f(event.data)) {
-            got_event = true;
-        }
-        return;
-    });
-
-    for (let i = 0; i < 5; i++) {
-        console.log("waiting for event...");
-        await sleep(1000);
-    }
-}
 
 
 async function main() {
-
-    var es = new EventSource('http://localhost:6060/events');
-    es.addEventListener('my-events', function(e) {
-        console.log(e.data);
-    });
+    await ensureDepositMonitorHealth();
 
     const MILLI_SECS_PER_BLOCK = 6000;
     const BLOCKS_TO_WAIT = 2
 
-    // Test no boost and early tx report
-    // testBrokerLevelScreening.log('Testing broker level screening with no boost...');
-    // let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
-    // await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT);
-    // await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
-    // let btcBalance = await observeBtcAddressBalanceChange(btcRefundAddress);
-    // testBrokerLevelScreening.log(`BTC balance: ${btcBalance}`);
-    // testBrokerLevelScreening.log(`Tx was rejected and refunded 👍.`);
+    {
+        // Test no boost and early tx report
+        testBrokerLevelScreening.log('Testing broker level screening with no boost...');
+        let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
+        await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, 9.0, 5000);
+        await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
+        let btcBalance = await observeBtcAddressBalanceChange(btcRefundAddress);
+        testBrokerLevelScreening.log(`BTC balance: ${btcBalance}`);
+        testBrokerLevelScreening.log(`Tx was rejected and refunded 👍.`);
+    }
 
-    // Test boost and early tx report
-    testBrokerLevelScreening.log('Testing broker level screening with boost');
-    let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
-    await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, 9.0, MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT);
-    await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
-    let btcBalance = await observeBtcAddressBalanceChange(btcRefundAddress);
-    testBrokerLevelScreening.log(`BTC balance: ${btcBalance}`);
-    testBrokerLevelScreening.log(`Tx was rejected and refunded 👍.`);
+    {
+        // Test boost and early tx report
+        testBrokerLevelScreening.log('Testing broker level screening with boost');
+        let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
+        await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, 9.0, 0);
+        await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
+        let btcBalance = await observeBtcAddressBalanceChange(btcRefundAddress);
+        testBrokerLevelScreening.log(`BTC balance: ${btcBalance}`);
+        testBrokerLevelScreening.log(`Tx was rejected and refunded 👍.`);
+    }
 
-    // // Test boost and late tx report
+    // Test boost and late tx report
     {
         testBrokerLevelScreening.log('Testing broker level screening without boost and with low risk score');
         let btcRefundAddress = await newAddress('Btc', randomBytes(32).toString('hex'));
