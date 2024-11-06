@@ -53,9 +53,9 @@ use state_chain_runtime::{
 	},
 	runtime_apis::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi,
-		DispatchErrorWithMessage, ElectoralRuntimeApi, EncodedVaultSwapParams,
-		FailingWitnessValidators, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		RuntimeApiPenalty, ValidatorInfo, VaultSwapDetails,
+		DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
+		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
+		VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -70,14 +70,9 @@ pub mod monitoring;
 pub mod order_fills;
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct VaultSwapDetailsHumanreadable {
-	pub deposit_address: ForeignChainAddressHumanreadable,
-	pub encoded_params: EncodedVaultSwapParamsBytes,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub enum EncodedVaultSwapParamsBytes {
-	Bitcoin { nulldata_utxo: Bytes },
+#[serde(tag = "chain")]
+pub enum VaultSwapDetailsHumanreadable {
+	Bitcoin { nulldata_utxo: Bytes, deposit_address: ForeignChainAddressHumanreadable },
 }
 
 impl VaultSwapDetailsHumanreadable {
@@ -85,13 +80,12 @@ impl VaultSwapDetailsHumanreadable {
 		details: VaultSwapDetails,
 		network: NetworkEnvironment,
 	) -> VaultSwapDetailsHumanreadable {
-		match details.encoded_params {
-			EncodedVaultSwapParams::Bitcoin { nulldata_utxo } => VaultSwapDetailsHumanreadable {
-				deposit_address: details.deposit_address.to_humanreadable(network),
-				encoded_params: EncodedVaultSwapParamsBytes::Bitcoin {
+		match details {
+			VaultSwapDetails::Bitcoin { nulldata_utxo, deposit_address } =>
+				VaultSwapDetailsHumanreadable::Bitcoin {
 					nulldata_utxo: nulldata_utxo.into(),
+					deposit_address: deposit_address.to_humanreadable(network),
 				},
-			},
 		}
 	}
 }

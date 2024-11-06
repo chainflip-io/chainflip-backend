@@ -26,10 +26,9 @@ use crate::{
 	},
 	runtime_apis::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, BoostPoolDepth,
-		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, EncodedVaultSwapParams,
-		FailingWitnessValidators, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-		RuntimeApiPenalty, SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
-		VaultSwapDetails,
+		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
+		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -41,7 +40,7 @@ pub use cf_chains::instances::{
 	SolanaInstance,
 };
 use cf_chains::{
-	address::to_encoded_address,
+	address::{AddressConverter, EncodedAddress},
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
 	btc::{
@@ -60,7 +59,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, BroadcastId, DcaParameters, EpochIndex, NetworkEnvironment,
-	STABLE_ASSET,
+	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::NoopRuntimeUpgrade;
 use cf_traits::{
@@ -122,7 +121,7 @@ use sp_runtime::{
 		BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One, OpaqueKeys,
 		Saturating, UniqueSaturatedInto, Verify,
 	},
-	BoundedVec, DispatchError,
+	BoundedVec,
 };
 
 use frame_support::genesis_builder_helper::build_state;
@@ -2128,9 +2127,9 @@ impl_runtime_apis! {
 		) -> Result<VaultSwapDetails, DispatchErrorWithMessage> {
 			// Validate params
 			if broker_commission != 0 || affiliate_fees.map_or(false, |fees| !fees.is_empty()) {
-				return Err(Into::<DispatchErrorWithMessage>::into(DispatchError::from(
+				return Err(DispatchErrorWithMessage::from_pallet_error(
 					pallet_cf_swapping::Error::<Runtime>::VaultSwapBrokerFeesNotSupported,
-				)));
+				));
 			}
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)
 				.map_err(Into::<DispatchErrorWithMessage>::into)?;
@@ -2139,25 +2138,25 @@ impl_runtime_apis! {
 					.map_err(Into::<DispatchErrorWithMessage>::into)?;
 			}
 			if ForeignChain::from(destination_asset) != destination_address.chain() {
-				return Err(Into::<DispatchErrorWithMessage>::into(DispatchError::from(
-					pallet_cf_swapping::Error::<Runtime>::IncompatibleDestinationAddress,
-				)));
+				return Err(DispatchErrorWithMessage::from_pallet_error(
+					pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress,
+				));
 			}
+
 
 			// Encode swap
 			match ForeignChain::from(source_asset) {
 				ForeignChain::Bitcoin => {
 					let params = UtxoEncodedData {
 						output_asset: destination_asset,
-						output_address: to_encoded_address(
+						output_address: ChainAddressConverter::to_encoded_address(
 							destination_address,
-							Environment::network_environment,
 						),
 						parameters: SharedCfParameters {
 							retry_duration: retry_duration.try_into().map_err(|_| {
-								Into::<DispatchErrorWithMessage>::into(DispatchError::from(
+								DispatchErrorWithMessage::from_pallet_error(
 									pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong,
-								))
+								)
 							})?,
 							min_output_amount,
 							number_of_chunks: dca_parameters
@@ -2166,24 +2165,24 @@ impl_runtime_apis! {
 								.unwrap_or(1)
 								.try_into()
 								.map_err(|_| {
-									Into::<DispatchErrorWithMessage>::into(DispatchError::from(
+									DispatchErrorWithMessage::from_pallet_error(
 										pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters,
-									))
+									)
 								})?,
 							chunk_interval: dca_parameters
 								.as_ref()
 								.map(|params| params.chunk_interval)
-								.unwrap_or(2)
+								.unwrap_or(SWAP_DELAY_BLOCKS)
 								.try_into()
 								.map_err(|_| {
-									Into::<DispatchErrorWithMessage>::into(DispatchError::from(
+									DispatchErrorWithMessage::from_pallet_error(
 										pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters,
-									))
+									)
 								})?,
 							boost_fee: boost_fee.unwrap_or_default().try_into().map_err(|_| {
-								Into::<DispatchErrorWithMessage>::into(DispatchError::from(
+								DispatchErrorWithMessage::from_pallet_error(
 									pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh,
-								))
+								)
 							})?,
 						},
 					};
@@ -2196,16 +2195,14 @@ impl_runtime_apis! {
 							.script_pubkey(),
 					);
 
-					Ok(VaultSwapDetails {
+					Ok(VaultSwapDetails::Bitcoin {
+						nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw().into(),
 						deposit_address,
-						encoded_params: EncodedVaultSwapParams::Bitcoin {
-							nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw().into(),
-						},
 					})
 				},
-				_ => Err(Into::<DispatchErrorWithMessage>::into(DispatchError::from(
+				_ => Err(DispatchErrorWithMessage::from_pallet_error(
 					pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset,
-				))),
+				)),
 			}
 		}
 	}

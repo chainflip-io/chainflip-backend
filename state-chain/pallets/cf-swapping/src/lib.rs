@@ -701,8 +701,6 @@ pub mod pallet {
 		InvalidRefundAddress,
 		/// The given boost fee is too large to fit in a u8.
 		BoostFeeTooHigh,
-		/// Destination address and asset are incompatible.
-		IncompatibleDestinationAddress,
 		/// Broker/Affiliate fees are not yet supported for vault swaps
 		VaultSwapBrokerFeesNotSupported,
 		/// Unsupported source asset for vault swap

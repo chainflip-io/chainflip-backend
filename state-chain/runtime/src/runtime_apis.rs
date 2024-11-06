@@ -35,14 +35,8 @@ use sp_std::{
 type VanityName = Vec<u8>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct VaultSwapDetails {
-	pub deposit_address: ForeignChainAddress,
-	pub encoded_params: EncodedVaultSwapParams,
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub enum EncodedVaultSwapParams {
-	Bitcoin { nulldata_utxo: Vec<u8> },
+pub enum VaultSwapDetails {
+	Bitcoin { nulldata_utxo: Vec<u8>, deposit_address: ForeignChainAddress },
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
@@ -172,6 +166,11 @@ impl From<DispatchError> for DispatchErrorWithMessage {
 				DispatchErrorWithMessage::Module(message.as_bytes().to_vec()),
 			value => DispatchErrorWithMessage::Other(value),
 		}
+	}
+}
+impl DispatchErrorWithMessage {
+	pub fn from_pallet_error(e: impl Into<DispatchError>) -> Self {
+		Self::from(e.into())
 	}
 }
 #[cfg(feature = "std")]
