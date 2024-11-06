@@ -1628,12 +1628,14 @@ name = "chainflip-broker-api"
 version = "1.7.0"
 dependencies = [
  "anyhow",
+ "cf-chains",
  "chainflip-api",
  "clap",
  "custom-rpc",
  "futures",
  "hex",
  "jsonrpsee 0.23.2",
+ "sc-rpc",
  "serde",
  "sp-core 34.0.0",
  "sp-rpc",
@@ -2558,6 +2560,7 @@ dependencies = [
  "jsonrpsee 0.23.2",
  "log",
  "pallet-cf-governance",
+ "pallet-cf-ingress-egress",
  "pallet-cf-pools",
  "pallet-cf-swapping",
  "pallet-cf-witnesser",

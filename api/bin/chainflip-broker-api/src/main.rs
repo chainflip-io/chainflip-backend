@@ -4,19 +4,26 @@ use cf_utilities::{
 };
 use chainflip_api::{
 	self,
-	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
+	primitives::{
+		state_chain_runtime::runtime_apis::{ChainAccounts, TaintedTransactionEvents},
+		AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters,
+	},
 	settings::StateChain,
-	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
-	SwapDepositAddress, WithdrawFeesDetail,
+	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, DepositMonitorApi, OperatorApi,
+	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId,
+	WithdrawFeesDetail,
 };
 use clap::Parser;
-use futures::FutureExt;
+use custom_rpc::CustomApiClient;
+use futures::{FutureExt, StreamExt};
 use jsonrpsee::{
-	core::{async_trait, ClientError},
+	core::{async_trait, ClientError, SubscriptionResult},
 	proc_macros::rpc,
 	server::ServerBuilder,
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
+	PendingSubscriptionSink,
 };
+use serde::{Deserialize, Serialize};
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
@@ -59,6 +66,12 @@ impl From<BrokerApiError> for ErrorObjectOwned {
 	}
 }
 
+#[derive(Serialize, Deserialize)]
+pub enum GetOpenDepositChannelsQuery {
+	All,
+	Mine,
+}
+
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
 	#[method(name = "register_account", aliases = ["broker_registerAccount"])]
@@ -84,6 +97,18 @@ pub trait Rpc {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "mark_transaction_as_tainted", aliases = ["broker_markTransactionAsTainted"])]
+	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> RpcResult<()>;
+
+	#[method(name = "get_open_deposit_channels", aliases = ["broker_getOpenDepositChannels"])]
+	async fn get_open_deposit_channels(
+		&self,
+		query: GetOpenDepositChannelsQuery,
+	) -> RpcResult<ChainAccounts>;
+
+	#[subscription(name = "subscribe_tainted_transaction_events", item = BlockUpdate<TaintedTransactionEvents>)]
+	async fn subscribe_tainted_transaction_events(&self) -> SubscriptionResult;
 }
 
 pub struct RpcServerImpl {
@@ -148,6 +173,80 @@ impl RpcServer for RpcServerImpl {
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
+	}
+
+	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> RpcResult<()> {
+		self.api
+			.deposit_monitor_api()
+			.mark_transaction_as_tainted(tx_id)
+			.await
+			.map_err(BrokerApiError::Other)?;
+		Ok(())
+	}
+
+	async fn get_open_deposit_channels(
+		&self,
+		query: GetOpenDepositChannelsQuery,
+	) -> RpcResult<ChainAccounts> {
+		let account_id = match query {
+			GetOpenDepositChannelsQuery::All => None,
+			GetOpenDepositChannelsQuery::Mine => Some(self.api.state_chain_client.account_id()),
+		};
+
+		self.api
+			.state_chain_client
+			.base_rpc_client
+			.raw_rpc_client
+			.cf_get_open_deposit_channels(account_id, None)
+			.await
+			.map_err(BrokerApiError::ClientError)
+	}
+
+	async fn subscribe_tainted_transaction_events(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+	) -> SubscriptionResult {
+		let state_chain_client = self.api.state_chain_client.clone();
+		let sink = pending_sink.accept().await.map_err(|e| e.to_string())?;
+		tokio::spawn(async move {
+			// Note we construct the subscription here rather than relying on the custom-rpc
+			// subscription. This is because we want to use finalized blocks.
+			// TODO: allow custom rpc subscriptions to use finalized blocks.
+			let mut finalized_block_stream = state_chain_client.finalized_block_stream().await;
+			while let Some(block) = finalized_block_stream.next().await {
+				match state_chain_client
+					.base_rpc_client
+					.raw_rpc_client
+					.cf_get_tainted_transaction_events(Some(block.hash))
+					.await
+				{
+					Ok(events) => {
+						// We only want to send a notification if there have been events.
+						// If other chains are added, they have to be considered here as
+						// well.
+						if events.btc_events.is_empty() {
+							continue;
+						}
+
+						let block_update = BlockUpdate {
+							block_hash: block.hash,
+							block_number: block.number,
+							data: events,
+						};
+
+						if sink
+							.send(sc_rpc::utils::to_sub_message(&sink, &block_update))
+							.await
+							.is_err()
+						{
+							break;
+						}
+					},
+					Err(_) => break,
+				}
+			}
+		});
+		Ok(())
 	}
 }
 
