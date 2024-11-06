@@ -41,7 +41,11 @@ use cf_utilities::{
 	task_scope::{self, Scope},
 };
 use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
-use std::{collections::BTreeSet, str::FromStr, sync::Arc};
+use std::{
+	collections::{BTreeSet, HashSet},
+	str::FromStr,
+	sync::Arc,
+};
 use utilities::{task_scope, task_scope::Scope};
 
 #[derive(Clone)]
@@ -184,7 +188,6 @@ impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
 	}
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 struct SolanaVaultSwapsVoter {
 	client: SolRetryRpcClient,
@@ -207,7 +210,7 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 				.witnessed_open_accounts
 				.into_iter()
 				.map(|VaultSwapAccountAndSender { vault_swap_account, .. }| vault_swap_account)
-				.collect(),
+				.collect::<HashSet<_>>(),
 			properties.closure_initiated_accounts,
 			settings.usdc_token_mint_pubkey,
 		)

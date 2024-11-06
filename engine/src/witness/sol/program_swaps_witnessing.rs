@@ -45,7 +45,7 @@ const MAX_MULTIPLE_EVENT_ACCOUNTS_QUERY: usize = 10;
 pub async fn get_program_swaps(
 	sol_rpc: &SolRetryRpcClient,
 	swap_endpoint_data_account_address: SolAddress,
-	sc_open_accounts: Vec<SolAddress>,
+	sc_open_accounts: HashSet<SolAddress>,
 	sc_closure_initiated_accounts: BTreeSet<VaultSwapAccountAndSender>,
 	usdc_token_mint_pubkey: SolAddress,
 ) -> Result<
@@ -158,7 +158,7 @@ pub async fn get_program_swaps(
 
 async fn get_changed_program_swap_accounts(
 	sol_rpc: &SolRetryRpcClient,
-	sc_opened_accounts: Vec<SolAddress>,
+	sc_opened_accounts: HashSet<SolAddress>,
 	sc_closure_initiated_accounts: BTreeSet<VaultSwapAccountAndSender>,
 	swap_endpoint_data_account_address: SolAddress,
 ) -> Result<(Vec<SolAddress>, Vec<VaultSwapAccountAndSender>, u64), anyhow::Error> {
@@ -167,24 +167,18 @@ async fn get_changed_program_swap_accounts(
 			.await
 			.expect("Failed to get the event accounts");
 
-	let sc_opened_accounts_hashset: HashSet<_> = sc_opened_accounts.iter().collect();
-
-	let mut new_program_swap_accounts = Vec::new();
-	let mut closed_accounts = Vec::new();
-
-	for account in &open_event_accounts {
-		if !sc_opened_accounts_hashset.contains(account) &&
-			!sc_closure_initiated_accounts.iter().any(|x| &x.vault_swap_account == account)
-		{
-			new_program_swap_accounts.push(*account);
-		}
-	}
-
-	for account in sc_closure_initiated_accounts {
-		if !open_event_accounts.contains(&account.vault_swap_account) {
-			closed_accounts.push(account);
-		}
-	}
+	let new_program_swap_accounts: Vec<_> = open_event_accounts
+		.iter()
+		.filter(|account| {
+			!sc_opened_accounts.contains(account) &&
+				!sc_closure_initiated_accounts.iter().any(|x| &x.vault_swap_account == *account)
+		})
+		.cloned()
+		.collect();
+	let closed_accounts: Vec<_> = sc_closure_initiated_accounts
+		.into_iter()
+		.filter(|account| !open_event_accounts.contains(&account.vault_swap_account))
+		.collect();
 
 	Ok((new_program_swap_accounts, closed_accounts, slot))
 }
@@ -396,7 +390,7 @@ mod tests {
 				let (new_program_swap_accounts, closed_accounts, _) =
 					get_changed_program_swap_accounts(
 						&client,
-						vec![],
+						Default::default(),
 						BTreeSet::from([VaultSwapAccountAndSender {
 							vault_swap_account: SolAddress::from_str(
 								"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -426,7 +420,7 @@ mod tests {
 				let (new_program_swap_accounts, closed_accounts, _) =
 					get_changed_program_swap_accounts(
 						&client,
-						vec![],
+						Default::default(),
 						BTreeSet::from([VaultSwapAccountAndSender {
 							vault_swap_account: SolAddress::from_str(
 								"HhxGAt8THMtsW97Zuo5ZrhKgqsdD5EBgCx9vZ4n62xpf",
