@@ -55,16 +55,19 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					let state_chain_client = state_chain_client_c.clone();
 					async move {
 						state_chain_client
-							.storage_map_entries::<pallet_cf_swapping::BrokerPrivateBtcChannels<
+							.storage_map::<pallet_cf_swapping::BrokerPrivateBtcChannels<
 								state_chain_runtime::Runtime,
-							>>(block_hash)
+							>, Vec<_>>(block_hash)
 							.await
 							.expect(STATE_CHAIN_CONNECTION)
 					}
 				},
 				// Private channels are not reusable (at least at the moment), so we
 				// don't need to check for their expiration:
-				|_index, addresses: &BrokerPrivateChannels| addresses.clone(),
+				|index, addresses: &BrokerPrivateChannels| {
+					assert!(<Inner::Chain as Chain>::is_block_witness_root(index));
+					addresses.clone()
+				},
 			)
 			.await,
 			self.parameters,

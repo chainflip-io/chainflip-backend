@@ -65,6 +65,11 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 					let key: &AggKey = &epoch.info.0;
 
+					// Take all current private broker chanenls and use them to build a list of all
+					// deposit addresses that we should check for vault swaps. Note that we
+					// monitor previous epoch key (if exists) in addition to the current one, which
+					// means we get up to two deposit addresses per broker. A special case is the
+					// "change address" that doesn't have a broker associated with it.
 					[key.current].into_iter().chain(key.previous).flat_map(|key| {
 						[(None, CHANGE_ADDRESS_SALT)]
 							.into_iter()
