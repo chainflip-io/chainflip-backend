@@ -89,7 +89,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 
 			// Can process CCM via Swap deposit
 			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::signed(BROKER),
 				Asset::Dot,
 				Asset::Eth,
 				MockAddressConverter::to_encoded_address((*EVM_OUTPUT_ADDRESS).clone()),

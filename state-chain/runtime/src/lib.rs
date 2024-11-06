@@ -310,6 +310,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
+	type ChannelIdAllocator = BitcoinIngressEgress;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -2282,7 +2283,19 @@ impl_runtime_apis! {
 		}
 
 		fn cf_suspended_validators() -> Vec<(Offence, u32)> {
-			pallet_cf_reputation::Suspensions::<Runtime>::iter().map(|(key, elem)| (key, elem.len() as u32)).collect()
+			let suspended_for_keygen = match pallet_cf_validator::Pallet::<Runtime>::current_rotation_phase() {
+				pallet_cf_validator::RotationPhase::KeygensInProgress(rotation_state) |
+				pallet_cf_validator::RotationPhase::KeyHandoversInProgress(rotation_state) |
+				pallet_cf_validator::RotationPhase::ActivatingKeys(rotation_state) |
+				pallet_cf_validator::RotationPhase::NewKeysActivated(rotation_state) => { rotation_state.banned.len() as u32 },
+				_ => {0u32}
+			};
+			pallet_cf_reputation::Suspensions::<Runtime>::iter().map(|(key, _)| {
+				if key == pallet_cf_threshold_signature::PalletOffence::FailedKeygen.into() {
+					return (key, suspended_for_keygen);
+				}
+				(key, pallet_cf_reputation::Pallet::<Runtime>::validators_suspended_for(&[key]).len() as u32)
+			}).collect()
 		}
 		fn cf_epoch_state() -> EpochState {
 			let auction_params = Validator::auction_parameters();

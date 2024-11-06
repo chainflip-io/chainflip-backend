@@ -368,15 +368,15 @@ fn withdraw_broker_fees() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Swapping::withdraw(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::signed(BROKER),
 				Asset::Eth,
 				EncodedAddress::Eth(Default::default()),
 			),
 			<Error<Test>>::NoFundsAvailable
 		);
-		credit_broker_account::<Test>(&ALICE, Asset::Eth, 200);
+		credit_broker_account::<Test>(&BROKER, Asset::Eth, 200);
 		assert_ok!(Swapping::withdraw(
-			RuntimeOrigin::signed(ALICE),
+			RuntimeOrigin::signed(BROKER),
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 		));
