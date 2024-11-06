@@ -15,7 +15,7 @@ import { getBalance } from '../shared/get_balance';
 import { observeEvent } from '../shared/utils/substrate';
 import { CcmDepositMetadata, FillOrKillParamsX128 } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
-import { executeVaultSwap } from '../shared/vault_swap';
+import { executeVaultSwap } from '../shared/evm_vault_swap';
 import { newCcmMetadata } from '../shared/swapping';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
