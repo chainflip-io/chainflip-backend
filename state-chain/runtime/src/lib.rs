@@ -358,6 +358,7 @@ impl pallet_cf_vaults::Config<Instance5> for Runtime {
 use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
+	const NAME: &'static str = "Ethereum";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
@@ -385,6 +386,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
+	const NAME: &'static str = "Polkadot";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
@@ -412,6 +414,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
+	const NAME: &'static str = "Bitcoin";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
@@ -439,6 +442,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
+	const NAME: &'static str = "Arbitrum";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
@@ -466,6 +470,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
+	const NAME: &'static str = "Solana";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = false;
@@ -771,6 +776,7 @@ impl pallet_cf_reputation::Config for Runtime {
 }
 
 impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
+	const NAME: &'static str = "EVM";
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -787,6 +793,7 @@ impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 }
 
 impl pallet_cf_threshold_signature::Config<Instance2> for Runtime {
+	const NAME: &'static str = "Polkadot";
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -803,6 +810,7 @@ impl pallet_cf_threshold_signature::Config<Instance2> for Runtime {
 }
 
 impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
+	const NAME: &'static str = "Bitcoin";
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -819,6 +827,7 @@ impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
 }
 
 impl pallet_cf_threshold_signature::Config<Instance5> for Runtime {
+	const NAME: &'static str = "Solana";
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -835,6 +844,7 @@ impl pallet_cf_threshold_signature::Config<Instance5> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance1> for Runtime {
+	const NAME: &'static str = "Ethereum";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -861,6 +871,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance2> for Runtime {
+	const NAME: &'static str = "Polkadot";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -887,6 +898,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance3> for Runtime {
+	const NAME: &'static str = "Bitcoin";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -913,6 +925,7 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance4> for Runtime {
+	const NAME: &'static str = "Arbitrum";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -946,6 +959,7 @@ impl pallet_cf_asset_balances::Config for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance5> for Runtime {
+	const NAME: &'static str = "Solana";
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;

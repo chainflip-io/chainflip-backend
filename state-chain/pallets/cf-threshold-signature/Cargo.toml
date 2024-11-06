@@ -22,6 +22,7 @@ cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true, features = ["derive"] }
 cf-utilities = { workspace = true }
 cfe-events = { workspace = true }
+generic-typeinfo-derive = { path = '../../generic-typeinfo-derive'}
 
 log = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
@@ -37,6 +38,7 @@ frame-benchmarking = { workspace = true, optional = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 sp-std = { workspace = true }
+const_format = "0.2.33"
 
 [dev-dependencies]
 hex-literal = { workspace = true }

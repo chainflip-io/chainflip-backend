@@ -2176,6 +2176,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_format"
+version = "0.2.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50c655d81ff1114fb0dcdea9225ea9f0cc712a6f8d189378e82bdf62a473a64b"
+dependencies = [
+ "const_format_proc_macros",
+]
+
+[[package]]
+name = "const_format_proc_macros"
+version = "0.2.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eff1a44b93f47b1bac19a27932f5c591e43d1ba357ee4f61526c8a25603f0eb1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-xid",
+]
+
+[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4457,6 +4477,16 @@ checksum = "96512db27971c2c3eece70a1e106fbe6c87760234e31e8f7e5634912fe52794a"
 dependencies = [
  "serde",
  "typenum",
+]
+
+[[package]]
+name = "generic-typeinfo-derive"
+version = "0.1.0"
+dependencies = [
+ "const_format",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.79",
 ]
 
 [[package]]
@@ -7705,6 +7735,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "log",
  "parity-scale-codec",
  "scale-info",
@@ -7900,6 +7931,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "hex-literal",
  "log",
  "nanorand",
@@ -8022,9 +8054,11 @@ dependencies = [
  "cf-test-utilities",
  "cf-traits",
  "cfe-events",
+ "const_format",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "generic-typeinfo-derive",
  "hex-literal",
  "log",
  "pallet-cf-reputation",
@@ -8956,9 +8990,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.87"
+version = "1.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3e4daa0dcf6feba26f985457cdf104d4b4256fc5a09547140f3631bb076b19a"
+checksum = "f139b0662de085916d1fb67d2b4169d1addddda1919e696f3252b740b629986e"
 dependencies = [
  "unicode-ident",
 ]
@@ -11372,7 +11406,7 @@ version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9465315bc9d4566e1724f0fffcbcc446268cb522e60f9a27bcded6b19c108113"
 dependencies = [
- "bitcoin_hashes 0.13.0",
+ "bitcoin_hashes 0.14.0",
  "rand",
  "secp256k1-sys 0.10.1",
  "serde",
