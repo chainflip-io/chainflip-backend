@@ -23,7 +23,7 @@ async function runAllConcurrentTests() {
   const givenNumberOfNodes = match ? parseInt(match[0]) : null;
   const numberOfNodes = givenNumberOfNodes ?? 1;
   // If the third argument is not explicitly false, we assume it's true and we are in a localnet environment.
-  const addConcurrentLocalNetTests = process.argv[3] !== 'false';
+  const addConcurrentLocalnetTests = process.argv[3] !== 'false';
 
   const broadcastAborted = observeBadEvent(':BroadcastAborted', {
     label: 'Concurrent broadcast aborted',
@@ -56,7 +56,7 @@ async function runAllConcurrentTests() {
   }
 
   // Tests that only work with localnet but can be run concurrent.
-  if (addConcurrentLocalNetTests) {
+  if (addConcurrentLocalnetTests) {
     const localnetTests = [testBrokerLevelScreening.run()];
     tests.push(...localnetTests);
   }
