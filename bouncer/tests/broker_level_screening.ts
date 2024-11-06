@@ -1,15 +1,8 @@
 import { randomBytes } from 'crypto';
-import { execSync } from 'child_process';
 import { InternalAsset } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
 import { sendBtc } from '../shared/send_btc';
-import {
-  hexStringToBytesArray,
-  newAddress,
-  sleep,
-  handleSubstrateError,
-  brokerMutex,
-} from '../shared/utils';
+import { newAddress, sleep, handleSubstrateError, brokerMutex } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
 import { requestNewSwap } from '../shared/perform_swap';
@@ -59,6 +52,7 @@ async function newAssetAddress(asset: InternalAsset, seed = null): Promise<strin
  * @param txId - The txId to submit as tainted as byte array in the order it is on the Bitcoin chain - which
  * is reverse of how it's normally displayed in block explorers.
  */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 async function submitTxAsTainted(txId: number[]) {
   await using chainflip = await getChainflipApi();
   return brokerMutex.runExclusive(async () =>
@@ -69,23 +63,85 @@ async function submitTxAsTainted(txId: number[]) {
 }
 
 /**
- * Pauses or resumes the bitcoin block production. We send a command to the docker container to start or stop mining blocks.
+ * Ensures that the deposit-monitor is running and healthy.
  *
- * @param pause - Whether to pause or resume the block production.
- * @returns - Whether the command was successful.
  */
-function pauseBtcBlockProduction(pause: boolean): boolean {
-  try {
-    execSync(
-      pause
-        ? 'docker exec bitcoin rm /root/mine_blocks'
-        : 'docker exec bitcoin touch /root/mine_blocks',
-    );
-    return true;
-  } catch (error) {
-    console.error(error);
-    return false;
+async function ensureDepositMonitorHealth() {
+  const headers: Headers = new Headers();
+  headers.set('Content-Type', 'application/json');
+  headers.set('Accept', 'application/json');
+
+  const request: RequestInfo = new Request('http://127.0.0.1:6060/health', {
+    method: 'GET',
+    headers,
+  });
+
+  let responseBody;
+  for (let i = 0; i < 10; i++) {
+    let res;
+    try {
+      res = await fetch(request);
+    } catch {
+      testBrokerLevelScreening.log('Could not connect to deposit monitor, retrying.');
+      await sleep(1000);
+    }
+
+    if (res) {
+      const body = await res.json();
+
+      if (body.starting === false) {
+        responseBody = body;
+        break;
+      } else {
+        testBrokerLevelScreening.log('Deposit monitor is starting...');
+        await sleep(500);
+      }
+    }
   }
+
+  if (responseBody === undefined) {
+    throw new Error('Could not ensure that deposit monitor is running.');
+  }
+
+  const body = responseBody;
+  const health =
+    body.transaction_processor &&
+    body.external_state_processor &&
+    body.analysis_processor &&
+    body.judgement_processor;
+  testBrokerLevelScreening.log('Deposit monitor health: ' + health);
+  if (!health) {
+    testBrokerLevelScreening.log('Deposit monitor health response is:  ' + JSON.stringify(body));
+    throw new Error('Could not ensure that deposit monitor is healthy.');
+  }
+  return health;
+}
+
+/**
+ * Call the deposit-monitor to set risk score of given transaction in mock analysis provider.
+ * @param txid Hash of the transaction we want to report.
+ * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
+ */
+function setTxRiskScore(txid: string, score: number) {
+  const headers: Headers = new Headers();
+  headers.set('Content-Type', 'application/json');
+  headers.set('Accept', 'application/json');
+  const request: RequestInfo = new Request('http://127.0.0.1:6070/riskscore', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify([
+      txid,
+      {
+        risk_score: { Score: score },
+        unknown_contribution_percentage: 0.0,
+        analysis_provider: 'elliptic_analysis_provider',
+      },
+    ]),
+  });
+
+  return fetch(request).then((res) =>
+    testBrokerLevelScreening.log('got response' + JSON.stringify(res)),
+  );
 }
 
 /**
@@ -94,7 +150,6 @@ function pauseBtcBlockProduction(pause: boolean): boolean {
  * @param amount - The deposit amount.
  * @param doBoost - Whether to boost the deposit.
  * @param refundAddress - The address to refund to.
- * @param stopBlockProductionFor - The number of blocks to stop block production for. We need this to ensure that the tainted tx is on chain before the deposit is witnessed/prewitnessed.
  * @param waitBeforeReport - The number of milliseconds to wait before reporting the tx as tainted.
  * @returns - The the channel id of the deposit channel.
  */
@@ -102,8 +157,7 @@ async function brokerLevelScreeningTestScenario(
   amount: string,
   doBoost: boolean,
   refundAddress: string,
-  stopBlockProductionFor = 0,
-  waitBeforeReport = 0,
+  waitBeforeReport: number,
 ): Promise<string> {
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const refundParameters: FillOrKillParamsX128 = {
@@ -122,20 +176,10 @@ async function brokerLevelScreeningTestScenario(
     doBoost ? 100 : 0,
     refundParameters,
   );
-  const txId = await sendBtc(swapParams.depositAddress, amount);
-  if (stopBlockProductionFor > 0) {
-    pauseBtcBlockProduction(true);
-  }
+  const txId = await sendBtc(swapParams.depositAddress, amount, 0);
   await sleep(waitBeforeReport);
-  // Note: The bitcoin core js lib returns the txId in reverse order.
-  // On chain we expect the txId to be in the correct order (like the Bitcoin internal representation).
-  // Because of this we need to reverse the txId before submitting it as tainted.
-  await submitTxAsTainted(hexStringToBytesArray(txId).reverse());
-  await sleep(stopBlockProductionFor);
-  if (stopBlockProductionFor > 0) {
-    pauseBtcBlockProduction(false);
-  }
-  return Promise.resolve(swapParams.channelId.toString());
+  await setTxRiskScore(txId, 9.0);
+  return swapParams.channelId.toString();
 }
 
 // -- Test suite for broker level screening --
@@ -147,18 +191,15 @@ async function brokerLevelScreeningTestScenario(
 // 3. Boost and late tx report -> Tainted tx is reported late and the swap is not refunded.
 async function main() {
   const MILLI_SECS_PER_BLOCK = 6000;
-  const BLOCKS_TO_WAIT = 2;
+
+  // 0. -- Ensure that deposit monitor is running --
+  await ensureDepositMonitorHealth();
 
   // 1. -- Test no boost and early tx report --
   testBrokerLevelScreening.log('Testing broker level screening with no boost...');
   let btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario(
-    '0.2',
-    false,
-    btcRefundAddress,
-    MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT,
-  );
+  await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, 0);
 
   await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
@@ -173,12 +214,7 @@ async function main() {
   );
   btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario(
-    '0.2',
-    true,
-    btcRefundAddress,
-    MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT,
-  );
+  await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, 0);
   await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
 
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
@@ -195,8 +231,7 @@ async function main() {
     '0.2',
     true,
     btcRefundAddress,
-    0,
-    MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT,
+    MILLI_SECS_PER_BLOCK * 2,
   );
 
   await observeEvent('bitcoinIngressEgress:DepositFinalised', {
