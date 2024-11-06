@@ -109,7 +109,6 @@
 
 pub mod electoral_system;
 pub mod electoral_systems;
-pub mod migrations;
 mod mock;
 mod tests;
 pub mod vote_storage;
