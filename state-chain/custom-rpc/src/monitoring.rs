@@ -3,6 +3,7 @@ use crate::{BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringD
 use cf_chains::{dot::PolkadotAccountId, sol::SolAddress};
 use jsonrpsee::proc_macros::rpc;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
+use sp_api::Core;
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
 use state_chain_runtime::{
 	chainflip::Offence,
@@ -126,8 +127,18 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcMonitoringData> {
-		self.with_runtime_api(at, |api, hash| api.cf_monitoring_data(hash))
-			.map(Into::into)
+		let name = sp_core::blake2_64(b"MonitoringRuntimeApi");
+		self.with_runtime_api(at, |api, hash| {
+			let apis = api.version(hash).unwrap().apis;
+			if apis.into_owned().contains(&(name, 1)) {
+				// if api.api_version::< ????? >(hash).unwrap().unwrap() < 2 {
+				let old_result = api.cf_monitoring_data_before_version_2(hash)?;
+				Ok(old_result.into())
+			} else {
+				api.cf_monitoring_data(hash)
+			}
+		})
+		.map(Into::into)
 	}
 	fn cf_accounts_info(
 		&self,
