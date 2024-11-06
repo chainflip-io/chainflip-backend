@@ -23,7 +23,7 @@ impl Encode for UtxoEncodedData {
 	fn encode(&self) -> Vec<u8> {
 		let mut r = Vec::with_capacity(MAX_NULLDATA_LENGTH);
 
-		r.push(CURRENT_VERSION);
+		CURRENT_VERSION.encode_to(&mut r);
 
 		self.output_asset.encode_to(&mut r);
 
