@@ -13,8 +13,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, ForeignChain,
-	NetworkEnvironment, SemVer, SwapId, SwapRequestId,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -421,6 +421,32 @@ pub struct RpcSwapOutputV2 {
 	pub egress_fee: RpcFee,
 }
 
+impl From<RpcSwapOutputV3> for RpcSwapOutputV2 {
+	fn from(swap_output: RpcSwapOutputV3) -> Self {
+		Self {
+			intermediary: swap_output.intermediary.map(Into::into),
+			output: swap_output.output,
+			network_fee: swap_output.network_fee,
+			ingress_fee: swap_output.ingress_fee,
+			egress_fee: swap_output.egress_fee,
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RpcSwapOutputV3 {
+	// Intermediary amount, if there's any
+	pub intermediary: Option<U256>,
+	// Final output of the swap
+	pub output: U256,
+	pub network_fee: RpcFee,
+	pub ingress_fee: RpcFee,
+	pub egress_fee: RpcFee,
+	// Fees for broker and affiliates
+	pub broker_commission: RpcFee,
+	pub affiliate_fees: Vec<(sp_runtime::AccountId32, RpcFee)>,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub enum SwapRateV2AdditionalOrder {
 	LimitOrder { base_asset: Asset, quote_asset: Asset, side: Side, tick: Tick, sell_amount: U256 },
@@ -746,6 +772,18 @@ pub trait CustomApi {
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
+	#[method(name = "swap_rate_v3")]
+	fn cf_pool_swap_rate_v3(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: U256,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		broker_commission: BasisPoints,
+		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
+		dca_parameters: Option<DcaParameters>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutputV3>;
 	#[method(name = "required_asset_ratio_for_range_order")]
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
@@ -1356,16 +1394,40 @@ where
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
+		self.cf_pool_swap_rate_v3(
+			from_asset,
+			to_asset,
+			amount,
+			additional_orders,
+			0u16,
+			None,
+			None,
+			at,
+		)
+		.map(Into::into)
+	}
+
+	fn cf_pool_swap_rate_v3(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: U256,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		broker_commission: BasisPoints,
+		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
+		dca_parameters: Option<DcaParameters>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutputV3> {
 		self.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(
-				api.cf_pool_simulate_swap(
+				api.cf_pool_simulate_swap_v2(
 					hash,
 					from_asset,
 					to_asset,
 					amount
 						.try_into()
 						.map_err(|_| "Swap input amount too large.")
-						.and_then(|amount| {
+						.and_then(|amount: u128| {
 							if amount == 0 {
 								Err("Swap input amount cannot be zero.")
 							} else {
@@ -1397,22 +1459,39 @@ where
 							})
 							.collect()
 					}),
+					broker_commission,
+					affiliate_fees,
+					dca_parameters,
 				)?
-				.map(|simulated_swap_info| RpcSwapOutputV2 {
-					intermediary: simulated_swap_info.intermediary.map(Into::into),
-					output: simulated_swap_info.output.into(),
+				.map(|simulated_swap_info_v2| RpcSwapOutputV3 {
+					intermediary: simulated_swap_info_v2.intermediary.map(Into::into),
+					output: simulated_swap_info_v2.output.into(),
 					network_fee: RpcFee {
 						asset: cf_primitives::STABLE_ASSET,
-						amount: simulated_swap_info.network_fee.into(),
+						amount: simulated_swap_info_v2.network_fee.into(),
 					},
 					ingress_fee: RpcFee {
 						asset: from_asset,
-						amount: simulated_swap_info.ingress_fee.into(),
+						amount: simulated_swap_info_v2.ingress_fee.into(),
 					},
 					egress_fee: RpcFee {
 						asset: to_asset,
-						amount: simulated_swap_info.egress_fee.into(),
+						amount: simulated_swap_info_v2.egress_fee.into(),
 					},
+					broker_commission: RpcFee {
+						asset: cf_primitives::STABLE_ASSET,
+						amount: simulated_swap_info_v2.broker_fee.into(),
+					},
+					affiliate_fees: simulated_swap_info_v2
+						.affiliate_fees
+						.into_iter()
+						.map(|(account, fees)| {
+							(
+								account,
+								RpcFee { asset: cf_primitives::STABLE_ASSET, amount: fees.into() },
+							)
+						})
+						.collect(),
 				})?,
 			)
 		})

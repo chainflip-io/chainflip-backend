@@ -2010,6 +2010,19 @@ pub mod pallet {
 				},
 			};
 		}
+
+		/// Swap some amount of an asset into the STABLE_ASSET with no fee deductions.
+		/// Used for fee estimation ONLY.
+		#[transactional]
+		pub fn swap_into_stable_without_fees(
+			from: Asset,
+			input_amount: AssetAmount,
+		) -> Result<AssetAmount, DispatchError> {
+			match from {
+				STABLE_ASSET => Ok(input_amount),
+				_ => T::SwappingApi::swap_single_leg(from, STABLE_ASSET, input_amount),
+			}
+		}
 	}
 
 	impl<T: Config> SwapRequestHandler for Pallet<T> {

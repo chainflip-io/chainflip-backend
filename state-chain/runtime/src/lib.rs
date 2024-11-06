@@ -28,7 +28,8 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, SimulatedSwapInformationV2,
+		ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -49,7 +50,10 @@ use cf_chains::{
 	sol::{SolAddress, SolanaCrypto},
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
-use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
+use cf_primitives::{
+	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
+	NetworkEnvironment, STABLE_ASSET,
+};
 use cf_runtime_utilities::NoopRuntimeUpgrade;
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
@@ -1541,6 +1545,15 @@ impl_runtime_apis! {
 			LiquidityPools::pool_price(base_asset, quote_asset).map_err(Into::into)
 		}
 
+		fn cf_pool_simulate_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
+			Self::cf_pool_simulate_swap_v2(from, to, amount, additional_orders, Default::default(), None, None).map(Into::into)
+		}
+
 		/// Simulates a swap and return the intermediate (if any) and final output.
 		///
 		/// If no swap rate can be calculated, returns None. This can happen if the pools are not
@@ -1549,12 +1562,15 @@ impl_runtime_apis! {
 		///
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_swap(
+		fn cf_pool_simulate_swap_v2(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
+			broker_commission: BasisPoints,
+			affiliate_fees: Option<Affiliates<AccountId>>,
+			dca_parameters: Option<DcaParameters>,
+		) -> Result<SimulatedSwapInformationV2, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
 				for (index, additional_order) in additional_orders.into_iter().enumerate() {
 					match additional_order {
@@ -1628,20 +1644,46 @@ impl_runtime_apis! {
 
 			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, from, amount);
 
+			fn accumulate_and_swap_fees_into_stable(asset: Asset, amount: AssetAmount, fees: BasisPoints, total_fees: &mut AssetAmount) -> Result<AssetAmount, DispatchErrorWithMessage> {
+				let input = cf_primitives::mul_bps(amount, fees);
+				*total_fees += input;
+				Swapping::swap_into_stable_without_fees(asset, amount).map_err(Into::into)
+			}
+
+			// Take broker and affiliate fees from the swap amount
+			let mut total_fees = 0;
+
+			// Calculate broker fee
+			let broker_fee = accumulate_and_swap_fees_into_stable(from, amount_to_swap, broker_commission, &mut total_fees)?;
+
+			// Calculate affiliate fees
+			let affiliate_fees = affiliate_fees.unwrap_or_default().into_iter().map(|Beneficiary {account, bps}|{
+				let affiliate_fee = accumulate_and_swap_fees_into_stable(from, amount_to_swap, bps, &mut total_fees)?;
+				Ok((account, affiliate_fee))
+			}).collect::<Result<Vec<(AccountId, AssetAmount)>, DispatchErrorWithMessage>>()?;
+
+			let amount_to_swap_without_fees = amount_to_swap.saturating_sub(total_fees);
+
+			// Estimate swap result for a chunk, then extrapolate the result.
+			// If no DCA parameter is given, swap the entire amount with 1 chunk.
+			let number_of_chunks: u128 = dca_parameters.map(|dca|dca.number_of_chunks).unwrap_or(1u32).into();
+			let amount_per_chunk = amount_to_swap_without_fees / number_of_chunks;
 			let swap_output = Swapping::swap_with_network_fee(
 				from,
 				to,
-				amount_to_swap,
-			)?;
+				amount_per_chunk,
+			)?.saturating_mul(number_of_chunks);
 
 			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, to, swap_output.output);
 
-			Ok(SimulatedSwapInformation {
+			Ok(SimulatedSwapInformationV2 {
 				intermediary: swap_output.intermediary,
 				output,
 				network_fee: swap_output.network_fee,
 				ingress_fee,
 				egress_fee,
+				broker_fee,
+				affiliate_fees,
 			})
 		}
 
@@ -2095,7 +2137,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> Result<(), DispatchErrorWithMessage> {
-			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&cf_primitives::DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
+			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
 		}
 
 		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage> {
