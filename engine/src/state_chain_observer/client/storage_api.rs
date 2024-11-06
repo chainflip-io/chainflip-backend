@@ -180,6 +180,13 @@ pub trait StorageApi {
 			.map(|(_k, v)| v)
 			.collect())
 	}
+
+	async fn storage_map_entries<StorageMap: StorageMapAssociatedTypes + 'static>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Vec<(StorageMap::Key, StorageMap::Value)>> {
+		Ok(self.storage_map::<StorageMap, Vec<_>>(block_hash).await?.into_iter().collect())
+	}
 }
 
 #[async_trait]

@@ -128,6 +128,8 @@ where
 		.chunk_by_vault(vaults.clone(), scope)
 		.deposit_addresses(scope, unfinalised_state_chain_stream, state_chain_client.clone())
 		.await
+		.private_deposit_channels(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await
 		.btc_deposits(prewitness_call)
 		.logging("pre-witnessing")
 		.spawn(scope);
@@ -163,6 +165,8 @@ where
 		.logging("safe block produced")
 		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await
+		.private_deposit_channels(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(process_call.clone())
 		.egress_items(scope, state_chain_stream, state_chain_client.clone())

@@ -7,7 +7,7 @@ use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use state_chain_runtime::BitcoinInstance;
 
 use super::super::common::chunked_chain_source::chunked_by_vault::{
-	builder::ChunkedByVaultBuilder, ChunkedByVault,
+	builder::ChunkedByVaultBuilder, private_deposit_channels::BrokerPrivateChannels, ChunkedByVault,
 };
 use crate::{
 	btc::rpc::VerboseTransaction,
@@ -39,7 +39,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		Inner: ChunkedByVault<
 			Index = u64,
 			Hash = BlockHash,
-			Data = (((), Vec<VerboseTransaction>), Addresses<Inner>),
+			Data = ((((), Vec<VerboseTransaction>), Addresses<Inner>), BrokerPrivateChannels),
 			Chain = Bitcoin,
 		>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
@@ -55,6 +55,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self.then(move |epoch, header| {
 			let process_call = process_call.clone();
 			async move {
+				// TODO: Make addresses a Map of some kind?
+				let ((((), txs), deposit_channels), private_channels) = header.data;
+
 				let vault_addresses = {
 					use cf_chains::btc::{
 						deposit_address::DepositAddress, AggKey, CHANGE_ADDRESS_SALT,
@@ -62,18 +65,20 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 					let key: &AggKey = &epoch.info.0;
 
-					let maybe_previous_vault_address =
-						key.previous.map(|key| DepositAddress::new(key, CHANGE_ADDRESS_SALT));
-					let current_vault_address =
-						DepositAddress::new(key.current, CHANGE_ADDRESS_SALT);
-
-					[current_vault_address].into_iter().chain(maybe_previous_vault_address)
+					[key.current].into_iter().chain(key.previous).flat_map(|key| {
+						[(None, CHANGE_ADDRESS_SALT)]
+							.into_iter()
+							.chain(private_channels.clone().into_iter().map(
+								|(broker_id, channel_id)| (Some(broker_id), channel_id as u32),
+							))
+							.map(move |(maybe_broker_id, channel_id)| {
+								(maybe_broker_id, DepositAddress::new(key, channel_id))
+							})
+					})
 				};
 
-				// TODO: Make addresses a Map of some kind?
-				let (((), txs), deposit_channels) = header.data;
-
-				for vault_address in vault_addresses {
+				// TODO: provide broker id (along with broker fees) in the call
+				for (_maybe_broker_id, vault_address) in vault_addresses {
 					for tx in &txs {
 						if let Some(call) =
 							super::vault_swaps::try_extract_vault_swap_call(tx, &vault_address)
