@@ -4,7 +4,8 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
+	self, assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ChainCrypto,
+	ForeignChainAddress,
 };
 use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
@@ -183,6 +184,39 @@ pub struct FailingWitnessValidators {
 	pub validators: Vec<(cf_primitives::AccountId, String, bool)>,
 }
 
+type ChainAccountFor<C> = <C as Chain>::ChainAccount;
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct ChainAccounts {
+	pub btc_chain_accounts: Vec<ChainAccountFor<cf_chains::Bitcoin>>,
+}
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub enum TaintedTransactionEvent<TxId> {
+	TaintedTransactionReportReceived {
+		account_id: <Runtime as frame_system::Config>::AccountId,
+		tx_id: TxId,
+	},
+
+	TaintedTransactionReportExpired {
+		account_id: <Runtime as frame_system::Config>::AccountId,
+		tx_id: TxId,
+	},
+
+	TaintedTransactionRejected {
+		refund_broadcast_id: BroadcastId,
+		tx_id: TxId,
+	},
+}
+
+type TaintedTransactionEventFor<C> =
+	TaintedTransactionEvent<<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId>;
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct TaintedTransactionEvents {
+	pub btc_events: Vec<TaintedTransactionEventFor<cf_chains::Bitcoin>>,
+}
+
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -306,6 +340,8 @@ decl_runtime_apis!(
 			chunk_interval: u32,
 		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage>;
+		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
+		fn cf_tainted_transaction_events() -> TaintedTransactionEvents;
 	}
 );
 
