@@ -962,9 +962,6 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ChainAccounts>;
 
-	#[subscription(name = "subscribe_tainted_transaction_events", item = BlockUpdate<TaintedTransactionEvents>)]
-	async fn cf_subscribe_tainted_transaction_events(&self);
-
 	#[method(name = "get_tainted_transaction_events")]
 	fn cf_get_tainted_transaction_events(
 		&self,
@@ -1759,19 +1756,6 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
-	}
-
-	async fn cf_subscribe_tainted_transaction_events(
-		&self,
-		sink: jsonrpsee::PendingSubscriptionSink,
-	) {
-		self.new_subscription(
-			true, /* only_on_changes */
-			true, /* end_on_error */
-			sink,
-			|client, hash| Ok(client.runtime_api().cf_tainted_transaction_events(hash)?),
-		)
-		.await
 	}
 
 	fn cf_get_tainted_transaction_events(
