@@ -54,11 +54,8 @@ use frame_support::{
 	transactional,
 };
 use frame_system::pallet_prelude::*;
+use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
-use scale_info::{
-	build::{Fields, Variants},
-	Path, Type,
-};
 use sp_runtime::{traits::UniqueSaturatedInto, Percent};
 use sp_std::{
 	boxed::Box,
@@ -218,9 +215,9 @@ mod deposit_origin {
 
 use deposit_origin::DepositOrigin;
 
+
 /// Holds information about a transaction that is marked for rejection.
-#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
-#[scale_info(skip_type_params(T, I))]
+#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo, CloneNoBound)]
 pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 	pub refund_address: Option<ForeignChainAddress>,
 	pub asset: TargetChainAsset<T, I>,
@@ -273,7 +270,14 @@ pub struct FailedForeignChainCall {
 }
 
 #[derive(
-	CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, MaxEncodedLen,
+	CloneNoBound,
+	RuntimeDebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	GenericTypeInfo,
 )]
 pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	/// Set the fixed fee that is burned when opening a channel, denominated in Flipperinos.
@@ -293,47 +297,6 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	SetNetworkFeeDeductionFromBoost {
 		deduction_percent: Percent,
 	},
-}
-
-macro_rules! append_chain_to_name {
-	($name:ident) => {
-		match T::TargetChain::NAME {
-			"Ethereum" => concat!(stringify!($name), "Ethereum"),
-			"Polkadot" => concat!(stringify!($name), "Polkadot"),
-			"Bitcoin" => concat!(stringify!($name), "Bitcoin"),
-			"Arbitrum" => concat!(stringify!($name), "Arbitrum"),
-			"Solana" => concat!(stringify!($name), "Solana"),
-			_ => concat!(stringify!($name), "Other"),
-		}
-	};
-}
-
-impl<T, I> TypeInfo for PalletConfigUpdate<T, I>
-where
-	T: Config<I>,
-	I: 'static,
-{
-	type Identity = Self;
-	fn type_info() -> Type {
-		Type::builder()
-			.path(Path::new(append_chain_to_name!(PalletConfigUpdate), module_path!()))
-			.variant(
-				Variants::new()
-					.variant("ChannelOpeningFee", |v| {
-						v.index(0)
-							.fields(Fields::named().field(|f| f.ty::<T::Amount>().name("fee")))
-					})
-					.variant(append_chain_to_name!(SetMinimumDeposit), |v| {
-						v.index(1).fields(
-							Fields::named()
-								.field(|f| f.ty::<TargetChainAsset<T, I>>().name("asset"))
-								.field(|f| {
-									f.ty::<TargetChainAmount<T, I>>().name("minimum_deposit")
-								}),
-						)
-					}),
-			)
-	}
 }
 
 #[frame_support::pallet]
@@ -370,9 +333,8 @@ pub mod pallet {
 	}
 
 	#[derive(
-		CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo,
+		CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, GenericTypeInfo,
 	)]
-	#[scale_info(skip_type_params(T, I))]
 	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
 		pub input_asset: TargetChainAsset<T, I>,
 		pub deposit_address: Option<TargetChainAccount<T, I>>,
@@ -391,16 +353,15 @@ pub mod pallet {
 	}
 
 	#[derive(
-		CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo,
+		CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, GenericTypeInfo,
 	)]
-	#[scale_info(skip_type_params(T, I))]
 	pub enum DepositFailedDetails<T: Config<I>, I: 'static> {
 		DepositChannel { deposit_witness: DepositWitness<T::TargetChain> },
 		Vault { vault_witness: Box<VaultDepositWitness<T, I>> },
 	}
 
-	#[derive(CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	#[scale_info(skip_type_params(T, I))]
+
+	#[derive(CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
 	pub struct DepositChannelDetails<T: Config<I>, I: 'static> {
 		/// The owner of the deposit channel.
 		pub owner: T::AccountId,
@@ -506,6 +467,9 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
+		/// Name of the chain that this Config is implemented for
+		const NAME: &'static str;
+
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
