@@ -24,11 +24,11 @@ use crate::{
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
-		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, BoostPoolDepth,
+		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, SimulatedSwapInformationV2,
-		TaintedTransactionEvents, ValidatorInfo,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TaintedTransactionEvents,
+		ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -1487,15 +1487,6 @@ impl_runtime_apis! {
 			LiquidityPools::pool_price(base_asset, quote_asset).map_err(Into::into)
 		}
 
-		fn cf_pool_simulate_swap(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
-			Self::cf_pool_simulate_swap_v2(from, to, amount, Default::default(), None, additional_orders).map(Into::into)
-		}
-
 		/// Simulates a swap and return the intermediate (if any) and final output.
 		///
 		/// If no swap rate can be calculated, returns None. This can happen if the pools are not
@@ -1504,14 +1495,14 @@ impl_runtime_apis! {
 		///
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_swap_v2(
+		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformationV2, DispatchErrorWithMessage> {
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
 				for (index, additional_order) in additional_orders.into_iter().enumerate() {
 					match additional_order {
@@ -1624,18 +1615,17 @@ impl_runtime_apis! {
 				intermediary,
 				output,
 			) = {
-				let output_per_chunk = swap_output_per_chunk[0].clone();
 				(
-					output_per_chunk.network_fee_taken.unwrap_or_default() * number_of_chunks,
-					output_per_chunk.broker_fee_taken.unwrap_or_default() * number_of_chunks,
-					output_per_chunk.stable_amount.map(|amount| amount * number_of_chunks),
-					output_per_chunk.final_output.unwrap_or_default() * number_of_chunks,
+					swap_output_per_chunk[0].network_fee_taken.unwrap_or_default() * number_of_chunks,
+					swap_output_per_chunk[0].broker_fee_taken.unwrap_or_default() * number_of_chunks,
+					swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks),
+					swap_output_per_chunk[0].final_output.unwrap_or_default() * number_of_chunks,
 				)
 			};
 
 			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, to, output);
 
-			Ok(SimulatedSwapInformationV2 {
+			Ok(SimulatedSwapInformation {
 				intermediary,
 				output,
 				network_fee,

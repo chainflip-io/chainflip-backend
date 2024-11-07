@@ -420,29 +420,6 @@ pub struct RpcSwapOutputV2 {
 	pub network_fee: RpcFee,
 	pub ingress_fee: RpcFee,
 	pub egress_fee: RpcFee,
-}
-
-impl From<RpcSwapOutputV3> for RpcSwapOutputV2 {
-	fn from(swap_output: RpcSwapOutputV3) -> Self {
-		Self {
-			intermediary: swap_output.intermediary.map(Into::into),
-			output: swap_output.output,
-			network_fee: swap_output.network_fee,
-			ingress_fee: swap_output.ingress_fee,
-			egress_fee: swap_output.egress_fee,
-		}
-	}
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct RpcSwapOutputV3 {
-	// Intermediary amount, if there's any
-	pub intermediary: Option<U256>,
-	// Final output of the swap
-	pub output: U256,
-	pub network_fee: RpcFee,
-	pub ingress_fee: RpcFee,
-	pub egress_fee: RpcFee,
 	pub broker_commission: RpcFee,
 }
 
@@ -781,7 +758,7 @@ pub trait CustomApi {
 		dca_parameters: Option<DcaParameters>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcSwapOutputV3>;
+	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "required_asset_ratio_for_range_order")]
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
@@ -1427,10 +1404,10 @@ where
 		dca_parameters: Option<DcaParameters>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcSwapOutputV3> {
+	) -> RpcResult<RpcSwapOutputV2> {
 		self.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(
-				api.cf_pool_simulate_swap_v2(
+				api.cf_pool_simulate_swap(
 					hash,
 					from_asset,
 					to_asset,
@@ -1454,25 +1431,25 @@ where
 							.into_iter()
 							.map(|additional_order| {
 								match additional_order {
-								SwapRateV2AdditionalOrder::LimitOrder {
-									base_asset,
-									quote_asset,
-									side,
-									tick,
-									sell_amount,
-								} => state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
-									base_asset,
-									quote_asset,
-									side,
-									tick,
-									sell_amount: sell_amount.unique_saturated_into(),
+									SwapRateV2AdditionalOrder::LimitOrder {
+										base_asset,
+										quote_asset,
+										side,
+										tick,
+										sell_amount,
+									} => state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
+										base_asset,
+										quote_asset,
+										side,
+										tick,
+										sell_amount: sell_amount.unique_saturated_into(),
+									}
 								}
-							}
 							})
 							.collect()
 					}),
 				)?
-				.map(|simulated_swap_info_v2| RpcSwapOutputV3 {
+				.map(|simulated_swap_info_v2| RpcSwapOutputV2 {
 					intermediary: simulated_swap_info_v2.intermediary.map(Into::into),
 					output: simulated_swap_info_v2.output.into(),
 					network_fee: RpcFee {
@@ -2307,6 +2284,7 @@ mod test {
 			network_fee: RpcFee { asset: Asset::Usdc, amount: 1_000u128.into() },
 			ingress_fee: RpcFee { asset: Asset::Flip, amount: 500u128.into() },
 			egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
+			broker_commission: RpcFee { asset: Asset::Usdc, amount: 100u128.into() },
 		})
 		.unwrap());
 	}

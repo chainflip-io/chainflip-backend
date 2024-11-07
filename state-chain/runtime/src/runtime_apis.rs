@@ -146,29 +146,6 @@ pub struct SimulatedSwapInformation {
 	pub network_fee: AssetAmount,
 	pub ingress_fee: AssetAmount,
 	pub egress_fee: AssetAmount,
-}
-
-impl From<SimulatedSwapInformationV2> for SimulatedSwapInformation {
-	fn from(swap_into: SimulatedSwapInformationV2) -> Self {
-		Self {
-			intermediary: swap_into.intermediary,
-			output: swap_into.output,
-			network_fee: swap_into.network_fee,
-			ingress_fee: swap_into.ingress_fee,
-			egress_fee: swap_into.egress_fee,
-		}
-	}
-}
-
-/// Struct that represents the estimated output of a Swap V2.
-/// Adds additional output for Broker and affiliate fees.
-#[derive(Encode, Decode, TypeInfo)]
-pub struct SimulatedSwapInformationV2 {
-	pub intermediary: Option<AssetAmount>,
-	pub output: AssetAmount,
-	pub network_fee: AssetAmount,
-	pub ingress_fee: AssetAmount,
-	pub egress_fee: AssetAmount,
 	pub broker_fee: AssetAmount,
 }
 
@@ -241,8 +218,23 @@ pub struct TaintedTransactionEvents {
 	pub btc_events: Vec<TaintedTransactionEventFor<cf_chains::Bitcoin>>,
 }
 
+// READ THIS BEFORE UPDATING THIS TRAIT:
+//
+// ## When changing an existing method:
+//  - Bump the api_version of the trait, for example from #[api_version(2)] to #[api_version(3)].
+//  - Annotate the old method with #[changed_in($VERSION)] where $VERSION is the *new* api_version,
+//    for example #[changed_in(3)].
+//  - Handle the old method in the custom rpc implementation using runtime_api().api_version().
+//
+// ## When adding a new method:
+//  - Bump the api_version of the trait, for example from #[api_version(2)] to #[api_version(3)].
+//  - Create a dummy method with the same name, but no args and no return value.
+//  - Annotate the dummy method with #[changed_in($VERSION)] where $VERSION is the *new*
+//    api_version.
+//  - Handle the dummy method gracefully in the custom rpc implementation using
+//    runtime_api().api_version().
 decl_runtime_apis!(
-	/// Definition for all runtime API interfaces.
+	#[api_version(2)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -276,20 +268,21 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 		) -> Result<PoolPriceV2, DispatchErrorWithMessage>;
+		#[changed_in(2)]
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
-		fn cf_pool_simulate_swap_v2(
+		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformationV2, DispatchErrorWithMessage>;
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,
 			quote_asset: Asset,
