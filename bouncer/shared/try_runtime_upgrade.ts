@@ -38,7 +38,6 @@ function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, ne
     `try-runtime \
         --runtime ${runtimePath} on-runtime-upgrade \
         --disable-spec-version-check \
-        --disable-idempotency-checks \
         --checks pre-and-post ${blockParam} \
         --uri ${networkUrl}`,
     `try-runtime-${blockHash}`,
