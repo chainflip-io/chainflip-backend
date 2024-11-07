@@ -2,6 +2,76 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.7.1] - 2024-11-07
+
+### Features
+
+- Solana chain tracking events ([#5195](https://github.com/chainflip-io/chainflip-backend/issues/5195))
+- Run benchmarks on merge queue to main ([#5197](https://github.com/chainflip-io/chainflip-backend/issues/5197))
+- Upload all artifacts of release builds to s3 - not just dylibs ([#5202](https://github.com/chainflip-io/chainflip-backend/issues/5202))
+- Elections pallet tests ([#5186](https://github.com/chainflip-io/chainflip-backend/issues/5186))
+- Dont start a new rotation if previous rotation still pending ([#5211](https://github.com/chainflip-io/chainflip-backend/issues/5211))
+- Uze zip archives for artifacts on s3 ([#5225](https://github.com/chainflip-io/chainflip-backend/issues/5225))
+- Added a swap_request_id to the CcmFailed event ([#5254](https://github.com/chainflip-io/chainflip-backend/issues/5254))
+- Add boosted deposit lost event ([#5260](https://github.com/chainflip-io/chainflip-backend/issues/5260))
+- Change broadcast timeout to be a storage value. ([#5258](https://github.com/chainflip-io/chainflip-backend/issues/5258))
+- Provide ValidatorIds to ElectoralSystem::check_consensus ([#5259](https://github.com/chainflip-io/chainflip-backend/issues/5259))
+- Refactor delta based ingress generics ([#5265](https://github.com/chainflip-io/chainflip-backend/issues/5265))
+- Pool fills rpc subscription ([#5214](https://github.com/chainflip-io/chainflip-backend/issues/5214))
+- Support use of zepter for feature checks ([#5266](https://github.com/chainflip-io/chainflip-backend/issues/5266))
+- Move contract swap extrinsics into ingress-egress pallet ([#5263](https://github.com/chainflip-io/chainflip-backend/issues/5263))
+- Localnet scripts to create and recreate easier ([#5284](https://github.com/chainflip-io/chainflip-backend/issues/5284))
+- Add solana monitoring data ([#5277](https://github.com/chainflip-io/chainflip-backend/issues/5277))
+- Remove swap and retry batch on price impact ([#5285](https://github.com/chainflip-io/chainflip-backend/issues/5285))
+- Liveness electoral system ([#5278](https://github.com/chainflip-io/chainflip-backend/issues/5278))
+- Minimum chunk size setting ([#5314](https://github.com/chainflip-io/chainflip-backend/issues/5314))
+- Cleanup aborted broadcasts ([#5301](https://github.com/chainflip-io/chainflip-backend/issues/5301))
+- Handle rotation tx construction failures ([#5307](https://github.com/chainflip-io/chainflip-backend/issues/5307))
+- Expose deposit transaction hash from ingress-egress-tracker ([#5320](https://github.com/chainflip-io/chainflip-backend/issues/5320))
+- Solana CCM fallback ([#5316](https://github.com/chainflip-io/chainflip-backend/issues/5316))
+- Submit a slot number alongside nonce ([#5297](https://github.com/chainflip-io/chainflip-backend/issues/5297))
+- Structured error return types for rpcs ([#5346](https://github.com/chainflip-io/chainflip-backend/issues/5346))
+- Tainted transaction reporting ([#5310](https://github.com/chainflip-io/chainflip-backend/issues/5310))
+- Engine-runner verifies gpg signature of old dylib when downloaded ([#5339](https://github.com/chainflip-io/chainflip-backend/issues/5339))
+- Add sol chain tracking metric ([#5366](https://github.com/chainflip-io/chainflip-backend/issues/5366))
+- Update custom_rpc, runtime_api and broker api for broker level screening ([#5341](https://github.com/chainflip-io/chainflip-backend/issues/5341))
+- Runtime API versioning for monitoring API ([#5393](https://github.com/chainflip-io/chainflip-backend/issues/5393))
+- `cf_pool_swap_rate_v3` with broker fee and DCA support ([#5386](https://github.com/chainflip-io/chainflip-backend/issues/5386))
+- Added EVM transfer/fetch limit ([#5237](https://github.com/chainflip-io/chainflip-backend/issues/5237))
+
+### Fixes
+
+- Make build-m2 blocking for upload artifacts 🐛 ([#5217](https://github.com/chainflip-io/chainflip-backend/issues/5217))
+- Change try_from_iter into from_iter_or_default ([#5219](https://github.com/chainflip-io/chainflip-backend/issues/5219))
+- Only call monotonic median hook if state is updated. ([#5223](https://github.com/chainflip-io/chainflip-backend/issues/5223))
+- CcmFailed event erased due to storage rollback ([#5242](https://github.com/chainflip-io/chainflip-backend/issues/5242))
+- Decrease broadcast timeout constants for sol and arb ([#5228](https://github.com/chainflip-io/chainflip-backend/issues/5228))
+- Workflow name should be berghain ([#5246](https://github.com/chainflip-io/chainflip-backend/issues/5246))
+- Triple ledger size local sol node ([#5249](https://github.com/chainflip-io/chainflip-backend/issues/5249))
+- Allow artefact overrides 🐛 ([#5247](https://github.com/chainflip-io/chainflip-backend/issues/5247))
+- Set_range_order now returns an error if no position is created ([#4540](https://github.com/chainflip-io/chainflip-backend/issues/4540))
+- Correct consensus for egress witnessing (no unanimity required) ([#5274](https://github.com/chainflip-io/chainflip-backend/issues/5274))
+- Force version bump endpoint ([#5280](https://github.com/chainflip-io/chainflip-backend/issues/5280))
+- Filter out stale bitcoin utxos ([#5291](https://github.com/chainflip-io/chainflip-backend/issues/5291))
+- Add audit exception for RUSTSEC-2024-0375 ([#5303](https://github.com/chainflip-io/chainflip-backend/issues/5303))
+- Redemption amount printed not consistent in rounding ([#5296](https://github.com/chainflip-io/chainflip-backend/issues/5296))
+- Only install solana if `run-job` is true 🐛 ([#5304](https://github.com/chainflip-io/chainflip-backend/issues/5304))
+- Ensure unused sol deposit channels are closed ([#5312](https://github.com/chainflip-io/chainflip-backend/issues/5312))
+- Increase init timeout for backup test ([#5317](https://github.com/chainflip-io/chainflip-backend/issues/5317))
+- Keyholder check should use `HistoricalActiveEpochs` ([#5325](https://github.com/chainflip-io/chainflip-backend/issues/5325))
+- Don't exit if we can't remove a file that already doesn't exist ([#5328](https://github.com/chainflip-io/chainflip-backend/issues/5328))
+- Scale types for pending ceremonies ([#5286](https://github.com/chainflip-io/chainflip-backend/issues/5286))
+- Ignore dust underflows in order fills rpc ([#5352](https://github.com/chainflip-io/chainflip-backend/issues/5352))
+- Features for test-externalities ([#5365](https://github.com/chainflip-io/chainflip-backend/issues/5365))
+- Separate lp account for lp api ([#5354](https://github.com/chainflip-io/chainflip-backend/issues/5354))
+- Remove is_vote_valid ([#5363](https://github.com/chainflip-io/chainflip-backend/issues/5363))
+- Make boost detection more accurate ([#5369](https://github.com/chainflip-io/chainflip-backend/issues/5369))
+- Always sweep on RPC free balance ([#5376](https://github.com/chainflip-io/chainflip-backend/issues/5376))
+- Rpc subscription return types ([#5374](https://github.com/chainflip-io/chainflip-backend/issues/5374))
+- Retry with search history enabled after some attempts ([#5370](https://github.com/chainflip-io/chainflip-backend/issues/5370))
+- Take into account only active suspensions ([#5359](https://github.com/chainflip-io/chainflip-backend/issues/5359))
+- Change_utxo not always present ([#5340](https://github.com/chainflip-io/chainflip-backend/issues/5340))
+
 ## [1.6.7] - 2024-09-25
 
 ### Fixes
