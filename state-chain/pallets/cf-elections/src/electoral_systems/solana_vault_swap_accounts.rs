@@ -249,25 +249,19 @@ impl<
 			}
 
 			counts_votes.iter().for_each(|(vote, count)| {
-				vote.new_accounts.iter().for_each(|new_account| {
-					counts_new_accounts
-						.entry(new_account)
-						.and_modify(|c| *c += *count)
-						.or_insert(*count);
-				});
-				vote.confirm_closed_accounts.iter().for_each(|confirm_closed_account| {
-					counts_confirm_closed_accounts
-						.entry(confirm_closed_account)
-						.and_modify(|c| *c += *count)
-						.or_insert(*count);
-				});
+				count_votes(&vote.new_accounts, &mut counts_new_accounts, count);
+				count_votes(
+					&vote.confirm_closed_accounts,
+					&mut counts_confirm_closed_accounts,
+					count,
+				);
 			});
 
 			counts_new_accounts.retain(|_, count| *count >= success_threshold);
-			let new_accounts = counts_new_accounts.into_keys().cloned().collect::<BTreeSet<_>>();
+			let new_accounts = counts_new_accounts.into_keys().collect::<BTreeSet<_>>();
 			counts_confirm_closed_accounts.retain(|_, count| *count >= success_threshold);
 			let confirm_closed_accounts =
-				counts_confirm_closed_accounts.into_keys().cloned().collect::<BTreeSet<_>>();
+				counts_confirm_closed_accounts.into_keys().collect::<BTreeSet<_>>();
 
 			if new_accounts.is_empty() && confirm_closed_accounts.is_empty() {
 				None
@@ -278,4 +272,17 @@ impl<
 			None
 		})
 	}
+}
+
+pub fn count_votes<T: Ord + Clone>(
+	accounts: &BTreeSet<T>,
+	counts_accounts: &mut BTreeMap<T, u32>,
+	count: &u32,
+) {
+	accounts.iter().for_each(|account| {
+		counts_accounts
+			.entry((*account).clone())
+			.and_modify(|c| *c += *count)
+			.or_insert(*count);
+	});
 }
