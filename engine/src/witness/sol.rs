@@ -24,8 +24,7 @@ use cf_chains::{
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
-	electoral_systems::solana_swap_accounts_tracking::SolanaVaultSwapsVote,
-	vote_storage::VoteStorage,
+	electoral_systems::solana_vault_swap_accounts::SolanaVaultSwapsVote, vote_storage::VoteStorage,
 };
 use state_chain_runtime::{
 	chainflip::solana_elections::{

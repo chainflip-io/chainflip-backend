@@ -45,7 +45,7 @@ use pallet_cf_elections::{
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
 		monotonic_median::MedianChangeHook,
-		solana_swap_accounts_tracking::SolanaVaultSwapAccountsHook,
+		solana_vault_swap_accounts::SolanaVaultSwapAccountsHook,
 	},
 	CorruptStorageError, ElectionIdentifier, InitialState, InitialStateOf, RunnerStorageAccess,
 };
@@ -171,7 +171,7 @@ impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHoo
 }
 pub type SolanaVaultSwapTracking =
 	electoral_systems::solana_swap_accounts_tracking::SolanaVaultSwapAccounts<
-		ContractSwapAccountAndSender,
+		VaultSwapAccountAndSender,
 		SolanaVaultSwapDetails,
 		BlockNumberFor<Runtime>,
 		SolanaVaultSwapsSettings,
