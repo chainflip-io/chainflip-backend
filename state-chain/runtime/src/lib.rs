@@ -2112,15 +2112,12 @@ impl_runtime_apis! {
 		) -> Result<VaultSwapDetails, DispatchErrorWithMessage> {
 			// Validate params
 			if broker_commission != 0 || affiliate_fees.map_or(false, |affiliate| !affiliate.is_empty()) {
-				return Err(DispatchErrorWithMessage::from_pallet_error(
-					pallet_cf_swapping::Error::<Runtime>::VaultSwapBrokerFeesNotSupported,
-				));
+				return Err(
+					pallet_cf_swapping::Error::<Runtime>::VaultSwapBrokerFeesNotSupported.into());
 			}
-			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)
-				.map_err(Into::<DispatchErrorWithMessage>::into)?;
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
 			if let Some(params) = dca_parameters.as_ref() {
-				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)
-					.map_err(Into::<DispatchErrorWithMessage>::into)?;
+				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
 			}
 			ChainAddressConverter::try_from_encoded_address(destination_address.clone())
 				.and_then(|address| {
@@ -2130,11 +2127,7 @@ impl_runtime_apis! {
 						Ok(())
 					}
 				})
-				.map_err(|_| {
-					DispatchErrorWithMessage::from_pallet_error(
-						pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress,
-					)
-				})?;
+				.map_err(|()| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
 
 
 			// Encode swap
@@ -2144,42 +2137,22 @@ impl_runtime_apis! {
 						output_asset: destination_asset,
 						output_address: destination_address,
 						parameters: SharedCfParameters {
-							retry_duration: retry_duration.try_into().map_err(|_| {
-								DispatchErrorWithMessage::from_pallet_error(
-									pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong,
-								)
-							})?,
+							retry_duration: retry_duration.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
 							min_output_amount,
 							number_of_chunks: dca_parameters
 								.as_ref()
 								.map(|params| params.number_of_chunks)
 								.unwrap_or(1)
 								.try_into()
-								.map_err(|_| {
-									DispatchErrorWithMessage::from_pallet_error(
-										pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters,
-									)
-								})?,
+								.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
 							chunk_interval: dca_parameters
 								.as_ref()
 								.map(|params| params.chunk_interval)
 								.unwrap_or(SWAP_DELAY_BLOCKS)
 								.try_into()
-								.map_err(|_| {
-									DispatchErrorWithMessage::from_pallet_error(
-										pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters,
-									)
-								})?,
-							boost_fee: boost_fee.unwrap_or_default().try_into().map_err(|_| {
-								DispatchErrorWithMessage::from_pallet_error(
-									pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh,
-								)
-							})?,
-							broker_fee: broker_commission.try_into().map_err(|_| {
-								DispatchErrorWithMessage::from_pallet_error(
-									pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh,
-								)
-							})?,
+								.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
+							boost_fee: boost_fee.unwrap_or_default().try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
+							broker_fee: broker_commission.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
 							// TODO: lookup affiliate mapping to convert affiliate ids and use them here
 							affiliates: Default::default(),
 						},
@@ -2198,9 +2171,8 @@ impl_runtime_apis! {
 						deposit_address,
 					})
 				},
-				_ => Err(DispatchErrorWithMessage::from_pallet_error(
-					pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset,
-				)),
+				_ => Err(
+					pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),
 			}
 		}
 

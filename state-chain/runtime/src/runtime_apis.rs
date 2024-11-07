@@ -161,20 +161,16 @@ pub enum DispatchErrorWithMessage {
 	Module(Vec<u8>),
 	Other(DispatchError),
 }
-impl From<DispatchError> for DispatchErrorWithMessage {
-	fn from(value: DispatchError) -> Self {
-		match value {
+impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
+	fn from(error: E) -> Self {
+		match error.into() {
 			DispatchError::Module(sp_runtime::ModuleError { message: Some(message), .. }) =>
 				DispatchErrorWithMessage::Module(message.as_bytes().to_vec()),
-			value => DispatchErrorWithMessage::Other(value),
+			error => DispatchErrorWithMessage::Other(error),
 		}
 	}
 }
-impl DispatchErrorWithMessage {
-	pub fn from_pallet_error(e: impl Into<DispatchError>) -> Self {
-		Self::from(e.into())
-	}
-}
+
 #[cfg(feature = "std")]
 impl core::fmt::Display for DispatchErrorWithMessage {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
