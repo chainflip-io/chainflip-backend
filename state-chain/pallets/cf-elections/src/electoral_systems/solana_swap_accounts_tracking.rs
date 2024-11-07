@@ -24,7 +24,7 @@ use cf_chains::sol::{
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
-	sp_runtime::traits::CheckedSub,
+	sp_runtime::traits::Saturating,
 	Parameter,
 };
 use itertools::Itertools;
@@ -100,7 +100,7 @@ impl<
 		E: sp_std::fmt::Debug + 'static,
 		Account: MaybeSerializeDeserialize + Member + Parameter + Ord,
 		SwapDetails: MaybeSerializeDeserialize + Member + Parameter + Ord,
-		BlockNumber: MaybeSerializeDeserialize + Member + Parameter + Ord + CheckedSub + Into<u32> + Copy,
+		BlockNumber: MaybeSerializeDeserialize + Member + Parameter + Ord + Saturating + Into<u32> + Copy,
 		Settings: Member + Parameter + MaybeSerializeDeserialize + Eq,
 		Hook: SolanaVaultSwapAccountsHook<Account, SwapDetails, E> + 'static,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
@@ -176,32 +176,39 @@ impl<
 					known_accounts.closure_initiated_accounts.remove(&acc);
 				});
 
+				// Since closing accounts is a low priority action, we wait for certain number of
+				// sol nonces to be free for us to initiate account closures which indicates that
+				// there is not enough Chainflip activity on the sol side and so we can process
+				// account closures.
+				//
+				// we also wait for certain number of accounts to buffer up or allow a certain
+				// amount of time to pass before initiating account closures.
 				if Hook::get_number_of_available_sol_nonce_accounts() >
 					NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES &&
 					(known_accounts.witnessed_open_accounts.len() >=
 						MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES ||
 						(*current_block_number)
-							.checked_sub(&electoral_access.unsynchronised_state()?)
-							.expect("current block number is always greater than when apicall was last created")
+							// current block number is always greater than when apicall was last
+							// created
+							.saturating_sub(electoral_access.unsynchronised_state()?)
 							.into() >= MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS)
 				{
 					let accounts_to_close: Vec<_> = known_accounts
-					.witnessed_open_accounts
-					.drain(..sp_std::cmp::min(
-						known_accounts.witnessed_open_accounts.len(),
-						MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES
-					))
-					.collect();
+						.witnessed_open_accounts
+						.drain(
+							..sp_std::cmp::min(
+								known_accounts.witnessed_open_accounts.len(),
+								MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
+							),
+						)
+						.collect();
 					match Hook::close_accounts(accounts_to_close.clone()) {
 						Ok(()) => {
 							known_accounts.closure_initiated_accounts.extend(accounts_to_close);
 							electoral_access.set_unsynchronised_state(*current_block_number)?;
 						},
 						Err(e) => {
-							log::error!(
-								"Failed to initiate account closure: {:?}",
-								e
-							);
+							log::error!("Failed to initiate account closure: {:?}", e);
 							known_accounts.witnessed_open_accounts.extend(accounts_to_close);
 						},
 					}
