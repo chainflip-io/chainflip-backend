@@ -3,16 +3,13 @@ use crate::{BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringD
 use cf_chains::{dot::PolkadotAccountId, sol::SolAddress};
 use jsonrpsee::proc_macros::rpc;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
-use sp_api::Core;
+use sp_api::{ApiExt, Core};
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
-use state_chain_runtime::{
-	chainflip::Offence,
-	monitoring_apis::{
-		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
-		LastRuntimeUpgradeInfo, MonitoringRuntimeApi, OpenDepositChannels, PendingBroadcasts,
-		PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
-	},
-};
+use state_chain_runtime::{self, Block, chainflip::Offence, monitoring_apis::{
+	ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
+	LastRuntimeUpgradeInfo, MonitoringRuntimeApi, OpenDepositChannels, PendingBroadcasts,
+	PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
+}};
 
 #[rpc(server, client, namespace = "cf_monitoring")]
 pub trait MonitoringApi {
@@ -127,11 +124,8 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcMonitoringData> {
-		let name = sp_core::blake2_64(b"MonitoringRuntimeApi");
 		self.with_runtime_api(at, |api, hash| {
-			let apis = api.version(hash).unwrap().apis;
-			if apis.into_owned().contains(&(name, 1)) {
-				// if api.api_version::< ????? >(hash).unwrap().unwrap() < 2 {
+			if api.api_version::< dyn Core<Block> >(hash).unwrap().unwrap() < 2 {
 				let old_result = api.cf_monitoring_data_before_version_2(hash)?;
 				Ok(old_result.into())
 			} else {
