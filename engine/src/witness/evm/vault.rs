@@ -66,8 +66,10 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
-				CfParameters::decode(&mut &cf_parameters[..])?;
+			let VersionedCfParameters::V0(CfParameters {
+				ccm_additional_data: (),
+				vault_swap_parameters,
+			}) = VersionedCfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::vault_swap_request(
 				native_asset,
@@ -91,8 +93,10 @@ where
 			sender: _,
 			cf_parameters,
 		}) => {
-			let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
-				CfParameters::decode(&mut &cf_parameters[..])?;
+			let VersionedCfParameters::V0(CfParameters {
+				ccm_additional_data: (),
+				vault_swap_parameters,
+			}) = VersionedCfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::vault_swap_request(
 				*(supported_assets
@@ -119,8 +123,10 @@ where
 			gas_amount,
 			cf_parameters,
 		}) => {
-			let CfParameters { ccm_additional_data, vault_swap_parameters } =
-				CcmCfParameters::decode(&mut &cf_parameters[..])?;
+			let VersionedCcmCfParameters::V0(CfParameters {
+				ccm_additional_data,
+				vault_swap_parameters,
+			}) = VersionedCcmCfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::vault_swap_request(
 				native_asset,
@@ -161,8 +167,10 @@ where
 			gas_amount,
 			cf_parameters,
 		}) => {
-			let CfParameters { ccm_additional_data, vault_swap_parameters } =
-				CcmCfParameters::decode(&mut &cf_parameters[..])?;
+			let VersionedCcmCfParameters::V0(CfParameters {
+				ccm_additional_data,
+				vault_swap_parameters,
+			}) = VersionedCcmCfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::vault_swap_request(
 				*(supported_assets
