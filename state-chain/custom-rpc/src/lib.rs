@@ -13,8 +13,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
-	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
+	AccountRole, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, DcaParameters,
+	EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -442,9 +442,7 @@ pub struct RpcSwapOutputV3 {
 	pub network_fee: RpcFee,
 	pub ingress_fee: RpcFee,
 	pub egress_fee: RpcFee,
-	// Fees for broker and affiliates
 	pub broker_commission: RpcFee,
-	pub affiliate_fees: Vec<(sp_runtime::AccountId32, RpcFee)>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -778,10 +776,9 @@ pub trait CustomApi {
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: U256,
-		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		broker_commission: BasisPoints,
-		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV3>;
 	#[method(name = "required_asset_ratio_for_range_order")]
@@ -1398,10 +1395,9 @@ where
 			from_asset,
 			to_asset,
 			amount,
+			Default::default(),
+			None,
 			additional_orders,
-			0u16,
-			None,
-			None,
 			at,
 		)
 		.map(Into::into)
@@ -1412,10 +1408,9 @@ where
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: U256,
-		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		broker_commission: BasisPoints,
-		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV3> {
 		self.with_runtime_api(at, |api, hash| {
@@ -1437,6 +1432,8 @@ where
 						.map_err(|s| {
 							ErrorObject::owned(ErrorCode::InvalidParams.code(), s, None::<()>)
 						})?,
+					broker_commission,
+					dca_parameters,
 					additional_orders.map(|additional_orders| {
 						additional_orders
 							.into_iter()
@@ -1459,9 +1456,6 @@ where
 							})
 							.collect()
 					}),
-					broker_commission,
-					affiliate_fees,
-					dca_parameters,
 				)?
 				.map(|simulated_swap_info_v2| RpcSwapOutputV3 {
 					intermediary: simulated_swap_info_v2.intermediary.map(Into::into),
@@ -1482,16 +1476,6 @@ where
 						asset: cf_primitives::STABLE_ASSET,
 						amount: simulated_swap_info_v2.broker_fee.into(),
 					},
-					affiliate_fees: simulated_swap_info_v2
-						.affiliate_fees
-						.into_iter()
-						.map(|(account, fees)| {
-							(
-								account,
-								RpcFee { asset: cf_primitives::STABLE_ASSET, amount: fees.into() },
-							)
-						})
-						.collect(),
 				})?,
 			)
 		})

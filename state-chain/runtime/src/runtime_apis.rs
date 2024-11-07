@@ -7,9 +7,8 @@ use cf_chains::{
 	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
 };
 use cf_primitives::{
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
-	DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
-	PrewitnessedDepositId, SemVer,
+	AccountRole, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, DcaParameters,
+	EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
@@ -170,7 +169,6 @@ pub struct SimulatedSwapInformationV2 {
 	pub ingress_fee: AssetAmount,
 	pub egress_fee: AssetAmount,
 	pub broker_fee: AssetAmount,
-	pub affiliate_fees: Vec<(AccountId32, AssetAmount)>,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -254,10 +252,9 @@ decl_runtime_apis!(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
-			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 			broker_commission: BasisPoints,
-			affiliate_fees: Option<Affiliates<sp_runtime::AccountId32>>,
 			dca_parameters: Option<DcaParameters>,
+			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformationV2, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,

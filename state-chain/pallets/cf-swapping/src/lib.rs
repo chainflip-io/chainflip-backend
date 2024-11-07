@@ -70,12 +70,12 @@ struct FeeTaken {
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
-struct SwapState<T: Config> {
-	swap: Swap<T>,
-	network_fee_taken: Option<AssetAmount>,
-	broker_fee_taken: Option<AssetAmount>,
-	stable_amount: Option<AssetAmount>,
-	final_output: Option<AssetAmount>,
+pub struct SwapState<T: Config> {
+	pub swap: Swap<T>,
+	pub network_fee_taken: Option<AssetAmount>,
+	pub broker_fee_taken: Option<AssetAmount>,
+	pub stable_amount: Option<AssetAmount>,
+	pub final_output: Option<AssetAmount>,
 }
 
 impl<T: Config> SwapState<T> {
@@ -149,7 +149,7 @@ impl<T: Config> SwapState<T> {
 #[repr(u8)]
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-enum FeeType<T: Config> {
+pub enum FeeType<T: Config> {
 	NetworkFee = 0,
 	BrokerFee(Beneficiaries<T::AccountId>),
 }
@@ -181,7 +181,7 @@ pub struct SwapLegInfo {
 }
 
 impl<T: Config> Swap<T> {
-	fn new(
+	pub fn new(
 		swap_id: SwapId,
 		swap_request_id: SwapRequestId,
 		from: Asset,
@@ -202,7 +202,7 @@ impl<T: Config> Swap<T> {
 	}
 }
 
-enum BatchExecutionError<T: Config> {
+pub enum BatchExecutionError<T: Config> {
 	SwapLegFailed {
 		asset: Asset,
 		direction: SwapLeg,
@@ -1281,7 +1281,7 @@ pub mod pallet {
 		}
 
 		#[transactional]
-		fn try_execute_without_violations(
+		pub fn try_execute_without_violations(
 			swaps: Vec<Swap<T>>,
 		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
@@ -2009,19 +2009,6 @@ pub mod pallet {
 					}
 				},
 			};
-		}
-
-		/// Swap some amount of an asset into the STABLE_ASSET with no fee deductions.
-		/// Used for fee estimation ONLY.
-		#[transactional]
-		pub fn swap_into_stable_without_fees(
-			from: Asset,
-			input_amount: AssetAmount,
-		) -> Result<AssetAmount, DispatchError> {
-			match from {
-				STABLE_ASSET => Ok(input_amount),
-				_ => T::SwappingApi::swap_single_leg(from, STABLE_ASSET, input_amount),
-			}
 		}
 	}
 

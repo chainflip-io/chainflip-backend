@@ -275,18 +275,6 @@ pub struct SwapOutput {
 	pub network_fee: AssetAmount,
 }
 
-impl SwapOutput {
-	// Multiply each field by x.
-	// Uses Saturating arithmetics.
-	pub fn saturating_mul(self, x: AssetAmount) -> Self {
-		SwapOutput {
-			intermediary: self.intermediary.map(|intermediary| intermediary.saturating_mul(x)),
-			output: self.output.saturating_mul(x),
-			network_fee: self.network_fee.saturating_mul(x),
-		}
-	}
-}
-
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
 pub enum SwapLeg {
 	FromStable,
@@ -436,10 +424,4 @@ pub struct DcaParameters {
 	pub number_of_chunks: u32,
 	/// The interval in blocks between each swap.
 	pub chunk_interval: u32,
-}
-
-/// Utility multiply an AssetAmount by a BasisPoint.
-/// Only support up to 10_000 bps or 100%.
-pub fn mul_bps(amount: AssetAmount, bps: BasisPoints) -> AssetAmount {
-	sp_arithmetic::Permill::from_rational(bps as u32, 10_000u32) * amount
 }
