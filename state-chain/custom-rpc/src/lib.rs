@@ -1819,7 +1819,11 @@ where
 					destination_address
 						.try_parse_to_encoded_address(destination_asset.into())
 						.map_err(|e| {
-							ErrorObject::owned(ErrorCode::InvalidParams.code(), e, None::<()>)
+							ErrorObject::owned(
+								ErrorCode::InvalidParams.code(),
+								format!("{e}"),
+								None::<()>,
+							)
 						})?,
 					broker_commission,
 					min_output_amount,

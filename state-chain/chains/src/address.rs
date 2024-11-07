@@ -403,7 +403,7 @@ impl AddressString {
 	pub fn try_parse_to_encoded_address(
 		self,
 		chain: ForeignChain,
-	) -> Result<EncodedAddress, &'static str> {
+	) -> anyhow::Result<EncodedAddress> {
 		clean_foreign_chain_address(chain, self.0.as_str())
 	}
 
@@ -411,9 +411,9 @@ impl AddressString {
 		self,
 		chain: ForeignChain,
 		network: NetworkEnvironment,
-	) -> Result<ForeignChainAddress, &'static str> {
+	) -> anyhow::Result<ForeignChainAddress> {
 		try_from_encoded_address(self.try_parse_to_encoded_address(chain)?, move || network)
-			.map_err(|_| "Failed to parse address".into())
+			.map_err(|_| anyhow::anyhow!("Failed to parse address"))
 	}
 
 	pub fn from_encoded_address<T: std::borrow::Borrow<EncodedAddress>>(address: T) -> Self {
@@ -434,26 +434,20 @@ impl sp_std::fmt::Display for AddressString {
 pub fn clean_foreign_chain_address(
 	chain: ForeignChain,
 	address: &str,
-) -> Result<EncodedAddress, &'static str> {
+) -> anyhow::Result<EncodedAddress> {
 	use core::str::FromStr;
 
 	use cf_utilities::clean_hex_address;
 
 	Ok(match chain {
-		ForeignChain::Ethereum =>
-			EncodedAddress::Eth(clean_hex_address(address).map_err(|_| "Invalid address")?),
-		ForeignChain::Polkadot => EncodedAddress::Dot(
-			PolkadotAccountId::from_str(address)
-				.map(|id| *id.aliased_ref())
-				.map_err(|_| "Invalid address")?,
-		),
+		ForeignChain::Ethereum => EncodedAddress::Eth(clean_hex_address(address)?),
+		ForeignChain::Polkadot =>
+			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
-		ForeignChain::Arbitrum =>
-			EncodedAddress::Arb(clean_hex_address(address).map_err(|_| "Invalid address")?),
+		ForeignChain::Arbitrum => EncodedAddress::Arb(clean_hex_address(address)?),
 		ForeignChain::Solana => match SolAddress::from_str(address) {
 			Ok(sol_address) => EncodedAddress::Sol(sol_address.into()),
-			Err(_) =>
-				EncodedAddress::Sol(clean_hex_address(address).map_err(|_| "Invalid address")?),
+			Err(_) => EncodedAddress::Sol(clean_hex_address(address)?),
 		},
 	})
 }

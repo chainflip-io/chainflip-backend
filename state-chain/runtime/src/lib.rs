@@ -2151,7 +2151,7 @@ impl_runtime_apis! {
 					);
 
 					Ok(VaultSwapDetails::Bitcoin {
-						nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw().into(),
+						nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw(),
 						deposit_address,
 					})
 				},

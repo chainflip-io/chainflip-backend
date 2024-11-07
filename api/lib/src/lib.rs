@@ -373,8 +373,7 @@ impl BrokerApi {
 								retry_duration: rpc_params.retry_duration,
 								refund_address: rpc_params
 									.refund_address
-									.try_parse_to_encoded_address(source_asset.into())
-									.map_err(anyhow::Error::msg)?,
+									.try_parse_to_encoded_address(source_asset.into())?,
 								min_price: rpc_params.min_price,
 							})
 						})
