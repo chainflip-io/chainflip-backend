@@ -48,7 +48,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
-		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
+		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringDataV2, OpenDepositChannels,
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
@@ -136,8 +136,8 @@ pub struct RpcMonitoringData {
 	pub sol_nonces: SolanaNonces,
 	pub activating_key_broadcast_ids: ActivateKeysBroadcastIds,
 }
-impl From<MonitoringData> for RpcMonitoringData {
-	fn from(monitoring_data: MonitoringData) -> Self {
+impl From<MonitoringDataV2> for RpcMonitoringData {
+	fn from(monitoring_data: MonitoringDataV2) -> Self {
 		Self {
 			epoch: monitoring_data.epoch.into(),
 			pending_redemptions: monitoring_data.pending_redemptions.into(),

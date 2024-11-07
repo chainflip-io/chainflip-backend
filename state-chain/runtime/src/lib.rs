@@ -20,7 +20,7 @@ use crate::{
 	},
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
-		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
+		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringDataV2, OpenDepositChannels,
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
@@ -2272,8 +2272,8 @@ impl_runtime_apis! {
 		fn cf_sol_onchain_key() -> SolAddress{
 			SolanaBroadcaster::current_on_chain_key().unwrap_or_default()
 		}
-		fn cf_monitoring_data() -> MonitoringData {
-			MonitoringData{
+		fn cf_monitoring_data() -> MonitoringDataV2 {
+			MonitoringDataV2{
 				external_chains_height: Self::cf_external_chains_block_height(),
 				btc_utxos: Self::cf_btc_utxos(),
 				epoch: Self::cf_epoch_state(),
