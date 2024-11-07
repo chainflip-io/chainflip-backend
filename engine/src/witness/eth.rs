@@ -255,6 +255,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) }),
 				// Defaulting to no broker fees until PRO-1743 is completed.
 				broker_fees: Default::default(),
+				affiliate_fees: Default::default(),
 				boost_fee: boost_fee.unwrap_or_default(),
 				dca_params,
 				refund_params: refund_params.map(Box::new),

@@ -8,7 +8,7 @@ use cf_chains::{
 	},
 	ChannelRefundParameters, ForeignChainAddress,
 };
-use cf_primitives::DcaParameters;
+use cf_primitives::{AccountId, BasisPoints, Beneficiary, DcaParameters};
 use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
@@ -82,6 +82,7 @@ type BtcIngressEgressCall =
 pub fn try_extract_vault_swap_call(
 	tx: &VerboseTransaction,
 	vault_address: &DepositAddress,
+	maybe_broker_id: Option<&AccountId>,
 ) -> Option<BtcIngressEgressCall> {
 	// A correctly constructed transaction carrying CF swap parameters must have at least 3 outputs:
 	let [utxo_to_vault, nulldata_utxo, change_utxo, ..] = &tx.vout[..] else {
@@ -141,7 +142,18 @@ pub fn try_extract_vault_swap_call(
 			deposit_address: vault_address.clone(),
 		}),
 		deposit_metadata: None, // No ccm for BTC (yet?)
-		broker_fees: Default::default(),
+		broker_fees: maybe_broker_id.map(|broker_id| Beneficiary {
+			account: broker_id.clone(),
+			bps: data.parameters.broker_fee as BasisPoints,
+		}),
+		affiliate_fees: data
+			.parameters
+			.affiliates
+			.into_iter()
+			.map(|entry| Beneficiary { account: entry.affiliate, bps: entry.fee as BasisPoints })
+			.collect_vec()
+			.try_into()
+			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
 		refund_params: Some(Box::new(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration as u32,
 			refund_address: ForeignChainAddress::Btc(refund_address),

@@ -33,17 +33,19 @@ use cf_chains::{
 	FetchAssetParams, ForeignChainAddress, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
-	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SECONDS_PER_BLOCK,
+	AffiliateId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
+	BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
+	ForeignChain, PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId,
+	TransactionHash, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
-	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, ChannelIdAllocator, DepositApi,
-	EgressApi, EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight,
-	IngressEgressFeeApi, IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit,
-	PoolApi, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
+	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry,
+	AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip,
+	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
+	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
+	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapLimitsProvider,
+	SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -450,6 +452,8 @@ pub mod pallet {
 
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
+
+		type AffiliateRegistry: AffiliateRegistry<AccountId = Self::AccountId>;
 
 		#[pallet::constant]
 		type AllowTransactionReports: Get<bool>;
@@ -1285,7 +1289,8 @@ pub mod pallet {
 			deposit_metadata: Option<CcmDepositMetadata>,
 			tx_hash: TransactionHash,
 			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
-			broker_fees: Beneficiaries<T::AccountId>,
+			broker_fees: Option<Beneficiary<T::AccountId>>,
+			affiliate_fees: Affiliates<AffiliateId>,
 			refund_params: Option<Box<ChannelRefundParameters>>,
 			dca_params: Option<DcaParameters>,
 			boost_fee: BasisPoints,
@@ -1301,6 +1306,7 @@ pub mod pallet {
 				tx_hash,
 				*deposit_details,
 				broker_fees,
+				affiliate_fees,
 				refund_params.map(|boxed| *boxed),
 				dca_params,
 				boost_fee,
@@ -2100,7 +2106,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
-		broker_fees: Beneficiaries<T::AccountId>,
+		broker_fees: Option<Beneficiary<T::AccountId>>,
+		affiliate_fees: Affiliates<AffiliateId>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		// This is only to be checked in the pre-witnessed version (not implemented yet)
@@ -2192,6 +2199,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return;
 			}
 		}
+
+		let broker_fees = broker_fees
+			.map(|broker_fees| {
+				let primary_broker = broker_fees.account.clone();
+
+				let fees: Vec<_> = [broker_fees]
+					.into_iter()
+					.chain(affiliate_fees.into_iter().filter_map(|Beneficiary { account, bps }| {
+						if let Some(affiliate_id) =
+							T::AffiliateRegistry::lookup(&primary_broker, account)
+						{
+							Some(Beneficiary { account: affiliate_id, bps })
+						} else {
+							// In case the entry not found, we ignore the entry, but process the
+							// swap (to avoid having to refund it).
+							log::warn!(
+							"Affiliate entry is skipped: no entry for idx {} found for broker {:?}.",
+							account,
+							&primary_broker
+						);
+							None
+						}
+					}))
+					.collect();
+
+				fees.try_into().expect(
+					"must fit since affiliates are limited to 1 fewer element than beneficiaries",
+				)
+			})
+			.unwrap_or_default();
 
 		if let Err(err) = T::SwapLimitsProvider::validate_broker_fees(&broker_fees) {
 			log::warn!(

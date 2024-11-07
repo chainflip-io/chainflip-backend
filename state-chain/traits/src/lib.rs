@@ -26,9 +26,10 @@ use cf_chains::{
 	Ethereum,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries, BlockNumber,
-	BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId, EpochIndex,
-	FlipBalance, ForeignChain, Ipv6Addr, NetworkEnvironment, SemVer, ThresholdSignatureRequestId,
+	AccountRole, AffiliateId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
+	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
+	EpochIndex, FlipBalance, ForeignChain, Ipv6Addr, NetworkEnvironment, SemVer,
+	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -1112,4 +1113,10 @@ pub trait RotationBroadcastsPending {
 
 pub trait ChannelIdAllocator {
 	fn allocate_private_channel_id() -> Result<ChannelId, DispatchError>;
+}
+
+pub trait AffiliateRegistry {
+	type AccountId;
+
+	fn lookup(broker_id: &Self::AccountId, affiliate_idx: AffiliateId) -> Option<Self::AccountId>;
 }

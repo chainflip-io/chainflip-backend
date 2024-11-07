@@ -15,9 +15,9 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, BalanceApi, ChannelIdAllocator, DepositApi, ExecutionCondition,
-	IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
-	SwapRequestTypeEncoded, SwapType, SwappingApi,
+	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, ChannelIdAllocator, DepositApi,
+	ExecutionCondition, IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -2449,6 +2449,14 @@ pub struct NoPendingSwaps<T: Config>(PhantomData<T>);
 impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
 	fn is_satisfied() -> bool {
 		SwapQueue::<T>::iter().all(|(_, swaps)| swaps.is_empty())
+	}
+}
+
+impl<T: Config> AffiliateRegistry for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn lookup(broker_id: &Self::AccountId, affiliate_idx: AffiliateId) -> Option<Self::AccountId> {
+		AffiliateIdMapping::<T>::get(&broker_id, affiliate_idx)
 	}
 }
 

@@ -83,11 +83,13 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				};
 
 				// TODO: provide broker id (along with broker fees) in the call
-				for (_maybe_broker_id, vault_address) in vault_addresses {
+				for (maybe_broker_id, vault_address) in vault_addresses {
 					for tx in &txs {
-						if let Some(call) =
-							super::vault_swaps::try_extract_vault_swap_call(tx, &vault_address)
-						{
+						if let Some(call) = super::vault_swaps::try_extract_vault_swap_call(
+							tx,
+							&vault_address,
+							maybe_broker_id.as_ref(),
+						) {
 							process_call(call.into(), epoch.index).await;
 						}
 					}
