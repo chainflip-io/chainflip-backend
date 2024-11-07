@@ -517,7 +517,7 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::storage]
-	pub(crate) type BrokerPrivateBtcChannels<T: Config> =
+	pub type BrokerPrivateBtcChannels<T: Config> =
 		StorageMap<_, Identity, T::AccountId, ChannelId, OptionQuery>;
 
 	#[pallet::event]

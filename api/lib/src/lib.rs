@@ -10,8 +10,8 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	evm::to_evm_address,
 	sol::SolAddress,
-	CcmChannelMetadata, ChannelRefundParametersEncoded, ChannelRefundParametersGeneric,
-	ForeignChain, ForeignChainAddress,
+	CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParametersEncoded,
+	ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment};
@@ -21,7 +21,9 @@ use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256, U256};
+use sp_core::{
+	bounded_vec, ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256, U256,
+};
 pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
@@ -32,7 +34,7 @@ pub mod primitives {
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
-		CcmChannelMetadata, CcmDepositMetadata,
+		CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
@@ -159,6 +161,10 @@ impl StateChainApi {
 		self.state_chain_client.clone()
 	}
 
+	pub fn deposit_monitor_api(&self) -> Arc<impl DepositMonitorApi> {
+		self.state_chain_client.clone()
+	}
+
 	pub fn query_api(&self) -> queries::QueryApi {
 		queries::QueryApi { state_chain_client: self.state_chain_client.clone() }
 	}
@@ -176,6 +182,8 @@ impl BrokerApi for StateChainClient {
 impl OperatorApi for StateChainClient {}
 #[async_trait]
 impl ValidatorApi for StateChainClient {}
+#[async_trait]
+impl DepositMonitorApi for StateChainClient {}
 
 #[async_trait]
 pub trait ValidatorApi: SimpleSubmissionApi {
@@ -573,6 +581,9 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 							.unwrap_or(2)
 							.try_into()?,
 						boost_fee: boost_fee.unwrap_or_default().try_into()?,
+						broker_fee: broker_commission.try_into()?,
+						// TODO: lookup affiliate mapping to convert affiliate ids and use them here
+						affiliates: bounded_vec![],
 					},
 				};
 				Ok(SwapPayload::Bitcoin {
@@ -613,6 +624,31 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 			Err(_) => EncodedAddress::Sol(clean_hex_address(address)?),
 		},
 	})
+}
+
+pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+
+#[derive(Serialize, Deserialize)]
+pub enum TransactionInId {
+	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
+	// other variants reserved for other chains.
+}
+
+#[async_trait]
+pub trait DepositMonitorApi:
+	SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static
+{
+	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> Result<H256> {
+		match tx_id {
+			TransactionInId::Bitcoin(tx_id) =>
+				self.simple_submission_with_dry_run(
+					state_chain_runtime::RuntimeCall::BitcoinIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_as_tainted { tx_id },
+					),
+				)
+				.await,
+		}
+	}
 }
 
 #[derive(Debug, Zeroize, PartialEq, Eq)]

@@ -18,7 +18,6 @@ use crate::{
 		},
 		Offence,
 	},
-	migrations::serialize_solana_broadcast::SerializeSolanaBroadcastMigration,
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
 		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
@@ -29,7 +28,7 @@ use crate::{
 		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, SimulatedSwapInformationV2,
-		ValidatorInfo,
+		TaintedTransactionEvents, ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -54,19 +53,14 @@ use cf_primitives::{
 	BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex, NetworkEnvironment,
 	STABLE_ASSET,
 };
-use cf_runtime_utilities::NoopRuntimeUpgrade;
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
+use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
-use migrations::{
-	add_liveness_electoral_system_solana::LivenessSettingsMigration,
-	solana_egress_success_witness::SolanaEgressSuccessWitnessMigration,
-};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
@@ -76,8 +70,9 @@ use pallet_cf_pools::{
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{BatchExecutionError, FeeType, Swap};
+use runtime_apis::ChainAccounts;
 
-use crate::chainflip::EvmLimit;
+use crate::{chainflip::EvmLimit, runtime_apis::TaintedTransactionEvent};
 
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::SwapLegInfo;
@@ -205,7 +200,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 170,
+	spec_version: 180,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -1239,10 +1234,9 @@ type AllMigrations = (
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
-	MigrationsForV1_7,
+	MigrationsForV1_8,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
-	chainflip::solana_elections::old::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1284,60 +1278,7 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-type MigrationsForV1_7 = (
-	// Only the Solana Transaction type has changed
-	VersionedMigration<
-		8,
-		9,
-		SerializeSolanaBroadcastMigration,
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
-	// For clearing all Solana Egress Success election votes, and migrating Solana ApiCall to the
-	// newer version.
-	VersionedMigration<
-		9,
-		10,
-		SolanaEgressSuccessWitnessMigration,
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		8,
-		10,
-		NoopRuntimeUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		8,
-		10,
-		NoopRuntimeUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		8,
-		10,
-		NoopRuntimeUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		8,
-		10,
-		NoopRuntimeUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<
-		0,
-		1,
-		LivenessSettingsMigration,
-		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
-);
+type MigrationsForV1_8 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -2158,7 +2099,41 @@ impl_runtime_apis! {
 		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage> {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
 		}
+
+		fn cf_get_open_deposit_channels(account_id: Option<AccountId>) -> ChainAccounts {
+			let btc_chain_accounts = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter_values()
+				.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id.as_ref())
+				.map(|channel_details| channel_details.deposit_channel.address)
+				.collect::<Vec<_>>();
+
+			ChainAccounts {
+				btc_chain_accounts
+			}
+		}
+
+		fn cf_tainted_transaction_events() -> crate::runtime_apis::TaintedTransactionEvents {
+			let btc_events = System::read_events_no_consensus().filter_map(|event_record| {
+				if let RuntimeEvent::BitcoinIngressEgress(btc_ie_event) = event_record.event {
+					match btc_ie_event {
+						pallet_cf_ingress_egress::Event::TaintedTransactionReportExpired{ account_id, tx_id } =>
+							Some(TaintedTransactionEvent::TaintedTransactionReportExpired{ account_id, tx_id }),
+						pallet_cf_ingress_egress::Event::TaintedTransactionReportReceived{ account_id, tx_id, expires_at: _ } =>
+							Some(TaintedTransactionEvent::TaintedTransactionReportReceived{account_id, tx_id }),
+						pallet_cf_ingress_egress::Event::TaintedTransactionRejected{ broadcast_id, tx_id } =>
+							Some(TaintedTransactionEvent::TaintedTransactionRejected{ refund_broadcast_id: broadcast_id, tx_id: tx_id.id.tx_id }),
+						_ => None,
+					}
+				} else {
+					None
+				}
+			}).collect();
+
+			TaintedTransactionEvents {
+				btc_events
+			}
+		}
 	}
+
 
 	impl monitoring_apis::MonitoringRuntimeApi<Block> for Runtime {
 
