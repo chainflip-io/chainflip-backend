@@ -25,7 +25,7 @@ use crate::{
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
-		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, BoostPoolDepth,
+		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TaintedTransactionEvents,
@@ -50,7 +50,10 @@ use cf_chains::{
 	sol::{SolAddress, SolanaCrypto},
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
-use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
+use cf_primitives::{
+	BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex, NetworkEnvironment,
+	STABLE_ASSET,
+};
 use cf_runtime_upgrade_utilities::VersionedMigration;
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
@@ -72,6 +75,7 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
+use pallet_cf_swapping::{BatchExecutionError, FeeType, Swap};
 use runtime_apis::ChainAccounts;
 
 use crate::{chainflip::EvmLimit, runtime_apis::TaintedTransactionEvent};
@@ -121,7 +125,7 @@ pub use sp_runtime::BuildStorage;
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, MultiSignature,
+	ApplyExtrinsicResult, DispatchError, MultiSignature,
 };
 pub use sp_runtime::{Perbill, Permill};
 use sp_std::prelude::*;
@@ -1527,6 +1531,8 @@ impl_runtime_apis! {
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
+			broker_commission: BasisPoints,
+			dca_parameters: Option<DcaParameters>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
@@ -1602,20 +1608,62 @@ impl_runtime_apis! {
 
 			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, from, amount);
 
-			let swap_output = Swapping::swap_with_network_fee(
-				from,
-				to,
-				amount_to_swap,
-			)?;
+			// Estimate swap result for a chunk, then extrapolate the result.
+			// If no DCA parameter is given, swap the entire amount with 1 chunk.
+			let number_of_chunks: u128 = dca_parameters.map(|dca|dca.number_of_chunks).unwrap_or(1u32).into();
+			let amount_per_chunk = amount_to_swap / number_of_chunks;
 
-			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, to, swap_output.output);
+			let swap_output_per_chunk = Swapping::try_execute_without_violations(
+				vec![
+					Swap::new(
+						Default::default(),
+						Default::default(),
+						from,
+						to,
+						amount_per_chunk,
+						None,
+						vec![
+							FeeType::NetworkFee,
+							FeeType::BrokerFee(
+								vec![Beneficiary {
+									account: AccountId::new([0xbb; 32]),
+									bps: broker_commission,
+								}]
+								.try_into()
+								.expect("Beneficiary with a length of 1 must be within length bound.")
+							)
+						],
+					)
+				],
+			).map_err(|e| DispatchErrorWithMessage::Other(match e {
+				BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
+				BatchExecutionError::PriceViolation { .. } => DispatchError::Other("Price Violation: Some swaps failed due to Price Impact Limitations."),
+				BatchExecutionError::DispatchError { error } => error,
+			}))?;
+
+			let (
+				network_fee,
+				broker_fee,
+				intermediary,
+				output,
+			) = {
+				(
+					swap_output_per_chunk[0].network_fee_taken.unwrap_or_default() * number_of_chunks,
+					swap_output_per_chunk[0].broker_fee_taken.unwrap_or_default() * number_of_chunks,
+					swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks),
+					swap_output_per_chunk[0].final_output.unwrap_or_default() * number_of_chunks,
+				)
+			};
+
+			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, to, output);
 
 			Ok(SimulatedSwapInformation {
-				intermediary: swap_output.intermediary,
+				intermediary,
 				output,
-				network_fee: swap_output.network_fee,
+				network_fee,
 				ingress_fee,
 				egress_fee,
+				broker_fee,
 			})
 		}
 
@@ -1624,9 +1672,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>> {
-
 			System::read_events_no_consensus().filter_map(|event_record| {
-
 				if let RuntimeEvent::LiquidityPools(pools_event) = event_record.event {
 					Some(pools_event)
 				} else {
