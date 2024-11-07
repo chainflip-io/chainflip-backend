@@ -8,8 +8,8 @@ use cf_chains::{
 	ForeignChainAddress,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, FlipBalance,
-	ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer,
+	AccountRole, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, DcaParameters,
+	EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
@@ -146,6 +146,7 @@ pub struct SimulatedSwapInformation {
 	pub network_fee: AssetAmount,
 	pub ingress_fee: AssetAmount,
 	pub egress_fee: AssetAmount,
+	pub broker_fee: AssetAmount,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -217,8 +218,23 @@ pub struct TaintedTransactionEvents {
 	pub btc_events: Vec<TaintedTransactionEventFor<cf_chains::Bitcoin>>,
 }
 
+// READ THIS BEFORE UPDATING THIS TRAIT:
+//
+// ## When changing an existing method:
+//  - Bump the api_version of the trait, for example from #[api_version(2)] to #[api_version(3)].
+//  - Annotate the old method with #[changed_in($VERSION)] where $VERSION is the *new* api_version,
+//    for example #[changed_in(3)].
+//  - Handle the old method in the custom rpc implementation using runtime_api().api_version().
+//
+// ## When adding a new method:
+//  - Bump the api_version of the trait, for example from #[api_version(2)] to #[api_version(3)].
+//  - Create a dummy method with the same name, but no args and no return value.
+//  - Annotate the dummy method with #[changed_in($VERSION)] where $VERSION is the *new*
+//    api_version.
+//  - Handle the dummy method gracefully in the custom rpc implementation using
+//    runtime_api().api_version().
 decl_runtime_apis!(
-	/// Definition for all runtime API interfaces.
+	#[api_version(2)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -252,10 +268,19 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 		) -> Result<PoolPriceV2, DispatchErrorWithMessage>;
+		#[changed_in(2)]
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
+			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
+		fn cf_pool_simulate_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			broker_commission: BasisPoints,
+			dca_parameters: Option<DcaParameters>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(
