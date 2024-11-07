@@ -1734,4 +1734,53 @@ mod private_channels {
 			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(CHANNEL_ID + 1));
 		});
 	}
+
+	#[test]
+	fn register_affiliate() {
+		new_test_ext().execute_with(|| {
+			// Only brokers can register affiliates
+			const AFFILIATE_IDX: u8 = 0;
+
+			assert_noop!(
+				Swapping::register_affiliate(OriginTrait::signed(ALICE), AFFILIATE_IDX, BOB),
+				BadOrigin
+			);
+
+			// Registering an affiliate for the first time (no existing records)
+			{
+				assert_ok!(Swapping::register_affiliate(
+					OriginTrait::signed(BROKER),
+					AFFILIATE_IDX,
+					ALICE,
+				));
+
+				System::assert_has_event(RuntimeEvent::Swapping(
+					Event::<Test>::AffiliateRegistrationUpdated {
+						broker_id: BROKER,
+						idx: 0,
+						affiliate_id: ALICE,
+						previous_affiliate_id: None,
+					},
+				));
+			}
+
+			// Overwriting an existing affiliate registration entry:
+			{
+				assert_ok!(Swapping::register_affiliate(
+					OriginTrait::signed(BROKER),
+					AFFILIATE_IDX,
+					BOB,
+				));
+
+				System::assert_has_event(RuntimeEvent::Swapping(
+					Event::<Test>::AffiliateRegistrationUpdated {
+						broker_id: BROKER,
+						idx: 0,
+						affiliate_id: BOB,
+						previous_affiliate_id: Some(ALICE),
+					},
+				));
+			}
+		});
+	}
 }

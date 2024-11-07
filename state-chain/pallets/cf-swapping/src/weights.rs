@@ -39,6 +39,7 @@ pub trait WeightInfo {
 	fn deregister_as_broker() -> Weight;
 	fn open_private_btc_channel() -> Weight;
 	fn close_private_btc_channel() -> Weight;
+	fn register_affiliate() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -192,6 +193,19 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Estimated: `4135`
 		// Minimum execution time: 13_000_000 picoseconds.
 		Weight::from_parts(14_000_000, 4135)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::AffiliateIdMapping` (r:1 w:1)
+	/// Proof: `Swapping::AffiliateIdMapping` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn register_affiliate() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `607`
+		//  Estimated: `4072`
+		// Minimum execution time: 13_000_000 picoseconds.
+		Weight::from_parts(14_000_000, 4072)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -351,4 +365,18 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::AffiliateIdMapping` (r:1 w:1)
+	/// Proof: `Swapping::AffiliateIdMapping` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn register_affiliate() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `607`
+		//  Estimated: `4072`
+		// Minimum execution time: 13_000_000 picoseconds.
+		Weight::from_parts(14_000_000, 4072)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+
 }

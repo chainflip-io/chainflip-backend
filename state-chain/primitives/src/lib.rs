@@ -101,6 +101,8 @@ pub type PrewitnessedDepositId = u64;
 
 pub type BoostPoolTier = u16;
 
+pub type AffiliateId = u8;
+
 // TODO: Consider alternative representation for Price:
 //
 // increasing Price to U512 or switch to a f64 (f64 would only be for the external

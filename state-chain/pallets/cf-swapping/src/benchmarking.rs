@@ -170,5 +170,26 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn register_affiliate() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		const IDX: u8 = 0;
+		let caller = OriginFor::<T>::signed(broker_id.clone());
+		let affiliate_id = frame_benchmarking::account::<T::AccountId>("affiliate", 0, 0);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::register_affiliate(caller.clone(), IDX, affiliate_id.clone()));
+		}
+
+		assert_eq!(
+			AffiliateIdMapping::<T>::get(&broker_id, IDX),
+			Some(affiliate_id),
+			"Affiliate must have been registered"
+		);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

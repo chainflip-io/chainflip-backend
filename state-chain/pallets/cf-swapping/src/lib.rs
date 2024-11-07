@@ -9,9 +9,9 @@ use cf_chains::{
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
-	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber, ChannelId,
-	DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION,
-	MAX_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	AffiliateId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
+	ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
+	BASIS_POINTS_PER_MILLION, MAX_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -520,6 +520,20 @@ pub mod pallet {
 	pub type BrokerPrivateBtcChannels<T: Config> =
 		StorageMap<_, Identity, T::AccountId, ChannelId, OptionQuery>;
 
+	/// Associates for a given broker an affiliate broker account with a u8 index so that
+	/// it can be used in place of the full account id in order to save space (e.g. in UTXO encoding
+	/// for BTC)
+	#[pallet::storage]
+	pub(crate) type AffiliateIdMapping<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		T::AccountId,
+		Twox64Concat,
+		AffiliateId,
+		T::AccountId,
+		OptionQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -655,6 +669,12 @@ pub mod pallet {
 		PrivateBrokerChannelClosed {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
+		},
+		AffiliateRegistrationUpdated {
+			broker_id: T::AccountId,
+			idx: u8,
+			affiliate_id: T::AccountId,
+			previous_affiliate_id: Option<T::AccountId>,
 		},
 	}
 	#[pallet::error]
@@ -1108,6 +1128,31 @@ pub mod pallet {
 			};
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed { broker_id, channel_id });
+
+			Ok(())
+		}
+
+		/// Associates `idx` with `affiliate_id` for a given broker. Overwrites the record under
+		/// `idx` if already taken by another affiliate.
+		#[pallet::call_index(14)]
+		#[pallet::weight(T::WeightInfo::register_affiliate())]
+		pub fn register_affiliate(
+			origin: OriginFor<T>,
+			idx: u8,
+			affiliate_id: T::AccountId,
+		) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let previous_affiliate_id = AffiliateIdMapping::<T>::take(&broker_id, idx);
+
+			AffiliateIdMapping::<T>::insert(broker_id.clone(), idx, affiliate_id.clone());
+
+			Self::deposit_event(Event::<T>::AffiliateRegistrationUpdated {
+				broker_id,
+				idx,
+				affiliate_id,
+				previous_affiliate_id,
+			});
 
 			Ok(())
 		}
