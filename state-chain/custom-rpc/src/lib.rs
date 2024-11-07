@@ -52,10 +52,10 @@ use state_chain_runtime::{
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
-		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi,
-		DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
-		VaultSwapDetails,
+		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, ChainAccounts,
+		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
+		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
+		TaintedTransactionEvents, ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -991,6 +991,19 @@ pub trait CustomApi {
 		dca_parameters: Option<DcaParameters>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapDetailsHumanreadable>;
+
+	#[method(name = "get_open_deposit_channels")]
+	fn cf_get_open_deposit_channels(
+		&self,
+		broker: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ChainAccounts>;
+
+	#[method(name = "get_tainted_transaction_events")]
+	fn cf_get_tainted_transaction_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<TaintedTransactionEvents>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1243,6 +1256,7 @@ where
 		cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>,
 		cf_boost_pools_depth() -> Vec<BoostPoolDepth>,
 		cf_pool_price(from_asset: Asset, to_asset: Asset) -> Option<PoolPriceV1>,
+		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 	}
 
 	pass_through_and_flatten! {
@@ -1817,6 +1831,13 @@ where
 				api.cf_network_environment(hash)?,
 			))
 		})
+	}
+
+	fn cf_get_tainted_transaction_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<TaintedTransactionEvents> {
+		self.with_runtime_api(at, |api, hash| api.cf_tainted_transaction_events(hash))
 	}
 }
 

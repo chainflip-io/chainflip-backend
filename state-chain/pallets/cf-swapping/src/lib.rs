@@ -517,7 +517,7 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	#[pallet::storage]
-	pub(crate) type BrokerPrivateBtcChannels<T: Config> =
+	pub type BrokerPrivateBtcChannels<T: Config> =
 		StorageMap<_, Identity, T::AccountId, ChannelId, OptionQuery>;
 
 	#[pallet::event]
@@ -703,6 +703,8 @@ pub mod pallet {
 		BoostFeeTooHigh,
 		/// Broker/Affiliate fees are not yet supported for vault swaps
 		VaultSwapBrokerFeesNotSupported,
+		/// The broker fee is too large to fit in a u8.
+		BrokerFeeTooHigh,
 		/// Unsupported source asset for vault swap
 		UnsupportedSourceAsset,
 		/// Broker cannot deregister or open a new private channel because one already exists.

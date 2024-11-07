@@ -41,6 +41,7 @@ import { testCancelOrdersBatch } from '../tests/create_and_delete_multiple_order
 import { depositChannelCreation } from '../tests/request_swap_deposit_address_with_affiliates';
 import { testDCASwaps } from '../tests/DCA_test';
 import { testBtcVaultSwap } from '../tests/btc_vault_swap';
+import { testBrokerLevelScreening } from '../tests/broker_level_screening';
 
 async function main() {
   const testName = process.argv[2];
@@ -69,6 +70,7 @@ async function main() {
     testCancelOrdersBatch,
     depositChannelCreation,
     testBtcVaultSwap,
+    testBrokerLevelScreening,
   ];
 
   // Help message

@@ -159,6 +159,8 @@ pub fn try_extract_vault_swap_call(
 #[cfg(test)]
 mod tests {
 
+	use std::sync::LazyLock;
+
 	use bitcoin::{
 		blockdata::script::{witness_program::WitnessProgram, witness_version::WitnessVersion},
 		hashes::Hash,
@@ -177,7 +179,7 @@ mod tests {
 
 	const MOCK_DOT_ADDRESS: [u8; 32] = [9u8; 32];
 
-	const MOCK_SWAP_PARAMS: UtxoEncodedData = UtxoEncodedData {
+	static MOCK_SWAP_PARAMS: LazyLock<UtxoEncodedData> = LazyLock::new(|| UtxoEncodedData {
 		output_asset: cf_primitives::Asset::Dot,
 		output_address: EncodedAddress::Dot(MOCK_DOT_ADDRESS),
 		parameters: SharedCfParameters {
@@ -186,8 +188,10 @@ mod tests {
 			number_of_chunks: 0x0ffff,
 			chunk_interval: 2,
 			boost_fee: 5,
+			broker_fee: 10,
+			affiliates: bounded_vec![],
 		},
-	};
+	});
 
 	#[test]
 	fn script_buf_to_script_pubkey_conversion() {

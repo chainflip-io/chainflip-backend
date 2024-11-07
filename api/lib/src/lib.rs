@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::address::AddressString;
 use cf_chains::{
-	evm::to_evm_address, CcmChannelMetadata, ChannelRefundParametersEncoded,
+	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParametersEncoded,
 	ChannelRefundParametersGeneric, ForeignChain,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
@@ -27,7 +27,7 @@ pub mod primitives {
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
-		CcmChannelMetadata, CcmDepositMetadata,
+		CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
 	};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
@@ -149,6 +149,10 @@ impl StateChainApi {
 		self.state_chain_client.clone()
 	}
 
+	pub fn deposit_monitor_api(&self) -> Arc<impl DepositMonitorApi> {
+		self.state_chain_client.clone()
+	}
+
 	pub fn query_api(&self) -> queries::QueryApi {
 		queries::QueryApi { state_chain_client: self.state_chain_client.clone() }
 	}
@@ -160,6 +164,8 @@ impl GovernanceApi for StateChainClient {}
 impl OperatorApi for StateChainClient {}
 #[async_trait]
 impl ValidatorApi for StateChainClient {}
+#[async_trait]
+impl DepositMonitorApi for StateChainClient {}
 
 #[async_trait]
 pub trait ValidatorApi: SimpleSubmissionApi {
@@ -514,6 +520,31 @@ pub trait SimpleSubmissionApi: SignedExtrinsicApi {
 
 #[async_trait]
 impl<T: SignedExtrinsicApi + Sized + Send + Sync + 'static> SimpleSubmissionApi for T {}
+
+pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+
+#[derive(Serialize, Deserialize)]
+pub enum TransactionInId {
+	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
+	// other variants reserved for other chains.
+}
+
+#[async_trait]
+pub trait DepositMonitorApi:
+	SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static
+{
+	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> Result<H256> {
+		match tx_id {
+			TransactionInId::Bitcoin(tx_id) =>
+				self.simple_submission_with_dry_run(
+					state_chain_runtime::RuntimeCall::BitcoinIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_as_tainted { tx_id },
+					),
+				)
+				.await,
+		}
+	}
+}
 
 #[derive(Debug, Zeroize, PartialEq, Eq)]
 /// Public and Secret keys as bytes
