@@ -21,7 +21,9 @@ use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256, U256};
+use sp_core::{
+	bounded_vec, ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256, U256,
+};
 pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
@@ -579,6 +581,9 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 							.unwrap_or(2)
 							.try_into()?,
 						boost_fee: boost_fee.unwrap_or_default().try_into()?,
+						broker_fee: broker_commission.try_into()?,
+						// TODO: lookup affiliate mapping to convert affiliate ids and use them here
+						affiliates: bounded_vec![],
 					},
 				};
 				Ok(SwapPayload::Bitcoin {
