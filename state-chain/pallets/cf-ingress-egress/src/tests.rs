@@ -3,11 +3,12 @@ mod screening;
 
 use crate::{
 	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
-	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
-	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
-	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
+	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
+	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
+	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
+	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -1553,11 +1554,13 @@ fn can_update_all_config_items() {
 		const NEW_OPENING_FEE: u128 = 300;
 		const NEW_MIN_DEPOSIT_FLIP: u128 = 100;
 		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
+		const NEW_DEPOSIT_CHANNEL_LIFETIME: u64 = 99;
 
 		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), 0);
+		assert_ne!(DepositChannelLifetime::<Test, _>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
 
 		// Update all config items at the same time, and updates 2 separate min deposit amounts.
 		assert_ok!(IngressEgress::update_pallet_config(
@@ -1572,6 +1575,9 @@ fn can_update_all_config_items() {
 					asset: eth::Asset::Eth,
 					minimum_deposit: NEW_MIN_DEPOSIT_ETH
 				},
+				PalletConfigUpdate::SetDepositChannelLifetime {
+					lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
+				}
 			]
 			.try_into()
 			.unwrap()
@@ -1581,6 +1587,7 @@ fn can_update_all_config_items() {
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), NEW_OPENING_FEE);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Flip), NEW_MIN_DEPOSIT_FLIP);
 		assert_eq!(MinimumDeposit::<Test, _>::get(eth::Asset::Eth), NEW_MIN_DEPOSIT_ETH);
+		assert_eq!(DepositChannelLifetime::<Test, _>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -1595,6 +1602,9 @@ fn can_update_all_config_items() {
 			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::MinimumDepositSet {
 				asset: eth::Asset::Eth,
 				minimum_deposit: NEW_MIN_DEPOSIT_ETH
+			}),
+			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::DepositChannelLifetimeSet {
+				lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
 			}),
 		);
 
