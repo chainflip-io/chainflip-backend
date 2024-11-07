@@ -62,7 +62,7 @@ use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
 use migrations::{
 	add_liveness_electoral_system_solana::LivenessSettingsMigration,
-	solana_egress_success_witness::SolanaEgressSuccessWitnessMigration,
+	solana_egress_success_witness::SolanaEgressSuccessWitnessMigration, SpecVersionedMigration,
 };
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
@@ -1238,7 +1238,7 @@ type AllMigrations = (
 	MigrationsForV1_7,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
-	chainflip::solana_elections::old::Migration,
+	SpecVersionedMigration<chainflip::solana_elections::old::Migration, 170>,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
