@@ -1,3 +1,4 @@
+import assert from 'assert';
 import { ExecutableTest } from '../shared/executable_test';
 import { BTC_ENDPOINT, selectInputs, waitForBtcTransaction, btcClient } from '../shared/send_btc';
 import {
@@ -7,20 +8,18 @@ import {
   btcClientMutex,
   createStateChainKeypair,
   newAddress,
-  shortChainFromAsset,
+  observeBalanceIncrease,
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
+import { getBalance } from '../shared/get_balance';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testBtcVaultSwap = new ExecutableTest('Btc-Vault-Swap', main, 60);
+export const testBtcVaultSwap = new ExecutableTest('Btc-Vault-Swap', main, 100);
 
 interface VaultSwapDetails {
-  chain: {
-    Bitcoin: {
-      nulldata_utxo: string;
-      deposit_address: string;
-    };
-  };
+  chain: string;
+  nulldata_utxo: string;
+  deposit_address: string;
 }
 
 async function buildAndSendBtcVaultSwap(
@@ -33,23 +32,24 @@ async function buildAndSendBtcVaultSwap(
   await using chainflip = await getChainflipApi();
 
   const broker = createStateChainKeypair(brokerUri);
+  testBtcVaultSwap.debugLog('Broker:', broker.address);
   testBtcVaultSwap.debugLog(`Btc endpoint is set to`, BTC_ENDPOINT);
 
   const feeBtc = 0.00001;
   const { inputs, change } = await selectInputs(Number(depositAmountBtc) + feeBtc);
 
-  const vaultSwapDetails = (
-    (await chainflip.rpc(
-      `cf_get_vault_swap_details`,
-      broker.address,
-      'BTC', // source_asset
-      destinationAsset.toUpperCase(),
-      { [shortChainFromAsset(destinationAsset)]: destinationAddress },
-      0, // broker_commission
-      0, // min_output_amount
-      0, // retry_duration
-    )) as unknown as VaultSwapDetails
-  ).chain.Bitcoin;
+  const vaultSwapDetails = (await chainflip.rpc(
+    `cf_get_vault_swap_details`,
+    broker.address,
+    'BTC', // source_asset
+    destinationAsset.toUpperCase(),
+    destinationAddress,
+    0, // broker_commission
+    0, // min_output_amount
+    0, // retry_duration
+  )) as unknown as VaultSwapDetails;
+
+  assert.strictEqual(vaultSwapDetails.chain, 'Bitcoin');
   testBtcVaultSwap.debugLog('nulldata_utxo:', vaultSwapDetails.nulldata_utxo);
 
   // The `createRawTransaction` function will add the op codes, so we have to remove them here.
@@ -87,6 +87,7 @@ async function testVaultSwap(depositAmountBtc: number, brokerUri: string, destin
   testBtcVaultSwap.debugLog('destinationAddress:', destinationAddress);
   const refundAddress = await newAddress('Btc', 'BTC_VAULT_SWAP_REFUND');
   testBtcVaultSwap.debugLog('Refund address:', refundAddress);
+  const destinationAmountBeforeSwap = await getBalance(destinationAsset, destinationAddress);
 
   const observeSwapExecutedEvent = observeEvent(`swapping:SwapExecuted`, {
     test: (event) =>
@@ -106,11 +107,14 @@ async function testVaultSwap(depositAmountBtc: number, brokerUri: string, destin
 
   testBtcVaultSwap.debugLog('Waiting for swap executed event');
   await observeSwapExecutedEvent;
-  testBtcVaultSwap.log(`✅ Btc -> ${destinationAsset} Vault Swap executed`);
+  testBtcVaultSwap.log(`Btc -> ${destinationAsset} Vault Swap executed`);
+
+  await observeBalanceIncrease(destinationAsset, destinationAddress, destinationAmountBeforeSwap);
+  testBtcVaultSwap.log(`Balance increased, Vault Swap Complete`);
 }
 
 async function main() {
-  const depositAmount = 0.1;
+  const btcDepositAmount = 0.1;
 
-  await testVaultSwap(depositAmount, '//BROKER_1', 'Flip');
+  await testVaultSwap(btcDepositAmount, '//BROKER_1', 'Flip');
 }

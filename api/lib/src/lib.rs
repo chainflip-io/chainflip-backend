@@ -1,17 +1,15 @@
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{fmt, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
+pub use cf_chains::address::AddressString;
 use cf_chains::{
-	address::{try_from_encoded_address, EncodedAddress},
-	dot::PolkadotAccountId,
-	evm::to_evm_address,
-	sol::SolAddress,
-	CcmChannelMetadata, ChannelRefundParametersEncoded, ChannelRefundParametersGeneric,
-	ForeignChain, ForeignChainAddress,
+	evm::to_evm_address, CcmChannelMetadata, ChannelRefundParametersEncoded,
+	ChannelRefundParametersGeneric, ForeignChain,
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{DcaParameters, NetworkEnvironment};
+use cf_primitives::{AssetAmount, DcaParameters};
+use custom_rpc::VaultSwapDetailsHumanreadable;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -49,7 +47,7 @@ pub mod queries;
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
-use cf_utilities::{clean_hex_address, rpc::NumberOrHex, task_scope::Scope};
+use cf_utilities::{rpc::NumberOrHex, task_scope::Scope};
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
@@ -143,8 +141,8 @@ impl StateChainApi {
 		self.state_chain_client.clone()
 	}
 
-	pub fn broker_api(&self) -> Arc<impl BrokerApi> {
-		self.state_chain_client.clone()
+	pub fn broker_api(&self) -> BrokerApi {
+		BrokerApi { state_chain_client: self.state_chain_client.clone() }
 	}
 
 	pub fn lp_api(&self) -> Arc<impl lp::LpApi> {
@@ -158,12 +156,6 @@ impl StateChainApi {
 
 #[async_trait]
 impl GovernanceApi for StateChainClient {}
-#[async_trait]
-impl BrokerApi for StateChainClient {
-	fn base_rpc_api(&self) -> Arc<dyn BaseRpcApi + Send + Sync + 'static> {
-		self.base_rpc_client.clone()
-	}
-}
 #[async_trait]
 impl OperatorApi for StateChainClient {}
 #[async_trait]
@@ -297,42 +289,6 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AddressString(String);
-
-impl FromStr for AddressString {
-	type Err = anyhow::Error;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		Ok(Self(s.to_string()))
-	}
-}
-
-impl AddressString {
-	pub fn try_parse_to_encoded_address(self, chain: ForeignChain) -> Result<EncodedAddress> {
-		clean_foreign_chain_address(chain, self.0.as_str())
-	}
-
-	pub fn try_parse_to_foreign_chain_address(
-		self,
-		chain: ForeignChain,
-		network: NetworkEnvironment,
-	) -> Result<ForeignChainAddress> {
-		try_from_encoded_address(self.try_parse_to_encoded_address(chain)?, move || network)
-			.map_err(|_| anyhow!("Failed to parse address"))
-	}
-
-	pub fn from_encoded_address<T: std::borrow::Borrow<EncodedAddress>>(address: T) -> Self {
-		Self(address.borrow().to_string())
-	}
-}
-
-impl fmt::Display for AddressString {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
-
 pub type RefundParameters = ChannelRefundParametersGeneric<AddressString>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -374,10 +330,12 @@ impl fmt::Display for WithdrawFeesDetail {
 	}
 }
 
-#[async_trait]
-pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static {
-	fn base_rpc_api(&self) -> Arc<dyn BaseRpcApi + Send + Sync + 'static>;
-	async fn request_swap_deposit_address(
+pub struct BrokerApi {
+	pub(crate) state_chain_client: Arc<StateChainClient>,
+}
+
+impl BrokerApi {
+	pub async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
@@ -389,9 +347,11 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		refund_parameters: Option<RefundParameters>,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
-		let destination_address =
-			destination_address.try_parse_to_encoded_address(destination_asset.into())?;
+		let destination_address = destination_address
+			.try_parse_to_encoded_address(destination_asset.into())
+			.map_err(anyhow::Error::msg)?;
 		let (_tx_hash, events, header, ..) = self
+			.state_chain_client
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
@@ -407,7 +367,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 								retry_duration: rpc_params.retry_duration,
 								refund_address: rpc_params
 									.refund_address
-									.try_parse_to_encoded_address(source_asset.into())?,
+									.try_parse_to_encoded_address(source_asset.into())
+									.map_err(anyhow::Error::msg)?,
 								min_price: rpc_params.min_price,
 							})
 						})
@@ -452,16 +413,18 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			bail!("No SwapDepositAddressReady event was found");
 		}
 	}
-	async fn withdraw_fees(
+	pub async fn withdraw_fees(
 		&self,
 		asset: Asset,
 		destination_address: AddressString,
 	) -> Result<WithdrawFeesDetail> {
 		let (tx_hash, events, ..) = self
+			.state_chain_client
 			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
 				asset,
 				destination_address: destination_address
-					.try_parse_to_encoded_address(asset.into())?,
+					.try_parse_to_encoded_address(asset.into())
+					.map_err(anyhow::Error::msg)?,
 			}))
 			.await
 			.until_in_block()
@@ -494,13 +457,46 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			bail!("No WithdrawalRequested event was found");
 		}
 	}
-	async fn register_account(&self) -> Result<H256> {
-		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_as_broker {})
+	pub async fn register_account(&self) -> Result<H256> {
+		self.state_chain_client
+			.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_as_broker {})
 			.await
 	}
-	async fn deregister_account(&self) -> Result<H256> {
-		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
+	pub async fn deregister_account(&self) -> Result<H256> {
+		self.state_chain_client
+			.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
 			.await
+	}
+
+	pub async fn request_swap_parameter_encoding(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		min_output_amount: AssetAmount,
+		retry_duration: u32,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
+	) -> Result<VaultSwapDetailsHumanreadable> {
+		Ok(self
+			.state_chain_client
+			.base_rpc_client
+			.cf_get_vault_swap_details(
+				self.state_chain_client.account_id(),
+				source_asset,
+				destination_asset,
+				destination_address,
+				broker_commission,
+				min_output_amount,
+				retry_duration,
+				boost_fee,
+				affiliate_fees,
+				dca_parameters,
+				None,
+			)
+			.await?)
 	}
 }
 
@@ -518,22 +514,6 @@ pub trait SimpleSubmissionApi: SignedExtrinsicApi {
 
 #[async_trait]
 impl<T: SignedExtrinsicApi + Sized + Send + Sync + 'static> SimpleSubmissionApi for T {}
-
-/// Sanitize the given address (hex or base58) and turn it into a EncodedAddress of the given
-/// chain.
-pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
-	Ok(match chain {
-		ForeignChain::Ethereum => EncodedAddress::Eth(clean_hex_address(address)?),
-		ForeignChain::Polkadot =>
-			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
-		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
-		ForeignChain::Arbitrum => EncodedAddress::Arb(clean_hex_address(address)?),
-		ForeignChain::Solana => match SolAddress::from_str(address) {
-			Ok(sol_address) => EncodedAddress::Sol(sol_address.into()),
-			Err(_) => EncodedAddress::Sol(clean_hex_address(address)?),
-		},
-	})
-}
 
 #[derive(Debug, Zeroize, PartialEq, Eq)]
 /// Public and Secret keys as bytes
@@ -640,6 +620,7 @@ mod tests {
 	mod key_generation {
 
 		use super::*;
+		use cf_chains::address::clean_foreign_chain_address;
 		use sp_core::crypto::Ss58Codec;
 
 		#[test]

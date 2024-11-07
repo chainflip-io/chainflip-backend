@@ -4,7 +4,8 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ForeignChainAddress,
+	address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress, Chain,
+	ForeignChainAddress,
 };
 use cf_primitives::{
 	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
@@ -322,7 +323,7 @@ decl_runtime_apis!(
 			broker: AccountId32,
 			source_asset: Asset,
 			destination_asset: Asset,
-			destination_address: ForeignChainAddress,
+			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
 			min_output_amount: AssetAmount,
 			retry_duration: u32,

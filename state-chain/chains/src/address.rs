@@ -97,7 +97,9 @@ impl ForeignChainAddress {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub enum EncodedAddress {
 	Eth([u8; 20]),
 	Dot([u8; 32]),
@@ -381,6 +383,79 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 				ForeignChainAddressHumanreadable::Sol(address.to_humanreadable(network_environment)),
 		}
 	}
+}
+
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddressString(String);
+
+#[cfg(feature = "std")]
+impl sp_std::str::FromStr for AddressString {
+	type Err = &'static str;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Ok(Self(s.to_string()))
+	}
+}
+
+#[cfg(feature = "std")]
+impl AddressString {
+	pub fn try_parse_to_encoded_address(
+		self,
+		chain: ForeignChain,
+	) -> Result<EncodedAddress, &'static str> {
+		clean_foreign_chain_address(chain, self.0.as_str())
+	}
+
+	pub fn try_parse_to_foreign_chain_address(
+		self,
+		chain: ForeignChain,
+		network: NetworkEnvironment,
+	) -> Result<ForeignChainAddress, &'static str> {
+		try_from_encoded_address(self.try_parse_to_encoded_address(chain)?, move || network)
+			.map_err(|_| "Failed to parse address".into())
+	}
+
+	pub fn from_encoded_address<T: std::borrow::Borrow<EncodedAddress>>(address: T) -> Self {
+		Self(address.borrow().to_string())
+	}
+}
+
+#[cfg(feature = "std")]
+impl sp_std::fmt::Display for AddressString {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
+
+/// Sanitize the given address (hex or base58) and turn it into a EncodedAddress of the given
+/// chain.
+#[cfg(feature = "std")]
+pub fn clean_foreign_chain_address(
+	chain: ForeignChain,
+	address: &str,
+) -> Result<EncodedAddress, &'static str> {
+	use core::str::FromStr;
+
+	use cf_utilities::clean_hex_address;
+
+	Ok(match chain {
+		ForeignChain::Ethereum =>
+			EncodedAddress::Eth(clean_hex_address(address).map_err(|_| "Invalid address")?),
+		ForeignChain::Polkadot => EncodedAddress::Dot(
+			PolkadotAccountId::from_str(address)
+				.map(|id| *id.aliased_ref())
+				.map_err(|_| "Invalid address")?,
+		),
+		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
+		ForeignChain::Arbitrum =>
+			EncodedAddress::Arb(clean_hex_address(address).map_err(|_| "Invalid address")?),
+		ForeignChain::Solana => match SolAddress::from_str(address) {
+			Ok(sol_address) => EncodedAddress::Sol(sol_address.into()),
+			Err(_) =>
+				EncodedAddress::Sol(clean_hex_address(address).map_err(|_| "Invalid address")?),
+		},
+	})
 }
 
 #[test]

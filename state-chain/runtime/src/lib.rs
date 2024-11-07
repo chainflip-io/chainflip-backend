@@ -2117,7 +2117,7 @@ impl_runtime_apis! {
 			_broker: AccountId,
 			source_asset: Asset,
 			destination_asset: Asset,
-			destination_address: ForeignChainAddress,
+			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
 			min_output_amount: AssetAmount,
 			retry_duration: u32,
@@ -2137,11 +2137,19 @@ impl_runtime_apis! {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)
 					.map_err(Into::<DispatchErrorWithMessage>::into)?;
 			}
-			if ForeignChain::from(destination_asset) != destination_address.chain() {
-				return Err(DispatchErrorWithMessage::from_pallet_error(
-					pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress,
-				));
-			}
+			ChainAddressConverter::try_from_encoded_address(destination_address.clone())
+				.and_then(|address| {
+					if ForeignChain::from(destination_asset) != address.chain() {
+						Err(())
+					} else {
+						Ok(())
+					}
+				})
+				.map_err(|_| {
+					DispatchErrorWithMessage::from_pallet_error(
+						pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress,
+					)
+				})?;
 
 
 			// Encode swap
@@ -2149,9 +2157,7 @@ impl_runtime_apis! {
 				ForeignChain::Bitcoin => {
 					let params = UtxoEncodedData {
 						output_asset: destination_asset,
-						output_address: ChainAddressConverter::to_encoded_address(
-							destination_address,
-						),
+						output_address: destination_address,
 						parameters: SharedCfParameters {
 							retry_duration: retry_duration.try_into().map_err(|_| {
 								DispatchErrorWithMessage::from_pallet_error(

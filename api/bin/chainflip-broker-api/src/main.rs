@@ -1,15 +1,18 @@
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
+	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
+	try_parse_number_or_hex,
 };
 use chainflip_api::{
 	self,
 	primitives::{AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters},
 	settings::StateChain,
-	AccountId32, AddressString, BrokerApi, OperatorApi, RefundParameters, StateChainApi,
-	SwapDepositAddress, WithdrawFeesDetail,
+	AccountId32, AddressString, OperatorApi, RefundParameters, StateChainApi, SwapDepositAddress,
+	WithdrawFeesDetail,
 };
 use clap::Parser;
+use custom_rpc::VaultSwapDetailsHumanreadable;
 use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, ClientError},
@@ -84,6 +87,20 @@ pub trait Rpc {
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
+
+	#[method(name = "request_swap_parameter_encoding", aliases = ["broker_requestSwapParameterEncoding"])]
+	async fn request_swap_parameter_encoding(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		min_output_amount: NumberOrHex,
+		retry_duration: u32,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<VaultSwapDetailsHumanreadable>;
 }
 
 pub struct RpcServerImpl {
@@ -148,6 +165,35 @@ impl RpcServer for RpcServerImpl {
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
 		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
+	}
+
+	async fn request_swap_parameter_encoding(
+		&self,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		min_output_amount: NumberOrHex,
+		retry_duration: u32,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<AccountId32>>,
+		dca_parameters: Option<DcaParameters>,
+	) -> RpcResult<VaultSwapDetailsHumanreadable> {
+		Ok(self
+			.api
+			.broker_api()
+			.request_swap_parameter_encoding(
+				source_asset,
+				destination_asset,
+				destination_address,
+				broker_commission,
+				try_parse_number_or_hex(min_output_amount)?,
+				retry_duration,
+				boost_fee,
+				affiliate_fees,
+				dca_parameters,
+			)
+			.await?)
 	}
 }
 

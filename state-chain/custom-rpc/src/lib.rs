@@ -5,11 +5,11 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
+	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
-	Chain, ForeignChainAddress,
+	Chain,
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
@@ -982,7 +982,7 @@ pub trait CustomApi {
 		broker: state_chain_runtime::AccountId,
 		source_asset: Asset,
 		destination_asset: Asset,
-		destination_address: ForeignChainAddress,
+		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		min_output_amount: AssetAmount,
 		retry_duration: u32,
@@ -1786,7 +1786,7 @@ where
 		broker: state_chain_runtime::AccountId,
 		source_asset: Asset,
 		destination_asset: Asset,
-		destination_address: ForeignChainAddress,
+		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		min_output_amount: AssetAmount,
 		retry_duration: u32,
@@ -1802,7 +1802,11 @@ where
 					broker,
 					source_asset,
 					destination_asset,
-					destination_address,
+					destination_address
+						.try_parse_to_encoded_address(destination_asset.into())
+						.map_err(|e| {
+							ErrorObject::owned(ErrorCode::InvalidParams.code(), e, None::<()>)
+						})?,
 					broker_commission,
 					min_output_amount,
 					retry_duration,

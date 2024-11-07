@@ -7,7 +7,7 @@ use api::{
 	lp::LpApi,
 	primitives::{EpochIndex, RedemptionAmount, FLIP_DECIMALS},
 	queries::QueryApi,
-	AccountId32, BrokerApi, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
+	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
 use cf_chains::eth::Address as EthereumAddress;
