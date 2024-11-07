@@ -1,5 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/lib.rs
-expression: "serde_json::to_value(swap_output).unwrap()"
+expression: "serde_json::to_value(RpcSwapOutputV2\n{\n    output: 1_000_000_000_000_000_000u128.into(), intermediary:\n    Some(1_000_000u128.into()), network_fee: RpcFee\n    { asset: Asset::Usdc, amount: 1_000u128.into() }, ingress_fee: RpcFee\n    { asset: Asset::Flip, amount: 500u128.into() }, egress_fee: RpcFee\n    { asset: Asset::Eth, amount: 1_000_000u128.into() }, broker_commission:\n    RpcFee { asset: Asset::Usdc, amount: 100u128.into() },\n}).unwrap()"
 ---
-{"egress_fee":{"amount":"0xf4240","asset":"ETH","chain":"Ethereum"},"ingress_fee":{"amount":"0x1f4","asset":"FLIP","chain":"Ethereum"},"intermediary":"0xf4240","network_fee":{"amount":"0x3e8","asset":"USDC","chain":"Ethereum"},"output":"0xde0b6b3a7640000"}
+{"broker_commission":{"amount":"0x64","asset":"USDC","chain":"Ethereum"},"egress_fee":{"amount":"0xf4240","asset":"ETH","chain":"Ethereum"},"ingress_fee":{"amount":"0x1f4","asset":"FLIP","chain":"Ethereum"},"intermediary":"0xf4240","network_fee":{"amount":"0x3e8","asset":"USDC","chain":"Ethereum"},"output":"0xde0b6b3a7640000"}
