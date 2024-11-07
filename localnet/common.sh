@@ -3,7 +3,8 @@ export WORKFLOW=build-localnet
 export GENESIS_NODES=("bashful" "doc" "dopey")
 export REQUIRED_BINARIES="engine-runner chainflip-node chainflip-broker-api chainflip-lp-api"
 export INIT_CONTAINERS="eth-init solana-init"
-export CORE_CONTAINERS="bitcoin geth polkadot redis deposit-monitor"
+export CORE_CONTAINERS="bitcoin geth polkadot redis"
+export CF_CONTAINERS="deposit-monitor"
 export ARB_CONTAINERS="sequencer staker-unsafe poster"
 export SOLANA_BASE_PATH="/tmp/solana"
 export CHAINFLIP_BASE_PATH="/tmp/chainflip"
@@ -171,6 +172,20 @@ build-localnet() {
 
   echo "🤑 Starting LP API ..."
   KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
+
+  echo "🔬 Starting Deposit Monitor API ..."
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up $CF_CONTAINERS $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  while true; do
+    echo "🩺 Checking deposit-monitor's health ..."
+    REPLY=$(check_endpoint_health 'http://localhost:6060/health')
+    starting=$(echo $REPLY | jq .starting)
+    if [[ $starting == "false" ]]; then
+      echo "💚 deposit-monitor is running!"
+      break
+    fi
+    sleep 1
+  done
+
 
   if [[ $START_TRACKER == "y" ]]; then
     echo "👁 Starting Ingress-Egress-tracker ..."
