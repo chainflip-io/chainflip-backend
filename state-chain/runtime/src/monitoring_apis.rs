@@ -106,13 +106,17 @@ pub struct FlipSupply {
 	pub offchain_supply: u128,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+#[derive(
+	Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone, Default,
+)]
 pub struct SolanaNonces {
 	pub available: Vec<DurableNonceAndAccount>,
 	pub unavailable: Vec<SolAddress>,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+#[derive(
+	Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone, Default,
+)]
 pub struct ActivateKeysBroadcastIds {
 	pub ethereum: Option<u32>,
 	pub bitcoin: Option<u32>,
@@ -122,7 +126,7 @@ pub struct ActivateKeysBroadcastIds {
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub struct MonitoringData {
+pub struct MonitoringDataV2 {
 	pub external_chains_height: ExternalChainsBlockHeight,
 	pub btc_utxos: BtcUtxos,
 	pub epoch: EpochState,
@@ -143,7 +147,50 @@ pub struct MonitoringData {
 	pub activating_key_broadcast_ids: ActivateKeysBroadcastIds,
 }
 
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct MonitoringData {
+	pub external_chains_height: ExternalChainsBlockHeight,
+	pub btc_utxos: BtcUtxos,
+	pub epoch: EpochState,
+	pub pending_redemptions: RedemptionsInfo,
+	pub pending_broadcasts: PendingBroadcasts,
+	pub pending_tss: PendingTssCeremonies,
+	pub open_deposit_channels: OpenDepositChannels,
+	pub fee_imbalance: FeeImbalance<AssetAmount>,
+	pub authorities: AuthoritiesInfo,
+	pub build_version: LastRuntimeUpgradeInfo,
+	pub suspended_validators: Vec<(Offence, u32)>,
+	pub pending_swaps: u32,
+	pub dot_aggkey: PolkadotAccountId,
+	pub flip_supply: FlipSupply,
+}
+
+impl From<MonitoringData> for MonitoringDataV2 {
+	fn from(monitoring_data: MonitoringData) -> Self {
+		Self {
+			epoch: monitoring_data.epoch,
+			pending_redemptions: monitoring_data.pending_redemptions,
+			fee_imbalance: monitoring_data.fee_imbalance.map(|i| *i),
+			external_chains_height: monitoring_data.external_chains_height,
+			btc_utxos: monitoring_data.btc_utxos,
+			pending_broadcasts: monitoring_data.pending_broadcasts,
+			pending_tss: monitoring_data.pending_tss,
+			open_deposit_channels: monitoring_data.open_deposit_channels,
+			authorities: monitoring_data.authorities,
+			build_version: monitoring_data.build_version,
+			suspended_validators: monitoring_data.suspended_validators,
+			pending_swaps: monitoring_data.pending_swaps,
+			dot_aggkey: monitoring_data.dot_aggkey,
+			flip_supply: monitoring_data.flip_supply,
+			sol_aggkey: Default::default(),
+			sol_onchain_key: Default::default(),
+			sol_nonces: Default::default(),
+			activating_key_broadcast_ids: Default::default(),
+		}
+	}
+}
 decl_runtime_apis!(
+	#[api_version(2)]
 	pub trait MonitoringRuntimeApi {
 		fn cf_authorities() -> AuthoritiesInfo;
 		fn cf_external_chains_block_height() -> ExternalChainsBlockHeight;
@@ -162,7 +209,9 @@ decl_runtime_apis!(
 		fn cf_sol_nonces() -> SolanaNonces;
 		fn cf_sol_aggkey() -> SolAddress;
 		fn cf_sol_onchain_key() -> SolAddress;
+		#[changed_in(2)]
 		fn cf_monitoring_data() -> MonitoringData;
+		fn cf_monitoring_data() -> MonitoringDataV2;
 		fn cf_accounts_info(
 			accounts: BoundedVec<AccountId32, sp_core::ConstU32<10>>,
 		) -> Vec<ValidatorInfo>;
