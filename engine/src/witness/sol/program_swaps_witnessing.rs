@@ -142,7 +142,7 @@ pub async fn get_program_swaps(
 					// problematic as we'd have reached consensus and the engine would just filter
 					// it out.
 					None => {
-						warn!("Event account not found for solana event account");
+						warn!("Event account not found for solana event account: {}", account);
 						None
 					},
 				},
