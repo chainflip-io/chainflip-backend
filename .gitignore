@@ -28,6 +28,9 @@ localnet/init/config/Settings.toml.*.backup
 # Local CFE config
 engine/config/Local.toml
 
+# Local enviroment file for docker-compose for deposit-monitor
+localnet/deposit-monitor.env
+
 # keystore for use in testing
 engine/tests/test_keystore/*
 
