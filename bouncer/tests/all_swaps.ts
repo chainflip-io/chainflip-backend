@@ -42,33 +42,31 @@ async function main() {
     }
   }
 
-  // Object.values(Assets).forEach((sourceAsset) => {
-  //   Object.values(Assets)
-  //     .filter((destAsset) => sourceAsset !== destAsset)
-  //     .forEach((destAsset) => {
-  //       // Regular swaps
-  //       appendSwap(sourceAsset, destAsset, testSwap);
+  Object.values(Assets).forEach((sourceAsset) => {
+    Object.values(Assets)
+      .filter((destAsset) => sourceAsset !== destAsset)
+      .forEach((destAsset) => {
+        // Regular swaps
+        appendSwap(sourceAsset, destAsset, testSwap);
 
-  //       const sourceChain = chainFromAsset(sourceAsset);
-  //       const destChain = chainFromAsset(destAsset);
-  //       if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
-  //         // Vault Swaps
-  //         appendSwap(sourceAsset, destAsset, testVaultSwap);
+        const sourceChain = chainFromAsset(sourceAsset);
+        const destChain = chainFromAsset(destAsset);
+        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
+          // Vault Swaps
+          appendSwap(sourceAsset, destAsset, testVaultSwap);
 
-  //         if (ccmSupportedChains.includes(destChain)) {
-  //           // CCM Vault swaps
-  //           appendSwap(sourceAsset, destAsset, testVaultSwap, true);
-  //         }
-  //       }
+          if (ccmSupportedChains.includes(destChain)) {
+            // CCM Vault swaps
+            appendSwap(sourceAsset, destAsset, testVaultSwap, true);
+          }
+        }
 
-  //       if (ccmSupportedChains.includes(destChain)) {
-  //         // CCM swaps
-  //         appendSwap(sourceAsset, destAsset, testSwap, true);
-  //       }
-  //     });
-  // });
-
-  appendSwap('ArbEth', 'Eth', testVaultSwap);
+        if (ccmSupportedChains.includes(destChain)) {
+          // CCM swaps
+          appendSwap(sourceAsset, destAsset, testSwap, true);
+        }
+      });
+  });
 
   await Promise.all(allSwaps);
 }
