@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_ingress_egress.
@@ -332,8 +332,8 @@ impl WeightInfo for () {
 		//  Estimated: `3671`
 		// Minimum execution time: 12_332_000 picoseconds.
 		Weight::from_parts(12_720_000, 3671)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:0)
 	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -355,8 +355,8 @@ impl WeightInfo for () {
 		//  Estimated: `4122`
 		// Minimum execution time: 35_588_000 picoseconds.
 		Weight::from_parts(35_963_000, 4122)
-			.saturating_add(RocksDbWeight::get().reads(7_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(7_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -369,8 +369,8 @@ impl WeightInfo for () {
 		Weight::from_parts(10_473_874, 3838)
 			// Standard Error: 14_941
 			.saturating_add(Weight::from_parts(2_104_864, 0).saturating_mul(a.into()))
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -418,8 +418,8 @@ impl WeightInfo for () {
 		//  Estimated: `12722`
 		// Minimum execution time: 107_353_000 picoseconds.
 		Weight::from_parts(109_754_000, 12722)
-			.saturating_add(RocksDbWeight::get().reads(20_u64))
-			.saturating_add(RocksDbWeight::get().writes(10_u64))
+			.saturating_add(ParityDbWeight::get().reads(20_u64))
+			.saturating_add(ParityDbWeight::get().writes(10_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -431,8 +431,8 @@ impl WeightInfo for () {
 		//  Estimated: `4017`
 		// Minimum execution time: 17_680_000 picoseconds.
 		Weight::from_parts(18_156_000, 4017)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -450,8 +450,8 @@ impl WeightInfo for () {
 		//  Estimated: `4939`
 		// Minimum execution time: 42_122_000 picoseconds.
 		Weight::from_parts(42_567_000, 4939)
-			.saturating_add(RocksDbWeight::get().reads(5_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(5_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -464,8 +464,8 @@ impl WeightInfo for () {
 		Weight::from_parts(16_955_522, 3867)
 			// Standard Error: 3_997
 			.saturating_add(Weight::from_parts(700_784, 0).saturating_mul(n.into()))
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 			.saturating_add(Weight::from_parts(0, 105).saturating_mul(n.into()))
 	}
 	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
@@ -484,8 +484,8 @@ impl WeightInfo for () {
 		//  Estimated: `3568`
 		// Minimum execution time: 21_295_000 picoseconds.
 		Weight::from_parts(21_615_000, 3568)
-			.saturating_add(RocksDbWeight::get().reads(4_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().reads(4_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
 	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -503,8 +503,8 @@ impl WeightInfo for () {
 		//  Estimated: `3568`
 		// Minimum execution time: 22_373_000 picoseconds.
 		Weight::from_parts(22_869_000, 3568)
-			.saturating_add(RocksDbWeight::get().reads(4_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().reads(4_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -520,8 +520,8 @@ impl WeightInfo for () {
 		//  Estimated: `8792`
 		// Minimum execution time: 75_490_000 picoseconds.
 		Weight::from_parts(76_512_000, 8792)
-			.saturating_add(RocksDbWeight::get().reads(4_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(4_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `EthereumIngressEgress::MinimumDeposit` (r:1 w:0)
 	/// Proof: `EthereumIngressEgress::MinimumDeposit` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -545,8 +545,8 @@ impl WeightInfo for () {
 		//  Estimated: `12032`
 		// Minimum execution time: 112_336_000 picoseconds.
 		Weight::from_parts(113_116_000, 12032)
-			.saturating_add(RocksDbWeight::get().reads(9_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().reads(9_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -566,8 +566,8 @@ impl WeightInfo for () {
 		//  Estimated: `91270`
 		// Minimum execution time: 324_311_000 picoseconds.
 		Weight::from_parts(333_568_000, 91270)
-			.saturating_add(RocksDbWeight::get().reads(35_u64))
-			.saturating_add(RocksDbWeight::get().writes(33_u64))
+			.saturating_add(ParityDbWeight::get().reads(35_u64))
+			.saturating_add(ParityDbWeight::get().writes(33_u64))
 	}
 	/// Storage: `EthereumIngressEgress::BoostPools` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::BoostPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -577,8 +577,8 @@ impl WeightInfo for () {
 		//  Estimated: `3671`
 		// Minimum execution time: 12_331_000 picoseconds.
 		Weight::from_parts(12_754_000, 3671)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EthereumIngressEgress::TaintedTransactions` (r:1 w:1)
 	/// Proof: `EthereumIngressEgress::TaintedTransactions` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -590,7 +590,7 @@ impl WeightInfo for () {
 		//  Estimated: `3671`
 		// Minimum execution time: 13_716_000 picoseconds.
 		Weight::from_parts(14_050_000, 3671)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 }

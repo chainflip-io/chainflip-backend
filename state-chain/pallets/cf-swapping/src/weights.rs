@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_swapping.
@@ -201,8 +201,8 @@ impl WeightInfo for () {
 		//  Estimated: `5445`
 		// Minimum execution time: 70_346_000 picoseconds.
 		Weight::from_parts(70_877_000, 5445)
-			.saturating_add(RocksDbWeight::get().reads(12_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().reads(12_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -236,8 +236,8 @@ impl WeightInfo for () {
 		//  Estimated: `5514`
 		// Minimum execution time: 70_160_000 picoseconds.
 		Weight::from_parts(71_637_000, 5514)
-			.saturating_add(RocksDbWeight::get().reads(12_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().reads(12_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
 	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -263,8 +263,8 @@ impl WeightInfo for () {
 		//  Estimated: `4939`
 		// Minimum execution time: 48_511_000 picoseconds.
 		Weight::from_parts(48_681_000, 4939)
-			.saturating_add(RocksDbWeight::get().reads(9_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().reads(9_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
 	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -276,8 +276,8 @@ impl WeightInfo for () {
 		//  Estimated: `4455`
 		// Minimum execution time: 24_117_000 picoseconds.
 		Weight::from_parts(24_826_000, 4455)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:1)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -289,7 +289,7 @@ impl WeightInfo for () {
 		//  Estimated: `26386`
 		// Minimum execution time: 45_937_000 picoseconds.
 		Weight::from_parts(46_580_000, 26386)
-			.saturating_add(RocksDbWeight::get().reads(11_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(11_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 }

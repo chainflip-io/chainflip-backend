@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_tokenholder_governance.
@@ -181,9 +181,9 @@ impl WeightInfo for () {
 		Weight::from_parts(69_165_000, 4389)
 			// Standard Error: 15_028
 			.saturating_add(Weight::from_parts(4_505_640, 0).saturating_mul(a.into()))
-			.saturating_add(RocksDbWeight::get().reads(5_u64))
-			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(a.into())))
-			.saturating_add(RocksDbWeight::get().writes(3_u64))
+			.saturating_add(ParityDbWeight::get().reads(5_u64))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(a.into())))
+			.saturating_add(ParityDbWeight::get().writes(3_u64))
 			.saturating_add(Weight::from_parts(0, 2555).saturating_mul(a.into()))
 	}
 	/// Storage: `TokenholderGovernance::Proposals` (r:1 w:0)
@@ -236,8 +236,8 @@ impl WeightInfo for () {
 		//  Estimated: `12671`
 		// Minimum execution time: 103_451_000 picoseconds.
 		Weight::from_parts(104_096_000, 12671)
-			.saturating_add(RocksDbWeight::get().reads(22_u64))
-			.saturating_add(RocksDbWeight::get().writes(12_u64))
+			.saturating_add(ParityDbWeight::get().reads(22_u64))
+			.saturating_add(ParityDbWeight::get().writes(12_u64))
 	}
 	/// Storage: `Flip::Account` (r:1 w:1)
 	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
@@ -253,8 +253,8 @@ impl WeightInfo for () {
 		//  Estimated: `3545`
 		// Minimum execution time: 24_496_000 picoseconds.
 		Weight::from_parts(24_945_000, 3545)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `TokenholderGovernance::Backers` (r:1 w:1)
 	/// Proof: `TokenholderGovernance::Backers` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -267,8 +267,8 @@ impl WeightInfo for () {
 		Weight::from_parts(13_644_626, 3683)
 			// Standard Error: 389
 			.saturating_add(Weight::from_parts(64_088, 0).saturating_mul(a.into()))
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 			.saturating_add(Weight::from_parts(0, 32).saturating_mul(a.into()))
 	}
 }
