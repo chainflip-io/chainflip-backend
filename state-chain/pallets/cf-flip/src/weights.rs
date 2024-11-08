@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_flip.
@@ -74,7 +74,7 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 5_538_000 picoseconds.
 		Weight::from_parts(5_870_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Flip::Account` (r:1 w:1)
 	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
@@ -86,7 +86,7 @@ impl WeightInfo for () {
 		//  Estimated: `3545`
 		// Minimum execution time: 17_529_000 picoseconds.
 		Weight::from_parts(17_908_000, 3545)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 }

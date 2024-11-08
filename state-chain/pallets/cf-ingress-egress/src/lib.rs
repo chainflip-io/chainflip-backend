@@ -805,7 +805,7 @@ pub mod pallet {
 
 			// Approximate weight calculation: r/w DepositChannelLookup + w DepositChannelPool
 			let recycle_weight_per_address =
-				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 2);
+				frame_support::weights::constants::ParityDbWeight::get().reads_writes(1, 2);
 
 			let maximum_addresses_to_recycle = remaining_weight
 				.ref_time()
@@ -832,7 +832,7 @@ pub mod pallet {
 				// Add weight for the DepositChannelRecycleBlocks read/write plus the
 				// DepositChannelLookup read/writes in the for loop below
 				used_weight = used_weight.saturating_add(
-					frame_support::weights::constants::RocksDbWeight::get().reads_writes(
+					frame_support::weights::constants::ParityDbWeight::get().reads_writes(
 						(addresses_to_recycle.len() + 1) as u64,
 						(addresses_to_recycle.len() + 1) as u64,
 					),
@@ -1445,7 +1445,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					DepositChannel { state, ..deposit_channel },
 				);
 				*used_weight = used_weight.saturating_add(
-					frame_support::weights::constants::RocksDbWeight::get().reads_writes(0, 1),
+					frame_support::weights::constants::ParityDbWeight::get().reads_writes(0, 1),
 				);
 			}
 

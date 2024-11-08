@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_broadcast.
@@ -238,7 +238,7 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 6_012_000 picoseconds.
 		Weight::from_parts(6_259_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
 	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
@@ -284,10 +284,10 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_parts(1_045_695, 0).saturating_mul(t.into()))
 			// Standard Error: 97_499
 			.saturating_add(Weight::from_parts(31_117_676, 0).saturating_mul(r.into()))
-			.saturating_add(RocksDbWeight::get().reads(8_u64))
-			.saturating_add(RocksDbWeight::get().reads((3_u64).saturating_mul(r.into())))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-			.saturating_add(RocksDbWeight::get().writes((2_u64).saturating_mul(r.into())))
+			.saturating_add(ParityDbWeight::get().reads(8_u64))
+			.saturating_add(ParityDbWeight::get().reads((3_u64).saturating_mul(r.into())))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes((2_u64).saturating_mul(r.into())))
 			.saturating_add(Weight::from_parts(0, 2864).saturating_mul(r.into()))
 			.saturating_add(Weight::from_parts(0, 122).saturating_mul(t.into()))
 	}
@@ -307,8 +307,8 @@ impl WeightInfo for () {
 		//  Estimated: `4656`
 		// Minimum execution time: 33_893_000 picoseconds.
 		Weight::from_parts(34_690_000, 4656)
-			.saturating_add(RocksDbWeight::get().reads(5_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(5_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `EvmThresholdSigner::SignerAndSignature` (r:1 w:1)
 	/// Proof: `EvmThresholdSigner::SignerAndSignature` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -344,8 +344,8 @@ impl WeightInfo for () {
 		//  Estimated: `7453`
 		// Minimum execution time: 84_288_000 picoseconds.
 		Weight::from_parts(85_602_000, 7453)
-			.saturating_add(RocksDbWeight::get().reads(11_u64))
-			.saturating_add(RocksDbWeight::get().writes(7_u64))
+			.saturating_add(ParityDbWeight::get().reads(11_u64))
+			.saturating_add(ParityDbWeight::get().writes(7_u64))
 	}
 	/// Storage: `EthereumBroadcaster::PendingBroadcasts` (r:1 w:0)
 	/// Proof: `EthereumBroadcaster::PendingBroadcasts` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -379,8 +379,8 @@ impl WeightInfo for () {
 		//  Estimated: `7758`
 		// Minimum execution time: 64_037_000 picoseconds.
 		Weight::from_parts(65_228_000, 7758)
-			.saturating_add(RocksDbWeight::get().reads(13_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().reads(13_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `EthereumBroadcaster::TransactionOutIdToBroadcastId` (r:1 w:1)
 	/// Proof: `EthereumBroadcaster::TransactionOutIdToBroadcastId` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -410,7 +410,7 @@ impl WeightInfo for () {
 		//  Estimated: `4529`
 		// Minimum execution time: 53_570_000 picoseconds.
 		Weight::from_parts(55_479_000, 4529)
-			.saturating_add(RocksDbWeight::get().reads(11_u64))
-			.saturating_add(RocksDbWeight::get().writes(7_u64))
+			.saturating_add(ParityDbWeight::get().reads(11_u64))
+			.saturating_add(ParityDbWeight::get().writes(7_u64))
 	}
 }

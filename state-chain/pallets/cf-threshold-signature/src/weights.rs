@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_threshold_signature.
@@ -273,8 +273,8 @@ impl WeightInfo for () {
 		//  Estimated: `4119`
 		// Minimum execution time: 34_252_000 picoseconds.
 		Weight::from_parts(34_519_000, 4119)
-			.saturating_add(RocksDbWeight::get().reads(3_u64))
-			.saturating_add(RocksDbWeight::get().writes(3_u64))
+			.saturating_add(ParityDbWeight::get().reads(3_u64))
+			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -289,8 +289,8 @@ impl WeightInfo for () {
 		Weight::from_parts(34_785_319, 4995)
 			// Standard Error: 1_288
 			.saturating_add(Weight::from_parts(1_377, 0).saturating_mul(a.into()))
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (r:0 w:1)
 	/// Proof: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -300,7 +300,7 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 6_290_000 picoseconds.
 		Weight::from_parts(6_500_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EvmThresholdSigner::PendingKeyRotation` (r:1 w:1)
 	/// Proof: `EvmThresholdSigner::PendingKeyRotation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -335,8 +335,8 @@ impl WeightInfo for () {
 		//  Estimated: `20271 + b * (2555 ±0)`
 		// Minimum execution time: 88_990_000 picoseconds.
 		Weight::from_parts(268_169_963, 20271)
-			.saturating_add(RocksDbWeight::get().reads(57_u64))
-			.saturating_add(RocksDbWeight::get().writes(28_u64))
+			.saturating_add(ParityDbWeight::get().reads(57_u64))
+			.saturating_add(ParityDbWeight::get().writes(28_u64))
 			.saturating_add(Weight::from_parts(0, 2555).saturating_mul(b.into()))
 	}
 	/// Storage: `EvmThresholdSigner::PendingKeyRotation` (r:1 w:1)
@@ -371,8 +371,8 @@ impl WeightInfo for () {
 		//  Estimated: `16519`
 		// Minimum execution time: 100_870_000 picoseconds.
 		Weight::from_parts(102_215_000, 16519)
-			.saturating_add(RocksDbWeight::get().reads(10_u64))
-			.saturating_add(RocksDbWeight::get().writes(11_u64))
+			.saturating_add(ParityDbWeight::get().reads(10_u64))
+			.saturating_add(ParityDbWeight::get().writes(11_u64))
 	}
 	/// Storage: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (r:1 w:0)
 	/// Proof: `EvmThresholdSigner::ThresholdSignatureResponseTimeout` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -410,10 +410,10 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_parts(108_867, 0).saturating_mul(a.into()))
 			// Standard Error: 56_565
 			.saturating_add(Weight::from_parts(29_352_762, 0).saturating_mul(r.into()))
-			.saturating_add(RocksDbWeight::get().reads(13_u64))
-			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(r.into())))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
-			.saturating_add(RocksDbWeight::get().writes((2_u64).saturating_mul(r.into())))
+			.saturating_add(ParityDbWeight::get().reads(13_u64))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(r.into())))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().writes((2_u64).saturating_mul(r.into())))
 			.saturating_add(Weight::from_parts(0, 34).saturating_mul(a.into()))
 			.saturating_add(Weight::from_parts(0, 2859).saturating_mul(r.into()))
 	}
@@ -434,10 +434,10 @@ impl WeightInfo for () {
 		Weight::from_parts(16_228_760, 4248)
 			// Standard Error: 9_876
 			.saturating_add(Weight::from_parts(4_301_667, 0).saturating_mul(o.into()))
-			.saturating_add(RocksDbWeight::get().reads(3_u64))
-			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(o.into())))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(o.into())))
+			.saturating_add(ParityDbWeight::get().reads(3_u64))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(o.into())))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(o.into())))
 			.saturating_add(Weight::from_parts(0, 2475).saturating_mul(o.into()))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
@@ -452,8 +452,8 @@ impl WeightInfo for () {
 		//  Estimated: `18672`
 		// Minimum execution time: 57_494_000 picoseconds.
 		Weight::from_parts(58_753_000, 18672)
-			.saturating_add(RocksDbWeight::get().reads(3_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(3_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `EvmThresholdSigner::SignerAndSignature` (r:1 w:1)
 	/// Proof: `EvmThresholdSigner::SignerAndSignature` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -465,7 +465,7 @@ impl WeightInfo for () {
 		//  Estimated: `3965`
 		// Minimum execution time: 16_934_000 picoseconds.
 		Weight::from_parts(17_727_000, 3965)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 }

@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_reputation.
@@ -157,7 +157,7 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 6_131_000 picoseconds.
 		Weight::from_parts(6_574_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Reputation::Penalties` (r:1 w:1)
 	/// Proof: `Reputation::Penalties` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -167,8 +167,8 @@ impl WeightInfo for () {
 		//  Estimated: `3805`
 		// Minimum execution time: 15_600_000 picoseconds.
 		Weight::from_parts(15_870_000, 3805)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Reputation::Penalties` (r:0 w:1)
 	/// Proof: `Reputation::Penalties` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -178,7 +178,7 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 8_140_000 picoseconds.
 		Weight::from_parts(8_498_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -194,8 +194,8 @@ impl WeightInfo for () {
 		//  Estimated: `4313`
 		// Minimum execution time: 22_183_000 picoseconds.
 		Weight::from_parts(22_429_000, 4313)
-			.saturating_add(RocksDbWeight::get().reads(4_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(4_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `Emissions::CurrentAuthorityEmissionInflation` (r:1 w:0)
 	/// Proof: `Emissions::CurrentAuthorityEmissionInflation` (`max_values`: Some(1), `max_size`: Some(4), added: 499, mode: `MaxEncodedLen`)
@@ -238,10 +238,10 @@ impl WeightInfo for () {
 		Weight::from_parts(62_862_981, 7834)
 			// Standard Error: 16_586
 			.saturating_add(Weight::from_parts(11_672_832, 0).saturating_mul(o.into()))
-			.saturating_add(RocksDbWeight::get().reads(13_u64))
-			.saturating_add(RocksDbWeight::get().reads((3_u64).saturating_mul(o.into())))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(o.into())))
+			.saturating_add(ParityDbWeight::get().reads(13_u64))
+			.saturating_add(ParityDbWeight::get().reads((3_u64).saturating_mul(o.into())))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(o.into())))
 			.saturating_add(Weight::from_parts(0, 2555).saturating_mul(o.into()))
 	}
 	fn on_initialize_no_action() -> Weight {
