@@ -74,14 +74,16 @@ pub async fn get_program_swaps(
 			stream::iter(program_swap_account_data_chunk.into_iter().filter_map(
 				|(account, program_swap_account_data)| match program_swap_account_data {
 					Some(data) => {
-						let from_asset = if data.src_token.is_none() {
-							SolAsset::Sol
-						} else if data.src_token.unwrap() == usdc_token_mint_pubkey.into() {
-							SolAsset::SolUsdc
+						let from_asset = if let Some(token) = data.src_token {
+							if token == usdc_token_mint_pubkey.into() {
+								SolAsset::SolUsdc
+							} else {
+								warn!("Unsupported output token for the witnessed solana vault swap, omitting the swap and the swap account.");
+								return None;
+							}	
 						} else {
-							warn!("Unsupported input token for the witnessed solana vault swap, omitting the swap and the swap account.");
-							None?
-						};
+							SolAsset::SolUsdc
+						}; 
 
 						let (deposit_metadata, vault_swap_parameters) = match data.ccm_parameters {
 							None => {
