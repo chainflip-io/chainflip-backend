@@ -58,7 +58,7 @@ impl BenchmarkValue for SolanaVaultSwapsKnownAccounts<VaultSwapAccountAndSender>
 	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, Ord, PartialOrd,
 )]
 pub struct SolanaVaultSwapsVote<Account: Ord, SwapDetails: Ord> {
-	pub new_accounts: BTreeSet<(Account, SwapDetails)>,
+	pub new_accounts: BTreeSet<(Account, Option<SwapDetails>)>,
 	pub confirm_closed_accounts: BTreeSet<Account>,
 }
 
@@ -68,10 +68,10 @@ impl<Account: Ord + BenchmarkValue, SwapDetails: Ord + BenchmarkValue> Benchmark
 {
 	fn benchmark_value() -> Self {
 		Self {
-			new_accounts: BTreeSet::from([
+			new_accounts: BTreeSet::from([(
 				BenchmarkValue::benchmark_value(),
-				BenchmarkValue::benchmark_value(),
-			]),
+				Some(BenchmarkValue::benchmark_value()),
+			)]),
 			confirm_closed_accounts: BTreeSet::from([BenchmarkValue::benchmark_value()]),
 		}
 	}
@@ -165,8 +165,10 @@ impl<
 				let mut known_accounts = election_access.properties()?;
 				election_access.delete();
 				known_accounts.witnessed_open_accounts.extend(consensus.new_accounts.iter().map(
-					|(account, swap_details)| {
-						Hook::initiate_vault_swap(swap_details.clone());
+					|(account, maybe_swap_details)| {
+						if let Some(swap_details) = maybe_swap_details.as_ref() {
+							Hook::initiate_vault_swap(swap_details.clone());
+						}
 						account.clone()
 					},
 				));

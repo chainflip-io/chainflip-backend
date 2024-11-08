@@ -48,7 +48,7 @@ pub async fn get_program_swaps(
 	sc_closure_initiated_accounts: BTreeSet<VaultSwapAccountAndSender>,
 	usdc_token_mint_pubkey: SolAddress,
 ) -> Result<
-	(Vec<(VaultSwapAccountAndSender, SolanaVaultSwapDetails)>, Vec<VaultSwapAccountAndSender>),
+	(Vec<(VaultSwapAccountAndSender, Option<SolanaVaultSwapDetails>)>, Vec<VaultSwapAccountAndSender>),
 	anyhow::Error,
 > {
 	let (new_program_swap_accounts, closed_accounts, slot) = get_changed_program_swap_accounts(
@@ -70,69 +70,75 @@ pub async fn get_program_swaps(
 		})
 		.buffered(MAXIMUM_CONCURRENT_RPCS)
 		.map_ok(|program_swap_account_data_chunk| {
-			stream::iter(program_swap_account_data_chunk.into_iter().filter_map(
+			stream::iter(program_swap_account_data_chunk.into_iter().map(
 				|(account, program_swap_account_data)| match program_swap_account_data {
 					Some(data) => {
-						let from_asset = if let Some(token) = data.src_token {
-							if token == usdc_token_mint_pubkey.into() {
+						let vault_swap_details = || -> Option<SolanaVaultSwapDetails>
+						{
+							let from_asset = if data.src_token.is_none() {
+								SolAsset::Sol
+							} else if data.src_token.unwrap() == usdc_token_mint_pubkey.into() {
 								SolAsset::SolUsdc
 							} else {
-								warn!("Unsupported output token for the witnessed solana vault swap, omitting the swap and the swap account.");
-								return None;
-							}
-						} else {
-							SolAsset::SolUsdc
-						};
+								warn!("Unsupported input token for the witnessed solana vault swap, omitting the swap and the swap account.");
+								None?
+							};
 
-						let (deposit_metadata, vault_swap_parameters) = match data.ccm_parameters {
-							None => {
-								let VersionedCfParameters::V0(CfParameters { ccm_additional_data: (), vault_swap_parameters }) =
-								VersionedCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding VersionedCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
-								(None, vault_swap_parameters)
+							let (deposit_metadata, vault_swap_parameters) = match data.ccm_parameters {
+								None => {
+									let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
+										CfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding CfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
+									(None, vault_swap_parameters)
+								},
+								Some(ccm_parameters) => {
+									let CcmCfParameters { ccm_additional_data, vault_swap_parameters } =
+										CcmCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding CcmCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
+
+									let deposit_metadata = Some(CcmDepositMetadata {
+										source_chain: cf_primitives::ForeignChain::Solana, // TODO: Pass chain id from above?
+										source_address: Some(ForeignChainAddress::Sol(data.sender.into())),
+										channel_metadata: CcmChannelMetadata {
+											message: ccm_parameters.message
+												.to_vec()
+												.try_into()
+												.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long.")).ok()?,
+											gas_budget: ccm_parameters.gas_amount.into(),
+											ccm_additional_data,
+										},
+									});
+									(deposit_metadata, vault_swap_parameters)
+								}
+							};
+
+							Some(SolanaVaultSwapDetails {
+								from: from_asset,
+								deposit_amount: data.amount,
+								destination_address: EncodedAddress::from_chain_bytes(data.dst_chain.try_into().map_err(|e| 
+											warn!("error while parsing destination chain for solana vault swap:{}. Omitting swap", e)
+										)
+										.ok()?,
+									data.dst_address.to_vec()
+									).map_err(|e| 
+										warn!("failed to decode the destination chain address for solana vault swap:{}. Omitting swap", e)
+									)
+									.ok()?,
+								to: data.dst_token.try_into().map_err(|e| warn!("error while decoding destination token for solana vault swap: {}. Omitting swap", e)).ok()?,
+								deposit_metadata,
+								swap_account: account,
+								creation_slot: data.creation_slot,
+								broker_fees: vault_swap_parameters.broker_fees,
+								refund_params: Some(vault_swap_parameters.refund_params),
+								dca_params: vault_swap_parameters.dca_params,
+								boost_fee: vault_swap_parameters.boost_fee,
+							})
+						};
+						Ok((
+							VaultSwapAccountAndSender {
+								vault_swap_account: account,
+								swap_sender: data.sender.into()
 							},
-							Some(ccm_parameters) => {
-								let VersionedCcmCfParameters::V0(CfParameters { ccm_additional_data, vault_swap_parameters }) =
-								VersionedCcmCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding VersionedCcmCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
-
-								let deposit_metadata = Some(CcmDepositMetadata {
-									source_chain: cf_primitives::ForeignChain::Solana, // TODO: Pass chain id from above?
-									source_address: Some(ForeignChainAddress::Sol(data.sender.into())),
-									channel_metadata: CcmChannelMetadata {
-										message: ccm_parameters.message
-											.to_vec()
-											.try_into()
-											.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long.")).ok()?,
-										gas_budget: ccm_parameters.gas_amount.into(),
-										ccm_additional_data,
-									},
-								});
-								(deposit_metadata, vault_swap_parameters)
-							}
-						};
-
-						Some(Ok::<_, anyhow::Error>((VaultSwapAccountAndSender {
-							vault_swap_account: account,
-							swap_sender: data.sender.into()
-						}, SolanaVaultSwapDetails {
-							from: from_asset,
-							deposit_amount: data.amount,
-							destination_address: EncodedAddress::from_chain_bytes(data.dst_chain.try_into().map_err(|e| warn!("error while parsing destination chain for solana vault swap:{}. Omitting swap", e)).ok()?, data.dst_address.to_vec()).map_err(|e| warn!("failed to decode the destination chain address for solana vault swap:{}. Omitting swap", e)).ok()?,
-							to: data.dst_token.try_into().map_err(|e| warn!("error while decoding destination token for solana vault swap: {}. Omitting swap", e)).ok()?,
-							deposit_metadata,
-							swap_account: account,
-							creation_slot: data.creation_slot,
-							broker_fee: vault_swap_parameters.broker_fee,
-							affiliate_fees: vault_swap_parameters
-								.affiliate_fees
-								.into_iter()
-								.map(|entry| cf_primitives::Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
-								.collect_vec()
-								.try_into()
-								.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
-							refund_params: vault_swap_parameters.refund_params,
-							dca_params: vault_swap_parameters.dca_params,
-							boost_fee: vault_swap_parameters.boost_fee,
-						})))
+							vault_swap_details()
+						))
 					},
 
 					// It could happen that some account is closed between the queries. This should
@@ -148,10 +154,10 @@ pub async fn get_program_swaps(
 					// problematic as we'd have reached consensus and the engine would just filter
 					// it out.
 					None => {
-						warn!("Event account not found for solana event account: {}", account);
-						None
+						warn!("Event account not found for solana event account");
+						Err(anyhow::Error::msg("we filter out the accounts we cant retrieve the data for"))
 					},
-				},
+				}
 			))
 		})
 		.try_flatten()
@@ -206,13 +212,8 @@ async fn get_swap_endpoint_data(
 			RpcAccountInfoConfig {
 				encoding: Some(UiAccountEncoding::Base64),
 				data_slice: None,
-				commitment: Some(CommitmentConfig::finalized()),
-				min_context_slot: None,
-			},
-		)
 		.await;
 
-	let slot = accounts_info_response.context.slot;
 	let accounts_info = accounts_info_response
 		.value
 		.into_iter()
