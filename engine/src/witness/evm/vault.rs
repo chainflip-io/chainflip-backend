@@ -78,7 +78,8 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
-				vault_swap_parameters.broker_fees,
+				// TODO: To update after PRO-1751 for both broker_fees and affiliate_fees
+				Default::default(),
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
@@ -107,7 +108,8 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
-				vault_swap_parameters.broker_fees,
+				// TODO: To update after PRO-1751 for both broker_fees and affiliate_fees
+				Default::default(),
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
@@ -150,7 +152,8 @@ where
 					},
 				}),
 				event.tx_hash.into(),
-				vault_swap_parameters.broker_fees,
+				// TODO: To update after PRO-1751 for both broker_fees and affiliate_fees
+				Default::default(),
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
@@ -196,7 +199,8 @@ where
 					},
 				}),
 				event.tx_hash.into(),
-				vault_swap_parameters.broker_fees,
+				// TODO: To update after PRO-1751 for both broker_fees and affiliate_fees
+				Default::default(),
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,

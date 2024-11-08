@@ -9,6 +9,7 @@ import {
 } from '@chainflip/cli';
 import { HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
+import Keyring from '../polkadot/keyring';
 import {
   observeBalanceIncrease,
   getContractAddress,
@@ -31,6 +32,10 @@ export async function executeVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
+  brokerFees: {
+    account: string;
+    commissionBps: number;
+  },
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
   boostFeeBps?: number,
@@ -87,12 +92,13 @@ export async function executeVaultSwap(
         message: messageMetadata.message,
         ccmAdditionalData: messageMetadata.ccmAdditionalData,
       },
+      brokerFees,
       // The SDK will encode these parameters and the ccmAdditionalData
       // into the `cfParameters` field for the vault swap.
       boostFeeBps,
       fillOrKillParams: fokParams,
       dcaParams,
-      beneficiaries: undefined,
+      affiliateFees: undefined,
     } as ExecuteSwapParams,
     networkOptions,
     txOptions,
@@ -136,6 +142,12 @@ export async function performVaultSwap(
       );
     }
 
+    const keyring = new Keyring({ type: 'sr25519' });
+    const broker = keyring.createFromUri('//BROKER_1');
+    const brokerFees = {
+      account: broker.address,
+      commissionBps: 1,
+    };
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
@@ -143,6 +155,7 @@ export async function performVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
+      brokerFees,
       messageMetadata,
       amountToSwap,
       boostFeeBps,
