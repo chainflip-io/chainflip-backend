@@ -35,6 +35,8 @@ use frame_system as system;
 use sp_core::{ConstBool, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
 
+use super::MockAffiliateRegistry;
+
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -137,6 +139,7 @@ impl crate::Config for Test {
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
+	type AffiliateRegistry = MockAffiliateRegistry;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

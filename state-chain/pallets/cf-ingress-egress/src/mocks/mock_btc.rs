@@ -28,6 +28,8 @@ use cf_traits::{
 use frame_support::derive_impl;
 use sp_core::ConstBool;
 
+use super::MockAffiliateRegistry;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
@@ -107,6 +109,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
+	type AffiliateRegistry = MockAffiliateRegistry;
 }
 
 impl_test_helpers! {

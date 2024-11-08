@@ -2456,7 +2456,7 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	fn lookup(broker_id: &Self::AccountId, affiliate_idx: AffiliateId) -> Option<Self::AccountId> {
-		AffiliateIdMapping::<T>::get(&broker_id, affiliate_idx)
+		AffiliateIdMapping::<T>::get(broker_id, affiliate_idx)
 	}
 }
 

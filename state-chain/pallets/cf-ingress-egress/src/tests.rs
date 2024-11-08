@@ -1790,7 +1790,6 @@ fn can_request_swap_via_extrinsic() {
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
 			Default::default(),
-			Default::default(),
 			None,
 			None,
 			0,
@@ -1840,7 +1839,6 @@ fn can_request_ccm_swap_via_extrinsic() {
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
 			Default::default(),
-			Default::default(),
 			None,
 			None,
 			0
@@ -1887,7 +1885,6 @@ fn rejects_invalid_swap_by_witnesser() {
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Default::default(),
-			Default::default(),
 			None,
 			None,
 			0
@@ -1906,7 +1903,6 @@ fn rejects_invalid_swap_by_witnesser() {
 			None,
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
-			Default::default(),
 			Default::default(),
 			None,
 			None,
@@ -1943,7 +1939,6 @@ fn failed_ccm_deposit_can_deposit_event() {
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Default::default(),
-			Default::default(),
 			None,
 			None,
 			0
@@ -1969,7 +1964,6 @@ fn failed_ccm_deposit_can_deposit_event() {
 			Some(ccm_deposit_metadata),
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
-			Default::default(),
 			Default::default(),
 			None,
 			None,

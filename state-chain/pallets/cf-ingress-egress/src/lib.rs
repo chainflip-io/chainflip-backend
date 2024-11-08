@@ -7,10 +7,11 @@
 mod benchmarking;
 
 pub mod migrations;
+
 #[cfg(test)]
-mod mock_btc;
+mod mocks;
 #[cfg(test)]
-mod mock_eth;
+use mocks::{mock_btc, mock_eth};
 #[cfg(test)]
 mod tests;
 pub mod weights;
@@ -1289,8 +1290,7 @@ pub mod pallet {
 			deposit_metadata: Option<CcmDepositMetadata>,
 			tx_hash: TransactionHash,
 			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
-			broker_fees: Option<Beneficiary<T::AccountId>>,
-			affiliate_fees: Affiliates<AffiliateId>,
+			broker_fees: Option<(Beneficiary<T::AccountId>, Affiliates<AffiliateId>)>,
 			refund_params: Option<Box<ChannelRefundParameters>>,
 			dca_params: Option<DcaParameters>,
 			boost_fee: BasisPoints,
@@ -1306,7 +1306,6 @@ pub mod pallet {
 				tx_hash,
 				*deposit_details,
 				broker_fees,
-				affiliate_fees,
 				refund_params.map(|boxed| *boxed),
 				dca_params,
 				boost_fee,
@@ -2106,8 +2105,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
-		broker_fees: Option<Beneficiary<T::AccountId>>,
-		affiliate_fees: Affiliates<AffiliateId>,
+		broker_fees: Option<(Beneficiary<T::AccountId>, Affiliates<AffiliateId>)>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		// This is only to be checked in the pre-witnessed version (not implemented yet)
@@ -2201,10 +2199,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		let broker_fees = broker_fees
-			.map(|broker_fees| {
-				let primary_broker = broker_fees.account.clone();
+			.map(|(primary_broker_fees, affiliate_fees)| {
+				let primary_broker = primary_broker_fees.account.clone();
 
-				let fees: Vec<_> = [broker_fees]
+				let fees: Vec<_> = [primary_broker_fees]
 					.into_iter()
 					.chain(affiliate_fees.into_iter().filter_map(|Beneficiary { account, bps }| {
 						if let Some(affiliate_id) =

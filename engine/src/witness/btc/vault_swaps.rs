@@ -142,18 +142,26 @@ pub fn try_extract_vault_swap_call(
 			deposit_address: vault_address.clone(),
 		}),
 		deposit_metadata: None, // No ccm for BTC (yet?)
-		broker_fees: maybe_broker_id.map(|broker_id| Beneficiary {
-			account: broker_id.clone(),
-			bps: data.parameters.broker_fee as BasisPoints,
+		broker_fees: maybe_broker_id.map(|broker_id| {
+			(
+				Beneficiary {
+					account: broker_id.clone(),
+					bps: data.parameters.broker_fee as BasisPoints,
+				},
+				data.parameters
+					.affiliates
+					.into_iter()
+					.map(|entry| Beneficiary {
+						account: entry.affiliate,
+						bps: entry.fee as BasisPoints,
+					})
+					.collect_vec()
+					.try_into()
+					.expect(
+						"runtime supports at least as many affiliates as we allow in UTXO encoding",
+					),
+			)
 		}),
-		affiliate_fees: data
-			.parameters
-			.affiliates
-			.into_iter()
-			.map(|entry| Beneficiary { account: entry.affiliate, bps: entry.fee as BasisPoints })
-			.collect_vec()
-			.try_into()
-			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
 		refund_params: Some(Box::new(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration as u32,
 			refund_address: ForeignChainAddress::Btc(refund_address),
@@ -248,6 +256,7 @@ mod tests {
 
 		const REFUND_PK_HASH: [u8; 20] = [8; 20];
 		const DEPOSIT_AMOUNT: u64 = 1000;
+		const BROKER: AccountId = AccountId::new([1; 32]);
 
 		// Addresses have different representations to satisfy interfaces:
 		let vault_deposit_address = DepositAddress::new([7; 32], 0);
@@ -284,7 +293,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			try_extract_vault_swap_call(&tx, &vault_deposit_address),
+			try_extract_vault_swap_call(&tx, &vault_deposit_address, Some(&BROKER)),
 			Some(BtcIngressEgressCall::vault_swap_request {
 				input_asset: NATIVE_ASSET,
 				output_asset: MOCK_SWAP_PARAMS.output_asset,
@@ -296,7 +305,13 @@ mod tests {
 					amount: DEPOSIT_AMOUNT,
 					deposit_address: vault_deposit_address,
 				}),
-				broker_fees: Default::default(),
+				broker_fees: Some((
+					Beneficiary {
+						account: BROKER,
+						bps: MOCK_SWAP_PARAMS.parameters.broker_fee as BasisPoints
+					},
+					Default::default()
+				)),
 				deposit_metadata: None,
 				refund_params: Some(Box::new(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
