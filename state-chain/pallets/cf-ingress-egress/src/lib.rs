@@ -34,7 +34,7 @@ use cf_chains::{
 	FetchAssetParams, ForeignChainAddress, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	AffiliateId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
+	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
 	BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
 	ForeignChain, PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId,
 	TransactionHash, SECONDS_PER_BLOCK,
@@ -1290,7 +1290,7 @@ pub mod pallet {
 			deposit_metadata: Option<CcmDepositMetadata>,
 			tx_hash: TransactionHash,
 			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
-			broker_fees: Option<(Beneficiary<T::AccountId>, Affiliates<AffiliateId>)>,
+			broker_fees: Option<(Beneficiary<T::AccountId>, Affiliates<AffiliateShortId>)>,
 			refund_params: Option<Box<ChannelRefundParameters>>,
 			dca_params: Option<DcaParameters>,
 			boost_fee: BasisPoints,
@@ -2105,7 +2105,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
-		broker_fees: Option<(Beneficiary<T::AccountId>, Affiliates<AffiliateId>)>,
+		broker_fees: Option<(Beneficiary<T::AccountId>, Affiliates<AffiliateShortId>)>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		// This is only to be checked in the pre-witnessed version (not implemented yet)
@@ -2213,10 +2213,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							// In case the entry not found, we ignore the entry, but process the
 							// swap (to avoid having to refund it).
 							log::warn!(
-							"Affiliate entry is skipped: no entry for idx {} found for broker {:?}.",
-							account,
-							&primary_broker
-						);
+								"Affiliate entry is skipped: no entry for affiliate short id {} found for broker {:?}.",
+								account,
+								&primary_broker
+							);
 							None
 						}
 					}))

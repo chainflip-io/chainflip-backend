@@ -209,7 +209,7 @@ mod tests {
 			chunk_interval: 2,
 			boost_fee: 5,
 			broker_fee: 10,
-			affiliates: bounded_vec![],
+			affiliates: bounded_vec![AffiliateAndFee { affiliate: 17, fee: 7 }],
 		},
 	});
 
@@ -310,7 +310,10 @@ mod tests {
 						account: BROKER,
 						bps: MOCK_SWAP_PARAMS.parameters.broker_fee as BasisPoints
 					},
-					Default::default()
+					bounded_vec![Beneficiary {
+						account: MOCK_SWAP_PARAMS.parameters.affiliates[0].affiliate,
+						bps: MOCK_SWAP_PARAMS.parameters.affiliates[0].fee as BasisPoints,
+					}]
 				)),
 				deposit_metadata: None,
 				refund_params: Some(Box::new(ChannelRefundParameters {

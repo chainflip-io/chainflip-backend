@@ -101,7 +101,7 @@ pub type PrewitnessedDepositId = u64;
 
 pub type BoostPoolTier = u16;
 
-pub type AffiliateId = u8;
+pub type AffiliateShortId = u8;
 
 // TODO: Consider alternative representation for Price:
 //

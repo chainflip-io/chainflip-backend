@@ -26,7 +26,7 @@ use cf_chains::{
 	Ethereum,
 };
 use cf_primitives::{
-	AccountRole, AffiliateId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
+	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChannelId, DcaParameters, Ed25519PublicKey, EgressCounter, EgressId,
 	EpochIndex, FlipBalance, ForeignChain, Ipv6Addr, NetworkEnvironment, SemVer,
 	ThresholdSignatureRequestId,
@@ -1118,5 +1118,8 @@ pub trait ChannelIdAllocator {
 pub trait AffiliateRegistry {
 	type AccountId;
 
-	fn lookup(broker_id: &Self::AccountId, affiliate_idx: AffiliateId) -> Option<Self::AccountId>;
+	fn lookup(
+		broker_id: &Self::AccountId,
+		affiliate_idx: AffiliateShortId,
+	) -> Option<Self::AccountId>;
 }

@@ -1739,10 +1739,10 @@ mod private_channels {
 	fn register_affiliate() {
 		new_test_ext().execute_with(|| {
 			// Only brokers can register affiliates
-			const AFFILIATE_IDX: u8 = 0;
+			const SHORT_ID: u8 = 0;
 
 			assert_noop!(
-				Swapping::register_affiliate(OriginTrait::signed(ALICE), AFFILIATE_IDX, BOB),
+				Swapping::register_affiliate(OriginTrait::signed(ALICE), SHORT_ID, BOB),
 				BadOrigin
 			);
 
@@ -1750,14 +1750,14 @@ mod private_channels {
 			{
 				assert_ok!(Swapping::register_affiliate(
 					OriginTrait::signed(BROKER),
-					AFFILIATE_IDX,
+					SHORT_ID,
 					ALICE,
 				));
 
 				System::assert_has_event(RuntimeEvent::Swapping(
 					Event::<Test>::AffiliateRegistrationUpdated {
 						broker_id: BROKER,
-						idx: 0,
+						affiliate_short_id: SHORT_ID,
 						affiliate_id: ALICE,
 						previous_affiliate_id: None,
 					},
@@ -1768,14 +1768,14 @@ mod private_channels {
 			{
 				assert_ok!(Swapping::register_affiliate(
 					OriginTrait::signed(BROKER),
-					AFFILIATE_IDX,
+					SHORT_ID,
 					BOB,
 				));
 
 				System::assert_has_event(RuntimeEvent::Swapping(
 					Event::<Test>::AffiliateRegistrationUpdated {
 						broker_id: BROKER,
-						idx: 0,
+						affiliate_short_id: SHORT_ID,
 						affiliate_id: BOB,
 						previous_affiliate_id: Some(ALICE),
 					},

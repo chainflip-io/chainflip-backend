@@ -12,7 +12,7 @@ use super::{
 	},
 	contract_common::{events_at_block, Event},
 };
-use cf_primitives::{AssetAmount, EpochIndex};
+use cf_primitives::{AffiliateShortId, AssetAmount, EpochIndex};
 use futures_core::Future;
 
 use anyhow::{anyhow, Result};
@@ -235,7 +235,7 @@ pub trait IngressCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: cf_primitives::TransactionHash,
-		broker_fees: cf_primitives::Beneficiaries<ShortId>,
+		broker_fees: cf_primitives::Beneficiaries<AffiliateShortId>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		boost_fee: Option<BasisPoints>,
