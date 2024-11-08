@@ -28,7 +28,7 @@ use crate::{
 		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TaintedTransactionEvents,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformationV2, TaintedTransactionEvents,
 		ValidatorInfo,
 	},
 };
@@ -1534,7 +1534,7 @@ impl_runtime_apis! {
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
+		) -> Result<SimulatedSwapInformationV2, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
 				for (index, additional_order) in additional_orders.into_iter().enumerate() {
 					match additional_order {
@@ -1657,7 +1657,7 @@ impl_runtime_apis! {
 
 			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, to, output);
 
-			Ok(SimulatedSwapInformation {
+			Ok(SimulatedSwapInformationV2 {
 				intermediary,
 				output,
 				network_fee,
