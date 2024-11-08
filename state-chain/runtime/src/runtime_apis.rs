@@ -146,6 +146,28 @@ pub struct SimulatedSwapInformation {
 	pub network_fee: AssetAmount,
 	pub ingress_fee: AssetAmount,
 	pub egress_fee: AssetAmount,
+}
+
+impl From<SimulatedSwapInformation> for SimulatedSwapInformationV2 {
+	fn from(value: SimulatedSwapInformation) -> Self {
+		SimulatedSwapInformationV2 {
+			intermediary: value.intermediary,
+			output: value.output,
+			network_fee: value.network_fee,
+			ingress_fee: value.ingress_fee,
+			egress_fee: value.egress_fee,
+			broker_fee: Default::default(),
+		}
+	}
+}
+/// Struct that represents the estimated output of a Swap.
+#[derive(Encode, Decode, TypeInfo)]
+pub struct SimulatedSwapInformationV2 {
+	pub intermediary: Option<AssetAmount>,
+	pub output: AssetAmount,
+	pub network_fee: AssetAmount,
+	pub ingress_fee: AssetAmount,
+	pub egress_fee: AssetAmount,
 	pub broker_fee: AssetAmount,
 }
 
@@ -282,7 +304,7 @@ decl_runtime_apis!(
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
+		) -> Result<SimulatedSwapInformationV2, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,
 			quote_asset: Asset,
