@@ -1013,22 +1013,18 @@ pub mod pallet {
 			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
-			let beneficiaries = {
-				let mut beneficiaries = Beneficiaries::new();
-				if broker_commission > 0 {
-					beneficiaries
-						.try_push(Beneficiary { account: broker.clone(), bps: broker_commission })
-						.expect("First element, impossible to exceed the maximum size");
+
+			let mut beneficiaries = Beneficiaries::new();
+			for beneficiary in [Beneficiary { account: broker.clone(), bps: broker_commission }]
+				.into_iter()
+				.chain(affiliate_fees.iter().cloned())
+			{
+				if beneficiary.bps > 0 {
+					beneficiaries.try_push(beneficiary).expect(
+						"We are pushing affiiliates + 1 which is exactly the maximum Beneficiaries size",
+					);
 				}
-				for affiliate in &affiliate_fees {
-					if affiliate.bps > 0 {
-						beneficiaries
-							.try_push(affiliate.clone())
-							.expect("Cannot exceed MAX_BENEFICIARY size which is MAX_AFFILIATE + 1 (main broker)");
-					}
-				}
-				beneficiaries
-			};
+			}
 
 			Pallet::<T>::validate_broker_fees(&beneficiaries)?;
 
