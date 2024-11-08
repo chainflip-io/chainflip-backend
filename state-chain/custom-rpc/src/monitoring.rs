@@ -3,7 +3,7 @@ use crate::{BlockT, CustomRpc, RpcAccountInfoV2, RpcFeeImbalance, RpcMonitoringD
 use cf_chains::{dot::PolkadotAccountId, sol::SolAddress};
 use jsonrpsee::proc_macros::rpc;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
-use sp_api::{ApiExt, Core};
+use sp_api::ApiExt;
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
 use state_chain_runtime::{
 	self,
@@ -130,7 +130,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcMonitoringData> {
 		self.with_runtime_api(at, |api, hash| {
-			if api.api_version::<dyn Core<Block>>(hash).unwrap().unwrap() < 2 {
+			if api.api_version::<dyn MonitoringRuntimeApi<Block>>(hash).unwrap().unwrap() < 2 {
 				let old_result = api.cf_monitoring_data_before_version_2(hash)?;
 				Ok(old_result.into())
 			} else {
