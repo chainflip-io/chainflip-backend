@@ -1,5 +1,5 @@
 use cf_chains::{CcmAdditionalData, ChannelRefundParameters};
-use cf_primitives::{BasisPoints, Beneficiaries, DcaParameters};
+use cf_primitives::{AccountId, Affiliates, BasisPoints, Beneficiary, DcaParameters};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -25,7 +25,9 @@ pub struct VaultSwapParameters {
 	pub refund_params: ChannelRefundParameters,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: Option<BasisPoints>,
-	pub broker_fees: Beneficiaries<ShortId>,
+	// TODO: Should we use u8 instead of BasisPoints for fees as in Bitcoin?
+	pub broker_fees: Beneficiary<AccountId>,
+	pub affiliate_fees: Affiliates<ShortId>,
 }
 
 #[cfg(test)]
