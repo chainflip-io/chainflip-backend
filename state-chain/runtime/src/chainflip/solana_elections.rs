@@ -273,6 +273,13 @@ pub mod old {
 			Ok(())
 		}
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if cf_runtime_upgrade_utilities::genesis_hashes::genesis_hash::<Runtime>() ==
+				cf_runtime_upgrade_utilities::genesis_hashes::SISYPHOS
+			{
+				// Already applied on Sisyphos
+				return Default::default();
+			}
+
 			let election_identifiers = frame_support::migration::storage_key_iter::<
 				ElectionIdentifierOf<old::SolanaElectoralSystem>,
 				<old::SolanaElectoralSystem as ElectoralSystem>::ElectionProperties,

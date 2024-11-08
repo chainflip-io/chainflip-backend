@@ -124,7 +124,7 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 pub use pallet::UniqueMonotonicIdentifier;
 
