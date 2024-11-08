@@ -25,8 +25,9 @@ pub struct VaultSwapParameters {
 	pub refund_params: ChannelRefundParameters,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: Option<BasisPoints>,
-	// TODO: Should we use u8 instead of BasisPoints for fees as in Bitcoin?
+	// TODO: Create BrokerAndFee instead so fee is also a u8?
 	pub broker_fees: Beneficiary<AccountId>,
+	// TODO: Use AffiliateAndFee in PRO-1751
 	pub affiliate_fees: Affiliates<ShortId>,
 }
 

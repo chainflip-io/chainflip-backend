@@ -22,7 +22,9 @@ use cf_chains::{
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 };
-use cf_primitives::{Asset, BasisPoints, DcaParameters, ForeignChain};
+use cf_primitives::{
+	AccountId, Affiliates, Asset, BasisPoints, Beneficiary, DcaParameters, ForeignChain,
+};
 use ethers::prelude::*;
 use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
@@ -78,8 +80,8 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
-				// TODO: To update after PRO-1751 for both broker_fees and affiliate_fees
-				Default::default(),
+				vault_swap_parameters.broker_fees,
+				vault_swap_parameters.affiliate_fees,
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
@@ -108,8 +110,8 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
-				// TODO: To update after PRO-1751 for both broker_fees and affiliate_fees
-				Default::default(),
+				vault_swap_parameters.broker_fees,
+				vault_swap_parameters.affiliate_fees,
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
@@ -152,8 +154,8 @@ where
 					},
 				}),
 				event.tx_hash.into(),
-				// TODO: To update after PRO-1751 for both broker_fees and affiliate_fees
-				Default::default(),
+				vault_swap_parameters.broker_fees,
+				vault_swap_parameters.affiliate_fees,
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
@@ -199,8 +201,8 @@ where
 					},
 				}),
 				event.tx_hash.into(),
-				// TODO: To update after PRO-1751 for both broker_fees and affiliate_fees
-				Default::default(),
+				vault_swap_parameters.broker_fees,
+				vault_swap_parameters.affiliate_fees,
 				Some(vault_swap_parameters.refund_params),
 				vault_swap_parameters.dca_params,
 				vault_swap_parameters.boost_fee,
@@ -247,7 +249,8 @@ pub trait IngressCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: cf_primitives::TransactionHash,
-		broker_fees: cf_primitives::Beneficiaries<ShortId>,
+		broker_fees: Beneficiary<AccountId>,
+		affiliate_fees: Affiliates<ShortId>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		boost_fee: Option<BasisPoints>,
