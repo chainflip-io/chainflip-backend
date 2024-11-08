@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_witnesser.
@@ -141,8 +141,8 @@ impl WeightInfo for () {
 		//  Estimated: `7623`
 		// Minimum execution time: 59_263_000 picoseconds.
 		Weight::from_parts(60_169_000, 7623)
-			.saturating_add(RocksDbWeight::get().reads(11_u64))
-			.saturating_add(RocksDbWeight::get().writes(3_u64))
+			.saturating_add(ParityDbWeight::get().reads(11_u64))
+			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
 	fn prewitness() -> Weight {
 		// Proof Size summary in bytes:
@@ -162,8 +162,8 @@ impl WeightInfo for () {
 		Weight::from_parts(3_939_084, 1149)
 			// Standard Error: 3_292
 			.saturating_add(Weight::from_parts(1_024_246, 0).saturating_mul(n.into()))
-			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(n.into())))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(n.into())))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(n.into())))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(n.into())))
 			.saturating_add(Weight::from_parts(0, 2513).saturating_mul(n.into()))
 	}
 	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
@@ -182,7 +182,7 @@ impl WeightInfo for () {
 		//  Estimated: `2421`
 		// Minimum execution time: 16_366_000 picoseconds.
 		Weight::from_parts(16_897_000, 2421)
-			.saturating_add(RocksDbWeight::get().reads(5_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(5_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 }
