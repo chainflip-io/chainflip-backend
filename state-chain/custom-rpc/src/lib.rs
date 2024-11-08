@@ -1105,7 +1105,7 @@ fn internal_error(error: impl core::fmt::Debug) -> ErrorObjectOwned {
 fn call_error(error: impl Into<Box<dyn core::error::Error + Sync + Send>>) -> ErrorObjectOwned {
 	let error = error.into();
 	log::debug!(target: "cf_rpc", "Call error: {}", error);
-	ErrorObject::owned(ErrorCode::InternalError.code(), "{error}", None::<()>)
+	ErrorObject::owned(ErrorCode::InternalError.code(), format!("{error}"), None::<()>)
 }
 
 impl From<CfApiError> for ErrorObjectOwned {
