@@ -198,6 +198,9 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	ChannelOpeningFee { fee: T::Amount },
 	/// Set the minimum deposit allowed for a particular asset.
 	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
+	/// Set the deposit channel lifetime. The time before the engines stop witnessing a channel.
+	/// This is configurable primarily to allow for unpredictable block times in testnets.
+	SetDepositChannelLifetime { lifetime: TargetChainBlockNumber<T, I> },
 }
 
 macro_rules! append_chain_to_name {
@@ -627,6 +630,9 @@ pub mod pallet {
 		MinimumDepositSet {
 			asset: TargetChainAsset<T, I>,
 			minimum_deposit: TargetChainAmount<T, I>,
+		},
+		DepositChannelLifetimeSet {
+			lifetime: TargetChainBlockNumber<T, I>,
 		},
 		/// The deposits was rejected because the amount was below the minimum allowed.
 		DepositIgnored {
@@ -1135,6 +1141,10 @@ pub mod pallet {
 							asset,
 							minimum_deposit,
 						});
+					},
+					PalletConfigUpdate::<T, I>::SetDepositChannelLifetime { lifetime } => {
+						DepositChannelLifetime::<T, I>::set(lifetime);
+						Self::deposit_event(Event::<T, I>::DepositChannelLifetimeSet { lifetime });
 					},
 				}
 			}
