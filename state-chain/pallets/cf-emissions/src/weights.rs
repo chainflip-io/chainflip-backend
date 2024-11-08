@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_emissions.
@@ -180,7 +180,7 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 6_483_000 picoseconds.
 		Weight::from_parts(6_839_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Emissions::CurrentAuthorityEmissionInflation` (r:0 w:1)
 	/// Proof: `Emissions::CurrentAuthorityEmissionInflation` (`max_values`: Some(1), `max_size`: Some(4), added: 499, mode: `MaxEncodedLen`)
@@ -190,7 +190,7 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 6_667_000 picoseconds.
 		Weight::from_parts(6_930_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Emissions::CurrentAuthorityEmissionPerBlock` (r:1 w:0)
 	/// Proof: `Emissions::CurrentAuthorityEmissionPerBlock` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
@@ -258,8 +258,8 @@ impl WeightInfo for () {
 		//  Estimated: `13857`
 		// Minimum execution time: 136_734_000 picoseconds.
 		Weight::from_parts(140_400_000, 13857)
-			.saturating_add(RocksDbWeight::get().reads(30_u64))
-			.saturating_add(RocksDbWeight::get().writes(14_u64))
+			.saturating_add(ParityDbWeight::get().reads(30_u64))
+			.saturating_add(ParityDbWeight::get().writes(14_u64))
 	}
 	/// Storage: `Emissions::CurrentAuthorityEmissionPerBlock` (r:1 w:0)
 	/// Proof: `Emissions::CurrentAuthorityEmissionPerBlock` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
@@ -285,8 +285,8 @@ impl WeightInfo for () {
 		//  Estimated: `6287`
 		// Minimum execution time: 33_024_000 picoseconds.
 		Weight::from_parts(33_875_000, 6287)
-			.saturating_add(RocksDbWeight::get().reads(9_u64))
-			.saturating_add(RocksDbWeight::get().writes(3_u64))
+			.saturating_add(ParityDbWeight::get().reads(9_u64))
+			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
 	/// Storage: `Emissions::SupplyUpdateInterval` (r:0 w:1)
 	/// Proof: `Emissions::SupplyUpdateInterval` (`max_values`: Some(1), `max_size`: Some(4), added: 499, mode: `MaxEncodedLen`)
@@ -296,6 +296,6 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 6_434_000 picoseconds.
 		Weight::from_parts(6_854_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 }

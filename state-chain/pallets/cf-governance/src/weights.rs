@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_governance.
@@ -265,8 +265,8 @@ impl WeightInfo for () {
 		//  Estimated: `1653`
 		// Minimum execution time: 31_820_000 picoseconds.
 		Weight::from_parts(32_532_000, 1653)
-			.saturating_add(RocksDbWeight::get().reads(6_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().reads(6_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `Governance::Members` (r:1 w:0)
 	/// Proof: `Governance::Members` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -282,8 +282,8 @@ impl WeightInfo for () {
 		//  Estimated: `3662`
 		// Minimum execution time: 24_492_000 picoseconds.
 		Weight::from_parts(25_147_000, 3662)
-			.saturating_add(RocksDbWeight::get().reads(4_u64))
-			.saturating_add(RocksDbWeight::get().writes(3_u64))
+			.saturating_add(ParityDbWeight::get().reads(4_u64))
+			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
 	/// Storage: `Governance::Members` (r:1 w:1)
 	/// Proof: `Governance::Members` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -315,8 +315,8 @@ impl WeightInfo for () {
 		//  Estimated: `3545`
 		// Minimum execution time: 74_323_000 picoseconds.
 		Weight::from_parts(75_046_000, 3545)
-			.saturating_add(RocksDbWeight::get().reads(5_u64))
-			.saturating_add(RocksDbWeight::get().writes(12_u64))
+			.saturating_add(ParityDbWeight::get().reads(5_u64))
+			.saturating_add(ParityDbWeight::get().writes(12_u64))
 	}
 	/// Storage: `System::Digest` (r:1 w:1)
 	/// Proof: `System::Digest` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -328,8 +328,8 @@ impl WeightInfo for () {
 		//  Estimated: `1485`
 		// Minimum execution time: 12_578_000 picoseconds.
 		Weight::from_parts(13_053_000, 1485)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `Governance::ActiveProposals` (r:1 w:1)
 	/// Proof: `Governance::ActiveProposals` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -346,8 +346,8 @@ impl WeightInfo for () {
 		Weight::from_parts(8_497_291, 1672)
 			// Standard Error: 4_288
 			.saturating_add(Weight::from_parts(378_709, 0).saturating_mul(b.into()))
-			.saturating_add(RocksDbWeight::get().reads(3_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(3_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 			.saturating_add(Weight::from_parts(0, 12).saturating_mul(b.into()))
 	}
 	/// Storage: `Governance::ActiveProposals` (r:1 w:0)
@@ -360,7 +360,7 @@ impl WeightInfo for () {
 		//  Estimated: `1555`
 		// Minimum execution time: 3_187_000 picoseconds.
 		Weight::from_parts(3_334_000, 1555)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
 	}
 	/// Storage: `Governance::ActiveProposals` (r:1 w:0)
 	/// Proof: `Governance::ActiveProposals` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -375,8 +375,8 @@ impl WeightInfo for () {
 		Weight::from_parts(4_354_686, 1610)
 			// Standard Error: 6_908
 			.saturating_add(Weight::from_parts(3_075_193, 0).saturating_mul(b.into()))
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(b.into())))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(b.into())))
 			.saturating_add(Weight::from_parts(0, 12).saturating_mul(b.into()))
 	}
 	/// Storage: `Governance::GovKeyWhitelistedCallHash` (r:0 w:1)
@@ -387,7 +387,7 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 6_631_000 picoseconds.
 		Weight::from_parts(6_805_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Governance::NextGovKeyCallHashNonce` (r:1 w:1)
 	/// Proof: `Governance::NextGovKeyCallHashNonce` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -423,8 +423,8 @@ impl WeightInfo for () {
 		//  Estimated: `3545`
 		// Minimum execution time: 86_683_000 picoseconds.
 		Weight::from_parts(90_936_000, 3545)
-			.saturating_add(RocksDbWeight::get().reads(7_u64))
-			.saturating_add(RocksDbWeight::get().writes(13_u64))
+			.saturating_add(ParityDbWeight::get().reads(7_u64))
+			.saturating_add(ParityDbWeight::get().writes(13_u64))
 	}
 	/// Storage: `Governance::Members` (r:1 w:1)
 	/// Proof: `Governance::Members` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -436,7 +436,7 @@ impl WeightInfo for () {
 		//  Estimated: `3655`
 		// Minimum execution time: 38_800_000 picoseconds.
 		Weight::from_parts(42_151_000, 3655)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 }
