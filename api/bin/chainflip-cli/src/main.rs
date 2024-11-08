@@ -15,6 +15,7 @@ use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,
 	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
+	BrokerApi,
 };
 use clap::Parser;
 use futures::FutureExt;

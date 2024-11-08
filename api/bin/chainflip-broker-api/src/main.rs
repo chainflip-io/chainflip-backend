@@ -12,7 +12,7 @@ use chainflip_api::{
 		DcaParameters,
 	},
 	settings::StateChain,
-	AccountId32, AddressString, BlockUpdate, ChainApi, DepositMonitorApi, OperatorApi,
+	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, DepositMonitorApi, OperatorApi,
 	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId,
 	WithdrawFeesDetail,
 };
@@ -207,7 +207,9 @@ impl RpcServer for RpcServerImpl {
 		Ok(self
 			.api
 			.broker_api()
-			.request_swap_parameter_encoding(
+			.base_rpc_api()
+			.cf_get_vault_swap_details(
+				self.api.state_chain_client.account_id(),
 				source_asset,
 				destination_asset,
 				destination_address,
@@ -217,6 +219,7 @@ impl RpcServer for RpcServerImpl {
 				boost_fee,
 				affiliate_fees,
 				dca_parameters,
+				None,
 			)
 			.await?)
 	}

@@ -7,9 +7,8 @@ use cf_chains::{
 	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParametersEncoded,
 	ChannelRefundParametersGeneric, ForeignChain,
 };
+use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{AssetAmount, DcaParameters};
-use custom_rpc::VaultSwapDetailsHumanreadable;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -141,8 +140,8 @@ impl StateChainApi {
 		self.state_chain_client.clone()
 	}
 
-	pub fn broker_api(&self) -> BrokerApi {
-		BrokerApi { state_chain_client: self.state_chain_client.clone() }
+	pub fn broker_api(&self) -> Arc<impl BrokerApi> {
+		self.state_chain_client.clone()
 	}
 
 	pub fn lp_api(&self) -> Arc<impl lp::LpApi> {
@@ -160,6 +159,12 @@ impl StateChainApi {
 
 #[async_trait]
 impl GovernanceApi for StateChainClient {}
+#[async_trait]
+impl BrokerApi for StateChainClient {
+	fn base_rpc_api(&self) -> Arc<dyn BaseRpcApi + Send + Sync + 'static> {
+		self.base_rpc_client.clone()
+	}
+}
 #[async_trait]
 impl OperatorApi for StateChainClient {}
 #[async_trait]
@@ -336,12 +341,10 @@ impl fmt::Display for WithdrawFeesDetail {
 	}
 }
 
-pub struct BrokerApi {
-	pub(crate) state_chain_client: Arc<StateChainClient>,
-}
-
-impl BrokerApi {
-	pub async fn request_swap_deposit_address(
+#[async_trait]
+pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static {
+	fn base_rpc_api(&self) -> Arc<dyn BaseRpcApi + Send + Sync + 'static>;
+	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
@@ -357,7 +360,6 @@ impl BrokerApi {
 			.try_parse_to_encoded_address(destination_asset.into())
 			.map_err(anyhow::Error::msg)?;
 		let (_tx_hash, events, header, ..) = self
-			.state_chain_client
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 					source_asset,
@@ -418,13 +420,12 @@ impl BrokerApi {
 			bail!("No SwapDepositAddressReady event was found");
 		}
 	}
-	pub async fn withdraw_fees(
+	async fn withdraw_fees(
 		&self,
 		asset: Asset,
 		destination_address: AddressString,
 	) -> Result<WithdrawFeesDetail> {
 		let (tx_hash, events, ..) = self
-			.state_chain_client
 			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
 				asset,
 				destination_address: destination_address
@@ -462,46 +463,13 @@ impl BrokerApi {
 			bail!("No WithdrawalRequested event was found");
 		}
 	}
-	pub async fn register_account(&self) -> Result<H256> {
-		self.state_chain_client
-			.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_as_broker {})
+	async fn register_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_as_broker {})
 			.await
 	}
-	pub async fn deregister_account(&self) -> Result<H256> {
-		self.state_chain_client
-			.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
+	async fn deregister_account(&self) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
 			.await
-	}
-
-	pub async fn request_swap_parameter_encoding(
-		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		min_output_amount: AssetAmount,
-		retry_duration: cf_primitives::BlockNumber,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
-		dca_parameters: Option<DcaParameters>,
-	) -> Result<VaultSwapDetailsHumanreadable> {
-		Ok(self
-			.state_chain_client
-			.base_rpc_client
-			.cf_get_vault_swap_details(
-				self.state_chain_client.account_id(),
-				source_asset,
-				destination_asset,
-				destination_address,
-				broker_commission,
-				min_output_amount,
-				retry_duration,
-				boost_fee,
-				affiliate_fees,
-				dca_parameters,
-				None,
-			)
-			.await?)
 	}
 }
 
