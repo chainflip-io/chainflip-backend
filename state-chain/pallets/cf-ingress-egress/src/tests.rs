@@ -2,12 +2,12 @@ mod boost;
 mod screening;
 
 use crate::{
-	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
-	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
-	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
-	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	mock_eth::*, mocks::MockAffiliateRegistry, BoostStatus, Call as PalletCall, ChannelAction,
+	ChannelIdCounter, ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup,
+	DepositChannelPool, DepositIgnoredReason, DepositWitness, DisabledEgressAssets,
+	EgressDustLimit, Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls,
+	FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode,
+	PrewitnessedDepositIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -18,7 +18,7 @@ use cf_chains::{
 	CcmChannelMetadata, CcmFailReason, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
 	TransferAssetParams,
 };
-use cf_primitives::{AssetAmount, ChannelId, ForeignChain};
+use cf_primitives::{AssetAmount, BasisPoints, Beneficiary, ChannelId, ForeignChain};
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
 	mocks::{
@@ -42,7 +42,7 @@ use frame_support::{
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::H160;
+use sp_core::{bounded_vec, H160};
 use sp_runtime::DispatchError;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
@@ -1542,6 +1542,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(test_function: i
 					output_asset: cf_primitives::Asset::Eth,
 					input_amount: GAS_FEE,
 					swap_type: SwapRequestType::IngressEgressFee,
+					broker_fees: Default::default(),
 					origin: SwapOrigin::Internal,
 				},
 				MockSwapRequest {
@@ -1549,6 +1550,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(test_function: i
 					output_asset: cf_primitives::Asset::Eth,
 					input_amount: GAS_FEE,
 					swap_type: SwapRequestType::IngressEgressFee,
+					broker_fees: Default::default(),
 					origin: SwapOrigin::Internal,
 				},
 				MockSwapRequest {
@@ -1556,6 +1558,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(test_function: i
 					output_asset: cf_primitives::Asset::Eth,
 					input_amount: GAS_FEE,
 					swap_type: SwapRequestType::IngressEgressFee,
+					broker_fees: Default::default(),
 					origin: SwapOrigin::Internal,
 				}
 			]
@@ -1802,6 +1805,73 @@ fn can_request_swap_via_extrinsic() {
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
 				swap_type: SwapRequestType::Regular { output_address },
+				broker_fees: Default::default(),
+				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+			},]
+		);
+	});
+}
+
+#[test]
+fn vault_swaps_support_broker_fees() {
+	new_test_ext().execute_with(|| {
+		const INPUT_ASSET: Asset = Asset::Usdc;
+		const OUTPUT_ASSET: Asset = Asset::Flip;
+		const INPUT_AMOUNT: AssetAmount = 10_000;
+		const TX_HASH: [u8; 32] = [0xa; 32];
+
+		const BROKER: u64 = 101;
+		const BROKER_FEE: BasisPoints = 5;
+		const AFFILIATE_FEE: BasisPoints = 10;
+		const AFFILIATE_1: u64 = 102;
+		const AFFILIATE_2: u64 = 103;
+
+		const AFFILIATE_SHORT_1: u8 = 0;
+		const AFFILIATE_SHORT_2: u8 = 1;
+
+		let output_address = ForeignChainAddress::Eth([1; 20].into());
+
+		// Register affiliate 1, but not affiliate 2 to check that we can
+		// handle both cases:
+		MockAffiliateRegistry::register_affiliate(BROKER, AFFILIATE_1, AFFILIATE_SHORT_1);
+		// Note that another affiliate entries from different brokers don't overlap, so this should
+		// have no effect on the test:
+		MockAffiliateRegistry::register_affiliate(BROKER + 1, AFFILIATE_2, AFFILIATE_SHORT_1);
+
+		assert_ok!(IngressEgress::vault_swap_request(
+			RuntimeOrigin::root(),
+			INPUT_ASSET.try_into().unwrap(),
+			OUTPUT_ASSET,
+			INPUT_AMOUNT,
+			MockAddressConverter::to_encoded_address(output_address.clone()),
+			None,
+			TX_HASH,
+			Box::new(DepositDetails { tx_hashes: None }),
+			Some((
+				Beneficiary { account: BROKER, bps: BROKER_FEE },
+				bounded_vec![
+					Beneficiary { account: AFFILIATE_SHORT_1, bps: AFFILIATE_FEE },
+					Beneficiary { account: AFFILIATE_SHORT_2, bps: AFFILIATE_FEE }
+				]
+			)),
+			None,
+			None,
+			0
+		));
+
+		assert_eq!(
+			MockSwapRequestHandler::<Test>::get_swap_requests(),
+			vec![MockSwapRequest {
+				input_asset: INPUT_ASSET,
+				output_asset: OUTPUT_ASSET,
+				input_amount: INPUT_AMOUNT,
+				swap_type: SwapRequestType::Regular { output_address },
+				broker_fees: bounded_vec![
+					Beneficiary { account: BROKER, bps: BROKER_FEE },
+					// Only one affiliate is used (short id for affiliate 2 has not been
+					// recognised):
+					Beneficiary { account: AFFILIATE_1, bps: AFFILIATE_FEE }
+				],
 				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
 			},]
 		);
@@ -1856,6 +1926,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 						.into_swap_metadata(INPUT_AMOUNT, INPUT_ASSET, OUTPUT_ASSET)
 						.unwrap()
 				},
+				broker_fees: Default::default(),
 				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
 			},]
 		);
