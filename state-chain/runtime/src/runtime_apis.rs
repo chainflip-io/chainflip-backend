@@ -376,7 +376,9 @@ decl_runtime_apis!(
 			number_of_chunks: u32,
 			chunk_interval: u32,
 		) -> Result<(), DispatchErrorWithMessage>;
-		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage>;
+		fn cf_validate_refund_params(
+			retry_duration: BlockNumber,
+		) -> Result<(), DispatchErrorWithMessage>;
 		fn cf_get_vault_swap_details(
 			broker: AccountId32,
 			source_asset: Asset,
@@ -384,7 +386,7 @@ decl_runtime_apis!(
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
 			min_output_amount: AssetAmount,
-			retry_duration: u32,
+			retry_duration: BlockNumber,
 			boost_fee: Option<BasisPoints>,
 			affiliate_fees: Option<Affiliates<AccountId32>>,
 			dca_parameters: Option<DcaParameters>,

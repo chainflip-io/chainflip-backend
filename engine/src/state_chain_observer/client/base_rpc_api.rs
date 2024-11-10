@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use cf_chains::address::AddressString;
-use cf_primitives::{Affiliates, Asset, AssetAmount, BasisPoints, DcaParameters};
+use cf_primitives::{Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters};
 use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::{
@@ -173,7 +173,7 @@ pub trait BaseRpcApi {
 
 	async fn validate_refund_params(
 		&self,
-		retry_duration: u32,
+		retry_duration: BlockNumber,
 		block_hash: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
 
@@ -192,7 +192,7 @@ pub trait BaseRpcApi {
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		min_output_amount: AssetAmount,
-		retry_duration: u32,
+		retry_duration: BlockNumber,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
@@ -338,7 +338,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 
 	async fn validate_refund_params(
 		&self,
-		retry_duration: u32,
+		retry_duration: BlockNumber,
 		block_hash: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()> {
 		self.raw_rpc_client.cf_validate_refund_params(retry_duration, block_hash).await
@@ -363,7 +363,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		min_output_amount: AssetAmount,
-		retry_duration: u32,
+		retry_duration: BlockNumber,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,

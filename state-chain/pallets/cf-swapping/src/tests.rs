@@ -19,7 +19,9 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	AnyChain, CcmChannelMetadata, CcmDepositMetadata, Ethereum,
 };
-use cf_primitives::{Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters, ForeignChain};
+use cf_primitives::{
+	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
+};
 use cf_test_utilities::{assert_event_sequence, assert_events_eq, assert_has_matching_event};
 use cf_traits::{
 	mocks::{
@@ -90,7 +92,7 @@ impl TestSwapParams {
 // with min output rather than min price:
 #[derive(Debug, Clone)]
 struct TestRefundParams {
-	retry_duration: u32,
+	retry_duration: BlockNumber,
 	min_output: AssetAmount,
 }
 

@@ -984,7 +984,7 @@ pub trait CustomApi {
 	#[method(name = "validate_refund_params")]
 	fn cf_validate_refund_params(
 		&self,
-		retry_duration: u32,
+		retry_duration: BlockNumber,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
 
@@ -997,7 +997,7 @@ pub trait CustomApi {
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		min_output_amount: AssetAmount,
-		retry_duration: u32,
+		retry_duration: BlockNumber,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
@@ -1284,7 +1284,7 @@ where
 			liquidity: Liquidity,
 		) -> PoolPairsMap<AmmAmount>,
 		cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> (),
-		cf_validate_refund_params(retry_duration: u32) -> (),
+		cf_validate_refund_params(retry_duration: BlockNumber) -> (),
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
@@ -1843,7 +1843,7 @@ where
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		min_output_amount: AssetAmount,
-		retry_duration: u32,
+		retry_duration: BlockNumber,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,

@@ -2363,7 +2363,7 @@ impl<T: Config> SwapLimitsProvider for Pallet<T> {
 		}
 	}
 
-	fn validate_refund_params(retry_duration: u32) -> Result<(), DispatchError> {
+	fn validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchError> {
 		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<T>::get();
 		if retry_duration > max_swap_retry_duration_blocks {
 			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));

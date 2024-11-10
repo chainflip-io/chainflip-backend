@@ -2094,7 +2094,7 @@ impl_runtime_apis! {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
 		}
 
-		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage> {
+		fn cf_validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchErrorWithMessage> {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
 		}
 
@@ -2105,7 +2105,7 @@ impl_runtime_apis! {
 			destination_address: EncodedAddress,
 			broker_commission: BasisPoints,
 			min_output_amount: AssetAmount,
-			retry_duration: u32,
+			retry_duration: BlockNumber,
 			boost_fee: Option<BasisPoints>,
 			affiliate_fees: Option<Affiliates<AccountId>>,
 			dca_parameters: Option<DcaParameters>,

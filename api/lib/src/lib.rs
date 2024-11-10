@@ -480,7 +480,7 @@ impl BrokerApi {
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		min_output_amount: AssetAmount,
-		retry_duration: u32,
+		retry_duration: cf_primitives::BlockNumber,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
