@@ -43,15 +43,22 @@ export async function waitForBtcTransaction(txid: string, confirmations = 1) {
       return;
     }
   }
+  throw new Error(`Timeout waiting for Btc transaction to be confirmed, txid: ${txid}`);
 }
 
-export async function sendBtc(address: string, amount: number | string): Promise<string> {
+export async function sendBtc(
+  address: string,
+  amount: number | string,
+  confirmations = 1,
+): Promise<string> {
   // Btc client has a limit on the number of concurrent requests
   const txid = (await btcClientMutex.runExclusive(async () =>
     btcClient.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
   )) as string;
 
-  await waitForBtcTransaction(txid);
+  if (confirmations > 0) {
+    await waitForBtcTransaction(txid, confirmations);
+  }
 
   return txid;
 }

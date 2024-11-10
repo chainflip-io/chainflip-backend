@@ -74,9 +74,8 @@ async function buildAndSendBtcVaultSwap(
   );
   if (!txid) {
     throw new Error('Broadcast failed');
-  } else {
-    testBtcVaultSwap.log('Broadcast successful, txid:', txid);
   }
+  testBtcVaultSwap.log('Broadcast successful, txid:', txid);
 
   await waitForBtcTransaction(txid as string);
   testBtcVaultSwap.debugLog('Transaction confirmed');
