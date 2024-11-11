@@ -48,6 +48,7 @@ async function runAllConcurrentTests() {
     testCancelOrdersBatch.run(),
     depositChannelCreation.run(),
     testBtcVaultSwap.run(),
+    testBrokerLevelScreening.run()
   ];
 
   // Tests that only work if there is more than one node
@@ -55,12 +56,6 @@ async function runAllConcurrentTests() {
     console.log(`Also running multi-node tests (${numberOfNodes} nodes)`);
     const multiNodeTests = [testPolkadotRuntimeUpdate.run()];
     tests.push(...multiNodeTests);
-  }
-
-  // Tests that only work with localnet but can be run concurrent.
-  if (addConcurrentLocalnetTests) {
-    const localnetTests = [testBrokerLevelScreening.run()];
-    tests.push(...localnetTests);
   }
 
   await Promise.all(tests);
