@@ -1887,6 +1887,13 @@ fn vault_swaps_support_broker_fees() {
 				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
 			},]
 		);
+
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
+			PalletEvent::UnknownAffiliateBroker {
+				broker_id: BROKER,
+				short_affiliate_id: AFFILIATE_SHORT_2,
+			},
+		));
 	});
 }
 

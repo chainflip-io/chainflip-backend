@@ -753,6 +753,10 @@ pub mod pallet {
 		FailedToRejectTaintedTransaction {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
+		UnknownAffiliateBroker {
+			broker_id: T::AccountId,
+			short_affiliate_id: AffiliateShortId,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -2214,22 +2218,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let fees: Vec<_> = [primary_broker_fees]
 					.into_iter()
-					.chain(affiliate_fees.into_iter().filter_map(|Beneficiary { account, bps }| {
-						if let Some(affiliate_id) =
-							T::AffiliateRegistry::lookup(&primary_broker, account)
-						{
-							Some(Beneficiary { account: affiliate_id, bps })
-						} else {
-							// In case the entry not found, we ignore the entry, but process the
-							// swap (to avoid having to refund it).
-							log::warn!(
-								"Affiliate entry is skipped: no entry for affiliate short id {} found for broker {:?}.",
-								account,
-								&primary_broker
-							);
-							None
-						}
-					}))
+					.chain(affiliate_fees.into_iter().filter_map(
+						|Beneficiary { account: short_affiliate_id, bps }| {
+							if let Some(affiliate_id) =
+								T::AffiliateRegistry::lookup(&primary_broker, short_affiliate_id)
+							{
+								Some(Beneficiary { account: affiliate_id, bps })
+							} else {
+								// In case the entry not found, we ignore the entry, but process the
+								// swap (to avoid having to refund it).
+								Self::deposit_event(Event::<T, I>::UnknownAffiliateBroker {
+									broker_id: primary_broker.clone(),
+									short_affiliate_id,
+								});
+
+								None
+							}
+						},
+					))
 					.collect();
 
 				fees.try_into().expect(
