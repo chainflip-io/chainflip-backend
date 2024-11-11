@@ -2,7 +2,7 @@ use cf_primitives::AuthorityCount;
 
 use super::{mocks::*, register_checks};
 use crate::{
-	electoral_system::{ConsensusStatus, ElectoralReadAccess},
+	electoral_system::ConsensusStatus,
 	electoral_systems::{tests::utils::generate_votes, unsafe_median::*},
 };
 
@@ -21,23 +21,23 @@ fn with_default_context() -> TestContext<SimpleUnsafeMedian> {
 
 register_checks! {
 	SimpleUnsafeMedian {
-		started_at_initial_state(pre_finalize, _post) {
+		started_at_initial_state(pre_finalize, _a) {
 			assert_eq!(
-				pre_finalize.unsynchronised_state().unwrap(),
+				pre_finalize.unsynchronised_state,
 				INIT_UNSYNCHRONISED_STATE,
 				"Expected initial state pre-finalization."
 			);
 		},
 		ended_at_initial_state(_pre, post_finalize) {
 			assert_eq!(
-				post_finalize.unsynchronised_state().unwrap(),
+				post_finalize.unsynchronised_state,
 				INIT_UNSYNCHRONISED_STATE,
 				"Expected initial state post-finalization."
 			);
 		},
 		ended_at_new_state(_pre, post_finalize) {
 			assert_eq!(
-				post_finalize.unsynchronised_state().unwrap(),
+				post_finalize.unsynchronised_state,
 				NEW_UNSYNCHRONISED_STATE,
 				"Expected new state post-finalization."
 			);

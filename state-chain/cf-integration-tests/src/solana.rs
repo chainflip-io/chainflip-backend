@@ -27,9 +27,8 @@ use frame_support::{
 	traits::{OnFinalize, UnfilteredDispatchable},
 };
 use pallet_cf_elections::{
-	electoral_system::{ElectionIdentifierOf, ElectoralSystem},
-	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote, VoteStorage},
-	MAXIMUM_VOTES_PER_EXTRINSIC,
+	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote},
+	CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FetchOrTransfer};
 use pallet_cf_validator::RotationPhase;
@@ -58,11 +57,12 @@ const BOB: AccountId = AccountId::new([0x44; 32]);
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
 const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
 
-type SolanaElectionVote = BoundedBTreeMap::<
-	ElectionIdentifierOf<<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystem>,
-	AuthorityVote<
-		<<<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::PartialVote,
-		<<<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote,
+type SolanaElectionVote = BoundedBTreeMap<
+	CompositeElectionIdentifierOf<
+		<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
+	>,
+	CompositeAuthorityVoteOf<
+		<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
 	>,
 	ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
 >;
@@ -731,8 +731,8 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			let ccm_broadcast_id = pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get().into_iter().next().unwrap();
 
 			// Get the election identifier of the Solana egress.
-			let election_id = SolanaElections::with_electoral_access_and_identifiers(
-				|_, election_identifiers| {
+			let election_id = SolanaElections::with_election_identifiers(
+				|election_identifiers| {
 					Ok(election_identifiers.last().cloned().unwrap())
 				},
 			).unwrap();

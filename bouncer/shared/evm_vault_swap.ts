@@ -30,7 +30,7 @@ import {
   getSolConnection,
 } from './utils';
 import { getBalance } from './get_balance';
-import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
+import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from './new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 
 import VaultIdl from '../../contract-interfaces/sol-program-idls/v1.0.0/vault.json';

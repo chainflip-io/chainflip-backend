@@ -13,7 +13,7 @@ import { getBalance } from '../shared/get_balance';
 import { ExecutableTest } from '../shared/executable_test';
 import { requestNewSwap } from '../shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
-import { executeVaultSwap } from '../shared/vault_swap';
+import { executeVaultSwap } from '../shared/evm_vault_swap';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testDCASwaps = new ExecutableTest('DCA-Swaps', main, 150);

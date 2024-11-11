@@ -1,5 +1,5 @@
 use super::{
-	mocks::{Check, TestContext, TestSetup},
+	mocks::{Check, MockAccess, TestContext, TestSetup},
 	register_checks,
 };
 use crate::{
@@ -43,8 +43,7 @@ impl MockHook {
 register_checks! {
 	MonotonicMedianTest {
 		monotonically_increasing_state(pre_finalize, post_finalize) {
-			assert!(post_finalize.unsynchronised_state().unwrap() >= pre_finalize.unsynchronised_state().unwrap(),
-				"Unsynchronised state can not decrease!");
+			assert!(post_finalize.unsynchronised_state >= pre_finalize.unsynchronised_state, "Unsynchronised state can not decrease!");
 		},
 		hook_called(_pre, _post) {
 			assert!(MockHook::has_been_called(), "Hook should have been called!");
@@ -90,7 +89,7 @@ fn too_few_votes_consensus_not_possible() {
 #[test]
 fn finalize_election_with_incremented_state() {
 	let test = with_default_context();
-	let initial_state = test.access().unsynchronised_state().unwrap();
+	let initial_state = MockAccess::<MonotonicMedianTest>::unsynchronised_state().unwrap();
 	let new_unsynchronised_state = initial_state + 1;
 
 	test.force_consensus_update(ConsensusStatus::Gained {
@@ -109,8 +108,8 @@ fn finalize_election_with_incremented_state() {
 			Check::monotonically_increasing_state(),
 			Check::<MonotonicMedianTest>::hook_called(),
 			Check::new(move |pre, post| {
-				assert_eq!(pre.unsynchronised_state().unwrap(), initial_state);
-				assert_eq!(post.unsynchronised_state().unwrap(), new_unsynchronised_state);
+				assert_eq!(pre.unsynchronised_state, initial_state);
+				assert_eq!(post.unsynchronised_state, new_unsynchronised_state);
 			}),
 			Check::last_election_deleted(),
 			Check::election_id_incremented(),
@@ -148,8 +147,8 @@ fn finalize_election_state_can_not_decrease() {
 					// The hook should not be called if the state is not updated.
 					Check::<MonotonicMedianTest>::hook_not_called(),
 					Check::new(|pre, post| {
-						assert_eq!(pre.unsynchronised_state().unwrap(), INTITIAL_STATE);
-						assert_eq!(post.unsynchronised_state().unwrap(), INTITIAL_STATE);
+						assert_eq!(pre.unsynchronised_state, INTITIAL_STATE);
+						assert_eq!(post.unsynchronised_state, INTITIAL_STATE);
 					}),
 					Check::last_election_deleted(),
 					Check::election_id_incremented(),

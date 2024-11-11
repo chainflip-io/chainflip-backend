@@ -5,55 +5,22 @@ use crate::{
 	},
 	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
-use codec::Encode;
-use frame_support::{
-	ensure, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound, StorageHasher, Twox64Concat,
-};
+use codec::{Decode, Encode};
+use core::cell::RefCell;
+use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use std::collections::BTreeMap;
 
-pub struct MockReadAccess<'es, ES: ElectoralSystem> {
+pub struct MockReadAccess<ES: ElectoralSystem> {
 	election_identifier: ElectionIdentifierOf<ES>,
-	electoral_system: &'es MockAccess<ES>,
-}
-pub struct MockWriteAccess<'es, ES: ElectoralSystem> {
-	election_identifier: ElectionIdentifierOf<ES>,
-	electoral_system: &'es mut MockAccess<ES>,
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]
-pub struct MockElection<ES: ElectoralSystem> {
-	properties: ES::ElectionProperties,
-	state: ES::ElectionState,
-	settings: ES::ElectoralSettings,
-	consensus_status: ConsensusStatus<ES::Consensus>,
+pub struct MockWriteAccess<ES: ElectoralSystem> {
+	election_identifier: ElectionIdentifierOf<ES>,
 }
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]
 pub struct MockAccess<ES: ElectoralSystem> {
-	electoral_settings: ES::ElectoralSettings,
-	unsynchronised_state: ES::ElectoralUnsynchronisedState,
-	unsynchronised_state_map: BTreeMap<Vec<u8>, Option<ES::ElectoralUnsynchronisedStateMapValue>>,
-	elections: BTreeMap<ElectionIdentifierOf<ES>, MockElection<ES>>,
-	unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
-	next_election_id: UniqueMonotonicIdentifier,
-}
-
-impl<ES: ElectoralSystem> MockAccess<ES> {
-	fn election_read_access(
-		&self,
-		id: ElectionIdentifierOf<ES>,
-	) -> Result<MockReadAccess<'_, ES>, CorruptStorageError> {
-		ensure!(self.elections.contains_key(&id), CorruptStorageError::new());
-		Ok(MockReadAccess { election_identifier: id, electoral_system: self })
-	}
-
-	fn election_write_access(
-		&mut self,
-		id: ElectionIdentifierOf<ES>,
-	) -> Result<MockWriteAccess<'_, ES>, CorruptStorageError> {
-		ensure!(self.elections.contains_key(&id), CorruptStorageError::new());
-		Ok(MockWriteAccess { election_identifier: id, electoral_system: self })
-	}
+	_phantom: core::marker::PhantomData<ES>,
 }
 
 macro_rules! impl_read_access {
@@ -67,7 +34,7 @@ macro_rules! impl_read_access {
 				<Self::ElectoralSystem as ElectoralSystem>::ElectoralSettings,
 				CorruptStorageError,
 			> {
-				self.with_election(|e| e.settings.clone())
+				Ok(MockStorageAccess::electoral_settings_for_election::<ES>(self.identifier()))
 			}
 
 			fn properties(
@@ -76,7 +43,7 @@ macro_rules! impl_read_access {
 				<Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
 				CorruptStorageError,
 			> {
-				self.with_election(|e| e.properties.clone())
+				Ok(MockStorageAccess::election_properties::<ES>(self.identifier()))
 			}
 
 			fn state(
@@ -85,27 +52,15 @@ macro_rules! impl_read_access {
 				<Self::ElectoralSystem as ElectoralSystem>::ElectionState,
 				CorruptStorageError,
 			> {
-				self.with_election(|e| e.state.clone())
+				Ok(MockStorageAccess::election_state::<ES>(self.identifier()))
 			}
 
-			fn election_identifier(
-				&self,
-			) -> Result<ElectionIdentifierOf<Self::ElectoralSystem>, CorruptStorageError> {
-				Ok(self.identifier())
+			fn election_identifier(&self) -> ElectionIdentifierOf<Self::ElectoralSystem> {
+				self.identifier()
 			}
 		}
 
 		impl<ES: ElectoralSystem> $t {
-			fn with_election<F: FnOnce(&MockElection<ES>) -> R, R>(
-				&self,
-				f: F,
-			) -> Result<R, CorruptStorageError> {
-				self.electoral_system
-					.elections
-					.get(&self.identifier())
-					.map(f)
-					.ok_or_else(CorruptStorageError::new)
-			}
 			pub fn identifier(&self) -> ElectionIdentifierOf<ES> {
 				self.election_identifier
 			}
@@ -114,183 +69,386 @@ macro_rules! impl_read_access {
 				previous_consensus: Option<&ES::Consensus>,
 				votes: ConsensusVotes<ES>,
 			) -> Result<Option<ES::Consensus>, CorruptStorageError> {
-				ES::check_consensus(self.identifier(), self, previous_consensus, votes)
+				ES::check_consensus(self, previous_consensus, votes)
 			}
 		}
 	};
 }
 
-impl_read_access!(MockReadAccess<'_, ES>);
-impl_read_access!(MockWriteAccess<'_, ES>);
+impl_read_access!(MockReadAccess<ES>);
+impl_read_access!(MockWriteAccess<ES>);
 
-impl<ES: ElectoralSystem> MockWriteAccess<'_, ES> {
-	fn with_election_mut<F: FnOnce(&mut MockElection<ES>) -> R, R>(
-		&mut self,
-		f: F,
-	) -> Result<R, CorruptStorageError> {
-		self.electoral_system
-			.elections
-			.get_mut(&self.identifier())
-			.map(f)
-			.ok_or_else(CorruptStorageError::new)
-	}
-	pub fn set_consensus_status(&mut self, consensus_status: ConsensusStatus<ES::Consensus>) {
-		self.with_election_mut(|e| e.consensus_status = consensus_status)
-			.expect("Cannot set consensus status for non-existent election");
-	}
+thread_local! {
+	pub static ELECTION_STATE: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
+	pub static ELECTION_PROPERTIES: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
+	pub static ELECTORAL_SETTINGS: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+	// The electoral settings for a particular election
+	pub static ELECTION_SETTINGS: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
+	pub static ELECTORAL_UNSYNCHRONISED_SETTINGS: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+	pub static ELECTORAL_UNSYNCHRONISED_STATE: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+	pub static ELECTORAL_UNSYNCHRONISED_STATE_MAP: RefCell<BTreeMap<Vec<u8>, Option<Vec<u8>>>> = const { RefCell::new(BTreeMap::new()) };
+	pub static CONSENSUS_STATUS: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
+	pub static NEXT_ELECTION_ID: RefCell<UniqueMonotonicIdentifier> = const { RefCell::new(UniqueMonotonicIdentifier::from_u64(0)) };
 }
 
-impl<ES: ElectoralSystem> ElectionWriteAccess for MockWriteAccess<'_, ES> {
+impl<ES: ElectoralSystem> ElectionWriteAccess for MockWriteAccess<ES> {
 	fn set_state(
-		&mut self,
+		&self,
 		state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
 	) -> Result<(), CorruptStorageError> {
-		self.with_election_mut(|e| e.state = state)?;
+		MockStorageAccess::set_state::<ES>(self.identifier(), state);
 		Ok(())
 	}
-	fn clear_votes(&mut self) {
+	fn clear_votes(&self) {
 		// nothing
 	}
 	fn delete(self) {
-		self.electoral_system.elections.remove(&self.identifier());
+		MockStorageAccess::delete_election::<ES>(self.identifier());
 	}
 	fn refresh(
 		&mut self,
-		_extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
+		new_extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
 		properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
 	) -> Result<(), CorruptStorageError> {
-		self.with_election_mut(|e| e.properties = properties)?;
+		self.election_identifier = self.election_identifier.with_extra(new_extra);
+		MockStorageAccess::set_election_properties::<ES>(self.identifier(), properties);
 		Ok(())
 	}
 
 	fn check_consensus(
-		&mut self,
+		&self,
 	) -> Result<
 		ConsensusStatus<<Self::ElectoralSystem as ElectoralSystem>::Consensus>,
 		CorruptStorageError,
 	> {
-		self.with_election_mut(|e| e.consensus_status.clone())
-	}
-}
-
-impl<ES: ElectoralSystem> MockAccess<ES> {
-	pub fn new(
-		unsynchronised_state: ES::ElectoralUnsynchronisedState,
-		unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
-		electoral_settings: ES::ElectoralSettings,
-	) -> Self {
-		Self {
-			electoral_settings,
-			unsynchronised_state,
-			unsynchronised_settings,
-			unsynchronised_state_map: Default::default(),
-			elections: Default::default(),
-			next_election_id: Default::default(),
-		}
-	}
-
-	pub fn finalize_elections(
-		&mut self,
-		context: &ES::OnFinalizeContext,
-	) -> Result<ES::OnFinalizeReturn, CorruptStorageError> {
-		ES::on_finalize(self, self.elections.keys().cloned().collect(), context)
-	}
-
-	pub fn election_identifiers(&self) -> Vec<ElectionIdentifierOf<ES>> {
-		self.elections.keys().cloned().collect()
-	}
-
-	pub fn next_umi(&self) -> UniqueMonotonicIdentifier {
-		self.next_election_id
+		Ok(MockStorageAccess::consensus_status::<ES>(self.identifier()))
 	}
 }
 
 impl<ES: ElectoralSystem> ElectoralReadAccess for MockAccess<ES> {
 	type ElectoralSystem = ES;
-	type ElectionReadAccess<'es> = MockReadAccess<'es, ES>;
+	type ElectionReadAccess = MockReadAccess<ES>;
 
-	fn election(
-		&self,
-		id: ElectionIdentifierOf<Self::ElectoralSystem>,
-	) -> Result<Self::ElectionReadAccess<'_>, CorruptStorageError> {
-		self.election_read_access(id)
+	fn election(id: ElectionIdentifierOf<Self::ElectoralSystem>) -> Self::ElectionReadAccess {
+		MockReadAccess { election_identifier: id }
 	}
-	fn unsynchronised_settings(
-		&self,
-	) -> Result<
+	fn unsynchronised_settings() -> Result<
 		<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings,
 		CorruptStorageError,
 	> {
-		Ok(self.unsynchronised_settings.clone())
+		Ok(MockStorageAccess::unsynchronised_settings::<ES>())
 	}
-	fn unsynchronised_state(
-		&self,
-	) -> Result<
+	fn unsynchronised_state() -> Result<
 		<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 		CorruptStorageError,
 	> {
-		Ok(self.unsynchronised_state.clone())
+		Ok(MockStorageAccess::unsynchronised_state::<ES>())
 	}
 	fn unsynchronised_state_map(
-		&self,
 		key: &<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
 	) -> Result<
 		Option<<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue>,
 		CorruptStorageError,
 	> {
-		self.unsynchronised_state_map
-			.get(&key.using_encoded(Twox64Concat::hash))
-			.ok_or_else(CorruptStorageError::new)
-			.cloned()
+		Ok(MockStorageAccess::unsynchronised_state_map::<ES>(key))
 	}
 }
 
 impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
-	type ElectionWriteAccess<'a> = MockWriteAccess<'a, ES>;
+	type ElectionWriteAccess = MockWriteAccess<ES>;
 
 	fn new_election(
-		&mut self,
 		extra: <Self::ElectoralSystem as ElectoralSystem>::ElectionIdentifierExtra,
 		properties: <Self::ElectoralSystem as ElectoralSystem>::ElectionProperties,
 		state: <Self::ElectoralSystem as ElectoralSystem>::ElectionState,
-	) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
-		let election_identifier = ElectionIdentifier::new(self.next_election_id, extra);
-		self.next_election_id = self.next_election_id.next_identifier().unwrap();
-		self.elections.insert(
-			election_identifier,
-			MockElection {
-				properties,
-				state,
-				settings: self.electoral_settings.clone(),
-				consensus_status: ConsensusStatus::None,
-			},
-		);
-		self.election_write_access(election_identifier)
+	) -> Result<Self::ElectionWriteAccess, CorruptStorageError> {
+		Ok(Self::election_mut(MockStorageAccess::new_election::<ES>(extra, properties, state)))
 	}
-	fn election_mut(
-		&mut self,
-		id: ElectionIdentifierOf<Self::ElectoralSystem>,
-	) -> Result<Self::ElectionWriteAccess<'_>, CorruptStorageError> {
-		self.election_write_access(id)
+	fn election_mut(id: ElectionIdentifierOf<Self::ElectoralSystem>) -> Self::ElectionWriteAccess {
+		MockWriteAccess { election_identifier: id }
 	}
 	fn set_unsynchronised_state(
-		&mut self,
 		unsynchronised_state: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedState,
 	) -> Result<(), CorruptStorageError> {
-		self.unsynchronised_state = unsynchronised_state;
+		MockStorageAccess::set_unsynchronised_state::<ES>(unsynchronised_state);
 		Ok(())
 	}
 
 	/// Inserts or removes a value from the unsynchronised state map of the electoral system.
 	fn set_unsynchronised_state_map(
-		&mut self,
 		key: <Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapKey,
 		value: Option<
 			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
 		>,
-	) -> Result<(), CorruptStorageError> {
-		self.unsynchronised_state_map
-			.insert(key.using_encoded(Twox64Concat::hash), value);
-		Ok(())
+	) {
+		MockStorageAccess::set_unsynchronised_state_map::<ES>(key, value);
+	}
+}
+
+pub struct MockStorageAccess;
+
+impl MockStorageAccess {
+	pub fn clear_storage() {
+		ELECTION_STATE.with(|state| {
+			let mut state_ref = state.borrow_mut();
+			state_ref.clear();
+		});
+		ELECTION_PROPERTIES.with(|properties| {
+			let mut properties_ref = properties.borrow_mut();
+			properties_ref.clear();
+		});
+		ELECTORAL_SETTINGS.with(|settings| {
+			let mut settings_ref = settings.borrow_mut();
+			settings_ref.clear();
+		});
+		ELECTION_SETTINGS.with(|settings| {
+			let mut settings_ref = settings.borrow_mut();
+			settings_ref.clear();
+		});
+		ELECTORAL_UNSYNCHRONISED_SETTINGS.with(|settings| {
+			let mut settings_ref = settings.borrow_mut();
+			settings_ref.clear();
+		});
+		ELECTORAL_UNSYNCHRONISED_STATE.with(|state| {
+			let mut state_ref = state.borrow_mut();
+			state_ref.clear();
+		});
+		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|state_map| {
+			let mut state_map_ref = state_map.borrow_mut();
+			state_map_ref.clear();
+		});
+		CONSENSUS_STATUS.with(|consensus| {
+			let mut consensus_ref = consensus.borrow_mut();
+			consensus_ref.clear();
+		});
+		NEXT_ELECTION_ID.with(|next_id| {
+			let mut next_id_ref = next_id.borrow_mut();
+			*next_id_ref = UniqueMonotonicIdentifier::from_u64(0);
+		});
+	}
+
+	pub fn next_umi() -> UniqueMonotonicIdentifier {
+		NEXT_ELECTION_ID.with(|next_id| *next_id.borrow())
+	}
+
+	pub fn increment_next_umi() {
+		NEXT_ELECTION_ID.with(|next_id| {
+			let mut next_id_ref = next_id.borrow_mut();
+			*next_id_ref = next_id_ref.next_identifier().unwrap();
+		});
+	}
+
+	pub fn set_electoral_settings<ES: ElectoralSystem>(
+		settings: <ES as ElectoralSystem>::ElectoralSettings,
+	) {
+		ELECTORAL_SETTINGS.with(|old_settings| {
+			let mut settings_ref = old_settings.borrow_mut();
+			*settings_ref = settings.encode();
+		});
+	}
+
+	pub fn electoral_settings<ES: ElectoralSystem>() -> ES::ElectoralSettings {
+		ELECTORAL_SETTINGS.with(|settings| {
+			let settings_ref = settings.borrow();
+			ES::ElectoralSettings::decode(&mut &settings_ref[..]).unwrap()
+		})
+	}
+
+	pub fn set_electoral_settings_for_election<ES: ElectoralSystem>(
+		identifier: ElectionIdentifierOf<ES>,
+		settings: <ES as ElectoralSystem>::ElectoralSettings,
+	) {
+		ELECTION_SETTINGS.with(|old_settings| {
+			let mut settings_ref = old_settings.borrow_mut();
+			settings_ref.insert(identifier.encode(), settings.encode());
+		});
+	}
+
+	pub fn electoral_settings_for_election<ES: ElectoralSystem>(
+		identifier: ElectionIdentifierOf<ES>,
+	) -> <ES as ElectoralSystem>::ElectoralSettings {
+		ELECTION_SETTINGS.with(|settings| {
+			let settings_ref = settings.borrow();
+			settings_ref
+				.get(&identifier.encode())
+				.map(|v| ES::ElectoralSettings::decode(&mut &v[..]).unwrap())
+				.unwrap()
+		})
+	}
+
+	pub fn delete_election<ES: ElectoralSystem>(identifier: ElectionIdentifierOf<ES>) {
+		ELECTION_PROPERTIES.with(|properties| {
+			let mut properties_ref = properties.borrow_mut();
+			properties_ref.remove(&identifier.encode());
+		});
+		ELECTION_STATE.with(|state| {
+			let mut state_ref = state.borrow_mut();
+			state_ref.remove(&identifier.encode());
+		});
+	}
+
+	pub fn set_state<ES: ElectoralSystem>(
+		identifier: ElectionIdentifierOf<ES>,
+		state: ES::ElectionState,
+	) {
+		println!("Setting election state for identifier: {:?}", identifier);
+		ELECTION_STATE.with(|old_state| {
+			let mut state_ref = old_state.borrow_mut();
+			state_ref.insert(identifier.encode(), state.encode());
+		});
+	}
+
+	pub fn election_state<ES: ElectoralSystem>(
+		identifier: ElectionIdentifierOf<ES>,
+	) -> ES::ElectionState {
+		ELECTION_STATE.with(|old_state| {
+			let state_ref = old_state.borrow();
+			state_ref
+				.get(&identifier.encode())
+				.map(|v| ES::ElectionState::decode(&mut &v[..]).unwrap())
+				.unwrap()
+		})
+	}
+
+	pub fn set_election_properties<ES: ElectoralSystem>(
+		identifier: ElectionIdentifierOf<ES>,
+		properties: ES::ElectionProperties,
+	) {
+		ELECTION_PROPERTIES.with(|old_properties| {
+			let mut properties_ref = old_properties.borrow_mut();
+			properties_ref.insert(identifier.encode(), properties.encode());
+		});
+	}
+
+	pub fn election_properties<ES: ElectoralSystem>(
+		identifier: ElectionIdentifierOf<ES>,
+	) -> ES::ElectionProperties {
+		ELECTION_PROPERTIES.with(|old_properties| {
+			let properties_ref = old_properties.borrow();
+			properties_ref
+				.get(&identifier.encode())
+				.map(|v| ES::ElectionProperties::decode(&mut &v[..]).unwrap())
+				.unwrap()
+		})
+	}
+
+	pub fn set_unsynchronised_state<ES: ElectoralSystem>(
+		unsynchronised_state: ES::ElectoralUnsynchronisedState,
+	) {
+		ELECTORAL_UNSYNCHRONISED_STATE.with(|old_state| {
+			let mut state_ref = old_state.borrow_mut();
+			state_ref.clear();
+			state_ref.extend_from_slice(&unsynchronised_state.encode());
+		});
+	}
+
+	pub fn set_unsynchronised_settings<ES: ElectoralSystem>(
+		unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
+	) {
+		ELECTORAL_UNSYNCHRONISED_SETTINGS.with(|old_settings| {
+			let mut settings_ref = old_settings.borrow_mut();
+			settings_ref.clear();
+			settings_ref.extend_from_slice(&unsynchronised_settings.encode());
+		});
+	}
+
+	pub fn unsynchronised_settings<ES: ElectoralSystem>() -> ES::ElectoralUnsynchronisedSettings {
+		ELECTORAL_UNSYNCHRONISED_SETTINGS.with(|old_settings| {
+			let settings_ref = old_settings.borrow();
+			ES::ElectoralUnsynchronisedSettings::decode(&mut &settings_ref[..]).unwrap()
+		})
+	}
+
+	pub fn unsynchronised_state<ES: ElectoralSystem>() -> ES::ElectoralUnsynchronisedState {
+		ELECTORAL_UNSYNCHRONISED_STATE.with(|old_state| {
+			let state_ref = old_state.borrow();
+			ES::ElectoralUnsynchronisedState::decode(&mut &state_ref[..]).unwrap()
+		})
+	}
+
+	pub fn unsynchronised_state_map<ES: ElectoralSystem>(
+		key: &ES::ElectoralUnsynchronisedStateMapKey,
+	) -> Option<ES::ElectoralUnsynchronisedStateMapValue> {
+		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
+			let state_map_ref = old_state_map.borrow();
+			state_map_ref
+				.get(&key.encode())
+				.expect("Key should exist")
+				.clone()
+				.map(|v| ES::ElectoralUnsynchronisedStateMapValue::decode(&mut &v[..]).unwrap())
+		})
+	}
+
+	pub fn raw_unsynchronised_state_map() -> BTreeMap<Vec<u8>, Option<Vec<u8>>> {
+		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
+			let state_map_ref = old_state_map.borrow();
+			state_map_ref.clone()
+		})
+	}
+
+	pub fn set_unsynchronised_state_map<ES: ElectoralSystem>(
+		key: ES::ElectoralUnsynchronisedStateMapKey,
+		value: Option<ES::ElectoralUnsynchronisedStateMapValue>,
+	) {
+		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
+			let mut state_map_ref = old_state_map.borrow_mut();
+			state_map_ref.insert(key.encode(), value.map(|v| v.encode()));
+		});
+	}
+
+	pub fn election_identifiers<ES: ElectoralSystem>() -> Vec<ElectionIdentifierOf<ES>> {
+		ELECTION_PROPERTIES.with(|properties| {
+			let properties_ref = properties.borrow();
+			properties_ref
+				.keys()
+				.map(|k| ElectionIdentifierOf::<ES>::decode(&mut &k[..]).unwrap())
+				.collect()
+		})
+	}
+
+	pub fn set_consensus_status<ES: ElectoralSystem>(
+		identifier: ElectionIdentifierOf<ES>,
+		status: ConsensusStatus<ES::Consensus>,
+	) {
+		println!("Setting consensus status to {:?} for {:?}", status, identifier);
+		CONSENSUS_STATUS.with(|old_consensus| {
+			let mut consensus_ref = old_consensus.borrow_mut();
+			consensus_ref.insert(identifier.encode(), status.encode());
+		});
+	}
+
+	pub fn consensus_status<ES: ElectoralSystem>(
+		identifier: ElectionIdentifierOf<ES>,
+	) -> ConsensusStatus<ES::Consensus> {
+		CONSENSUS_STATUS
+			.with(|old_consensus| {
+				let consensus_ref = old_consensus.borrow();
+				consensus_ref
+					.get(&identifier.encode())
+					.map(|v| ConsensusStatus::<ES::Consensus>::decode(&mut &v[..]).unwrap())
+			})
+			.unwrap_or(ConsensusStatus::None)
+	}
+
+	pub fn new_election<ES: ElectoralSystem>(
+		extra: <ES as ElectoralSystem>::ElectionIdentifierExtra,
+		properties: <ES as ElectoralSystem>::ElectionProperties,
+		state: <ES as ElectoralSystem>::ElectionState,
+	) -> ElectionIdentifierOf<ES> {
+		let next_umi = Self::next_umi();
+		let election_identifier = ElectionIdentifier::new(next_umi, extra);
+		Self::increment_next_umi();
+
+		Self::set_election_properties::<ES>(election_identifier, properties);
+		Self::set_state::<ES>(election_identifier, state);
+		// These are normally stored once and synchronised by election identifier. In the tests we
+		// simplify this by just storing the electoral settings (that would be fetched by
+		// resolving the synchronisation) alongside the election.
+		Self::set_electoral_settings_for_election::<ES>(
+			election_identifier,
+			Self::electoral_settings::<ES>(),
+		);
+
+		election_identifier
 	}
 }

@@ -1300,21 +1300,24 @@ pub mod pallet {
 			dca_params: Option<DcaParameters>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Self::process_vault_swap_request(
-				input_asset,
-				deposit_amount,
-				output_asset,
-				destination_address,
-				deposit_metadata,
-				tx_hash,
-				*deposit_details,
-				broker_fees,
-				refund_params.map(|boxed| *boxed),
-				dca_params,
-				boost_fee,
-			);
+			if T::EnsureWitnessed::ensure_origin(origin.clone()).is_ok() {
+				Self::process_vault_swap_request(
+					input_asset,
+					deposit_amount,
+					output_asset,
+					destination_address,
+					deposit_metadata,
+					tx_hash,
+					*deposit_details,
+					broker_fees,
+					refund_params.map(|boxed| *boxed),
+					dca_params,
+					boost_fee,
+				);
+			} else {
+				T::EnsurePrewitnessed::ensure_origin(origin)?;
+				// Pre-witnessed vault swaps are not supported yet.
+			}
 
 			Ok(())
 		}

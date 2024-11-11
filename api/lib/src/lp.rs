@@ -1,5 +1,3 @@
-use crate::AddressString;
-
 use super::SimpleSubmissionApi;
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -7,7 +5,10 @@ pub use cf_amm::{
 	common::{Amount, PoolPairsMap, Side, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{address::EncodedAddress, ForeignChain};
+use cf_chains::{
+	address::{AddressString, EncodedAddress},
+	ForeignChain,
+};
 use cf_primitives::{AccountId, Asset, AssetAmount, BasisPoints, BlockNumber, EgressId};
 use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock, WaitFor, WaitForResult},
@@ -197,7 +198,9 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		let (tx_hash, ..) = self
 			.submit_signed_extrinsic(RuntimeCall::from(
 				pallet_cf_lp::Call::register_liquidity_refund_address {
-					address: address.try_parse_to_encoded_address(chain)?,
+					address: address
+						.try_parse_to_encoded_address(chain)
+						.map_err(anyhow::Error::msg)?,
 				},
 			))
 			.await
@@ -263,7 +266,8 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 					amount,
 					asset,
 					destination_address: destination_address
-						.try_parse_to_encoded_address(asset.into())?,
+						.try_parse_to_encoded_address(asset.into())
+						.map_err(anyhow::Error::msg)?,
 				},
 				wait_for,
 			)
