@@ -38,6 +38,13 @@ mod tests {
 	const MAX_CF_PARAM_LENGTH: u32 =
 		MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_PARAMETERS_LENGTH;
 
+	const REFERENCE_EXPECTED_ENCODED: &[u8] = &[
+		0, 1, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+		3, 3, 4, 0, 0,
+	];
+
 	#[test]
 	fn test_cf_parameters_max_length() {
 		assert!(
@@ -50,7 +57,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_encoding() {
+	fn test_versioned_cf_parameters() {
 		let vault_swap_parameters = VaultSwapParameters {
 			refund_params: ChannelRefundParameters {
 				retry_duration: 1,
@@ -63,19 +70,25 @@ mod tests {
 			affiliate_fees: sp_core::bounded_vec![],
 		};
 
-		let cf_parameters = CfParameters {
+		let cf_parameters = CfParameters::<()> {
+			ccm_additional_data: (),
+			vault_swap_parameters: vault_swap_parameters.clone(),
+		};
+
+		let mut encoded = VersionedCfParameters::V0(cf_parameters).encode();
+
+		assert_eq!(encoded, REFERENCE_EXPECTED_ENCODED);
+
+		let ccm_cf_parameters = CfParameters {
 			ccm_additional_data: CcmAdditionalData::default(),
 			vault_swap_parameters,
 		};
 
-		let encoded = VersionedCfParameters::V0(cf_parameters).encode();
+		encoded = VersionedCcmCfParameters::V0(ccm_cf_parameters).encode();
 
-		let expected_encoded: Vec<u8> = vec![
-			0, 0, 1, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-			0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-			3, 3, 3, 3, 3, 3, 4, 0, 0,
-		];
+		// Extra byte for the empty ccm metadata
+		let mut expected_encoded = vec![0];
+		expected_encoded.extend_from_slice(REFERENCE_EXPECTED_ENCODED);
 
 		assert_eq!(encoded, expected_encoded);
 	}
