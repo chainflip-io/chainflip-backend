@@ -34,7 +34,7 @@ pub struct VaultSwapParameters {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use cf_chains::MAX_CCM_ADDITIONAL_DATA_LENGTH;
+	use cf_chains::{ChannelRefundParameters, ForeignChainAddress, MAX_CCM_ADDITIONAL_DATA_LENGTH};
 
 	const MAX_VAULT_SWAP_PARAMETERS_LENGTH: u32 = 1_000;
 	const MAX_CF_PARAM_LENGTH: u32 =
@@ -49,5 +49,36 @@ mod tests {
 		assert!(
 			MAX_VAULT_SWAP_PARAMETERS_LENGTH as usize >= VaultSwapParameters::max_encoded_len()
 		);
+	}
+
+	#[test]
+	fn test_encoding() {
+		let vault_swap_parameters = VaultSwapParameters {
+			refund_params: ChannelRefundParameters {
+				retry_duration: 1,
+				refund_address: ForeignChainAddress::Eth(sp_core::H160::from([2; 20])),
+				min_price: Default::default(),
+			},
+			dca_params: None,
+			boost_fee: None,
+			broker_fees: Beneficiary { account: AccountId::new([3; 32]), bps: 4 },
+			affiliate_fees: Default::default(),
+		};
+
+		let cf_parameters = CfParameters {
+			ccm_additional_data: CcmAdditionalData::default(),
+			vault_swap_parameters,
+		};
+
+		let encoded = VersionedCfParameters::V0(cf_parameters).encode();
+
+		let expected_encoded: Vec<u8> = vec![
+			0, 0, 1, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+			3, 3, 3, 3, 3, 3, 4, 0, 0,
+		];
+
+		assert_eq!(encoded, expected_encoded);
 	}
 }
