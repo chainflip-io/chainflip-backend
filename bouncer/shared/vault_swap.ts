@@ -32,16 +32,16 @@ export async function executeVaultSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  brokerFees: {
-    account: string;
-    commissionBps: number;
-  },
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
   boostFeeBps?: number,
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
   wallet?: HDNodeWallet,
+  brokerFees?: {
+    account: string;
+    commissionBps: number;
+  },
 ): ReturnType<typeof executeSwap> {
   const srcChain = chainFromAsset(sourceAsset);
   const destChain = chainFromAsset(destAsset);
@@ -55,6 +55,11 @@ export async function executeVaultSwap(
   };
 
   const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
+
+  const brokerComission = brokerFees ?? {
+    account: new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
+    commissionBps: 1,
+  };
 
   if (erc20Assets.includes(sourceAsset)) {
     // Doing effectively infinite approvals to make sure it doesn't fail.
@@ -92,7 +97,7 @@ export async function executeVaultSwap(
         message: messageMetadata.message,
         ccmAdditionalData: messageMetadata.ccmAdditionalData,
       },
-      brokerFees,
+      brokerFees: brokerComission,
       // The SDK will encode these parameters and the ccmAdditionalData
       // into the `cfParameters` field for the vault swap.
       boostFeeBps,
@@ -142,12 +147,6 @@ export async function performVaultSwap(
       );
     }
 
-    const keyring = new Keyring({ type: 'sr25519' });
-    const broker = keyring.createFromUri('//BROKER_1');
-    const brokerFees = {
-      account: broker.address,
-      commissionBps: 1,
-    };
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
@@ -155,7 +154,6 @@ export async function performVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
-      brokerFees,
       messageMetadata,
       amountToSwap,
       boostFeeBps,
