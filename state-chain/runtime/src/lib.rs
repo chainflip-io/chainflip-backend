@@ -62,7 +62,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
-	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
+	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoLimit, SwapLimits,
+	SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -2132,7 +2133,6 @@ impl_runtime_apis! {
 			// Encode swap
 			match ForeignChain::from(source_asset) {
 				ForeignChain::Bitcoin => {
-					use cf_traits::{KeyProvider, EpochKey};
 					use cf_chains::btc::deposit_address::DepositAddress;
 
 					let private_channel_id = pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
@@ -2163,7 +2163,7 @@ impl_runtime_apis! {
 					};
 
 					let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
-						.expect("We should always have a for the current epoch.");
+						.expect("We should always have a key for the current epoch.");
 					let deposit_address = DepositAddress::new(
 						key.current,
 						private_channel_id.try_into().map_err(
@@ -2261,16 +2261,15 @@ impl_runtime_apis! {
 			let btc_ceremonies = pallet_cf_threshold_signature::PendingCeremonies::<Runtime,BitcoinInstance>::iter_values().map(|ceremony|{
 				ceremony.request_context.request_id
 			}).collect::<Vec<_>>();
-			let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
-				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
-				.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
+			let EpochKey { key, .. } = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::active_epoch_key()
+				.expect("We should always have a key for the current epoch");
 			for ceremony in btc_ceremonies {
 				if let RuntimeCall::BitcoinBroadcaster(pallet_cf_broadcast::pallet::Call::on_signature_ready{ api_call, ..}) = pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::get(ceremony).unwrap() {
 					if let BitcoinApi::BatchTransfer(batch_transfer) = *api_call {
 						for output in batch_transfer.bitcoin_transaction.outputs {
 							if [
-								ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
-								ScriptPubkey::Taproot(btc_key.current),
+								ScriptPubkey::Taproot(key.previous.unwrap_or_default()),
+								ScriptPubkey::Taproot(key.current),
 							]
 							.contains(&output.script_pubkey)
 							{
