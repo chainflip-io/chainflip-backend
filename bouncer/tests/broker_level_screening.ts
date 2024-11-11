@@ -2,7 +2,13 @@ import { randomBytes } from 'crypto';
 import { InternalAsset } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
 import { sendBtc } from '../shared/send_btc';
-import { newAddress, sleep, handleSubstrateError, brokerMutex, hexStringToBytesArray } from '../shared/utils';
+import {
+  newAddress,
+  sleep,
+  handleSubstrateError,
+  brokerMutex,
+  hexStringToBytesArray,
+} from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
 import { requestNewSwap } from '../shared/perform_swap';
@@ -159,7 +165,7 @@ async function brokerLevelScreeningTestScenario(
   doBoost: boolean,
   refundAddress: string,
   waitBeforeReport: number,
-  reportFunction: (txId: string) => Promise<void>
+  reportFunction: (txId: string) => Promise<void>,
 ): Promise<string> {
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const refundParameters: FillOrKillParamsX128 = {
@@ -202,7 +208,9 @@ async function main() {
   testBrokerLevelScreening.log('Testing broker level screening with no boost...');
   let btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, 0, (txId) => setTxRiskScore(txId, 9.0));
+  await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, 0, (txId) =>
+    setTxRiskScore(txId, 9.0),
+  );
 
   await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
@@ -217,7 +225,9 @@ async function main() {
   );
   btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, 0, (txId) => setTxRiskScore(txId, 9.0));
+  await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, 0, (txId) =>
+    setTxRiskScore(txId, 9.0),
+  );
   await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
 
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
@@ -237,7 +247,9 @@ async function main() {
     MILLI_SECS_PER_BLOCK * 2,
     // we submit the extrinsic manually in order to ensure that even though it definitely arrives,
     // the transaction is refunded because the extrinsic is submitted too late.
-    async (txId) => {await submitTxAsTainted(txId);}
+    async (txId) => {
+      await submitTxAsTainted(txId);
+    },
   );
 
   await observeEvent('bitcoinIngressEgress:DepositFinalised', {
