@@ -91,9 +91,13 @@ where
 		let (election_identifier_extra, election_properties, election_state) =
 			self.initial_election_state.unwrap_or_default();
 
-		// These are synchronised with respect to an election, so for simplicity in the tests
-		// we just assign them to an election.
+		// The ElectoralSettings are synchronised with an election, by election identifier in the
+		// actual implementation. Here we simplify by storing the settings in the electoral
+		// system, and upon the creation of new election, we store the ElectoralSettings that were
+		// in storage with the election directly. This duplicates the settings, but is fine for
+		// testing.
 		MockStorageAccess::set_electoral_settings::<ES>(setup.electoral_settings.clone());
+
 		MockStorageAccess::set_unsynchronised_state::<ES>(setup.unsynchronised_state.clone());
 		MockStorageAccess::set_unsynchronised_settings::<ES>(setup.unsynchronised_settings.clone());
 
