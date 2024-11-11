@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use crate::{
 	electoral_system::{
-		ConsensusStatus, ConsensusVotes, ElectionIdentifierOf, ElectionReadAccess,
-		ElectoralReadAccess, ElectoralSystem, ElectoralWriteAccess,
+		ConsensusStatus, ConsensusVotes, ElectionIdentifierOf, ElectoralReadAccess,
+		ElectoralSystem, ElectoralWriteAccess,
 	},
 	UniqueMonotonicIdentifier,
 };
