@@ -111,11 +111,7 @@ async function ensureDepositMonitorHealth() {
   }
 
   const body = responseBody;
-  const health =
-    body.transaction_processor &&
-    body.external_state_processor &&
-    body.analysis_processor &&
-    body.judgement_processor;
+  const health = body.all_processors;
   testBrokerLevelScreening.log('Deposit monitor health: ' + health);
   if (!health) {
     testBrokerLevelScreening.log('Deposit monitor health response is:  ' + JSON.stringify(body));

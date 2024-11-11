@@ -186,7 +186,8 @@ build-localnet() {
     echo "🩺 Checking deposit-monitor's health ..."
     REPLY=$(check_endpoint_health 'http://localhost:6060/health')
     starting=$(echo $REPLY | jq .starting)
-    if [[ $starting == "false" ]]; then
+    all_healthy=$(echo $REPLY | jq .all_processors)
+    if test "$starting" == "false" && test "$all_healthy" == "true" ; then
       echo "💚 deposit-monitor is running!"
       break
     fi
