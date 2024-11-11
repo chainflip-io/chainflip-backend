@@ -3,10 +3,13 @@ mod state_chain_gateway;
 
 use std::{collections::HashMap, sync::Arc};
 
-use cf_chains::{address::EncodedAddress, evm::DepositDetails, CcmDepositMetadata, Ethereum};
+use cf_chains::{
+	address::EncodedAddress,
+	evm::{DepositDetails, H256},
+	CcmDepositMetadata, Ethereum,
+};
 use cf_primitives::{
 	chains::assets::eth::Asset as EthAsset, Asset, AssetAmount, Beneficiary, EpochIndex,
-	TransactionHash,
 };
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
@@ -236,7 +239,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
-		tx_hash: TransactionHash,
+		tx_hash: H256,
 		vault_swap_parameters: VaultSwapParameters,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::EthereumIngressEgress(

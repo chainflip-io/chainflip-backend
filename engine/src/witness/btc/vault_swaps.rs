@@ -12,6 +12,7 @@ use cf_primitives::{AccountId, Beneficiary, DcaParameters};
 use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
+use sp_core::H256;
 use state_chain_runtime::BitcoinInstance;
 
 use crate::btc::rpc::VerboseTransaction;
@@ -134,7 +135,7 @@ pub fn try_extract_vault_swap_call(
 		output_asset: data.output_asset,
 		deposit_amount,
 		destination_address: data.output_address,
-		tx_hash: tx_id,
+		tx_hash: H256::from(tx_id),
 		deposit_details: Box::new(Utxo {
 			// we require the deposit to be the first UTXO
 			id: UtxoId { tx_id: tx_id.into(), vout: 0 },

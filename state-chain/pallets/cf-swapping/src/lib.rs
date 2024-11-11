@@ -6,7 +6,7 @@ use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
 	CcmChannelMetadata, CcmDepositMetadata, CcmSwapAmounts, ChannelRefundParameters,
-	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
+	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters, TransactionInIdForAnyChain,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
@@ -543,7 +543,7 @@ pub mod pallet {
 			input_asset: Asset,
 			input_amount: AssetAmount, // includes broker fee
 			output_asset: Asset,
-			origin: SwapOrigin,
+			origin: SwapOrigin<TransactionInIdForAnyChain>,
 			request_type: SwapRequestTypeEncoded,
 			refund_parameters: Option<ChannelRefundParametersEncoded>,
 			dca_parameters: Option<DcaParameters>,
@@ -2072,7 +2072,7 @@ pub mod pallet {
 			broker_fees: Beneficiaries<Self::AccountId>,
 			refund_params: Option<ChannelRefundParameters>,
 			dca_params: Option<DcaParameters>,
-			origin: SwapOrigin,
+			origin: SwapOrigin<TransactionInIdForAnyChain>,
 		) -> SwapRequestId {
 			let request_id = SwapRequestIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);

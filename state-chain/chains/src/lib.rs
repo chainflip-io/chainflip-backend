@@ -3,6 +3,10 @@
 #![feature(extract_if)]
 #![feature(split_array)]
 
+use crate::sol::SolHash;
+use cf_primitives::TxId;
+use sp_core::H256;
+
 use core::{fmt::Display, iter::Step};
 use sp_std::marker::PhantomData;
 
@@ -15,9 +19,7 @@ use address::{
 	AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
-use cf_primitives::{
-	Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TransactionHash,
-};
+use cf_primitives::{Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -594,15 +596,59 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
+pub trait ConvertTransactionInIdToAnyChain<TransactionInId> {
+	fn convert(origin: SwapOrigin<TransactionInId>) -> SwapOrigin<TransactionInIdForAnyChain>;
+}
+
+pub struct ConvertTransactionInIdToAnyChainWrapper;
+
+#[derive(Debug, Clone, TypeInfo, Encode, Decode, PartialEq, Eq)]
+pub enum TransactionInIdForAnyChain {
+	H256(H256),
+	TxId(TxId),
+	SolHash(SolHash),
+	Mock([u8; 4]),
+	None,
+}
+
+#[macro_export]
+macro_rules! impl_convert_transaction_in_id_to_any_chain {
+	($type:ty, $variant:ident) => {
+		impl ConvertTransactionInIdToAnyChain<$type> for ConvertTransactionInIdToAnyChainWrapper {
+			fn convert(origin: SwapOrigin<$type>) -> SwapOrigin<TransactionInIdForAnyChain> {
+				match origin {
+					SwapOrigin::Vault { tx_hash } =>
+						SwapOrigin::Vault { tx_hash: TransactionInIdForAnyChain::$variant(tx_hash) },
+					SwapOrigin::Internal => SwapOrigin::Internal,
+					SwapOrigin::DepositChannel {
+						deposit_address,
+						channel_id,
+						deposit_block_height,
+					} => SwapOrigin::DepositChannel {
+						deposit_address,
+						channel_id,
+						deposit_block_height,
+					},
+				}
+			}
+		}
+	};
+}
+
+impl_convert_transaction_in_id_to_any_chain!(H256, H256);
+impl_convert_transaction_in_id_to_any_chain!(TxId, TxId);
+impl_convert_transaction_in_id_to_any_chain!(SolHash, SolHash);
+impl_convert_transaction_in_id_to_any_chain!([u8; 4], Mock);
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SwapOrigin {
+pub enum SwapOrigin<TransactionInId> {
 	DepositChannel {
 		deposit_address: address::EncodedAddress,
 		channel_id: ChannelId,
 		deposit_block_height: u64,
 	},
 	Vault {
-		tx_hash: TransactionHash,
+		tx_hash: TransactionInId,
 	},
 	Internal,
 }
@@ -848,5 +894,20 @@ pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 	fn deposit_id(&self) -> Option<C::TransactionInId> {
 		None
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_swap_origin_conversion() {
+		let origin = SwapOrigin::<ethabi::ethereum_types::H256>::Vault {
+			tx_hash: ethabi::ethereum_types::H256::from([0u8; 32]),
+		};
+		let all_chain_origin: SwapOrigin<TransactionInIdForAnyChain> = origin.clone().convert();
+		println!("Chain-Specific: {:?}", origin);
+		println!("All-Chain: {:?}", all_chain_origin);
 	}
 }

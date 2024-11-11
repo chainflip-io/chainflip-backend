@@ -229,7 +229,7 @@ pub trait IngressCallBuilder {
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
-		tx_hash: cf_primitives::TransactionHash,
+		tx_hash: H256,
 		vault_swap_parameters: VaultSwapParameters,
 	) -> state_chain_runtime::RuntimeCall;
 

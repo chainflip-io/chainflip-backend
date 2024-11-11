@@ -21,6 +21,8 @@ mod boost_pool;
 use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
 
+use cf_chains::{ConvertTransactionInIdToAnyChain, TransactionInIdForAnyChain};
+
 use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
@@ -452,6 +454,10 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
 
+		type ConvertTransactionInIdToAnyChain: ConvertTransactionInIdToAnyChain<
+			TransactionInIdFor<Self, I>,
+		>;
+
 		type SwapLimitsProvider: SwapLimitsProvider<AccountId = Self::AccountId>;
 
 		/// For checking if the CCM message passed in is valid.
@@ -731,7 +737,7 @@ pub mod pallet {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadataEncoded,
-			origin: SwapOrigin,
+			origin: SwapOrigin<TransactionInIdFor<T, I>>,
 		},
 		TaintedTransactionReportReceived {
 			account_id: T::AccountId,
@@ -1844,7 +1850,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount_after_fees: TargetChainAmount<T, I>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) -> Result<DepositAction<T::AccountId>, DispatchError> {
-		let swap_origin = SwapOrigin::DepositChannel {
+		let swap_origin = SwapOrigin::<TransactionInIdFor<T, I>>::DepositChannel {
 			deposit_address: T::AddressConverter::to_encoded_address(
 				<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
 					deposit_address.clone(),
@@ -1878,7 +1884,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broker_fees,
 					refund_params,
 					dca_params,
-					swap_origin,
+					T::ConvertTransactionInIdToAnyChain::convert(swap_origin),
 				);
 				DepositAction::Swap { swap_request_id }
 			},
@@ -1912,7 +1918,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							broker_fees,
 							refund_params,
 							dca_params,
-							swap_origin,
+							T::ConvertTransactionInIdToAnyChain::convert(swap_origin),
 						);
 						DepositAction::CcmTransfer { swap_request_id }
 					},
@@ -2162,7 +2168,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			};
 
 		let request_type = if let Some(deposit_metadata) = deposit_metadata {
-			let swap_origin = SwapOrigin::Vault { tx_hash };
+			let swap_origin = SwapOrigin::Vault { tx_hash: tx_hash.clone() };
 
 			let ccm_failed = |reason| {
 				log::warn!("Failed to process CCM. Tx hash: {:?}, Reason: {:?}", tx_hash, reason);
@@ -2260,6 +2266,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return;
 		}
 
+		let swap_origin = SwapOrigin::Vault { tx_hash };
+
 		T::SwapRequestHandler::init_swap_request(
 			source_asset.into(),
 			deposit_amount.into(),
@@ -2268,7 +2276,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			broker_fees,
 			Some(refund_params),
 			dca_params,
-			SwapOrigin::Vault { tx_hash },
+			T::ConvertTransactionInIdToAnyChain::convert(swap_origin),
 		);
 	}
 
