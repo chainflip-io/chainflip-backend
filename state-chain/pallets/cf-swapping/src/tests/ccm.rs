@@ -1,13 +1,14 @@
 const GAS_ASSET: Asset = Asset::Eth;
 
 use super::*;
+use sp_core::H256;
 
 #[track_caller]
 fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: AssetAmount) {
 	let ccm_deposit_metadata = generate_ccm_deposit();
 	let output_address = (*EVM_OUTPUT_ADDRESS).clone();
 	let encoded_output_address = MockAddressConverter::to_encoded_address(output_address.clone());
-	let origin = SwapOrigin::Vault { tx_hash: Default::default() };
+	let origin = SwapOrigin::Vault { tx_hash: TransactionInIdForAnyChain::H256(H256::default()) };
 
 	let ccm_swap_metadata = ccm_deposit_metadata
 		.into_swap_metadata(input_amount, input_asset, output_asset)
@@ -112,7 +113,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 				Default::default(),
 				None,
 				None,
-				SwapOrigin::Vault { tx_hash: Default::default() },
+				SwapOrigin::Vault { tx_hash: TransactionInIdForAnyChain::H256(H256::default()) },
 			);
 
 			// Principal swap is scheduled first

@@ -14,7 +14,7 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	assets::eth::Asset as EthAsset,
 	btc::{BitcoinNetwork, ScriptPubkey},
-	evm::{DepositDetails, EvmFetchId},
+	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
 	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel,
 	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
@@ -1796,8 +1796,6 @@ fn can_request_swap_via_extrinsic() {
 	const OUTPUT_ASSET: Asset = Asset::Flip;
 	const INPUT_AMOUNT: AssetAmount = 1_000u128;
 
-	const TX_HASH: [u8; 32] = [0xa; 32];
-
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
@@ -1808,7 +1806,7 @@ fn can_request_swap_via_extrinsic() {
 			INPUT_AMOUNT,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
-			TX_HASH,
+			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
@@ -1825,7 +1823,9 @@ fn can_request_swap_via_extrinsic() {
 				input_amount: INPUT_AMOUNT,
 				swap_type: SwapRequestType::Regular { output_address },
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
-				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+				origin: SwapOrigin::Vault {
+					tx_hash: TransactionInIdForAnyChain::H256(H256::default()),
+				},
 			},]
 		);
 	});
@@ -1954,7 +1954,6 @@ fn can_request_ccm_swap_via_extrinsic() {
 	const OUTPUT_ASSET: Asset = Asset::Usdc;
 
 	const INPUT_AMOUNT: AssetAmount = 10_000;
-	const TX_HASH: [u8; 32] = [0xa; 32];
 
 	let ccm_deposit_metadata = CcmDepositMetadata {
 		source_chain: ForeignChain::Ethereum,
@@ -1976,7 +1975,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 			10_000,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			Some(ccm_deposit_metadata.clone()),
-			TX_HASH,
+			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
@@ -1998,7 +1997,9 @@ fn can_request_ccm_swap_via_extrinsic() {
 						.unwrap()
 				},
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
-				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+				origin: SwapOrigin::Vault {
+					tx_hash: TransactionInIdForAnyChain::H256(H256::default()),
+				},
 			},]
 		);
 	});

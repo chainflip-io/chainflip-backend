@@ -292,7 +292,7 @@ mod tests {
 				output_asset: MOCK_SWAP_PARAMS.output_asset,
 				deposit_amount: DEPOSIT_AMOUNT,
 				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
-				tx_hash: tx.hash.to_byte_array(),
+				tx_hash: tx.txid.to_byte_array().into(),
 				deposit_details: Box::new(Utxo {
 					id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
 					amount: DEPOSIT_AMOUNT,

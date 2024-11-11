@@ -896,18 +896,3 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 		None
 	}
 }
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_swap_origin_conversion() {
-		let origin = SwapOrigin::<ethabi::ethereum_types::H256>::Vault {
-			tx_hash: ethabi::ethereum_types::H256::from([0u8; 32]),
-		};
-		let all_chain_origin: SwapOrigin<TransactionInIdForAnyChain> = origin.clone().convert();
-		println!("Chain-Specific: {:?}", origin);
-		println!("All-Chain: {:?}", all_chain_origin);
-	}
-}

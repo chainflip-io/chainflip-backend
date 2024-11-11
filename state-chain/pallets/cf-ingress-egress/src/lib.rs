@@ -21,7 +21,7 @@ mod boost_pool;
 use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
 
-use cf_chains::{ConvertTransactionInIdToAnyChain, TransactionInIdForAnyChain};
+use cf_chains::ConvertTransactionInIdToAnyChain;
 
 use cf_chains::{
 	address::{
