@@ -1,5 +1,5 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import { VaultSwapParams } from '../shared/vault_swap';
+import { VaultSwapParams } from '../shared/evm_vault_swap';
 import { ExecutableTest } from '../shared/executable_test';
 import { SwapParams } from '../shared/perform_swap';
 import { newCcmMetadata, testSwap, testVaultSwap } from '../shared/swapping';

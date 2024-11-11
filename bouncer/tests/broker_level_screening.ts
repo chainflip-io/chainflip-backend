@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 import { execSync } from 'child_process';
 import { InternalAsset } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
-import { sendBtcAndReturnTxId } from '../shared/send_btc';
+import { sendBtc } from '../shared/send_btc';
 import {
   hexStringToBytesArray,
   newAddress,
@@ -122,7 +122,7 @@ async function brokerLevelScreeningTestScenario(
     doBoost ? 100 : 0,
     refundParameters,
   );
-  const txId = await sendBtcAndReturnTxId(swapParams.depositAddress, amount);
+  const txId = await sendBtc(swapParams.depositAddress, amount);
   if (stopBlockProductionFor > 0) {
     pauseBtcBlockProduction(true);
   }

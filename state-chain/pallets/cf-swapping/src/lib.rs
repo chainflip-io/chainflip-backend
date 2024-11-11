@@ -699,9 +699,17 @@ pub mod pallet {
 		InvalidDcaParameters,
 		/// The provided Refund address cannot be decoded into ForeignChainAddress.
 		InvalidRefundAddress,
+		/// The given boost fee is too large to fit in a u8.
+		BoostFeeTooHigh,
+		/// Broker/Affiliate fees are not yet supported for vault swaps
+		VaultSwapBrokerFeesNotSupported,
+		/// The broker fee is too large to fit in a u8.
+		BrokerFeeTooHigh,
+		/// Unsupported source asset for vault swap
+		UnsupportedSourceAsset,
 		/// Broker cannot deregister or open a new private channel because one already exists.
 		PrivateChannelExistsForBroker,
-		/// Cannot close a private channel for a broker because it does not exist.
+		/// The Broker does not have an open private channel.
 		NoPrivateChannelExistsForBroker,
 	}
 
@@ -2355,7 +2363,7 @@ impl<T: Config> SwapLimitsProvider for Pallet<T> {
 		}
 	}
 
-	fn validate_refund_params(retry_duration: u32) -> Result<(), DispatchError> {
+	fn validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchError> {
 		let max_swap_retry_duration_blocks = MaxSwapRetryDurationBlocks::<T>::get();
 		if retry_duration > max_swap_retry_duration_blocks {
 			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));

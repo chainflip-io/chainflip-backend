@@ -5,7 +5,7 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	address::{ForeignChainAddressHumanreadable, ToHumanreadableAddress},
+	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
@@ -13,8 +13,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, DcaParameters,
-	EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -55,7 +55,7 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		TaintedTransactionEvents, ValidatorInfo,
+		TaintedTransactionEvents, ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -963,9 +963,25 @@ pub trait CustomApi {
 	#[method(name = "validate_refund_params")]
 	fn cf_validate_refund_params(
 		&self,
-		retry_duration: u32,
+		retry_duration: BlockNumber,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
+
+	#[method(name = "get_vault_swap_details")]
+	fn cf_get_vault_swap_details(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		min_output_amount: AssetAmount,
+		retry_duration: BlockNumber,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
+		dca_parameters: Option<DcaParameters>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<VaultSwapDetails<AddressString>>;
 
 	#[method(name = "get_open_deposit_channels")]
 	fn cf_get_open_deposit_channels(
@@ -1091,6 +1107,8 @@ pub enum CfApiError {
 	RuntimeApiError(#[from] ApiError),
 	#[error(transparent)]
 	ErrorObject(#[from] ErrorObjectOwned),
+	#[error(transparent)]
+	OtherError(#[from] anyhow::Error),
 }
 pub type RpcResult<T> = Result<T, CfApiError>;
 
@@ -1130,6 +1148,7 @@ impl From<CfApiError> for ErrorObjectOwned {
 				other => internal_error(format!("Unexpected ApiError: {other}")),
 			},
 			CfApiError::ErrorObject(object) => object,
+			CfApiError::OtherError(error) => internal_error(error),
 		}
 	}
 }
@@ -1247,7 +1266,7 @@ where
 			liquidity: Liquidity,
 		) -> PoolPairsMap<AmmAmount>,
 		cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> (),
-		cf_validate_refund_params(retry_duration: u32) -> (),
+		cf_validate_refund_params(retry_duration: BlockNumber) -> (),
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<SemVer> {
@@ -1796,6 +1815,40 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>> {
 		self.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
+	}
+
+	fn cf_get_vault_swap_details(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: AddressString,
+		broker_commission: BasisPoints,
+		min_output_amount: AssetAmount,
+		retry_duration: BlockNumber,
+		boost_fee: Option<BasisPoints>,
+		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
+		dca_parameters: Option<DcaParameters>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<VaultSwapDetails<AddressString>> {
+		self.with_runtime_api(at, |api, hash| {
+			Ok::<_, CfApiError>(
+				api.cf_get_vault_swap_details(
+					hash,
+					broker,
+					source_asset,
+					destination_asset,
+					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
+					broker_commission,
+					min_output_amount,
+					retry_duration,
+					boost_fee.unwrap_or_default(),
+					affiliate_fees.unwrap_or_default(),
+					dca_parameters,
+				)??
+				.map_btc_address(Into::into),
+			)
+		})
 	}
 
 	fn cf_get_tainted_transaction_events(
