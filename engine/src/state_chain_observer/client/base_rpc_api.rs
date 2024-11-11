@@ -1,7 +1,5 @@
 use async_trait::async_trait;
 
-use cf_chains::address::AddressString;
-use cf_primitives::{Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters};
 use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::{
@@ -12,7 +10,7 @@ use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 
 use codec::Encode;
-use custom_rpc::{CustomApiClient, VaultSwapDetailsHumanreadable};
+use custom_rpc::CustomApiClient;
 use sc_rpc_api::{
 	author::AuthorApiClient,
 	chain::ChainApiClient,
@@ -183,21 +181,6 @@ pub trait BaseRpcApi {
 		chunk_interval: u32,
 		block_hash: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
-
-	async fn cf_get_vault_swap_details(
-		&self,
-		broker: state_chain_runtime::AccountId,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		min_output_amount: AssetAmount,
-		retry_duration: BlockNumber,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
-		dca_parameters: Option<DcaParameters>,
-		block_hash: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<VaultSwapDetailsHumanreadable>;
 }
 
 pub struct BaseRpcClient<RawRpcClient> {
@@ -352,37 +335,6 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 	) -> RpcResult<()> {
 		self.raw_rpc_client
 			.cf_validate_dca_params(number_of_chunks, chunk_interval, block_hash)
-			.await
-	}
-
-	async fn cf_get_vault_swap_details(
-		&self,
-		broker: state_chain_runtime::AccountId,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		min_output_amount: AssetAmount,
-		retry_duration: BlockNumber,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
-		dca_parameters: Option<DcaParameters>,
-		block_hash: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<VaultSwapDetailsHumanreadable> {
-		self.raw_rpc_client
-			.cf_get_vault_swap_details(
-				broker,
-				source_asset,
-				destination_asset,
-				destination_address,
-				broker_commission,
-				min_output_amount,
-				retry_duration,
-				boost_fee,
-				affiliate_fees,
-				dca_parameters,
-				block_hash,
-			)
 			.await
 	}
 }

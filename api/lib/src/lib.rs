@@ -155,16 +155,20 @@ impl StateChainApi {
 	pub fn query_api(&self) -> queries::QueryApi {
 		queries::QueryApi { state_chain_client: self.state_chain_client.clone() }
 	}
+
+	pub fn base_rpc_api(&self) -> Arc<impl BaseRpcApi + Send + Sync + 'static> {
+		self.state_chain_client.base_rpc_client.clone()
+	}
+
+	pub fn raw_client(&self) -> &jsonrpsee::ws_client::WsClient {
+		&self.state_chain_client.base_rpc_client.raw_rpc_client
+	}
 }
 
 #[async_trait]
 impl GovernanceApi for StateChainClient {}
 #[async_trait]
-impl BrokerApi for StateChainClient {
-	fn base_rpc_api(&self) -> Arc<dyn BaseRpcApi + Send + Sync + 'static> {
-		self.base_rpc_client.clone()
-	}
-}
+impl BrokerApi for StateChainClient {}
 #[async_trait]
 impl OperatorApi for StateChainClient {}
 #[async_trait]
@@ -343,7 +347,6 @@ impl fmt::Display for WithdrawFeesDetail {
 
 #[async_trait]
 pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static {
-	fn base_rpc_api(&self) -> Arc<dyn BaseRpcApi + Send + Sync + 'static>;
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
