@@ -29,7 +29,7 @@ localnet/init/config/Settings.toml.*.backup
 engine/config/Local.toml
 
 # Local enviroment file for docker-compose for deposit-monitor
-localnet/deposit-monitor.env
+localnet/init/deposit-monitor/deposit-monitor.env
 
 # keystore for use in testing
 engine/tests/test_keystore/*

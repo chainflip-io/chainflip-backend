@@ -178,7 +178,6 @@ services:
       - CFDM_PERSISTENT_STATE_DIR=/persistent_state
       - CFDM_CRITICAL_ELLIPTIC_RISK_SCORE=8.0
       - CFDM_BROKER_API_URL=${CFDM_BROKER_API_URL}
-      # - CFDM_BROKER_API_URL=? # this variable is set in `common.sh` because the value depends on whether we run in CI or locally
       - CFDM_BTC_RPC_HTTP_ENDPOINT=http://bitcoin:8332
       - CFDM_BTC_RPC_BASIC_AUTH_USER=flip
       - CFDM_BTC_RPC_BASIC_AUTH_PASSWORD=flip
