@@ -1,29 +1,21 @@
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{fmt, sync::Arc};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
+pub use cf_chains::address::AddressString;
 use cf_chains::{
-	address::{try_from_encoded_address, EncodedAddress},
-	btc::vault_swap_encoding::{
-		encode_swap_params_in_nulldata_utxo, SharedCfParameters, UtxoEncodedData,
-	},
-	dot::PolkadotAccountId,
-	evm::to_evm_address,
-	sol::SolAddress,
-	CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParametersEncoded,
-	ChannelRefundParametersGeneric, ForeignChain, ForeignChainAddress,
+	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParametersEncoded,
+	ChannelRefundParametersGeneric, ForeignChain,
 };
+use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
-use cf_primitives::{AssetAmount, BlockNumber, DcaParameters, NetworkEnvironment};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 pub use sp_core::crypto::AccountId32;
-use sp_core::{
-	bounded_vec, ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256, U256,
-};
+use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256, U256};
 pub use state_chain_runtime::chainflip::BlockUpdate;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
@@ -54,7 +46,7 @@ pub mod queries;
 
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
-use cf_utilities::{clean_hex_address, rpc::NumberOrHex, task_scope::Scope};
+use cf_utilities::{rpc::NumberOrHex, task_scope::Scope};
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
@@ -113,11 +105,6 @@ pub async fn request_block(
 		.ok_or_else(|| anyhow!("unknown block hash"))
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SwapPayload {
-	Bitcoin { nulldata_utxo: Bytes },
-}
-
 pub struct StateChainApi {
 	pub state_chain_client: Arc<StateChainClient>,
 }
@@ -168,16 +155,20 @@ impl StateChainApi {
 	pub fn query_api(&self) -> queries::QueryApi {
 		queries::QueryApi { state_chain_client: self.state_chain_client.clone() }
 	}
+
+	pub fn base_rpc_api(&self) -> Arc<impl BaseRpcApi + Send + Sync + 'static> {
+		self.state_chain_client.base_rpc_client.clone()
+	}
+
+	pub fn raw_client(&self) -> &jsonrpsee::ws_client::WsClient {
+		&self.state_chain_client.base_rpc_client.raw_rpc_client
+	}
 }
 
 #[async_trait]
 impl GovernanceApi for StateChainClient {}
 #[async_trait]
-impl BrokerApi for StateChainClient {
-	fn base_rpc_api(&self) -> Arc<dyn BaseRpcApi + Send + Sync + 'static> {
-		self.base_rpc_client.clone()
-	}
-}
+impl BrokerApi for StateChainClient {}
 #[async_trait]
 impl OperatorApi for StateChainClient {}
 #[async_trait]
@@ -313,42 +304,6 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AddressString(String);
-
-impl FromStr for AddressString {
-	type Err = anyhow::Error;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		Ok(Self(s.to_string()))
-	}
-}
-
-impl AddressString {
-	pub fn try_parse_to_encoded_address(self, chain: ForeignChain) -> Result<EncodedAddress> {
-		clean_foreign_chain_address(chain, self.0.as_str())
-	}
-
-	pub fn try_parse_to_foreign_chain_address(
-		self,
-		chain: ForeignChain,
-		network: NetworkEnvironment,
-	) -> Result<ForeignChainAddress> {
-		try_from_encoded_address(self.try_parse_to_encoded_address(chain)?, move || network)
-			.map_err(|_| anyhow!("Failed to parse address"))
-	}
-
-	pub fn from_encoded_address<T: std::borrow::Borrow<EncodedAddress>>(address: T) -> Self {
-		Self(address.borrow().to_string())
-	}
-}
-
-impl fmt::Display for AddressString {
-	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
-
 pub type RefundParameters = ChannelRefundParametersGeneric<AddressString>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -392,7 +347,6 @@ impl fmt::Display for WithdrawFeesDetail {
 
 #[async_trait]
 pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static {
-	fn base_rpc_api(&self) -> Arc<dyn BaseRpcApi + Send + Sync + 'static>;
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
@@ -405,8 +359,9 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		refund_parameters: Option<RefundParameters>,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
-		let destination_address =
-			destination_address.try_parse_to_encoded_address(destination_asset.into())?;
+		let destination_address = destination_address
+			.try_parse_to_encoded_address(destination_asset.into())
+			.map_err(anyhow::Error::msg)?;
 		let (_tx_hash, events, header, ..) = self
 			.submit_signed_extrinsic_with_dry_run(
 				pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
@@ -477,7 +432,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.submit_signed_extrinsic(RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
 				asset,
 				destination_address: destination_address
-					.try_parse_to_encoded_address(asset.into())?,
+					.try_parse_to_encoded_address(asset.into())
+					.map_err(anyhow::Error::msg)?,
 			}))
 			.await
 			.until_in_block()
@@ -518,81 +474,6 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
 			.await
 	}
-
-	async fn request_swap_parameter_encoding(
-		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		min_output_amount: AssetAmount,
-		retry_duration: BlockNumber,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
-		dca_parameters: Option<DcaParameters>,
-	) -> Result<SwapPayload> {
-		// Check if safe mode is active
-		let block_hash = self.base_rpc_api().latest_finalized_block_hash().await?;
-		let safe_mode = self
-			.storage_value::<pallet_cf_environment::RuntimeSafeMode<state_chain_runtime::Runtime>>(
-				block_hash,
-			)
-			.await?;
-		if !safe_mode.swapping.swaps_enabled {
-			bail!("Safe mode is active. Swaps are disabled.");
-		}
-
-		// Validate params
-		frame_support::ensure!(
-			broker_commission == 0 && affiliate_fees.map_or(true, |fees| fees.is_empty()),
-			anyhow!("Broker/Affi fees are not yet supported for vault swaps. Request a deposit address or remove the broker fees.")
-		);
-		self.base_rpc_api()
-			.validate_refund_params(retry_duration, Some(block_hash))
-			.await?;
-		if let Some(params) = dca_parameters.as_ref() {
-			self.base_rpc_api()
-				.validate_dca_params(
-					params.number_of_chunks,
-					params.chunk_interval,
-					Some(block_hash),
-				)
-				.await?;
-		}
-
-		// Encode swap
-		match ForeignChain::from(source_asset) {
-			ForeignChain::Bitcoin => {
-				let params = UtxoEncodedData {
-					output_asset: destination_asset,
-					output_address: destination_address
-						.try_parse_to_encoded_address(destination_asset.into())?,
-					parameters: SharedCfParameters {
-						retry_duration: retry_duration.try_into()?,
-						min_output_amount,
-						number_of_chunks: dca_parameters
-							.as_ref()
-							.map(|params| params.number_of_chunks)
-							.unwrap_or(1)
-							.try_into()?,
-						chunk_interval: dca_parameters
-							.as_ref()
-							.map(|params| params.chunk_interval)
-							.unwrap_or(2)
-							.try_into()?,
-						boost_fee: boost_fee.unwrap_or_default().try_into()?,
-						broker_fee: broker_commission.try_into()?,
-						// TODO: lookup affiliate mapping to convert affiliate ids and use them here
-						affiliates: bounded_vec![],
-					},
-				};
-				Ok(SwapPayload::Bitcoin {
-					nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw().into(),
-				})
-			},
-			_ => bail!("Unsupported input asset"),
-		}
-	}
 }
 
 #[async_trait]
@@ -609,22 +490,6 @@ pub trait SimpleSubmissionApi: SignedExtrinsicApi {
 
 #[async_trait]
 impl<T: SignedExtrinsicApi + Sized + Send + Sync + 'static> SimpleSubmissionApi for T {}
-
-/// Sanitize the given address (hex or base58) and turn it into a EncodedAddress of the given
-/// chain.
-pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
-	Ok(match chain {
-		ForeignChain::Ethereum => EncodedAddress::Eth(clean_hex_address(address)?),
-		ForeignChain::Polkadot =>
-			EncodedAddress::Dot(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
-		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
-		ForeignChain::Arbitrum => EncodedAddress::Arb(clean_hex_address(address)?),
-		ForeignChain::Solana => match SolAddress::from_str(address) {
-			Ok(sol_address) => EncodedAddress::Sol(sol_address.into()),
-			Err(_) => EncodedAddress::Sol(clean_hex_address(address)?),
-		},
-	})
-}
 
 pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
@@ -756,6 +621,7 @@ mod tests {
 	mod key_generation {
 
 		use super::*;
+		use cf_chains::address::clean_foreign_chain_address;
 		use sp_core::crypto::Ss58Codec;
 
 		#[test]

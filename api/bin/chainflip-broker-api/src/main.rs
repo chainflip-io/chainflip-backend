@@ -7,13 +7,16 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	primitives::{
-		state_chain_runtime::runtime_apis::{ChainAccounts, TaintedTransactionEvents},
-		AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters,
+		state_chain_runtime::runtime_apis::{
+			ChainAccounts, TaintedTransactionEvents, VaultSwapDetails,
+		},
+		AccountRole, Affiliates, Asset, BasisPoints, BlockNumber, CcmChannelMetadata,
+		DcaParameters,
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, DepositMonitorApi, OperatorApi,
-	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, SwapPayload,
-	TransactionInId, WithdrawFeesDetail,
+	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId,
+	WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -108,11 +111,11 @@ pub trait Rpc {
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		min_output_amount: NumberOrHex,
-		retry_duration: u32,
+		retry_duration: BlockNumber,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<SwapPayload>;
+	) -> RpcResult<VaultSwapDetails<AddressString>>;
 
 	#[method(name = "mark_transaction_as_tainted", aliases = ["broker_markTransactionAsTainted"])]
 	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> RpcResult<()>;
@@ -198,15 +201,16 @@ impl RpcServer for RpcServerImpl {
 		destination_address: AddressString,
 		broker_commission: BasisPoints,
 		min_output_amount: NumberOrHex,
-		retry_duration: u32,
+		retry_duration: BlockNumber,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<SwapPayload> {
+	) -> RpcResult<VaultSwapDetails<AddressString>> {
 		Ok(self
 			.api
-			.broker_api()
-			.request_swap_parameter_encoding(
+			.raw_client()
+			.cf_get_vault_swap_details(
+				self.api.state_chain_client.account_id(),
 				source_asset,
 				destination_asset,
 				destination_address,
@@ -216,6 +220,7 @@ impl RpcServer for RpcServerImpl {
 				boost_fee,
 				affiliate_fees,
 				dca_parameters,
+				None,
 			)
 			.await?)
 	}

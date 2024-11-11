@@ -4,12 +4,13 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	self, assets::any::AssetMap, eth::Address as EthereumAddress, Chain, ChainCrypto,
-	ForeignChainAddress,
+	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress, Chain,
+	ChainCrypto, ForeignChainAddress,
 };
 use cf_primitives::{
-	AccountRole, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, DcaParameters,
-	EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment, PrewitnessedDepositId, SemVer,
+	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
+	PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
@@ -31,7 +32,30 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec::Vec,
 };
+
 type VanityName = Vec<u8>;
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[serde(tag = "chain")]
+pub enum VaultSwapDetails<BtcAddress> {
+	Bitcoin {
+		#[serde(with = "sp_core::bytes")]
+		nulldata_utxo: Vec<u8>,
+		deposit_address: BtcAddress,
+	},
+}
+
+impl<BtcAddress> VaultSwapDetails<BtcAddress> {
+	pub fn map_btc_address<F, T>(self, f: F) -> VaultSwapDetails<T>
+	where
+		F: FnOnce(BtcAddress) -> T,
+	{
+		match self {
+			VaultSwapDetails::Bitcoin { nulldata_utxo, deposit_address } =>
+				VaultSwapDetails::Bitcoin { nulldata_utxo, deposit_address: f(deposit_address) },
+		}
+	}
+}
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
 pub enum BackupOrPassive {
@@ -154,15 +178,16 @@ pub enum DispatchErrorWithMessage {
 	Module(Vec<u8>),
 	Other(DispatchError),
 }
-impl From<DispatchError> for DispatchErrorWithMessage {
-	fn from(value: DispatchError) -> Self {
-		match value {
+impl<E: Into<DispatchError>> From<E> for DispatchErrorWithMessage {
+	fn from(error: E) -> Self {
+		match error.into() {
 			DispatchError::Module(sp_runtime::ModuleError { message: Some(message), .. }) =>
 				DispatchErrorWithMessage::Module(message.as_bytes().to_vec()),
-			value => DispatchErrorWithMessage::Other(value),
+			error => DispatchErrorWithMessage::Other(error),
 		}
 	}
 }
+
 #[cfg(feature = "std")]
 impl core::fmt::Display for DispatchErrorWithMessage {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
@@ -364,7 +389,21 @@ decl_runtime_apis!(
 			number_of_chunks: u32,
 			chunk_interval: u32,
 		) -> Result<(), DispatchErrorWithMessage>;
-		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage>;
+		fn cf_validate_refund_params(
+			retry_duration: BlockNumber,
+		) -> Result<(), DispatchErrorWithMessage>;
+		fn cf_get_vault_swap_details(
+			broker: AccountId32,
+			source_asset: Asset,
+			destination_asset: Asset,
+			destination_address: EncodedAddress,
+			broker_commission: BasisPoints,
+			min_output_amount: AssetAmount,
+			retry_duration: BlockNumber,
+			boost_fee: BasisPoints,
+			affiliate_fees: Affiliates<AccountId32>,
+			dca_parameters: Option<DcaParameters>,
+		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
 		fn cf_tainted_transaction_events() -> TaintedTransactionEvents;
 	}

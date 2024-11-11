@@ -389,7 +389,6 @@ pub mod pallet {
 		UnreferencedSharedData,
 		CorruptStorage,
 		VotesNotCleared,
-		InvalidVote,
 		NotContributing,
 		NoVotesSpecified,
 	}

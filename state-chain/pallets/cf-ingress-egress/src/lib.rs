@@ -801,7 +801,7 @@ pub mod pallet {
 
 			// Approximate weight calculation: r/w DepositChannelLookup + w DepositChannelPool
 			let recycle_weight_per_address =
-				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 2);
+				frame_support::weights::constants::ParityDbWeight::get().reads_writes(1, 2);
 
 			let maximum_addresses_to_recycle = remaining_weight
 				.ref_time()
@@ -828,7 +828,7 @@ pub mod pallet {
 				// Add weight for the DepositChannelRecycleBlocks read/write plus the
 				// DepositChannelLookup read/writes in the for loop below
 				used_weight = used_weight.saturating_add(
-					frame_support::weights::constants::RocksDbWeight::get().reads_writes(
+					frame_support::weights::constants::ParityDbWeight::get().reads_writes(
 						(addresses_to_recycle.len() + 1) as u64,
 						(addresses_to_recycle.len() + 1) as u64,
 					),
@@ -1300,21 +1300,24 @@ pub mod pallet {
 			dca_params: Option<DcaParameters>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			Self::process_vault_swap_request(
-				input_asset,
-				deposit_amount,
-				output_asset,
-				destination_address,
-				deposit_metadata,
-				tx_hash,
-				*deposit_details,
-				broker_fees,
-				refund_params.map(|boxed| *boxed),
-				dca_params,
-				boost_fee,
-			);
+			if T::EnsureWitnessed::ensure_origin(origin.clone()).is_ok() {
+				Self::process_vault_swap_request(
+					input_asset,
+					deposit_amount,
+					output_asset,
+					destination_address,
+					deposit_metadata,
+					tx_hash,
+					*deposit_details,
+					broker_fees,
+					refund_params.map(|boxed| *boxed),
+					dca_params,
+					boost_fee,
+				);
+			} else {
+				T::EnsurePrewitnessed::ensure_origin(origin)?;
+				// Pre-witnessed vault swaps are not supported yet.
+			}
 
 			Ok(())
 		}
@@ -1389,7 +1392,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					DepositChannel { state, ..deposit_channel },
 				);
 				*used_weight = used_weight.saturating_add(
-					frame_support::weights::constants::RocksDbWeight::get().reads_writes(0, 1),
+					frame_support::weights::constants::ParityDbWeight::get().reads_writes(0, 1),
 				);
 			}
 
