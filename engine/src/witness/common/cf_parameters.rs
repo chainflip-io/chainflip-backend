@@ -4,14 +4,18 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+pub enum VersionedCfParameters<CcmData = ()> {
+	V0(CfParameters<CcmData>),
+}
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub struct CfParameters<CcmData = ()> {
-	/// CCMs may require additional data (for example CCMs to Solana require adding a list of
-	/// addresses).
+	/// CCMs may require additional data (e.g. CCMs to Solana requires a list of addresses).
 	pub ccm_additional_data: CcmData,
 	pub vault_swap_parameters: VaultSwapParameters,
 }
 
-pub type CcmCfParameters = CfParameters<CcmAdditionalData>;
+pub type VersionedCcmCfParameters = VersionedCfParameters<CcmAdditionalData>;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub struct VaultSwapParameters {

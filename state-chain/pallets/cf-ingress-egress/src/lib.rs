@@ -201,6 +201,9 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	ChannelOpeningFee { fee: T::Amount },
 	/// Set the minimum deposit allowed for a particular asset.
 	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
+	/// Set the deposit channel lifetime. The time before the engines stop witnessing a channel.
+	/// This is configurable primarily to allow for unpredictable block times in testnets.
+	SetDepositChannelLifetime { lifetime: TargetChainBlockNumber<T, I> },
 }
 
 macro_rules! append_chain_to_name {
@@ -633,6 +636,9 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			minimum_deposit: TargetChainAmount<T, I>,
 		},
+		DepositChannelLifetimeSet {
+			lifetime: TargetChainBlockNumber<T, I>,
+		},
 		/// The deposits was rejected because the amount was below the minimum allowed.
 		DepositIgnored {
 			deposit_address: Option<TargetChainAccount<T, I>>,
@@ -800,7 +806,7 @@ pub mod pallet {
 
 			// Approximate weight calculation: r/w DepositChannelLookup + w DepositChannelPool
 			let recycle_weight_per_address =
-				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 2);
+				frame_support::weights::constants::ParityDbWeight::get().reads_writes(1, 2);
 
 			let maximum_addresses_to_recycle = remaining_weight
 				.ref_time()
@@ -827,7 +833,7 @@ pub mod pallet {
 				// Add weight for the DepositChannelRecycleBlocks read/write plus the
 				// DepositChannelLookup read/writes in the for loop below
 				used_weight = used_weight.saturating_add(
-					frame_support::weights::constants::RocksDbWeight::get().reads_writes(
+					frame_support::weights::constants::ParityDbWeight::get().reads_writes(
 						(addresses_to_recycle.len() + 1) as u64,
 						(addresses_to_recycle.len() + 1) as u64,
 					),
@@ -1141,6 +1147,10 @@ pub mod pallet {
 							minimum_deposit,
 						});
 					},
+					PalletConfigUpdate::<T, I>::SetDepositChannelLifetime { lifetime } => {
+						DepositChannelLifetime::<T, I>::set(lifetime);
+						Self::deposit_event(Event::<T, I>::DepositChannelLifetimeSet { lifetime });
+					},
 				}
 			}
 
@@ -1384,7 +1394,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					DepositChannel { state, ..deposit_channel },
 				);
 				*used_weight = used_weight.saturating_add(
-					frame_support::weights::constants::RocksDbWeight::get().reads_writes(0, 1),
+					frame_support::weights::constants::ParityDbWeight::get().reads_writes(0, 1),
 				);
 			}
 

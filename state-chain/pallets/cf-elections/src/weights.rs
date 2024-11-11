@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_elections.
@@ -410,8 +410,8 @@ impl WeightInfo for () {
 		Weight::from_parts(65_190_866, 7534)
 			// Standard Error: 36_335
 			.saturating_add(Weight::from_parts(26_561, 0).saturating_mul(n.into()))
-			.saturating_add(RocksDbWeight::get().reads(11_u64))
-			.saturating_add(RocksDbWeight::get().writes(5_u64))
+			.saturating_add(ParityDbWeight::get().reads(11_u64))
+			.saturating_add(ParityDbWeight::get().writes(5_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -431,8 +431,8 @@ impl WeightInfo for () {
 		//  Estimated: `4850`
 		// Minimum execution time: 31_000_000 picoseconds.
 		Weight::from_parts(33_000_000, 4850)
-			.saturating_add(RocksDbWeight::get().reads(6_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(6_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -450,7 +450,7 @@ impl WeightInfo for () {
 		//  Estimated: `4850`
 		// Minimum execution time: 26_000_000 picoseconds.
 		Weight::from_parts(27_000_000, 4850)
-			.saturating_add(RocksDbWeight::get().reads(5_u64))
+			.saturating_add(ParityDbWeight::get().reads(5_u64))
 	}
 	/// Storage: `SolanaElections::ElectionConsensusHistoryUpToDate` (r:2 w:1)
 	/// Proof: `SolanaElections::ElectionConsensusHistoryUpToDate` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -466,8 +466,8 @@ impl WeightInfo for () {
 		//  Estimated: `6483`
 		// Minimum execution time: 20_000_000 picoseconds.
 		Weight::from_parts(21_000_000, 6483)
-			.saturating_add(RocksDbWeight::get().reads(5_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(5_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -497,8 +497,8 @@ impl WeightInfo for () {
 		//  Estimated: `7794`
 		// Minimum execution time: 58_000_000 picoseconds.
 		Weight::from_parts(60_000_000, 7794)
-			.saturating_add(RocksDbWeight::get().reads(10_u64))
-			.saturating_add(RocksDbWeight::get().writes(5_u64))
+			.saturating_add(ParityDbWeight::get().reads(10_u64))
+			.saturating_add(ParityDbWeight::get().writes(5_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -520,8 +520,8 @@ impl WeightInfo for () {
 		//  Estimated: `7540`
 		// Minimum execution time: 37_000_000 picoseconds.
 		Weight::from_parts(40_000_000, 7540)
-			.saturating_add(RocksDbWeight::get().reads(6_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(6_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `SolanaElections::Status` (r:1 w:1)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -539,8 +539,8 @@ impl WeightInfo for () {
 		//  Estimated: `1736`
 		// Minimum execution time: 9_000_000 picoseconds.
 		Weight::from_parts(10_000_000, 1736)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(4_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `SolanaElections::Status` (r:1 w:0)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -556,8 +556,8 @@ impl WeightInfo for () {
 		//  Estimated: `1690`
 		// Minimum execution time: 9_000_000 picoseconds.
 		Weight::from_parts(9_000_000, 1690)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 	/// Storage: `SolanaElections::Status` (r:1 w:0)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -569,8 +569,8 @@ impl WeightInfo for () {
 		//  Estimated: `1756`
 		// Minimum execution time: 6_000_000 picoseconds.
 		Weight::from_parts(6_000_000, 1756)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `SolanaElections::Status` (r:1 w:0)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -592,8 +592,8 @@ impl WeightInfo for () {
 		//  Estimated: `386186`
 		// Minimum execution time: 1_132_000_000 picoseconds.
 		Weight::from_parts(1_199_000_000, 386186)
-			.saturating_add(RocksDbWeight::get().reads(156_u64))
-			.saturating_add(RocksDbWeight::get().writes(153_u64))
+			.saturating_add(ParityDbWeight::get().reads(156_u64))
+			.saturating_add(ParityDbWeight::get().writes(153_u64))
 	}
 	/// Storage: `SolanaElections::Status` (r:1 w:0)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -607,8 +607,8 @@ impl WeightInfo for () {
 		//  Estimated: `3896`
 		// Minimum execution time: 15_000_000 picoseconds.
 		Weight::from_parts(19_000_000, 3896)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `SolanaElections::Status` (r:1 w:1)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -618,8 +618,8 @@ impl WeightInfo for () {
 		//  Estimated: `1816`
 		// Minimum execution time: 7_000_000 picoseconds.
 		Weight::from_parts(8_000_000, 1816)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `SolanaElections::Status` (r:1 w:1)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -639,8 +639,8 @@ impl WeightInfo for () {
 		//  Estimated: `4224`
 		// Minimum execution time: 27_000_000 picoseconds.
 		Weight::from_parts(29_000_000, 4224)
-			.saturating_add(RocksDbWeight::get().reads(6_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(6_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `SolanaElections::Status` (r:1 w:1)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -650,8 +650,8 @@ impl WeightInfo for () {
 		//  Estimated: `1817`
 		// Minimum execution time: 7_000_000 picoseconds.
 		Weight::from_parts(8_000_000, 1817)
-			.saturating_add(RocksDbWeight::get().reads(1_u64))
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `SolanaElections::Status` (r:1 w:0)
 	/// Proof: `SolanaElections::Status` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -684,15 +684,15 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_parts(2_029_509, 0).saturating_mul(d.into()))
 			// Standard Error: 39_072
 			.saturating_add(Weight::from_parts(2_085_576, 0).saturating_mul(e.into()))
-			.saturating_add(RocksDbWeight::get().reads(6_u64))
-			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(a.into())))
-			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(b.into())))
-			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(d.into())))
-			.saturating_add(RocksDbWeight::get().reads((1_u64).saturating_mul(e.into())))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(a.into())))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(b.into())))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(d.into())))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(e.into())))
+			.saturating_add(ParityDbWeight::get().reads(6_u64))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(a.into())))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(b.into())))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(d.into())))
+			.saturating_add(ParityDbWeight::get().reads((1_u64).saturating_mul(e.into())))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(a.into())))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(b.into())))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(d.into())))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(e.into())))
 			.saturating_add(Weight::from_parts(0, 2541).saturating_mul(a.into()))
 			.saturating_add(Weight::from_parts(0, 2521).saturating_mul(b.into()))
 			.saturating_add(Weight::from_parts(0, 2561).saturating_mul(d.into()))
