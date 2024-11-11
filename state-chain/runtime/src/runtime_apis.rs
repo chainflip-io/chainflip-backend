@@ -383,8 +383,8 @@ decl_runtime_apis!(
 			broker_commission: BasisPoints,
 			min_output_amount: AssetAmount,
 			retry_duration: BlockNumber,
-			boost_fee: Option<BasisPoints>,
-			affiliate_fees: Option<Affiliates<AccountId32>>,
+			boost_fee: BasisPoints,
+			affiliate_fees: Affiliates<AccountId32>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;

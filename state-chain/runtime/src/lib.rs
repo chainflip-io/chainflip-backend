@@ -2106,12 +2106,12 @@ impl_runtime_apis! {
 			broker_commission: BasisPoints,
 			min_output_amount: AssetAmount,
 			retry_duration: BlockNumber,
-			boost_fee: Option<BasisPoints>,
-			affiliate_fees: Option<Affiliates<AccountId>>,
+			boost_fee: BasisPoints,
+			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails, DispatchErrorWithMessage> {
 			// Validate params
-			if broker_commission != 0 || affiliate_fees.map_or(false, |affiliate| !affiliate.is_empty()) {
+			if broker_commission != 0 || !affiliate_fees.is_empty() {
 				return Err(
 					pallet_cf_swapping::Error::<Runtime>::VaultSwapBrokerFeesNotSupported.into());
 			}
@@ -2151,7 +2151,7 @@ impl_runtime_apis! {
 								.unwrap_or(SWAP_DELAY_BLOCKS)
 								.try_into()
 								.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
-							boost_fee: boost_fee.unwrap_or_default().try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
+							boost_fee: boost_fee.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
 							broker_fee: broker_commission.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
 							// TODO: lookup affiliate mapping to convert affiliate ids and use them here
 							affiliates: Default::default(),
