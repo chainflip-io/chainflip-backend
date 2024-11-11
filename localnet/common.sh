@@ -177,11 +177,11 @@ build-localnet() {
   # On some machines (e.g. MacOS), 172.17.0.1 is not accessible from inside the container, so we need to use host.docker.internal
   DEPOSIT_MONITOR_ENV='localnet/init/deposit-monitor/deposit-monitor.env'
   if [[ $CI == true ]]; then
-    echo "CFDM_BROKER_API_URL='ws://172.17.0.1:10997'" > $DEPOSIT_MONITOR_ENV
+    export CFDM_BROKER_API_URL='ws://172.17.0.1:10997'
   else
-    echo "CFDM_BROKER_API_URL='ws://host.docker.internal:10997'" > $DEPOSIT_MONITOR_ENV
+    export CFDM_BROKER_API_URL='ws://host.docker.internal:10997'
   fi
-  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml --env-file $DEPOSIT_MONITOR_ENV -p "chainflip-localnet" up $CF_CONTAINERS $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up $CF_CONTAINERS $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
   while true; do
     echo "🩺 Checking deposit-monitor's health ..."
     REPLY=$(check_endpoint_health 'http://localhost:6060/health')
