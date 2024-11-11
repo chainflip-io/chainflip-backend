@@ -2,7 +2,7 @@ use crate::{Config, Pallet};
 #[cfg(feature = "try-runtime")]
 use crate::{CurrentReleaseVersion, Get};
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::{migrations::VersionedMigration, traits::OnRuntimeUpgrade};
 #[cfg(feature = "try-runtime")]
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
@@ -37,13 +37,14 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 
 // Migration for Updating Solana's Api Environments.
 pub type PalletMigration<T> = (
-	cf_runtime_upgrade_utilities::VersionedMigration<
-		Pallet<T>,
-		SolApiEnvironmentMigration<T>,
+	VersionedMigration<
 		12,
 		13,
+		SolApiEnvironmentMigration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<Pallet<T>, 13>,
+	PlaceholderMigration<13, Pallet<T>>,
 );
 
 #[cfg(test)]
