@@ -1739,7 +1739,7 @@ mod private_channels {
 	fn register_affiliate() {
 		new_test_ext().execute_with(|| {
 			// Only brokers can register affiliates
-			const SHORT_ID: u8 = 0;
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
 
 			assert_noop!(
 				Swapping::register_affiliate(OriginTrait::signed(ALICE), SHORT_ID, BOB),

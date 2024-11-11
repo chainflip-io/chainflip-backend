@@ -19,7 +19,9 @@ use cf_chains::{
 	CcmChannelMetadata, CcmFailReason, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
 	TransferAssetParams,
 };
-use cf_primitives::{AssetAmount, BasisPoints, Beneficiary, ChannelId, ForeignChain};
+use cf_primitives::{
+	AffiliateShortId, AssetAmount, BasisPoints, Beneficiary, ChannelId, ForeignChain,
+};
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
 	mocks::{
@@ -1836,8 +1838,8 @@ fn vault_swaps_support_broker_fees() {
 		const AFFILIATE_1: u64 = 102;
 		const AFFILIATE_2: u64 = 103;
 
-		const AFFILIATE_SHORT_1: u8 = 0;
-		const AFFILIATE_SHORT_2: u8 = 1;
+		const AFFILIATE_SHORT_1: AffiliateShortId = AffiliateShortId(0);
+		const AFFILIATE_SHORT_2: AffiliateShortId = AffiliateShortId(1);
 
 		let output_address = ForeignChainAddress::Eth([1; 20].into());
 

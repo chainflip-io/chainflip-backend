@@ -3,7 +3,7 @@
 use super::*;
 
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
-use cf_primitives::{AccountRole, Beneficiary, FLIPPERINOS_PER_FLIP};
+use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -181,11 +181,15 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T>::register_affiliate(caller.clone(), IDX, affiliate_id.clone()));
+			assert_ok!(Pallet::<T>::register_affiliate(
+				caller.clone(),
+				IDX.into(),
+				affiliate_id.clone()
+			));
 		}
 
 		assert_eq!(
-			AffiliateIdMapping::<T>::get(&broker_id, IDX),
+			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX)),
 			Some(affiliate_id),
 			"Affiliate must have been registered"
 		);

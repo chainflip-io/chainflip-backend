@@ -148,7 +148,10 @@ pub fn try_extract_vault_swap_call(
 				data.parameters
 					.affiliates
 					.into_iter()
-					.map(|entry| Beneficiary { account: entry.affiliate, bps: entry.fee.into() })
+					.map(|entry| Beneficiary {
+						account: entry.affiliate.into(),
+						bps: entry.fee.into(),
+					})
 					.collect_vec()
 					.try_into()
 					.expect(
@@ -305,7 +308,7 @@ mod tests {
 						bps: MOCK_SWAP_PARAMS.parameters.broker_fee.into()
 					},
 					bounded_vec![Beneficiary {
-						account: MOCK_SWAP_PARAMS.parameters.affiliates[0].affiliate,
+						account: MOCK_SWAP_PARAMS.parameters.affiliates[0].affiliate.into(),
 						bps: MOCK_SWAP_PARAMS.parameters.affiliates[0].fee.into(),
 					}]
 				)),

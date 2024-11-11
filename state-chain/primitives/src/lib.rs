@@ -101,7 +101,7 @@ pub type PrewitnessedDepositId = u64;
 
 pub type BoostPoolTier = u16;
 
-pub type AffiliateShortId = u8;
+define_wrapper_type!(AffiliateShortId, u8, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 
 // TODO: Consider alternative representation for Price:
 //
