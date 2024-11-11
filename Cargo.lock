@@ -1327,7 +1327,7 @@ dependencies = [
 
 [[package]]
 name = "cf-engine-dylib"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "chainflip-engine",
  "engine-proc-macros",
@@ -1428,27 +1428,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "cf-runtime-upgrade-utilities"
+name = "cf-runtime-utilities"
 version = "0.1.0"
 dependencies = [
+ "cf-runtime-macros",
  "frame-support",
  "frame-system",
  "hex-literal",
  "log",
  "parity-scale-codec",
  "sp-core 34.0.0",
- "sp-io 38.0.0",
- "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2+2)",
-]
-
-[[package]]
-name = "cf-runtime-utilities"
-version = "0.1.0"
-dependencies = [
- "cf-runtime-macros",
- "frame-support",
- "log",
- "parity-scale-codec",
  "sp-io 38.0.0",
  "sp-runtime 39.0.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2+2)",
@@ -1578,7 +1567,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-api"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1625,15 +1614,17 @@ dependencies = [
 
 [[package]]
 name = "chainflip-broker-api"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "anyhow",
+ "cf-chains",
  "chainflip-api",
  "clap",
  "custom-rpc",
  "futures",
  "hex",
  "jsonrpsee 0.23.2",
+ "sc-rpc",
  "serde",
  "sp-core 34.0.0",
  "sp-rpc",
@@ -1647,7 +1638,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-cli"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "anyhow",
  "bigdecimal",
@@ -1668,7 +1659,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-engine"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "anyhow",
  "async-broadcast",
@@ -1805,7 +1796,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-lp-api"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "anyhow",
  "cf-primitives",
@@ -1832,7 +1823,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-node"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
@@ -2558,6 +2549,7 @@ dependencies = [
  "jsonrpsee 0.23.2",
  "log",
  "pallet-cf-governance",
+ "pallet-cf-ingress-egress",
  "pallet-cf-pools",
  "pallet-cf-swapping",
  "pallet-cf-witnesser",
@@ -3221,7 +3213,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "engine-proc-macros"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "engine-upgrade-utils",
  "proc-macro2",
@@ -3231,7 +3223,7 @@ dependencies = [
 
 [[package]]
 name = "engine-runner"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -7665,7 +7657,7 @@ name = "pallet-cf-account-roles"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7686,7 +7678,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -7710,7 +7701,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -7734,7 +7724,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-traits",
  "cfe-events",
  "frame-benchmarking",
@@ -7751,7 +7741,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7797,7 +7787,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7821,7 +7811,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7866,7 +7856,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7888,7 +7878,7 @@ name = "pallet-cf-governance"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7908,7 +7898,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -7936,7 +7925,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -7959,7 +7948,6 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -7984,7 +7972,7 @@ name = "pallet-cf-reputation"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -8009,7 +7997,6 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -8035,7 +8022,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -8063,7 +8049,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -8083,7 +8069,7 @@ name = "pallet-cf-validator"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -8113,7 +8099,6 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
@@ -13056,13 +13041,12 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "state-chain-runtime"
-version = "1.7.0"
+version = "1.8.0"
 dependencies = [
  "bitvec",
  "cf-amm",
  "cf-chains",
  "cf-primitives",
- "cf-runtime-upgrade-utilities",
  "cf-runtime-utilities",
  "cf-session-benchmarking",
  "cf-test-utilities",

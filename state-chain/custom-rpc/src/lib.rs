@@ -13,12 +13,13 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Asset, AssetAmount, BlockNumber, BroadcastId, EpochIndex, ForeignChain,
-	NetworkEnvironment, SemVer, SwapId, SwapRequestId,
+	AccountRole, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, DcaParameters,
+	EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use jsonrpsee::{
+	core::async_trait,
 	proc_macros::rpc,
 	types::{
 		error::{ErrorObject, ErrorObjectOwned},
@@ -47,13 +48,14 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
-		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
+		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringDataV2, OpenDepositChannels,
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
-		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CustomRuntimeApi,
-		DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
-		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty, ValidatorInfo,
+		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, ChainAccounts,
+		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
+		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
+		TaintedTransactionEvents, ValidatorInfo,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash, NetworkFee, SolanaInstance,
@@ -134,8 +136,8 @@ pub struct RpcMonitoringData {
 	pub sol_nonces: SolanaNonces,
 	pub activating_key_broadcast_ids: ActivateKeysBroadcastIds,
 }
-impl From<MonitoringData> for RpcMonitoringData {
-	fn from(monitoring_data: MonitoringData) -> Self {
+impl From<MonitoringDataV2> for RpcMonitoringData {
+	fn from(monitoring_data: MonitoringDataV2) -> Self {
 		Self {
 			epoch: monitoring_data.epoch.into(),
 			pending_redemptions: monitoring_data.pending_redemptions.into(),
@@ -418,6 +420,7 @@ pub struct RpcSwapOutputV2 {
 	pub network_fee: RpcFee,
 	pub ingress_fee: RpcFee,
 	pub egress_fee: RpcFee,
+	pub broker_commission: RpcFee,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -745,6 +748,17 @@ pub trait CustomApi {
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
+	#[method(name = "swap_rate_v3")]
+	fn cf_pool_swap_rate_v3(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: U256,
+		broker_commission: BasisPoints,
+		dca_parameters: Option<DcaParameters>,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutputV2>;
 	#[method(name = "required_asset_ratio_for_range_order")]
 	fn cf_required_asset_ratio_for_range_order(
 		&self,
@@ -834,21 +848,26 @@ pub trait CustomApi {
 
 	#[method(name = "max_swap_amount")]
 	fn cf_max_swap_amount(&self, asset: Asset) -> RpcResult<Option<AssetAmount>>;
-	#[subscription(name = "subscribe_pool_price", item = PoolPriceV1)]
-	fn cf_subscribe_pool_price(&self, from_asset: Asset, to_asset: Asset);
+	#[subscription(name = "subscribe_pool_price", item = BlockUpdate<PoolPriceV1>)]
+	async fn cf_subscribe_pool_price(&self, from_asset: Asset, to_asset: Asset);
 	#[subscription(name = "subscribe_pool_price_v2", item = BlockUpdate<PoolPriceV2>)]
-	fn cf_subscribe_pool_price_v2(&self, base_asset: Asset, quote_asset: Asset);
+	async fn cf_subscribe_pool_price_v2(&self, base_asset: Asset, quote_asset: Asset);
 	#[subscription(name = "subscribe_prewitness_swaps", item = BlockUpdate<RpcPrewitnessedSwap>)]
-	fn cf_subscribe_prewitness_swaps(&self, base_asset: Asset, quote_asset: Asset, side: Side);
+	async fn cf_subscribe_prewitness_swaps(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+	);
 
 	// Subscribe to a stream that on every block produces a list of all scheduled/pending
 	// swaps in the base_asset/quote_asset pool, including any "implicit" half-swaps (as a
 	// part of a swap involving two pools)
 	#[subscription(name = "subscribe_scheduled_swaps", item = BlockUpdate<SwapResponse>)]
-	fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
+	async fn cf_subscribe_scheduled_swaps(&self, base_asset: Asset, quote_asset: Asset);
 
 	#[subscription(name = "subscribe_lp_order_fills", item = BlockUpdate<OrderFills>)]
-	fn cf_subscribe_lp_order_fills(&self);
+	async fn cf_subscribe_lp_order_fills(&self);
 
 	#[method(name = "scheduled_swaps")]
 	fn cf_scheduled_swaps(
@@ -947,6 +966,19 @@ pub trait CustomApi {
 		retry_duration: u32,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<()>;
+
+	#[method(name = "get_open_deposit_channels")]
+	fn cf_get_open_deposit_channels(
+		&self,
+		broker: Option<state_chain_runtime::AccountId>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<ChainAccounts>;
+
+	#[method(name = "get_tainted_transaction_events")]
+	fn cf_get_tainted_transaction_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<TaintedTransactionEvents>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1073,7 +1105,7 @@ fn internal_error(error: impl core::fmt::Debug) -> ErrorObjectOwned {
 fn call_error(error: impl Into<Box<dyn core::error::Error + Sync + Send>>) -> ErrorObjectOwned {
 	let error = error.into();
 	log::debug!(target: "cf_rpc", "Call error: {}", error);
-	ErrorObject::owned(ErrorCode::InternalError.code(), "{error}", None::<()>)
+	ErrorObject::owned(ErrorCode::InternalError.code(), format!("{error}"), None::<()>)
 }
 
 impl From<CfApiError> for ErrorObjectOwned {
@@ -1139,6 +1171,7 @@ where
 	}
 }
 
+#[async_trait]
 impl<C, B> CustomApiServer for CustomRpc<C, B>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
@@ -1198,6 +1231,7 @@ where
 		cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>,
 		cf_boost_pools_depth() -> Vec<BoostPoolDepth>,
 		cf_pool_price(from_asset: Asset, to_asset: Asset) -> Option<PoolPriceV1>,
+		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 	}
 
 	pass_through_and_flatten! {
@@ -1349,6 +1383,28 @@ where
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
+		self.cf_pool_swap_rate_v3(
+			from_asset,
+			to_asset,
+			amount,
+			Default::default(),
+			None,
+			additional_orders,
+			at,
+		)
+		.map(Into::into)
+	}
+
+	fn cf_pool_swap_rate_v3(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: U256,
+		broker_commission: BasisPoints,
+		dca_parameters: Option<DcaParameters>,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutputV2> {
 		self.with_runtime_api(at, |api, hash| {
 			Ok::<_, CfApiError>(
 				api.cf_pool_simulate_swap(
@@ -1358,7 +1414,7 @@ where
 					amount
 						.try_into()
 						.map_err(|_| "Swap input amount too large.")
-						.and_then(|amount| {
+						.and_then(|amount: u128| {
 							if amount == 0 {
 								Err("Swap input amount cannot be zero.")
 							} else {
@@ -1368,43 +1424,49 @@ where
 						.map_err(|s| {
 							ErrorObject::owned(ErrorCode::InvalidParams.code(), s, None::<()>)
 						})?,
+					broker_commission,
+					dca_parameters,
 					additional_orders.map(|additional_orders| {
 						additional_orders
 							.into_iter()
 							.map(|additional_order| {
 								match additional_order {
-								SwapRateV2AdditionalOrder::LimitOrder {
-									base_asset,
-									quote_asset,
-									side,
-									tick,
-									sell_amount,
-								} => state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
-									base_asset,
-									quote_asset,
-									side,
-									tick,
-									sell_amount: sell_amount.unique_saturated_into(),
+									SwapRateV2AdditionalOrder::LimitOrder {
+										base_asset,
+										quote_asset,
+										side,
+										tick,
+										sell_amount,
+									} => state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
+										base_asset,
+										quote_asset,
+										side,
+										tick,
+										sell_amount: sell_amount.unique_saturated_into(),
+									}
 								}
-							}
 							})
 							.collect()
 					}),
 				)?
-				.map(|simulated_swap_info| RpcSwapOutputV2 {
-					intermediary: simulated_swap_info.intermediary.map(Into::into),
-					output: simulated_swap_info.output.into(),
+				.map(|simulated_swap_info_v2| RpcSwapOutputV2 {
+					intermediary: simulated_swap_info_v2.intermediary.map(Into::into),
+					output: simulated_swap_info_v2.output.into(),
 					network_fee: RpcFee {
 						asset: cf_primitives::STABLE_ASSET,
-						amount: simulated_swap_info.network_fee.into(),
+						amount: simulated_swap_info_v2.network_fee.into(),
 					},
 					ingress_fee: RpcFee {
 						asset: from_asset,
-						amount: simulated_swap_info.ingress_fee.into(),
+						amount: simulated_swap_info_v2.ingress_fee.into(),
 					},
 					egress_fee: RpcFee {
 						asset: to_asset,
-						amount: simulated_swap_info.egress_fee.into(),
+						amount: simulated_swap_info_v2.egress_fee.into(),
+					},
+					broker_commission: RpcFee {
+						asset: cf_primitives::STABLE_ASSET,
+						amount: simulated_swap_info_v2.broker_fee.into(),
 					},
 				})?,
 			)
@@ -1505,7 +1567,7 @@ where
 		})
 	}
 
-	fn cf_subscribe_pool_price(
+	async fn cf_subscribe_pool_price(
 		&self,
 		pending_sink: PendingSubscriptionSink,
 		from_asset: Asset,
@@ -1519,9 +1581,10 @@ where
 				Ok((*client.runtime_api()).cf_pool_price(hash, from_asset, to_asset)?)
 			},
 		)
+		.await
 	}
 
-	fn cf_subscribe_pool_price_v2(
+	async fn cf_subscribe_pool_price_v2(
 		&self,
 		pending_sink: PendingSubscriptionSink,
 		base_asset: Asset,
@@ -1543,9 +1606,10 @@ where
 				})
 			},
 		)
+		.await
 	}
 
-	fn cf_subscribe_scheduled_swaps(
+	async fn cf_subscribe_scheduled_swaps(
 		&self,
 		pending_sink: PendingSubscriptionSink,
 		base_asset: Asset,
@@ -1573,7 +1637,8 @@ where
 						.collect(),
 				})
 			},
-		);
+		)
+		.await;
 	}
 
 	fn cf_scheduled_swaps(
@@ -1598,7 +1663,7 @@ where
 			})
 	}
 
-	fn cf_subscribe_prewitness_swaps(
+	async fn cf_subscribe_prewitness_swaps(
 		&self,
 		pending_sink: PendingSubscriptionSink,
 		base_asset: Asset,
@@ -1622,6 +1687,7 @@ where
 				})
 			},
 		)
+		.await
 	}
 
 	fn cf_prewitness_swaps(
@@ -1645,7 +1711,7 @@ where
 		})
 	}
 
-	fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink) {
+	async fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink) {
 		self.new_subscription_with_state(
 			false, /* only_on_changes */
 			true,  /* end_on_error */
@@ -1670,6 +1736,7 @@ where
 				RpcResult::Ok((fills, pools))
 			},
 		)
+		.await
 	}
 
 	fn cf_supported_assets(&self) -> RpcResult<Vec<Asset>> {
@@ -1730,6 +1797,13 @@ where
 	) -> RpcResult<Vec<u8>> {
 		self.with_runtime_api(at, |api, hash| api.cf_filter_votes(hash, validator, proposed_votes))
 	}
+
+	fn cf_get_tainted_transaction_events(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<TaintedTransactionEvents> {
+		self.with_runtime_api(at, |api, hash| api.cf_tainted_transaction_events(hash))
+	}
 }
 
 impl<C, B> CustomRpc<C, B>
@@ -1743,7 +1817,7 @@ where
 		+ BlockchainEvents<B>,
 	C::Api: CustomRuntimeApi<B>,
 {
-	fn new_subscription<
+	async fn new_subscription<
 		T: Serialize + Send + Clone + Eq + 'static,
 		F: Fn(&C, state_chain_runtime::Hash) -> Result<T, CfApiError> + Send + Clone + 'static,
 	>(
@@ -1759,13 +1833,14 @@ where
 			sink,
 			move |client, hash, _state| f(client, hash).map(|res| (res, ())),
 		)
+		.await
 	}
 
 	/// The subscription will return the first value immediately and then either return new values
 	/// only when it changes, or every new block. Note in both cases this can skip blocks. Also this
 	/// subscription can either filter out, or end the stream if the provided async closure returns
 	/// an error.
-	fn new_subscription_with_state<
+	async fn new_subscription_with_state<
 		T: Serialize + Send + Clone + Eq + 'static,
 		// State to carry forward between calls to the closure.
 		S: 'static + Clone + Send,
@@ -1787,11 +1862,8 @@ where
 		let (initial_item, initial_state) = match f(&self.client, info.best_hash, None) {
 			Ok(initial) => initial,
 			Err(e) => {
-				self.executor.spawn(
-					"cf-rpc-update-subscription",
-					Some("rpc"),
-					pending_sink.reject(e).boxed(),
-				);
+				log::warn!(target: "cf-rpc", "Error in subscription initialization: {:?}", e);
+				pending_sink.reject(e).await;
 				return;
 			},
 		};
@@ -1824,12 +1896,22 @@ where
 									data: new_item,
 								}))
 							},
-							Err(error) if end_on_error => Some(Err(ErrorObjectOwned::from(error))),
+							Err(error) => {
+								log::warn!("Subscription Error: {error}.");
+								if end_on_error {
+									log::warn!("Closing Subscription.");
+									Some(Err(ErrorObjectOwned::from(error)))
+								} else {
+									None
+								}
+							},
 							_ => None,
 						})
 					}
 				}),
-		);
+		)
+		.take_while(|item| futures::future::ready(item.is_ok()))
+		.map(Result::unwrap);
 
 		self.executor.spawn(
 			"cf-rpc-update-subscription",
@@ -2202,6 +2284,7 @@ mod test {
 			network_fee: RpcFee { asset: Asset::Usdc, amount: 1_000u128.into() },
 			ingress_fee: RpcFee { asset: Asset::Flip, amount: 500u128.into() },
 			egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
+			broker_commission: RpcFee { asset: Asset::Usdc, amount: 100u128.into() },
 		})
 		.unwrap());
 	}

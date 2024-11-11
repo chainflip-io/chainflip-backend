@@ -269,7 +269,7 @@ fn swap_with_custom_broker_fee(
 fn request_swap_success_with_valid_parameters() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
-			RuntimeOrigin::signed(ALICE),
+			RuntimeOrigin::signed(BROKER),
 			Asset::Eth,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
@@ -351,7 +351,7 @@ fn expect_swap_id_to_be_emitted() {
 		.then_execute_at_block(INIT_BLOCK, |_| {
 			// 1. Request a deposit address -> SwapDepositAddressReady
 			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::signed(BROKER),
 				Asset::Eth,
 				Asset::Usdc,
 				EncodedAddress::Eth(Default::default()),
@@ -413,7 +413,7 @@ fn rejects_invalid_swap_deposit() {
 
 		assert_noop!(
 			Swapping::request_swap_deposit_address_with_affiliates(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::signed(BROKER),
 				Asset::Btc,
 				Asset::Eth,
 				EncodedAddress::Dot(Default::default()),
@@ -429,7 +429,7 @@ fn rejects_invalid_swap_deposit() {
 
 		assert_noop!(
 			Swapping::request_swap_deposit_address_with_affiliates(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::signed(BROKER),
 				Asset::Eth,
 				Asset::Dot,
 				EncodedAddress::Dot(Default::default()),
@@ -1031,7 +1031,7 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 
 		const BOOST_FEE: u16 = 100;
 		assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
-			RuntimeOrigin::signed(ALICE),
+			RuntimeOrigin::signed(BROKER),
 			Asset::Eth,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
@@ -1216,32 +1216,60 @@ fn test_get_scheduled_swap_legs_for_dca() {
 }
 
 #[test]
-fn register_and_deregister_account() {
+fn broker_deregistration_checks_earned_fees() {
 	new_test_ext().execute_with(|| {
 		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_broker(
-			OriginTrait::signed(ALICE),
+			OriginTrait::signed(BROKER),
 		)
-		.expect("ALICE was registered in test setup.");
+		.expect("BROKER was registered in test setup.");
 
 		// Earn some fees.
-		credit_broker_account::<Test>(&ALICE, Asset::Eth, 100);
+		credit_broker_account::<Test>(&BROKER, Asset::Eth, 100);
 
 		assert_noop!(
-			Swapping::deregister_as_broker(OriginTrait::signed(ALICE)),
+			Swapping::deregister_as_broker(OriginTrait::signed(BROKER)),
 			Error::<Test>::EarnedFeesNotWithdrawn,
 		);
 
 		assert_ok!(Swapping::withdraw(
-			OriginTrait::signed(ALICE),
+			OriginTrait::signed(BROKER),
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 		));
-		assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(ALICE)),);
+
+		assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(BROKER)),);
 
 		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_broker(
-			OriginTrait::signed(ALICE),
+			OriginTrait::signed(BROKER),
 		)
-		.expect_err("ALICE should be deregistered.");
+		.expect_err("BROKER should be deregistered.");
+	});
+}
+
+#[test]
+fn broker_deregistration_checks_private_channels() {
+	new_test_ext().execute_with(|| {
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_broker(
+			OriginTrait::signed(BROKER),
+		)
+		.expect("BROKER was registered in test setup.");
+
+		// Create a private broker channel
+		assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
+
+		assert_noop!(
+			Swapping::deregister_as_broker(OriginTrait::signed(BROKER)),
+			Error::<Test>::PrivateChannelExistsForBroker,
+		);
+
+		assert_ok!(Swapping::close_private_btc_channel(OriginTrait::signed(BROKER)));
+
+		assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(BROKER)));
+
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::ensure_broker(
+			OriginTrait::signed(BROKER),
+		)
+		.expect_err("BROKER should be deregistered.");
 	});
 }
 
@@ -1616,5 +1644,94 @@ mod swap_batching {
 
 				assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
 			});
+	}
+}
+
+mod private_channels {
+
+	use super::*;
+	use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
+	use sp_runtime::DispatchError::BadOrigin;
+
+	#[test]
+	fn open_private_btc_channel() {
+		new_test_ext().execute_with(|| {
+			const FIRST_CHANNEL_ID: u64 = 0;
+			// Only brokers can open private channels
+			assert_noop!(Swapping::open_private_btc_channel(OriginTrait::signed(ALICE)), BadOrigin);
+
+			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), None);
+
+			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
+
+			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(FIRST_CHANNEL_ID));
+
+			System::assert_has_event(RuntimeEvent::Swapping(
+				Event::<Test>::PrivateBrokerChannelOpened {
+					broker_id: BROKER,
+					channel_id: FIRST_CHANNEL_ID,
+				},
+			));
+
+			// The same broker should not be able to open another private channel:
+			{
+				assert_noop!(
+					Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)),
+					Error::<Test>::PrivateChannelExistsForBroker
+				);
+			}
+
+			// A different broker can still open another private channel:
+			{
+				const BROKER_2: u64 = 777;
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+					&BROKER_2,
+				)
+				.unwrap();
+
+				assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER_2)));
+
+				assert_eq!(
+					BrokerPrivateBtcChannels::<Test>::get(BROKER_2),
+					Some(FIRST_CHANNEL_ID + 1)
+				);
+			}
+		});
+	}
+
+	#[test]
+	fn close_private_btc_channel() {
+		new_test_ext().execute_with(|| {
+			const CHANNEL_ID: u64 = 0;
+			// Only brokers can close channels
+			assert_noop!(
+				Swapping::close_private_btc_channel(OriginTrait::signed(ALICE)),
+				BadOrigin
+			);
+
+			// Can't close a channel if one does not exist:
+			assert_noop!(
+				Swapping::close_private_btc_channel(OriginTrait::signed(BROKER)),
+				Error::<Test>::NoPrivateChannelExistsForBroker
+			);
+
+			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
+			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(CHANNEL_ID));
+
+			// Now closing should succeed:
+			assert_ok!(Swapping::close_private_btc_channel(OriginTrait::signed(BROKER)));
+			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), None);
+
+			System::assert_has_event(RuntimeEvent::Swapping(
+				Event::<Test>::PrivateBrokerChannelClosed {
+					broker_id: BROKER,
+					channel_id: CHANNEL_ID,
+				},
+			));
+
+			// The same broker can re-open a (different) private channel:
+			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
+			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(CHANNEL_ID + 1));
+		});
 	}
 }

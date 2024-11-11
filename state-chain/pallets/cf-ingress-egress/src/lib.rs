@@ -40,10 +40,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
-	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, DepositApi, EgressApi,
-	EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi,
-	IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit, PoolApi,
-	ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
+	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, ChannelIdAllocator, DepositApi,
+	EgressApi, EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight,
+	IngressEgressFeeApi, IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit,
+	PoolApi, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -82,11 +82,9 @@ pub enum BoostStatus<ChainAmount> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub enum TaintedTransactionStatus {
-	/// Transaction was boosted, can't be rejected.
-	Boosted,
 	/// Transaction was prewitnessed but not boosted due to being reported.
 	Prewitnessed,
-	/// Transaction has been reported but not neither prewitnessed nor boosted.
+	/// Transaction has been reported but was not prewitnessed.
 	#[default]
 	Unseen,
 }
@@ -200,6 +198,9 @@ pub enum PalletConfigUpdate<T: Config<I>, I: 'static> {
 	ChannelOpeningFee { fee: T::Amount },
 	/// Set the minimum deposit allowed for a particular asset.
 	SetMinimumDeposit { asset: TargetChainAsset<T, I>, minimum_deposit: TargetChainAmount<T, I> },
+	/// Set the deposit channel lifetime. The time before the engines stop witnessing a channel.
+	/// This is configurable primarily to allow for unpredictable block times in testnets.
+	SetDepositChannelLifetime { lifetime: TargetChainBlockNumber<T, I> },
 }
 
 macro_rules! append_chain_to_name {
@@ -630,6 +631,9 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			minimum_deposit: TargetChainAmount<T, I>,
 		},
+		DepositChannelLifetimeSet {
+			lifetime: TargetChainBlockNumber<T, I>,
+		},
 		/// The deposits was rejected because the amount was below the minimum allowed.
 		DepositIgnored {
 			deposit_address: Option<TargetChainAccount<T, I>>,
@@ -797,7 +801,7 @@ pub mod pallet {
 
 			// Approximate weight calculation: r/w DepositChannelLookup + w DepositChannelPool
 			let recycle_weight_per_address =
-				frame_support::weights::constants::RocksDbWeight::get().reads_writes(1, 2);
+				frame_support::weights::constants::ParityDbWeight::get().reads_writes(1, 2);
 
 			let maximum_addresses_to_recycle = remaining_weight
 				.ref_time()
@@ -824,7 +828,7 @@ pub mod pallet {
 				// Add weight for the DepositChannelRecycleBlocks read/write plus the
 				// DepositChannelLookup read/writes in the for loop below
 				used_weight = used_weight.saturating_add(
-					frame_support::weights::constants::RocksDbWeight::get().reads_writes(
+					frame_support::weights::constants::ParityDbWeight::get().reads_writes(
 						(addresses_to_recycle.len() + 1) as u64,
 						(addresses_to_recycle.len() + 1) as u64,
 					),
@@ -849,7 +853,7 @@ pub mod pallet {
 							Ok(())
 						},
 						_ => {
-							// Don't apply the mutation. We expect the pre-witnessed/boosted
+							// Don't apply the mutation. We expect the pre-witnessed
 							// transaction to eventually be fully witnessed.
 							Err(())
 						},
@@ -1138,6 +1142,10 @@ pub mod pallet {
 							minimum_deposit,
 						});
 					},
+					PalletConfigUpdate::<T, I>::SetDepositChannelLifetime { lifetime } => {
+						DepositChannelLifetime::<T, I>::set(lifetime);
+						Self::deposit_event(Event::<T, I>::DepositChannelLifetimeSet { lifetime });
+					},
 				}
 			}
 
@@ -1381,7 +1389,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					DepositChannel { state, ..deposit_channel },
 				);
 				*used_weight = used_weight.saturating_add(
-					frame_support::weights::constants::RocksDbWeight::get().reads_writes(0, 1),
+					frame_support::weights::constants::ParityDbWeight::get().reads_writes(0, 1),
 				);
 			}
 
@@ -1725,16 +1733,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							*status = TaintedTransactionStatus::Prewitnessed;
 							true
 						},
+						// Pre-witnessing twice is unlikely but possible. Either way we don't want
+						// to change the status and we don't want to allow boosting.
+						Some(TaintedTransactionStatus::Prewitnessed) => true,
 						// Transaction has not been reported, mark it as boosted to prevent further
 						// reports.
-						None => {
-							let _ = opt.insert(TaintedTransactionStatus::Boosted);
-							false
-						},
-						// Pre-witnessing twice or pre-witnessing after boosting is unlikely but
-						// possible. Either way we don't want to change the status.
-						Some(TaintedTransactionStatus::Prewitnessed) |
-						Some(TaintedTransactionStatus::Boosted) => true,
+						None => false,
 					}
 				}) {
 					continue;
@@ -1963,8 +1967,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let channel_owner = deposit_channel_details.owner.clone();
 
 		if let Some(tx_id) = deposit_details.deposit_id() {
-			if matches!(TaintedTransactions::<T, I>::take(&channel_owner, &tx_id),
-			Some(status) if status != TaintedTransactionStatus::Boosted)
+			if TaintedTransactions::<T, I>::take(&channel_owner, &tx_id).is_some() &&
+				!matches!(deposit_channel_details.boost_status, BoostStatus::Boosted { .. })
 			{
 				let refund_address = match deposit_channel_details.action.clone() {
 					ChannelAction::Swap { refund_params, .. } => refund_params
@@ -2283,11 +2287,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			deposit_channel.asset = source_asset;
 			(deposit_channel, channel_id)
 		} else {
-			let next_channel_id =
-				ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
-					*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
-					Ok(*id)
-				})?;
+			let next_channel_id = Self::allocate_next_channel_id()?;
 			(
 				DepositChannel::generate_new::<T::AddressDerivation>(next_channel_id, source_asset)
 					.map_err(|e| match e {
@@ -2416,6 +2416,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Err(e) => log::error!("Ccm fallback failed to schedule the fallback egress: Target chain: {:?}, broadcast_id: {:?}, error: {:?}", T::TargetChain::get(), broadcast_id, e),
 		}
 	}
+
+	fn allocate_next_channel_id() -> Result<ChannelId, Error<T, I>> {
+		ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
+			*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
+			Ok(*id)
+		})
+	}
 }
 
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
@@ -2494,6 +2501,12 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				},
 			}
 		})
+	}
+}
+
+impl<T: Config<I>, I: 'static> ChannelIdAllocator for Pallet<T, I> {
+	fn allocate_private_channel_id() -> Result<ChannelId, DispatchError> {
+		Ok(Self::allocate_next_channel_id()?)
 	}
 }
 

@@ -229,7 +229,7 @@ fn broker_bps_is_limited() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Swapping::request_swap_deposit_address_with_affiliates(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::signed(BROKER),
 				Asset::Eth,
 				Asset::Usdc,
 				EncodedAddress::Eth(Default::default()),
@@ -274,7 +274,7 @@ fn cannot_swap_in_safe_mode() {
 #[test]
 fn cannot_withdraw_in_safe_mode() {
 	new_test_ext().execute_with(|| {
-		credit_broker_account::<Test>(&ALICE, Asset::Eth, 200);
+		credit_broker_account::<Test>(&BROKER, Asset::Eth, 200);
 
 		// Activate code red
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
@@ -282,25 +282,25 @@ fn cannot_withdraw_in_safe_mode() {
 		// Cannot withdraw
 		assert_noop!(
 			Swapping::withdraw(
-				RuntimeOrigin::signed(ALICE),
+				RuntimeOrigin::signed(BROKER),
 				Asset::Eth,
 				EncodedAddress::Eth(Default::default()),
 			),
 			Error::<Test>::WithdrawalsDisabled
 		);
 
-		assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Eth), 200);
+		assert_eq!(get_broker_balance::<Test>(&BROKER, Asset::Eth), 200);
 
 		// Change back to code green
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
 		// withdraws are now allowed
 		assert_ok!(Swapping::withdraw(
-			RuntimeOrigin::signed(ALICE),
+			RuntimeOrigin::signed(BROKER),
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 		));
-		assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Eth), 0);
+		assert_eq!(get_broker_balance::<Test>(&BROKER, Asset::Eth), 0);
 	});
 }
 

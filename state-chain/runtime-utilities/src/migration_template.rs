@@ -1,4 +1,4 @@
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::traits::UncheckedOnRuntimeUpgrade;
 use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
@@ -8,7 +8,7 @@ use sp_std::vec::Vec;
 
 pub struct Migration<T>(PhantomData<T>);
 
-impl<T> OnRuntimeUpgrade for Migration<T> {
+impl<T> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		unimplemented!()
 	}

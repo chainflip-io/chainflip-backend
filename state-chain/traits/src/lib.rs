@@ -1109,3 +1109,7 @@ impl<C: ChainCrypto> ElectionEgressWitnesser for DummyEgressSuccessWitnesser<C> 
 pub trait RotationBroadcastsPending {
 	fn rotation_broadcasts_pending() -> bool;
 }
+
+pub trait ChannelIdAllocator {
+	fn allocate_private_channel_id() -> Result<ChannelId, DispatchError>;
+}

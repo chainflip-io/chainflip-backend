@@ -1,4 +1,4 @@
 use crate::Pallet;
-use cf_runtime_upgrade_utilities::PlaceholderMigration;
+use cf_runtime_utilities::PlaceholderMigration;
 
-pub type PalletMigration<T> = PlaceholderMigration<Pallet<T>, 3>;
+pub type PalletMigration<T> = PlaceholderMigration<3, Pallet<T>>;

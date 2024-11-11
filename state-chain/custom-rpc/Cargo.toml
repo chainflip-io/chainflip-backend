@@ -29,6 +29,7 @@ pallet-cf-governance = { workspace = true, default-features = true }
 pallet-cf-pools = { workspace = true, default-features = true }
 pallet-cf-witnesser = { workspace = true, default-features = true }
 pallet-cf-swapping = { workspace = true, default-features = true }
+pallet-cf-ingress-egress = { workspace = true, default-features = true }
 
 sp-api = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }

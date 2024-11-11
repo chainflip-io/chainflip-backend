@@ -3,11 +3,12 @@ mod screening;
 
 use crate::{
 	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
-	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLookup, DepositChannelPool,
-	DepositIgnoredReason, DepositWitness, DisabledEgressAssets, EgressDustLimit,
-	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FetchOrTransfer,
-	MinimumDeposit, Pallet, PalletConfigUpdate, PalletSafeMode, PrewitnessedDepositIdCounter,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
+	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
+	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
+	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
+	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -1451,11 +1452,13 @@ fn can_update_all_config_items() {
 		const NEW_OPENING_FEE: u128 = 300;
 		const NEW_MIN_DEPOSIT_FLIP: u128 = 100;
 		const NEW_MIN_DEPOSIT_ETH: u128 = 200;
+		const NEW_DEPOSIT_CHANNEL_LIFETIME: u64 = 99;
 
 		// Check that the default values are different from the new ones
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Flip), 0);
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Eth), 0);
+		assert_ne!(DepositChannelLifetime::<Test, _>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
 
 		// Update all config items at the same time, and updates 2 separate min deposit amounts.
 		assert_ok!(IngressEgress::update_pallet_config(
@@ -1470,6 +1473,9 @@ fn can_update_all_config_items() {
 					asset: EthAsset::Eth,
 					minimum_deposit: NEW_MIN_DEPOSIT_ETH
 				},
+				PalletConfigUpdate::SetDepositChannelLifetime {
+					lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
+				}
 			]
 			.try_into()
 			.unwrap()
@@ -1479,6 +1485,7 @@ fn can_update_all_config_items() {
 		assert_eq!(ChannelOpeningFee::<Test, _>::get(), NEW_OPENING_FEE);
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Flip), NEW_MIN_DEPOSIT_FLIP);
 		assert_eq!(MinimumDeposit::<Test, _>::get(EthAsset::Eth), NEW_MIN_DEPOSIT_ETH);
+		assert_eq!(DepositChannelLifetime::<Test, _>::get(), NEW_DEPOSIT_CHANNEL_LIFETIME);
 
 		// Check that the events were emitted
 		assert_events_eq!(
@@ -1493,6 +1500,9 @@ fn can_update_all_config_items() {
 			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::MinimumDepositSet {
 				asset: EthAsset::Eth,
 				minimum_deposit: NEW_MIN_DEPOSIT_ETH
+			}),
+			RuntimeEvent::IngressEgress(crate::Event::<Test, _>::DepositChannelLifetimeSet {
+				lifetime: NEW_DEPOSIT_CHANNEL_LIFETIME
 			}),
 		);
 
@@ -1977,5 +1987,38 @@ fn failed_ccm_deposit_can_deposit_event() {
 				..
 			})
 		);
+	});
+}
+
+#[test]
+fn private_and_regular_channel_ids_do_not_overlap() {
+	new_test_ext().execute_with(|| {
+		const REGULAR_CHANNEL_ID_1: u64 = 1;
+		const PRIVATE_CHANNEL_ID: u64 = 2;
+		const REGULAR_CHANNEL_ID_2: u64 = 3;
+
+		let open_regular_channel_expecting_id = |expected_channel_id: u64| {
+			let (channel_id, ..) = IngressEgress::open_channel(
+				&ALICE,
+				EthAsset::Eth,
+				ChannelAction::LiquidityProvision { lp_account: 0, refund_address: None },
+				0,
+			)
+			.unwrap();
+
+			assert_eq!(channel_id, expected_channel_id);
+		};
+
+		// Open a regular channel first to check that ids of regular
+		// and private channels do not overlap:
+		open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_1);
+
+		// This method is used, for example, by the swapping pallet when requesting
+		// a channel id for private broker channels:
+		assert_eq!(IngressEgress::allocate_next_channel_id(), Ok(PRIVATE_CHANNEL_ID));
+
+		// Open a regular channel again to check that opening a private channel
+		// updates the channel id counter:
+		open_regular_channel_expecting_id(REGULAR_CHANNEL_ID_2);
 	});
 }

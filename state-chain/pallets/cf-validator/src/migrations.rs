@@ -1,9 +1,4 @@
 use crate::Pallet;
-use cf_runtime_upgrade_utilities::{PlaceholderMigration, VersionedMigration};
+use cf_runtime_utilities::PlaceholderMigration;
 
-mod delete_old_epoch_data;
-
-pub type PalletMigration<T> = (
-	VersionedMigration<Pallet<T>, delete_old_epoch_data::Migration<T>, 3, 4>,
-	PlaceholderMigration<Pallet<T>, 4>,
-);
+pub type PalletMigration<T> = (PlaceholderMigration<4, Pallet<T>>,);

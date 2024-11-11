@@ -18,17 +18,17 @@ use crate::{
 		},
 		Offence,
 	},
-	migrations::serialize_solana_broadcast::{NoopUpgrade, SerializeSolanaBroadcastMigration},
 	monitoring_apis::{
 		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
-		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringData, OpenDepositChannels,
+		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringDataV2, OpenDepositChannels,
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
-		runtime_decl_for_custom_runtime_api::CustomRuntimeApiV1, AuctionState, BoostPoolDepth,
+		runtime_decl_for_custom_runtime_api::CustomRuntimeApi, AuctionState, BoostPoolDepth,
 		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulateSwapAdditionalOrder, SimulatedSwapInformation, ValidatorInfo,
+		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TaintedTransactionEvents,
+		ValidatorInfo,
 	},
 };
 use cf_amm::{
@@ -49,8 +49,10 @@ use cf_chains::{
 	sol::{SolAddress, SolanaCrypto},
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
-use cf_primitives::{BroadcastId, EpochIndex, NetworkEnvironment, STABLE_ASSET};
-use cf_runtime_upgrade_utilities::VersionedMigration;
+use cf_primitives::{
+	BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex, NetworkEnvironment,
+	STABLE_ASSET,
+};
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
@@ -59,10 +61,6 @@ use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
 use frame_support::{derive_impl, instances::*};
 pub use frame_system::Call as SystemCall;
-use migrations::{
-	add_liveness_electoral_system_solana::LivenessSettingsMigration,
-	solana_egress_success_witness::SolanaEgressSuccessWitnessMigration,
-};
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
 	ChannelAction, DepositWitness, IngressOrEgress, OwedAmount, TargetChainAsset,
@@ -71,8 +69,10 @@ use pallet_cf_pools::{
 	AskBidMap, AssetPair, HistoricalEarnedFees, OrderId, PoolLiquidity, PoolOrderbook, PoolPriceV1,
 	PoolPriceV2, UnidirectionalPoolDepth,
 };
+use pallet_cf_swapping::{BatchExecutionError, FeeType, Swap};
+use runtime_apis::ChainAccounts;
 
-use crate::chainflip::EvmLimit;
+use crate::{chainflip::EvmLimit, runtime_apis::TaintedTransactionEvent};
 
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_swapping::SwapLegInfo;
@@ -119,7 +119,7 @@ pub use sp_runtime::BuildStorage;
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, MultiSignature,
+	ApplyExtrinsicResult, DispatchError, MultiSignature,
 };
 pub use sp_runtime::{Perbill, Permill};
 use sp_std::prelude::*;
@@ -200,7 +200,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 170,
+	spec_version: 180,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 12,
@@ -298,6 +298,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
+	type ChannelIdAllocator = BitcoinIngressEgress;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -1233,10 +1234,9 @@ type AllMigrations = (
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
-	MigrationsForV1_7,
+	MigrationsForV1_8,
 	migrations::housekeeping::Migration,
 	migrations::reap_old_accounts::Migration,
-	chainflip::solana_elections::old::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1278,33 +1278,7 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-type MigrationsForV1_7 = (
-	// Only the Solana Transaction type has changed
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		SerializeSolanaBroadcastMigration,
-		8,
-		9,
-	>,
-	// For clearing all Solana Egress Success election votes, and migrating Solana ApiCall to the
-	// newer version.
-	VersionedMigration<
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		SolanaEgressSuccessWitnessMigration,
-		9,
-		10,
-	>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>, NoopUpgrade, 8, 10>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>, NoopUpgrade, 8, 10>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>, NoopUpgrade, 8, 10>,
-	VersionedMigration<pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>, NoopUpgrade, 8, 10>,
-	VersionedMigration<
-		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-		LivenessSettingsMigration,
-		0,
-		1,
-	>,
-);
+type MigrationsForV1_8 = ();
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
@@ -1413,6 +1387,7 @@ impl_runtime_apis! {
 				.collect()
 		}
 		fn cf_free_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
+			LiquidityPools::sweep(&account_id).unwrap();
 			AssetBalances::free_balances(&account_id)
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
@@ -1524,6 +1499,8 @@ impl_runtime_apis! {
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
+			broker_commission: BasisPoints,
+			dca_parameters: Option<DcaParameters>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
 			if let Some(additional_orders) = additional_orders {
@@ -1599,20 +1576,62 @@ impl_runtime_apis! {
 
 			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, from, amount);
 
-			let swap_output = Swapping::swap_with_network_fee(
-				from,
-				to,
-				amount_to_swap,
-			)?;
+			// Estimate swap result for a chunk, then extrapolate the result.
+			// If no DCA parameter is given, swap the entire amount with 1 chunk.
+			let number_of_chunks: u128 = dca_parameters.map(|dca|dca.number_of_chunks).unwrap_or(1u32).into();
+			let amount_per_chunk = amount_to_swap / number_of_chunks;
 
-			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, to, swap_output.output);
+			let swap_output_per_chunk = Swapping::try_execute_without_violations(
+				vec![
+					Swap::new(
+						Default::default(),
+						Default::default(),
+						from,
+						to,
+						amount_per_chunk,
+						None,
+						vec![
+							FeeType::NetworkFee,
+							FeeType::BrokerFee(
+								vec![Beneficiary {
+									account: AccountId::new([0xbb; 32]),
+									bps: broker_commission,
+								}]
+								.try_into()
+								.expect("Beneficiary with a length of 1 must be within length bound.")
+							)
+						],
+					)
+				],
+			).map_err(|e| DispatchErrorWithMessage::Other(match e {
+				BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
+				BatchExecutionError::PriceViolation { .. } => DispatchError::Other("Price Violation: Some swaps failed due to Price Impact Limitations."),
+				BatchExecutionError::DispatchError { error } => error,
+			}))?;
+
+			let (
+				network_fee,
+				broker_fee,
+				intermediary,
+				output,
+			) = {
+				(
+					swap_output_per_chunk[0].network_fee_taken.unwrap_or_default() * number_of_chunks,
+					swap_output_per_chunk[0].broker_fee_taken.unwrap_or_default() * number_of_chunks,
+					swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks),
+					swap_output_per_chunk[0].final_output.unwrap_or_default() * number_of_chunks,
+				)
+			};
+
+			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, to, output);
 
 			Ok(SimulatedSwapInformation {
-				intermediary: swap_output.intermediary,
+				intermediary,
 				output,
-				network_fee: swap_output.network_fee,
+				network_fee,
 				ingress_fee,
 				egress_fee,
+				broker_fee,
 			})
 		}
 
@@ -1621,9 +1640,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_lp_events() -> Vec<pallet_cf_pools::Event<Runtime>> {
-
 			System::read_events_no_consensus().filter_map(|event_record| {
-
 				if let RuntimeEvent::LiquidityPools(pools_event) = event_record.event {
 					Some(pools_event)
 				} else {
@@ -2066,13 +2083,47 @@ impl_runtime_apis! {
 		}
 
 		fn cf_validate_dca_params(number_of_chunks: u32, chunk_interval: u32) -> Result<(), DispatchErrorWithMessage> {
-			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&cf_primitives::DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
+			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
 		}
 
 		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage> {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
 		}
+
+		fn cf_get_open_deposit_channels(account_id: Option<AccountId>) -> ChainAccounts {
+			let btc_chain_accounts = pallet_cf_ingress_egress::DepositChannelLookup::<Runtime,BitcoinInstance>::iter_values()
+				.filter(|channel_details| account_id.is_none() || Some(&channel_details.owner) == account_id.as_ref())
+				.map(|channel_details| channel_details.deposit_channel.address)
+				.collect::<Vec<_>>();
+
+			ChainAccounts {
+				btc_chain_accounts
+			}
+		}
+
+		fn cf_tainted_transaction_events() -> crate::runtime_apis::TaintedTransactionEvents {
+			let btc_events = System::read_events_no_consensus().filter_map(|event_record| {
+				if let RuntimeEvent::BitcoinIngressEgress(btc_ie_event) = event_record.event {
+					match btc_ie_event {
+						pallet_cf_ingress_egress::Event::TaintedTransactionReportExpired{ account_id, tx_id } =>
+							Some(TaintedTransactionEvent::TaintedTransactionReportExpired{ account_id, tx_id }),
+						pallet_cf_ingress_egress::Event::TaintedTransactionReportReceived{ account_id, tx_id, expires_at: _ } =>
+							Some(TaintedTransactionEvent::TaintedTransactionReportReceived{account_id, tx_id }),
+						pallet_cf_ingress_egress::Event::TaintedTransactionRejected{ broadcast_id, tx_id } =>
+							Some(TaintedTransactionEvent::TaintedTransactionRejected{ refund_broadcast_id: broadcast_id, tx_id: tx_id.id.tx_id }),
+						_ => None,
+					}
+				} else {
+					None
+				}
+			}).collect();
+
+			TaintedTransactionEvents {
+				btc_events
+			}
+		}
 	}
+
 
 	impl monitoring_apis::MonitoringRuntimeApi<Block> for Runtime {
 
@@ -2147,7 +2198,19 @@ impl_runtime_apis! {
 		}
 
 		fn cf_suspended_validators() -> Vec<(Offence, u32)> {
-			pallet_cf_reputation::Suspensions::<Runtime>::iter().map(|(key, elem)| (key, elem.len() as u32)).collect()
+			let suspended_for_keygen = match pallet_cf_validator::Pallet::<Runtime>::current_rotation_phase() {
+				pallet_cf_validator::RotationPhase::KeygensInProgress(rotation_state) |
+				pallet_cf_validator::RotationPhase::KeyHandoversInProgress(rotation_state) |
+				pallet_cf_validator::RotationPhase::ActivatingKeys(rotation_state) |
+				pallet_cf_validator::RotationPhase::NewKeysActivated(rotation_state) => { rotation_state.banned.len() as u32 },
+				_ => {0u32}
+			};
+			pallet_cf_reputation::Suspensions::<Runtime>::iter().map(|(key, _)| {
+				if key == pallet_cf_threshold_signature::PalletOffence::FailedKeygen.into() {
+					return (key, suspended_for_keygen);
+				}
+				(key, pallet_cf_reputation::Pallet::<Runtime>::validators_suspended_for(&[key]).len() as u32)
+			}).collect()
 		}
 		fn cf_epoch_state() -> EpochState {
 			let auction_params = Validator::auction_parameters();
@@ -2255,8 +2318,8 @@ impl_runtime_apis! {
 		fn cf_sol_onchain_key() -> SolAddress{
 			SolanaBroadcaster::current_on_chain_key().unwrap_or_default()
 		}
-		fn cf_monitoring_data() -> MonitoringData {
-			MonitoringData{
+		fn cf_monitoring_data() -> MonitoringDataV2 {
+			MonitoringDataV2{
 				external_chains_height: Self::cf_external_chains_block_height(),
 				btc_utxos: Self::cf_btc_utxos(),
 				epoch: Self::cf_epoch_state(),

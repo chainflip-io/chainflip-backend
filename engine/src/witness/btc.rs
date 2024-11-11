@@ -78,7 +78,7 @@ pub async fn start<
 	prewitness_call: PrewitnessCall,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
-	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED>,
+	unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
@@ -126,7 +126,13 @@ where
 	block_source
 		.clone()
 		.chunk_by_vault(vaults.clone(), scope)
-		.deposit_addresses(scope, unfinalised_state_chain_stream, state_chain_client.clone())
+		.deposit_addresses(
+			scope,
+			unfinalised_state_chain_stream.clone(),
+			state_chain_client.clone(),
+		)
+		.await
+		.private_deposit_channels(scope, unfinalised_state_chain_stream, state_chain_client.clone())
 		.await
 		.btc_deposits(prewitness_call)
 		.logging("pre-witnessing")
@@ -163,6 +169,8 @@ where
 		.logging("safe block produced")
 		.chunk_by_vault(vaults, scope)
 		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.await
+		.private_deposit_channels(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.btc_deposits(process_call.clone())
 		.egress_items(scope, state_chain_stream, state_chain_client.clone())

@@ -27,7 +27,7 @@
 #![allow(unused_imports)]
 #![allow(missing_docs)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::ParityDbWeight}};
 use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_environment.
@@ -85,7 +85,7 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 7_212_000 picoseconds.
 		Weight::from_parts(7_576_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Environment::ConsolidationParameters` (r:0 w:1)
 	/// Proof: `Environment::ConsolidationParameters` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -95,7 +95,7 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 6_387_000 picoseconds.
 		Weight::from_parts(6_694_000, 0)
-			.saturating_add(RocksDbWeight::get().writes(1_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Environment::SolanaUnavailableNonceAccounts` (r:1 w:1)
 	/// Proof: `Environment::SolanaUnavailableNonceAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -107,7 +107,7 @@ impl WeightInfo for () {
 		//  Estimated: `4681`
 		// Minimum execution time: 17_539_000 picoseconds.
 		Weight::from_parts(17_925_000, 4681)
-			.saturating_add(RocksDbWeight::get().reads(2_u64))
-			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
 }

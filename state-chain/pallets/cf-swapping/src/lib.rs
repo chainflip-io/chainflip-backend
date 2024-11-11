@@ -15,9 +15,9 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, BalanceApi, DepositApi, ExecutionCondition, IngressEgressFeeApi,
-	SwapLimitsProvider, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi,
+	impl_pallet_safe_mode, BalanceApi, ChannelIdAllocator, DepositApi, ExecutionCondition,
+	IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
+	SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -70,12 +70,12 @@ struct FeeTaken {
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
-struct SwapState<T: Config> {
-	swap: Swap<T>,
-	network_fee_taken: Option<AssetAmount>,
-	broker_fee_taken: Option<AssetAmount>,
-	stable_amount: Option<AssetAmount>,
-	final_output: Option<AssetAmount>,
+pub struct SwapState<T: Config> {
+	pub swap: Swap<T>,
+	pub network_fee_taken: Option<AssetAmount>,
+	pub broker_fee_taken: Option<AssetAmount>,
+	pub stable_amount: Option<AssetAmount>,
+	pub final_output: Option<AssetAmount>,
 }
 
 impl<T: Config> SwapState<T> {
@@ -149,7 +149,7 @@ impl<T: Config> SwapState<T> {
 #[repr(u8)]
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-enum FeeType<T: Config> {
+pub enum FeeType<T: Config> {
 	NetworkFee = 0,
 	BrokerFee(Beneficiaries<T::AccountId>),
 }
@@ -181,7 +181,7 @@ pub struct SwapLegInfo {
 }
 
 impl<T: Config> Swap<T> {
-	fn new(
+	pub fn new(
 		swap_id: SwapId,
 		swap_request_id: SwapRequestId,
 		from: Asset,
@@ -202,7 +202,7 @@ impl<T: Config> Swap<T> {
 	}
 }
 
-enum BatchExecutionError<T: Config> {
+pub enum BatchExecutionError<T: Config> {
 	SwapLegFailed {
 		asset: Asset,
 		direction: SwapLeg,
@@ -441,6 +441,8 @@ pub mod pallet {
 
 		/// The balance API for interacting with the asset-balance pallet.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
+
+		type ChannelIdAllocator: ChannelIdAllocator;
 	}
 
 	#[pallet::pallet]
@@ -513,6 +515,10 @@ pub mod pallet {
 	#[pallet::getter(fn minimum_chunk_size)]
 	pub type MinimumChunkSize<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+
+	#[pallet::storage]
+	pub type BrokerPrivateBtcChannels<T: Config> =
+		StorageMap<_, Identity, T::AccountId, ChannelId, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -642,6 +648,14 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 		},
+		PrivateBrokerChannelOpened {
+			broker_id: T::AccountId,
+			channel_id: ChannelId,
+		},
+		PrivateBrokerChannelClosed {
+			broker_id: T::AccountId,
+			channel_id: ChannelId,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -685,6 +699,10 @@ pub mod pallet {
 		InvalidDcaParameters,
 		/// The provided Refund address cannot be decoded into ForeignChainAddress.
 		InvalidRefundAddress,
+		/// Broker cannot deregister or open a new private channel because one already exists.
+		PrivateChannelExistsForBroker,
+		/// Cannot close a private channel for a broker because it does not exist.
+		NoPrivateChannelExistsForBroker,
 	}
 
 	#[pallet::genesis_config]
@@ -941,6 +959,11 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
 			ensure!(
+				!BrokerPrivateBtcChannels::<T>::contains_key(&account_id),
+				Error::<T>::PrivateChannelExistsForBroker
+			);
+
+			ensure!(
 				T::BalanceApi::free_balances(&account_id).iter().all(|(_, amount)| *amount == 0),
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
@@ -1051,6 +1074,40 @@ pub mod pallet {
 				refund_parameters,
 				dca_parameters,
 			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(12)]
+		#[pallet::weight(T::WeightInfo::open_private_btc_channel())]
+		pub fn open_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			ensure!(
+				!BrokerPrivateBtcChannels::<T>::contains_key(&broker_id),
+				Error::<T>::PrivateChannelExistsForBroker
+			);
+
+			// TODO: burn fee for opening a channel?
+			let channel_id = T::ChannelIdAllocator::allocate_private_channel_id()?;
+
+			BrokerPrivateBtcChannels::<T>::insert(broker_id.clone(), channel_id);
+
+			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened { broker_id, channel_id });
+
+			Ok(())
+		}
+
+		#[pallet::call_index(13)]
+		#[pallet::weight(T::WeightInfo::close_private_btc_channel())]
+		pub fn close_private_btc_channel(origin: OriginFor<T>) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let Some(channel_id) = BrokerPrivateBtcChannels::<T>::take(&broker_id) else {
+				return Err(Error::<T>::NoPrivateChannelExistsForBroker.into())
+			};
+
+			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed { broker_id, channel_id });
 
 			Ok(())
 		}
@@ -1224,7 +1281,7 @@ pub mod pallet {
 		}
 
 		#[transactional]
-		fn try_execute_without_violations(
+		pub fn try_execute_without_violations(
 			swaps: Vec<Swap<T>>,
 		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
