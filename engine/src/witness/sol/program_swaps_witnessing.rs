@@ -95,7 +95,7 @@ pub async fn get_program_swaps(
 										CcmCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding CcmCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
 
 									let deposit_metadata = Some(CcmDepositMetadata {
-										source_chain: cf_primitives::ForeignChain::Solana, // TODO: Pass chain id from above?
+										source_chain: cf_primitives::ForeignChain::Solana,
 										source_address: Some(ForeignChainAddress::Sol(data.sender.into())),
 										channel_metadata: CcmChannelMetadata {
 											message: ccm_parameters.message
