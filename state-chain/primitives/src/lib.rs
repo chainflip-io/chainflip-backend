@@ -395,11 +395,12 @@ fn is_more_recent_semver() {
 }
 
 pub const MAX_AFFILIATES: u32 = 5;
-pub const MAX_BENEFICIARIES: u32 = 6;
+// Beneficiaries can be 1 element larger since they include the primary broker:
+pub const MAX_BENEFICIARIES: u32 = MAX_AFFILIATES + 1;
 
 pub type Affiliates<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_AFFILIATES>>;
 
-pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<{ MAX_AFFILIATES + 1 }>>;
+pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIARIES>>;
 
 #[derive(
 	Clone, Debug, PartialEq, Eq, MaxEncodedLen, Encode, Decode, TypeInfo, Serialize, Deserialize,

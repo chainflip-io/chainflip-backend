@@ -8,7 +8,7 @@ use cf_chains::{
 	},
 	ChannelRefundParameters, ForeignChainAddress,
 };
-use cf_primitives::{AccountId, BasisPoints, Beneficiary, DcaParameters};
+use cf_primitives::{AccountId, Beneficiary, DcaParameters};
 use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
@@ -144,17 +144,11 @@ pub fn try_extract_vault_swap_call(
 		deposit_metadata: None, // No ccm for BTC (yet?)
 		broker_fees: maybe_broker_id.map(|broker_id| {
 			(
-				Beneficiary {
-					account: broker_id.clone(),
-					bps: data.parameters.broker_fee as BasisPoints,
-				},
+				Beneficiary { account: broker_id.clone(), bps: data.parameters.broker_fee.into() },
 				data.parameters
 					.affiliates
 					.into_iter()
-					.map(|entry| Beneficiary {
-						account: entry.affiliate,
-						bps: entry.fee as BasisPoints,
-					})
+					.map(|entry| Beneficiary { account: entry.affiliate, bps: entry.fee.into() })
 					.collect_vec()
 					.try_into()
 					.expect(
@@ -163,16 +157,16 @@ pub fn try_extract_vault_swap_call(
 			)
 		}),
 		refund_params: Some(Box::new(ChannelRefundParameters {
-			retry_duration: data.parameters.retry_duration as u32,
+			retry_duration: data.parameters.retry_duration.into(),
 			refund_address: ForeignChainAddress::Btc(refund_address),
 			min_price,
 		})),
 		dca_params: Some(DcaParameters {
-			number_of_chunks: data.parameters.number_of_chunks as u32,
-			chunk_interval: data.parameters.chunk_interval as u32,
+			number_of_chunks: data.parameters.number_of_chunks.into(),
+			chunk_interval: data.parameters.chunk_interval.into(),
 		}),
 		// This is only to be checked in the pre-witnessed version
-		boost_fee: data.parameters.boost_fee as u16,
+		boost_fee: data.parameters.boost_fee.into(),
 	})
 }
 
@@ -308,16 +302,16 @@ mod tests {
 				broker_fees: Some((
 					Beneficiary {
 						account: BROKER,
-						bps: MOCK_SWAP_PARAMS.parameters.broker_fee as BasisPoints
+						bps: MOCK_SWAP_PARAMS.parameters.broker_fee.into()
 					},
 					bounded_vec![Beneficiary {
 						account: MOCK_SWAP_PARAMS.parameters.affiliates[0].affiliate,
-						bps: MOCK_SWAP_PARAMS.parameters.affiliates[0].fee as BasisPoints,
+						bps: MOCK_SWAP_PARAMS.parameters.affiliates[0].fee.into(),
 					}]
 				)),
 				deposit_metadata: None,
 				refund_params: Some(Box::new(ChannelRefundParameters {
-					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
+					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),
 					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
@@ -325,10 +319,10 @@ mod tests {
 					)),
 				})),
 				dca_params: Some(DcaParameters {
-					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks as u32,
-					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval as u32,
+					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks.into(),
+					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval.into(),
 				}),
-				boost_fee: MOCK_SWAP_PARAMS.parameters.boost_fee as u16,
+				boost_fee: MOCK_SWAP_PARAMS.parameters.boost_fee.into(),
 			})
 		);
 	}

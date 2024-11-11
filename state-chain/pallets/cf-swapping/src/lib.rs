@@ -1138,14 +1138,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
 			origin: OriginFor<T>,
-			short_id: u8,
+			short_id: AffiliateShortId,
 			affiliate_id: T::AccountId,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let previous_affiliate_id = AffiliateIdMapping::<T>::take(&broker_id, short_id);
 
-			AffiliateIdMapping::<T>::insert(broker_id.clone(), short_id, affiliate_id.clone());
+			AffiliateIdMapping::<T>::insert(&broker_id, short_id, &affiliate_id);
 
 			Self::deposit_event(Event::<T>::AffiliateRegistrationUpdated {
 				broker_id,

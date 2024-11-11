@@ -82,7 +82,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					})
 				};
 
-				// TODO: provide broker id (along with broker fees) in the call
 				for (maybe_broker_id, vault_address) in vault_addresses {
 					for tx in &txs {
 						if let Some(call) = super::vault_swaps::try_extract_vault_swap_call(
