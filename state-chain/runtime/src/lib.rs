@@ -54,8 +54,7 @@ use cf_chains::{
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, ForeignChainAddress, Polkadot, Solana,
-	TransactionBuilder,
+	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -2099,7 +2098,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_get_vault_swap_details(
-			_broker: AccountId,
+			broker_id: AccountId,
 			source_asset: Asset,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
@@ -2109,7 +2108,7 @@ impl_runtime_apis! {
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
-		) -> Result<VaultSwapDetails, DispatchErrorWithMessage> {
+		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
 			// Validate params
 			if broker_commission != 0 || !affiliate_fees.is_empty() {
 				return Err(
@@ -2133,6 +2132,11 @@ impl_runtime_apis! {
 			// Encode swap
 			match ForeignChain::from(source_asset) {
 				ForeignChain::Bitcoin => {
+					use cf_traits::{KeyProvider, EpochKey};
+					use cf_chains::btc::deposit_address::DepositAddress;
+
+					let private_channel_id = pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
+						.ok_or(pallet_cf_swapping::Error::<Runtime>::NoPrivateChannelExistsForBroker)?;
 					let params = UtxoEncodedData {
 						output_asset: destination_asset,
 						output_address: destination_address,
@@ -2158,13 +2162,17 @@ impl_runtime_apis! {
 						},
 					};
 
-					// TODO: get private channel address. For now just return the btc vault address.
-					let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
-						pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch().unwrap()).unwrap();
-					let deposit_address = ForeignChainAddress::Btc(
-						cf_chains::btc::deposit_address::DepositAddress::new(btc_key.current, 0)
-							.script_pubkey(),
-					);
+					let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
+						.expect("We should always have a for the current epoch.");
+					let deposit_address = DepositAddress::new(
+						key.current,
+						private_channel_id.try_into().map_err(
+							// TODO: Ensure this can't happen.
+							|_| DispatchErrorWithMessage::Other("Private channel id out of bounds.".into())
+						)?
+					)
+					.script_pubkey()
+					.to_address(&Environment::network_environment().into());
 
 					Ok(VaultSwapDetails::Bitcoin {
 						nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw(),

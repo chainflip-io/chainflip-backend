@@ -36,8 +36,25 @@ use sp_std::{
 type VanityName = Vec<u8>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub enum VaultSwapDetails {
-	Bitcoin { nulldata_utxo: Vec<u8>, deposit_address: ForeignChainAddress },
+#[serde(tag = "chain")]
+pub enum VaultSwapDetails<BtcAddress> {
+	Bitcoin {
+		#[serde(with = "sp_core::bytes")]
+		nulldata_utxo: Vec<u8>,
+		deposit_address: BtcAddress,
+	},
+}
+
+impl<BtcAddress> VaultSwapDetails<BtcAddress> {
+	pub fn map_btc_address<F, T>(self, f: F) -> VaultSwapDetails<T>
+	where
+		F: FnOnce(BtcAddress) -> T,
+	{
+		match self {
+			VaultSwapDetails::Bitcoin { nulldata_utxo, deposit_address } =>
+				VaultSwapDetails::Bitcoin { nulldata_utxo, deposit_address: f(deposit_address) },
+		}
+	}
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Copy, TypeInfo, Serialize, Deserialize)]
@@ -386,7 +403,7 @@ decl_runtime_apis!(
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId32>,
 			dca_parameters: Option<DcaParameters>,
-		) -> Result<VaultSwapDetails, DispatchErrorWithMessage>;
+		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
 		fn cf_tainted_transaction_events() -> TaintedTransactionEvents;
 	}

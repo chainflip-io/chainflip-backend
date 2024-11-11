@@ -390,8 +390,15 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 pub struct AddressString(String);
 
 #[cfg(feature = "std")]
+impl From<String> for AddressString {
+	fn from(s: String) -> Self {
+		Self(s)
+	}
+}
+
+#[cfg(feature = "std")]
 impl sp_std::str::FromStr for AddressString {
-	type Err = &'static str;
+	type Err = frame_support::Never;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		Ok(Self(s.to_string()))

@@ -709,7 +709,7 @@ pub mod pallet {
 		UnsupportedSourceAsset,
 		/// Broker cannot deregister or open a new private channel because one already exists.
 		PrivateChannelExistsForBroker,
-		/// Cannot close a private channel for a broker because it does not exist.
+		/// The Broker does not have an open private channel.
 		NoPrivateChannelExistsForBroker,
 	}
 

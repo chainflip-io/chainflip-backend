@@ -37,7 +37,7 @@ use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
 use sp_api::{ApiError, CallApiAt};
-use sp_core::{Bytes, U256};
+use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
 	Permill,
@@ -68,27 +68,6 @@ use std::{
 
 pub mod monitoring;
 pub mod order_fills;
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(tag = "chain")]
-pub enum VaultSwapDetailsHumanreadable {
-	Bitcoin { nulldata_utxo: Bytes, deposit_address: ForeignChainAddressHumanreadable },
-}
-
-impl VaultSwapDetailsHumanreadable {
-	fn from(
-		details: VaultSwapDetails,
-		network: NetworkEnvironment,
-	) -> VaultSwapDetailsHumanreadable {
-		match details {
-			VaultSwapDetails::Bitcoin { nulldata_utxo, deposit_address } =>
-				VaultSwapDetailsHumanreadable::Bitcoin {
-					nulldata_utxo: nulldata_utxo.into(),
-					deposit_address: deposit_address.to_humanreadable(network),
-				},
-		}
-	}
-}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RpcEpochState {
@@ -1002,7 +981,7 @@ pub trait CustomApi {
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<VaultSwapDetailsHumanreadable>;
+	) -> RpcResult<VaultSwapDetails<AddressString>>;
 
 	#[method(name = "get_open_deposit_channels")]
 	fn cf_get_open_deposit_channels(
@@ -1128,6 +1107,8 @@ pub enum CfApiError {
 	RuntimeApiError(#[from] ApiError),
 	#[error(transparent)]
 	ErrorObject(#[from] ErrorObjectOwned),
+	#[error(transparent)]
+	OtherError(#[from] anyhow::Error),
 }
 pub type RpcResult<T> = Result<T, CfApiError>;
 
@@ -1167,6 +1148,7 @@ impl From<CfApiError> for ErrorObjectOwned {
 				other => internal_error(format!("Unexpected ApiError: {other}")),
 			},
 			CfApiError::ErrorObject(object) => object,
+			CfApiError::OtherError(error) => internal_error(error),
 		}
 	}
 }
@@ -1848,32 +1830,24 @@ where
 		affiliate_fees: Option<Affiliates<state_chain_runtime::AccountId>>,
 		dca_parameters: Option<DcaParameters>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<VaultSwapDetailsHumanreadable> {
+	) -> RpcResult<VaultSwapDetails<AddressString>> {
 		self.with_runtime_api(at, |api, hash| {
-			Ok::<_, CfApiError>(VaultSwapDetailsHumanreadable::from(
+			Ok::<_, CfApiError>(
 				api.cf_get_vault_swap_details(
 					hash,
 					broker,
 					source_asset,
 					destination_asset,
-					destination_address
-						.try_parse_to_encoded_address(destination_asset.into())
-						.map_err(|e| {
-							ErrorObject::owned(
-								ErrorCode::InvalidParams.code(),
-								format!("{e}"),
-								None::<()>,
-							)
-						})?,
+					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
 					broker_commission,
 					min_output_amount,
 					retry_duration,
 					boost_fee.unwrap_or_default(),
 					affiliate_fees.unwrap_or_default(),
 					dca_parameters,
-				)??,
-				api.cf_network_environment(hash)?,
-			))
+				)??
+				.map_btc_address(Into::into),
+			)
 		})
 	}
 
