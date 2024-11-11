@@ -118,10 +118,10 @@ pub enum SolanaTransactionType {
 	#[deprecated]
 	CcmTransferLegacy,
 	SetGovKeyWithAggKey,
-	CloseEventAccounts,
 	CcmTransfer {
 		fallback: TransferAssetParams<Solana>,
 	},
+	CloseEventAccounts,
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
