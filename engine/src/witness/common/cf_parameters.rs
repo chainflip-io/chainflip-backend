@@ -1,5 +1,7 @@
 use cf_chains::{CcmAdditionalData, ChannelRefundParameters};
-use cf_primitives::{AccountId, Affiliates, BasisPoints, Beneficiary, DcaParameters};
+use cf_primitives::{
+	AccountId, AffiliateAndFee, Affiliates, BasisPoints, Beneficiary, DcaParameters,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -17,9 +19,6 @@ pub struct CfParameters<CcmData = ()> {
 
 pub type VersionedCcmCfParameters = VersionedCfParameters<CcmAdditionalData>;
 
-// TODO: Define this / implement it on the SC - PRO-1743.
-pub type ShortId = u8;
-
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub struct VaultSwapParameters {
 	pub refund_params: ChannelRefundParameters,
@@ -27,8 +26,7 @@ pub struct VaultSwapParameters {
 	pub boost_fee: Option<BasisPoints>,
 	// TODO: Create BrokerAndFee instead so fee is also a u8?
 	pub broker_fees: Beneficiary<AccountId>,
-	// TODO: Use AffiliateAndFee in PRO-1751
-	pub affiliate_fees: Affiliates<ShortId>,
+	pub affiliate_fees: Affiliates<AffiliateAndFee>,
 }
 
 #[cfg(test)]
@@ -62,7 +60,7 @@ mod tests {
 			dca_params: None,
 			boost_fee: None,
 			broker_fees: Beneficiary { account: AccountId::new([3; 32]), bps: 4 },
-			affiliate_fees: Default::default(),
+			affiliate_fees: sp_core::bounded_vec![],
 		};
 
 		let cf_parameters = CfParameters {

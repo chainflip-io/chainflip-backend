@@ -1,5 +1,5 @@
 use crate::address::EncodedAddress;
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
+use cf_primitives::{AffiliateAndFee, Asset, AssetAmount, ForeignChain};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::ConstU32;
@@ -68,12 +68,6 @@ impl Decode for UtxoEncodedData {
 
 		Ok(UtxoEncodedData { output_asset, output_address, parameters })
 	}
-}
-
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct AffiliateAndFee {
-	pub affiliate: u8,
-	pub fee: u8,
 }
 
 // We limit the number of affiliates in btc vault swaps to ensure that we

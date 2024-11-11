@@ -3,7 +3,7 @@ mod chain_tracking;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{assets::arb::Asset as ArbAsset, evm::DepositDetails, Arbitrum};
-use cf_primitives::EpochIndex;
+use cf_primitives::{AffiliateAndFee, EpochIndex};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use sp_core::H160;
@@ -18,7 +18,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::{common::cf_parameters::ShortId, evm::erc20_deposits::usdc::UsdcEvents},
+	witness::evm::erc20_deposits::usdc::UsdcEvents,
 };
 
 use super::{
@@ -192,7 +192,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
 		_broker_fees: Beneficiary<AccountId>,
-		_affiliate_fees: Affiliates<ShortId>,
+		_affiliate_fees: Affiliates<AffiliateAndFee>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		// This is only to be checked in the pre-witnessed version

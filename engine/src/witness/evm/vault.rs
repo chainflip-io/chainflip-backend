@@ -23,7 +23,8 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
 };
 use cf_primitives::{
-	AccountId, Affiliates, Asset, BasisPoints, Beneficiary, DcaParameters, ForeignChain,
+	AccountId, AffiliateAndFee, Affiliates, Asset, BasisPoints, Beneficiary, DcaParameters,
+	ForeignChain,
 };
 use ethers::prelude::*;
 use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
@@ -250,7 +251,7 @@ pub trait IngressCallBuilder {
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: cf_primitives::TransactionHash,
 		broker_fees: Beneficiary<AccountId>,
-		affiliate_fees: Affiliates<ShortId>,
+		affiliate_fees: Affiliates<AffiliateAndFee>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		boost_fee: Option<BasisPoints>,
