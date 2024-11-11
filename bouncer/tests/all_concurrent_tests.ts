@@ -23,8 +23,6 @@ async function runAllConcurrentTests() {
   const match = process.argv[2] ? process.argv[2].match(/\d+/) : null;
   const givenNumberOfNodes = match ? parseInt(match[0]) : null;
   const numberOfNodes = givenNumberOfNodes ?? 1;
-  // If the third argument is not explicitly false, we assume it's true and we are in a localnet environment.
-  const addConcurrentLocalnetTests = process.argv[3] !== 'false';
 
   const broadcastAborted = observeBadEvent(':BroadcastAborted', {
     label: 'Concurrent broadcast aborted',
