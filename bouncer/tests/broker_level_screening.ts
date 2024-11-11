@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 import { InternalAsset } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
 import { sendBtc } from '../shared/send_btc';
-import { newAddress, sleep, handleSubstrateError, brokerMutex } from '../shared/utils';
+import { newAddress, sleep, handleSubstrateError, brokerMutex, hexStringToBytesArray } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import Keyring from '../polkadot/keyring';
 import { requestNewSwap } from '../shared/perform_swap';
@@ -49,15 +49,16 @@ async function newAssetAddress(asset: InternalAsset, seed = null): Promise<strin
 /**
  * Submits a transaction as tainted to the extrinsic on the state chain.
  *
- * @param txId - The txId to submit as tainted as byte array in the order it is on the Bitcoin chain - which
- * is reverse of how it's normally displayed in block explorers.
+ * @param txId - The txId to submit as tainted, in its typical representation in bitcoin explorers,
+ * i.e., reverse of its memory representation.
  */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-async function submitTxAsTainted(txId: number[]) {
+async function submitTxAsTainted(txId: string) {
+  // The engine uses the memory representation everywhere, so we convert the txId here.
+  const memoryRepresentationTxId = hexStringToBytesArray(txId).reverse();
   await using chainflip = await getChainflipApi();
   return brokerMutex.runExclusive(async () =>
     chainflip.tx.bitcoinIngressEgress
-      .markTransactionAsTainted(txId)
+      .markTransactionAsTainted(memoryRepresentationTxId)
       .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
   );
 }
@@ -158,6 +159,7 @@ async function brokerLevelScreeningTestScenario(
   doBoost: boolean,
   refundAddress: string,
   waitBeforeReport: number,
+  reportFunction: (txId: string) => Promise<void>
 ): Promise<string> {
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const refundParameters: FillOrKillParamsX128 = {
@@ -178,7 +180,8 @@ async function brokerLevelScreeningTestScenario(
   );
   const txId = await sendBtc(swapParams.depositAddress, amount, 0);
   await sleep(waitBeforeReport);
-  await setTxRiskScore(txId, 9.0);
+  // await setTxRiskScore(txId, 9.0);
+  await reportFunction(txId);
   return swapParams.channelId.toString();
 }
 
@@ -199,7 +202,7 @@ async function main() {
   testBrokerLevelScreening.log('Testing broker level screening with no boost...');
   let btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, 0);
+  await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, 0, (txId) => setTxRiskScore(txId, 9.0));
 
   await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
@@ -214,7 +217,7 @@ async function main() {
   );
   btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, 0);
+  await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, 0, (txId) => setTxRiskScore(txId, 9.0));
   await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
 
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
@@ -232,6 +235,9 @@ async function main() {
     true,
     btcRefundAddress,
     MILLI_SECS_PER_BLOCK * 2,
+    // we submit the extrinsic manually in order to ensure that even though it definitely arrives,
+    // the transaction is refunded because the extrinsic is submitted too late.
+    async (txId) => {await submitTxAsTainted(txId);}
   );
 
   await observeEvent('bitcoinIngressEgress:DepositFinalised', {
