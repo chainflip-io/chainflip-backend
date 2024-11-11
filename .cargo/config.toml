@@ -44,6 +44,8 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2024-0320: Unmaintained transitive `yaml-rust` dependency of `insta` crate. We only use insta for testing.
 # - RUSTSEC-2024-0370: Unmaintained transitive dependency. Only affects macro generation efficiency.
 # - RUSTSEC-2024-0375: Unmaintained transitive dependency used by clap.
+# - RUSTSEC-2024-0388: Unmaintained transitive dependency `derivative` used by substrate.
+# - RUSTSEC-2024-0384: Unmaintained transitive dependency `instant` used by substrate.
 cf-audit = '''
 audit -D unmaintained -D unsound
     --ignore RUSTSEC-2022-0093
@@ -56,4 +58,6 @@ audit -D unmaintained -D unsound
     --ignore RUSTSEC-2024-0344
     --ignore RUSTSEC-2024-0370
     --ignore RUSTSEC-2024-0375
+    --ignore RUSTSEC-2024-0388
+    --ignore RUSTSEC-2024-0384
 '''
