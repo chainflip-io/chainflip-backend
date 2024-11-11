@@ -7,7 +7,7 @@ pub use cf_chains::{
 };
 use cf_chains::{
 	btc::{deposit_address::DepositAddress, BitcoinTrackedData},
-	ConvertTransactionInIdToAnyChainWrapper,
+	TransactionInIdConverter,
 };
 pub use cf_primitives::chains::{assets, Bitcoin};
 use cf_primitives::ChannelId;
@@ -112,7 +112,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;
-	type ConvertTransactionInIdToAnyChain = ConvertTransactionInIdToAnyChainWrapper;
+	type ConvertTransactionInIdToAnyChain = TransactionInIdConverter;
 }
 
 impl_test_helpers! {

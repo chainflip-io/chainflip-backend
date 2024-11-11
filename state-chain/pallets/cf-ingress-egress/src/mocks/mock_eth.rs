@@ -6,7 +6,7 @@ pub use cf_chains::{
 	eth::Address as EthereumAddress,
 	CcmDepositMetadata, Chain,
 };
-use cf_chains::{eth::EthereumTrackedData, ConvertTransactionInIdToAnyChainWrapper};
+use cf_chains::{eth::EthereumTrackedData, TransactionInIdConverter};
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -139,7 +139,7 @@ impl crate::Config for Test {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
 	type AffiliateRegistry = MockAffiliateRegistry;
-	type ConvertTransactionInIdToAnyChain = ConvertTransactionInIdToAnyChainWrapper;
+	type ConvertTransactionInIdToAnyChain = TransactionInIdConverter;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

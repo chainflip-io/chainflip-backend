@@ -600,21 +600,20 @@ pub trait ConvertTransactionInIdToAnyChain<TransactionInId> {
 	fn convert(origin: SwapOrigin<TransactionInId>) -> SwapOrigin<TransactionInIdForAnyChain>;
 }
 
-pub struct ConvertTransactionInIdToAnyChainWrapper;
+pub struct TransactionInIdConverter;
 
 #[derive(Debug, Clone, TypeInfo, Encode, Decode, PartialEq, Eq)]
 pub enum TransactionInIdForAnyChain {
-	H256(H256),
-	TxId(TxId),
-	SolHash(SolHash),
-	Mock([u8; 4]),
-	None,
+	// Used by Ethereum, Arbitrum and BTC.
+	ByteHash(H256),
+	PolkadotTxId(TxId),
+	SolanaTxHash(SolHash),
 }
 
 #[macro_export]
 macro_rules! impl_convert_transaction_in_id_to_any_chain {
-	($type:ty, $variant:ident) => {
-		impl ConvertTransactionInIdToAnyChain<$type> for ConvertTransactionInIdToAnyChainWrapper {
+	($variant:ident, $type:ty) => {
+		impl ConvertTransactionInIdToAnyChain<$type> for TransactionInIdConverter {
 			fn convert(origin: SwapOrigin<$type>) -> SwapOrigin<TransactionInIdForAnyChain> {
 				match origin {
 					SwapOrigin::Vault { tx_hash } =>
@@ -635,10 +634,9 @@ macro_rules! impl_convert_transaction_in_id_to_any_chain {
 	};
 }
 
-impl_convert_transaction_in_id_to_any_chain!(H256, H256);
-impl_convert_transaction_in_id_to_any_chain!(TxId, TxId);
-impl_convert_transaction_in_id_to_any_chain!(SolHash, SolHash);
-impl_convert_transaction_in_id_to_any_chain!([u8; 4], Mock);
+impl_convert_transaction_in_id_to_any_chain!(ByteHash, H256);
+impl_convert_transaction_in_id_to_any_chain!(PolkadotTxId, TxId);
+impl_convert_transaction_in_id_to_any_chain!(SolanaTxHash, SolHash);
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin<TransactionInId> {
