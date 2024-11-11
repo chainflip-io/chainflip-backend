@@ -69,7 +69,6 @@ macro_rules! impl_read_access {
 				previous_consensus: Option<&ES::Consensus>,
 				votes: ConsensusVotes<ES>,
 			) -> Result<Option<ES::Consensus>, CorruptStorageError> {
-				println!("Calling check consensus on the electoral system struct");
 				ES::check_consensus(self, previous_consensus, votes)
 			}
 		}

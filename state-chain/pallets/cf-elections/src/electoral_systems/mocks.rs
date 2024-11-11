@@ -104,11 +104,6 @@ where
 		)
 		.unwrap();
 
-		println!(
-			"Election identifier in with initial election: {:?}",
-			election.election_identifier()
-		);
-
 		// A new election should not have consensus at any authority count.
 		assert_eq!(election.check_consensus(None, ConsensusVotes { votes: vec![] }).unwrap(), None);
 
