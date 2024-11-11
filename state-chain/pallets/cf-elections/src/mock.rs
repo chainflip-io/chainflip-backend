@@ -24,7 +24,7 @@ impl pallet_cf_elections::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 
 	// TODO: Use Settings?
-	type ElectoralSystem = crate::electoral_systems::mock::MockElectoralSystem;
+	type ElectoralSystemRunner = crate::electoral_systems::mock::MockElectoralSystemRunner;
 
 	type WeightInfo = ();
 }
