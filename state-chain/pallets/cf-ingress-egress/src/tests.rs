@@ -2,8 +2,8 @@ mod boost;
 mod screening;
 
 use crate::{
-	mock_eth::*, mocks::MockAffiliateRegistry, BoostStatus, Call as PalletCall, ChannelAction,
-	ChannelIdCounter, ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
+	mock_eth::*, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
+	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
 	DepositChannelLookup, DepositChannelPool, DepositIgnoredReason, DepositWitness,
 	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
 	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
@@ -27,6 +27,7 @@ use cf_traits::{
 	mocks::{
 		self,
 		address_converter::MockAddressConverter,
+		affiliate_registry::MockAffiliateRegistry,
 		api_call::{MockEthAllBatch, MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,

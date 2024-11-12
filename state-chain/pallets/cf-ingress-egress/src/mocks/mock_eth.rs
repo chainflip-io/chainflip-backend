@@ -17,6 +17,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter,
+		affiliate_registry::MockAffiliateRegistry,
 		api_call::{MockEthereumApiCall, MockEvmEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
@@ -34,8 +35,6 @@ use frame_support::derive_impl;
 use frame_system as system;
 use sp_core::{ConstBool, H256};
 use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Zero};
-
-use super::MockAffiliateRegistry;
 
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;

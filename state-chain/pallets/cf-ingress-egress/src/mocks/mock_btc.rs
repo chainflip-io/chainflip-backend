@@ -13,6 +13,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter,
+		affiliate_registry::MockAffiliateRegistry,
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
@@ -27,8 +28,6 @@ use cf_traits::{
 };
 use frame_support::derive_impl;
 use sp_core::ConstBool;
-
-use super::MockAffiliateRegistry;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
