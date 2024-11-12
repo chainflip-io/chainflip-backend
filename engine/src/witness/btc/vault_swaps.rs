@@ -135,7 +135,7 @@ pub fn try_extract_vault_swap_call(
 		output_asset: data.output_asset,
 		deposit_amount,
 		destination_address: data.output_address,
-		tx_hash: H256::from(tx_id),
+		tx_id: H256::from(tx_id),
 		deposit_details: Box::new(Utxo {
 			// we require the deposit to be the first UTXO
 			id: UtxoId { tx_id: tx_id.into(), vout: 0 },
@@ -292,7 +292,7 @@ mod tests {
 				output_asset: MOCK_SWAP_PARAMS.output_asset,
 				deposit_amount: DEPOSIT_AMOUNT,
 				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
-				tx_hash: tx.txid.to_byte_array().into(),
+				tx_id: tx.txid.to_byte_array().into(),
 				deposit_details: Box::new(Utxo {
 					id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
 					amount: DEPOSIT_AMOUNT,

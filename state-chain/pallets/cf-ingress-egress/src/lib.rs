@@ -1311,7 +1311,7 @@ pub mod pallet {
 			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
 			destination_address: EncodedAddress,
 			deposit_metadata: Option<CcmDepositMetadata>,
-			tx_hash: TransactionInIdFor<T, I>,
+			tx_id: TransactionInIdFor<T, I>,
 			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
 			broker_fee: Beneficiary<T::AccountId>,
 			affiliate_fees: Affiliates<AffiliateShortId>,
@@ -1326,7 +1326,7 @@ pub mod pallet {
 					output_asset,
 					destination_address,
 					deposit_metadata,
-					tx_hash,
+					tx_id,
 					*deposit_details,
 					broker_fee,
 					affiliate_fees,
@@ -2131,7 +2131,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
-		tx_hash: TransactionInIdFor<T, I>,
+		tx_id: TransactionInIdFor<T, I>,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		broker_fee: Beneficiary<T::AccountId>,
 		affiliate_fees: Affiliates<AffiliateShortId>,
@@ -2162,16 +2162,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			) {
 				Ok(address) => address,
 				Err(err) => {
-					log::warn!("Failed to process vault swap due to invalid destination address. Tx hash: {tx_hash:?}. Error: {err:?}");
+					log::warn!("Failed to process vault swap due to invalid destination address. Tx id: {tx_id:?}. Error: {err:?}");
 					return;
 				},
 			};
 
 		let request_type = if let Some(deposit_metadata) = deposit_metadata {
-			let swap_origin = SwapOrigin::Vault { tx_hash: tx_hash.clone() };
+			let swap_origin = SwapOrigin::Vault { tx_id: tx_id.clone() };
 
 			let ccm_failed = |reason| {
-				log::warn!("Failed to process CCM. Tx hash: {:?}, Reason: {:?}", tx_hash, reason);
+				log::warn!("Failed to process CCM. Tx id: {:?}, Reason: {:?}", tx_id, reason);
 
 				Self::deposit_event(Event::<T, I>::CcmFailed {
 					reason,
@@ -2213,7 +2213,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
 		{
 			log::warn!(
-				"Failed to process vault swap due to invalid refund params. Tx hash: {tx_hash:?}. Error: {err:?}",
+				"Failed to process vault swap due to invalid refund params. Tx id: {tx_id:?}. Error: {err:?}",
 			);
 			return;
 		}
@@ -2221,7 +2221,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(params) = &dca_params {
 			if let Err(err) = T::SwapLimitsProvider::validate_dca_params(params) {
 				log::warn!(
-    				"Failed to process vault swap due to invalid dca params. Tx hash: {tx_hash:?}. Error: {err:?}",
+    				"Failed to process vault swap due to invalid dca params. Tx id: {tx_id:?}. Error: {err:?}",
     			);
 				return;
 			}
@@ -2261,12 +2261,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Err(err) = T::SwapLimitsProvider::validate_broker_fees(&broker_fees) {
 			log::warn!(
-				"Failed to process vault swap due to invalid broker fees. Tx hash: {tx_hash:?}. Error: {err:?}",
+				"Failed to process vault swap due to invalid broker fees. Tx id: {tx_id:?}. Error: {err:?}",
  			);
 			return;
 		}
 
-		let swap_origin = SwapOrigin::Vault { tx_hash };
+		let swap_origin = SwapOrigin::Vault { tx_id };
 
 		T::SwapRequestHandler::init_swap_request(
 			source_asset.into(),

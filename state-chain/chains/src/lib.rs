@@ -615,8 +615,8 @@ macro_rules! impl_convert_transaction_in_id_to_any_chain {
 		impl ConvertTransactionInIdToAnyChain<$type> for TransactionInIdConverter {
 			fn convert(origin: SwapOrigin<$type>) -> SwapOrigin<TransactionInIdForAnyChain> {
 				match origin {
-					SwapOrigin::Vault { tx_hash } =>
-						SwapOrigin::Vault { tx_hash: TransactionInIdForAnyChain::$variant(tx_hash) },
+					SwapOrigin::Vault { tx_id } =>
+						SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::$variant(tx_id) },
 					SwapOrigin::Internal => SwapOrigin::Internal,
 					SwapOrigin::DepositChannel {
 						deposit_address,
@@ -645,7 +645,7 @@ pub enum SwapOrigin<TransactionInId> {
 		deposit_block_height: u64,
 	},
 	Vault {
-		tx_hash: TransactionInId,
+		tx_id: TransactionInId,
 	},
 	Internal,
 }

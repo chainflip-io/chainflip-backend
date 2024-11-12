@@ -1824,7 +1824,7 @@ fn can_request_swap_via_extrinsic() {
 				swap_type: SwapRequestType::Regular { output_address },
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
-					tx_hash: TransactionInIdForAnyChain::ByteHash(H256::default()),
+					tx_id: TransactionInIdForAnyChain::ByteHash(H256::default()),
 				},
 			},]
 		);
@@ -1998,7 +1998,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 				},
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
-					tx_hash: TransactionInIdForAnyChain::ByteHash(H256::default()),
+					tx_id: TransactionInIdForAnyChain::ByteHash(H256::default()),
 				},
 			},]
 		);
