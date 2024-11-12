@@ -320,7 +320,7 @@ async fn get_program_swap_event_accounts_data(
 		.zip(account_infos.into_iter())
 		.map(|(account, account_info)| {
 			Ok((
-				account.clone(),
+				account,
 				match account_info {
 					Some(UiAccount {
 						data: UiAccountData::Binary(base64_string, UiAccountEncoding::Base64),
