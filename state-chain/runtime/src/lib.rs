@@ -28,7 +28,7 @@ use crate::{
 		BoostPoolDetails, BrokerInfo, DispatchErrorWithMessage, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulateSwapAdditionalOrder, SimulatedSwapInformation, TaintedTransactionEvents,
-		ValidatorInfo,
+		ValidatorInfo, VaultSwapDetails,
 	},
 };
 use cf_amm::{
@@ -40,9 +40,16 @@ pub use cf_chains::instances::{
 	SolanaInstance,
 };
 use cf_chains::{
+	address::{AddressConverter, EncodedAddress},
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
-	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
+	btc::{
+		api::BitcoinApi,
+		vault_swap_encoding::{
+			encode_swap_params_in_nulldata_utxo, SharedCfParameters, UtxoEncodedData,
+		},
+		BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey,
+	},
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
@@ -50,12 +57,13 @@ use cf_chains::{
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{
-	BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex, NetworkEnvironment,
-	STABLE_ASSET,
+	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
+	NetworkEnvironment, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
-	DummyIngressSource, GetBlockHeight, NoLimit, SwapLimits, SwapLimitsProvider,
+	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoLimit, SwapLimits,
+	SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -1009,7 +1017,7 @@ impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
 
 impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type ElectoralSystem = chainflip::solana_elections::SolanaElectoralSystem;
+	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 }
 
@@ -2091,8 +2099,94 @@ impl_runtime_apis! {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(&DcaParameters{number_of_chunks, chunk_interval}).map_err(Into::into)
 		}
 
-		fn cf_validate_refund_params(retry_duration: u32) -> Result<(), DispatchErrorWithMessage> {
+		fn cf_validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchErrorWithMessage> {
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration).map_err(Into::into)
+		}
+
+		fn cf_get_vault_swap_details(
+			broker_id: AccountId,
+			source_asset: Asset,
+			destination_asset: Asset,
+			destination_address: EncodedAddress,
+			broker_commission: BasisPoints,
+			min_output_amount: AssetAmount,
+			retry_duration: BlockNumber,
+			boost_fee: BasisPoints,
+			affiliate_fees: Affiliates<AccountId>,
+			dca_parameters: Option<DcaParameters>,
+		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
+			// Validate params
+			if broker_commission != 0 || !affiliate_fees.is_empty() {
+				return Err(
+					pallet_cf_swapping::Error::<Runtime>::VaultSwapBrokerFeesNotSupported.into());
+			}
+			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
+			if let Some(params) = dca_parameters.as_ref() {
+				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
+			}
+			ChainAddressConverter::try_from_encoded_address(destination_address.clone())
+				.and_then(|address| {
+					if ForeignChain::from(destination_asset) != address.chain() {
+						Err(())
+					} else {
+						Ok(())
+					}
+				})
+				.map_err(|()| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
+
+
+			// Encode swap
+			match ForeignChain::from(source_asset) {
+				ForeignChain::Bitcoin => {
+					use cf_chains::btc::deposit_address::DepositAddress;
+
+					let private_channel_id = pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
+						.ok_or(pallet_cf_swapping::Error::<Runtime>::NoPrivateChannelExistsForBroker)?;
+					let params = UtxoEncodedData {
+						output_asset: destination_asset,
+						output_address: destination_address,
+						parameters: SharedCfParameters {
+							retry_duration: retry_duration.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
+							min_output_amount,
+							number_of_chunks: dca_parameters
+								.as_ref()
+								.map(|params| params.number_of_chunks)
+								.unwrap_or(1)
+								.try_into()
+								.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
+							chunk_interval: dca_parameters
+								.as_ref()
+								.map(|params| params.chunk_interval)
+								.unwrap_or(SWAP_DELAY_BLOCKS)
+								.try_into()
+								.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
+							boost_fee: boost_fee.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
+							broker_fee: broker_commission.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
+							// TODO: lookup affiliate mapping to convert affiliate ids and use them here
+							affiliates: Default::default(),
+						},
+					};
+
+					let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
+						.expect("We should always have a key for the current epoch.");
+					let deposit_address = DepositAddress::new(
+						key.current,
+						private_channel_id.try_into().map_err(
+							// TODO: Ensure this can't happen.
+							|_| DispatchErrorWithMessage::Other("Private channel id out of bounds.".into())
+						)?
+					)
+					.script_pubkey()
+					.to_address(&Environment::network_environment().into());
+
+					Ok(VaultSwapDetails::Bitcoin {
+						nulldata_utxo: encode_swap_params_in_nulldata_utxo(params).raw(),
+						deposit_address,
+					})
+				},
+				_ => Err(
+					pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),
+			}
 		}
 
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId>) -> ChainAccounts {
@@ -2172,16 +2266,15 @@ impl_runtime_apis! {
 			let btc_ceremonies = pallet_cf_threshold_signature::PendingCeremonies::<Runtime,BitcoinInstance>::iter_values().map(|ceremony|{
 				ceremony.request_context.request_id
 			}).collect::<Vec<_>>();
-			let btc_key = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::keys(
-				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::current_key_epoch()
-				.expect("We should always have an epoch set")).expect("We should always have a key set for the current epoch");
+			let EpochKey { key, .. } = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::active_epoch_key()
+				.expect("We should always have a key for the current epoch");
 			for ceremony in btc_ceremonies {
 				if let RuntimeCall::BitcoinBroadcaster(pallet_cf_broadcast::pallet::Call::on_signature_ready{ api_call, ..}) = pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::get(ceremony).unwrap() {
 					if let BitcoinApi::BatchTransfer(batch_transfer) = *api_call {
 						for output in batch_transfer.bitcoin_transaction.outputs {
 							if [
-								ScriptPubkey::Taproot(btc_key.previous.unwrap_or_default()),
-								ScriptPubkey::Taproot(btc_key.current),
+								ScriptPubkey::Taproot(key.previous.unwrap_or_default()),
+								ScriptPubkey::Taproot(key.current),
 							]
 							.contains(&output.script_pubkey)
 							{

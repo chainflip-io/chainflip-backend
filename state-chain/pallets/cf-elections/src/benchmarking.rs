@@ -1,8 +1,8 @@
 use crate::{
 	bitmap_components::ElectionBitmapComponents,
-	electoral_system::{
-		AuthorityVoteOf, ElectionIdentifierOf, ElectoralSystem, IndividualComponentOf,
-		VotePropertiesOf,
+	electoral_system_runner::{
+		CompositeAuthorityVoteOf, CompositeIndividualComponentOf, CompositeVotePropertiesOf,
+		ElectoralSystemRunner,
 	},
 	vote_storage::VoteStorage,
 	*,
@@ -25,13 +25,13 @@ use crate::Call;
 #[allow(clippy::multiple_bound_locations)]
 #[instance_benchmarks(
 	where
-	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote: BenchmarkValue,
-	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData: BenchmarkValue,
-	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Properties: BenchmarkValue,
-	<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::IndividualComponent: BenchmarkValue,
+	<<<T as Config<I>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Vote: BenchmarkValue,
+	<<<T as Config<I>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::SharedData: BenchmarkValue,
+	<<<T as Config<I>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Properties: BenchmarkValue,
+	<<<T as Config<I>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::IndividualComponent: BenchmarkValue,
 	InitialStateOf<T, I>: BenchmarkValue,
-	<T::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedSettings: BenchmarkValue,
-	<T::ElectoralSystem as ElectoralSystem>::ElectoralSettings: BenchmarkValue,
+	<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedSettings: BenchmarkValue,
+	<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralSettings: BenchmarkValue,
 )]
 mod benchmarks {
 	use super::*;
@@ -64,8 +64,8 @@ mod benchmarks {
 
 	fn setup_validators_and_vote<T: crate::pallet::Config<I>, I: 'static>(
 		validator_counts: u32,
-		vote_value: <<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote,
-	) -> ElectionIdentifierOf<T::ElectoralSystem> {
+		vote_value: <<<T as Config<I>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
+	) -> CompositeElectionIdentifierOf<T::ElectoralSystemRunner> {
 		// Setup a validator set of 150 as in the case of Mainnet.
 		let validators = ready_validator_for_vote::<T, I>(validator_counts);
 		let caller = validators[0].clone();
@@ -82,7 +82,9 @@ mod benchmarks {
 				BoundedBTreeMap::try_from(
 					[(
 						election_identifier,
-						AuthorityVoteOf::<T::ElectoralSystem>::Vote(vote_value.clone()),
+						CompositeAuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+							vote_value.clone()
+						),
 					)]
 					.into_iter()
 					.collect::<BTreeMap<_, _>>(),
@@ -106,7 +108,9 @@ mod benchmarks {
 			BoundedBTreeMap::try_from(
 				iter::repeat((
 					next_election.0,
-					AuthorityVoteOf::<T::ElectoralSystem>::Vote(BenchmarkValue::benchmark_value()),
+					CompositeAuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+						BenchmarkValue::benchmark_value(),
+					),
 				))
 				.take(n as usize)
 				.collect::<BTreeMap<_, _>>(),
@@ -166,7 +170,9 @@ mod benchmarks {
 			BoundedBTreeMap::try_from(
 				[(
 					next_election.0,
-					AuthorityVoteOf::<T::ElectoralSystem>::Vote(BenchmarkValue::benchmark_value()),
+					CompositeAuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+						BenchmarkValue::benchmark_value()
+					),
 				)]
 				.into_iter()
 				.collect::<BTreeMap<_, _>>(),
@@ -201,7 +207,9 @@ mod benchmarks {
 			BoundedBTreeMap::try_from(
 				[(
 					next_election.0,
-					AuthorityVoteOf::<T::ElectoralSystem>::Vote(BenchmarkValue::benchmark_value()),
+					CompositeAuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+						BenchmarkValue::benchmark_value()
+					),
 				)]
 				.into_iter()
 				.collect::<BTreeMap<_, _>>(),
@@ -239,7 +247,9 @@ mod benchmarks {
 			BoundedBTreeMap::try_from(
 				[(
 					election_identifier,
-					AuthorityVoteOf::<T::ElectoralSystem>::Vote(BenchmarkValue::benchmark_value()),
+					CompositeAuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+						BenchmarkValue::benchmark_value()
+					),
 				)]
 				.into_iter()
 				.collect::<BTreeMap<_, _>>(),
@@ -252,7 +262,7 @@ mod benchmarks {
 
 		assert_eq!(
 			SharedData::<T, I>::get(SharedDataHash::of::<
-				<<<T as Config<I>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote,
+				<<<T as Config<I>>::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::Vote,
 			>(&BenchmarkValue::benchmark_value())),
 			Some(BenchmarkValue::benchmark_value())
 		);
@@ -351,8 +361,7 @@ mod benchmarks {
 		}
 
 		assert!(!ElectionConsensusHistoryUpToDate::<T, I>::contains_key(
-			access_impls::ElectionAccess::<T, I>::new(election_identifier)
-				.unique_monotonic_identifier()
+			election_identifier.unique_monotonic()
 		));
 	}
 
@@ -369,8 +378,7 @@ mod benchmarks {
 		};
 
 		let epoch = T::EpochInfo::epoch_index();
-		let monotonic_identifier = access_impls::ElectionAccess::<T, I>::new(election_identifier)
-			.unique_monotonic_identifier();
+		let monotonic_identifier = election_identifier.unique_monotonic();
 
 		Pallet::<T, I>::on_finalize(frame_system::Pallet::<T>::block_number());
 		assert_eq!(
@@ -489,7 +497,7 @@ mod benchmarks {
 		(0..b).for_each(|i| {
 			SharedData::<T, I>::insert(
 				SharedDataHash::of(&i),
-				<<T::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::SharedData::benchmark_value());
+				<<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::SharedData::benchmark_value());
 		});
 
 		(0..c).for_each(|i| {
@@ -506,8 +514,8 @@ mod benchmarks {
 				UniqueMonotonicIdentifier::from_u64(i as u64),
 				T::ValidatorId::from(validators[i as usize].clone()),
 				(
-					VotePropertiesOf::<T::ElectoralSystem>::benchmark_value(),
-					IndividualComponentOf::<T::ElectoralSystem>::benchmark_value(),
+					CompositeVotePropertiesOf::<T::ElectoralSystemRunner>::benchmark_value(),
+					CompositeIndividualComponentOf::<T::ElectoralSystemRunner>::benchmark_value(),
 				),
 			);
 		});
@@ -538,7 +546,7 @@ mod benchmarks {
 	mod tests {
 		use super::*;
 
-		use crate::{mock::*, tests::ElectoralSystemTestExt, Instance1};
+		use crate::{mock::*, tests::ElectoralSystemRunnerTestExt, Instance1};
 
 		macro_rules! benchmark_tests {
 			( $( $test_name:ident: $test_fn:ident ( $( $arg:expr ),* ) ),+ $(,)? ) => {

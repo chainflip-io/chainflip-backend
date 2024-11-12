@@ -1,3 +1,4 @@
+use cf_primitives::BlockNumber;
 use frame_support::sp_runtime::DispatchError;
 
 use crate::{SwapLimits, SwapLimitsProvider};
@@ -14,7 +15,7 @@ impl SwapLimitsProvider for MockSwapLimitsProvider {
 		}
 	}
 
-	fn validate_refund_params(retry_duration: u32) -> Result<(), DispatchError> {
+	fn validate_refund_params(retry_duration: BlockNumber) -> Result<(), DispatchError> {
 		let limits = Self::get_swap_limits();
 		if retry_duration > limits.max_swap_retry_duration_blocks {
 			return Err(DispatchError::Other("Retry duration too high"));
