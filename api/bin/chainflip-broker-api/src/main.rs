@@ -14,9 +14,9 @@ use chainflip_api::{
 		DcaParameters,
 	},
 	settings::StateChain,
-	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, DepositMonitorApi, OperatorApi,
-	RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId,
-	WithdrawFeesDetail,
+	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, ChannelId, DepositMonitorApi,
+	OperatorApi, RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress,
+	TransactionInId, WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -128,6 +128,12 @@ pub trait Rpc {
 
 	#[subscription(name = "subscribe_tainted_transaction_events", item = BlockUpdate<TaintedTransactionEvents>)]
 	async fn subscribe_tainted_transaction_events(&self) -> SubscriptionResult;
+
+	#[method(name = "open_private_btc_channel", aliases = ["broker_openPrivateBtcChannel"])]
+	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId>;
+
+	#[method(name = "close_private_btc_channel", aliases = ["broker_closePrivateBtcChannel"])]
+	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId>;
 }
 
 pub struct RpcServerImpl {
@@ -297,6 +303,14 @@ impl RpcServer for RpcServerImpl {
 			}
 		});
 		Ok(())
+	}
+
+	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId> {
+		Ok(self.api.broker_api().open_private_btc_channel().await?)
+	}
+
+	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
+		Ok(self.api.broker_api().close_private_btc_channel().await?)
 	}
 }
 
