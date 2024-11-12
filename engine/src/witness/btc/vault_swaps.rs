@@ -82,7 +82,7 @@ type BtcIngressEgressCall =
 pub fn try_extract_vault_swap_call(
 	tx: &VerboseTransaction,
 	vault_address: &DepositAddress,
-	maybe_broker_id: Option<&AccountId>,
+	broker_id: &AccountId,
 ) -> Option<BtcIngressEgressCall> {
 	// A correctly constructed transaction carrying CF swap parameters must have at least 3 outputs:
 	let [utxo_to_vault, nulldata_utxo, change_utxo, ..] = &tx.vout[..] else {
@@ -142,23 +142,18 @@ pub fn try_extract_vault_swap_call(
 			deposit_address: vault_address.clone(),
 		}),
 		deposit_metadata: None, // No ccm for BTC (yet?)
-		broker_fees: maybe_broker_id.map(|broker_id| {
-			(
-				Beneficiary { account: broker_id.clone(), bps: data.parameters.broker_fee.into() },
-				data.parameters
-					.affiliates
-					.into_iter()
-					.map(|entry| Beneficiary {
-						account: entry.affiliate.into(),
-						bps: entry.fee.into(),
-					})
-					.collect_vec()
-					.try_into()
-					.expect(
-						"runtime supports at least as many affiliates as we allow in UTXO encoding",
-					),
-			)
-		}),
+		broker_fee: Beneficiary {
+			account: broker_id.clone(),
+			bps: data.parameters.broker_fee.into(),
+		},
+		affiliate_fees: data
+			.parameters
+			.affiliates
+			.into_iter()
+			.map(|entry| Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
+			.collect_vec()
+			.try_into()
+			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
 		refund_params: Some(Box::new(ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration.into(),
 			refund_address: ForeignChainAddress::Btc(refund_address),
@@ -290,7 +285,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			try_extract_vault_swap_call(&tx, &vault_deposit_address, Some(&BROKER)),
+			try_extract_vault_swap_call(&tx, &vault_deposit_address, &BROKER),
 			Some(BtcIngressEgressCall::vault_swap_request {
 				input_asset: NATIVE_ASSET,
 				output_asset: MOCK_SWAP_PARAMS.output_asset,
@@ -302,16 +297,14 @@ mod tests {
 					amount: DEPOSIT_AMOUNT,
 					deposit_address: vault_deposit_address,
 				}),
-				broker_fees: Some((
-					Beneficiary {
-						account: BROKER,
-						bps: MOCK_SWAP_PARAMS.parameters.broker_fee.into()
-					},
-					bounded_vec![Beneficiary {
-						account: MOCK_SWAP_PARAMS.parameters.affiliates[0].affiliate.into(),
-						bps: MOCK_SWAP_PARAMS.parameters.affiliates[0].fee.into(),
-					}]
-				)),
+				broker_fee: Beneficiary {
+					account: BROKER,
+					bps: MOCK_SWAP_PARAMS.parameters.broker_fee.into()
+				},
+				affiliate_fees: bounded_vec![Beneficiary {
+					account: MOCK_SWAP_PARAMS.parameters.affiliates[0].affiliate.into(),
+					bps: MOCK_SWAP_PARAMS.parameters.affiliates[0].fee.into(),
+				}],
 				deposit_metadata: None,
 				refund_params: Some(Box::new(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),

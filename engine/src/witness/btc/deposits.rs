@@ -59,35 +59,33 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				let ((((), txs), deposit_channels), private_channels) = header.data;
 
 				let vault_addresses = {
-					use cf_chains::btc::{
-						deposit_address::DepositAddress, AggKey, CHANGE_ADDRESS_SALT,
-					};
+					use cf_chains::btc::{deposit_address::DepositAddress, AggKey};
 
 					let key: &AggKey = &epoch.info.0;
 
-					// Take all current private broker chanenls and use them to build a list of all
+					// Take all current private broker channels and use them to build a list of all
 					// deposit addresses that we should check for vault swaps. Note that we
 					// monitor previous epoch key (if exists) in addition to the current one, which
-					// means we get up to two deposit addresses per broker. A special case is the
-					// "change address" that doesn't have a broker associated with it.
+					// means we get up to two deposit addresses per broker.
 					[key.current].into_iter().chain(key.previous).flat_map(|key| {
-						[(None, CHANGE_ADDRESS_SALT)]
-							.into_iter()
-							.chain(private_channels.clone().into_iter().map(
-								|(broker_id, channel_id)| (Some(broker_id), channel_id as u32),
-							))
-							.map(move |(maybe_broker_id, channel_id)| {
-								(maybe_broker_id, DepositAddress::new(key, channel_id))
-							})
+						private_channels.clone().into_iter().map(move |(broker_id, channel_id)| {
+							(
+								broker_id,
+								DepositAddress::new(
+									key,
+									channel_id.try_into().expect("BTC channel id must fit in u32"),
+								),
+							)
+						})
 					})
 				};
 
-				for (maybe_broker_id, vault_address) in vault_addresses {
+				for (broker_id, vault_address) in vault_addresses {
 					for tx in &txs {
 						if let Some(call) = super::vault_swaps::try_extract_vault_swap_call(
 							tx,
 							&vault_address,
-							maybe_broker_id.as_ref(),
+							&broker_id,
 						) {
 							process_call(call.into(), epoch.index).await;
 						}

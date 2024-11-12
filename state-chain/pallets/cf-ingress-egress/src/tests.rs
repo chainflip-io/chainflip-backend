@@ -1805,6 +1805,7 @@ fn can_request_swap_via_extrinsic() {
 			None,
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
+			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
 			None,
 			None,
@@ -1818,7 +1819,7 @@ fn can_request_swap_via_extrinsic() {
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
 				swap_type: SwapRequestType::Regular { output_address },
-				broker_fees: Default::default(),
+				broker_fees: bounded_vec![Beneficiary { account: 0, bps: 0 }],
 				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
 			},]
 		);
@@ -1860,13 +1861,11 @@ fn vault_swaps_support_broker_fees() {
 			None,
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
-			Some((
-				Beneficiary { account: BROKER, bps: BROKER_FEE },
-				bounded_vec![
-					Beneficiary { account: AFFILIATE_SHORT_1, bps: AFFILIATE_FEE },
-					Beneficiary { account: AFFILIATE_SHORT_2, bps: AFFILIATE_FEE }
-				]
-			)),
+			Beneficiary { account: BROKER, bps: BROKER_FEE },
+			bounded_vec![
+				Beneficiary { account: AFFILIATE_SHORT_1, bps: AFFILIATE_FEE },
+				Beneficiary { account: AFFILIATE_SHORT_2, bps: AFFILIATE_FEE }
+			],
 			None,
 			None,
 			0
@@ -1928,6 +1927,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 			Some(ccm_deposit_metadata.clone()),
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
+			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
 			None,
 			None,
@@ -1946,7 +1946,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 						.into_swap_metadata(INPUT_AMOUNT, INPUT_ASSET, OUTPUT_ASSET)
 						.unwrap()
 				},
-				broker_fees: Default::default(),
+				broker_fees: bounded_vec![Beneficiary { account: 0, bps: 0 }],
 				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
 			},]
 		);
@@ -1975,6 +1975,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			None,
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
+			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
 			None,
 			None,
@@ -1994,6 +1995,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			None,
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
+			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
 			None,
 			None,
@@ -2029,6 +2031,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 			Some(ccm_deposit_metadata.clone()),
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
+			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
 			None,
 			None,
@@ -2055,6 +2058,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 			Some(ccm_deposit_metadata),
 			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
+			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
 			None,
 			None,
