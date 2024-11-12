@@ -46,7 +46,7 @@ async function runAllConcurrentTests() {
     testCancelOrdersBatch.run(),
     depositChannelCreation.run(),
     testBtcVaultSwap.run(),
-    testBrokerLevelScreening.run()
+    testBrokerLevelScreening.run(),
   ];
 
   // Tests that only work if there is more than one node

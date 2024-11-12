@@ -75,14 +75,14 @@ async function submitTxAsTainted(txId: string) {
  * @param portAndRoute Where we want to submit the request to.
  * @param body The request body, is serialized as JSON.
  */
-async function postDepositMonitor(portAndRoute: string, body: string | object) {
+async function postToDepositMonitor(portAndRoute: string, body: string | object) {
   return axios
     .post('http://127.0.0.1' + portAndRoute, JSON.stringify(body), {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      timeout: 1000,
+      timeout: 5000,
     })
     .then((res) => res.data)
     .catch((error) => {
@@ -104,7 +104,7 @@ async function postDepositMonitor(portAndRoute: string, body: string | object) {
  * `{Random: { min_score: 0.0, max_score: 10.0 , incomplete_probability: 0.5 }}`.
  */
 async function setMockmode(mode: string | object) {
-  return postDepositMonitor(':6070/mockmode', mode);
+  return postToDepositMonitor(':6070/mockmode', mode);
 }
 
 /**
@@ -114,7 +114,7 @@ async function setMockmode(mode: string | object) {
  * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
  */
 async function setTxRiskScore(txid: string, score: number) {
-  await postDepositMonitor(':6070/riskscore', [
+  await postToDepositMonitor(':6070/riskscore', [
     txid,
     {
       risk_score: { Score: score },
@@ -127,7 +127,7 @@ async function setTxRiskScore(txid: string, score: number) {
  * Checks that the deposit monitor has started up successfully and is healthy.
  */
 async function ensureHealth() {
-  const response = await postDepositMonitor(':6060/health', {});
+  const response = await postToDepositMonitor(':6060/health', {});
   if (response.starting === true || response.all_processors === false) {
     throw new Error(
       "Deposit monitor is running, but not healthy. It's response was: " + JSON.stringify(response),
