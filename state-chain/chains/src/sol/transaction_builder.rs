@@ -11,10 +11,11 @@ use sol_prim::consts::{
 
 use crate::{
 	sol::{
-		api::{DurableNonceAndAccount, SolanaTransactionBuildingError},
+		api::{DurableNonceAndAccount, EventAccountAndSender, SolanaTransactionBuildingError},
 		compute_units_costs::{
 			compute_limit_with_buffer, BASE_COMPUTE_UNITS_PER_TX,
-			COMPUTE_UNITS_PER_BUMP_DERIVATION, COMPUTE_UNITS_PER_FETCH_NATIVE,
+			COMPUTE_UNITS_PER_BUMP_DERIVATION, COMPUTE_UNITS_PER_CLOSE_ACCOUNT,
+			COMPUTE_UNITS_PER_CLOSE_EVENT_ACCOUNTS, COMPUTE_UNITS_PER_FETCH_NATIVE,
 			COMPUTE_UNITS_PER_FETCH_TOKEN, COMPUTE_UNITS_PER_ROTATION,
 			COMPUTE_UNITS_PER_SET_GOV_KEY, COMPUTE_UNITS_PER_TRANSFER_NATIVE,
 			COMPUTE_UNITS_PER_TRANSFER_TOKEN,
@@ -22,8 +23,12 @@ use crate::{
 		sol_tx_core::{
 			address_derivation::{derive_associated_token_account, derive_fetch_account},
 			compute_budget::ComputeBudgetInstruction,
-			program_instructions::{InstructionExt, SystemProgramInstruction, VaultProgram},
+			program_instructions::{
+				swap_endpoints::SwapEndpointProgram, InstructionExt, SystemProgramInstruction,
+				VaultProgram,
+			},
 			token_instructions::AssociatedTokenAccountInstruction,
+			AccountMeta,
 		},
 		AccountBump, SolAddress, SolAmount, SolApiEnvironment, SolAsset, SolCcmAccounts,
 		SolComputeLimit, SolInstruction, SolMessage, SolPubkey, SolTransaction, Solana,
@@ -437,6 +442,45 @@ impl SolanaTransactionBuilder {
 			compute_limit_with_buffer(COMPUTE_UNITS_PER_SET_GOV_KEY),
 		)
 	}
+
+	/// Creates an instruction to close a number of open event swap accounts created via program
+	/// swap.
+	pub fn close_event_accounts(
+		event_accounts: Vec<EventAccountAndSender>,
+		vault_program_data_account: SolAddress,
+		swap_endpoint_program: SolAddress,
+		swap_endpoint_data_account: SolAddress,
+		agg_key: SolAddress,
+		durable_nonce: DurableNonceAndAccount,
+		compute_price: SolAmount,
+	) -> Result<SolTransaction, SolanaTransactionBuildingError> {
+		let number_of_accounts = event_accounts.len();
+		let event_and_sender_vec: Vec<AccountMeta> = event_accounts
+			.into_iter()
+			// Both event account and payee should be writable and non-signers
+			.flat_map(|(event_account, payee)| {
+				vec![
+					AccountMeta::new(event_account.into(), false),
+					AccountMeta::new(payee.into(), false),
+				]
+			})
+			.collect();
+
+		let instructions = vec![SwapEndpointProgram::with_id(swap_endpoint_program)
+			.close_event_accounts(vault_program_data_account, agg_key, swap_endpoint_data_account)
+			.with_remaining_accounts(event_and_sender_vec)];
+
+		Self::build(
+			instructions,
+			durable_nonce,
+			agg_key.into(),
+			compute_price,
+			compute_limit_with_buffer(
+				COMPUTE_UNITS_PER_CLOSE_EVENT_ACCOUNTS +
+					COMPUTE_UNITS_PER_CLOSE_ACCOUNT * number_of_accounts as u32,
+			),
+		)
+	}
 }
 
 #[cfg(test)]
@@ -487,6 +531,8 @@ mod test {
 			token_vault_pda_account: TOKEN_VAULT_PDA_ACCOUNT,
 			usdc_token_mint_pubkey: USDC_TOKEN_MINT_PUB_KEY,
 			usdc_token_vault_ata: USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+			swap_endpoint_program: SWAP_ENDPOINT_PROGRAM,
+			swap_endpoint_program_data_account: SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
 		}
 	}
 
@@ -672,8 +718,50 @@ mod test {
 		)
 		.unwrap();
 
-		// Serialized tx built in `create_full_rotation` test
+		// Serialized tx built in `rotate_agg_key` test
 		let expected_serialized_tx = hex_literal::hex!("0180d9ae78d86dbf0895772b959d27110d09d8cb0f9bb388cbc84a53372b568ea56cb9f235f05bf59446a18b9e9babdf61e7194cd6f838d6fd6a741e6f60cc300d01000411f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb0e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e0917eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1926744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900448541f57201f277c5f3ffb631d0212e26e7f47749c26c4808718174a0ab2a09a18cd28baa84f2067bbdf24513c2d44e44bf408f2e6da6e60762e3faa4a62a0adbcd644e45426a41a7cb8369b8a0c1c89bb3f86cf278fdd9cc38b0f69784ad5667e392cd98d3284fd551604be95c14cc8e20123e2940ef9fb784e6b591c7442864e5e1869817a4fd88ddf7ab7a5f7252d7c345b39721769888608592912e8ca9acf0f13460b3fd04b7d53d7421fc874ec00eec769cf36480895e1a407bf1249475f2b2e24122be016983be9369965246cc45e1f621d40fba300c56c7ac50c3874df4f83bd213a59c9785110cf83c718f9486c3484f918593bce20c61dc6a96036afecc89e3b031824af6363174d19bbec12d3a13c4a173e5aeb349b63042bc138f00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293cc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000e0d03020f0004040000000e00090340420f00000000000e000502e02e000010040100030d094e518fabdda5d68b000d02020024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020b0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02090024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020a0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02070024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02060024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02040024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d020c0024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02080024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be5439900440d02050024070000006744e9d9790761c45a800a074687b5ff47b449a90c722a3852543be543990044").to_vec();
+
+		test_constructed_transaction(transaction, expected_serialized_tx);
+	}
+
+	#[test]
+	fn can_close_event_accounts() {
+		let env = api_env();
+		let event_accounts = vec![EVENT_AND_SENDER_ACCOUNTS[0]];
+		let transaction = SolanaTransactionBuilder::close_event_accounts(
+			event_accounts,
+			env.vault_program_data_account,
+			env.swap_endpoint_program,
+			env.swap_endpoint_program_data_account,
+			agg_key(),
+			durable_nonce(),
+			compute_price(),
+		)
+		.unwrap();
+
+		// Serialized tx built in `close_event_accounts` test
+		let expected_serialized_tx = hex_literal::hex!("01026e2d4bdca9e638b59507a70ea62ad88f098ffb25df028a19288702698fdf6d1cf77618b2123c0205a8e8d272ba8ea645b7e75c606ca3aa4356b65fa52ca20b0100050af79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17e5cc1f4d51a40626e11c783b75a45a4922615ecd7f5320b9d4d46481a196a317eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921c1f0efc91eeb48bb80c90cf97775cd5d843a96f16500266cee2c20d053152d2665730decf59d4cd6db8437dab77302287431eb7562b5997601851a0eab6946f00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e091ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc1622938c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e4890004050302070004040000000600090340420f000000000006000502307500000905080003010408a5663d01b94dbd79").to_vec();
+
+		test_constructed_transaction(transaction, expected_serialized_tx);
+	}
+
+	#[test]
+	fn can_close_max_event_accounts() {
+		let env = api_env();
+
+		// We can close 11 accounts without reaching the transaction length limit.
+		let transaction = SolanaTransactionBuilder::close_event_accounts(
+			EVENT_AND_SENDER_ACCOUNTS.to_vec(),
+			env.vault_program_data_account,
+			env.swap_endpoint_program,
+			env.swap_endpoint_program_data_account,
+			agg_key(),
+			durable_nonce(),
+			compute_price(),
+		)
+		.unwrap();
+
+		let expected_serialized_tx = hex_literal::hex!("01361c7baab92d2d4599136442ad7d4c1d51fedc6749d44f3a8e8405cc19983862c885526b293ed79d0253d44e174705db9050638d1ffc31b6f7b586b269fea4030100051ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb05a557a331e51b8bf444d3bacdf6f48d8fd583aa79f9b956dd68f13a67ad096412741ecfad8423dea0c173b354b32309c3e97bb1dc68e0d858c3caebc1a1701a178480c19a99c9f2b95d40ebcb55057a49f0df00e123da6ae5e85a77c282f7c117e5cc1f4d51a40626e11c783b75a45a4922615ecd7f5320b9d4d46481a196a317eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921c11d80c98e8c11e79fd97b6c10ad733782bdbe25a710b807bbf14dedaa314861c1f0efc91eeb48bb80c90cf97775cd5d843a96f16500266cee2c20d053152d2266d68abb283ba2f4cecb092e3cfed2cb1774468ebbc264426c268ff405aa5a837de225793278f0575804f7d969e1980caaa5c5ddb2aebfd8496b14e71c9fad657d7f5b3e6c340824caca3b6c34c03e2fe0e636430b2b729ddfe32146ba4b3795c4b1e73c84b8d3f9e006c22fe8b865b9900e296345d88cdaaa7077ef17d9a31665730decf59d4cd6db8437dab77302287431eb7562b5997601851a0eab6946f74dd7ddee33a59ae7431bb31fbeb738cbfd097a66fd6706cffe7fc7efb239ec67fab67806fbb92ffd9504f4411b7f4561a0efb16685e4a22c41373fedc50b4bf86554fe5208d48fc8198310804e59837443fdaab12ea97be0fa38049910da82987410536ffebba5f49e67bafd3aa4b6cc860a594641e801500e058f74bac504da054544b2425f722e18c810bbc6cb6b9045d0db0a62d529af30efde8c37255bda7e867ab720f01897e5ede67fc232e41729d0be2a530391619743822ff6d95bea9dff663e1d13345d96daede8066cd30a1474635f2d64052d1a50ac04aed3f99bd9ce2f9674b65bfaefb62c9b8252fd0080357b1cbff44d0dad8568535dbc230c78bf2e7aee8e16631746542ef634cee3ac9bdc044c491f06862590ff1029865ce904f76d0a0ffedad66f8e2c94bccc731cac372fef8bb12cd2c473d95acf366d33096c9d0fa193639345c07abfe81175fc4d153cf0ab7b5668006538f195382df0e412e53b45bf52f91fa8e70ea872687428e4cb372306b9e6073f8d3c270c400000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea94000000e14940a2247d0a8a33650d7dfe12d269ecabce61c1219b5a6dcdb6961026e091ef91c791d2aa8492c90f12540abd10056ce5dd8d9ab08461476c1dcc1622938c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900041903051b0004040000001a00090340420f00000000001a00050220bf02001d191c0007040c0a01141312060b17100e02090d0f08151103161808a5663d01b94dbd79").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}

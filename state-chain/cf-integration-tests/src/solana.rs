@@ -75,6 +75,8 @@ fn setup_sol_environments() {
 		token_vault_pda_account: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT,
 		usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
 		usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+		swap_endpoint_program: sol_test_values::SWAP_ENDPOINT_PROGRAM,
+		swap_endpoint_program_data_account: sol_test_values::SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
 	});
 
 	// Environment::AvailableDurableNonces
