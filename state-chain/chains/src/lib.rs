@@ -3,7 +3,6 @@
 #![feature(extract_if)]
 #![feature(split_array)]
 
-use crate::sol::SolHash;
 use cf_primitives::TxId;
 use sp_core::H256;
 
@@ -12,7 +11,7 @@ use sp_std::marker::PhantomData;
 
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
-	sol::api::SolanaTransactionBuildingError,
+	sol::{api::SolanaTransactionBuildingError, SolanaTransactionInId},
 };
 pub use address::ForeignChainAddress;
 use address::{
@@ -607,7 +606,7 @@ pub enum TransactionInIdForAnyChain {
 	// Used by Ethereum, Arbitrum and BTC.
 	ByteHash(H256),
 	PolkadotTxId(TxId),
-	SolanaTxHash(SolHash),
+	SolanaTxId(SolanaTransactionInId),
 }
 
 #[macro_export]
@@ -636,7 +635,7 @@ macro_rules! impl_convert_transaction_in_id_to_any_chain {
 
 impl_convert_transaction_in_id_to_any_chain!(ByteHash, H256);
 impl_convert_transaction_in_id_to_any_chain!(PolkadotTxId, TxId);
-impl_convert_transaction_in_id_to_any_chain!(SolanaTxHash, SolHash);
+impl_convert_transaction_in_id_to_any_chain!(SolanaTxId, SolanaTransactionInId);
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin<TransactionInId> {
