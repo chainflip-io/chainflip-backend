@@ -175,7 +175,6 @@ build-localnet() {
 
   echo "🔬 Starting Deposit Monitor API ..."
   # On some machines (e.g. MacOS), 172.17.0.1 is not accessible from inside the container, so we need to use host.docker.internal
-  DEPOSIT_MONITOR_ENV='localnet/init/deposit-monitor/deposit-monitor.env'
   if [[ $CI == true ]]; then
     export CFDM_BROKER_API_URL='ws://172.17.0.1:10997'
   else

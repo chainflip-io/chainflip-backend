@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { randomBytes } from 'crypto';
 import { InternalAsset } from '@chainflip/cli';
 import { ExecutableTest } from '../shared/executable_test';
@@ -70,81 +71,68 @@ async function submitTxAsTainted(txId: string) {
 }
 
 /**
- * Ensures that the deposit-monitor is running and healthy.
- *
+ * Submit a post request to the deposit-monitor, with error handling.
+ * @param portAndRoute Where we want to submit the request to.
+ * @param body The request body, is serialized as JSON.
  */
-async function ensureDepositMonitorHealth() {
-  const headers: Headers = new Headers();
-  headers.set('Content-Type', 'application/json');
-  headers.set('Accept', 'application/json');
-
-  const request: RequestInfo = new Request('http://127.0.0.1:6060/health', {
-    method: 'GET',
-    headers,
-  });
-
-  let responseBody;
-  for (let i = 0; i < 10; i++) {
-    let res;
-    try {
-      res = await fetch(request);
-    } catch {
-      testBrokerLevelScreening.log('Could not connect to deposit monitor, retrying.');
-      await sleep(1000);
-    }
-
-    if (res) {
-      const body = await res.json();
-
-      if (body.starting === false) {
-        responseBody = body;
-        break;
+async function postDepositMonitor(portAndRoute: string, body: string | object) {
+  return axios
+    .post('http://127.0.0.1' + portAndRoute, JSON.stringify(body), {
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      timeout: 1000,
+    })
+    .then((res) => res.data)
+    .catch((error) => {
+      let message;
+      if (error.response) {
+        message = error.response.data + ' (' + error.response.status + ')';
       } else {
-        testBrokerLevelScreening.log('Deposit monitor is starting...');
-        await sleep(500);
+        message = error;
       }
-    }
-  }
+      throw new Error('Request to deposit monitor (' + portAndRoute + ') failed: ' + message);
+    });
+}
 
-  if (responseBody === undefined) {
-    throw new Error('Could not ensure that deposit monitor is running.');
-  }
-
-  const body = responseBody;
-  const health = body.all_processors;
-  testBrokerLevelScreening.log('Deposit monitor health: ' + health);
-  if (!health) {
-    testBrokerLevelScreening.log('Deposit monitor health response is:  ' + JSON.stringify(body));
-    throw new Error('Could not ensure that deposit monitor is healthy.');
-  }
-  return health;
+/**
+ * Set the mockmode of the deposit monitor, controlling how it analyses incoming transactions.
+ *
+ * @param mode Object describing the mockmode we want to set the deposit-monitor to,
+ * Possible example values are: `"Manual"`, `{Deterministic: {score: 1.0, incomplete_probability: 0.5}}`,
+ * `{Random: { min_score: 0.0, max_score: 10.0 , incomplete_probability: 0.5 }}`.
+ */
+async function setMockmode(mode: string | object) {
+  return postDepositMonitor(':6070/mockmode', mode);
 }
 
 /**
  * Call the deposit-monitor to set risk score of given transaction in mock analysis provider.
+ *
  * @param txid Hash of the transaction we want to report.
  * @param score Risk score for this transaction. Can be in range [0.0, 10.0].
  */
-function setTxRiskScore(txid: string, score: number) {
-  const headers: Headers = new Headers();
-  headers.set('Content-Type', 'application/json');
-  headers.set('Accept', 'application/json');
-  const request: RequestInfo = new Request('http://127.0.0.1:6070/riskscore', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify([
-      txid,
-      {
-        risk_score: { Score: score },
-        unknown_contribution_percentage: 0.0,
-        analysis_provider: 'elliptic_analysis_provider',
-      },
-    ]),
-  });
+async function setTxRiskScore(txid: string, score: number) {
+  await postDepositMonitor(':6070/riskscore', [
+    txid,
+    {
+      risk_score: { Score: score },
+      unknown_contribution_percentage: 0.0,
+    },
+  ]);
+}
 
-  return fetch(request).then((res) =>
-    testBrokerLevelScreening.log('got response' + JSON.stringify(res)),
-  );
+/**
+ * Checks that the deposit monitor has started up successfully and is healthy.
+ */
+async function ensureHealth() {
+  const response = await postDepositMonitor(':6060/health', {});
+  if (response.starting === true || response.all_processors === false) {
+    throw new Error(
+      "Deposit monitor is running, but not healthy. It's response was: " + JSON.stringify(response),
+    );
+  }
 }
 
 /**
@@ -153,14 +141,12 @@ function setTxRiskScore(txid: string, score: number) {
  * @param amount - The deposit amount.
  * @param doBoost - Whether to boost the deposit.
  * @param refundAddress - The address to refund to.
- * @param waitBeforeReport - The number of milliseconds to wait before reporting the tx as tainted.
  * @returns - The the channel id of the deposit channel.
  */
 async function brokerLevelScreeningTestScenario(
   amount: string,
   doBoost: boolean,
   refundAddress: string,
-  waitBeforeReport: number,
   reportFunction: (txId: string) => Promise<void>,
 ): Promise<string> {
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
@@ -181,8 +167,6 @@ async function brokerLevelScreeningTestScenario(
     refundParameters,
   );
   const txId = await sendBtc(swapParams.depositAddress, amount, 0);
-  await sleep(waitBeforeReport);
-  // await setTxRiskScore(txId, 9.0);
   await reportFunction(txId);
   return swapParams.channelId.toString();
 }
@@ -197,14 +181,15 @@ async function brokerLevelScreeningTestScenario(
 async function main() {
   const MILLI_SECS_PER_BLOCK = 6000;
 
-  // 0. -- Ensure that deposit monitor is running --
-  await ensureDepositMonitorHealth();
+  // 0. -- Ensure that deposit monitor is running with manual mocking mode --
+  await ensureHealth();
+  const previousMockmode = (await setMockmode('Manual')).previous;
 
   // 1. -- Test no boost and early tx report --
   testBrokerLevelScreening.log('Testing broker level screening with no boost...');
   let btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, 0, (txId) =>
+  await brokerLevelScreeningTestScenario('0.2', false, btcRefundAddress, async (txId) =>
     setTxRiskScore(txId, 9.0),
   );
 
@@ -221,7 +206,7 @@ async function main() {
   );
   btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, 0, (txId) =>
+  await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, async (txId) =>
     setTxRiskScore(txId, 9.0),
   );
   await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
@@ -240,10 +225,11 @@ async function main() {
     '0.2',
     true,
     btcRefundAddress,
-    MILLI_SECS_PER_BLOCK * 2,
-    // we submit the extrinsic manually in order to ensure that even though it definitely arrives,
+    // We wait 12 seconds (2 localnet btc blocks) before we submit the tx.
+    // We submit the extrinsic manually in order to ensure that even though it definitely arrives,
     // the transaction is refunded because the extrinsic is submitted too late.
     async (txId) => {
+      await sleep(MILLI_SECS_PER_BLOCK * 2);
       await submitTxAsTainted(txId);
     },
   );
@@ -253,4 +239,7 @@ async function main() {
   }).event;
 
   testBrokerLevelScreening.log(`Swap was executed and tainted transaction was not refunded 👍.`);
+
+  // 4. -- Restore mockmode --
+  await setMockmode(previousMockmode);
 }
