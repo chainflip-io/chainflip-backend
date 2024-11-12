@@ -34,9 +34,9 @@ use cf_chains::{
 	FetchAssetParams, ForeignChainAddress, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
-	ForeignChain, PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId,
+	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
+	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
+	EpochIndex, ForeignChain, PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId,
 	TransactionHash, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -752,6 +752,9 @@ pub mod pallet {
 		},
 		FailedToRejectTaintedTransaction {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
+		},
+		UnknownPrimaryBroker {
+			broker_id: T::AccountId,
 		},
 		UnknownAffiliateBroker {
 			broker_id: T::AccountId,
@@ -2217,31 +2220,37 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let primary_broker = broker_fee.account.clone();
 
-		// TODO: check that primary_broker is an existing broker
+		let broker_fees =
+			if T::AccountRoleRegistry::has_account_role(&primary_broker, AccountRole::Broker) {
+				[broker_fee]
+				.into_iter()
+				.chain(affiliate_fees.into_iter().filter_map(
+					|Beneficiary { account: short_affiliate_id, bps }| {
+						if let Some(affiliate_id) =
+							T::AffiliateRegistry::lookup(&primary_broker, short_affiliate_id)
+						{
+							Some(Beneficiary { account: affiliate_id, bps })
+						} else {
+							// In case the entry not found, we ignore the entry, but process the
+							// swap (to avoid having to refund it).
+							Self::deposit_event(Event::<T, I>::UnknownAffiliateBroker {
+								broker_id: primary_broker.clone(),
+								short_affiliate_id,
+							});
 
-		let broker_fees = [broker_fee]
-			.into_iter()
-			.chain(affiliate_fees.into_iter().filter_map(
-				|Beneficiary { account: short_affiliate_id, bps }| {
-					if let Some(affiliate_id) =
-						T::AffiliateRegistry::lookup(&primary_broker, short_affiliate_id)
-					{
-						Some(Beneficiary { account: affiliate_id, bps })
-					} else {
-						// In case the entry not found, we ignore the entry, but process the
-						// swap (to avoid having to refund it).
-						Self::deposit_event(Event::<T, I>::UnknownAffiliateBroker {
-							broker_id: primary_broker.clone(),
-							short_affiliate_id,
-						});
-
-						None
-					}
-				},
-			))
-			.collect::<Vec<_>>()
-			.try_into()
-			.expect("must fit since affiliates are limited to 1 fewer element than beneficiaries");
+							None
+						}
+					},
+				))
+				.collect::<Vec<_>>()
+				.try_into()
+				.expect("must fit since affiliates are limited to 1 fewer element than beneficiaries")
+			} else {
+				Self::deposit_event(Event::<T, I>::UnknownPrimaryBroker {
+					broker_id: primary_broker,
+				});
+				Default::default()
+			};
 
 		if let Err(err) = T::SwapLimitsProvider::validate_broker_fees(&broker_fees) {
 			log::warn!(

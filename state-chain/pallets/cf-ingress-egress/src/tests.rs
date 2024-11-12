@@ -1805,7 +1805,7 @@ fn can_request_swap_via_extrinsic() {
 			None,
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
-			Beneficiary { account: 0, bps: 0 },
+			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
 			None,
 			None,
@@ -1819,7 +1819,7 @@ fn can_request_swap_via_extrinsic() {
 				output_asset: OUTPUT_ASSET,
 				input_amount: INPUT_AMOUNT,
 				swap_type: SwapRequestType::Regular { output_address },
-				broker_fees: bounded_vec![Beneficiary { account: 0, bps: 0 }],
+				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
 			},]
 		);
@@ -1827,14 +1827,13 @@ fn can_request_swap_via_extrinsic() {
 }
 
 #[test]
-fn vault_swaps_support_broker_fees() {
+fn vault_swaps_support_affiliate_fees() {
 	new_test_ext().execute_with(|| {
 		const INPUT_ASSET: Asset = Asset::Usdc;
 		const OUTPUT_ASSET: Asset = Asset::Flip;
 		const INPUT_AMOUNT: AssetAmount = 10_000;
 		const TX_HASH: [u8; 32] = [0xa; 32];
 
-		const BROKER: u64 = 101;
 		const BROKER_FEE: BasisPoints = 5;
 		const AFFILIATE_FEE: BasisPoints = 10;
 		const AFFILIATE_1: u64 = 102;
@@ -1898,6 +1897,55 @@ fn vault_swaps_support_broker_fees() {
 }
 
 #[test]
+fn charge_no_broker_fees_on_unknown_primary_broker() {
+	new_test_ext().execute_with(|| {
+		const INPUT_ASSET: Asset = Asset::Usdc;
+		const OUTPUT_ASSET: Asset = Asset::Flip;
+		const INPUT_AMOUNT: AssetAmount = 10_000;
+		const TX_HASH: [u8; 32] = [0xa; 32];
+
+		const BROKER_FEE: BasisPoints = 5;
+
+		const NOT_A_BROKER: u64 = 357;
+
+		let output_address = ForeignChainAddress::Eth([1; 20].into());
+
+		assert_ok!(IngressEgress::vault_swap_request(
+			RuntimeOrigin::root(),
+			INPUT_ASSET.try_into().unwrap(),
+			OUTPUT_ASSET,
+			INPUT_AMOUNT,
+			MockAddressConverter::to_encoded_address(output_address.clone()),
+			None,
+			TX_HASH,
+			Box::new(DepositDetails { tx_hashes: None }),
+			Beneficiary { account: NOT_A_BROKER, bps: BROKER_FEE },
+			Default::default(),
+			None,
+			None,
+			0
+		));
+
+		// The request is recorded as not having any broker fees:
+		assert_eq!(
+			MockSwapRequestHandler::<Test>::get_swap_requests(),
+			vec![MockSwapRequest {
+				input_asset: INPUT_ASSET,
+				output_asset: OUTPUT_ASSET,
+				input_amount: INPUT_AMOUNT,
+				swap_type: SwapRequestType::Regular { output_address },
+				broker_fees: Default::default(),
+				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+			},]
+		);
+
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::UnknownPrimaryBroker {
+			broker_id: NOT_A_BROKER,
+		}));
+	});
+}
+
+#[test]
 fn can_request_ccm_swap_via_extrinsic() {
 	const INPUT_ASSET: Asset = Asset::Flip;
 	const OUTPUT_ASSET: Asset = Asset::Usdc;
@@ -1927,7 +1975,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 			Some(ccm_deposit_metadata.clone()),
 			TX_HASH,
 			Box::new(DepositDetails { tx_hashes: None }),
-			Beneficiary { account: 0, bps: 0 },
+			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
 			None,
 			None,
@@ -1946,7 +1994,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 						.into_swap_metadata(INPUT_AMOUNT, INPUT_ASSET, OUTPUT_ASSET)
 						.unwrap()
 				},
-				broker_fees: bounded_vec![Beneficiary { account: 0, bps: 0 }],
+				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
 			},]
 		);
