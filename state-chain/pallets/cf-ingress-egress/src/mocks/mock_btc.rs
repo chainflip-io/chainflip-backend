@@ -13,6 +13,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter,
+		affiliate_registry::MockAffiliateRegistry,
 		api_call::{MockBitcoinApiCall, MockBtcEnvironment},
 		asset_converter::MockAssetConverter,
 		asset_withholding::MockAssetWithholding,
@@ -107,6 +108,7 @@ impl pallet_cf_ingress_egress::Config for Test {
 	type SwapLimitsProvider = MockSwapLimitsProvider;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AllowTransactionReports = ConstBool<true>;
+	type AffiliateRegistry = MockAffiliateRegistry;
 }
 
 impl_test_helpers! {

@@ -8,7 +8,7 @@ use cf_chains::{
 	},
 	ChannelRefundParameters, ForeignChainAddress,
 };
-use cf_primitives::DcaParameters;
+use cf_primitives::{AccountId, Beneficiary, DcaParameters};
 use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
@@ -82,6 +82,7 @@ type BtcIngressEgressCall =
 pub fn try_extract_vault_swap_call(
 	tx: &VerboseTransaction,
 	vault_address: &DepositAddress,
+	broker_id: &AccountId,
 ) -> Option<BtcIngressEgressCall> {
 	// A correctly constructed transaction carrying CF swap parameters must have at least 3 outputs:
 	let [utxo_to_vault, nulldata_utxo, change_utxo, ..] = &tx.vout[..] else {
@@ -141,18 +142,29 @@ pub fn try_extract_vault_swap_call(
 			deposit_address: vault_address.clone(),
 		}),
 		deposit_metadata: None, // No ccm for BTC (yet?)
-		broker_fees: Default::default(),
+		broker_fee: Beneficiary {
+			account: broker_id.clone(),
+			bps: data.parameters.broker_fee.into(),
+		},
+		affiliate_fees: data
+			.parameters
+			.affiliates
+			.into_iter()
+			.map(|entry| Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
+			.collect_vec()
+			.try_into()
+			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
 		refund_params: Some(Box::new(ChannelRefundParameters {
-			retry_duration: data.parameters.retry_duration as u32,
+			retry_duration: data.parameters.retry_duration.into(),
 			refund_address: ForeignChainAddress::Btc(refund_address),
 			min_price,
 		})),
 		dca_params: Some(DcaParameters {
-			number_of_chunks: data.parameters.number_of_chunks as u32,
-			chunk_interval: data.parameters.chunk_interval as u32,
+			number_of_chunks: data.parameters.number_of_chunks.into(),
+			chunk_interval: data.parameters.chunk_interval.into(),
 		}),
 		// This is only to be checked in the pre-witnessed version
-		boost_fee: data.parameters.boost_fee as u16,
+		boost_fee: data.parameters.boost_fee.into(),
 	})
 }
 
@@ -189,7 +201,7 @@ mod tests {
 			chunk_interval: 2,
 			boost_fee: 5,
 			broker_fee: 10,
-			affiliates: bounded_vec![],
+			affiliates: bounded_vec![AffiliateAndFee { affiliate: 17, fee: 7 }],
 		},
 	});
 
@@ -236,6 +248,7 @@ mod tests {
 
 		const REFUND_PK_HASH: [u8; 20] = [8; 20];
 		const DEPOSIT_AMOUNT: u64 = 1000;
+		const BROKER: AccountId = AccountId::new([1; 32]);
 
 		// Addresses have different representations to satisfy interfaces:
 		let vault_deposit_address = DepositAddress::new([7; 32], 0);
@@ -272,7 +285,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			try_extract_vault_swap_call(&tx, &vault_deposit_address),
+			try_extract_vault_swap_call(&tx, &vault_deposit_address, &BROKER),
 			Some(BtcIngressEgressCall::vault_swap_request {
 				input_asset: NATIVE_ASSET,
 				output_asset: MOCK_SWAP_PARAMS.output_asset,
@@ -284,10 +297,17 @@ mod tests {
 					amount: DEPOSIT_AMOUNT,
 					deposit_address: vault_deposit_address,
 				}),
-				broker_fees: Default::default(),
+				broker_fee: Beneficiary {
+					account: BROKER,
+					bps: MOCK_SWAP_PARAMS.parameters.broker_fee.into()
+				},
+				affiliate_fees: bounded_vec![Beneficiary {
+					account: MOCK_SWAP_PARAMS.parameters.affiliates[0].affiliate.into(),
+					bps: MOCK_SWAP_PARAMS.parameters.affiliates[0].fee.into(),
+				}],
 				deposit_metadata: None,
 				refund_params: Some(Box::new(ChannelRefundParameters {
-					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration as u32,
+					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),
 					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
@@ -295,10 +315,10 @@ mod tests {
 					)),
 				})),
 				dca_params: Some(DcaParameters {
-					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks as u32,
-					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval as u32,
+					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks.into(),
+					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval.into(),
 				}),
-				boost_fee: MOCK_SWAP_PARAMS.parameters.boost_fee as u16,
+				boost_fee: MOCK_SWAP_PARAMS.parameters.boost_fee.into(),
 			})
 		);
 	}

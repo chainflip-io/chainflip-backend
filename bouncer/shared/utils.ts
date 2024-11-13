@@ -45,6 +45,7 @@ export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
+export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
 
 export type Asset = SDKAsset;
 export type Chain = SDKChain;
@@ -114,14 +115,26 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '8inHGLHXegST3EPLcpisQe9D1hDT9r7DJjS395L3yuYf';
         case 'TOKEN_VAULT_PDA':
           return '7B13iu7bUbBX88eVBqTZkQqrErnTMazPmGLdE5RqdyKZ';
+        case 'TOKEN_VAULT_ATA':
+          return '9CGLwcPknpYs3atgwtjMX7RhgvBgaqK8wwCvXnmjEoL9';
         case 'DATA_ACCOUNT':
           return 'BttvFNSRKrkHugwDP6SpnBejCKKskHowJif1HGgBtTfG';
         case 'SolUsdc':
           return process.env.SOL_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
+        case 'SolUsdcTokenSupport':
+          return PublicKey.findProgramAddressSync(
+            [
+              Buffer.from('supported_token'),
+              new PublicKey(getContractAddress('Solana', 'SolUsdc')).toBuffer(),
+            ],
+            new PublicKey(getContractAddress('Solana', 'VAULT')),
+          )[0].toBase58();
         case 'CFTESTER':
           return '8pBPaVfTAcjLeNfC187Fkvi9b1XEFhRNJ95BQXXVksmH';
         case 'SWAP_ENDPOINT':
           return '35uYgHdfZQT4kHkaaXQ6ZdCkK5LFrsk43btTLbGCRCNT';
+        case 'SWAP_ENDPOINT_DATA_ACCOUNT':
+          return '2tmtGLQcBd11BMiE9B1tAkQXwmPNgR79Meki2Eme4Ec9';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }

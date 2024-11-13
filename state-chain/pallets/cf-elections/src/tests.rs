@@ -1,10 +1,9 @@
 #![cfg(test)]
 use crate::{mock::*, *};
 use cf_primitives::AuthorityCount;
-use electoral_system::{
-	AuthorityVoteOf, ConsensusStatus, ElectionReadAccess, ElectoralReadAccess, ElectoralWriteAccess,
-};
-use electoral_systems::mock::{BehaviourUpdate, MockElectoralSystem};
+use electoral_system::ConsensusStatus;
+use electoral_system_runner::RunnerStorageAccessTrait;
+use electoral_systems::mock::{BehaviourUpdate, MockElectoralSystemRunner};
 use frame_support::traits::OriginTrait;
 use mock::Test;
 use std::collections::BTreeMap;
@@ -117,7 +116,7 @@ fn ensure_can_vote() {
 	});
 }
 
-pub trait ElectoralSystemTestExt: Sized {
+pub trait ElectoralSystemRunnerTestExt: Sized {
 	fn update_settings(self, updates: &[BehaviourUpdate]) -> Self;
 	fn expect_consensus_after_next_block(self, expected: ConsensusStatus<AuthorityCount>) -> Self;
 	fn assume_consensus(self) -> Self;
@@ -127,39 +126,28 @@ pub trait ElectoralSystemTestExt: Sized {
 	fn submit_votes<I: 'static>(
 		self,
 		validator_ids: &[u64],
-		vote: AuthorityVoteOf<MockElectoralSystem>,
+		vote: CompositeAuthorityVoteOf<MockElectoralSystemRunner>,
 		expected_outcome: Result<(), Error<Test, I>>,
 	) -> Self
 	where
-		Test: Config<I, ElectoralSystem = MockElectoralSystem>,
+		Test: Config<I, ElectoralSystemRunner = MockElectoralSystemRunner>,
 		<Test as frame_system::Config>::RuntimeCall: From<Call<Test, I>>;
 }
 
-impl ElectoralSystemTestExt for TestRunner<TestContext> {
+impl ElectoralSystemRunnerTestExt for TestRunner<TestContext> {
 	/// Starts a new election, adding its unique monotonic identifier to the test context.
 	#[track_caller]
 	fn new_election(self) -> Self {
 		self.then_execute_with(
 			#[track_caller]
 			|mut ctx| {
-				let unique_monotonic_identifier =
-					*Pallet::<Test, Instance1>::with_electoral_access(|electoral_access| {
-						electoral_access.new_election((), (), ())
-					})
-					.expect("New election should not corrupt storage.")
-					.election_identifier()
-					.expect("New election should have an identifier.")
-					.unique_monotonic();
+				let identifier =
+					RunnerStorageAccess::<Test, Instance1>::new_election((), (), ()).unwrap();
+				let unique_monotonic_identifier = identifier.unique_monotonic();
 
 				assert_eq!(Status::<Test, Instance1>::get(), Some(ElectionPalletStatus::Running));
 
-				Pallet::<Test, Instance1>::with_electoral_access(|electoral_access| {
-					electoral_access
-						.election(ElectionIdentifier::new(unique_monotonic_identifier, ()))
-				})
-				.expect("Expected an initial election.");
-
-				ctx.umis.push(unique_monotonic_identifier);
+				ctx.umis.push(*unique_monotonic_identifier);
 
 				ctx
 			},
@@ -167,7 +155,7 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 	}
 
 	fn update_settings(self, updates: &[BehaviourUpdate]) -> Self {
-		MockElectoralSystem::update(updates);
+		MockElectoralSystemRunner::update(updates);
 		self
 	}
 
@@ -185,11 +173,11 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 	fn submit_votes<I: 'static>(
 		self,
 		validator_ids: &[u64],
-		vote: AuthorityVoteOf<MockElectoralSystem>,
+		vote: CompositeAuthorityVoteOf<MockElectoralSystemRunner>,
 		expected_outcome: Result<(), Error<Test, I>>,
 	) -> Self
 	where
-		Test: Config<I, ElectoralSystem = MockElectoralSystem>,
+		Test: Config<I, ElectoralSystemRunner = MockElectoralSystemRunner>,
 		<Test as frame_system::Config>::RuntimeCall: From<Call<Test, I>>,
 	{
 		self.then_apply_extrinsics(
@@ -204,7 +192,9 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 								Call::<Test, I>::vote {
 									authority_votes: BoundedBTreeMap::try_from(
 										sp_std::iter::once((
-											ElectionIdentifier::new(*umi, ()),
+											CompositeElectionIdentifierOf::<
+												MockElectoralSystemRunner,
+											>::new(*umi, ()),
 											vote.clone(),
 										))
 										.collect::<BTreeMap<_, _>>(),
@@ -228,7 +218,7 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 				assert!(!umis.is_empty(), "Asserted consensus on empty election set.");
 
 				for umi in umis {
-					let actual = MockElectoralSystem::consensus_status(*umi);
+					let actual = MockElectoralSystemRunner::consensus_status(*umi);
 					assert_eq!(
 					actual,
 					expected,
@@ -249,7 +239,7 @@ impl ElectoralSystemTestExt for TestRunner<TestContext> {
 
 #[test]
 fn consensus_state_transitions() {
-	const VOTE: AuthorityVoteOf<MockElectoralSystem> = AuthorityVote::Vote(());
+	const VOTE: CompositeAuthorityVoteOf<MockElectoralSystemRunner> = AuthorityVote::Vote(());
 
 	election_test_ext(TestSetup { num_non_contributing_authorities: 2, ..Default::default() })
 		.new_election()
@@ -301,7 +291,7 @@ fn consensus_state_transitions() {
 
 #[test]
 fn authority_removes_and_re_adds_itself_from_contributing_set() {
-	const VOTE: AuthorityVoteOf<MockElectoralSystem> = AuthorityVote::Vote(());
+	const VOTE: CompositeAuthorityVoteOf<MockElectoralSystemRunner> = AuthorityVote::Vote(());
 
 	election_test_ext(Default::default())
 		.new_election()

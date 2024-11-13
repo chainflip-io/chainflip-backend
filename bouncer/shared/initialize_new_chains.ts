@@ -210,10 +210,7 @@ export async function initializeSolanaPrograms(solClient: Connection, solKey: st
 
   const solUsdcMintPubkey = new PublicKey(getContractAddress('Solana', 'SolUsdc'));
 
-  const [tokenSupportedAccount] = PublicKey.findProgramAddressSync(
-    [Buffer.from('supported_token'), solUsdcMintPubkey.toBuffer()],
-    solanaVaultProgramId,
-  );
+  const tokenSupportedAccount = new PublicKey(getContractAddress('Solana', 'SolUsdcTokenSupport'));
 
   tx.add(
     new TransactionInstruction({

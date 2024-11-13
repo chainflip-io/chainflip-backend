@@ -3,7 +3,7 @@
 use super::*;
 
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
-use cf_primitives::{AccountRole, Beneficiary, FLIPPERINOS_PER_FLIP};
+use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -167,6 +167,31 @@ mod benchmarks {
 		assert!(
 			!BrokerPrivateBtcChannels::<T>::contains_key(&broker_id),
 			"Private channel must have been closed"
+		);
+	}
+
+	#[benchmark]
+	fn register_affiliate() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		const IDX: u8 = 0;
+		let caller = OriginFor::<T>::signed(broker_id.clone());
+		let affiliate_id = frame_benchmarking::account::<T::AccountId>("affiliate", 0, 0);
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::register_affiliate(
+				caller.clone(),
+				IDX.into(),
+				affiliate_id.clone()
+			));
+		}
+
+		assert_eq!(
+			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX)),
+			Some(affiliate_id),
+			"Affiliate must have been registered"
 		);
 	}
 

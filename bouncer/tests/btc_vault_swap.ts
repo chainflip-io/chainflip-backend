@@ -12,6 +12,7 @@ import {
 } from '../shared/utils';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
+import { jsonRpc } from '../shared/json_rpc';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testBtcVaultSwap = new ExecutableTest('Btc-Vault-Swap', main, 100);
@@ -51,6 +52,7 @@ async function buildAndSendBtcVaultSwap(
 
   assert.strictEqual(vaultSwapDetails.chain, 'Bitcoin');
   testBtcVaultSwap.debugLog('nulldata_utxo:', vaultSwapDetails.nulldata_utxo);
+  testBtcVaultSwap.debugLog('deposit_address:', vaultSwapDetails.deposit_address);
 
   // The `createRawTransaction` function will add the op codes, so we have to remove them here.
   const nullDataWithoutOpCodes = vaultSwapDetails.nulldata_utxo.replace('0x', '').substring(4);
@@ -112,8 +114,25 @@ async function testVaultSwap(depositAmountBtc: number, brokerUri: string, destin
   testBtcVaultSwap.log(`Balance increased, Vault Swap Complete`);
 }
 
+async function openPrivateBtcChannel(brokerUri: string) {
+  // TODO: Use chainflip SDK instead so we can support any broker uri
+  assert.strictEqual(brokerUri, '//BROKER_1', 'Support for other brokers is not implemented');
+
+  // TODO: use chainflip SDK to check if the channel is already open
+  try {
+    await jsonRpc('broker_open_private_btc_channel', [], 'http://127.0.0.1:10997');
+    testBtcVaultSwap.log('Private Btc channel opened');
+  } catch (error) {
+    // We expect this to fail if the channel already exists from a previous run
+    testBtcVaultSwap.debugLog('Failed to open private Btc channel', error);
+  }
+}
+
 async function main() {
   const btcDepositAmount = 0.1;
+  const brokerUri = '//BROKER_1';
 
-  await testVaultSwap(btcDepositAmount, '//BROKER_1', 'Flip');
+  await openPrivateBtcChannel(brokerUri);
+
+  await testVaultSwap(btcDepositAmount, brokerUri, 'Flip');
 }

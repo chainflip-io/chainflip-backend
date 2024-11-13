@@ -7,10 +7,11 @@
 mod benchmarking;
 
 pub mod migrations;
+
 #[cfg(test)]
-mod mock_btc;
+mod mocks;
 #[cfg(test)]
-mod mock_eth;
+use mocks::{mock_btc, mock_eth};
 #[cfg(test)]
 mod tests;
 pub mod weights;
@@ -33,17 +34,19 @@ use cf_chains::{
 	FetchAssetParams, ForeignChainAddress, RejectCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BoostPoolTier, BroadcastId, ChannelId,
-	DcaParameters, EgressCounter, EgressId, EpochIndex, ForeignChain, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, TransactionHash, SECONDS_PER_BLOCK,
+	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
+	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
+	EpochIndex, ForeignChain, PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId,
+	TransactionHash, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AssetConverter,
-	AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip, ChannelIdAllocator, DepositApi,
-	EgressApi, EpochInfo, FeePayment, FetchesTransfersLimitProvider, GetBlockHeight,
-	IngressEgressFeeApi, IngressSink, IngressSource, NetworkEnvironmentProvider, OnDeposit,
-	PoolApi, ScheduledEgressDetails, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
+	impl_pallet_safe_mode, AccountRoleRegistry, AdjustedFeeEstimationApi, AffiliateRegistry,
+	AssetConverter, AssetWithholding, BalanceApi, BoostApi, Broadcaster, Chainflip,
+	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
+	FetchesTransfersLimitProvider, GetBlockHeight, IngressEgressFeeApi, IngressSink, IngressSource,
+	NetworkEnvironmentProvider, OnDeposit, PoolApi, ScheduledEgressDetails, SwapLimitsProvider,
+	SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
@@ -454,6 +457,8 @@ pub mod pallet {
 		/// For checking if the CCM message passed in is valid.
 		type CcmValidityChecker: CcmValidityCheck;
 
+		type AffiliateRegistry: AffiliateRegistry<AccountId = Self::AccountId>;
+
 		#[pallet::constant]
 		type AllowTransactionReports: Get<bool>;
 	}
@@ -747,6 +752,13 @@ pub mod pallet {
 		},
 		FailedToRejectTaintedTransaction {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
+		},
+		UnknownBroker {
+			broker_id: T::AccountId,
+		},
+		UnknownAffiliate {
+			broker_id: T::AccountId,
+			short_affiliate_id: AffiliateShortId,
 		},
 	}
 
@@ -1295,7 +1307,8 @@ pub mod pallet {
 			deposit_metadata: Option<CcmDepositMetadata>,
 			tx_hash: TransactionHash,
 			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
-			broker_fees: Beneficiaries<T::AccountId>,
+			broker_fee: Beneficiary<T::AccountId>,
+			affiliate_fees: Affiliates<AffiliateShortId>,
 			refund_params: Option<Box<ChannelRefundParameters>>,
 			dca_params: Option<DcaParameters>,
 			boost_fee: BasisPoints,
@@ -1309,7 +1322,8 @@ pub mod pallet {
 					deposit_metadata,
 					tx_hash,
 					*deposit_details,
-					broker_fees,
+					broker_fee,
+					affiliate_fees,
 					refund_params.map(|boxed| *boxed),
 					dca_params,
 					boost_fee,
@@ -2113,7 +2127,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
-		broker_fees: Beneficiaries<T::AccountId>,
+		broker_fee: Beneficiary<T::AccountId>,
+		affiliate_fees: Affiliates<AffiliateShortId>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		// This is only to be checked in the pre-witnessed version (not implemented yet)
@@ -2205,6 +2220,38 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return;
 			}
 		}
+
+		let primary_broker = broker_fee.account.clone();
+
+		let broker_fees =
+			if T::AccountRoleRegistry::has_account_role(&primary_broker, AccountRole::Broker) {
+				[broker_fee]
+				.into_iter()
+				.chain(affiliate_fees.into_iter().filter_map(
+					|Beneficiary { account: short_affiliate_id, bps }| {
+						if let Some(affiliate_id) =
+							T::AffiliateRegistry::lookup(&primary_broker, short_affiliate_id)
+						{
+							Some(Beneficiary { account: affiliate_id, bps })
+						} else {
+							// In case the entry not found, we ignore the entry, but process the
+							// swap (to avoid having to refund it).
+							Self::deposit_event(Event::<T, I>::UnknownAffiliate {
+								broker_id: primary_broker.clone(),
+								short_affiliate_id,
+							});
+
+							None
+						}
+					},
+				))
+				.collect::<Vec<_>>()
+				.try_into()
+				.expect("must fit since affiliates are limited to 1 fewer element than beneficiaries")
+			} else {
+				Self::deposit_event(Event::<T, I>::UnknownBroker { broker_id: primary_broker });
+				Default::default()
+			};
 
 		if let Err(err) = T::SwapLimitsProvider::validate_broker_fees(&broker_fees) {
 			log::warn!(

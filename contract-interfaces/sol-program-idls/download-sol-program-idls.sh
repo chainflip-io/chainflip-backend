@@ -31,6 +31,7 @@ gh release download \
 unzip -u ${ZIP_FILE} \
     'vault.json' \
     'cf_tester.json' \
+    'swap_endpoint.json' \
     -d $TARGET_DIR
 
 rm ${ZIP_FILE}

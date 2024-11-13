@@ -58,8 +58,7 @@ impl<
 		Ok(())
 	}
 
-	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
+	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
 		_context: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
@@ -68,21 +67,20 @@ impl<
 			.at_most_one()
 			.map_err(|_| CorruptStorageError::new())?
 		{
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
+			let election_access = ElectoralAccess::election_mut(election_identifier);
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
 				election_access.delete();
-				electoral_access.set_unsynchronised_state(consensus)?;
-				electoral_access.new_election((), (), ())?;
+				ElectoralAccess::set_unsynchronised_state(consensus)?;
+				ElectoralAccess::new_election((), (), ())?;
 			}
 		} else {
-			electoral_access.new_election((), (), ())?;
+			ElectoralAccess::new_election((), (), ())?;
 		}
 
 		Ok(())
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
 		votes: ConsensusVotes<Self>,

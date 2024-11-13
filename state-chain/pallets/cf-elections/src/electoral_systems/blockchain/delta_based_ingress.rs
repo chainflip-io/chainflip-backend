@@ -55,23 +55,22 @@ where
 	<Sink as IngressSink>::Account: Ord,
 	ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 {
-	pub fn open_channel<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
+	pub fn open_channel<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<
 			ElectionIdentifier<<Self as ElectoralSystem>::ElectionIdentifierExtra>,
 		>,
-		electoral_access: &mut ElectoralAccess,
 		channel: Sink::Account,
 		asset: Sink::Asset,
 		close_block: Sink::BlockNumber,
 	) -> Result<(), CorruptStorageError> {
 		let channel_details = (
 			OpenChannelDetails { asset, close_block },
-			electoral_access.unsynchronised_state_map(&(channel.clone(), asset))?.unwrap_or(
+			ElectoralAccess::unsynchronised_state_map(&(channel.clone(), asset))?.unwrap_or(
 				ChannelTotalIngressed { block_number: Zero::zero(), amount: Zero::zero() },
 			),
 		);
 		if let Some(election_identifier) = election_identifiers.last() {
-			let mut election_access = electoral_access.election_mut(*election_identifier)?;
+			let mut election_access = ElectoralAccess::election_mut(*election_identifier);
 			let mut channels = election_access.properties()?;
 			if channels.len() < MAXIMUM_CHANNELS_PER_ELECTION as usize {
 				channels.insert(channel, channel_details);
@@ -86,7 +85,7 @@ where
 			}
 		}
 
-		electoral_access.new_election(
+		ElectoralAccess::new_election(
 			Default::default(), /* We use the lowest value, so we can refresh the elections the
 			                     * maximum number of times */
 			[(channel, channel_details)].into_iter().collect(),
@@ -139,7 +138,6 @@ where
 	type OnFinalizeReturn = ();
 
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier_with_extra: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
@@ -168,14 +166,13 @@ where
 		Ok(())
 	}
 
-	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
+	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
 		chain_tracking: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		for election_identifier in election_identifiers {
 			let (mut channels, mut pending_ingress_totals, option_consensus) = {
-				let mut election_access = electoral_access.election_mut(election_identifier)?;
+				let election_access = ElectoralAccess::election_mut(election_identifier);
 				(
 					election_access.properties()?,
 					election_access.state()?,
@@ -220,11 +217,13 @@ where
 				};
 
 				if let Some(ingress_total) = option_ingress_total_before_chain_tracking {
-					let previous_amount = electoral_access
-						.unsynchronised_state_map(&(account.clone(), details.asset))?
-						.map_or(Zero::zero(), |previous_total_ingressed| {
-							previous_total_ingressed.amount
-						});
+					let previous_amount = ElectoralAccess::unsynchronised_state_map(&(
+						account.clone(),
+						details.asset,
+					))?
+					.map_or(Zero::zero(), |previous_total_ingressed| {
+						previous_total_ingressed.amount
+					});
 					match previous_amount.cmp(&ingress_total.amount) {
 						Ordering::Less => {
 							Sink::on_ingress(
@@ -234,10 +233,10 @@ where
 								ingress_total.block_number,
 								(),
 							);
-							electoral_access.set_unsynchronised_state_map(
+							ElectoralAccess::set_unsynchronised_state_map(
 								(account.clone(), details.asset),
 								Some(ingress_total),
-							)?;
+							);
 						},
 						Ordering::Greater => {
 							Sink::on_ingress_reverted(
@@ -261,7 +260,7 @@ where
 				}
 			}
 
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
+			let mut election_access = ElectoralAccess::election_mut(election_identifier);
 			if !closed_channels.is_empty() {
 				for closed_channel in closed_channels {
 					pending_ingress_totals.remove(&closed_channel);
@@ -291,7 +290,6 @@ where
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: ConsensusVotes<Self>,

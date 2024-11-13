@@ -23,6 +23,7 @@ serde = { workspace = true, features = ["derive", "alloc"] }
 hex-literal = { workspace = true }
 log = { workspace = true }
 cf-runtime-utilities = { workspace = true }
+cf-utilities = { workspace = true }
 
 # Parity deps
 codec = { workspace = true, features = ["derive"] }
@@ -54,6 +55,7 @@ std = [
   "sp-std/std",
   "log/std",
   "cf-runtime-utilities/std",
+  "cf-utilities/std",
 ]
 runtime-benchmarks = [
   "cf-chains/runtime-benchmarks",

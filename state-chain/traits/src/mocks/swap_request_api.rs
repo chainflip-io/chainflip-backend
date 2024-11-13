@@ -17,6 +17,7 @@ pub struct MockSwapRequest {
 	pub output_asset: Asset,
 	pub input_amount: AssetAmount,
 	pub swap_type: SwapRequestType,
+	pub broker_fees: Beneficiaries<u64>,
 	pub origin: SwapOrigin,
 }
 
@@ -43,7 +44,7 @@ where
 		input_amount: AssetAmount,
 		output_asset: Asset,
 		swap_type: SwapRequestType,
-		_broker_fees: Beneficiaries<Self::AccountId>,
+		broker_fees: Beneficiaries<Self::AccountId>,
 		_refund_params: Option<ChannelRefundParameters>,
 		_dca_params: Option<DcaParameters>,
 		origin: SwapOrigin,
@@ -56,6 +57,7 @@ where
 				output_asset,
 				input_amount,
 				swap_type: swap_type.clone(),
+				broker_fees,
 				origin,
 			});
 			id

@@ -153,6 +153,8 @@ pub mod compute_units_costs {
 	pub const COMPUTE_UNITS_PER_ROTATION: SolComputeLimit = 8_000u32;
 	pub const COMPUTE_UNITS_PER_SET_GOV_KEY: SolComputeLimit = 15_000u32;
 	pub const COMPUTE_UNITS_PER_BUMP_DERIVATION: SolComputeLimit = 2_000u32;
+	pub const COMPUTE_UNITS_PER_CLOSE_EVENT_ACCOUNTS: SolComputeLimit = 10_000u32;
+	pub const COMPUTE_UNITS_PER_CLOSE_ACCOUNT: SolComputeLimit = 10_000u32;
 
 	/// This is equivalent to a priority fee
 	pub const MIN_COMPUTE_PRICE: SolAmount = 10u64;
@@ -389,6 +391,10 @@ pub struct SolApiEnvironment {
 	// For Usdc token
 	pub usdc_token_mint_pubkey: SolAddress,
 	pub usdc_token_vault_ata: SolAddress,
+
+	// For program swaps API calls.
+	pub swap_endpoint_program: SolAddress,
+	pub swap_endpoint_program_data_account: SolAddress,
 }
 
 impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}

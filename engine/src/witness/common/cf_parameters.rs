@@ -25,7 +25,7 @@ pub struct VaultSwapParameters {
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: Option<BasisPoints>,
 	// TODO: Create BrokerAndFee instead so fee is also a u8?
-	pub broker_fees: Beneficiary<AccountId>,
+	pub broker_fee: Beneficiary<AccountId>,
 	pub affiliate_fees: Affiliates<AffiliateAndFee>,
 }
 
@@ -66,7 +66,7 @@ mod tests {
 			},
 			dca_params: None,
 			boost_fee: None,
-			broker_fees: Beneficiary { account: AccountId::new([3; 32]), bps: 4 },
+			broker_fee: Beneficiary { account: AccountId::new([3; 32]), bps: 4 },
 			affiliate_fees: sp_core::bounded_vec![],
 		};
 

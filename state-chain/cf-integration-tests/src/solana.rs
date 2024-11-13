@@ -27,9 +27,8 @@ use frame_support::{
 	traits::{OnFinalize, UnfilteredDispatchable},
 };
 use pallet_cf_elections::{
-	electoral_system::{ElectionIdentifierOf, ElectoralSystem},
-	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote, VoteStorage},
-	MAXIMUM_VOTES_PER_EXTRINSIC,
+	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote},
+	CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FetchOrTransfer};
 use pallet_cf_validator::RotationPhase;
@@ -58,11 +57,12 @@ const BOB: AccountId = AccountId::new([0x44; 32]);
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
 const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
 
-type SolanaElectionVote = BoundedBTreeMap::<
-	ElectionIdentifierOf<<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystem>,
-	AuthorityVote<
-		<<<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::PartialVote,
-		<<<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystem as ElectoralSystem>::Vote as VoteStorage>::Vote,
+type SolanaElectionVote = BoundedBTreeMap<
+	CompositeElectionIdentifierOf<
+		<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
+	>,
+	CompositeAuthorityVoteOf<
+		<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
 	>,
 	ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
 >;
@@ -75,6 +75,8 @@ fn setup_sol_environments() {
 		token_vault_pda_account: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT,
 		usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
 		usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+		swap_endpoint_program: sol_test_values::SWAP_ENDPOINT_PROGRAM,
+		swap_endpoint_program_data_account: sol_test_values::SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
 	});
 
 	// Environment::AvailableDurableNonces
@@ -435,7 +437,11 @@ fn solana_ccm_fails_with_invalid_input() {
 					deposit_metadata: Some(invalid_ccm),
 					tx_hash: Default::default(),
 					deposit_details: Box::new(()),
-					broker_fees: Default::default(),
+					broker_fee: cf_primitives::Beneficiary {
+						account: sp_runtime::AccountId32::new([0; 32]),
+						bps: 0,
+					},
+					affiliate_fees: Default::default(),
 					refund_params: None,
 					dca_params: None,
 					boost_fee: 0,
@@ -489,7 +495,11 @@ fn solana_ccm_fails_with_invalid_input() {
 					deposit_metadata: Some(ccm),
 					tx_hash: Default::default(),
 					deposit_details: Box::new(()),
-					broker_fees: Default::default(),
+					broker_fee: cf_primitives::Beneficiary {
+						account: sp_runtime::AccountId32::new([0; 32]),
+						bps: 0,
+					},
+					affiliate_fees: Default::default(),
 					refund_params: None,
 					dca_params: None,
 					boost_fee: 0,
@@ -713,7 +723,11 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 					deposit_metadata: Some(ccm),
 					tx_hash: Default::default(),
 					deposit_details: Box::new(()),
-					broker_fees: Default::default(),
+					broker_fee: cf_primitives::Beneficiary {
+						account: sp_runtime::AccountId32::new([0; 32]),
+						bps: 0,
+					},
+					affiliate_fees: Default::default(),
 					refund_params: None,
 					dca_params: None,
 					boost_fee: 0,
@@ -729,8 +743,8 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 			let ccm_broadcast_id = pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get().into_iter().next().unwrap();
 
 			// Get the election identifier of the Solana egress.
-			let election_id = SolanaElections::with_electoral_access_and_identifiers(
-				|_, election_identifiers| {
+			let election_id = SolanaElections::with_election_identifiers(
+				|election_identifiers| {
 					Ok(election_identifiers.last().cloned().unwrap())
 				},
 			).unwrap();

@@ -191,8 +191,8 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
-		_broker_fees: Beneficiary<AccountId>,
-		_affiliate_fees: Affiliates<AffiliateAndFee>,
+		broker_fee: Beneficiary<AccountId>,
+		affiliate_fees: Affiliates<AffiliateAndFee>,
 		refund_params: Option<ChannelRefundParameters>,
 		dca_params: Option<DcaParameters>,
 		// This is only to be checked in the pre-witnessed version
@@ -207,9 +207,8 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 				deposit_metadata,
 				tx_hash,
 				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) }),
-				// TODO: To update after PRO-1751 for both broker_fees and affiliate_fees
-				broker_fees: Default::default(),
-				// affiliate_fees: Default::default(),
+				broker_fee,
+				affiliate_fees,
 				boost_fee: boost_fee.unwrap_or_default(),
 				dca_params,
 				refund_params: refund_params.map(Box::new),

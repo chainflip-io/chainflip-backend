@@ -390,6 +390,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
 
@@ -417,6 +418,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
 
@@ -444,6 +446,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
 }
 
@@ -471,6 +474,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
 
@@ -498,6 +502,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type SwapLimitsProvider = Swapping;
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
+	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
 }
 
@@ -1012,7 +1017,7 @@ impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
 
 impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type ElectoralSystem = chainflip::solana_elections::SolanaElectoralSystem;
+	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 }
 
@@ -2127,8 +2132,7 @@ impl_runtime_apis! {
 						Ok(())
 					}
 				})
-				.map_err(|()| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
-
+				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
 
 			// Encode swap
 			match ForeignChain::from(source_asset) {

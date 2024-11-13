@@ -145,6 +145,10 @@ impl WeightInfo for MockWeightInfo {
 	fn close_private_btc_channel() -> Weight {
 		Weight::from_parts(100, 0)
 	}
+
+	fn register_affiliate() -> Weight {
+		Weight::from_parts(100, 0)
+	}
 }
 
 pub struct AlwaysValid;
@@ -178,6 +182,7 @@ impl pallet_cf_swapping::Config for Test {
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+pub const BOB: <Test as frame_system::Config>::AccountId = 789u64;
 pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
 
 cf_test_utilities::impl_test_helpers! {
