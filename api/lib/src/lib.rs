@@ -474,6 +474,56 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::deregister_as_broker {})
 			.await
 	}
+
+	async fn open_private_btc_channel(&self) -> Result<ChannelId> {
+		let (_, events, ..) = self
+			.submit_signed_extrinsic_with_dry_run(RuntimeCall::from(
+				pallet_cf_swapping::Call::open_private_btc_channel {},
+			))
+			.await?
+			.until_in_block()
+			.await?;
+
+		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
+			pallet_cf_swapping::Event::PrivateBrokerChannelOpened { channel_id, .. },
+		)) = events.iter().find(|event| {
+			matches!(
+				event,
+				state_chain_runtime::RuntimeEvent::Swapping(
+					pallet_cf_swapping::Event::PrivateBrokerChannelOpened { .. }
+				)
+			)
+		}) {
+			Ok(*channel_id)
+		} else {
+			bail!("No PrivateBrokerChannelOpened event was found");
+		}
+	}
+
+	async fn close_private_btc_channel(&self) -> Result<ChannelId> {
+		let (_, events, ..) = self
+			.submit_signed_extrinsic_with_dry_run(RuntimeCall::from(
+				pallet_cf_swapping::Call::close_private_btc_channel {},
+			))
+			.await?
+			.until_in_block()
+			.await?;
+
+		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
+			pallet_cf_swapping::Event::PrivateBrokerChannelClosed { channel_id, .. },
+		)) = events.iter().find(|event| {
+			matches!(
+				event,
+				state_chain_runtime::RuntimeEvent::Swapping(
+					pallet_cf_swapping::Event::PrivateBrokerChannelClosed { .. }
+				)
+			)
+		}) {
+			Ok(*channel_id)
+		} else {
+			bail!("No PrivateBrokerChannelClosed event was found");
+		}
+	}
 }
 
 #[async_trait]

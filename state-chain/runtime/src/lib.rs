@@ -2132,8 +2132,7 @@ impl_runtime_apis! {
 						Ok(())
 					}
 				})
-				.map_err(|()| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
-
+				.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDestinationAddress)?;
 
 			// Encode swap
 			match ForeignChain::from(source_asset) {

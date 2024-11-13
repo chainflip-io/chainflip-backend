@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use cf_primitives::BlockNumber;
 use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::{
@@ -168,19 +167,6 @@ pub trait BaseRpcApi {
 		params: Option<Box<RawValue>>,
 		unsub: &str,
 	) -> RpcResult<Subscription<Box<RawValue>>>;
-
-	async fn validate_refund_params(
-		&self,
-		retry_duration: BlockNumber,
-		block_hash: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<()>;
-
-	async fn validate_dca_params(
-		&self,
-		number_of_chunks: u32,
-		chunk_interval: u32,
-		block_hash: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<()>;
 }
 
 pub struct BaseRpcClient<RawRpcClient> {
@@ -317,25 +303,6 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		unsub: &str,
 	) -> RpcResult<Subscription<Box<RawValue>>> {
 		self.raw_rpc_client.subscribe(sub, Params(params), unsub).await
-	}
-
-	async fn validate_refund_params(
-		&self,
-		retry_duration: BlockNumber,
-		block_hash: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<()> {
-		self.raw_rpc_client.cf_validate_refund_params(retry_duration, block_hash).await
-	}
-
-	async fn validate_dca_params(
-		&self,
-		number_of_chunks: u32,
-		chunk_interval: u32,
-		block_hash: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<()> {
-		self.raw_rpc_client
-			.cf_validate_dca_params(number_of_chunks, chunk_interval, block_hash)
-			.await
 	}
 }
 
