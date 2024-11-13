@@ -97,13 +97,20 @@ async function postToDepositMonitor(portAndRoute: string, body: string | object)
 }
 
 /**
+ * Typescript representation of the allowed parameters to `setMockmode`. The JSON encoding of these
+ * is what the deposit-monitor expects.
+ */
+type Mockmode =
+  | 'Manual'
+  | { Deterministic: { score: number; incomplete_probability: number } }
+  | { Random: { min_score: number; max_score: number; incomplete_probability: number } };
+
+/**
  * Set the mockmode of the deposit monitor, controlling how it analyses incoming transactions.
  *
  * @param mode Object describing the mockmode we want to set the deposit-monitor to,
- * Possible example values are: `"Manual"`, `{Deterministic: {score: 1.0, incomplete_probability: 0.5}}`,
- * `{Random: { min_score: 0.0, max_score: 10.0 , incomplete_probability: 0.5 }}`.
  */
-async function setMockmode(mode: string | object) {
+async function setMockmode(mode: Mockmode) {
   return postToDepositMonitor(':6070/mockmode', mode);
 }
 
