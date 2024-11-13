@@ -15,7 +15,7 @@ use cf_primitives::{
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, ChannelIdAllocator, DepositApi,
+	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
 	ExecutionCondition, IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler,
 	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
@@ -443,6 +443,11 @@ pub mod pallet {
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type ChannelIdAllocator: ChannelIdAllocator;
+
+		type Bonder: Bonding<
+			ValidatorId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -533,6 +538,9 @@ pub mod pallet {
 		T::AccountId,
 		OptionQuery,
 	>;
+
+	#[pallet::storage]
+	pub type BrokerBond<T: Config> = StorageValue<_, <T as Chainflip>::Amount, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -737,6 +745,8 @@ pub mod pallet {
 		TooManyAffiliates,
 		/// No empty affiliate short id available.
 		NoEmptyAffiliateShortId,
+		/// The Bonder does not have enough Funds to cover the bond.
+		InsufficientFunds,
 	}
 
 	#[pallet::genesis_config]
@@ -1120,6 +1130,11 @@ pub mod pallet {
 				Error::<T>::PrivateChannelExistsForBroker
 			);
 
+			ensure!(
+				T::Bonder::try_bond(&broker_id, BrokerBond::<T>::get()),
+				Error::<T>::InsufficientFunds
+			);
+
 			// TODO: burn fee for opening a channel?
 			let channel_id = T::ChannelIdAllocator::allocate_private_channel_id()?;
 
@@ -1138,6 +1153,8 @@ pub mod pallet {
 			let Some(channel_id) = BrokerPrivateBtcChannels::<T>::take(&broker_id) else {
 				return Err(Error::<T>::NoPrivateChannelExistsForBroker.into())
 			};
+
+			T::Bonder::kill_bond(&broker_id);
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed { broker_id, channel_id });
 

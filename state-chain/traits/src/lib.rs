@@ -689,6 +689,11 @@ pub trait Bonding {
 	type Amount;
 	/// Update the bond of an authority
 	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
+	/// Try to bond an amount for an account. Returns true if the bond was successful, false
+	/// otherwise.
+	fn try_bond(authority: &Self::ValidatorId, bond: Self::Amount) -> bool;
+	/// Kill the bond of an authority.
+	fn kill_bond(authority: &Self::ValidatorId);
 }
 
 /// Something that is able to provide block authorship slots that were missed.

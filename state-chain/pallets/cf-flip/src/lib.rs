@@ -448,6 +448,29 @@ impl<T: Config> Bonding for Bonder<T> {
 			}
 		})
 	}
+
+	fn try_bond(authority: &Self::ValidatorId, bond: Self::Amount) -> bool {
+		Account::<T>::mutate_exists(authority, |maybe_account| {
+			if let Some(account) = maybe_account.as_mut() {
+				if account.balance >= bond {
+					account.bond = bond;
+					true
+				} else {
+					false
+				}
+			} else {
+				false
+			}
+		})
+	}
+
+	fn kill_bond(authority: &Self::ValidatorId) {
+		Account::<T>::mutate_exists(authority, |maybe_account| {
+			if let Some(account) = maybe_account.as_mut() {
+				account.bond = 0u128.into()
+			}
+		})
+	}
 }
 
 pub struct FlipIssuance<T>(PhantomData<T>);
