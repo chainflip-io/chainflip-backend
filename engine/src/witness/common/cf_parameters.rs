@@ -25,7 +25,7 @@ pub type VersionedCcmCfParameters = VersionedCfParameters<CcmAdditionalData>;
 pub struct VaultSwapParameters {
 	pub refund_params: ChannelRefundParameters,
 	pub dca_params: Option<DcaParameters>,
-	pub boost_fee: Option<BasisPoints>,
+	pub boost_fee: BasisPoints,
 	pub broker_fee: Beneficiary<AccountId>,
 	pub affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
 }
@@ -42,8 +42,8 @@ mod tests {
 	const REFERENCE_EXPECTED_ENCODED: &[u8] = &[
 		0, 1, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-		3, 3, 4, 0, 0,
+		0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+		3, 3, 3, 4, 0, 0,
 	];
 
 	#[test]
@@ -66,7 +66,7 @@ mod tests {
 				min_price: Default::default(),
 			},
 			dca_params: None,
-			boost_fee: None,
+			boost_fee: 0,
 			broker_fee: Beneficiary { account: AccountId::new([3; 32]), bps: 4 },
 			affiliate_fees: sp_core::bounded_vec![],
 		};
