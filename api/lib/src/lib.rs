@@ -346,13 +346,13 @@ impl fmt::Display for WithdrawFeesDetail {
 }
 
 macro_rules! extract_event {
-    ($events:expr, $event_variant:path, $pattern:tt, $result:expr) => {
-        if let Some(state_chain_runtime::RuntimeEvent::Swapping($event_variant $pattern)) = $events.iter().find(|event| {
-            matches!(event, state_chain_runtime::RuntimeEvent::Swapping($event_variant { .. }))
+    ($events:expr, $pallet_event:path, $event_variant:path, $pattern:tt, $result:expr) => {
+        if let Some($pallet_event($event_variant $pattern)) = $events.iter().find(|event| {
+            matches!(event, $pallet_event($event_variant { .. }))
         }) {
         	Ok($result)
         } else {
-            bail!("No {} event was found", stringify!($event_variant));
+            bail!("No {}({}) event was found", stringify!($pallet_event), stringify!($event_variant));
         }
     };
 }
@@ -404,6 +404,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 		extract_event!(
 			events,
+			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::SwapDepositAddressReady,
 			{
 				deposit_address,
@@ -445,6 +446,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 		extract_event!(
 			events,
+			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::WithdrawalRequested,
 			{
 				egress_amount,
@@ -482,6 +484,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 		extract_event!(
 			&events,
+			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::PrivateBrokerChannelOpened,
 			{ channel_id, .. },
 			*channel_id
@@ -499,6 +502,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 		extract_event!(
 			&events,
+			state_chain_runtime::RuntimeEvent::Swapping,
 			pallet_cf_swapping::Event::PrivateBrokerChannelClosed,
 			{ channel_id, .. },
 			*channel_id
