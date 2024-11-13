@@ -880,20 +880,17 @@ fn solana_can_recycle_deposit_channels() {
 					}
 				) => (deposit_address, channel_id, source_chain_expiry_block)
 			);
-			let deposit_address = match channel_address {
-				EncodedAddress::Sol(address) => Some(SolAddress(address)),
-				_ => None
-			}.expect("Deposit channel generated must be on the Solana Chain");
+			let deposit_address = channel_address.try_into().expect("Deposit channel generated must be on the Solana Chain");
 
 			assert!(pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, SolanaInstance>::contains_key(deposit_address));
 
 			// Generated deposit channel address should be correct.
-			let (generated_sol_address, generated_sol_bump) = <AddressDerivation as AddressDerivationApi<Solana>>::generate_address_and_state(
+			let (generated_address, generated_bump) = <AddressDerivation as AddressDerivationApi<Solana>>::generate_address_and_state(
 				SOL_SOL,
 				channel_id,
 			)
 			.expect("Must be able to derive Solana deposit channel.");
-			assert_eq!(deposit_address, generated_sol_address);
+			assert_eq!(deposit_address, generated_address);
 
 			// Witness Solana ingress in the deposit channel
 			testnet.move_forward_blocks(10);
@@ -917,7 +914,7 @@ fn solana_can_recycle_deposit_channels() {
 					channel_id,
 					address: deposit_address,
 					asset: SOL_SOL,
-					state: generated_sol_bump,
+					state: generated_bump,
 				})
 			);
 
@@ -960,7 +957,7 @@ fn solana_can_recycle_deposit_channels() {
 					channel_id,
 					address: deposit_address,
 					asset: SOL_USDC,
-					state: generated_sol_bump,
+					state: generated_bump,
 				})
 			);
 		});
