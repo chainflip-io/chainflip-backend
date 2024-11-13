@@ -12,7 +12,6 @@ use super::{
 	},
 	contract_common::{events_at_block, Event},
 };
-use cf_primitives::{AffiliateShortId, AssetAmount, EpochIndex};
 use futures_core::Future;
 
 use anyhow::{anyhow, Result};
@@ -20,12 +19,9 @@ use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	eth::Address as EthereumAddress,
 	evm::DepositDetails,
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChannelRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, Chain,
 };
-use cf_primitives::{
-	AccountId, AffiliateAndFee, Affiliates, Asset, BasisPoints, Beneficiary, DcaParameters,
-	ForeignChain,
-};
+use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
 use ethers::prelude::*;
 use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
@@ -81,11 +77,7 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
-				vault_swap_parameters.broker_fees,
-				vault_swap_parameters.affiliate_fees,
-				Some(vault_swap_parameters.refund_params),
-				vault_swap_parameters.dca_params,
-				vault_swap_parameters.boost_fee,
+				vault_swap_parameters,
 			))
 		},
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
@@ -111,11 +103,7 @@ where
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
 				event.tx_hash.into(),
-				vault_swap_parameters.broker_fees,
-				vault_swap_parameters.affiliate_fees,
-				Some(vault_swap_parameters.refund_params),
-				vault_swap_parameters.dca_params,
-				vault_swap_parameters.boost_fee,
+				vault_swap_parameters,
 			))
 		},
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
@@ -155,11 +143,7 @@ where
 					},
 				}),
 				event.tx_hash.into(),
-				vault_swap_parameters.broker_fees,
-				vault_swap_parameters.affiliate_fees,
-				Some(vault_swap_parameters.refund_params),
-				vault_swap_parameters.dca_params,
-				vault_swap_parameters.boost_fee,
+				vault_swap_parameters,
 			))
 		},
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
@@ -202,11 +186,7 @@ where
 					},
 				}),
 				event.tx_hash.into(),
-				vault_swap_parameters.broker_fees,
-				vault_swap_parameters.affiliate_fees,
-				Some(vault_swap_parameters.refund_params),
-				vault_swap_parameters.dca_params,
-				vault_swap_parameters.boost_fee,
+				vault_swap_parameters,
 			))
 		},
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
@@ -250,11 +230,7 @@ pub trait IngressCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: cf_primitives::TransactionHash,
-		broker_fee: Beneficiary<AccountId>,
-		affiliate_fees: Affiliates<AffiliateAndFee>,
-		refund_params: Option<ChannelRefundParameters>,
-		dca_params: Option<DcaParameters>,
-		boost_fee: Option<BasisPoints>,
+		vault_swap_parameters: VaultSwapParameters,
 	) -> state_chain_runtime::RuntimeCall;
 
 	fn vault_transfer_failed(

@@ -201,7 +201,7 @@ mod tests {
 			chunk_interval: 2,
 			boost_fee: 5,
 			broker_fee: 10,
-			affiliates: bounded_vec![AffiliateAndFee { affiliate: 17, fee: 7 }],
+			affiliates: bounded_vec![cf_primitives::AffiliateAndFee { affiliate: 17, fee: 7 }],
 		},
 	});
 

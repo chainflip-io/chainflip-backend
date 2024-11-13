@@ -402,18 +402,18 @@ pub type Affiliates<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_AFFILIATES>>;
 
 pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIARIES>>;
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
-pub struct AffiliateAndFee {
-	pub affiliate: u8,
-	pub fee: u8,
-}
-
 #[derive(
 	Clone, Debug, PartialEq, Eq, MaxEncodedLen, Encode, Decode, TypeInfo, Serialize, Deserialize,
 )]
 pub struct Beneficiary<Id> {
 	pub account: Id,
 	pub bps: BasisPoints,
+}
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+pub struct AffiliateAndFee {
+	pub affiliate: u8,
+	pub fee: u8,
 }
 
 #[derive(

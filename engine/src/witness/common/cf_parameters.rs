@@ -1,9 +1,11 @@
 use cf_chains::{CcmAdditionalData, ChannelRefundParameters};
 use cf_primitives::{
-	AccountId, AffiliateAndFee, Affiliates, BasisPoints, Beneficiary, DcaParameters,
+	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use sp_core::ConstU32;
+use sp_runtime::BoundedVec;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub enum VersionedCfParameters<CcmData = ()> {
@@ -24,9 +26,8 @@ pub struct VaultSwapParameters {
 	pub refund_params: ChannelRefundParameters,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: Option<BasisPoints>,
-	// TODO: Create BrokerAndFee instead so fee is also a u8?
 	pub broker_fee: Beneficiary<AccountId>,
-	pub affiliate_fees: Affiliates<AffiliateAndFee>,
+	pub affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
 }
 
 #[cfg(test)]

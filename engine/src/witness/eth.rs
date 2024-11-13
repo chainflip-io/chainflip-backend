@@ -3,10 +3,14 @@ mod state_chain_gateway;
 
 use std::{collections::HashMap, sync::Arc};
 
-use cf_chains::{evm::DepositDetails, Ethereum};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, AffiliateAndFee, EpochIndex};
+use cf_chains::{address::EncodedAddress, evm::DepositDetails, CcmDepositMetadata, Ethereum};
+use cf_primitives::{
+	chains::assets::eth::Asset as EthAsset, Asset, AssetAmount, Beneficiary, EpochIndex,
+	TransactionHash,
+};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
+use itertools::Itertools;
 use sp_core::H160;
 
 use crate::{
@@ -19,7 +23,10 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+	witness::{
+		common::cf_parameters::VaultSwapParameters,
+		evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+	},
 };
 
 use super::{common::epoch_source::EpochSourceBuilder, evm::source::EvmSource};
@@ -218,12 +225,6 @@ where
 	Ok(())
 }
 
-use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ChannelRefundParameters};
-use cf_primitives::{
-	AccountId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters,
-	TransactionHash,
-};
-
 pub struct EthCallBuilder {}
 
 impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
@@ -236,12 +237,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
-		_broker_fee: Beneficiary<AccountId>,
-		_affiliate_fees: Affiliates<AffiliateAndFee>,
-		refund_params: Option<ChannelRefundParameters>,
-		dca_params: Option<DcaParameters>,
-		// This is only to be checked in the pre-witnessed version
-		boost_fee: Option<BasisPoints>,
+		vault_swap_parameters: VaultSwapParameters,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
@@ -252,11 +248,17 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 				deposit_metadata,
 				tx_hash,
 				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) }),
-				broker_fee,
-				affiliate_fees,
-				boost_fee: boost_fee.unwrap_or_default(),
-				dca_params,
-				refund_params: refund_params.map(Box::new),
+				broker_fee: vault_swap_parameters.broker_fee,
+				affiliate_fees: vault_swap_parameters
+					.affiliate_fees
+					.into_iter()
+					.map(|entry| Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
+					.collect_vec()
+					.try_into()
+					.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
+				boost_fee: vault_swap_parameters.boost_fee.unwrap_or_default(),
+				dca_params: vault_swap_parameters.dca_params,
+				refund_params: Some(Box::new(vault_swap_parameters.refund_params)),
 			},
 		)
 	}
