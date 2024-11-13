@@ -345,6 +345,18 @@ impl fmt::Display for WithdrawFeesDetail {
 	}
 }
 
+macro_rules! extract_event {
+    ($events:expr, $runtime_event_variant:path, $pallet_event_variant:path, $pattern:tt, $result:expr) => {
+        if let Some($runtime_event_variant($pallet_event_variant $pattern)) = $events.iter().find(|event| {
+            matches!(event, $runtime_event_variant($pallet_event_variant { .. }))
+        }) {
+        	Ok($result)
+        } else {
+            bail!("No {}({}) event was found", stringify!($runtime_event_variant), stringify!($pallet_event_variant));
+        }
+    };
+}
+
 #[async_trait]
 pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static {
 	async fn request_swap_deposit_address(
@@ -390,8 +402,11 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.until_in_block()
 			.await?;
 
-		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::SwapDepositAddressReady {
+		extract_event!(
+			events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::SwapDepositAddressReady,
+			{
 				deposit_address,
 				channel_id,
 				source_chain_expiry_block,
@@ -399,15 +414,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 				refund_parameters,
 				..
 			},
-		)) = events.iter().find(|event| {
-			matches!(
-				event,
-				state_chain_runtime::RuntimeEvent::Swapping(
-					pallet_cf_swapping::Event::SwapDepositAddressReady { .. }
-				)
-			)
-		}) {
-			Ok(SwapDepositAddress {
+			SwapDepositAddress {
 				address: AddressString::from_encoded_address(deposit_address),
 				issued_block: header.number,
 				channel_id: *channel_id,
@@ -418,10 +425,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 						AddressString::from_encoded_address(&refund_address)
 					})
 				}),
-			})
-		} else {
-			bail!("No SwapDepositAddressReady event was found");
-		}
+			}
+		)
 	}
 	async fn withdraw_fees(
 		&self,
@@ -439,32 +444,25 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.until_in_block()
 			.await?;
 
-		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::WithdrawalRequested {
+		extract_event!(
+			events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::WithdrawalRequested,
+			{
 				egress_amount,
 				egress_fee,
 				destination_address,
 				egress_id,
 				..
 			},
-		)) = events.iter().find(|event| {
-			matches!(
-				event,
-				state_chain_runtime::RuntimeEvent::Swapping(
-					pallet_cf_swapping::Event::WithdrawalRequested { .. }
-				)
-			)
-		}) {
-			Ok(WithdrawFeesDetail {
+			WithdrawFeesDetail {
 				tx_hash,
 				egress_id: *egress_id,
 				egress_amount: (*egress_amount).into(),
 				egress_fee: (*egress_fee).into(),
 				destination_address: AddressString::from_encoded_address(destination_address),
-			})
-		} else {
-			bail!("No WithdrawalRequested event was found");
-		}
+			}
+		)
 	}
 	async fn register_account(&self) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_as_broker {})
@@ -484,20 +482,13 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.until_in_block()
 			.await?;
 
-		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::PrivateBrokerChannelOpened { channel_id, .. },
-		)) = events.iter().find(|event| {
-			matches!(
-				event,
-				state_chain_runtime::RuntimeEvent::Swapping(
-					pallet_cf_swapping::Event::PrivateBrokerChannelOpened { .. }
-				)
-			)
-		}) {
-			Ok(*channel_id)
-		} else {
-			bail!("No PrivateBrokerChannelOpened event was found");
-		}
+		extract_event!(
+			&events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::PrivateBrokerChannelOpened,
+			{ channel_id, .. },
+			*channel_id
+		)
 	}
 
 	async fn close_private_btc_channel(&self) -> Result<ChannelId> {
@@ -509,20 +500,13 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			.until_in_block()
 			.await?;
 
-		if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-			pallet_cf_swapping::Event::PrivateBrokerChannelClosed { channel_id, .. },
-		)) = events.iter().find(|event| {
-			matches!(
-				event,
-				state_chain_runtime::RuntimeEvent::Swapping(
-					pallet_cf_swapping::Event::PrivateBrokerChannelClosed { .. }
-				)
-			)
-		}) {
-			Ok(*channel_id)
-		} else {
-			bail!("No PrivateBrokerChannelClosed event was found");
-		}
+		extract_event!(
+			&events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::PrivateBrokerChannelClosed,
+			{ channel_id, .. },
+			*channel_id
+		)
 	}
 }
 
