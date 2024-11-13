@@ -205,7 +205,7 @@ fn witness_solana_state(state: SolanaState) {
 		Ok(election_identifiers
 			.into_iter()
 			.find(|id| state.is_of_type(id))
-			.expect("WIP: start a new election if one doesn't exist."))
+			.expect("Election must exists to be voted on."))
 	})
 	.unwrap();
 
