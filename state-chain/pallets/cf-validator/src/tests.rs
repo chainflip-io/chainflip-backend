@@ -6,6 +6,7 @@ use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
 	mocks::{
+		bonding::MockBonder,
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
 		key_rotator::MockKeyRotatorA,
 		reputation_resetter::MockReputationResetter,

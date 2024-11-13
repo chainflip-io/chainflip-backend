@@ -539,6 +539,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// The bond for a broker to open a private channel.
 	#[pallet::storage]
 	pub type BrokerBond<T: Config> = StorageValue<_, <T as Chainflip>::Amount, ValueQuery>;
 
@@ -1130,15 +1131,11 @@ pub mod pallet {
 				Error::<T>::PrivateChannelExistsForBroker
 			);
 
-			ensure!(
-				T::Bonder::try_bond(&broker_id, BrokerBond::<T>::get()),
-				Error::<T>::InsufficientFunds
-			);
-
-			// TODO: burn fee for opening a channel?
 			let channel_id = T::ChannelIdAllocator::allocate_private_channel_id()?;
 
 			BrokerPrivateBtcChannels::<T>::insert(broker_id.clone(), channel_id);
+
+			T::Bonder::try_bond(&broker_id, BrokerBond::<T>::get())?;
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened { broker_id, channel_id });
 
@@ -1154,7 +1151,7 @@ pub mod pallet {
 				return Err(Error::<T>::NoPrivateChannelExistsForBroker.into())
 			};
 
-			T::Bonder::kill_bond(&broker_id);
+			T::Bonder::unbond(&broker_id);
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed { broker_id, channel_id });
 
@@ -1183,6 +1180,15 @@ pub mod pallet {
 				previous_affiliate_id,
 			});
 
+			Ok(())
+		}
+
+		/// Updates the broker's bond to the new amount.
+		#[pallet::call_index(15)]
+		#[pallet::weight(10_000)]
+		pub fn update_broker_bond(origin: OriginFor<T>, new_bond: T::Amount) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			BrokerBond::<T>::set(new_bond);
 			Ok(())
 		}
 	}
