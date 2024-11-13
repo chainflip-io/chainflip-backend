@@ -346,13 +346,13 @@ impl fmt::Display for WithdrawFeesDetail {
 }
 
 macro_rules! extract_event {
-    ($events:expr, $pallet_event:path, $event_variant:path, $pattern:tt, $result:expr) => {
-        if let Some($pallet_event($event_variant $pattern)) = $events.iter().find(|event| {
-            matches!(event, $pallet_event($event_variant { .. }))
+    ($events:expr, $runtime_event_variant:path, $pallet_event_variant:path, $pattern:tt, $result:expr) => {
+        if let Some($runtime_event_variant($pallet_event_variant $pattern)) = $events.iter().find(|event| {
+            matches!(event, $runtime_event_variant($pallet_event_variant { .. }))
         }) {
         	Ok($result)
         } else {
-            bail!("No {}({}) event was found", stringify!($pallet_event), stringify!($event_variant));
+            bail!("No {}({}) event was found", stringify!($runtime_event_variant), stringify!($pallet_event_variant));
         }
     };
 }
