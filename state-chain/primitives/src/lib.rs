@@ -101,6 +101,8 @@ pub type PrewitnessedDepositId = u64;
 
 pub type BoostPoolTier = u16;
 
+define_wrapper_type!(AffiliateShortId, u8, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
+
 // TODO: Consider alternative representation for Price:
 //
 // increasing Price to U512 or switch to a f64 (f64 would only be for the external
@@ -393,11 +395,12 @@ fn is_more_recent_semver() {
 }
 
 pub const MAX_AFFILIATES: u32 = 5;
-pub const MAX_BENEFICIARIES: u32 = 6;
+// Beneficiaries can be 1 element larger since they include the primary broker:
+pub const MAX_BENEFICIARIES: u32 = MAX_AFFILIATES + 1;
 
 pub type Affiliates<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_AFFILIATES>>;
 
-pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<{ MAX_AFFILIATES + 1 }>>;
+pub type Beneficiaries<Id> = BoundedVec<Beneficiary<Id>, ConstU32<MAX_BENEFICIARIES>>;
 
 #[derive(
 	Clone, Debug, PartialEq, Eq, MaxEncodedLen, Encode, Decode, TypeInfo, Serialize, Deserialize,

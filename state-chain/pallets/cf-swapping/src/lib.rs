@@ -9,15 +9,15 @@ use cf_chains::{
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
-	Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber, ChannelId,
-	DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION,
-	MAX_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
+	ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
+	BASIS_POINTS_PER_MILLION, MAX_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, BalanceApi, ChannelIdAllocator, DepositApi, ExecutionCondition,
-	IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler, SwapRequestType,
-	SwapRequestTypeEncoded, SwapType, SwappingApi,
+	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, ChannelIdAllocator, DepositApi,
+	ExecutionCondition, IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -387,8 +387,8 @@ pub mod pallet {
 	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{
-		Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId, SwapId, SwapOutput,
-		SwapRequestId,
+		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
+		SwapId, SwapOutput, SwapRequestId,
 	};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, ScheduledEgressDetails};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -519,6 +519,20 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BrokerPrivateBtcChannels<T: Config> =
 		StorageMap<_, Identity, T::AccountId, ChannelId, OptionQuery>;
+
+	/// Associates for a given broker an affiliate broker account with short id (u8) so that
+	/// it can be used in place of the full account id in order to save space (e.g. in UTXO encoding
+	/// for BTC)
+	#[pallet::storage]
+	pub(crate) type AffiliateIdMapping<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		T::AccountId,
+		Twox64Concat,
+		AffiliateShortId,
+		T::AccountId,
+		OptionQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -655,6 +669,12 @@ pub mod pallet {
 		PrivateBrokerChannelClosed {
 			broker_id: T::AccountId,
 			channel_id: ChannelId,
+		},
+		AffiliateRegistrationUpdated {
+			broker_id: T::AccountId,
+			affiliate_short_id: AffiliateShortId,
+			affiliate_id: T::AccountId,
+			previous_affiliate_id: Option<T::AccountId>,
 		},
 	}
 	#[pallet::error]
@@ -1001,22 +1021,18 @@ pub mod pallet {
 			dca_parameters: Option<DcaParameters>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
-			let beneficiaries = {
-				let mut beneficiaries = Beneficiaries::new();
-				if broker_commission > 0 {
-					beneficiaries
-						.try_push(Beneficiary { account: broker.clone(), bps: broker_commission })
-						.expect("First element, impossible to exceed the maximum size");
+
+			let mut beneficiaries = Beneficiaries::new();
+			for beneficiary in [Beneficiary { account: broker.clone(), bps: broker_commission }]
+				.into_iter()
+				.chain(affiliate_fees.iter().cloned())
+			{
+				if beneficiary.bps > 0 {
+					beneficiaries.try_push(beneficiary).expect(
+						"We are pushing affiiliates + 1 which is exactly the maximum Beneficiaries size",
+					);
 				}
-				for affiliate in &affiliate_fees {
-					if affiliate.bps > 0 {
-						beneficiaries
-							.try_push(affiliate.clone())
-							.expect("Cannot exceed MAX_BENEFICIARY size which is MAX_AFFILIATE + 1 (main broker)");
-					}
-				}
-				beneficiaries
-			};
+			}
 
 			Pallet::<T>::validate_broker_fees(&beneficiaries)?;
 
@@ -1116,6 +1132,31 @@ pub mod pallet {
 			};
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed { broker_id, channel_id });
+
+			Ok(())
+		}
+
+		/// Associates `short_id` with `affiliate_id` for a given broker. Overwrites the record
+		/// under `short_id` if already taken by another affiliate.
+		#[pallet::call_index(14)]
+		#[pallet::weight(T::WeightInfo::register_affiliate())]
+		pub fn register_affiliate(
+			origin: OriginFor<T>,
+			short_id: AffiliateShortId,
+			affiliate_id: T::AccountId,
+		) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let previous_affiliate_id = AffiliateIdMapping::<T>::take(&broker_id, short_id);
+
+			AffiliateIdMapping::<T>::insert(&broker_id, short_id, &affiliate_id);
+
+			Self::deposit_event(Event::<T>::AffiliateRegistrationUpdated {
+				broker_id,
+				affiliate_short_id: short_id,
+				affiliate_id,
+				previous_affiliate_id,
+			});
 
 			Ok(())
 		}
@@ -2412,6 +2453,17 @@ pub struct NoPendingSwaps<T: Config>(PhantomData<T>);
 impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
 	fn is_satisfied() -> bool {
 		SwapQueue::<T>::iter().all(|(_, swaps)| swaps.is_empty())
+	}
+}
+
+impl<T: Config> AffiliateRegistry for Pallet<T> {
+	type AccountId = T::AccountId;
+
+	fn lookup(
+		broker_id: &Self::AccountId,
+		affiliate_short_id: AffiliateShortId,
+	) -> Option<Self::AccountId> {
+		AffiliateIdMapping::<T>::get(broker_id, affiliate_short_id)
 	}
 }
 
