@@ -1837,7 +1837,6 @@ fn vault_swaps_support_affiliate_fees() {
 		const INPUT_ASSET: Asset = Asset::Usdc;
 		const OUTPUT_ASSET: Asset = Asset::Flip;
 		const INPUT_AMOUNT: AssetAmount = 10_000;
-		const TX_HASH: [u8; 32] = [0xa; 32];
 
 		const BROKER_FEE: BasisPoints = 5;
 		const AFFILIATE_FEE: BasisPoints = 10;
@@ -1863,7 +1862,7 @@ fn vault_swaps_support_affiliate_fees() {
 			INPUT_AMOUNT,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
-			TX_HASH,
+			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: BROKER, bps: BROKER_FEE },
 			bounded_vec![
@@ -1888,7 +1887,9 @@ fn vault_swaps_support_affiliate_fees() {
 					// recognised):
 					Beneficiary { account: AFFILIATE_1, bps: AFFILIATE_FEE }
 				],
-				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+				origin: SwapOrigin::Vault {
+					tx_id: cf_chains::TransactionInIdForAnyChain::ByteHash(H256::default())
+				},
 			},]
 		);
 
@@ -1905,7 +1906,6 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 		const INPUT_ASSET: Asset = Asset::Usdc;
 		const OUTPUT_ASSET: Asset = Asset::Flip;
 		const INPUT_AMOUNT: AssetAmount = 10_000;
-		const TX_HASH: [u8; 32] = [0xa; 32];
 
 		const BROKER_FEE: BasisPoints = 5;
 
@@ -1920,7 +1920,7 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 			INPUT_AMOUNT,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
-			TX_HASH,
+			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: NOT_A_BROKER, bps: BROKER_FEE },
 			Default::default(),
@@ -1938,7 +1938,9 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 				input_amount: INPUT_AMOUNT,
 				swap_type: SwapRequestType::Regular { output_address },
 				broker_fees: Default::default(),
-				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+				origin: SwapOrigin::Vault {
+					tx_id: cf_chains::TransactionInIdForAnyChain::ByteHash(H256::default())
+				},
 			},]
 		);
 
