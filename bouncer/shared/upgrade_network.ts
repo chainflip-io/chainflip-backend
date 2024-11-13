@@ -10,7 +10,6 @@ import { compileBinaries } from './utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from './submit_runtime_upgrade';
 import { execWithLog } from './utils/exec_with_log';
 import { submitGovernanceExtrinsic } from './cf_governance';
-import { setupLpAccount } from './setup_lp_account';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -339,17 +338,23 @@ export async function upgradeNetworkPrebuilt(
     );
   }
 
-  // Temp: until localnet/bouncer initialises to a version where the LP_API is funded already.
-  if (cleanOldVersion.startsWith('1.6')) {
-    console.log('Setting up LP account and adding liquidity for the LP-API.');
-    // Liquidity is provided as part of the LP-API test setup.
-    await setupLpAccount('//LP_API');
-    // Write LP_API key to keys/ so that the LP-API can use it - when upgrading the old version, which the upgrade-test is
-    // started from doesn't yet have this key.
-    await fs.writeFile(
-      `${localnetInitPath}/keys/LP_API`,
-      '8e1866e65039304e4142f09452a8305acd28d0ae0b833cd268b21a57d68782c1',
-    );
+  // Temp: until localnet/bouncer initialises to a version where the deposit-monitor is started already.
+  if (cleanOldVersion.startsWith('1.7')) {
+    console.log('Starting up deposit-monitor.');
+
+    execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh`, 'start-broker-api', {
+      DEPOSIT_MONITOR_CONTAINER: 'deposit-monitor',
+      DOCKER_COMPOSE_CMD: 'docker-compose',
+      additional_docker_compose_up_args: '--quiet-pull',
+    });
+
+    try {
+      const pid = execSync(`lsof -t -i:6060`);
+      console.log(`New deposit-monitor PID: ${pid.toString()}`);
+    } catch (e) {
+      console.error(`Error starting deposit-monitor: ${e}`);
+      throw e;
+    }
   }
 
   if (cleanOldVersion === nodeVersion) {
