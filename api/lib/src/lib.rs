@@ -477,10 +477,10 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 	async fn open_private_btc_channel(&self) -> Result<ChannelId> {
 		let (_, events, ..) = self
-			.submit_signed_extrinsic(RuntimeCall::from(
+			.submit_signed_extrinsic_with_dry_run(RuntimeCall::from(
 				pallet_cf_swapping::Call::open_private_btc_channel {},
 			))
-			.await
+			.await?
 			.until_in_block()
 			.await?;
 
@@ -502,10 +502,10 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 	async fn close_private_btc_channel(&self) -> Result<ChannelId> {
 		let (_, events, ..) = self
-			.submit_signed_extrinsic(RuntimeCall::from(
+			.submit_signed_extrinsic_with_dry_run(RuntimeCall::from(
 				pallet_cf_swapping::Call::close_private_btc_channel {},
 			))
-			.await
+			.await?
 			.until_in_block()
 			.await?;
 
