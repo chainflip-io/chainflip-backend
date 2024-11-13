@@ -1887,12 +1887,10 @@ fn vault_swaps_support_affiliate_fees() {
 			},]
 		);
 
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
-			PalletEvent::UnknownAffiliateBroker {
-				broker_id: BROKER,
-				short_affiliate_id: AFFILIATE_SHORT_2,
-			},
-		));
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::UnknownAffiliate {
+			broker_id: BROKER,
+			short_affiliate_id: AFFILIATE_SHORT_2,
+		}));
 	});
 }
 
@@ -1939,7 +1937,7 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 			},]
 		);
 
-		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::UnknownPrimaryBroker {
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(PalletEvent::UnknownBroker {
 			broker_id: NOT_A_BROKER,
 		}));
 	});

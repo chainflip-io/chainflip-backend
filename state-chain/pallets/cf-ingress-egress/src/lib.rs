@@ -753,10 +753,10 @@ pub mod pallet {
 		FailedToRejectTaintedTransaction {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
-		UnknownPrimaryBroker {
+		UnknownBroker {
 			broker_id: T::AccountId,
 		},
-		UnknownAffiliateBroker {
+		UnknownAffiliate {
 			broker_id: T::AccountId,
 			short_affiliate_id: AffiliateShortId,
 		},
@@ -2236,7 +2236,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						} else {
 							// In case the entry not found, we ignore the entry, but process the
 							// swap (to avoid having to refund it).
-							Self::deposit_event(Event::<T, I>::UnknownAffiliateBroker {
+							Self::deposit_event(Event::<T, I>::UnknownAffiliate {
 								broker_id: primary_broker.clone(),
 								short_affiliate_id,
 							});
@@ -2249,9 +2249,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.try_into()
 				.expect("must fit since affiliates are limited to 1 fewer element than beneficiaries")
 			} else {
-				Self::deposit_event(Event::<T, I>::UnknownPrimaryBroker {
-					broker_id: primary_broker,
-				});
+				Self::deposit_event(Event::<T, I>::UnknownBroker { broker_id: primary_broker });
 				Default::default()
 			};
 
