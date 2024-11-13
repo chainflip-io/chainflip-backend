@@ -12,9 +12,9 @@ import {
 } from '@chainflip/cli';
 import { HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
-import Keyring from '../polkadot/keyring';
 import { PublicKey, sendAndConfirmTransaction, Keypair } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import Keyring from '../polkadot/keyring';
 import {
   observeBalanceIncrease,
   getContractAddress,
