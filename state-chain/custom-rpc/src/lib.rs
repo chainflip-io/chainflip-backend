@@ -423,25 +423,22 @@ pub struct RpcSwapOutputV2 {
 	pub broker_commission: RpcFee,
 }
 fn into_rpc_swap_output(
-	simulated_swap_info_v2: SimulatedSwapInformation,
+	simulated_swap_info: SimulatedSwapInformation,
 	from_asset: Asset,
 	to_asset: Asset,
 ) -> RpcSwapOutputV2 {
 	RpcSwapOutputV2 {
-		intermediary: simulated_swap_info_v2.intermediary.map(Into::into),
-		output: simulated_swap_info_v2.output.into(),
+		intermediary: simulated_swap_info.intermediary.map(Into::into),
+		output: simulated_swap_info.output.into(),
 		network_fee: RpcFee {
 			asset: cf_primitives::STABLE_ASSET,
-			amount: simulated_swap_info_v2.network_fee.into(),
+			amount: simulated_swap_info.network_fee.into(),
 		},
-		ingress_fee: RpcFee {
-			asset: from_asset,
-			amount: simulated_swap_info_v2.ingress_fee.into(),
-		},
-		egress_fee: RpcFee { asset: to_asset, amount: simulated_swap_info_v2.egress_fee.into() },
+		ingress_fee: RpcFee { asset: from_asset, amount: simulated_swap_info.ingress_fee.into() },
+		egress_fee: RpcFee { asset: to_asset, amount: simulated_swap_info.egress_fee.into() },
 		broker_commission: RpcFee {
 			asset: cf_primitives::STABLE_ASSET,
-			amount: simulated_swap_info_v2.broker_fee.into(),
+			amount: simulated_swap_info.broker_fee.into(),
 		},
 	}
 }
