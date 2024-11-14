@@ -7,8 +7,8 @@ use cf_chains::{
 	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParametersEncoded,
 	ChannelRefundParametersGeneric, ForeignChain,
 };
-use cf_primitives::DcaParameters;
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
+use cf_primitives::{AffiliateShortId, DcaParameters};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -507,6 +507,18 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 			{ channel_id, .. },
 			*channel_id
 		)
+	}
+
+	async fn register_affiliate(
+		&self,
+		short_id: AffiliateShortId,
+		affiliate_id: AccountId32,
+	) -> Result<H256> {
+		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_affiliate {
+			short_id,
+			affiliate_id,
+		})
+		.await
 	}
 }
 

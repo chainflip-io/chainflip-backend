@@ -13,7 +13,7 @@ import {
   stateChainAssetFromAsset,
   Chain,
 } from '../shared/utils';
-import { jsonRpc } from '../shared/json_rpc';
+import { lpApiRpc } from '../shared/json_rpc';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { sendEvmNative } from '../shared/send_evm';
 import { getBalance } from '../shared/get_balance';
@@ -39,12 +39,6 @@ const testAssetAmount = parseInt(
 );
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function lpApiRpc(method: string, params: any[]): Promise<any> {
-  // The port for the lp api is defined in `chainflip-lp-api.service`
-  return jsonRpc(method, params, 'http://127.0.0.1:10589');
-}
 
 async function provideLiquidityAndTestAssetBalances() {
   const fineAmountToProvide = parseInt(

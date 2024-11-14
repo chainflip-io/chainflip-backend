@@ -127,8 +127,8 @@ mod tests {
 				boost_fee: 5,
 				broker_fee: 0xa,
 				affiliates: bounded_vec![
-					AffiliateAndFee { affiliate: 6, fee: 7 },
-					AffiliateAndFee { affiliate: 8, fee: 9 }
+					AffiliateAndFee { affiliate: 6.into(), fee: 7 },
+					AffiliateAndFee { affiliate: 8.into(), fee: 9 }
 				],
 			},
 		};

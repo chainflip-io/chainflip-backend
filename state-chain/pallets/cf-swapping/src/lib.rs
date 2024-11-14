@@ -721,8 +721,6 @@ pub mod pallet {
 		InvalidRefundAddress,
 		/// The given boost fee is too large to fit in a u8.
 		BoostFeeTooHigh,
-		/// Broker/Affiliate fees are not yet supported for vault swaps
-		VaultSwapBrokerFeesNotSupported,
 		/// The broker fee is too large to fit in a u8.
 		BrokerFeeTooHigh,
 		/// Unsupported source asset for vault swap
@@ -731,6 +729,12 @@ pub mod pallet {
 		PrivateChannelExistsForBroker,
 		/// The Broker does not have an open private channel.
 		NoPrivateChannelExistsForBroker,
+		/// The affiliate fee is too large to fit in a u8.
+		AffiliateFeeTooHigh,
+		/// The affiliate id is not registered with the broker.
+		AffiliateNotRegistered,
+		/// Bitcoin vault swaps only support up to 2 affiliates.
+		TooManyAffiliates,
 	}
 
 	#[pallet::genesis_config]
@@ -2461,11 +2465,20 @@ impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
 impl<T: Config> AffiliateRegistry for Pallet<T> {
 	type AccountId = T::AccountId;
 
-	fn lookup(
+	fn get_account_id(
 		broker_id: &Self::AccountId,
 		affiliate_short_id: AffiliateShortId,
 	) -> Option<Self::AccountId> {
 		AffiliateIdMapping::<T>::get(broker_id, affiliate_short_id)
+	}
+
+	fn get_short_id(
+		broker_id: &Self::AccountId,
+		affiliate_id: &Self::AccountId,
+	) -> Option<AffiliateShortId> {
+		AffiliateIdMapping::<T>::iter_prefix(broker_id)
+			.find(|(_, id)| id == affiliate_id)
+			.map(|(short_id, _)| short_id)
 	}
 }
 

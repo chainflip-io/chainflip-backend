@@ -398,7 +398,7 @@ pub struct Beneficiary<Id> {
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub struct AffiliateAndFee {
-	pub affiliate: u8,
+	pub affiliate: AffiliateShortId,
 	pub fee: u8,
 }
 

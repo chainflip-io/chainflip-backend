@@ -10,8 +10,8 @@ use chainflip_api::{
 		state_chain_runtime::runtime_apis::{
 			ChainAccounts, TaintedTransactionEvents, VaultSwapDetails,
 		},
-		AccountRole, Affiliates, Asset, BasisPoints, BlockNumber, CcmChannelMetadata,
-		DcaParameters,
+		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber,
+		CcmChannelMetadata, DcaParameters,
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, ChannelId, DepositMonitorApi,
@@ -29,6 +29,7 @@ use jsonrpsee::{
 	PendingSubscriptionSink,
 };
 use serde::{Deserialize, Serialize};
+use sp_core::H256;
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
@@ -134,6 +135,13 @@ pub trait Rpc {
 
 	#[method(name = "close_private_btc_channel", aliases = ["broker_closePrivateBtcChannel"])]
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId>;
+
+	#[method(name = "register_affiliate", aliases = ["broker_registerAffiliate"])]
+	async fn register_affiliate(
+		&self,
+		short_id: AffiliateShortId,
+		affiliate_id: AccountId32,
+	) -> RpcResult<H256>;
 }
 
 pub struct RpcServerImpl {
@@ -311,6 +319,14 @@ impl RpcServer for RpcServerImpl {
 
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
 		Ok(self.api.broker_api().close_private_btc_channel().await?)
+	}
+
+	async fn register_affiliate(
+		&self,
+		short_id: AffiliateShortId,
+		affiliate_id: AccountId32,
+	) -> RpcResult<H256> {
+		Ok(self.api.broker_api().register_affiliate(short_id, affiliate_id).await?)
 	}
 }
 
