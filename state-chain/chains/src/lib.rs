@@ -2,10 +2,6 @@
 #![feature(step_trait)]
 #![feature(extract_if)]
 #![feature(split_array)]
-
-use cf_primitives::TxId;
-use sp_core::H256;
-
 use crate::{
 	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, none::NoneChainCrypto,
 	sol::SolanaCrypto,
@@ -22,7 +18,7 @@ use address::{
 	AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
-use cf_primitives::{Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price};
+use cf_primitives::{Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TxId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -36,7 +32,7 @@ use frame_support::{
 use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::{ConstU32, U256};
+use sp_core::{ConstU32, H256, U256};
 use sp_std::{
 	cmp::Ord,
 	convert::{Into, TryFrom},
