@@ -163,6 +163,9 @@ pub struct BrokerInfo {
 }
 
 /// Struct that represents the estimated output of a Swap.
+#[obake::versioned]
+#[obake(version("0.1.0"))]
+#[obake(version("0.2.0"))]
 #[derive(Encode, Decode, TypeInfo)]
 pub struct SimulatedSwapInformation {
 	pub intermediary: Option<AssetAmount>,
@@ -170,11 +173,13 @@ pub struct SimulatedSwapInformation {
 	pub network_fee: AssetAmount,
 	pub ingress_fee: AssetAmount,
 	pub egress_fee: AssetAmount,
+	#[obake(cfg(">=0.2"))]
+	pub broker_fee: AssetAmount,
 }
 
-impl From<SimulatedSwapInformation> for SimulatedSwapInformationV2 {
-	fn from(value: SimulatedSwapInformation) -> Self {
-		SimulatedSwapInformationV2 {
+impl From<SimulatedSwapInformation!["0.1.0"]> for SimulatedSwapInformation {
+	fn from(value: SimulatedSwapInformation!("0.1.0")) -> Self {
+		Self {
 			intermediary: value.intermediary,
 			output: value.output,
 			network_fee: value.network_fee,
@@ -183,16 +188,6 @@ impl From<SimulatedSwapInformation> for SimulatedSwapInformationV2 {
 			broker_fee: Default::default(),
 		}
 	}
-}
-/// Struct that represents the estimated output of a Swap.
-#[derive(Encode, Decode, TypeInfo)]
-pub struct SimulatedSwapInformationV2 {
-	pub intermediary: Option<AssetAmount>,
-	pub output: AssetAmount,
-	pub network_fee: AssetAmount,
-	pub ingress_fee: AssetAmount,
-	pub egress_fee: AssetAmount,
-	pub broker_fee: AssetAmount,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -321,7 +316,7 @@ decl_runtime_apis!(
 			to: Asset,
 			amount: AssetAmount,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
+		) -> Result<SimulatedSwapInformation!["0.1.0"], DispatchErrorWithMessage>;
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
@@ -329,7 +324,7 @@ decl_runtime_apis!(
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformationV2, DispatchErrorWithMessage>;
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,
 			quote_asset: Asset,

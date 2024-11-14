@@ -55,8 +55,7 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulatedSwapInformationV2,
-		TaintedTransactionEvents, ValidatorInfo, VaultSwapDetails,
+		SimulatedSwapInformation, TaintedTransactionEvents, ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Block, Hash, NetworkFee, SolanaInstance,
@@ -424,7 +423,7 @@ pub struct RpcSwapOutputV2 {
 	pub broker_commission: RpcFee,
 }
 fn into_rpc_swap_output(
-	simulated_swap_info_v2: SimulatedSwapInformationV2,
+	simulated_swap_info_v2: SimulatedSwapInformation,
 	from_asset: Asset,
 	to_asset: Asset,
 ) -> RpcSwapOutputV2 {
