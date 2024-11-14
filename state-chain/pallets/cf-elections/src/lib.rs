@@ -1216,7 +1216,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::vote(authority_votes.len() as u32))]
+		#[pallet::weight((T::WeightInfo::vote(authority_votes.len() as u32), DispatchClass::Operational))]
 		pub fn vote(
 			origin: OriginFor<T>,
 			authority_votes: BoundedBTreeMap<
@@ -1318,7 +1318,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::provide_shared_data())]
+		#[pallet::weight((T::WeightInfo::provide_shared_data(), DispatchClass::Operational))]
 		pub fn provide_shared_data(
 			origin: OriginFor<T>,
 			shared_data: <<T::ElectoralSystemRunner as ElectoralSystemRunner>::Vote as VoteStorage>::SharedData,
@@ -1329,7 +1329,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::ignore_my_votes())]
+		#[pallet::weight((T::WeightInfo::ignore_my_votes(), DispatchClass::Operational))]
 		pub fn ignore_my_votes(origin: OriginFor<T>) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
@@ -1341,7 +1341,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::stop_ignoring_my_votes())]
+		#[pallet::weight((T::WeightInfo::stop_ignoring_my_votes(), DispatchClass::Operational))]
 		pub fn stop_ignoring_my_votes(origin: OriginFor<T>) -> DispatchResult {
 			let (epoch_index, authority, authority_index) = Self::ensure_can_vote(origin)?;
 
@@ -1354,7 +1354,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::delete_vote())]
+		#[pallet::weight((T::WeightInfo::delete_vote(), DispatchClass::Operational))]
 		pub fn delete_vote(
 			origin: OriginFor<T>,
 			election_identifier: CompositeElectionIdentifierOf<T::ElectoralSystemRunner>,
