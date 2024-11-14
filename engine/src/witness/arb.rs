@@ -9,7 +9,6 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount, Beneficiary, EpochIndex,
-	TransactionHash,
 };
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
@@ -202,7 +201,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 				destination_address,
 				deposit_metadata,
 				tx_id,
-				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_id.into()]) }),
+				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_id]) }),
 				broker_fee: vault_swap_parameters.broker_fee,
 				affiliate_fees: vault_swap_parameters
 					.affiliate_fees

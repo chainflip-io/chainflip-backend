@@ -251,15 +251,17 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 				deposit_metadata,
 				tx_id,
 				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_id]) }),
-				// Defaulting to no broker fees until PRO-1743 is completed.
-				broker_fee: cf_primitives::Beneficiary {
-					account: sp_runtime::AccountId32::new([0; 32]),
-					bps: 0,
-				},
-				affiliate_fees: Default::default(),
-				boost_fee: boost_fee.unwrap_or_default(),
-				dca_params,
-				refund_params: refund_params.map(Box::new),
+				broker_fee: vault_swap_parameters.broker_fee,
+				affiliate_fees: vault_swap_parameters
+					.affiliate_fees
+					.into_iter()
+					.map(|entry| Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
+					.collect_vec()
+					.try_into()
+					.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
+				boost_fee: vault_swap_parameters.boost_fee.into(),
+				dca_params: vault_swap_parameters.dca_params,
+				refund_params: Box::new(vault_swap_parameters.refund_params),
 			},
 		)
 	}

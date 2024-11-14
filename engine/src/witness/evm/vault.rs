@@ -76,7 +76,7 @@ where
 				try_into_primitive(dst_token)?,
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
-				event.tx_hash.into(),
+				event.tx_hash,
 				vault_swap_parameters,
 			))
 		},
@@ -102,7 +102,7 @@ where
 				try_into_primitive(dst_token)?,
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
 				None,
-				event.tx_hash.into(),
+				event.tx_hash,
 				vault_swap_parameters,
 			))
 		},
@@ -142,7 +142,7 @@ where
 						ccm_additional_data,
 					},
 				}),
-				event.tx_hash.into(),
+				event.tx_hash,
 				vault_swap_parameters,
 			))
 		},
@@ -185,7 +185,7 @@ where
 						ccm_additional_data,
 					},
 				}),
-				event.tx_hash.into(),
+				event.tx_hash,
 				vault_swap_parameters,
 			))
 		},
