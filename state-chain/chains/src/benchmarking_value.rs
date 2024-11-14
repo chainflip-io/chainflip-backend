@@ -4,7 +4,9 @@ use cf_primitives::{
 	Asset,
 };
 #[cfg(feature = "runtime-benchmarks")]
-use cf_primitives::{Beneficiary, DcaParameters, ForeignChain, ShortId, MAX_AFFILIATES};
+use cf_primitives::{
+	AffiliateShortId, Beneficiary, DcaParameters, ForeignChain, ShortId, MAX_AFFILIATES,
+};
 #[cfg(feature = "runtime-benchmarks")]
 use core::str::FromStr;
 
@@ -274,6 +276,22 @@ impl BenchmarkValue for Beneficiary<sp_runtime::AccountId32> {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue
 	for sp_runtime::BoundedVec<Beneficiary<ShortId>, sp_core::ConstU32<{ MAX_AFFILIATES + 1 }>>
+{
+	fn benchmark_value() -> Self {
+		sp_runtime::BoundedVec::try_from(vec![BenchmarkValue::benchmark_value()]).unwrap()
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for AffiliateShortId {
+	fn benchmark_value() -> Self {
+		cf_primitives::AffiliateShortId(BenchmarkValue::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue
+	for frame_support::BoundedVec<Beneficiary<AffiliateShortId>, sp_core::ConstU32<MAX_AFFILIATES>>
 {
 	fn benchmark_value() -> Self {
 		sp_runtime::BoundedVec::try_from(vec![BenchmarkValue::benchmark_value()]).unwrap()

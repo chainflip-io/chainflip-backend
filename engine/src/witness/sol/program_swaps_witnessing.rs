@@ -121,12 +121,15 @@ pub async fn get_program_swaps(
 							deposit_metadata,
 							swap_account: account,
 							creation_slot: data.creation_slot,
-							// todo: get this from vault_swap_parameters (functionalit around this changed recently).
-							broker_fees: cf_primitives::Beneficiary {
-								account: sp_runtime::AccountId32::new(Default::default()),
-								bps: 0,
-							},
-							refund_params: Some(vault_swap_parameters.refund_params),
+							broker_fee: vault_swap_parameters.broker_fee,
+							affiliate_fees: vault_swap_parameters
+								.affiliate_fees
+								.into_iter()
+								.map(|entry| cf_primitives::Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
+								.collect_vec()
+								.try_into()
+								.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
+							refund_params: vault_swap_parameters.refund_params,
 							dca_params: vault_swap_parameters.dca_params,
 							boost_fee: vault_swap_parameters.boost_fee,
 						})))

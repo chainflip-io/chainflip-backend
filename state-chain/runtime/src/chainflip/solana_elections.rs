@@ -16,7 +16,7 @@ use cf_chains::{
 	CcmDepositMetadata, Chain, ChannelRefundParameters, CloseSolanaVaultSwapAccounts,
 	FeeEstimationApi, ForeignChain, Solana,
 };
-use cf_primitives::{BasisPoints, Beneficiary, DcaParameters};
+use cf_primitives::{AffiliateShortId, Affiliates, Beneficiary, DcaParameters};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
@@ -520,13 +520,14 @@ pub struct SolanaVaultSwapDetails {
 	pub deposit_amount: SolAmount,
 	pub destination_address: EncodedAddress,
 	pub deposit_metadata: Option<CcmDepositMetadata>,
-	// TODO: swap_account and creation_slot might be pulled into TransactionInId type (PRO-1760)
+	// TODO: swap_account and creation_slot will be pulled into TransactionInId type (PRO-1760)
 	pub swap_account: SolAddress,
 	pub creation_slot: u64,
-	pub broker_fees: cf_primitives::Beneficiary<AccountId>,
-	pub refund_params: Option<ChannelRefundParameters>,
+	pub broker_fee: Beneficiary<AccountId>,
+	pub refund_params: ChannelRefundParameters,
 	pub dca_params: Option<DcaParameters>,
-	pub boost_fee: Option<BasisPoints>,
+	pub boost_fee: u8,
+	pub affiliate_fees: Affiliates<AffiliateShortId>,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -540,10 +541,11 @@ impl BenchmarkValue for SolanaVaultSwapDetails {
 			deposit_metadata: Some(BenchmarkValue::benchmark_value()),
 			swap_account: BenchmarkValue::benchmark_value(),
 			creation_slot: BenchmarkValue::benchmark_value(),
-			broker_fees: BenchmarkValue::benchmark_value(),
-			refund_params: Some(BenchmarkValue::benchmark_value()),
+			broker_fee: BenchmarkValue::benchmark_value(),
+			refund_params: BenchmarkValue::benchmark_value(),
 			dca_params: Some(BenchmarkValue::benchmark_value()),
-			boost_fee: Some(BenchmarkValue::benchmark_value()),
+			boost_fee: BenchmarkValue::benchmark_value(),
+			affiliate_fees: BenchmarkValue::benchmark_value(),
 		}
 	}
 }
@@ -566,15 +568,11 @@ impl
 			swap_details.deposit_metadata,
 			Default::default(), // TODO txHash PRO-1760
 			(),
-			// TODO in PRO-1743
-			Beneficiary {
-				account: sp_runtime::AccountId32::new(Default::default()),
-				bps: Default::default(),
-			},
-			Default::default(),
+			swap_details.broker_fee,
+			swap_details.affiliate_fees,
 			swap_details.refund_params,
 			swap_details.dca_params,
-			swap_details.boost_fee.unwrap_or_default(),
+			swap_details.boost_fee.into(),
 		);
 	}
 
