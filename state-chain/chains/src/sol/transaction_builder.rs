@@ -468,7 +468,7 @@ impl SolanaTransactionBuilder {
 
 		let instructions = vec![SwapEndpointProgram::with_id(swap_endpoint_program)
 			.close_event_accounts(vault_program_data_account, agg_key, swap_endpoint_data_account)
-			.with_remaining_accounts(event_and_sender_vec)];
+			.with_remaining_accounts(swap_and_sender_vec)];
 
 		Self::build(
 			instructions,

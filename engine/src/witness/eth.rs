@@ -4,9 +4,7 @@ mod state_chain_gateway;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{evm::DepositDetails, Ethereum};
-use cf_primitives::{
-	chains::assets::eth::Asset as EthAsset, AffiliateShortId, EpochIndex, ShortId,
-};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, AffiliateShortId, EpochIndex};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use sp_core::H160;

@@ -131,7 +131,6 @@ impl<
 	}
 
 	fn is_vote_desired<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier_with_extra: crate::electoral_system::ElectionIdentifierOf<Self>,
 		_election_access: &ElectionAccess,
 		_current_vote: Option<(VotePropertiesOf<Self>, AuthorityVoteOf<Self>)>,
 	) -> Result<bool, CorruptStorageError> {
@@ -153,7 +152,6 @@ impl<
 	}
 
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self>>(
-		electoral_access: &mut ElectoralAccess,
 		election_identifiers: Vec<ElectionIdentifier<Self::ElectionIdentifierExtra>>,
 		current_block_number: &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
@@ -162,7 +160,7 @@ impl<
 			.at_most_one()
 			.map_err(|_| CorruptStorageError::new())?
 		{
-			let mut election_access = electoral_access.election_mut(election_identifier)?;
+			let election_access = ElectoralAccess::election_mut(election_identifier);
 			if let Some(consensus) = election_access.check_consensus()?.has_consensus() {
 				let mut known_accounts = election_access.properties()?;
 				election_access.delete();
@@ -190,7 +188,7 @@ impl<
 						(*current_block_number)
 							// current block number is always greater than when apicall was last
 							// created
-							.saturating_sub(electoral_access.unsynchronised_state()?)
+							.saturating_sub(ElectoralAccess::unsynchronised_state()?)
 							.into() >= MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS)
 				{
 					let accounts_to_close: Vec<_> = known_accounts
@@ -205,7 +203,7 @@ impl<
 					match Hook::close_accounts(accounts_to_close.clone()) {
 						Ok(()) => {
 							known_accounts.closure_initiated_accounts.extend(accounts_to_close);
-							electoral_access.set_unsynchronised_state(*current_block_number)?;
+							ElectoralAccess::set_unsynchronised_state(*current_block_number)?;
 						},
 						Err(e) => {
 							log::error!("Failed to initiate account closure: {:?}", e);
@@ -213,10 +211,10 @@ impl<
 						},
 					}
 				}
-				electoral_access.new_election((), known_accounts, ())?;
+				ElectoralAccess::new_election((), known_accounts, ())?;
 			}
 		} else {
-			electoral_access.new_election(
+			ElectoralAccess::new_election(
 				(),
 				SolanaVaultSwapsKnownAccounts {
 					witnessed_open_accounts: Vec::new(),
@@ -230,7 +228,6 @@ impl<
 	}
 
 	fn check_consensus<ElectionAccess: ElectionReadAccess<ElectoralSystem = Self>>(
-		_election_identifier: ElectionIdentifier<Self::ElectionIdentifierExtra>,
 		_election_access: &ElectionAccess,
 		_previous_consensus: Option<&Self::Consensus>,
 		consensus_votes: ConsensusVotes<Self>,

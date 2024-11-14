@@ -28,24 +28,20 @@ use pallet_cf_elections::{
 };
 use state_chain_runtime::{
 	chainflip::solana_elections::{
-		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystem,
-		SolanaElectoralSystemRunner, SolanaFeeTracking, SolanaIngressTracking, SolanaLiveness,
-		SolanaNonceTracking, SolanaVaultSwapTracking, TransactionSuccessDetails,
+		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystemRunner,
+		SolanaFeeTracking, SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking,
+		SolanaVaultSwapTracking, TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
 
-use cf_utilities::{
-	metrics::CHAIN_TRACKING,
-	task_scope::{self, Scope},
-};
+use cf_utilities::{metrics::CHAIN_TRACKING, task_scope, task_scope::Scope};
 use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
 use std::{
 	collections::{BTreeSet, HashSet},
 	str::FromStr,
 	sync::Arc,
 };
-use utilities::{task_scope, task_scope::Scope};
 
 #[derive(Clone)]
 struct SolanaBlockHeightTrackingVoter {

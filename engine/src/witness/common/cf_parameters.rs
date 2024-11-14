@@ -1,5 +1,5 @@
 use cf_chains::{CcmAdditionalData, ChannelRefundParameters};
-use cf_primitives::{AffiliateShortId, BasisPoints, Beneficiaries, DcaParameters, ShortId};
+use cf_primitives::{AffiliateShortId, BasisPoints, Beneficiaries, DcaParameters};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -16,7 +16,6 @@ pub struct CfParameters<CcmData = ()> {
 }
 
 pub type VersionedCcmCfParameters = VersionedCfParameters<CcmAdditionalData>;
-pub type CcmCfParameters = CfParameters<CcmAdditionalData>;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
 pub struct VaultSwapParameters {

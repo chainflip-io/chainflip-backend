@@ -1,8 +1,10 @@
 use crate::{
-	Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
+	AccountId, Environment, Offence, Reputation, Runtime, SolanaBroadcaster, SolanaChainTracking,
 	SolanaIngressEgress, SolanaThresholdSigner,
 };
 use cf_chains::{
+	address::EncodedAddress,
+	assets::{any::Asset, sol::Asset as SolAsset},
 	instances::{ChainInstanceAlias, SolanaInstance},
 	sol::{
 		api::{
@@ -14,33 +16,19 @@ use cf_chains::{
 	CcmDepositMetadata, Chain, ChannelRefundParameters, CloseSolanaVaultSwapAccounts,
 	FeeEstimationApi, ForeignChain, Solana,
 };
-use cf_primitives::{BasisPoints, DcaParameters, ShortId};
+use cf_primitives::{BasisPoints, Beneficiary, DcaParameters};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	instances::ChainInstanceAlias,
-	offence_reporting::OffenceReporter,
-	sol::{
-		api::{SolanaApi, SolanaTransactionBuildingError},
-		SolAddress, SolAmount, SolHash, SolSignature, SolTrackedData, SolanaCrypto,
-	},
-	AdjustedFeeEstimationApi, Broadcaster, Chain, Chainflip, ElectionEgressWitnesser,
-	FeeEstimationApi, GetBlockHeight, IngressSource, Solana, SolanaNonceWatch,
+	offence_reporting::OffenceReporter, AdjustedFeeEstimationApi, Broadcaster, Chainflip,
+	ElectionEgressWitnesser, GetBlockHeight, IngressSource, SolanaNonceWatch,
 };
-
-use crate::{RuntimeOrigin, SolanaIngressEgress};
-use cf_chains::{
-	address::EncodedAddress, assets::any::Asset, sol::api::ContractSwapAccountAndSender,
-	CloseSolanaVaultSwapAccounts,
-};
-use cf_primitives::{AssetAmount, TransactionHash};
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem},
 	electoral_systems::{
 		self,
-		change::OnChangeHook,
-		composite::{tuple_6_impls::Hooks, Composite, CompositeRunner, Translator},
+		composite::{tuple_7_impls::Hooks, CompositeRunner},
 		egress_success::OnEgressSuccess,
 		liveness::OnCheckComplete,
 		monotonic_change::OnChangeHook,
@@ -52,7 +40,7 @@ use pallet_cf_elections::{
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{DispatchResult, FixedPointNumber, FixedU128};
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 use cf_chains::benchmarking_value::BenchmarkValue;
@@ -101,6 +89,7 @@ pub fn initial_state(
 		unsynchronised_settings: (
 			(),
 			SolanaFeeUnsynchronisedSettings { fee_multiplier: FixedU128::from_u32(1u32) },
+			(),
 			(),
 			(),
 			(),
@@ -170,7 +159,7 @@ impl OnCheckComplete<<Runtime as Chainflip>::ValidatorId> for OnCheckCompleteHoo
 	}
 }
 pub type SolanaVaultSwapTracking =
-	electoral_systems::solana_swap_accounts_tracking::SolanaVaultSwapAccounts<
+	electoral_systems::solana_vault_swap_accounts::SolanaVaultSwapAccounts<
 		VaultSwapAccountAndSender,
 		SolanaVaultSwapDetails,
 		BlockNumberFor<Runtime>,
@@ -305,7 +294,7 @@ impl
 			>,
 		),
 	) -> Result<(), CorruptStorageError> {
-		let current_SC_block_number = crate::System::block_number();
+		let current_sc_block_number = crate::System::block_number();
 		let block_height = SolanaBlockHeightTracking::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -350,7 +339,7 @@ impl
 				SolanaVaultSwapTracking,
 				RunnerStorageAccess<Runtime, SolanaInstance>,
 			>,
-		>(vault_swap_identifiers, current_sc_block_number)?;
+		>(vault_swap_identifiers, &current_sc_block_number)?;
 		Ok(())
 	}
 }
@@ -383,7 +372,7 @@ impl BenchmarkValue for SolanaIngressSettings {
 	}
 }
 
-use pallet_cf_elections::electoral_systems::composite::tuple_6_impls::DerivedElectoralAccess;
+use pallet_cf_elections::electoral_systems::composite::tuple_7_impls::DerivedElectoralAccess;
 
 pub struct SolanaChainTrackingProvider;
 impl GetBlockHeight<Solana> for SolanaChainTrackingProvider {
@@ -526,15 +515,15 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, PartialOrd, Ord,
 )]
 pub struct SolanaVaultSwapDetails {
-	pub from: Asset,
+	pub from: SolAsset,
 	pub to: Asset,
-	pub deposit_amount: AssetAmount,
+	pub deposit_amount: SolAmount,
 	pub destination_address: EncodedAddress,
 	pub deposit_metadata: Option<CcmDepositMetadata>,
 	// TODO: swap_account and creation_slot might be pulled into TransactionInId type (PRO-1760)
 	pub swap_account: SolAddress,
 	pub creation_slot: u64,
-	pub broker_fees: cf_primitives::Beneficiaries<ShortId>,
+	pub broker_fees: cf_primitives::Beneficiary<AccountId>,
 	pub refund_params: Option<ChannelRefundParameters>,
 	pub dca_params: Option<DcaParameters>,
 	pub boost_fee: Option<BasisPoints>,
@@ -577,7 +566,12 @@ impl
 			swap_details.deposit_metadata,
 			Default::default(), // TODO txHash PRO-1760
 			(),
-			Default::default(), // TODO in PRO-1743
+			// TODO in PRO-1743
+			Beneficiary {
+				account: sp_runtime::AccountId32::new(Default::default()),
+				bps: Default::default(),
+			},
+			Default::default(),
 			swap_details.refund_params,
 			swap_details.dca_params,
 			swap_details.boost_fee.unwrap_or_default(),

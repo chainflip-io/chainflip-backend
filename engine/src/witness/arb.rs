@@ -3,7 +3,7 @@ mod chain_tracking;
 use std::{collections::HashMap, sync::Arc};
 
 use cf_chains::{assets::arb::Asset as ArbAsset, evm::DepositDetails, Arbitrum};
-use cf_primitives::{AffiliateShortId, EpochIndex, ShortId};
+use cf_primitives::{AffiliateShortId, EpochIndex};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use sp_core::H160;

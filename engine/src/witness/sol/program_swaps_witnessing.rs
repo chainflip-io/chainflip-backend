@@ -22,7 +22,6 @@ use cf_chains::{
 	},
 	CcmChannelMetadata, CcmDepositMetadata, ForeignChainAddress,
 };
-use cf_primitives::Asset;
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use state_chain_runtime::chainflip::solana_elections::SolanaVaultSwapDetails;
@@ -80,10 +79,10 @@ pub async fn get_program_swaps(
 							} else {
 								warn!("Unsupported output token for the witnessed solana vault swap, omitting the swap and the swap account.");
 								return None;
-							}	
+							}
 						} else {
 							SolAsset::SolUsdc
-						}; 
+						};
 
 						let (deposit_metadata, vault_swap_parameters) = match data.ccm_parameters {
 							None => {
@@ -92,8 +91,8 @@ pub async fn get_program_swaps(
 								(None, vault_swap_parameters)
 							},
 							Some(ccm_parameters) => {
-								let CcmCfParameters { ccm_additional_data, vault_swap_parameters } =
-									CcmCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding CcmCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
+								let VersionedCfParameters::V0(CfParameters { ccm_additional_data, vault_swap_parameters }) =
+								VersionedCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding VersionedCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
 
 								let deposit_metadata = Some(CcmDepositMetadata {
 									source_chain: cf_primitives::ForeignChain::Solana, // TODO: Pass chain id from above?
@@ -122,7 +121,11 @@ pub async fn get_program_swaps(
 							deposit_metadata,
 							swap_account: account,
 							creation_slot: data.creation_slot,
-							broker_fees: vault_swap_parameters.broker_fees,
+							// todo: get this from vault_swap_parameters (functionalit around this changed recently).
+							broker_fees: cf_primitives::Beneficiary {
+								account: sp_runtime::AccountId32::new(Default::default()),
+								bps: 0,
+							},
 							refund_params: Some(vault_swap_parameters.refund_params),
 							dca_params: vault_swap_parameters.dca_params,
 							boost_fee: vault_swap_parameters.boost_fee,

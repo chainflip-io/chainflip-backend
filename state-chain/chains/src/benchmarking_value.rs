@@ -262,6 +262,16 @@ impl<Id: BenchmarkValue> BenchmarkValue for Beneficiary<Id> {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for Beneficiary<sp_runtime::AccountId32> {
+	fn benchmark_value() -> Self {
+		Self {
+			account: sp_runtime::AccountId32::new([1u8; 32]),
+			bps: BenchmarkValue::benchmark_value(),
+		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue
 	for sp_runtime::BoundedVec<Beneficiary<ShortId>, sp_core::ConstU32<{ MAX_AFFILIATES + 1 }>>
 {
