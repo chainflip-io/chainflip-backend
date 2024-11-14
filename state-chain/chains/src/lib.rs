@@ -6,6 +6,10 @@
 use cf_primitives::TxId;
 use sp_core::H256;
 
+use crate::{
+	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, none::NoneChainCrypto,
+	sol::SolanaCrypto,
+};
 use core::{fmt::Display, iter::Step};
 use sp_std::marker::PhantomData;
 
@@ -283,7 +287,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 }
 
 /// Common crypto-related types and operations for some external chain.
-pub trait ChainCrypto: ChainCryptoInstanceAlias {
+pub trait ChainCrypto: ChainCryptoInstanceAlias + Sized {
 	const NAME: &'static str;
 	type UtxoChain: Get<bool>;
 
@@ -299,7 +303,11 @@ pub trait ChainCrypto: ChainCryptoInstanceAlias {
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the incoming direction.
-	type TransactionInId: Member + Parameter + Unpin + BenchmarkValue;
+	type TransactionInId: Member
+		+ Parameter
+		+ Unpin
+		+ IntoTransactionInIdForAnyChain<Self>
+		+ BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the outgoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
@@ -595,57 +603,59 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
-pub trait ConvertTransactionInIdToAnyChain<TransactionInId> {
-	fn convert(origin: SwapOrigin<TransactionInId>) -> SwapOrigin<TransactionInIdForAnyChain>;
-}
-
-pub struct TransactionInIdConverter;
-
 #[derive(Debug, Clone, TypeInfo, Encode, Decode, PartialEq, Eq)]
 pub enum TransactionInIdForAnyChain {
-	// Used by Ethereum, Arbitrum and BTC.
-	ByteHash(H256),
-	PolkadotTxId(TxId),
-	SolanaTxId(SolanaTransactionInId),
+	Evm(H256),
+	Bitcoin(H256),
+	Polkadot(TxId),
+	Solana(SolanaTransactionInId),
+	MockEthereum([u8; 4]),
+	None,
 }
 
-#[macro_export]
-macro_rules! impl_convert_transaction_in_id_to_any_chain {
-	($variant:ident, $type:ty) => {
-		impl ConvertTransactionInIdToAnyChain<$type> for TransactionInIdConverter {
-			fn convert(origin: SwapOrigin<$type>) -> SwapOrigin<TransactionInIdForAnyChain> {
-				match origin {
-					SwapOrigin::Vault { tx_id } =>
-						SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::$variant(tx_id) },
-					SwapOrigin::Internal => SwapOrigin::Internal,
-					SwapOrigin::DepositChannel {
-						deposit_address,
-						channel_id,
-						deposit_block_height,
-					} => SwapOrigin::DepositChannel {
-						deposit_address,
-						channel_id,
-						deposit_block_height,
-					},
-				}
-			}
-		}
-	};
+pub trait IntoTransactionInIdForAnyChain<C: ChainCrypto> {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain;
 }
 
-impl_convert_transaction_in_id_to_any_chain!(ByteHash, H256);
-impl_convert_transaction_in_id_to_any_chain!(PolkadotTxId, TxId);
-impl_convert_transaction_in_id_to_any_chain!(SolanaTxId, SolanaTransactionInId);
+impl IntoTransactionInIdForAnyChain<EvmCrypto> for H256 {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::Evm(self)
+	}
+}
+
+impl IntoTransactionInIdForAnyChain<BitcoinCrypto> for H256 {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::Bitcoin(self)
+	}
+}
+
+impl IntoTransactionInIdForAnyChain<SolanaCrypto> for SolanaTransactionInId {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::Solana(self)
+	}
+}
+
+impl IntoTransactionInIdForAnyChain<PolkadotCrypto> for TxId {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::Polkadot(self)
+	}
+}
+
+impl IntoTransactionInIdForAnyChain<NoneChainCrypto> for () {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::None
+	}
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SwapOrigin<TransactionInId> {
+pub enum SwapOrigin {
 	DepositChannel {
 		deposit_address: address::EncodedAddress,
 		channel_id: ChannelId,
 		deposit_block_height: u64,
 	},
 	Vault {
-		tx_id: TransactionInId,
+		tx_id: TransactionInIdForAnyChain,
 	},
 	Internal,
 }

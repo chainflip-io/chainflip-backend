@@ -3,7 +3,7 @@
 use crate::{
 	address::IntoForeignChainAddress,
 	evm::{api::EvmReplayProtection, TransactionFee},
-	*,
+	IntoTransactionInIdForAnyChain, *,
 };
 use cf_utilities::SliceToArray;
 use sp_core::{ConstBool, H160};
@@ -246,6 +246,12 @@ pub struct MockThresholdSignature<K, P> {
 	PartialOrd,
 )]
 pub struct MockAggKey(pub [u8; 4]);
+
+impl IntoTransactionInIdForAnyChain<MockEthereumChainCrypto> for [u8; 4] {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::MockEthereum(self)
+	}
+}
 
 /// A key that should be not accepted as handover result
 pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");

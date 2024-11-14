@@ -55,7 +55,6 @@ use cf_chains::{
 	evm::EvmCrypto,
 	sol::{SolAddress, SolanaCrypto},
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
-	TransactionInIdConverter,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
@@ -393,7 +392,6 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
-	type ConvertTransactionInIdToAnyChain = TransactionInIdConverter;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -422,7 +420,6 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
-	type ConvertTransactionInIdToAnyChain = TransactionInIdConverter;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -451,7 +448,6 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<true>;
-	type ConvertTransactionInIdToAnyChain = TransactionInIdConverter;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -480,7 +476,6 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
-	type ConvertTransactionInIdToAnyChain = TransactionInIdConverter;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -509,7 +504,6 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type CcmValidityChecker = cf_chains::ccm_checker::CcmValidityChecker;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
-	type ConvertTransactionInIdToAnyChain = TransactionInIdConverter;
 }
 
 impl pallet_cf_pools::Config for Runtime {

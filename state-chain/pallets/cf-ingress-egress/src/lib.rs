@@ -21,8 +21,6 @@ mod boost_pool;
 use boost_pool::BoostPool;
 pub use boost_pool::OwedAmount;
 
-use cf_chains::ConvertTransactionInIdToAnyChain;
-
 use cf_chains::{
 	address::{
 		AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
@@ -33,7 +31,8 @@ use cf_chains::{
 	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata,
 	CcmFailReason, CcmMessage, Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
 	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, RejectCall, SwapOrigin, TransferAssetParams,
+	FetchAssetParams, ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
+	TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -454,10 +453,6 @@ pub mod pallet {
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode<I>>;
 
-		type ConvertTransactionInIdToAnyChain: ConvertTransactionInIdToAnyChain<
-			TransactionInIdFor<Self, I>,
-		>;
-
 		type SwapLimitsProvider: SwapLimitsProvider<AccountId = Self::AccountId>;
 
 		/// For checking if the CCM message passed in is valid.
@@ -737,7 +732,7 @@ pub mod pallet {
 			reason: CcmFailReason,
 			destination_address: EncodedAddress,
 			deposit_metadata: CcmDepositMetadataEncoded,
-			origin: SwapOrigin<TransactionInIdFor<T, I>>,
+			origin: SwapOrigin,
 		},
 		TaintedTransactionReportReceived {
 			account_id: T::AccountId,
@@ -1850,7 +1845,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount_after_fees: TargetChainAmount<T, I>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) -> Result<DepositAction<T::AccountId>, DispatchError> {
-		let swap_origin = SwapOrigin::<TransactionInIdFor<T, I>>::DepositChannel {
+		let swap_origin = SwapOrigin::DepositChannel {
 			deposit_address: T::AddressConverter::to_encoded_address(
 				<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
 					deposit_address.clone(),
@@ -1884,7 +1879,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broker_fees,
 					refund_params,
 					dca_params,
-					T::ConvertTransactionInIdToAnyChain::convert(swap_origin),
+					swap_origin,
 				);
 				DepositAction::Swap { swap_request_id }
 			},
@@ -1918,7 +1913,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							broker_fees,
 							refund_params,
 							dca_params,
-							T::ConvertTransactionInIdToAnyChain::convert(swap_origin),
+							swap_origin,
 						);
 						DepositAction::CcmTransfer { swap_request_id }
 					},
@@ -2168,7 +2163,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			};
 
 		let request_type = if let Some(deposit_metadata) = deposit_metadata {
-			let swap_origin = SwapOrigin::Vault { tx_id: tx_id.clone() };
+			let swap_origin =
+				SwapOrigin::Vault { tx_id: tx_id.clone().into_transaction_in_id_for_any_chain() };
 
 			let ccm_failed = |reason| {
 				log::warn!("Failed to process CCM. Tx id: {:?}, Reason: {:?}", tx_id, reason);
@@ -2266,7 +2262,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return;
 		}
 
-		let swap_origin = SwapOrigin::Vault { tx_id };
+		let swap_origin = SwapOrigin::Vault { tx_id: tx_id.into_transaction_in_id_for_any_chain() };
 
 		T::SwapRequestHandler::init_swap_request(
 			source_asset.into(),
@@ -2276,7 +2272,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			broker_fees,
 			Some(refund_params),
 			dca_params,
-			T::ConvertTransactionInIdToAnyChain::convert(swap_origin),
+			swap_origin,
 		);
 	}
 

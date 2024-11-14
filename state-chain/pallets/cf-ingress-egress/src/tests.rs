@@ -1824,7 +1824,7 @@ fn can_request_swap_via_extrinsic() {
 				swap_type: SwapRequestType::Regular { output_address },
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
-					tx_id: TransactionInIdForAnyChain::ByteHash(H256::default()),
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 				},
 			},]
 		);
@@ -1888,7 +1888,7 @@ fn vault_swaps_support_affiliate_fees() {
 					Beneficiary { account: AFFILIATE_1, bps: AFFILIATE_FEE }
 				],
 				origin: SwapOrigin::Vault {
-					tx_id: cf_chains::TransactionInIdForAnyChain::ByteHash(H256::default())
+					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default())
 				},
 			},]
 		);
@@ -1939,7 +1939,7 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 				swap_type: SwapRequestType::Regular { output_address },
 				broker_fees: Default::default(),
 				origin: SwapOrigin::Vault {
-					tx_id: cf_chains::TransactionInIdForAnyChain::ByteHash(H256::default())
+					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default())
 				},
 			},]
 		);
@@ -2000,7 +2000,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 				},
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 				origin: SwapOrigin::Vault {
-					tx_id: TransactionInIdForAnyChain::ByteHash(H256::default()),
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
 				},
 			},]
 		);
