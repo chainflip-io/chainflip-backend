@@ -14,6 +14,7 @@ import { HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import { PublicKey, sendAndConfirmTransaction, Keypair } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import Keyring from '../polkadot/keyring';
 import {
   observeBalanceIncrease,
   getContractAddress,
@@ -54,6 +55,10 @@ export async function executeVaultSwap(
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
   wallet?: HDNodeWallet,
+  brokerFees?: {
+    account: string;
+    commissionBps: number;
+  },
 ): ReturnType<typeof executeSwap> {
   const srcChain = chainFromAsset(sourceAsset);
   const destChain = chainFromAsset(destAsset);
@@ -67,6 +72,11 @@ export async function executeVaultSwap(
   };
 
   const evmWallet = wallet ?? (await createEvmWalletAndFund(sourceAsset));
+
+  const brokerComission = brokerFees ?? {
+    account: new Keyring({ type: 'sr25519' }).createFromUri('//BROKER_1').address,
+    commissionBps: 1,
+  };
 
   if (erc20Assets.includes(sourceAsset)) {
     // Doing effectively infinite approvals to make sure it doesn't fail.
@@ -104,12 +114,13 @@ export async function executeVaultSwap(
         message: messageMetadata.message,
         ccmAdditionalData: messageMetadata.ccmAdditionalData,
       },
+      brokerFees: brokerComission,
       // The SDK will encode these parameters and the ccmAdditionalData
       // into the `cfParameters` field for the vault swap.
       boostFeeBps,
       fillOrKillParams: fokParams,
       dcaParams,
-      beneficiaries: undefined,
+      affiliateFees: undefined,
     } as ExecuteSwapParams,
     networkOptions,
     txOptions,

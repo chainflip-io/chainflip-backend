@@ -18,9 +18,9 @@ use cf_chains::{
 	assets::eth::Asset as EthAsset,
 	eth::{api::EthereumApi, EthereumTrackedData},
 	evm::DepositDetails,
-	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, DefaultRetryPolicy, Ethereum,
-	ExecutexSwapAndCall, ForeignChain, ForeignChainAddress, RetryPolicy, SwapOrigin,
-	TransactionBuilder, TransferAssetParams,
+	CcmChannelMetadata, CcmDepositMetadata, Chain, ChainState, ChannelRefundParameters,
+	DefaultRetryPolicy, Ethereum, ExecutexSwapAndCall, ForeignChain, ForeignChainAddress,
+	RetryPolicy, SwapOrigin, TransactionBuilder, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, SwapId, FLIPPERINOS_PER_FLIP,
@@ -53,6 +53,11 @@ use state_chain_runtime::{
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
+const ETH_REFUND_PARAMS: ChannelRefundParameters = ChannelRefundParameters {
+	retry_duration: 5,
+	refund_address: ForeignChainAddress::Eth(sp_core::H160([100u8; 20])),
+	min_price: sp_core::U256::zero(),
+};
 
 fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_price: Price) {
 	assert_ok!(LiquidityPools::new_pool(
@@ -585,7 +590,7 @@ fn can_process_ccm_via_direct_deposit() {
 					bps: 0,
 				},
 				affiliate_fees: Default::default(),
-				refund_params: None,
+				refund_params: Box::new(ETH_REFUND_PARAMS),
 				dca_params: None,
 				boost_fee: 0,
 			},
@@ -639,7 +644,7 @@ fn failed_swaps_are_rolled_back() {
 					bps: 0,
 				},
 				affiliate_fees: Default::default(),
-				refund_params: None,
+				refund_params: Box::new(ETH_REFUND_PARAMS),
 				dca_params: None,
 				boost_fee: 0,
 			},
@@ -806,7 +811,7 @@ fn can_resign_failed_ccm() {
 					},
 					affiliate_fees: Default::default(),
 
-					refund_params: None,
+					refund_params: Box::new(ETH_REFUND_PARAMS),
 					dca_params: None,
 					boost_fee: 0,
 				},

@@ -410,6 +410,12 @@ pub struct Beneficiary<Id> {
 	pub bps: BasisPoints,
 }
 
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+pub struct AffiliateAndFee {
+	pub affiliate: u8,
+	pub fee: u8,
+}
+
 #[derive(
 	Clone,
 	RuntimeDebug,

@@ -2,10 +2,14 @@ mod chain_tracking;
 
 use std::{collections::HashMap, sync::Arc};
 
-use cf_chains::{assets::arb::Asset as ArbAsset, evm::DepositDetails, Arbitrum};
-use cf_primitives::{AffiliateShortId, EpochIndex};
+use cf_chains::{address::EncodedAddress, evm::DepositDetails, Arbitrum, CcmDepositMetadata};
+use cf_primitives::{
+	chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount, Beneficiary, EpochIndex,
+	TransactionHash,
+};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
+use itertools::Itertools;
 use sp_core::H160;
 
 use crate::{
@@ -18,7 +22,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::usdc::UsdcEvents,
+	witness::{common::cf_parameters::VaultSwapParameters, evm::erc20_deposits::usdc::UsdcEvents},
 };
 
 use super::{
@@ -81,11 +85,10 @@ where
 		.get(&ArbAsset::ArbUsdc)
 		.context("ArbitrumSupportedAssets does not include USDC")?;
 
-	let supported_arb_erc20_assets: HashMap<H160, cf_primitives::Asset> =
-		supported_arb_erc20_assets
-			.into_iter()
-			.map(|(asset, address)| (address, asset.into()))
-			.collect();
+	let supported_arb_erc20_assets: HashMap<H160, Asset> = supported_arb_erc20_assets
+		.into_iter()
+		.map(|(asset, address)| (address, asset.into()))
+		.collect();
 
 	let arb_source = EvmSource::<_, Arbitrum>::new(arb_client.clone())
 		.strictly_monotonic()
@@ -162,7 +165,7 @@ where
 			process_call,
 			arb_client.clone(),
 			vault_address,
-			cf_primitives::Asset::ArbEth,
+			Asset::ArbEth,
 			cf_primitives::ForeignChain::Arbitrum,
 			supported_arb_erc20_assets,
 		)
@@ -175,11 +178,6 @@ where
 
 struct ArbCallBuilder {}
 
-use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ChannelRefundParameters};
-use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, DcaParameters, TransactionHash,
-};
-
 impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 	type Chain = Arbitrum;
 
@@ -190,11 +188,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
 		tx_hash: TransactionHash,
-		_broker_fees: Beneficiaries<AffiliateShortId>,
-		refund_params: Option<ChannelRefundParameters>,
-		dca_params: Option<DcaParameters>,
-		// This is only to be checked in the pre-witnessed version
-		boost_fee: Option<BasisPoints>,
+		vault_swap_parameters: VaultSwapParameters,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
@@ -205,15 +199,17 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 				deposit_metadata,
 				tx_hash,
 				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) }),
-				// Defaulting to no broker fees until PRO-1743 is completed.
-				broker_fee: cf_primitives::Beneficiary {
-					account: sp_runtime::AccountId32::new([0; 32]),
-					bps: 0,
-				},
-				affiliate_fees: Default::default(),
-				boost_fee: boost_fee.unwrap_or_default(),
-				dca_params,
-				refund_params: refund_params.map(Box::new),
+				broker_fee: vault_swap_parameters.broker_fee,
+				affiliate_fees: vault_swap_parameters
+					.affiliate_fees
+					.into_iter()
+					.map(|entry| Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
+					.collect_vec()
+					.try_into()
+					.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
+				boost_fee: vault_swap_parameters.boost_fee.into(),
+				dca_params: vault_swap_parameters.dca_params,
+				refund_params: Box::new(vault_swap_parameters.refund_params),
 			},
 		)
 	}
