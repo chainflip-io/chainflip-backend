@@ -16,8 +16,8 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId},
 	mocks::MockEthereum,
-	CcmChannelMetadata, CcmFailReason, DepositChannel, ExecutexSwapAndCall, SwapOrigin,
-	TransferAssetParams,
+	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel,
+	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
 	AffiliateShortId, AssetAmount, BasisPoints, Beneficiary, ChannelId, ForeignChain,
@@ -54,6 +54,11 @@ const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
 const ETH_ETH: EthAsset = EthAsset::Eth;
 const ETH_FLIP: EthAsset = EthAsset::Flip;
 const DEFAULT_DEPOSIT_AMOUNT: u128 = 1_000;
+const ETH_REFUND_PARAMS: ChannelRefundParameters = ChannelRefundParameters {
+	retry_duration: 0,
+	refund_address: ForeignChainAddress::Eth(ALICE_ETH_ADDRESS),
+	min_price: sp_core::U256::zero(),
+};
 
 #[track_caller]
 fn expect_size_of_address_pool(size: usize) {
@@ -1807,7 +1812,7 @@ fn can_request_swap_via_extrinsic() {
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
-			None,
+			Box::new(ETH_REFUND_PARAMS),
 			None,
 			0,
 		));
@@ -1865,7 +1870,7 @@ fn vault_swaps_support_affiliate_fees() {
 				Beneficiary { account: AFFILIATE_SHORT_1, bps: AFFILIATE_FEE },
 				Beneficiary { account: AFFILIATE_SHORT_2, bps: AFFILIATE_FEE }
 			],
-			None,
+			Box::new(ETH_REFUND_PARAMS),
 			None,
 			0
 		));
@@ -1919,7 +1924,7 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: NOT_A_BROKER, bps: BROKER_FEE },
 			Default::default(),
-			None,
+			Box::new(ETH_REFUND_PARAMS),
 			None,
 			0
 		));
@@ -1975,7 +1980,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
-			None,
+			Box::new(ETH_REFUND_PARAMS),
 			None,
 			0
 		));
@@ -2023,7 +2028,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			None,
+			Box::new(ETH_REFUND_PARAMS),
 			None,
 			0
 		),);
@@ -2043,7 +2048,7 @@ fn rejects_invalid_swap_by_witnesser() {
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			None,
+			Box::new(ETH_REFUND_PARAMS),
 			None,
 			0
 		),);
@@ -2079,7 +2084,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			None,
+			Box::new(ETH_REFUND_PARAMS),
 			None,
 			0
 		));
@@ -2106,7 +2111,7 @@ fn failed_ccm_deposit_can_deposit_event() {
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			None,
+			Box::new(ETH_REFUND_PARAMS),
 			None,
 			0
 		));

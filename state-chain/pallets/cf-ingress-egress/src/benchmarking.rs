@@ -316,7 +316,11 @@ mod benchmarks {
 			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
 			broker_fee: cf_primitives::Beneficiary { account: account("broker", 0, 0), bps: 0 },
 			affiliate_fees: Default::default(),
-			refund_params: None,
+			refund_params: Box::new(ChannelRefundParameters {
+				retry_duration: Default::default(),
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+				min_price: Default::default(),
+			}),
 			dca_params: None,
 			boost_fee: 0,
 		};

@@ -14,9 +14,9 @@ use cf_chains::{
 		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
 		SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, CcmFailReason, Chain, DepositChannel,
-	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
-	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
+	CcmChannelMetadata, CcmDepositMetadata, CcmFailReason, Chain, ChannelRefundParameters,
+	DepositChannel, ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh,
+	SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -60,6 +60,11 @@ const BOB: AccountId = AccountId::new([0x44; 32]);
 
 const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
 const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
+const REFUND_PARAMS: ChannelRefundParameters = ChannelRefundParameters {
+	retry_duration: 0,
+	refund_address: ForeignChainAddress::Sol(FALLBACK_ADDRESS),
+	min_price: sp_core::U256::zero(),
+};
 
 type SolanaCompositeVote = CompositeAuthorityVoteOf<
 	<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
@@ -514,7 +519,7 @@ fn solana_ccm_fails_with_invalid_input() {
 						bps: 0,
 					},
 					affiliate_fees: Default::default(),
-					refund_params: None,
+					refund_params: Box::new(REFUND_PARAMS),
 					dca_params: None,
 					boost_fee: 0,
 				}
@@ -572,7 +577,7 @@ fn solana_ccm_fails_with_invalid_input() {
 						bps: 0,
 					},
 					affiliate_fees: Default::default(),
-					refund_params: None,
+					refund_params: Box::new(REFUND_PARAMS),
 					dca_params: None,
 					boost_fee: 0,
 				},
@@ -800,7 +805,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 						bps: 0,
 					},
 					affiliate_fees: Default::default(),
-					refund_params: None,
+					refund_params:  Box::new(REFUND_PARAMS),
 					dca_params: None,
 					boost_fee: 0,
 

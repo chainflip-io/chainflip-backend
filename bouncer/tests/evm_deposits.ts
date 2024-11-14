@@ -97,8 +97,8 @@ async function testTxMultipleVaultSwaps(sourceAsset: Asset, destAsset: Asset) {
       assetContractId(destAsset),
       getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
       amount,
-      // Encoded EVM refund address and no other swap parameters.
-      '0x0000000000000e879c89cad7076b347bde13c99cf2c33e7299b60000000000000000000000000000000000000000000000000000000000000000000000',
+      // Dummy encoded data containing a refund address and a broker accountId.
+      '0x000001000000000202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000',
       numSwaps,
     )
     .encodeABI();
