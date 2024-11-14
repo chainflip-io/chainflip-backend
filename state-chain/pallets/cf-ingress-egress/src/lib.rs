@@ -1309,7 +1309,7 @@ pub mod pallet {
 			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
 			broker_fee: Beneficiary<T::AccountId>,
 			affiliate_fees: Affiliates<AffiliateShortId>,
-			refund_params: Option<Box<ChannelRefundParameters>>,
+			refund_params: Box<ChannelRefundParameters>,
 			dca_params: Option<DcaParameters>,
 			boost_fee: BasisPoints,
 		) -> DispatchResult {
@@ -1324,7 +1324,7 @@ pub mod pallet {
 					*deposit_details,
 					broker_fee,
 					affiliate_fees,
-					refund_params.map(|boxed| *boxed),
+					*refund_params,
 					dca_params,
 					boost_fee,
 				);
@@ -2129,7 +2129,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_details: <T::TargetChain as Chain>::DepositDetails,
 		broker_fee: Beneficiary<T::AccountId>,
 		affiliate_fees: Affiliates<AffiliateShortId>,
-		refund_params: Option<ChannelRefundParameters>,
+		refund_params: ChannelRefundParameters,
 		dca_params: Option<DcaParameters>,
 		// This is only to be checked in the pre-witnessed version (not implemented yet)
 		_boost_fee: BasisPoints,
@@ -2203,13 +2203,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			SwapRequestType::Regular { output_address: destination_address_internal.clone() }
 		};
 
-		if let Some(params) = &refund_params {
-			if let Err(err) = T::SwapLimitsProvider::validate_refund_params(params.retry_duration) {
-				log::warn!(
-					"Failed to process vault swap due to invalid refund params. Tx hash: {tx_hash:?}. Error: {err:?}",
-				);
-				return;
-			}
+		if let Err(err) =
+			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
+		{
+			log::warn!(
+				"Failed to process vault swap due to invalid refund params. Tx hash: {tx_hash:?}. Error: {err:?}",
+			);
+			return;
 		}
 
 		if let Some(params) = &dca_params {
@@ -2266,7 +2266,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			destination_asset,
 			request_type,
 			broker_fees,
-			refund_params,
+			Some(refund_params),
 			dca_params,
 			SwapOrigin::Vault { tx_hash },
 		);
