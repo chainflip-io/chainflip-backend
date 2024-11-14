@@ -207,7 +207,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 					.collect_vec()
 					.try_into()
 					.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
-				boost_fee: vault_swap_parameters.boost_fee,
+				boost_fee: vault_swap_parameters.boost_fee.into(),
 				dca_params: vault_swap_parameters.dca_params,
 				refund_params: Some(Box::new(vault_swap_parameters.refund_params)),
 			},

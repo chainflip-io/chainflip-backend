@@ -1,7 +1,5 @@
 use cf_chains::{CcmAdditionalData, ChannelRefundParameters};
-use cf_primitives::{
-	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
-};
+use cf_primitives::{AccountId, AffiliateAndFee, Beneficiary, DcaParameters, MAX_AFFILIATES};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::ConstU32;
@@ -25,7 +23,7 @@ pub type VersionedCcmCfParameters = VersionedCfParameters<CcmAdditionalData>;
 pub struct VaultSwapParameters {
 	pub refund_params: ChannelRefundParameters,
 	pub dca_params: Option<DcaParameters>,
-	pub boost_fee: BasisPoints,
+	pub boost_fee: u8,
 	pub broker_fee: Beneficiary<AccountId>,
 	pub affiliate_fees: BoundedVec<AffiliateAndFee, ConstU32<MAX_AFFILIATES>>,
 }
@@ -42,8 +40,8 @@ mod tests {
 	const REFERENCE_EXPECTED_ENCODED: &[u8] = &[
 		0, 1, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-		3, 3, 3, 4, 0, 0,
+		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+		3, 3, 4, 0, 0,
 	];
 
 	#[test]
@@ -88,8 +86,7 @@ mod tests {
 		encoded = VersionedCcmCfParameters::V0(ccm_cf_parameters).encode();
 
 		// Extra byte for the empty ccm metadata
-		let mut expected_encoded = vec![0];
-		expected_encoded.extend_from_slice(REFERENCE_EXPECTED_ENCODED);
+		let expected_encoded = [vec![0], Vec::from(REFERENCE_EXPECTED_ENCODED)].concat();
 
 		assert_eq!(encoded, expected_encoded);
 	}
