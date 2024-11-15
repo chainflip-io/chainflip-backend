@@ -1,13 +1,14 @@
-use super::super::common::cf_parameters::*;
-use codec::Decode;
-use std::collections::{BTreeSet, HashSet};
-
-use crate::sol::{
-	commitment_config::CommitmentConfig,
-	retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
-	rpc_client_api::{RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding},
+use crate::{
+	sol::{
+		commitment_config::CommitmentConfig,
+		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
+		rpc_client_api::{RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding},
+	},
+	witness::common::cf_parameters::{
+		CfParameters, VaultSwapParameters, VersionedCcmCfParameters, VersionedCfParameters,
+	},
 };
-use anyhow::{anyhow, ensure};
+use anyhow::{anyhow, bail, ensure, Context};
 use base64::Engine;
 use cf_chains::{
 	address::EncodedAddress,
@@ -22,9 +23,11 @@ use cf_chains::{
 	},
 	CcmChannelMetadata, CcmDepositMetadata, ForeignChainAddress,
 };
+use codec::Decode;
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use state_chain_runtime::chainflip::solana_elections::SolanaVaultSwapDetails;
+use std::collections::{BTreeSet, HashSet};
 use tracing::warn;
 
 const MAXIMUM_CONCURRENT_RPCS: usize = 16;
@@ -48,7 +51,10 @@ pub async fn get_program_swaps(
 	sc_closure_initiated_accounts: BTreeSet<VaultSwapAccountAndSender>,
 	usdc_token_mint_pubkey: SolAddress,
 ) -> Result<
-	(Vec<(VaultSwapAccountAndSender, SolanaVaultSwapDetails)>, Vec<VaultSwapAccountAndSender>),
+	(
+		Vec<(VaultSwapAccountAndSender, Option<SolanaVaultSwapDetails>)>,
+		Vec<VaultSwapAccountAndSender>,
+	),
 	anyhow::Error,
 > {
 	let (new_program_swap_accounts, closed_accounts, slot) = get_changed_program_swap_accounts(
@@ -69,96 +75,146 @@ pub async fn get_program_swaps(
 			get_program_swap_event_accounts_data(sol_rpc, new_program_swap_accounts_chunk, slot)
 		})
 		.buffered(MAXIMUM_CONCURRENT_RPCS)
-		.map_ok(|program_swap_account_data_chunk| {
-			stream::iter(program_swap_account_data_chunk.into_iter().filter_map(
-				|(account, program_swap_account_data)| match program_swap_account_data {
-					Some(data) => {
-						let from_asset = if let Some(token) = data.src_token {
-							if token == usdc_token_mint_pubkey.into() {
-								SolAsset::SolUsdc
+		.map_ok(stream::iter)
+		.try_flatten()
+		.filter_map(|response| {
+			futures::future::ready(
+				response
+					.inspect_err(|e| {
+						tracing::error!("Error querying for program swap account data: {e:?}");
+					})
+					.ok(),
+			)
+		})
+		.map(
+			|(
+				vault_swap_account,
+				SwapEvent {
+					creation_slot,
+					sender,
+					dst_chain,
+					dst_address,
+					dst_token,
+					amount,
+					src_token,
+					ccm_parameters,
+					cf_parameters,
+				},
+			)| {
+				{
+					let vault_swap_details = move || {
+						let from_asset =
+							if let Some(token) = src_token {
+								if token == usdc_token_mint_pubkey.into() {
+									SolAsset::SolUsdc
+								} else {
+									bail!("Unsupported input token for the witnessed solana vault swap.");
+								}
 							} else {
-								warn!("Unsupported output token for the witnessed solana vault swap, omitting the swap and the swap account.");
-								return None;
-							}
-						} else {
-							SolAsset::SolUsdc
-						};
+								SolAsset::Sol
+							};
 
-						let (deposit_metadata, vault_swap_parameters) = match data.ccm_parameters {
+						let (
+							deposit_metadata,
+							VaultSwapParameters {
+								refund_params,
+								dca_params,
+								boost_fee,
+								broker_fee,
+								affiliate_fees,
+							},
+						) = match ccm_parameters {
 							None => {
-								let VersionedCfParameters::V0(CfParameters { ccm_additional_data: (), vault_swap_parameters }) =
-								VersionedCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding VersionedCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
+								let VersionedCfParameters::V0(CfParameters {
+									ccm_additional_data: (),
+									vault_swap_parameters,
+								}) = VersionedCfParameters::decode(&mut &cf_parameters[..])
+									.map_err(|e| {
+										anyhow!("Error while decoding VersionedCfParameters for solana vault swap: {}.", e)
+									})?;
 								(None, vault_swap_parameters)
 							},
 							Some(ccm_parameters) => {
-								let VersionedCcmCfParameters::V0(CfParameters { ccm_additional_data, vault_swap_parameters }) =
-								VersionedCcmCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding VersionedCcmCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
+								let VersionedCcmCfParameters::V0(CfParameters {
+									ccm_additional_data,
+									vault_swap_parameters
+									}) = VersionedCcmCfParameters::decode(&mut &cf_parameters[..]).map_err(|e| {
+											anyhow!("Error while decoding VersionedCcmCfParameters for solana vault swap: {}.", e)
+										},
+									)?;
 
-								let deposit_metadata = Some(CcmDepositMetadata {
-									source_chain: cf_primitives::ForeignChain::Solana, // TODO: Pass chain id from above?
-									source_address: Some(ForeignChainAddress::Sol(data.sender.into())),
-									channel_metadata: CcmChannelMetadata {
-										message: ccm_parameters.message
-											.to_vec()
-											.try_into()
-											.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long.")).ok()?,
-										gas_budget: ccm_parameters.gas_amount.into(),
-										ccm_additional_data,
-									},
-								});
-								(deposit_metadata, vault_swap_parameters)
-							}
+								(
+									Some(CcmDepositMetadata {
+										source_chain: cf_primitives::ForeignChain::Solana,
+										source_address: Some(ForeignChainAddress::Sol(
+											sender.into(),
+										)),
+										channel_metadata: CcmChannelMetadata {
+											message: ccm_parameters
+												.message
+												.to_vec()
+												.try_into()
+												.map_err(|_| {
+													anyhow!(
+														"Failed to deposit CCM: `message` too long."
+													)
+												})?,
+											gas_budget: ccm_parameters.gas_amount.into(),
+											ccm_additional_data,
+										},
+									}),
+									vault_swap_parameters,
+								)
+							},
 						};
-
-						Some(Ok::<_, anyhow::Error>((VaultSwapAccountAndSender {
-							vault_swap_account: account,
-							swap_sender: data.sender.into()
-						}, SolanaVaultSwapDetails {
+						Ok(SolanaVaultSwapDetails {
 							from: from_asset,
-							deposit_amount: data.amount,
-							destination_address: EncodedAddress::from_chain_bytes(data.dst_chain.try_into().map_err(|e| warn!("error while parsing destination chain for solana vault swap:{}. Omitting swap", e)).ok()?, data.dst_address.to_vec()).map_err(|e| warn!("failed to decode the destination chain address for solana vault swap:{}. Omitting swap", e)).ok()?,
-							to: data.dst_token.try_into().map_err(|e| warn!("error while decoding destination token for solana vault swap: {}. Omitting swap", e)).ok()?,
+							deposit_amount: amount,
+							destination_address: EncodedAddress::from_chain_bytes(
+								dst_chain.try_into().map_err(|e| {
+									anyhow!("Error while parsing destination chain for solana vault swap:{}.", e)
+								})?,
+								dst_address.to_vec(),
+							)
+							.map_err(|e| {
+								anyhow!("Failed to decode the destination address for solana vault swap:{}.", e)
+							})?,
+							to: dst_token.try_into().map_err(|e| {
+								anyhow!("Error while decoding destination token for solana vault swap: {}.", e)
+							})?,
 							deposit_metadata,
-							swap_account: account,
-							creation_slot: data.creation_slot,
-							broker_fee: vault_swap_parameters.broker_fee,
-							affiliate_fees: vault_swap_parameters
-								.affiliate_fees
+							swap_account: vault_swap_account,
+							creation_slot,
+							broker_fee,
+							affiliate_fees: affiliate_fees
 								.into_iter()
 								.map(|entry| cf_primitives::Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
 								.collect_vec()
 								.try_into()
-								.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
-							refund_params: vault_swap_parameters.refund_params,
-							dca_params: vault_swap_parameters.dca_params,
-							boost_fee: vault_swap_parameters.boost_fee,
-						})))
-					},
-
-					// It could happen that some account is closed between the queries. This should
-					// not happen because:
-					// 1. Accounts in `new_program_swap_accounts` can only be accounts that have
-					//    newly been opened and they won't be closed until consensus is reached.
-					// 2. If due to rpc load management the get event accounts rpc is queried at a
-					//    slot < get swap endpoint data rpc slot, the min_context_slot will prevent
-					//    it from being executed before that.
-					// This could only happen if an engine is behind and were to see the account
-					// opened and closed between queries. That's not reallistic as it takes minutes
-					// for an account to be closed and even if it were to happen it's not
-					// problematic as we'd have reached consensus and the engine would just filter
-					// it out.
-					None => {
-						warn!("Event account not found for solana event account: {}", account);
-						None
-					},
-				},
-			))
-		})
-		.try_flatten()
-		.filter(|item| futures::future::ready(item.is_ok()))
-		.try_collect()
-		.await
-		.unwrap();
+								.map_err(|_| {
+									anyhow!("runtime supports at least as many affiliates as we allow in cf_parameters encoding")
+								})?,
+							refund_params,
+							dca_params,
+							boost_fee,
+						})
+					};
+					(
+						VaultSwapAccountAndSender {
+							vault_swap_account,
+							swap_sender: sender.into(),
+						},
+						vault_swap_details()
+							.inspect_err(|e| {
+								warn!("Unable to derive swap details for account `{vault_swap_account}`: {e}")
+							})
+							.ok(),
+					)
+				}
+			},
+		)
+		.collect()
+		.await;
 
 	Ok((new_swaps, closed_accounts))
 
@@ -260,10 +316,10 @@ async fn get_program_swap_event_accounts_data(
 	sol_rpc: &SolRetryRpcClient,
 	program_swap_event_accounts: Vec<SolAddress>,
 	min_context_slot: u64,
-) -> Result<Vec<(SolAddress, Option<SwapEvent>)>, anyhow::Error> {
-	let accounts_info_response = sol_rpc
+) -> anyhow::Result<Vec<anyhow::Result<(SolAddress, SwapEvent)>>> {
+	let account_infos = sol_rpc
 		.get_multiple_accounts(
-			program_swap_event_accounts.as_slice(),
+			&program_swap_event_accounts[..],
 			RpcAccountInfoConfig {
 				encoding: Some(UiAccountEncoding::Base64),
 				data_slice: None,
@@ -271,35 +327,58 @@ async fn get_program_swap_event_accounts_data(
 				min_context_slot: Some(min_context_slot),
 			},
 		)
-		.await;
+		.await
+		.value;
 
-	let _slot = accounts_info_response.context.slot;
-	let accounts_info = accounts_info_response.value;
+	ensure!(
+		account_infos.len() == program_swap_event_accounts.len(),
+		"Number of queried accounts should match number of returned accounts."
+	);
 
-	ensure!(accounts_info.len() == program_swap_event_accounts.len());
-
-	program_swap_event_accounts
+	Ok(program_swap_event_accounts
 		.into_iter()
-		.zip(accounts_info.into_iter())
-		.map(|(account, accounts_info)| match accounts_info {
-			Some(UiAccount { data: UiAccountData::Binary(base64_string, encoding), .. }) => {
-				if encoding != UiAccountEncoding::Base64 {
-					return Err(anyhow!("Data account encoding is not base64"));
+		.zip(account_infos.into_iter())
+		.map(|(account, account_info)| {
+			Ok((
+				account,
+				match account_info {
+					Some(UiAccount {
+						data: UiAccountData::Binary(base64_string, UiAccountEncoding::Base64),
+						..
+					}) => {
+						let bytes = base64::engine::general_purpose::STANDARD
+							.decode(base64_string)
+							.map_err(|e| anyhow!("Failed to decode base64 string: {}", e))?;
+
+						SwapEvent::check_and_deserialize(&bytes[..])
+							.map_err(|e| anyhow!("Failed to deserialize data: {}", e))
+					},
+					Some(other) => Err(anyhow!(
+						"Expected UiAccountData::Binary(String, UiAccountEncoding::Base64), got {}",
+						match other.data {
+							UiAccountData::Binary(_, other) => format!("{:?}", other),
+							UiAccountData::Json(_) => "Json".to_string(),
+							UiAccountData::LegacyBinary(_) => "LegacyBinary".to_string(),
+						}
+					)),
+					// It could happen that some account is closed between the queries. This
+					// should not happen because:
+					// 1. Accounts in `new_program_swap_accounts` can only be accounts that have
+					//    newly been opened and they won't be closed until consensus is reached.
+					// 2. If due to rpc load management the get event accounts rpc is queried at a
+					//    slot < get swap endpoint data rpc slot, the min_context_slot will prevent
+					//    it from being executed before that.
+					// This could only happen if an engine is behind and were to see the account
+					// opened and closed between queries. That's not realistic as it takes
+					// minutes for an account to be closed and even if it were to happen
+					// it's not problematic as we'd have reached consensus and the engine
+					// would just filter it out.
+					None => Err(anyhow!("Account does not exist.")),
 				}
-				let bytes = base64::engine::general_purpose::STANDARD
-					.decode(base64_string)
-					.expect("Failed to decode base64 string");
-
-				let swap_event: SwapEvent = SwapEvent::check_and_deserialize(&bytes[..])
-					.map_err(|e| anyhow!("Failed to deserialize data: {:?}", e))?;
-
-				Ok((account, Some(swap_event)))
-			},
-			Some(_) =>
-				Err(anyhow!("Expected UiAccountData::Binary(String, UiAccountEncoding::Base64)")),
-			None => Ok((account, None)),
+				.context(format!("Error getting SwapEvent data for account `{account}`."))?,
+			))
 		})
-		.collect()
+		.collect())
 }
 
 #[cfg(test)]
