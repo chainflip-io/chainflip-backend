@@ -86,13 +86,13 @@ pub async fn get_program_swaps(
 
 						let (deposit_metadata, vault_swap_parameters) = match data.ccm_parameters {
 							None => {
-								let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
-									CfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding CfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
+								let VersionedCfParameters::V0(CfParameters { ccm_additional_data: (), vault_swap_parameters }) =
+								VersionedCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding VersionedCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
 								(None, vault_swap_parameters)
 							},
 							Some(ccm_parameters) => {
-								let VersionedCfParameters::V0(CfParameters { ccm_additional_data, vault_swap_parameters }) =
-								VersionedCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding VersionedCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
+								let VersionedCcmCfParameters::V0(CfParameters { ccm_additional_data, vault_swap_parameters }) =
+								VersionedCcmCfParameters::decode(&mut &data.cf_parameters[..]).map_err(|e| warn!("error while decoding VersionedCcmCfParameters for solana vault swap: {}. Omitting swap", e)).ok()?;
 
 								let deposit_metadata = Some(CcmDepositMetadata {
 									source_chain: cf_primitives::ForeignChain::Solana, // TODO: Pass chain id from above?
