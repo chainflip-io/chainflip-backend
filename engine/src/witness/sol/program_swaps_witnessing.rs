@@ -4,7 +4,9 @@ use crate::{
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
 		rpc_client_api::{RpcAccountInfoConfig, UiAccount, UiAccountData, UiAccountEncoding},
 	},
-	witness::common::cf_parameters::{CcmCfParameters, CfParameters, VaultSwapParameters},
+	witness::common::cf_parameters::{
+		CfParameters, VaultSwapParameters, VersionedCcmCfParameters, VersionedCfParameters,
+	},
 };
 use anyhow::{anyhow, bail, ensure, Context};
 use base64::Engine;
@@ -118,21 +120,26 @@ pub async fn get_program_swaps(
 								refund_params,
 								dca_params,
 								boost_fee,
-								broker_fees,
+								broker_fee,
+								affiliate_fees,
 							},
 						) = match ccm_parameters {
 							None => {
-								let CfParameters { ccm_additional_data: (), vault_swap_parameters } =
-									CfParameters::decode(&mut &cf_parameters[..]).map_err(|e| {
-										anyhow!("Error while decoding CfParameters for solana vault swap: {}.", e)
+								let VersionedCfParameters::V0(CfParameters {
+									ccm_additional_data: (),
+									vault_swap_parameters,
+								}) = VersionedCfParameters::decode(&mut &cf_parameters[..])
+									.map_err(|e| {
+										anyhow!("Error while decoding VersionedCfParameters for solana vault swap: {}.", e)
 									})?;
 								(None, vault_swap_parameters)
 							},
 							Some(ccm_parameters) => {
-								let CcmCfParameters { ccm_additional_data, vault_swap_parameters } =
-									CcmCfParameters::decode(&mut &cf_parameters[..]).map_err(
-										|e| {
-											anyhow!("Error while decoding CcmCfParameters for solana vault swap: {}.", e)
+								let VersionedCcmCfParameters::V0(CfParameters {
+									ccm_additional_data,
+									vault_swap_parameters
+									}) = VersionedCcmCfParameters::decode(&mut &cf_parameters[..]).map_err(|e| {
+											anyhow!("Error while decoding VersionedCcmCfParameters for solana vault swap: {}.", e)
 										},
 									)?;
 
@@ -178,8 +185,16 @@ pub async fn get_program_swaps(
 							deposit_metadata,
 							swap_account: vault_swap_account,
 							creation_slot,
-							broker_fees,
-							refund_params: Some(refund_params),
+							broker_fee,
+							affiliate_fees: affiliate_fees
+								.into_iter()
+								.map(|entry| cf_primitives::Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
+								.collect_vec()
+								.try_into()
+								.map_err(|_| {
+									anyhow!("runtime supports at least as many affiliates as we allow in cf_parameters encoding")
+								})?,
+							refund_params,
 							dca_params,
 							boost_fee,
 						})
@@ -247,8 +262,13 @@ async fn get_swap_endpoint_data(
 			RpcAccountInfoConfig {
 				encoding: Some(UiAccountEncoding::Base64),
 				data_slice: None,
+				commitment: Some(CommitmentConfig::finalized()),
+				min_context_slot: None,
+			},
+		)
 		.await;
 
+	let slot = accounts_info_response.context.slot;
 	let accounts_info = accounts_info_response
 		.value
 		.into_iter()
