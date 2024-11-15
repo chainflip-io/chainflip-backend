@@ -465,6 +465,16 @@ fn test_try_debit_from_liquid_funds() {
 	});
 }
 
+#[test]
+fn test_try_bond() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Bonder::<Test>::try_bond(&ALICE, Flip::total_balance_of(&ALICE) * 2),
+			Error::<Test>::InsufficientLiquidity
+		);
+	});
+}
+
 #[cfg(test)]
 mod test_issuance {
 	use super::*;
