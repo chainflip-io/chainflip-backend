@@ -88,11 +88,6 @@ jobs:
       environment: "development"
     secrets: inherit
 
-  upload-versioned-build-artifacts:
-    needs: [build, build-m2]
-    uses: ./.github/workflows/_61_upload_versioned_build_artifacts.yml
-    secrets: inherit
-
   merge-commit-summary:
     needs: [publish]
     uses: ./.github/workflows/_04_merge_commit_summary.yml
