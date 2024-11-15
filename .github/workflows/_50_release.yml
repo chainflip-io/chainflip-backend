@@ -31,7 +31,7 @@ jobs:
       - name: Upload binaries 📤
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-compressed
           path: ${{ env.RELEASE_DIR }}.tar.gz
           overwrite: true
 
@@ -46,7 +46,7 @@ jobs:
       - name: Download binaries 📥
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-compressed
 
       - name: Substitute ENV 🌍
         env:

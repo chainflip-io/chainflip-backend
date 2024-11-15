@@ -25,6 +25,10 @@ jobs:
           name: chainflip-node-runtime-production
           path: artifacts
 
+      - name: Debug Artifacts 🐛
+        run: |
+          ls -laR artifacts
+
       - name: Set Version 🔦
         id: version
         run: |
