@@ -1498,7 +1498,10 @@ impl_runtime_apis! {
 		}
 
 		fn cf_pool_price_v2(base_asset: Asset, quote_asset: Asset) -> Result<PoolPriceV2, DispatchErrorWithMessage> {
-			LiquidityPools::pool_price(base_asset, quote_asset).map_err(Into::into)
+			Ok(
+				LiquidityPools::pool_price(base_asset, quote_asset)?
+					.map_sell_and_buy_prices(|price| price.sqrt_price)
+			)
 		}
 
 		/// Simulates a swap and return the intermediate (if any) and final output.
@@ -1966,14 +1969,23 @@ impl_runtime_apis! {
 			let current_block = System::block_number();
 
 			pallet_cf_swapping::SwapQueue::<Runtime>::iter().flat_map(|(block, swaps_for_block)| {
-
 				// In case `block` has already passed, the swaps will be re-tried at the next block:
 				let execute_at = core::cmp::max(block, current_block.saturating_add(1));
 
-				let swaps: Vec<_> = swaps_for_block.iter().filter(|swap| swap.from == base_asset || swap.to == base_asset).cloned().collect();
+				let swaps: Vec<_> = swaps_for_block
+					.iter()
+					.filter(|swap| swap.from == base_asset || swap.to == base_asset)
+					.cloned()
+					.collect();
 
-				let pool_sell_price = LiquidityPools::pool_price(base_asset, quote_asset).expect("Pool should exist").sell;
-				Swapping::get_scheduled_swap_legs(swaps, base_asset, pool_sell_price).into_iter().map(move |swap| (swap, execute_at))
+				let pool_sell_price = LiquidityPools::pool_price(base_asset, quote_asset).
+					expect("Pool should exist")
+					.sell
+					.map(|price| price.sqrt_price);
+
+				Swapping::get_scheduled_swap_legs(swaps, base_asset, pool_sell_price)
+					.into_iter()
+					.map(move |swap| (swap, execute_at))
 			}).collect()
 		}
 

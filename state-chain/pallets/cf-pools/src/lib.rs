@@ -1311,11 +1311,19 @@ pub struct PoolPriceV1 {
 	pub tick: Tick,
 }
 
-#[derive(Serialize, Deserialize, Clone, Encode, Decode, TypeInfo, PartialEq, Eq, Debug)]
-pub struct PoolPriceV2 {
-	pub sell: Option<SqrtPriceQ64F96>,
-	pub buy: Option<SqrtPriceQ64F96>,
+pub type PoolPriceV2 = PoolPrice<SqrtPriceQ64F96>;
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PoolPrice<P> {
+	pub sell: Option<P>,
+	pub buy: Option<P>,
 	pub range_order: SqrtPriceQ64F96,
+}
+
+impl<P> PoolPrice<P> {
+	pub fn map_sell_and_buy_prices<R>(self, f: impl Fn(P) -> R) -> PoolPrice<R> {
+		PoolPrice { sell: self.sell.map(&f), buy: self.buy.map(&f), range_order: self.range_order }
+	}
 }
 
 #[derive(PartialEq, Eq)]
@@ -1704,12 +1712,21 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn pool_price(base_asset: Asset, quote_asset: Asset) -> Result<PoolPriceV2, DispatchError> {
+	pub fn pool_price(
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> Result<PoolPrice<PoolPriceV1>, DispatchError> {
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		let mut pool = Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
-		Ok(PoolPriceV2 {
-			sell: pool.pool_state.current_price(Side::Sell).map(|(_, sqrt_price, _)| sqrt_price),
-			buy: pool.pool_state.current_price(Side::Buy).map(|(_, sqrt_price, _)| sqrt_price),
+		Ok(PoolPrice {
+			sell: pool
+				.pool_state
+				.current_price(Side::Sell)
+				.map(|(price, sqrt_price, tick)| PoolPriceV1 { price, sqrt_price, tick }),
+			buy: pool
+				.pool_state
+				.current_price(Side::Buy)
+				.map(|(price, sqrt_price, tick)| PoolPriceV1 { price, sqrt_price, tick }),
 			range_order: pool.pool_state.current_range_order_pool_price(),
 		})
 	}
