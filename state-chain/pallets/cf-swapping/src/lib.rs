@@ -2508,11 +2508,7 @@ pub(crate) mod utilities {
 	) -> SwapRefundParameters {
 		SwapRefundParameters {
 			refund_block: execute_at_block.saturating_add(params.retry_duration),
-			min_output: u128::try_from(cf_amm::math::output_amount_ceil(
-				input_amount.into(),
-				params.min_price,
-			))
-			.unwrap_or(u128::MAX),
+			min_output: params.min_output_amount(input_amount),
 		}
 	}
 

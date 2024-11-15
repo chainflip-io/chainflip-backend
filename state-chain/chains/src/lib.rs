@@ -888,6 +888,10 @@ impl<A: Clone> ChannelRefundParametersGeneric<A> {
 			min_price: self.min_price,
 		})
 	}
+	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
+		use sp_runtime::traits::UniqueSaturatedInto;
+		cf_amm_math::output_amount_ceil(input_amount.into(), self.min_price).unique_saturated_into()
+	}
 }
 
 pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
