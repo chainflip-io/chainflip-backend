@@ -996,6 +996,8 @@ pub mod pallet {
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
 
+			let _ = AffiliateIdMapping::<T>::clear_prefix(&account_id, u32::MAX, None);
+
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
 
 			Ok(())
