@@ -9,6 +9,7 @@ description = "Shared Chain-specific functionality for use in the substrate runt
 workspace = true
 
 [dependencies]
+cf-amm-math = { workspace = true }
 cf-primitives = { workspace = true }
 cf-utilities = { workspace = true }
 cf-runtime-utilities = { workspace = true }
@@ -83,6 +84,7 @@ ed25519-dalek = { workspace = true, features = ["rand_core"] }
 default = ["std"]
 std = [
   "bech32/std",
+  "cf-amm-math/std",
   "cf-primitives/std",
   "cf-utilities/std",
   "scale-info/std",

@@ -10,7 +10,7 @@ use crate::{
 	witness_call, witness_ethereum_rotation_broadcast, witness_rotation_broadcasts,
 };
 use cf_amm::{
-	common::{price_at_tick, Price, Tick},
+	math::{price_at_tick, Price, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{

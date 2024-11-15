@@ -1,26 +1,27 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod test_utilities;
 mod tests;
 
 use core::convert::Infallible;
 
+use cf_amm_math::{
+	bounded_sqrt_price, is_sqrt_price_valid, mul_div_floor, price_to_sqrt_price,
+	sqrt_price_to_price, tick_at_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick,
+};
 use codec::{Decode, Encode};
 use common::{
-	is_sqrt_price_valid, price_to_sqrt_price, sqrt_price_to_price, tick_at_sqrt_price, Amount,
-	BaseToQuote, Pairs, PoolPairsMap, Price, QuoteToBase, SetFeesError, Side, SqrtPriceQ64F96,
-	SwapDirection, Tick,
+	nth_root_of_integer_as_fixed_point, BaseToQuote, Pairs, PoolPairsMap, QuoteToBase,
+	SetFeesError, Side, SwapDirection,
 };
 use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
-use crate::common::{mul_div_floor, nth_root_of_integer_as_fixed_point};
-
 pub mod common;
 pub mod limit_orders;
 pub mod range_orders;
+pub use cf_amm_math as math;
 
 #[derive(
 	Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize, PartialEq,
@@ -82,8 +83,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		output_amount: Amount,
 	) -> SqrtPriceQ64F96 {
 		match order.to_sold_pair() {
-			Pairs::Base => common::bounded_sqrt_price(output_amount, input_amount),
-			Pairs::Quote => common::bounded_sqrt_price(input_amount, output_amount),
+			Pairs::Base => bounded_sqrt_price(output_amount, input_amount),
+			Pairs::Quote => bounded_sqrt_price(input_amount, output_amount),
 		}
 	}
 

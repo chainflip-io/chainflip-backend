@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use cf_amm::common::price_at_tick;
+use cf_amm::math::price_at_tick;
 use cf_chains::ForeignChainAddress;
 use cf_primitives::{AccountRole, Asset};
 use cf_traits::AccountRoleRegistry;

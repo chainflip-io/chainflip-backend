@@ -32,7 +32,8 @@ use crate::{
 	},
 };
 use cf_amm::{
-	common::{Amount, PoolPairsMap, Side, Tick},
+	common::{PoolPairsMap, Side},
+	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
 pub use cf_chains::instances::{
@@ -1663,7 +1664,7 @@ impl_runtime_apis! {
 
 		}
 
-		fn cf_pool_depth(base_asset: Asset, quote_asset: Asset, tick_range: Range<cf_amm::common::Tick>) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchErrorWithMessage> {
+		fn cf_pool_depth(base_asset: Asset, quote_asset: Asset, tick_range: Range<cf_amm::math::Tick>) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchErrorWithMessage> {
 			LiquidityPools::pool_depth(base_asset, quote_asset, tick_range).map_err(Into::into)
 		}
 
@@ -1674,7 +1675,7 @@ impl_runtime_apis! {
 		fn cf_required_asset_ratio_for_range_order(
 			base_asset: Asset,
 			quote_asset: Asset,
-			tick_range: Range<cf_amm::common::Tick>,
+			tick_range: Range<cf_amm::math::Tick>,
 		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage> {
 			LiquidityPools::required_asset_ratio_for_range_order(base_asset, quote_asset, tick_range).map_err(Into::into)
 		}

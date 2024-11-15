@@ -257,6 +257,7 @@ pallet-cf-vaults = { path = "state-chain/pallets/cf-vaults", default-features = 
 pallet-cf-witnesser = { path = "state-chain/pallets/cf-witnesser", default-features = false }
 
 cf-amm = { path = "state-chain/amm", default-features = false }
+cf-amm-math = { path = "state-chain/amm-math", default-features = false }
 cf-chains = { path = "state-chain/chains", default-features = false }
 cf-primitives = { path = "state-chain/primitives", default-features = false }
 cf-session-benchmarking = { path = "state-chain/cf-session-benchmarking", default-features = false }
