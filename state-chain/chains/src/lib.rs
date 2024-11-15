@@ -610,7 +610,7 @@ pub enum TransactionInIdForAnyChain {
 	MockEthereum([u8; 4]),
 }
 
-pub trait IntoTransactionInIdForAnyChain<C: ChainCrypto> {
+pub trait IntoTransactionInIdForAnyChain<C: ChainCrypto<TransactionInId = Self>> {
 	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain;
 }
 
