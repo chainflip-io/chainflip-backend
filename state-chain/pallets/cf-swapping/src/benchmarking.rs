@@ -195,5 +195,12 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn update_broker_bond() {
+		let caller: T::AccountId = whitelisted_caller();
+		#[extrinsic_call]
+		update_broker_bond(RawOrigin::Signed(caller.clone()), 100_000_000_000_000_000_000.into());
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
