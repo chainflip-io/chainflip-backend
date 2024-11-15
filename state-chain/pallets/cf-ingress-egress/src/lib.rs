@@ -2162,10 +2162,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			};
 
-		let request_type = if let Some(deposit_metadata) = deposit_metadata {
-			let swap_origin =
-				SwapOrigin::Vault { tx_id: tx_id.clone().into_transaction_in_id_for_any_chain() };
+		let swap_origin =
+			SwapOrigin::Vault { tx_id: tx_id.clone().into_transaction_in_id_for_any_chain() };
 
+		let request_type = if let Some(deposit_metadata) = deposit_metadata {
 			let ccm_failed = |reason| {
 				log::warn!("Failed to process CCM. Tx id: {:?}, Reason: {:?}", tx_id, reason);
 
@@ -2261,8 +2261,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
  			);
 			return;
 		}
-
-		let swap_origin = SwapOrigin::Vault { tx_id: tx_id.into_transaction_in_id_for_any_chain() };
 
 		T::SwapRequestHandler::init_swap_request(
 			source_asset.into(),
