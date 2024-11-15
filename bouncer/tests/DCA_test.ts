@@ -11,9 +11,8 @@ import { send } from '../shared/send';
 import { observeEvent, observeEvents } from '../shared/utils/substrate';
 import { getBalance } from '../shared/get_balance';
 import { ExecutableTest } from '../shared/executable_test';
-import { requestNewSwap } from '../shared/perform_swap';
+import { executeVaultSwap, requestNewSwap } from '../shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from '../shared/new_swap';
-import { executeVaultSwap } from '../shared/evm_vault_swap';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testDCASwaps = new ExecutableTest('DCA-Swaps', main, 150);
@@ -74,7 +73,7 @@ async function testDCASwap(
     await send(inputAsset, swapRequest.depositAddress, amount.toString());
     testDCASwaps.log(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
-    const receipt = await executeVaultSwap(
+    const { txHash } = await executeVaultSwap(
       inputAsset,
       destAsset,
       destAddress,
@@ -85,13 +84,13 @@ async function testDCASwap(
       dcaParams,
     );
 
-    testDCASwaps.log(`Vault swap executed, tx hash: ${receipt.hash}`);
+    testDCASwaps.log(`Vault swap executed, tx hash: ${txHash}`);
 
     // Look after Swap Requested of data.origin.Vault.tx_hash
     swapRequestedHandle = observeSwapRequested(
       inputAsset,
       destAsset,
-      receipt.hash,
+      txHash,
       SwapRequestType.Regular,
     );
   }

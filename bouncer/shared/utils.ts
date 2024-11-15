@@ -50,6 +50,13 @@ export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
 export type Asset = SDKAsset;
 export type Chain = SDKChain;
 
+export type VaultSwapParams = {
+  sourceAsset: Asset;
+  destAsset: Asset;
+  destAddress: string;
+  txHash: string;
+};
+
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
 const isSDKChain = (chain: Chain): chain is SDKChain => chain in chainConstants;
 

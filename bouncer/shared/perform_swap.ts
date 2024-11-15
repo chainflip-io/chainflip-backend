@@ -14,10 +14,17 @@ import {
   chainFromAsset,
   observeSwapRequested,
   SwapRequestType,
+  evmChains,
+  createEvmWalletAndFund,
+  getSolWhaleKeyPair,
+  decodeSolAddress,
+  VaultSwapParams,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 import { getChainflipApi, observeEvent } from './utils/substrate';
+import { executeEvmVaultSwap } from './evm_vault_swap';
+import { executeSolVaultSwap } from './sol_vault_swap';
 
 function encodeDestinationAddress(address: string, destAsset: Asset): string {
   let destAddress = address;
@@ -232,4 +239,119 @@ export async function performAndTrackSwap(
   if (broadcastId) await observeBroadcastSuccess(broadcastId, tag);
   else throw new Error('Failed to retrieve broadcastId!');
   console.log(`${tag} broadcast executed succesfully, swap is complete!`);
+}
+
+export async function executeVaultSwap(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  destAddress: string,
+  messageMetadata?: CcmDepositMetadata,
+  amount?: string,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
+) {
+  let sourceAddress: string;
+  let txHash: string;
+
+  const srcChain = chainFromAsset(sourceAsset);
+
+  if (evmChains.includes(srcChain)) {
+    // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
+    // with other swaps via deposit channels.
+    const wallet = await createEvmWalletAndFund(sourceAsset);
+    sourceAddress = wallet.address.toLowerCase();
+
+    // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
+    // after sending the transaction, so we send it first and observe the events afterwards.
+    // There are still multiple blocks of safety margin inbetween before the event is emitted
+    const receipt = await executeEvmVaultSwap(
+      sourceAsset,
+      destAsset,
+      destAddress,
+      messageMetadata,
+      amount,
+      boostFeeBps,
+      fillOrKillParams,
+      dcaParams,
+      wallet,
+    );
+    txHash = receipt.hash;
+    sourceAddress = wallet.address.toLowerCase();
+  } else {
+    // Temporary until we implement the Solana encoding in the SDK/BrokerApi
+    if (boostFeeBps || fillOrKillParams || dcaParams) {
+      throw new Error(
+        'BoostFeeBps, FillOrKillParams and DcaParams are not supported for Solana vault swaps for now',
+      );
+    }
+    txHash = await executeSolVaultSwap(sourceAsset, destAsset, destAddress, messageMetadata);
+    sourceAddress = decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58());
+  }
+
+  return { txHash, sourceAddress };
+}
+
+export async function performVaultSwap(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  destAddress: string,
+  swapTag = '',
+  messageMetadata?: CcmDepositMetadata,
+  swapContext?: SwapContext,
+  log = true,
+  amount?: string,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
+): Promise<VaultSwapParams> {
+  const tag = swapTag ?? '';
+
+  const oldBalance = await getBalance(destAsset, destAddress);
+  if (log) {
+    console.log(`${tag} Old balance: ${oldBalance}`);
+    console.log(
+      `${tag} Executing (${sourceAsset}) vault swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
+    );
+  }
+
+  try {
+    const { txHash, sourceAddress } = await executeVaultSwap(
+      sourceAsset,
+      destAsset,
+      destAddress,
+      messageMetadata,
+      amount,
+      boostFeeBps,
+      fillOrKillParams,
+      dcaParams,
+    );
+    swapContext?.updateStatus(swapTag, SwapStatus.VaultContractExecuted);
+
+    const ccmEventEmitted = messageMetadata
+      ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
+      : Promise.resolve();
+
+    const [newBalance] = await Promise.all([
+      observeBalanceIncrease(destAsset, destAddress, oldBalance),
+      ccmEventEmitted,
+    ]);
+    if (log) {
+      console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    }
+    swapContext?.updateStatus(swapTag, SwapStatus.Success);
+    return {
+      sourceAsset,
+      destAsset,
+      destAddress,
+      txHash,
+    };
+  } catch (err) {
+    console.error('err:', err);
+    swapContext?.updateStatus(swapTag, SwapStatus.Failure);
+    if (err instanceof Error) {
+      console.log(err.stack);
+    }
+    throw new Error(`${tag} ${err}`);
+  }
 }

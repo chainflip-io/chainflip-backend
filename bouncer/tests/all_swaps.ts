@@ -1,10 +1,9 @@
 import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
-import { VaultSwapParams } from '../shared/evm_vault_swap';
 import { ExecutableTest } from '../shared/executable_test';
 import { SwapParams } from '../shared/perform_swap';
 import { newCcmMetadata, testSwap, testVaultSwap } from '../shared/swapping';
 import { btcAddressTypes } from '../shared/new_btc_address';
-import { ccmSupportedChains, chainFromAsset } from '../shared/utils';
+import { ccmSupportedChains, chainFromAsset, VaultSwapParams } from '../shared/utils';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);

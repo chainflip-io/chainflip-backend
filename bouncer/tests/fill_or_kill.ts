@@ -9,13 +9,12 @@ import {
   observeSwapRequested,
   SwapRequestType,
 } from '../shared/utils';
-import { requestNewSwap } from '../shared/perform_swap';
+import { executeVaultSwap, requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
 import { getBalance } from '../shared/get_balance';
 import { observeEvent } from '../shared/utils/substrate';
 import { CcmDepositMetadata, FillOrKillParamsX128 } from '../shared/new_swap';
 import { ExecutableTest } from '../shared/executable_test';
-import { executeVaultSwap } from '../shared/evm_vault_swap';
 import { newCcmMetadata } from '../shared/swapping';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
@@ -85,7 +84,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
         Math.random() < 0.5 ? ccmMetadata.ccmAdditionalData : undefined;
     }
 
-    const receipt = await executeVaultSwap(
+    const { txHash } = await executeVaultSwap(
       inputAsset,
       destAsset,
       destAddress,
@@ -98,7 +97,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
     swapRequestedHandle = observeSwapRequested(
       inputAsset,
       destAsset,
-      receipt.hash,
+      txHash,
       SwapRequestType.Regular,
     );
   }

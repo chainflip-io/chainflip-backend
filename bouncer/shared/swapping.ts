@@ -3,7 +3,7 @@ import { Keypair, PublicKey } from '@solana/web3.js';
 import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
 import { randomAsHex, randomAsNumber } from '../polkadot/util-crypto';
-import { performSwap } from '../shared/perform_swap';
+import { performSwap, performVaultSwap } from '../shared/perform_swap';
 import {
   newAddress,
   chainFromAsset,
@@ -16,7 +16,6 @@ import {
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { performVaultSwap } from './evm_vault_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 
 enum SolidityType {
