@@ -87,7 +87,6 @@ jobs:
       version: ci/${{ github.sha }}/
       environment: "development"
     secrets: inherit
-
   merge-commit-summary:
     needs: [publish]
     uses: ./.github/workflows/_04_merge_commit_summary.yml
