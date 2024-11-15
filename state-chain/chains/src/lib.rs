@@ -605,8 +605,9 @@ pub enum TransactionInIdForAnyChain {
 	Bitcoin(H256),
 	Polkadot(TxId),
 	Solana(SolanaTransactionInId),
-	MockEthereum([u8; 4]),
 	None,
+	#[cfg(feature = "std")]
+	MockEthereum([u8; 4]),
 }
 
 pub trait IntoTransactionInIdForAnyChain<C: ChainCrypto> {
