@@ -583,7 +583,7 @@ fn can_process_ccm_via_direct_deposit() {
 				deposit_amount,
 				destination_address: EncodedAddress::Eth([0x02; 20]),
 				deposit_metadata: Some(ccm_deposit_metadata_mock()),
-				tx_hash: Default::default(),
+				tx_id: Default::default(),
 				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
 				broker_fee: cf_primitives::Beneficiary {
 					account: sp_runtime::AccountId32::new([0; 32]),
@@ -636,7 +636,7 @@ fn failed_swaps_are_rolled_back() {
 				output_asset: Asset::Flip,
 				deposit_amount: 10_000 * DECIMALS,
 				destination_address: EncodedAddress::Eth(Default::default()),
-				tx_hash: Default::default(),
+				tx_id: Default::default(),
 				deposit_metadata: None,
 				deposit_details: Box::new(DepositDetails { tx_hashes: None }),
 				broker_fee: cf_primitives::Beneficiary {
@@ -803,7 +803,7 @@ fn can_resign_failed_ccm() {
 					deposit_amount: 10_000_000_000_000,
 					destination_address: EncodedAddress::Eth([0x02; 20]),
 					deposit_metadata: Some(ccm_deposit_metadata_mock()),
-					tx_hash: Default::default(),
+					tx_id: Default::default(),
 					deposit_details: Box::new(DepositDetails { tx_hashes: None }),
 					broker_fee: cf_primitives::Beneficiary {
 						account: sp_runtime::AccountId32::new([0; 32]),

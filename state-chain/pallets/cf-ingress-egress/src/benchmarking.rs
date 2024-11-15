@@ -312,7 +312,7 @@ mod benchmarks {
 			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::benchmark_value(),
 			deposit_metadata: Some(deposit_metadata),
-			tx_hash: Default::default(),
+			tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
 			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
 			broker_fee: cf_primitives::Beneficiary { account: account("broker", 0, 0), bps: 0 },
 			affiliate_fees: Default::default(),

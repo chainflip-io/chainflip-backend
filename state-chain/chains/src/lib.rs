@@ -2,22 +2,23 @@
 #![feature(step_trait)]
 #![feature(extract_if)]
 #![feature(split_array)]
-
+use crate::{
+	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, none::NoneChainCrypto,
+	sol::SolanaCrypto,
+};
 use core::{fmt::Display, iter::Step};
 use sp_std::marker::PhantomData;
 
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
-	sol::api::SolanaTransactionBuildingError,
+	sol::{api::SolanaTransactionBuildingError, SolanaTransactionInId},
 };
 pub use address::ForeignChainAddress;
 use address::{
 	AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
-use cf_primitives::{
-	Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TransactionHash,
-};
+use cf_primitives::{Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TxId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -31,7 +32,7 @@ use frame_support::{
 use instances::{ChainCryptoInstanceAlias, ChainInstanceAlias};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::{ConstU32, U256};
+use sp_core::{ConstU32, H256, U256};
 use sp_std::{
 	cmp::Ord,
 	convert::{Into, TryFrom},
@@ -282,7 +283,7 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 }
 
 /// Common crypto-related types and operations for some external chain.
-pub trait ChainCrypto: ChainCryptoInstanceAlias {
+pub trait ChainCrypto: ChainCryptoInstanceAlias + Sized {
 	const NAME: &'static str;
 	type UtxoChain: Get<bool>;
 
@@ -298,7 +299,11 @@ pub trait ChainCrypto: ChainCryptoInstanceAlias {
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the incoming direction.
-	type TransactionInId: Member + Parameter + Unpin + BenchmarkValue;
+	type TransactionInId: Member
+		+ Parameter
+		+ Unpin
+		+ IntoTransactionInIdForAnyChain<Self>
+		+ BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the outgoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
@@ -594,6 +599,51 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
+#[derive(Debug, Clone, TypeInfo, Encode, Decode, PartialEq, Eq)]
+pub enum TransactionInIdForAnyChain {
+	Evm(H256),
+	Bitcoin(H256),
+	Polkadot(TxId),
+	Solana(SolanaTransactionInId),
+	None,
+	#[cfg(feature = "std")]
+	MockEthereum([u8; 4]),
+}
+
+pub trait IntoTransactionInIdForAnyChain<C: ChainCrypto<TransactionInId = Self>> {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain;
+}
+
+impl IntoTransactionInIdForAnyChain<EvmCrypto> for H256 {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::Evm(self)
+	}
+}
+
+impl IntoTransactionInIdForAnyChain<BitcoinCrypto> for H256 {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::Bitcoin(self)
+	}
+}
+
+impl IntoTransactionInIdForAnyChain<SolanaCrypto> for SolanaTransactionInId {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::Solana(self)
+	}
+}
+
+impl IntoTransactionInIdForAnyChain<PolkadotCrypto> for TxId {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::Polkadot(self)
+	}
+}
+
+impl IntoTransactionInIdForAnyChain<NoneChainCrypto> for () {
+	fn into_transaction_in_id_for_any_chain(self) -> TransactionInIdForAnyChain {
+		TransactionInIdForAnyChain::None
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
 	DepositChannel {
@@ -602,7 +652,7 @@ pub enum SwapOrigin {
 		deposit_block_height: u64,
 	},
 	Vault {
-		tx_hash: TransactionHash,
+		tx_id: TransactionInIdForAnyChain,
 	},
 	Internal,
 }

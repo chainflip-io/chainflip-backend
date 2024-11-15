@@ -14,10 +14,10 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	assets::eth::Asset as EthAsset,
 	btc::{BitcoinNetwork, ScriptPubkey},
-	evm::{DepositDetails, EvmFetchId},
+	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
 	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel,
-	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
+	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
 	AffiliateShortId, AssetAmount, BasisPoints, Beneficiary, ChannelId, ForeignChain,
@@ -1796,8 +1796,6 @@ fn can_request_swap_via_extrinsic() {
 	const OUTPUT_ASSET: Asset = Asset::Flip;
 	const INPUT_AMOUNT: AssetAmount = 1_000u128;
 
-	const TX_HASH: [u8; 32] = [0xa; 32];
-
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
@@ -1808,7 +1806,7 @@ fn can_request_swap_via_extrinsic() {
 			INPUT_AMOUNT,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
-			TX_HASH,
+			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
@@ -1825,7 +1823,9 @@ fn can_request_swap_via_extrinsic() {
 				input_amount: INPUT_AMOUNT,
 				swap_type: SwapRequestType::Regular { output_address },
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
-				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+				origin: SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+				},
 			},]
 		);
 	});
@@ -1837,7 +1837,6 @@ fn vault_swaps_support_affiliate_fees() {
 		const INPUT_ASSET: Asset = Asset::Usdc;
 		const OUTPUT_ASSET: Asset = Asset::Flip;
 		const INPUT_AMOUNT: AssetAmount = 10_000;
-		const TX_HASH: [u8; 32] = [0xa; 32];
 
 		const BROKER_FEE: BasisPoints = 5;
 		const AFFILIATE_FEE: BasisPoints = 10;
@@ -1863,7 +1862,7 @@ fn vault_swaps_support_affiliate_fees() {
 			INPUT_AMOUNT,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
-			TX_HASH,
+			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: BROKER, bps: BROKER_FEE },
 			bounded_vec![
@@ -1888,7 +1887,9 @@ fn vault_swaps_support_affiliate_fees() {
 					// recognised):
 					Beneficiary { account: AFFILIATE_1, bps: AFFILIATE_FEE }
 				],
-				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+				origin: SwapOrigin::Vault {
+					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default())
+				},
 			},]
 		);
 
@@ -1905,7 +1906,6 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 		const INPUT_ASSET: Asset = Asset::Usdc;
 		const OUTPUT_ASSET: Asset = Asset::Flip;
 		const INPUT_AMOUNT: AssetAmount = 10_000;
-		const TX_HASH: [u8; 32] = [0xa; 32];
 
 		const BROKER_FEE: BasisPoints = 5;
 
@@ -1920,7 +1920,7 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 			INPUT_AMOUNT,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
-			TX_HASH,
+			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: NOT_A_BROKER, bps: BROKER_FEE },
 			Default::default(),
@@ -1938,7 +1938,9 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 				input_amount: INPUT_AMOUNT,
 				swap_type: SwapRequestType::Regular { output_address },
 				broker_fees: Default::default(),
-				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+				origin: SwapOrigin::Vault {
+					tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default())
+				},
 			},]
 		);
 
@@ -1954,7 +1956,6 @@ fn can_request_ccm_swap_via_extrinsic() {
 	const OUTPUT_ASSET: Asset = Asset::Usdc;
 
 	const INPUT_AMOUNT: AssetAmount = 10_000;
-	const TX_HASH: [u8; 32] = [0xa; 32];
 
 	let ccm_deposit_metadata = CcmDepositMetadata {
 		source_chain: ForeignChain::Ethereum,
@@ -1976,7 +1977,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 			10_000,
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			Some(ccm_deposit_metadata.clone()),
-			TX_HASH,
+			Default::default(),
 			Box::new(DepositDetails { tx_hashes: None }),
 			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
@@ -1998,7 +1999,9 @@ fn can_request_ccm_swap_via_extrinsic() {
 						.unwrap()
 				},
 				broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
-				origin: SwapOrigin::Vault { tx_hash: TX_HASH },
+				origin: SwapOrigin::Vault {
+					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+				},
 			},]
 		);
 	});

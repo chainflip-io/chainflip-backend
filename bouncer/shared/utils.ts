@@ -512,7 +512,7 @@ export async function observeSwapRequested(
           (typeof id === 'number' &&
             'DepositChannel' in data.origin &&
             Number(data.origin.DepositChannel.channelId.replaceAll(',', '')) === id) ||
-          (typeof id === 'string' && 'Vault' in data.origin && data.origin.Vault.txHash === id);
+          (typeof id === 'string' && 'Vault' in data.origin && data.origin.Vault.txId.Evm === id);
         const sourceAssetMatches = sourceAsset === (data.inputAsset as Asset);
         const destAssetMatches = destAsset === (data.outputAsset as Asset);
         const requestTypeMatches = checkRequestTypeMatches(data.requestType, swapRequestType);

@@ -1034,7 +1034,7 @@ fn test_minimum_chunk_size() {
 			vec![].try_into().unwrap(),
 			None,
 			Some(dca_params),
-			SwapOrigin::Vault { tx_hash: Default::default() },
+			SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
 		);
 
 		// Check that the swap was initiated with the updated number of chunks
