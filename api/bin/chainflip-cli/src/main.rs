@@ -138,8 +138,9 @@ async fn run_cli() -> Result<()> {
 						println!("Account started bidding at tx {tx_hash:#x}.");
 					},
 				},
-				Redeem { amount, eth_address, executor_address } => {
-					request_redemption(api, amount, eth_address, executor_address).await?;
+				Redeem { amount, flipperinos, eth_address, executor_address } => {
+					request_redemption(api, amount, flipperinos, eth_address, executor_address)
+						.await?;
 				},
 				BindRedeemAddress { eth_address } => {
 					bind_redeem_address(api.operator_api(), &eth_address).await?;
@@ -210,6 +211,7 @@ fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
 async fn request_redemption(
 	api: StateChainApi,
 	amount: Option<f64>,
+	flipperinos: Option<u128>,
 	supplied_redeem_address: String,
 	supplied_executor_address: Option<String>,
 ) -> Result<()> {
@@ -229,7 +231,13 @@ async fn request_redemption(
 	};
 
 	// Calculate the redemption amount
-	let redeem_amount = flip_to_redemption_amount(amount);
+	let redeem_amount = match (amount, flipperinos) {
+		(None, None) => RedemptionAmount::Max,
+		(amount, None) => flip_to_redemption_amount(amount),
+		(None, Some(atomic_amount)) => RedemptionAmount::Exact(atomic_amount),
+		(Some(_), Some(_)) => anyhow::bail!("Use either -exact or --flipperinos but not both."),
+	};
+
 	match redeem_amount {
 		RedemptionAmount::Exact(atomic_amount) => {
 			println!(

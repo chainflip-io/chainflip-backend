@@ -136,9 +136,16 @@ pub enum CliCommand {
 	Redeem {
 		#[clap(
 			help = "Amount to redeem in FLIP (omit this option to redeem all available FLIP). Up to 6 decimal places, any more are rounded.",
-			long = "exact"
+			long = "exact",
+			conflicts_with = "flipperinos"
 		)]
 		amount: Option<f64>,
+		#[clap(
+			help = "Amount to redeem in FLIPPERINOS (omit this option to redeem all available FLIP).",
+			long = "exact-atomic",
+			conflicts_with = "amount"
+		)]
+		flipperinos: Option<u128>,
 		#[clap(help = "The Ethereum address you wish to redeem your FLIP to.")]
 		eth_address: String,
 		#[clap(
