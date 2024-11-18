@@ -117,13 +117,17 @@ where
 	// We may want to test initialisation of elections within on finalise, so *don't* want to
 	// initialise an election in the utilities.
 	pub fn build(self) -> TestContext<ES> {
+		let setup = self.clone();
+
 		// We need to clear the storage at every build so if there are multiple test contexts used
 		// within a single test they do not conflict.
 		MockStorageAccess::clear_storage();
 
-		MockStorageAccess::set_electoral_settings::<ES>(self.electoral_settings.clone());
+		MockStorageAccess::set_electoral_settings::<ES>(setup.electoral_settings.clone());
+		MockStorageAccess::set_unsynchronised_state::<ES>(setup.unsynchronised_state.clone());
+		MockStorageAccess::set_unsynchronised_settings::<ES>(setup.unsynchronised_settings.clone());
 
-		TestContext { setup: self.clone() }
+		TestContext { setup }
 	}
 }
 

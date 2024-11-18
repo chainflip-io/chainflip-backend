@@ -10,8 +10,6 @@ use crate::{
 	CorruptStorageError, ElectionIdentifier,
 };
 
-pub mod mock;
-
 #[derive(Clone)]
 pub struct ConsensusVote<ES: ElectoralSystem> {
 	// If the validator hasn't voted, they will get a None.
