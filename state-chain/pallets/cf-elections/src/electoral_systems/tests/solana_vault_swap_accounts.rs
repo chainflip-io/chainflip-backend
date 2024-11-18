@@ -64,6 +64,12 @@ register_checks! {
 		initiate_vault_swap_hook_called_twice(_pre, _post) {
 			assert_eq!(INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.get()), 2, "Hook should have been called once so far!");
 		},
+		initiate_vault_swap_hook_called_four_times(_pre,_post) {
+			assert_eq!(INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.get()), 4, "Hook should have been called once so far!");
+		},
+		initiate_vault_swap_hook_called_15_times(_pre, _post) {
+			assert_eq!(INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.get()), 15, "Hook should have been called once so far!");
+		},
 		close_accounts_hook_not_called(_pre, _post) {
 			assert_eq!(
 				CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),
@@ -75,6 +81,13 @@ register_checks! {
 			assert_eq!(
 				CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),
 				1,
+				"Hook should not have been called!"
+			);
+		},
+		close_accounts_hook_called_twice(_pre, _post) {
+			assert_eq!(
+				CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),
+				2,
 				"Hook should not have been called!"
 			);
 		},
@@ -92,11 +105,18 @@ register_checks! {
 				"Hook should not have been called!"
 			);
 		},
+		get_sol_nonces_hook_called_twice(_pre, _post) {
+			assert_eq!(
+				GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()),
+				2,
+				"Hook should not have been called!"
+			);
+		},
 	}
 }
 
 #[test]
-fn on_finalize() {
+fn on_finalize_accounts_limit_reached() {
 	TestSetup::default()
 		.with_unsynchronised_state(0)
 		.build()
@@ -117,16 +137,80 @@ fn on_finalize() {
 			},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
 				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
 				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_not_called(),
 			],
 		)
 		.expect_consensus(
-			generate_votes([80, 80, 0, 0]),
+			generate_votes_n_to_m_accounts(0, 15),
 			Some(SolanaVaultSwapsVote {
-				new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, ()), (NEW_ACCOUNT_2, ())]),
-				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
+				new_accounts: (0..15u64).map(|i| (i, ())).collect::<BTreeSet<_>>(),
+				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
+			}),
+		)
+		.test_on_finalize(
+			// check duration has not yet elapsed, so no change
+			&1u32,
+			|_| {},
+			vec![
+				Check::<MinimalVaultSwapAccounts>::only_one_election(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_15_times(),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_once(),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_once(),
+			],
+		);
+}
+
+#[test]
+fn on_finalize_time_limit_reached() {
+	TestSetup::default()
+		.with_unsynchronised_state(0)
+		.build()
+		.test_on_finalize(
+			&0u32,
+			|_| {
+				assert_eq!(
+					MockHook::close_accounts_called(),
+					0,
+					"Hook should not have been called!"
+				);
+				assert_eq!(MockHook::init_swap_called(), 0, "Hook should not have been called!");
+				assert_eq!(
+					MockHook::get_number_of_available_sol_nonce_accounts_called(),
+					0,
+					"Hook should not have been called!"
+				);
+			},
+			vec![
+				Check::<MinimalVaultSwapAccounts>::only_one_election(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_not_called(),
+			],
+		)
+		.expect_consensus(
+			generate_votes_n_to_m_accounts(0, 2),
+			Some(SolanaVaultSwapsVote {
+				new_accounts: (0..2u64).map(|i| (i, ())).collect::<BTreeSet<_>>(),
+				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
+			}),
+		)
+		.test_on_finalize(
+			&0,
+			|_| {},
+			vec![
+				Check::<MinimalVaultSwapAccounts>::only_one_election(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_twice(),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_once(),
+			],
+		)
+		.expect_consensus(
+			generate_votes_n_to_m_accounts(2, 4),
+			Some(SolanaVaultSwapsVote {
+				new_accounts: (2..4u64).map(|i| (i, ())).collect::<BTreeSet<_>>(),
+				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
 			}),
 		)
 		.test_on_finalize(
@@ -135,9 +219,9 @@ fn on_finalize() {
 			|_| {},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_twice(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_once(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_four_times(),
 				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_once(),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_twice(),
 			],
 		);
 }
@@ -149,7 +233,46 @@ pub const NEW_ACCOUNT_3: u64 = 3u64;
 pub const CLOSED_ACCOUNT_1: u64 = 4u64;
 pub const CLOSED_ACCOUNT_2: u64 = 5u64;
 
-fn generate_votes(no_of_each_vote: [usize; 4]) -> ConsensusVotes<MinimalVaultSwapAccounts> {
+#[test]
+fn test_consensus() {
+	TestSetup::<MinimalVaultSwapAccounts>::default()
+		.build_with_initial_election()
+		.expect_consensus(
+			generate_votes_specific_case([80, 80, 0, 0]),
+			Some(SolanaVaultSwapsVote {
+				new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, ()), (NEW_ACCOUNT_2, ())]),
+				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
+			}),
+		);
+
+	TestSetup::<MinimalVaultSwapAccounts>::default()
+		.build_with_initial_election()
+		.expect_consensus(
+			generate_votes_specific_case([0, 80, 80, 80]),
+			Some(SolanaVaultSwapsVote {
+				new_accounts: BTreeSet::from([
+					(NEW_ACCOUNT_1, ()),
+					(NEW_ACCOUNT_2, ()),
+					(NEW_ACCOUNT_3, ()),
+				]),
+				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
+			}),
+		);
+
+	TestSetup::<MinimalVaultSwapAccounts>::default()
+		.build_with_initial_election()
+		.expect_consensus(
+			generate_votes_specific_case([0, 0, 80, 80]),
+			Some(SolanaVaultSwapsVote {
+				new_accounts: BTreeSet::from([(NEW_ACCOUNT_3, ())]),
+				confirm_closed_accounts: BTreeSet::from([]),
+			}),
+		);
+}
+
+fn generate_votes_specific_case(
+	no_of_each_vote: [usize; 4],
+) -> ConsensusVotes<MinimalVaultSwapAccounts> {
 	let vote_1 = SolanaVaultSwapsVote {
 		new_accounts: BTreeSet::from([
 			(NEW_ACCOUNT_1, ()),
@@ -193,39 +316,15 @@ fn generate_votes(no_of_each_vote: [usize; 4]) -> ConsensusVotes<MinimalVaultSwa
 	}
 }
 
-#[test]
-fn test_consensus() {
-	TestSetup::<MinimalVaultSwapAccounts>::default()
-		.build_with_initial_election()
-		.expect_consensus(
-			generate_votes([80, 80, 0, 0]),
-			Some(SolanaVaultSwapsVote {
-				new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, ()), (NEW_ACCOUNT_2, ())]),
-				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
-			}),
-		);
+fn generate_votes_n_to_m_accounts(n: u64, m: u64) -> ConsensusVotes<MinimalVaultSwapAccounts> {
+	let vote = SolanaVaultSwapsVote {
+		new_accounts: (n..m).map(|i| (i, ())).collect::<BTreeSet<_>>(),
+		confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
+	};
 
-	TestSetup::<MinimalVaultSwapAccounts>::default()
-		.build_with_initial_election()
-		.expect_consensus(
-			generate_votes([0, 80, 80, 80]),
-			Some(SolanaVaultSwapsVote {
-				new_accounts: BTreeSet::from([
-					(NEW_ACCOUNT_1, ()),
-					(NEW_ACCOUNT_2, ()),
-					(NEW_ACCOUNT_3, ()),
-				]),
-				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
-			}),
-		);
-
-	TestSetup::<MinimalVaultSwapAccounts>::default()
-		.build_with_initial_election()
-		.expect_consensus(
-			generate_votes([0, 0, 80, 80]),
-			Some(SolanaVaultSwapsVote {
-				new_accounts: BTreeSet::from([(NEW_ACCOUNT_3, ())]),
-				confirm_closed_accounts: BTreeSet::from([]),
-			}),
-		);
+	ConsensusVotes {
+		votes: (0..150)
+			.map(|_| ConsensusVote { vote: Some(((), vote.clone())), validator_id: () })
+			.collect::<Vec<_>>(),
+	}
 }
