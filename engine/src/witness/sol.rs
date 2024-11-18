@@ -173,7 +173,10 @@ impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
 				.client
 				.get_block(
 					slot,
-					RpcBlockConfig { max_supported_transaction_version: 0, ..Default::default() },
+					RpcBlockConfig {
+						max_supported_transaction_version: Some(0),
+						..Default::default()
+					},
 				)
 				.await
 				.blockhash,
