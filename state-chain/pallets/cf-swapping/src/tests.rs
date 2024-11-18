@@ -1794,7 +1794,7 @@ mod private_channels {
 	#[test]
 	fn update_broker_bond() {
 		new_test_ext().execute_with(|| {
-			const BOND: u128 = 100_000_000_000_000_000_000u128;
+			const BOND: u128 = FLIPPERINOS_PER_FLIP * 100;
 			assert_noop!(
 				Swapping::update_broker_bond(OriginTrait::signed(BROKER), BOND),
 				sp_runtime::traits::BadOrigin
@@ -1807,7 +1807,7 @@ mod private_channels {
 	#[test]
 	fn default_broker_bond() {
 		new_test_ext().execute_with(|| {
-			assert_eq!(BrokerBond::<Test>::get(), 100_000_000_000_000_000_000u128);
+			assert_eq!(BrokerBond::<Test>::get(), FLIPPERINOS_PER_FLIP * 100);
 		});
 	}
 }

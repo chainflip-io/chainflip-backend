@@ -11,7 +11,8 @@ use cf_chains::{
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
 	ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
-	BASIS_POINTS_PER_MILLION, MAX_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
+	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -170,7 +171,7 @@ pub struct Swap<T: Config> {
 pub struct DefaultBrokerBond<T>(PhantomData<T>);
 impl<T: Config> Get<T::Amount> for DefaultBrokerBond<T> {
 	fn get() -> T::Amount {
-		T::Amount::from(100_000_000_000_000_000_000u128)
+		T::Amount::from(FLIPPERINOS_PER_FLIP * 100)
 	}
 }
 
