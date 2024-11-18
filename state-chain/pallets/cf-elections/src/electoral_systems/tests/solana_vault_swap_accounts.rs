@@ -125,8 +125,9 @@ fn on_finalize_accounts_limit_reached() {
 				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
 			}),
 		)
+		// account closure will be initiated since account limit is reached, even though time limit
+		// has not reached yet.
 		.test_on_finalize(
-			// check duration has not yet elapsed, so no change
 			&1u32,
 			|_| {},
 			vec![
@@ -172,6 +173,7 @@ fn on_finalize_time_limit_reached() {
 				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
 			}),
 		)
+		// account closure will not initiate since we havent reached time or account limit
 		.test_on_finalize(
 			&0,
 			|_| {},
@@ -189,8 +191,9 @@ fn on_finalize_time_limit_reached() {
 				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
 			}),
 		)
+		// time limit reached. account closure initiated even though account number limit not
+		// reached
 		.test_on_finalize(
-			// check duration has not yet elapsed, so no change
 			&MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
 			|_| {},
 			vec![
