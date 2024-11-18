@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use std::{collections::BTreeMap, marker::PhantomData};
+use std::marker::PhantomData;
 
 use super::*;
 use cf_chains::{
@@ -11,12 +11,11 @@ use cf_chains::{
 		api::{SolanaApi, SolanaEnvironment, SolanaTransactionBuildingError},
 		sol_tx_core::sol_test_values,
 		transaction_builder::SolanaTransactionBuilder,
-		SolAddress, SolApiEnvironment, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey,
-		SolanaCrypto,
+		SolAddress, SolCcmAccounts, SolCcmAddress, SolHash, SolPubkey, SolanaCrypto,
 	},
-	CcmChannelMetadata, CcmDepositMetadata, CcmFailReason, Chain, ChannelRefundParameters,
-	DepositChannel, ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh,
-	SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
+	CcmChannelMetadata, CcmDepositMetadata, CcmFailReason, Chain, DepositChannel,
+	ExecutexSwapAndCallError, ForeignChainAddress, RequiresSignatureRefresh, SetAggKeyWithAggKey,
+	SetAggKeyWithAggKeyError, Solana, SwapOrigin, TransactionBuilder,
 };
 use cf_primitives::{AccountRole, AuthorityCount, ForeignChain, SwapRequestId};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
@@ -26,18 +25,9 @@ use frame_support::{
 	assert_err,
 	traits::{OnFinalize, UnfilteredDispatchable},
 };
-use pallet_cf_elections::{
-	electoral_systems::{
-		blockchain::delta_based_ingress::ChannelTotalIngressedFor,
-		composite::tuple_6_impls::CompositeElectionIdentifierExtra,
-	},
-	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote},
-	CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
-};
+use pallet_cf_elections::electoral_systems::blockchain::delta_based_ingress::ChannelTotalIngressedFor;
 use pallet_cf_ingress_egress::{DepositWitness, FetchOrTransfer};
 use pallet_cf_validator::RotationPhase;
-use sp_core::ConstU32;
-use sp_runtime::BoundedBTreeMap;
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, solana_elections::TransactionSuccessDetails,
@@ -50,6 +40,7 @@ use state_chain_runtime::{
 
 use crate::{
 	network::register_refund_addresses,
+	solana_test_utils::*,
 	swapping::{setup_pool_and_accounts, OrderType},
 };
 
@@ -57,54 +48,6 @@ const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
 const ALICE: AccountId = AccountId::new([0x33; 32]);
 const BOB: AccountId = AccountId::new([0x44; 32]);
-
-const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
-const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
-const REFUND_PARAMS: ChannelRefundParameters = ChannelRefundParameters {
-	retry_duration: 0,
-	refund_address: ForeignChainAddress::Sol(FALLBACK_ADDRESS),
-	min_price: sp_core::U256::zero(),
-};
-
-type SolanaCompositeVote = CompositeAuthorityVoteOf<
-	<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
->;
-type SolanaCompositeElectionIdentifier = CompositeElectionIdentifierOf<
-	<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
->;
-type SolanaChannelIngressed = ChannelTotalIngressedFor<SolanaIngressEgress>;
-
-type SolanaElectionVote = BoundedBTreeMap<
-	SolanaCompositeElectionIdentifier,
-	SolanaCompositeVote,
-	ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
->;
-
-fn setup_sol_environments() {
-	// Environment::SolanaApiEnvironment
-	pallet_cf_environment::SolanaApiEnvironment::<Runtime>::set(SolApiEnvironment {
-		vault_program: sol_test_values::VAULT_PROGRAM,
-		vault_program_data_account: sol_test_values::VAULT_PROGRAM_DATA_ACCOUNT,
-		token_vault_pda_account: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT,
-		usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
-		usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
-		swap_endpoint_program: sol_test_values::SWAP_ENDPOINT_PROGRAM,
-		swap_endpoint_program_data_account: sol_test_values::SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
-	});
-
-	// Environment::AvailableDurableNonces
-	pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
-		sol_test_values::NONCE_ACCOUNTS
-			.into_iter()
-			.map(|nonce| (nonce, sol_test_values::TEST_DURABLE_NONCE))
-			.collect::<Vec<_>>(),
-	);
-
-	// Enable voting for all validators
-	for v in Validator::current_authorities() {
-		assert_ok!(SolanaElections::stop_ignoring_my_votes(RuntimeOrigin::signed(v.clone()),));
-	}
-}
 
 fn schedule_deposit_to_swap(
 	who: AccountId,
@@ -165,65 +108,6 @@ fn schedule_deposit_to_swap(
 	}) if <Solana as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone())
 		.expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address
 		=> swap_request_id)
-}
-
-/// Helper functions to make voting in Solana Elections easier
-enum SolanaState {
-	BlockHeight(u64),
-	Ingressed(Vec<(SolAddress, SolanaChannelIngressed)>),
-	Egress(TransactionSuccessDetails),
-}
-
-impl SolanaState {
-	fn is_of_type(&self, target: &SolanaCompositeElectionIdentifier) -> bool {
-		match self {
-			SolanaState::BlockHeight(..) =>
-				matches!(*target.extra(), CompositeElectionIdentifierExtra::A(..)),
-			SolanaState::Ingressed(..) =>
-				matches!(*target.extra(), CompositeElectionIdentifierExtra::C(..)),
-			SolanaState::Egress(..) =>
-				matches!(*target.extra(), CompositeElectionIdentifierExtra::EE(..)),
-		}
-	}
-}
-
-impl From<SolanaState> for SolanaCompositeVote {
-	fn from(value: SolanaState) -> Self {
-		match value {
-			SolanaState::BlockHeight(block_height) =>
-				AuthorityVote::Vote(CompositeVote::A(block_height)),
-			SolanaState::Ingressed(channel_ingresses) => AuthorityVote::Vote(CompositeVote::C(
-				channel_ingresses
-					.into_iter()
-					.collect::<BTreeMap<_, _>>()
-					.try_into()
-					.expect("Too many ingress channels per election."),
-			)),
-			SolanaState::Egress(transaction_success_details) =>
-				AuthorityVote::Vote(CompositeVote::EE(transaction_success_details)),
-		}
-	}
-}
-
-#[track_caller]
-fn witness_solana_state(state: SolanaState) {
-	// Get the election identifier of the Solana egress.
-	let election_id = SolanaElections::with_election_identifiers(|election_identifiers| {
-		Ok(election_identifiers
-			.into_iter()
-			.find(|id| state.is_of_type(id))
-			.expect("Election must exists to be voted on."))
-	})
-	.unwrap();
-
-	let vote = state.into();
-
-	// Submit vote to witness: transaction success, but execution failure
-	let votes: SolanaElectionVote = BTreeMap::from_iter([(election_id, vote)]).try_into().unwrap();
-
-	for v in Validator::current_authorities() {
-		assert_ok!(SolanaElections::vote(RuntimeOrigin::signed(v), votes.clone()));
-	}
 }
 
 #[test]
@@ -874,8 +758,6 @@ fn solana_can_recycle_deposit_channels() {
 			testnet.move_forward_blocks(1);
 
 			let destination_address = EncodedAddress::Eth([0x11; 20]);
-			const SOL_SOL: cf_chains::assets::sol::Asset = cf_chains::assets::sol::Asset::Sol;
-			const SOL_USDC: cf_chains::assets::sol::Asset = cf_chains::assets::sol::Asset::SolUsdc;
 
 			// Request some deposit channels
 			assert_ok!(Swapping::request_swap_deposit_address(
@@ -905,7 +787,7 @@ fn solana_can_recycle_deposit_channels() {
 
 			// Generated deposit channel address should be correct.
 			let (generated_address, generated_bump) = <AddressDerivation as AddressDerivationApi<Solana>>::generate_address_and_state(
-				SOL_SOL,
+				SolAsset::Sol,
 				channel_id,
 			)
 			.expect("Must be able to derive Solana deposit channel.");
@@ -932,7 +814,7 @@ fn solana_can_recycle_deposit_channels() {
 				Some(DepositChannel {
 					channel_id,
 					address: deposit_address,
-					asset: SOL_SOL,
+					asset: SolAsset::Sol,
 					state: generated_bump,
 				})
 			);
@@ -975,7 +857,7 @@ fn solana_can_recycle_deposit_channels() {
 				Some(DepositChannel {
 					channel_id,
 					address: deposit_address,
-					asset: SOL_USDC,
+					asset: SolAsset::SolUsdc,
 					state: generated_bump,
 				})
 			);

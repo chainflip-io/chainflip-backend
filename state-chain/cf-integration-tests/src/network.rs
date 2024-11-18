@@ -24,7 +24,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
 	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, BitcoinInstance, Funding,
 	LiquidityProvider, PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent,
-	RuntimeOrigin, SolanaInstance, Validator, Weight,
+	RuntimeOrigin, SolanaElections, SolanaInstance, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -684,8 +684,17 @@ impl Network {
 	pub fn move_to_the_next_epoch(&mut self) {
 		let epoch = Validator::epoch_index();
 		self.move_to_the_end_of_epoch();
+
+		for v in Validator::current_authorities() {
+			assert_ok!(SolanaElections::ignore_my_votes(RuntimeOrigin::signed(v.clone()),));
+		}
+
 		self.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 		assert_eq!(epoch + 1, Validator::epoch_index());
+
+		for v in Validator::current_authorities() {
+			assert_ok!(SolanaElections::stop_ignoring_my_votes(RuntimeOrigin::signed(v.clone()),));
+		}
 	}
 
 	/// Move to the last block of the epoch - next block will start Authority rotation

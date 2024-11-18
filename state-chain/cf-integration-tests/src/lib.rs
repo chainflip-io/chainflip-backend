@@ -13,6 +13,7 @@ mod genesis;
 mod governance;
 mod new_epoch;
 mod solana;
+mod solana_elections;
 mod swapping;
 mod witnessing;
 
@@ -172,4 +173,160 @@ pub fn witness_ethereum_rotation_broadcast(broadcast_id: cf_primitives::Broadcas
 			),
 		transaction_ref: Default::default(),
 	}));
+}
+
+/// Provide helper structs and functions to make voting in Solana Elections easier.
+pub mod solana_test_utils {
+	use cf_chains::{
+		sol::{sol_tx_core::sol_test_values, SolAddress, SolApiEnvironment, SolHash},
+		ChannelRefundParameters, ForeignChainAddress,
+	};
+	use cf_traits::EpochInfo;
+	use frame_support::{assert_ok, BoundedBTreeMap};
+	use pallet_cf_elections::{
+		electoral_system_runner::RunnerStorageAccessTrait,
+		electoral_systems::{
+			blockchain::delta_based_ingress::ChannelTotalIngressedFor,
+			composite::tuple_6_impls::{
+				CompositeElectionIdentifierExtra, CompositeElectionProperties,
+			},
+		},
+		vote_storage::{
+			change::MonotonicChangeVote, composite::tuple_6_impls::CompositeVote, AuthorityVote,
+		},
+		CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
+	};
+	use sp_core::ConstU32;
+	use sp_std::collections::btree_map::BTreeMap;
+	use state_chain_runtime::{
+		chainflip::solana_elections::TransactionSuccessDetails, Runtime, RuntimeOrigin,
+		SolanaElections, SolanaIngressEgress, SolanaInstance, Validator,
+	};
+
+	pub type SolanaCompositeVote = CompositeAuthorityVoteOf<
+		<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
+	>;
+	pub type SolanaCompositeElectionIdentifier = CompositeElectionIdentifierOf<
+		<Runtime as pallet_cf_elections::Config<SolanaInstance>>::ElectoralSystemRunner,
+	>;
+	pub type SolanaChannelIngressed = ChannelTotalIngressedFor<SolanaIngressEgress>;
+
+	pub type SolanaElectionVote = BoundedBTreeMap<
+		SolanaCompositeElectionIdentifier,
+		SolanaCompositeVote,
+		ConstU32<MAXIMUM_VOTES_PER_EXTRINSIC>,
+	>;
+
+	pub const DEPOSIT_AMOUNT: u64 = 5_000_000_000u64; // 5 Sol
+	pub const FALLBACK_ADDRESS: SolAddress = SolAddress([0xf0; 32]);
+	pub const REFUND_PARAMS: ChannelRefundParameters = ChannelRefundParameters {
+		retry_duration: 0,
+		refund_address: ForeignChainAddress::Sol(FALLBACK_ADDRESS),
+		min_price: sp_core::U256::zero(),
+	};
+
+	/// Simulates observable state from the Solana chain. Can be converted into SolanaElection's
+	/// Vote directly.
+	pub enum SolanaState {
+		BlockHeight(u64),
+		Fee(u64),
+		Ingressed(Vec<(SolAddress, SolanaChannelIngressed)>),
+		Nonce(SolAddress, SolHash, u64),
+		Egress(TransactionSuccessDetails),
+	}
+
+	impl SolanaState {
+		/// Used to find the right Election Identifier.
+		pub fn is_of_type(&self, target: &SolanaCompositeElectionIdentifier) -> bool {
+			match self {
+				SolanaState::BlockHeight(..) =>
+					matches!(*target.extra(), CompositeElectionIdentifierExtra::A(..)),
+				SolanaState::Fee(..) =>
+					matches!(*target.extra(), CompositeElectionIdentifierExtra::B(..)),
+				SolanaState::Ingressed(..) =>
+					matches!(*target.extra(), CompositeElectionIdentifierExtra::C(..)),
+				SolanaState::Nonce(address, ..) =>
+					matches!(*target.extra(), CompositeElectionIdentifierExtra::D(..)) &&
+						{
+							if let CompositeElectionProperties::D((addr, _, _)) = pallet_cf_elections::RunnerStorageAccess::<Runtime, SolanaInstance>::election_properties(*target).expect("Election property must exist.") {
+							*address == addr
+						} else {
+							false
+						}
+						},
+				SolanaState::Egress(..) =>
+					matches!(*target.extra(), CompositeElectionIdentifierExtra::EE(..)),
+			}
+		}
+	}
+
+	impl From<SolanaState> for SolanaCompositeVote {
+		fn from(value: SolanaState) -> Self {
+			match value {
+				SolanaState::BlockHeight(block_height) =>
+					AuthorityVote::Vote(CompositeVote::A(block_height)),
+				SolanaState::Fee(fee) => AuthorityVote::Vote(CompositeVote::B(fee)),
+				SolanaState::Ingressed(channel_ingresses) => AuthorityVote::Vote(CompositeVote::C(
+					channel_ingresses
+						.into_iter()
+						.collect::<BTreeMap<_, _>>()
+						.try_into()
+						.expect("Too many ingress channels per election."),
+				)),
+				SolanaState::Nonce(_addr, value, block) =>
+					AuthorityVote::Vote(CompositeVote::D(MonotonicChangeVote { value, block })),
+				SolanaState::Egress(transaction_success_details) =>
+					AuthorityVote::Vote(CompositeVote::EE(transaction_success_details)),
+			}
+		}
+	}
+
+	/// Have all validators to vote to witness the given `SolanaState` via SolanaElection.
+	#[track_caller]
+	pub fn witness_solana_state(state: SolanaState) {
+		// Get the election identifier of the Solana egress.
+		let election_id = SolanaElections::with_election_identifiers(|election_identifiers| {
+			Ok(election_identifiers
+				.into_iter()
+				.find(|id| state.is_of_type(id))
+				.expect("Election must exists to be voted on."))
+		})
+		.unwrap();
+
+		let vote = state.into();
+
+		// Submit vote to witness: transaction success, but execution failure
+		let votes: SolanaElectionVote =
+			BTreeMap::from_iter([(election_id, vote)]).try_into().unwrap();
+
+		for v in Validator::current_authorities() {
+			assert_ok!(SolanaElections::vote(RuntimeOrigin::signed(v), votes.clone()));
+		}
+	}
+
+	pub fn setup_sol_environments() {
+		// Environment::SolanaApiEnvironment
+		pallet_cf_environment::SolanaApiEnvironment::<Runtime>::set(SolApiEnvironment {
+			vault_program: sol_test_values::VAULT_PROGRAM,
+			vault_program_data_account: sol_test_values::VAULT_PROGRAM_DATA_ACCOUNT,
+			token_vault_pda_account: sol_test_values::TOKEN_VAULT_PDA_ACCOUNT,
+			usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
+			usdc_token_vault_ata: sol_test_values::USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+			swap_endpoint_program: sol_test_values::SWAP_ENDPOINT_PROGRAM,
+			swap_endpoint_program_data_account: sol_test_values::SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
+		});
+
+		// Environment::AvailableDurableNonces
+		pallet_cf_environment::SolanaAvailableNonceAccounts::<Runtime>::set(
+			sol_test_values::NONCE_ACCOUNTS
+				.into_iter()
+				.map(|nonce| (nonce, sol_test_values::TEST_DURABLE_NONCE))
+				.collect::<Vec<_>>(),
+		);
+
+		// Enable voting for all validators
+		for v in Validator::current_authorities() {
+			assert_ok!(SolanaElections::stop_ignoring_my_votes(RuntimeOrigin::signed(v.clone()),));
+		}
+	}
 }
