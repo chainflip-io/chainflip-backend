@@ -71,46 +71,22 @@ register_checks! {
 			assert_eq!(INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.get()), 15, "Hook should have been called once so far!");
 		},
 		close_accounts_hook_not_called(_pre, _post) {
-			assert_eq!(
-				CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),
-				0,
-				"Hook should not have been called!"
-			);
+			assert_eq!(CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),	0, "Hook should not have been called!");
 		},
 		close_accounts_hook_called_once(_pre, _post) {
-			assert_eq!(
-				CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),
-				1,
-				"Hook should not have been called!"
-			);
+			assert_eq!(CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),	1, "Hook should not have been called!");
 		},
 		close_accounts_hook_called_twice(_pre, _post) {
-			assert_eq!(
-				CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),
-				2,
-				"Hook should not have been called!"
-			);
+			assert_eq!(CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),	2, "Hook should not have been called!");
 		},
 		get_sol_nonces_hook_not_called(_pre, _post) {
-			assert_eq!(
-				GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()),
-				0,
-				"Hook should not have been called!"
-			);
+			assert_eq!(GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()), 0, "Hook should not have been called!");
 		},
 		get_sol_nonces_hook_called_once(_pre, _post) {
-			assert_eq!(
-				GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()),
-				1,
-				"Hook should not have been called!"
-			);
+			assert_eq!(GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()), 1, "Hook should not have been called!");
 		},
 		get_sol_nonces_hook_called_twice(_pre, _post) {
-			assert_eq!(
-				GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()),
-				2,
-				"Hook should not have been called!"
-			);
+			assert_eq!(GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()), 2, "Hook should not have been called!");
 		},
 	}
 }
