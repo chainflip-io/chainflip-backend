@@ -3,7 +3,10 @@ use crate::{
 	HistoricalEarnedFees, LimitOrder, PoolInfo, PoolOrders, PoolPairsMap, Pools, RangeOrder,
 	RangeOrderSize, ScheduledLimitOrderUpdates, STABLE_ASSET,
 };
-use cf_amm::common::{price_at_tick, Side, Tick};
+use cf_amm::{
+	common::Side,
+	math::{price_at_tick, Tick},
+};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{assert_events_match, assert_has_event, last_event};
 use cf_traits::{PoolApi, SwappingApi};

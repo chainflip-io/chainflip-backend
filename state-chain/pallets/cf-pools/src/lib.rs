@@ -1,7 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{self, Amount, PoolPairsMap, Price, Side, SqrtPriceQ64F96, Tick},
+	common::{PoolPairsMap, Side},
 	limit_orders::{self, Collected, PositionInfo},
+	math::{bounded_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick},
 	range_orders::{self, Liquidity},
 	PoolState,
 };
@@ -159,8 +160,8 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm::{
-		common::Tick,
 		limit_orders,
+		math::Tick,
 		range_orders::{self, Liquidity},
 		NewError,
 	};
@@ -752,7 +753,7 @@ pub mod pallet {
 								side,
 								id,
 								previous_tick,
-								IncreaseOrDecrease::Decrease(cf_amm::common::Amount::MAX),
+								IncreaseOrDecrease::Decrease(Amount::MAX),
 								NoOpStatus::Error,
 							)?;
 							Self::inner_update_limit_order(
@@ -827,7 +828,7 @@ pub mod pallet {
 							side,
 							id,
 							previous_tick,
-							IncreaseOrDecrease::Decrease(cf_amm::common::Amount::MAX),
+							IncreaseOrDecrease::Decrease(Amount::MAX),
 							NoOpStatus::Error,
 						)?;
 
@@ -1024,9 +1025,7 @@ pub mod pallet {
 										side,
 										id,
 										previous_tick,
-										crate::pallet::IncreaseOrDecrease::Decrease(
-											cf_amm::common::Amount::MAX,
-										),
+										crate::pallet::IncreaseOrDecrease::Decrease(Amount::MAX),
 										crate::NoOpStatus::Allow,
 									)?;
 									Ok(())
@@ -1080,6 +1079,8 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		to: any::Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
+		use cf_amm::math::tick_at_sqrt_price;
+
 		let (asset_pair, order) =
 			AssetPair::from_swap(from, to).ok_or(Error::<T>::PoolDoesNotExist)?;
 		Self::try_mutate_pool(asset_pair, |_asset_pair, pool| {
@@ -1101,13 +1102,12 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					.ok_or(Error::<T>::InsufficientLiquidity)?
 					.2;
 
-				let swap_tick = common::tick_at_sqrt_price(
-					PoolState::<(T::AccountId, OrderId)>::swap_sqrt_price(
+				let swap_tick =
+					tick_at_sqrt_price(PoolState::<(T::AccountId, OrderId)>::swap_sqrt_price(
 						order,
 						input_amount,
 						output_amount,
-					),
-				);
+					));
 				let bounded_swap_tick = if tick_after < tick_before {
 					core::cmp::min(core::cmp::max(tick_after, swap_tick), tick_before)
 				} else {
@@ -1311,11 +1311,19 @@ pub struct PoolPriceV1 {
 	pub tick: Tick,
 }
 
-#[derive(Serialize, Deserialize, Clone, Encode, Decode, TypeInfo, PartialEq, Eq, Debug)]
-pub struct PoolPriceV2 {
-	pub sell: Option<SqrtPriceQ64F96>,
-	pub buy: Option<SqrtPriceQ64F96>,
+pub type PoolPriceV2 = PoolPrice<SqrtPriceQ64F96>;
+
+#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PoolPrice<P> {
+	pub sell: Option<P>,
+	pub buy: Option<P>,
 	pub range_order: SqrtPriceQ64F96,
+}
+
+impl<P> PoolPrice<P> {
+	pub fn map_sell_and_buy_prices<R>(self, f: impl Fn(P) -> R) -> PoolPrice<R> {
+		PoolPrice { sell: self.sell.map(&f), buy: self.buy.map(&f), range_order: self.range_order }
+	}
 }
 
 #[derive(PartialEq, Eq)]
@@ -1383,8 +1391,8 @@ impl<T: Config> Pallet<T> {
 		lp: &T::AccountId,
 		side: Side,
 		id: OrderId,
-		tick: cf_amm::common::Tick,
-		sold_amount: cf_amm::common::Amount,
+		tick: Tick,
+		sold_amount: Amount,
 		noop_status: NoOpStatus,
 	) -> Result<(Collected, PositionInfo), DispatchError> {
 		let (collected, position_info) = match pool.pool_state.collect_and_mint_limit_order(
@@ -1419,8 +1427,8 @@ impl<T: Config> Pallet<T> {
 		asset_pair: &AssetPair,
 		side: Side,
 		id: OrderId,
-		tick: cf_amm::common::Tick,
-		sold_amount_change: IncreaseOrDecrease<cf_amm::common::Amount>,
+		tick: Tick,
+		sold_amount_change: IncreaseOrDecrease<Amount>,
 		noop_status: NoOpStatus,
 	) -> Result<AssetAmount, DispatchError> {
 		let (sold_amount_change, position_info, collected) = match sold_amount_change {
@@ -1495,7 +1503,7 @@ impl<T: Config> Pallet<T> {
 		lp: &T::AccountId,
 		asset_pair: &AssetPair,
 		id: OrderId,
-		tick_range: Range<cf_amm::common::Tick>,
+		tick_range: Range<Tick>,
 		size_change: IncreaseOrDecrease<range_orders::Size>,
 		noop_status: NoOpStatus,
 	) -> Result<(AssetAmounts, Liquidity), DispatchError> {
@@ -1704,12 +1712,21 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn pool_price(base_asset: Asset, quote_asset: Asset) -> Result<PoolPriceV2, DispatchError> {
+	pub fn pool_price(
+		base_asset: Asset,
+		quote_asset: Asset,
+	) -> Result<PoolPrice<PoolPriceV1>, DispatchError> {
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		let mut pool = Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
-		Ok(PoolPriceV2 {
-			sell: pool.pool_state.current_price(Side::Sell).map(|(_, sqrt_price, _)| sqrt_price),
-			buy: pool.pool_state.current_price(Side::Buy).map(|(_, sqrt_price, _)| sqrt_price),
+		Ok(PoolPrice {
+			sell: pool
+				.pool_state
+				.current_price(Side::Sell)
+				.map(|(price, sqrt_price, tick)| PoolPriceV1 { price, sqrt_price, tick }),
+			buy: pool
+				.pool_state
+				.current_price(Side::Buy)
+				.map(|(price, sqrt_price, tick)| PoolPriceV1 { price, sqrt_price, tick }),
 			range_order: pool.pool_state.current_range_order_pool_price(),
 		})
 	}
@@ -1717,7 +1734,7 @@ impl<T: Config> Pallet<T> {
 	pub fn required_asset_ratio_for_range_order(
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
-		tick_range: Range<cf_amm::common::Tick>,
+		tick_range: Range<Tick>,
 	) -> Result<PoolPairsMap<Amount>, DispatchError> {
 		let pool_state = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?
@@ -1768,7 +1785,7 @@ impl<T: Config> Pallet<T> {
 						} else {
 							Some(PoolOrder {
 								amount: sold_base_amount,
-								sqrt_price: cf_amm::common::bounded_sqrt_price(
+								sqrt_price: bounded_sqrt_price(
 									bought_quote_amount,
 									sold_base_amount,
 								),
@@ -1794,7 +1811,7 @@ impl<T: Config> Pallet<T> {
 						} else {
 							Some(PoolOrder {
 								amount: bought_base_amount,
-								sqrt_price: cf_amm::common::bounded_sqrt_price(
+								sqrt_price: bounded_sqrt_price(
 									sold_quote_amount,
 									bought_base_amount,
 								),
@@ -1809,7 +1826,7 @@ impl<T: Config> Pallet<T> {
 	pub fn pool_depth(
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
-		tick_range: Range<cf_amm::common::Tick>,
+		tick_range: Range<Tick>,
 	) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchError> {
 		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
 		let mut pool = Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;

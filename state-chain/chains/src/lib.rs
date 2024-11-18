@@ -18,7 +18,8 @@ use address::{
 	AddressConverter, AddressDerivationApi, AddressDerivationError, EncodedAddress,
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
-use cf_primitives::{Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, Price, TxId};
+use cf_amm_math::Price;
+use cf_primitives::{Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, TxId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -886,6 +887,10 @@ impl<A: Clone> ChannelRefundParametersGeneric<A> {
 			refund_address: f(self.refund_address.clone())?,
 			min_price: self.min_price,
 		})
+	}
+	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
+		use sp_runtime::traits::UniqueSaturatedInto;
+		cf_amm_math::output_amount_ceil(input_amount.into(), self.min_price).unique_saturated_into()
 	}
 }
 

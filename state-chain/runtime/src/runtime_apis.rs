@@ -1,6 +1,7 @@
 use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
 use cf_amm::{
-	common::{Amount, PoolPairsMap, Side, Tick},
+	common::{PoolPairsMap, Side},
+	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -315,7 +316,7 @@ decl_runtime_apis!(
 		fn cf_pool_depth(
 			base_asset: Asset,
 			quote_asset: Asset,
-			tick_range: Range<cf_amm::common::Tick>,
+			tick_range: Range<cf_amm::math::Tick>,
 		) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchErrorWithMessage>;
 		fn cf_pool_liquidity(
 			base_asset: Asset,
@@ -324,7 +325,7 @@ decl_runtime_apis!(
 		fn cf_required_asset_ratio_for_range_order(
 			base_asset: Asset,
 			quote_asset: Asset,
-			tick_range: Range<cf_amm::common::Tick>,
+			tick_range: Range<cf_amm::math::Tick>,
 		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 		fn cf_pool_orderbook(
 			base_asset: Asset,

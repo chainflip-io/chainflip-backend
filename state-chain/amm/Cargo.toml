@@ -9,6 +9,7 @@ description = "Chainflip's AMM Logic"
 workspace = true
 
 [dependencies]
+cf-amm-math = { workspace = true }
 cf-primitives = { workspace = true }
 cf-utilities = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
@@ -22,11 +23,13 @@ sp-std = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true, features = ["std"] }
+cf-amm-math = { workspace = true, features = ["slow-tests"] }
 
 [features]
 default = ["std"]
 slow-tests = []
 std = [
+	"cf-amm-math/std",
 	"cf-primitives/std",
 	"cf-utilities/std",
 	"codec/std",

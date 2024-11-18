@@ -3,9 +3,9 @@
 use cf_utilities::assert_ok;
 use core::convert::Infallible;
 
-use crate::{
-	common::{sqrt_price_to_price, Price, MAX_SQRT_PRICE, MIN_SQRT_PRICE, PRICE_FRACTIONAL_BITS},
-	range_orders::Liquidity,
+use crate::range_orders::Liquidity;
+use cf_amm_math::{
+	sqrt_price_to_price, Price, MAX_SQRT_PRICE, MIN_SQRT_PRICE, PRICE_FRACTIONAL_BITS,
 };
 
 use super::*;

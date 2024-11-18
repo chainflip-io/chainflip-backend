@@ -12,7 +12,7 @@ use crate::{
 	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapQueue,
 	SwapType,
 };
-use cf_amm::common::{price_to_sqrt_price, PRICE_FRACTIONAL_BITS};
+use cf_amm::math::{price_to_sqrt_price, PRICE_FRACTIONAL_BITS};
 use cf_chains::{
 	self,
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -99,7 +99,7 @@ struct TestRefundParams {
 
 impl TestRefundParams {
 	fn into_channel_params(self, input_amount: AssetAmount) -> ChannelRefundParameters {
-		use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
+		use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 
 		ChannelRefundParameters {
 			retry_duration: self.retry_duration,
