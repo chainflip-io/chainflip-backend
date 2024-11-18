@@ -59,6 +59,7 @@ pub trait Chainflip: frame_system::Config {
 		+ FixedPointOperand
 		+ MaybeSerializeDeserialize
 		+ Bounded
+		+ From<u128>
 		+ Sum<Self::Amount>;
 
 	/// An identity for a node

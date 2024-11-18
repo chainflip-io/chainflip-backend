@@ -166,6 +166,14 @@ pub struct Swap<T: Config> {
 	refund_params: Option<SwapRefundParameters>,
 }
 
+// 100 FLIP is our default broker bond
+pub struct DefaultBrokerBond<T>(PhantomData<T>);
+impl<T: Config> Get<T::Amount> for DefaultBrokerBond<T> {
+	fn get() -> T::Amount {
+		T::Amount::from(100_000_000_000_000_000_000u128)
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct SwapLegInfo {
 	pub swap_id: SwapId,
@@ -395,7 +403,6 @@ pub mod pallet {
 	use sp_runtime::SaturatedConversion;
 
 	use super::*;
-
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
@@ -541,7 +548,7 @@ pub mod pallet {
 
 	/// The bond for a broker to open a private channel.
 	#[pallet::storage]
-	pub type BrokerBond<T: Config> = StorageValue<_, <T as Chainflip>::Amount, ValueQuery>;
+	pub type BrokerBond<T: Config> = StorageValue<_, T::Amount, ValueQuery, DefaultBrokerBond<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]

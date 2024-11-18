@@ -1803,4 +1803,11 @@ mod private_channels {
 			assert_eq!(BrokerBond::<Test>::get(), BOND);
 		});
 	}
+
+	#[test]
+	fn default_broker_bond() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(BrokerBond::<Test>::get(), 100_000_000_000_000_000_000u128);
+		});
+	}
 }
