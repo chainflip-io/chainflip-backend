@@ -169,7 +169,14 @@ impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
 		slot: <SolanaLiveness as ElectoralSystem>::ElectionProperties,
 	) -> Result<<<SolanaLiveness as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error> {
 		Ok(SolHash::from_str(
-			&self.client.get_block(slot, RpcBlockConfig::default()).await.blockhash,
+			&self
+				.client
+				.get_block(
+					slot,
+					RpcBlockConfig { max_supported_transaction_version: 0, ..Default::default() },
+				)
+				.await
+				.blockhash,
 		)
 		.map_err(|e| anyhow::anyhow!("Failed to convert blockhash String to SolHash: {e}"))?)
 	}
