@@ -134,6 +134,8 @@ mod benchmarks {
 
 		let caller = OriginFor::<T>::signed(broker_id.clone());
 
+		T::FeePayment::mint_to_account(&broker_id, (200 * FLIPPERINOS_PER_FLIP).into());
+
 		#[block]
 		{
 			assert_ok!(Pallet::<T>::open_private_btc_channel(caller));
@@ -151,6 +153,8 @@ mod benchmarks {
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
 
 		let caller = OriginFor::<T>::signed(broker_id.clone());
+
+		T::FeePayment::mint_to_account(&broker_id, (200 * FLIPPERINOS_PER_FLIP).into());
 
 		assert_ok!(Pallet::<T>::open_private_btc_channel(caller.clone()));
 

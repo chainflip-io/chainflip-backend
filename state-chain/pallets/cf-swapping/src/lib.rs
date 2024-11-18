@@ -1192,7 +1192,7 @@ pub mod pallet {
 
 		/// Updates the broker's bond to the new amount.
 		#[pallet::call_index(15)]
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_broker_bond())]
 		pub fn update_broker_bond(origin: OriginFor<T>, new_bond: T::Amount) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			BrokerBond::<T>::set(new_bond);
