@@ -161,7 +161,7 @@ fn solana_delta_based_ingress_works() {
 					amount: INITIAL_AMOUNT,
 				},
 			)]));
-			witness_solana_state(SolanaState::BlockHeight(SOLANA_BLOCKNUMBER + Solana::WITNESS_PERIOD));
+			witness_solana_state(SolanaState::BlockHeight(SOLANA_BLOCKNUMBER + 5));
 			testnet.move_forward_blocks(1);
 
 			assert_events_match!(
@@ -188,18 +188,18 @@ fn solana_delta_based_ingress_works() {
 			witness_solana_state(SolanaState::Ingressed(vec![(
 				deposit_address_1,
 				ChannelTotalIngressedFor::<SolanaIngressEgress> {
-					block_number: SOLANA_BLOCKNUMBER + Solana::WITNESS_PERIOD + 1,
+					block_number: SOLANA_BLOCKNUMBER + 6,
 					amount: FINAL_AMOUNT,
 				},
 			),
 			(
 				deposit_address_2,
 				ChannelTotalIngressedFor::<SolanaIngressEgress> {
-					block_number: SOLANA_BLOCKNUMBER + Solana::WITNESS_PERIOD + 1,
+					block_number: SOLANA_BLOCKNUMBER + 6,
 					amount: FINAL_AMOUNT,
 				},
 			)]));
-			witness_solana_state(SolanaState::BlockHeight(SOLANA_BLOCKNUMBER + Solana::WITNESS_PERIOD * 2));
+			witness_solana_state(SolanaState::BlockHeight(SOLANA_BLOCKNUMBER + 10));
 			testnet.move_forward_blocks(1);
 
 			assert_events_match!(
@@ -226,61 +226,48 @@ fn solana_delta_based_ingress_works() {
 			witness_solana_state(SolanaState::Ingressed(vec![(
 				deposit_address_1,
 				ChannelTotalIngressedFor::<SolanaIngressEgress> {
-					block_number: SOLANA_BLOCKNUMBER + Solana::WITNESS_PERIOD * 2 + 1,
+					block_number: SOLANA_BLOCKNUMBER + 11,
 					amount: 0,
 				},
 			),
 			(
 				deposit_address_2,
 				ChannelTotalIngressedFor::<SolanaIngressEgress> {
-					block_number: SOLANA_BLOCKNUMBER + Solana::WITNESS_PERIOD * 2 + 1,
+					block_number: SOLANA_BLOCKNUMBER + 11,
 					amount: 0,
 				},
 			)]));
-			witness_solana_state(SolanaState::BlockHeight(SOLANA_BLOCKNUMBER + Solana::WITNESS_PERIOD * 3));
+			witness_solana_state(SolanaState::BlockHeight(SOLANA_BLOCKNUMBER + 15));
 			testnet.move_forward_blocks(1);
 
 			// No ingress should be processed when `total_ingressed_amount` is reduced.
+			// The new amount is also ignored and not registered.
 			assert!(!System::events().into_iter().any(|event|matches!(event.event, RuntimeEvent::SolanaIngressEgress(
 				pallet_cf_ingress_egress::Event::DepositFinalised {..}))));
+
+			testnet.move_forward_blocks(20);
 
 			// Ingress more assets
 			witness_solana_state(SolanaState::Ingressed(vec![(
 				deposit_address_1,
 				ChannelTotalIngressedFor::<SolanaIngressEgress> {
-					block_number: SOLANA_BLOCKNUMBER + Solana::WITNESS_PERIOD * 3 + 1,
+					block_number: SOLANA_BLOCKNUMBER + 16,
 					amount: FINAL_AMOUNT,
 				},
 			),
 			(
 				deposit_address_2,
 				ChannelTotalIngressedFor::<SolanaIngressEgress> {
-					block_number: SOLANA_BLOCKNUMBER + Solana::WITNESS_PERIOD * 3 + 1,
+					block_number: SOLANA_BLOCKNUMBER + 16,
 					amount: FINAL_AMOUNT,
 				},
 			)]));
-			witness_solana_state(SolanaState::BlockHeight(SOLANA_BLOCKNUMBER + Solana::WITNESS_PERIOD * 4));
+			witness_solana_state(SolanaState::BlockHeight(SOLANA_BLOCKNUMBER + 20));
 			testnet.move_forward_blocks(1);
 
-			assert_events_match!(
-				Runtime,
-				RuntimeEvent::SolanaIngressEgress(
-					pallet_cf_ingress_egress::Event::DepositFinalised {
-						deposit_address,
-						asset,
-						amount,
-						..
-					}
-				) if deposit_address == deposit_address_1 && asset == SolAsset::Sol && amount == FINAL_AMOUNT => (),
-				RuntimeEvent::SolanaIngressEgress(
-					pallet_cf_ingress_egress::Event::DepositFinalised {
-						deposit_address,
-						asset,
-						amount,
-						..
-					}
-				) if deposit_address == deposit_address_2 && asset == SolAsset::Sol && amount == FINAL_AMOUNT => ()
-			);
+			// no new ingress is registered.
+			assert!(!System::events().into_iter().any(|event|matches!(event.event, RuntimeEvent::SolanaIngressEgress(
+				pallet_cf_ingress_egress::Event::DepositFinalised {..}))));
 		});
 }
 
