@@ -342,19 +342,12 @@ export async function upgradeNetworkPrebuilt(
   if (cleanOldVersion.startsWith('1.7')) {
     console.log('Starting up deposit-monitor.');
 
-    execWithLog(`${localnetInitPath}/scripts/start-broker-api.sh`, 'start-broker-api', {
+    execWithLog(`${localnetInitPath}/scripts/start-deposit-monitor.sh`, 'start-deposit-monitor', {
+      LOCALNET_INIT_DIR: `${localnetInitPath}`,
       DEPOSIT_MONITOR_CONTAINER: 'deposit-monitor',
-      DOCKER_COMPOSE_CMD: 'docker-compose',
+      DOCKER_COMPOSE_CMD: 'docker compose',
       additional_docker_compose_up_args: '--quiet-pull',
     });
-
-    try {
-      const pid = execSync(`lsof -t -i:6060`);
-      console.log(`New deposit-monitor PID: ${pid.toString()}`);
-    } catch (e) {
-      console.error(`Error starting deposit-monitor: ${e}`);
-      throw e;
-    }
   }
 
   if (cleanOldVersion === nodeVersion) {

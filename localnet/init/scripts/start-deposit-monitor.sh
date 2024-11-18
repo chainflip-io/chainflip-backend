@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
+DATETIME=$(date '+%Y-%m-%d_%H-%M-%S')
 
-source ./localnet/helper.sh
+source $LOCALNET_INIT_DIR/../helper.sh
 
 # On some machines (e.g. MacOS), 172.17.0.1 is not accessible from inside the container, so we need to use host.docker.internal
 if [[ $CI == true ]]; then
@@ -9,7 +10,9 @@ if [[ $CI == true ]]; then
 else
   export CFDM_BROKER_API_URL='ws://host.docker.internal:10997'
 fi
-$DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up $DEPOSIT_MONITOR_CONTAINER $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
+$DOCKER_COMPOSE_CMD -f $LOCALNET_INIT_DIR/../docker-compose.yml -p "chainflip-localnet" up $DEPOSIT_MONITOR_CONTAINER $additional_docker_compose_up_args -d \
+  > /tmp/chainflip/chainflip-deposit-monitor.$DATETIME.log 2>&1
+
 while true; do
   echo "🩺 Checking deposit-monitor's health ..."
   REPLY=$(check_endpoint_health 'http://localhost:6060/health')

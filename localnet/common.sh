@@ -174,6 +174,7 @@ build-localnet() {
   KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARY_ROOT_PATH
 
   echo "🔬 Starting Deposit Monitor ..."
+  LOCALNET_INIT_DIR=$LOCALNET_INIT_DIR \
   DOCKER_COMPOSE_CMD=$DOCKER_COMPOSE_CMD \
   DEPOSIT_MONITOR_CONTAINER=$DEPOSIT_MONITOR_CONTAINER \
   additional_docker_compose_up_args=$additional_docker_compose_up_args \
