@@ -125,7 +125,7 @@ quickcheck_macros = { version = "1" }
 quote = { version = "1.0.35" }
 rayon = { version = "1.7.0" }
 rand = { version = "0.8.5", default-features = false }
-redis = { version = "0.27.2" }
+redis = { version = "0.27.5" }
 regex = { version = "1.10.2" }
 reqwest = { version = "0.11.4" }
 rlp = { version = "0.5.2", default-features = false }
