@@ -206,7 +206,7 @@ mod benchmarks {
 		{
 			assert_ok!(Pallet::<T>::update_broker_bond(
 				origin.clone(),
-				100_000_000_000_000_000_000.into()
+				(FLIPPERINOS_PER_FLIP * 100).into()
 			));
 		}
 	}
