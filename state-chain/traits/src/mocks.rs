@@ -17,6 +17,7 @@ pub mod ceremony_id_provider;
 pub mod cfe_interface_mock;
 pub mod chain_tracking;
 pub mod deposit_handler;
+pub mod deregistration_check;
 pub mod egress_handler;
 pub mod ensure_origin_mock;
 pub mod epoch_info;
