@@ -88,11 +88,11 @@ async function postToDepositMonitor(portAndRoute: string, body: string | object)
     .catch((error) => {
       let message;
       if (error.response) {
-        message = error.response.data + ' (' + error.response.status + ')';
+        message = `${error.response.data} (${error.response.status})`;
       } else {
         message = error;
       }
-      throw new Error('Request to deposit monitor (' + portAndRoute + ') failed: ' + message);
+      throw new Error(`Request to deposit monitor (${portAndRoute}) failed: ${message}`);
     });
 }
 
@@ -137,7 +137,7 @@ async function ensureHealth() {
   const response = await postToDepositMonitor(':6060/health', {});
   if (response.starting === true || response.all_processors === false) {
     throw new Error(
-      "Deposit monitor is running, but not healthy. It's response was: " + JSON.stringify(response),
+      `Deposit monitor is running, but not healthy. It's response was: ${JSON.stringify(response)}`,
     );
   }
 }
