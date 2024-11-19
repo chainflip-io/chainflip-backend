@@ -20,7 +20,9 @@ use address::{
 	IntoForeignChainAddress, ToHumanreadableAddress,
 };
 use cf_amm_math::Price;
-use cf_primitives::{Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, TxId};
+use cf_primitives::{
+	Asset, AssetAmount, BroadcastId, ChannelId, EgressId, EthAmount, GasAmount, TxId,
+};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
@@ -580,7 +582,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: C::ChainAmount,
+		gas_budget: GasAmount,
 		message: Vec<u8>,
 		ccm_additional_data: Vec<u8>,
 	) -> Result<Self, ExecutexSwapAndCallError>;
@@ -719,7 +721,7 @@ pub struct CcmChannelMetadata {
 	pub message: CcmMessage,
 	/// User funds designated to be used for gas.
 	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::number_or_hex"))]
-	pub gas_budget: AssetAmount,
+	pub gas_budget: GasAmount,
 	/// Additional parameters for the cross chain message.
 	#[cfg_attr(
 		feature = "std",
@@ -742,7 +744,7 @@ impl BenchmarkValue for CcmChannelMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct CcmSwapAmounts {
 	pub principal_swap_amount: AssetAmount,
-	pub gas_budget: AssetAmount,
+	pub gas_budget: GasAmount,
 	// if the gas asset is different to the input asset, it will require a swap
 	pub other_gas_asset: Option<Asset>,
 }
@@ -750,7 +752,6 @@ pub struct CcmSwapAmounts {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum CcmFailReason {
 	UnsupportedForTargetChain,
-	InsufficientDepositAmount,
 	InvalidMetadata,
 }
 
@@ -774,51 +775,6 @@ impl<Address: BenchmarkValue> BenchmarkValue for CcmDepositMetadataGeneric<Addre
 	}
 }
 
-impl<Address> CcmDepositMetadataGeneric<Address> {
-	pub fn into_swap_metadata(
-		self,
-		deposit_amount: AssetAmount,
-		source_asset: Asset,
-		destination_asset: Asset,
-	) -> Result<CcmSwapMetadataGeneric<Address>, CcmFailReason> {
-		let gas_budget = self.channel_metadata.gas_budget;
-
-		let principal_swap_amount = deposit_amount.saturating_sub(gas_budget);
-
-		let destination_chain: ForeignChain = destination_asset.into();
-		if !destination_chain.ccm_support() {
-			return Err(CcmFailReason::UnsupportedForTargetChain)
-		} else if deposit_amount < gas_budget {
-			return Err(CcmFailReason::InsufficientDepositAmount)
-		}
-
-		// Return gas asset only if it is different from the input asset (and thus requires a swap)
-		let output_gas_asset = destination_chain.gas_asset();
-
-		Ok(CcmSwapMetadataGeneric {
-			deposit_metadata: self,
-			swap_amounts: CcmSwapAmounts {
-				principal_swap_amount,
-				gas_budget,
-				other_gas_asset: if source_asset == output_gas_asset || gas_budget == 0 {
-					None
-				} else {
-					Some(output_gas_asset)
-				},
-			},
-		})
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct CcmSwapMetadataGeneric<Address> {
-	pub deposit_metadata: CcmDepositMetadataGeneric<Address>,
-	pub swap_amounts: CcmSwapAmounts,
-}
-
-pub type CcmSwapMetadata = CcmSwapMetadataGeneric<ForeignChainAddress>;
-pub type CcmSwapMetadataEncoded = CcmSwapMetadataGeneric<EncodedAddress>;
-
 pub type CcmDepositMetadata = CcmDepositMetadataGeneric<ForeignChainAddress>;
 pub type CcmDepositMetadataEncoded = CcmDepositMetadataGeneric<EncodedAddress>;
 
@@ -828,15 +784,6 @@ impl CcmDepositMetadata {
 			source_address: self.source_address.map(Converter::to_encoded_address),
 			channel_metadata: self.channel_metadata,
 			source_chain: self.source_chain,
-		}
-	}
-}
-
-impl CcmSwapMetadata {
-	pub fn to_encoded<Converter: AddressConverter>(self) -> CcmSwapMetadataEncoded {
-		CcmSwapMetadataEncoded {
-			deposit_metadata: self.deposit_metadata.to_encoded::<Converter>(),
-			swap_amounts: self.swap_amounts,
 		}
 	}
 }
@@ -862,6 +809,13 @@ pub trait FeeEstimationApi<C: Chain> {
 	fn estimate_ingress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
 
 	fn estimate_egress_fee(&self, asset: C::ChainAsset) -> C::ChainAmount;
+
+	fn estimate_ccm_fee(
+		&self,
+		asset: C::ChainAsset,
+		gas_budget: GasAmount,
+		message_length: usize,
+	) -> Option<C::ChainAmount>;
 }
 
 impl<C: Chain> FeeEstimationApi<C> for () {
@@ -871,6 +825,15 @@ impl<C: Chain> FeeEstimationApi<C> for () {
 
 	fn estimate_egress_fee(&self, _asset: C::ChainAsset) -> C::ChainAmount {
 		Default::default()
+	}
+
+	fn estimate_ccm_fee(
+		&self,
+		_asset: C::ChainAsset,
+		_gas_budget: GasAmount,
+		_message_length: usize,
+	) -> Option<C::ChainAmount> {
+		None
 	}
 }
 

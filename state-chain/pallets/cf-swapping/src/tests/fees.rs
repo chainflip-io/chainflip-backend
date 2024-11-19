@@ -35,6 +35,7 @@ fn swap_output_amounts_correctly_account_for_fees() {
 					to,
 					SwapRequestType::Regular {
 						output_address: ForeignChainAddress::Eth(H160::zero()),
+						ccm_deposit_metadata: None,
 					},
 					Default::default(),
 					None,
@@ -337,7 +338,10 @@ fn input_amount_excludes_network_fee() {
 				FROM_ASSET,
 				AMOUNT,
 				TO_ASSET,
-				SwapRequestType::Regular { output_address: output_address.clone() },
+				SwapRequestType::Regular {
+					output_address: output_address.clone(),
+					ccm_deposit_metadata: None,
+				},
 				bounded_vec![],
 				None,
 				None,

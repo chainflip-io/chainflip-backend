@@ -5,7 +5,7 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	ccm_checker::CcmValidityCheck,
-	CcmChannelMetadata, CcmDepositMetadata, CcmSwapAmounts, ChannelRefundParameters,
+	CcmChannelMetadata, CcmDepositMetadata, ChannelRefundParameters,
 	ChannelRefundParametersEncoded, SwapOrigin, SwapRefundParameters,
 };
 use cf_primitives::{
@@ -239,13 +239,6 @@ impl<T: Config> From<DispatchError> for BatchExecutionError<T> {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-enum GasSwapState {
-	OutputReady { gas_budget: AssetAmount },
-	Scheduled { gas_swap_id: SwapId },
-	ToBeScheduled { gas_budget: AssetAmount, other_gas_asset: Asset },
-}
-
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Encode, Decode, TypeInfo)]
 enum DcaStatus {
 	ChunkToBeScheduled,
@@ -325,18 +318,12 @@ impl DcaState {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-struct CcmState {
-	gas_swap_state: GasSwapState,
-	ccm_deposit_metadata: CcmDepositMetadata,
-}
-
 #[allow(clippy::large_enum_variant)]
 #[derive(CloneNoBound, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 enum SwapRequestState<T: Config> {
 	UserSwap {
-		ccm: Option<CcmState>,
+		ccm_deposit_metadata: Option<CcmDepositMetadata>,
 		output_address: ForeignChainAddress,
 		dca_state: DcaState,
 		broker_fees: Beneficiaries<T::AccountId>,
@@ -618,14 +605,14 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			egress_fee: AssetAmount,
+			egress_fee: (AssetAmount, Asset),
 		},
 		RefundEgressScheduled {
 			swap_request_id: SwapRequestId,
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			egress_fee: AssetAmount,
+			egress_fee: (AssetAmount, Asset),
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
@@ -1463,26 +1450,6 @@ pub mod pallet {
 			BatchExecutionOutcomes { successful_swaps: vec![], failed_swaps }
 		}
 
-		fn schedule_ccm_gas_swap(
-			request_id: SwapRequestId,
-			input_asset: Asset,
-			gas_asset: Asset,
-			gas_budget: AssetAmount,
-		) -> GasSwapState {
-			let gas_swap_id = Self::schedule_swap(
-				input_asset,
-				gas_asset,
-				gas_budget,
-				None, // FoK does not apply to gas swaps
-				SwapType::CcmGas,
-				Default::default(),
-				request_id,
-				SWAP_DELAY_BLOCKS.into(),
-			);
-
-			GasSwapState::Scheduled { gas_swap_id }
-		}
-
 		fn refund_failed_swap(swap: Swap<T>) {
 			let swap_request_id = swap.swap_request_id;
 
@@ -1498,10 +1465,9 @@ pub mod pallet {
 
 			let swap_request_completed = match &mut request.state {
 				SwapRequestState::UserSwap {
-					ccm,
+					ccm_deposit_metadata: _,
 					output_address,
-					dca_state:
-						DcaState { remaining_input_amount, accumulated_output_amount, status, .. },
+					dca_state: DcaState { remaining_input_amount, accumulated_output_amount, .. },
 					broker_fees: _,
 				} => {
 					let refund = |amount: AssetAmount| {
@@ -1515,86 +1481,23 @@ pub mod pallet {
 						);
 					};
 
-					if let Some(ccm) = ccm {
-						let egress_ccm = |amount: AssetAmount, gas_budget: AssetAmount| {
-							Self::egress_for_swap(
-								request.id,
-								amount,
-								request.output_asset,
-								output_address.clone(),
-								Some((ccm.ccm_deposit_metadata.clone(), gas_budget)), /* ccm */
-								false,                                                /* refund */
-							);
-						};
+					// Refund the failed swap and any unused input amount:
+					refund(swap.input_amount + *remaining_input_amount);
 
-						match ccm.gas_swap_state {
-							GasSwapState::ToBeScheduled { gas_budget, .. } => {
-								// Gas swap has not been scheduled yet, we can refund it,
-								// and there will be no CCM egress
-								refund(swap.input_amount + *remaining_input_amount + gas_budget);
-
-								// Sanity check:
-								if *accumulated_output_amount > 0 {
-									log_or_panic!(
-									   "Unexpected output amount of {accumulated_output_amount} when refunding DCA CCM (gas isn't scheduled) in request id {}", request.id
-    								);
-								}
-
-								true
-							},
-							GasSwapState::OutputReady { gas_budget } => {
-								if *accumulated_output_amount == 0 {
-									// Scenario 1: no chunks have been swapped, and gas is simply
-									// ready because the input happens to be in the gas asset
-									// already. In this case the gas is refunded and there is no ccm
-									// egress:
-									refund(
-										swap.input_amount + *remaining_input_amount + gas_budget,
-									);
-
-									true
-								} else {
-									// Scenario 2: we have already swapped one or more chunks, and
-									// we should use gas amount to perform ccm egress (in addition
-									// to refunding unexecuted amount):
-									refund(swap.input_amount + *remaining_input_amount);
-									egress_ccm(*accumulated_output_amount, gas_budget);
-
-									true
-								}
-							},
-							GasSwapState::Scheduled { .. } => {
-								// It is possible (though somewhat unlikely) that a DCA chunk fails
-								// after gas swap has already been scheduled, but *before* it has
-								// been executed. In this case we simply record the fact of the
-								// failure and process the outcome only once the gas swap is
-								// complete.
-
-								*status = DcaStatus::AwaitingRefund;
-								*remaining_input_amount += swap.input_amount;
-
-								false
-							},
-						}
-					} else {
-						// Refund the failed swap and any unused input amount:
-						refund(swap.input_amount + *remaining_input_amount);
-
-						// In case of DCA we may have partially swapped and now have some output
-						// asset to egress to the output address:
-						if *accumulated_output_amount > 0 {
-							Self::egress_for_swap(
-								swap.swap_request_id,
-								*accumulated_output_amount,
-								request.output_asset,
-								output_address.clone(),
-								None,  /* ccm */
-								false, /* refund */
-							);
-						}
-
-						true
+					// In case of DCA we may have partially swapped and now have some output
+					// asset to egress to the output address:
+					if *accumulated_output_amount > 0 {
+						Self::egress_for_swap(
+							swap.swap_request_id,
+							*accumulated_output_amount,
+							request.output_asset,
+							output_address.clone(),
+							None,  /* ccm */
+							false, /* refund */
+						);
 					}
+
+					true
 				},
 				non_refundable_request => {
 					log_or_panic!(
@@ -1649,160 +1552,42 @@ pub mod pallet {
 			});
 
 			let request_completed = match &mut request.state {
-				SwapRequestState::UserSwap { ccm, output_address, dca_state, broker_fees } =>
-					if let Some(CcmState { gas_swap_state, ccm_deposit_metadata }) = ccm {
-						let is_gas_swap = match gas_swap_state {
-							GasSwapState::Scheduled { gas_swap_id }
-								if *gas_swap_id == swap.swap_id() =>
-								true,
-							_ => {
-								if dca_state.status != DcaStatus::ChunkScheduled(swap.swap_id()) {
-									log_or_panic!(
-										"Executed swap with unexpected id {} for swap request {swap_request_id}", swap.swap_id()
-									);
-								}
+				SwapRequestState::UserSwap {
+					ccm_deposit_metadata,
+					output_address,
+					dca_state,
+					broker_fees,
+				} =>
+					if let Some(chunk_input_amount) =
+						dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
+					{
+						let swap_id = Self::schedule_swap(
+							request.input_asset,
+							request.output_asset,
+							chunk_input_amount,
+							request.refund_params.as_ref(),
+							SwapType::Swap,
+							broker_fees.clone(),
+							request.id,
+							dca_state.chunk_interval.into(),
+						);
 
-								false
-							},
-						};
+						dca_state.status = DcaStatus::ChunkScheduled(swap_id);
 
-						if is_gas_swap {
-							*gas_swap_state =
-								GasSwapState::OutputReady { gas_budget: output_amount };
-						} else {
-							// The executed swap must be for the principal amount,
-							// record the output and schedule the next chunk if needed:
-							dca_state.status = if let Some(chunk_input_amount) =
-								dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
-							{
-								let swap_id = Self::schedule_swap(
-									request.input_asset,
-									request.output_asset,
-									chunk_input_amount,
-									request.refund_params.as_ref(),
-									SwapType::CcmPrincipal,
-									broker_fees.clone(),
-									swap_request_id,
-									dca_state.chunk_interval.into(),
-								);
-
-								if dca_state.status != DcaStatus::ChunkToBeScheduled {
-									log_or_panic!(
-										"Unexpected DCA status {:?} for request id: {swap_request_id}", dca_state.status
-									);
-								}
-
-								DcaStatus::ChunkScheduled(swap_id)
-							} else {
-								// No more chunks to schedule
-								DcaStatus::Completed
-							};
-
-							// See if we still need to schedule the gas swap
-							if let GasSwapState::ToBeScheduled { gas_budget, other_gas_asset } =
-								gas_swap_state
-							{
-								*gas_swap_state = Self::schedule_ccm_gas_swap(
-									swap_request_id,
-									request.input_asset,
-									*other_gas_asset,
-									*gas_budget,
-								);
-							}
-						}
-
-						if let GasSwapState::OutputReady { gas_budget } = gas_swap_state {
-							match dca_state.status {
-								DcaStatus::Completed => {
-									// Success, egress the full output amount
-									Self::egress_for_swap(
-										swap_request_id,
-										dca_state.accumulated_output_amount,
-										request.output_asset,
-										output_address.clone(),
-										Some((ccm_deposit_metadata.clone(), *gas_budget)),
-										false, /* refund */
-									);
-
-									true
-								},
-								DcaStatus::ChunkScheduled(_) => {
-									// Common case: awaiting for one or more chunks to complete
-									false
-								},
-								DcaStatus::AwaitingRefund => {
-									// Edge case: a DCA chunk failed earlier, and we have been
-									// waiting until now to do a partial refund and partial ccm
-									// egress:
-
-									if let Some(refund_params) = &request.refund_params {
-										Self::egress_for_swap(
-											request.id,
-											dca_state.remaining_input_amount,
-											request.input_asset,
-											refund_params.refund_address.clone(),
-											None, /* ccm */
-											true, /* refund */
-										);
-									} else {
-										log_or_panic!("Trying to refund swap request {swap_request_id}, but missing refund parameters");
-									}
-
-									Self::egress_for_swap(
-										swap_request_id,
-										dca_state.accumulated_output_amount,
-										request.output_asset,
-										output_address.clone(),
-										Some((ccm_deposit_metadata.clone(), *gas_budget)),
-										false, /* refund */
-									);
-
-									true
-								},
-								DcaStatus::ChunkToBeScheduled => {
-									// At this point either we have processed all chunks, or the
-									// next chunk must have been scheduled:
-									log_or_panic!("Unexpected ChunkToBeScheduled status for request id {swap_request_id}");
-									false
-								},
-							}
-						} else {
-							// Awaiting gas swap to complete
-							false
-						}
+						false
 					} else {
-						#[allow(clippy::collapsible_if)] // collapsing makes non-ccm case less clear
-						if let Some(chunk_input_amount) =
-							dca_state.prepare_next_chunk(Some((swap.swap_id(), output_amount)))
-						{
-							let swap_id = Self::schedule_swap(
-								request.input_asset,
-								request.output_asset,
-								chunk_input_amount,
-								request.refund_params.as_ref(),
-								SwapType::Swap,
-								broker_fees.clone(),
-								request.id,
-								dca_state.chunk_interval.into(),
-							);
+						debug_assert!(dca_state.remaining_input_amount == 0);
 
-							dca_state.status = DcaStatus::ChunkScheduled(swap_id);
+						Self::egress_for_swap(
+							swap_request_id,
+							dca_state.accumulated_output_amount,
+							swap.output_asset(),
+							output_address.clone(),
+							ccm_deposit_metadata.clone(), /* ccm */
+							false,                        /* refund */
+						);
 
-							false
-						} else {
-							debug_assert!(dca_state.remaining_input_amount == 0);
-
-							Self::egress_for_swap(
-								swap_request_id,
-								dca_state.accumulated_output_amount,
-								swap.output_asset(),
-								output_address.clone(),
-								None,  /* ccm */
-								false, /* refund */
-							);
-
-							true
-						}
+						true
 					},
 				SwapRequestState::NetworkFee => {
 					if swap.output_asset() == Asset::Flip {
@@ -2056,12 +1841,12 @@ pub mod pallet {
 			amount: AssetAmount,
 			asset: Asset,
 			address: ForeignChainAddress,
-			ccm_gas_and_metadata: Option<(CcmDepositMetadata, AssetAmount)>,
+			maybe_ccm_metadata: Option<CcmDepositMetadata>,
 			is_refund: bool,
 		) {
-			let is_ccm_swap = ccm_gas_and_metadata.is_some();
+			let is_ccm_swap = maybe_ccm_metadata.is_some();
 
-			match T::EgressHandler::schedule_egress(asset, amount, address, ccm_gas_and_metadata) {
+			match T::EgressHandler::schedule_egress(asset, amount, address, maybe_ccm_metadata) {
 				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
 					if is_refund {
 						Self::deposit_event(Event::<T>::RefundEgressScheduled {
@@ -2069,7 +1854,7 @@ pub mod pallet {
 							egress_id,
 							asset,
 							amount: egress_amount,
-							egress_fee: fee_withheld,
+							egress_fee: (fee_withheld, asset),
 						});
 					} else {
 						Self::deposit_event(Event::<T>::SwapEgressScheduled {
@@ -2077,7 +1862,7 @@ pub mod pallet {
 							egress_id,
 							asset,
 							amount: egress_amount,
-							egress_fee: fee_withheld,
+							egress_fee: (fee_withheld, asset),
 						});
 					},
 				Err(err) => {
@@ -2170,20 +1955,14 @@ pub mod pallet {
 				request_type: match &request_type {
 					SwapRequestType::NetworkFee => SwapRequestTypeEncoded::NetworkFee,
 					SwapRequestType::IngressEgressFee => SwapRequestTypeEncoded::IngressEgressFee,
-					SwapRequestType::Regular { output_address } =>
+					SwapRequestType::Regular { output_address, ccm_deposit_metadata } =>
 						SwapRequestTypeEncoded::Regular {
 							output_address: T::AddressConverter::to_encoded_address(
 								output_address.clone(),
 							),
-						},
-					SwapRequestType::Ccm { output_address, ccm_swap_metadata } =>
-						SwapRequestTypeEncoded::Ccm {
-							output_address: T::AddressConverter::to_encoded_address(
-								output_address.clone(),
-							),
-							ccm_swap_metadata: ccm_swap_metadata
+							ccm_deposit_metadata: ccm_deposit_metadata
 								.clone()
-								.to_encoded::<T::AddressConverter>(),
+								.map(|metadata| metadata.to_encoded::<T::AddressConverter>()),
 						},
 				},
 				origin: origin.clone(),
@@ -2240,7 +2019,7 @@ pub mod pallet {
 						},
 					);
 				},
-				SwapRequestType::Regular { output_address } => {
+				SwapRequestType::Regular { output_address, ccm_deposit_metadata } => {
 					let (mut dca_state, chunk_input_amount) =
 						DcaState::create_with_first_chunk(net_amount, dca_params);
 
@@ -2265,119 +2044,13 @@ pub mod pallet {
 							output_asset,
 							refund_params,
 							state: SwapRequestState::UserSwap {
-								ccm: None,
+								ccm_deposit_metadata,
 								output_address: output_address.clone(),
 								broker_fees,
 								dca_state,
 							},
 						},
 					);
-				},
-				SwapRequestType::Ccm { ccm_swap_metadata, output_address } => {
-					// Caller should ensure that assets and addresses are compatible.
-					debug_assert!(output_address.chain() == ForeignChain::from(output_asset));
-
-					let CcmSwapAmounts { principal_swap_amount, gas_budget, other_gas_asset } =
-						ccm_swap_metadata.swap_amounts;
-
-					// See if principal swap is needed, schedule it first if so:
-					if input_asset != output_asset && !principal_swap_amount.is_zero() {
-						let (mut dca_state, chunk_input_amount) =
-							DcaState::create_with_first_chunk(principal_swap_amount, dca_params);
-
-						let swap_id = Self::schedule_swap(
-							input_asset,
-							output_asset,
-							chunk_input_amount,
-							refund_params.as_ref(),
-							SwapType::CcmPrincipal,
-							broker_fees.clone(),
-							request_id,
-							SWAP_DELAY_BLOCKS.into(),
-						);
-
-						dca_state.status = DcaStatus::ChunkScheduled(swap_id);
-
-						SwapRequests::<T>::insert(
-							request_id,
-							SwapRequest {
-								id: request_id,
-								input_asset,
-								output_asset,
-								refund_params: refund_params.clone(),
-								state: SwapRequestState::UserSwap {
-									ccm: Some(CcmState {
-										gas_swap_state: if let Some(other_gas_asset) =
-											other_gas_asset
-										{
-											GasSwapState::ToBeScheduled {
-												gas_budget,
-												other_gas_asset,
-											}
-										} else {
-											GasSwapState::OutputReady { gas_budget }
-										},
-										ccm_deposit_metadata: ccm_swap_metadata
-											.deposit_metadata
-											.clone(),
-									}),
-									output_address: output_address.clone(),
-									dca_state,
-									broker_fees,
-								},
-							},
-						);
-					// See if gas swap is needed, schedule it immediately if so
-					// (since there is no principal swap in this case):
-					} else if let Some(other_gas_asset) = other_gas_asset {
-						let gas_swap_state = Self::schedule_ccm_gas_swap(
-							request_id,
-							input_asset,
-							other_gas_asset,
-							gas_budget,
-						);
-
-						SwapRequests::<T>::insert(
-							request_id,
-							SwapRequest {
-								id: request_id,
-								input_asset,
-								output_asset,
-								refund_params: None,
-								state: SwapRequestState::UserSwap {
-									ccm: Some(CcmState {
-										gas_swap_state,
-										ccm_deposit_metadata: ccm_swap_metadata
-											.deposit_metadata
-											.clone(),
-									}),
-									output_address,
-									dca_state: DcaState {
-										status: DcaStatus::Completed,
-										remaining_input_amount: 0,
-										remaining_chunks: 0,
-										chunk_interval: SWAP_DELAY_BLOCKS,
-										accumulated_output_amount: principal_swap_amount,
-									},
-									broker_fees,
-								},
-							},
-						);
-					} else {
-						// No swaps are needed, process the CCM outcome immediately:
-						Self::deposit_event(Event::<T>::SwapRequestCompleted {
-							swap_request_id: request_id,
-						});
-
-						Self::egress_for_swap(
-							request_id,
-							principal_swap_amount,
-							output_asset,
-							output_address,
-							Some((ccm_swap_metadata.deposit_metadata, gas_budget)),
-							false, /* refund */
-						);
-					}
 				},
 			};
 

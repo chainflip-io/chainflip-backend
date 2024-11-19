@@ -166,9 +166,10 @@ pub mod compute_units_costs {
 
 	// Max compute units per CCM transfers. Capping it to maximize chances of inclusion.
 	pub const MAX_COMPUTE_UNITS_PER_CCM_TRANSFER: SolComputeLimit = 600_000u32;
-	// Minimum compute units required for CCM transfers to ensure their inclusion
-	pub const MIN_COMPUTE_LIMIT_PER_CCM_NATIVE_TRANSFER: SolComputeLimit = 20_000u32;
-	pub const MIN_COMPUTE_LIMIT_PER_CCM_TOKEN_TRANSFER: SolComputeLimit = 50_000u32;
+	// Compute units overhead for Ccm transfers. These also act as minimum compute units
+	// to ensure transaction inclusion.
+	pub const CCM_COMPUTE_UNITS_OVERHEAD_NATIVE: SolComputeLimit = 40_000u32;
+	pub const CCM_COMPUTE_UNITS_OVERHEAD_TOKEN: SolComputeLimit = 80_000u32;
 }
 
 #[derive(
@@ -189,6 +190,26 @@ pub struct SolTrackedData {
 }
 
 impl SolTrackedData {
+	pub fn calculate_ccm_compute_limit(
+		gas_budget: cf_primitives::GasAmount,
+		asset: SolAsset,
+	) -> SolComputeLimit {
+		use compute_units_costs::*;
+
+		let compute_limit: SolComputeLimit = match gas_budget.try_into() {
+			Ok(limit) => limit,
+			Err(_) => return MAX_COMPUTE_UNITS_PER_CCM_TRANSFER,
+		};
+		let compute_limit_with_overhead = compute_limit.saturating_add(match asset {
+			SolAsset::Sol => CCM_COMPUTE_UNITS_OVERHEAD_NATIVE,
+			SolAsset::SolUsdc => CCM_COMPUTE_UNITS_OVERHEAD_TOKEN,
+		});
+		sp_std::cmp::min(
+			MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as SolComputeLimit,
+			compute_limit_with_overhead,
+		)
+	}
+
 	// Calculate the estimated fee for broadcasting a transaction given its compute units
 	// and the current priority fee.
 	pub fn calculate_transaction_fee(
@@ -248,6 +269,20 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 		);
 
 		self.calculate_transaction_fee(compute_units_per_fetch)
+	}
+
+	fn estimate_ccm_fee(
+		&self,
+		asset: <Solana as Chain>::ChainAsset,
+		gas_budget: cf_primitives::GasAmount,
+		_message_length: usize,
+	) -> Option<<Solana as Chain>::ChainAmount> {
+		let gas_limit = SolTrackedData::calculate_ccm_compute_limit(gas_budget, asset);
+		let ccm_fee = self.calculate_transaction_fee(gas_limit);
+		Some(match asset {
+			assets::sol::Asset::Sol => ccm_fee,
+			assets::sol::Asset::SolUsdc => ccm_fee.saturating_add(TOKEN_ACCOUNT_RENT),
+		})
 	}
 }
 
@@ -407,3 +442,45 @@ pub struct SolApiEnvironment {
 }
 
 impl DepositDetailsToTransactionInId<SolanaCrypto> for () {}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use crate::sol::compute_units_costs::*;
+
+	#[test]
+	fn can_calculate_gas_limit() {
+		const TEST_EGRESS_BUDGET: u128 = 80_000u128;
+
+		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
+			let default_compute_limit = match asset {
+				SolAsset::Sol => CCM_COMPUTE_UNITS_OVERHEAD_NATIVE,
+				SolAsset::SolUsdc => CCM_COMPUTE_UNITS_OVERHEAD_TOKEN,
+			};
+
+			let mut tx_compute_limit: u32 =
+				SolTrackedData::calculate_ccm_compute_limit(TEST_EGRESS_BUDGET, *asset);
+			assert_eq!(tx_compute_limit, TEST_EGRESS_BUDGET as u32 + default_compute_limit);
+
+			// Test SolComputeLimit saturation
+			assert_eq!(
+				SolTrackedData::calculate_ccm_compute_limit(
+					MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u128 - default_compute_limit as u128 + 1,
+					*asset,
+				),
+				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER
+			);
+
+			// Test upper cap
+			tx_compute_limit = SolTrackedData::calculate_ccm_compute_limit(
+				MAX_COMPUTE_UNITS_PER_CCM_TRANSFER as u128 - 1,
+				*asset,
+			);
+			assert_eq!(tx_compute_limit, MAX_COMPUTE_UNITS_PER_CCM_TRANSFER);
+
+			// Test lower cap
+			let tx_compute_limit = SolTrackedData::calculate_ccm_compute_limit(0, *asset);
+			assert_eq!(tx_compute_limit, default_compute_limit);
+		}
+	}
+}

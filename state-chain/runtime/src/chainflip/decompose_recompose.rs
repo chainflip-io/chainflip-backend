@@ -4,7 +4,6 @@ use crate::{
 use cf_chains::{arb::ArbitrumTrackedData, btc::BitcoinFeeInfo};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
-use sp_runtime::FixedU64;
 use sp_std::{mem, prelude::*};
 
 impl WitnessDataExtraction for RuntimeCall {
@@ -53,7 +52,7 @@ impl WitnessDataExtraction for RuntimeCall {
 					ArbitrumTrackedData {
 						// Use the floor value of 0.01 gwei for Arbitrum One
 						base_fee: 10000000,
-						gas_limit_multiplier: FixedU64::from(1),
+						l1_base_fee_estimate: 1u128,
 					},
 				);
 				Some(tracked_data.encode())
@@ -128,11 +127,11 @@ fn arb_select_median_base_and_multiplier(data: &mut [Vec<u8>]) -> Option<Arbitru
 
 	match decode_all_results {
 		Ok(entries) => {
-			let (base_values, multiplier_values): (Vec<_>, Vec<_>) =
-				entries.into_iter().map(|t| (t.base_fee, t.gas_limit_multiplier)).unzip();
+			let (base_values, l1_base_fee_estimates): (Vec<_>, Vec<_>) =
+				entries.into_iter().map(|t| (t.base_fee, t.l1_base_fee_estimate)).unzip();
 			Some(ArbitrumTrackedData {
 				base_fee: select_median(base_values)?,
-				gas_limit_multiplier: select_median(multiplier_values)?,
+				l1_base_fee_estimate: select_median(l1_base_fee_estimates)?,
 			})
 		},
 		Err(decode_err) => {
@@ -383,16 +382,15 @@ mod tests {
 	fn arb_select_median_base_and_multiplier_test() {
 		let mut votes = [(1, 1), (9999, 1000), (7, 1002), (7, 4000), (3, 0)]
 			.into_iter()
-			.map(|(base_fee, multiplier)| ArbitrumTrackedData {
+			.map(|(base_fee, l1_base_fee_estimate)| ArbitrumTrackedData {
 				base_fee,
-				gas_limit_multiplier: FixedU64::from(multiplier),
+				l1_base_fee_estimate,
 			})
 			.map(|data| data.encode())
 			.collect::<Vec<_>>();
 
 		let actual = arb_select_median_base_and_multiplier(&mut votes).unwrap();
-		let expected =
-			ArbitrumTrackedData { base_fee: 7, gas_limit_multiplier: FixedU64::from(1000) };
+		let expected = ArbitrumTrackedData { base_fee: 7, l1_base_fee_estimate: 1u128 };
 
 		assert_eq!(actual, expected);
 	}
