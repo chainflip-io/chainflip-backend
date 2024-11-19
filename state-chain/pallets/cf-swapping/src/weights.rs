@@ -40,7 +40,6 @@ pub trait WeightInfo {
 	fn open_private_btc_channel() -> Weight;
 	fn close_private_btc_channel() -> Weight;
 	fn register_affiliate() -> Weight;
-	fn update_broker_bond() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -210,16 +209,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-	/// Storage: `Swapping::BrokerBond` (r:0 w:1)
-	/// Proof: `Swapping::BrokerBond` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_broker_bond() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 1_000_000 picoseconds.
-		Weight::from_parts(2_000_000, 0)
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
 }
 
 // For backwards compatibility and tests
@@ -386,16 +375,6 @@ impl WeightInfo for () {
 		// Minimum execution time: 13_000_000 picoseconds.
 		Weight::from_parts(14_000_000, 4072)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
-	}
-	/// Storage: `Swapping::BrokerBond` (r:0 w:1)
-	/// Proof: `Swapping::BrokerBond` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	fn update_broker_bond() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `0`
-		//  Estimated: `0`
-		// Minimum execution time: 1_000_000 picoseconds.
-		Weight::from_parts(2_000_000, 0)
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 }

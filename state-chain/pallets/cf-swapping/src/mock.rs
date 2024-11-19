@@ -149,10 +149,6 @@ impl WeightInfo for MockWeightInfo {
 	fn register_affiliate() -> Weight {
 		Weight::from_parts(100, 0)
 	}
-
-	fn update_broker_bond() -> Weight {
-		Weight::from_parts(100, 0)
-	}
 }
 
 pub struct AlwaysValid;
