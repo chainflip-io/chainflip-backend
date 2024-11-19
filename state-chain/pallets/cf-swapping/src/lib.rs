@@ -373,7 +373,8 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// Set the minimum chunk size for DCA swaps. The number of chunks of a DCA swap will be
 	/// reduced to meet this requirement.
 	SetMinimumChunkSize { asset: Asset, size: AssetAmount },
-	/// Set the broker bond.
+	/// Set the broker bond. This is the amount of FLIP that must be bonded to open a private
+	/// broker channel. The funds are getting freed when the channel is closed.
 	SetBrokerBond { bond: T::Amount },
 }
 
