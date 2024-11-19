@@ -1,20 +1,20 @@
 use crate::Bonding;
-use std::{cell::RefCell, collections::HashMap};
+use frame_support::parameter_types;
 
-use crate::DispatchResult;
+use sp_std::collections::btree_map::BTreeMap;
 
 pub type Amount = u128;
 pub type ValidatorId = u64;
 
-thread_local! {
-	pub static AUTHORITY_BONDS: RefCell<HashMap<ValidatorId, Amount>> = RefCell::new(HashMap::default());
+parameter_types! {
+	pub storage AuthorityBonds: BTreeMap<ValidatorId, Amount> = Default::default();
 }
 
 pub struct MockBonder;
 
 impl MockBonder {
 	pub fn get_bond(account_id: &ValidatorId) -> Amount {
-		AUTHORITY_BONDS.with(|cell| cell.borrow().get(account_id).copied().unwrap_or(0))
+		AuthorityBonds::get().get(account_id).copied().unwrap_or(0)
 	}
 }
 
@@ -23,21 +23,7 @@ impl Bonding for MockBonder {
 	type Amount = Amount;
 
 	fn update_bond(account_id: &Self::ValidatorId, bond: Self::Amount) {
-		AUTHORITY_BONDS.with(|cell| {
-			cell.borrow_mut().insert(*account_id, bond);
-		})
-	}
-
-	fn try_bond(account_id: &Self::ValidatorId, bond: Self::Amount) -> DispatchResult {
-		AUTHORITY_BONDS.with(|cell| {
-			cell.borrow_mut().insert(*account_id, bond);
-		});
-		Ok(())
-	}
-
-	fn unbond(account_id: &Self::ValidatorId) {
-		AUTHORITY_BONDS.with(|cell| {
-			cell.borrow_mut().remove(account_id);
-		})
+		let mut authority_bonds = AuthorityBonds::get();
+		authority_bonds.insert(*account_id, bond);
 	}
 }

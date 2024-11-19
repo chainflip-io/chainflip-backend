@@ -690,13 +690,6 @@ pub trait Bonding {
 	type Amount;
 	/// Update the bond of an authority
 	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
-	/// Try to bond an amount for an account. Checks if the account exists and if the account has
-	/// enough liquidity to bond the amount.
-	/// If not, returns an error.
-	fn try_bond(authority: &Self::ValidatorId, bond: Self::Amount) -> DispatchResult;
-	/// Frees the account from its bond.
-	/// Note: Does nothing if the account does not exist.
-	fn unbond(authority: &Self::ValidatorId);
 }
 
 /// Something that is able to provide block authorship slots that were missed.

@@ -199,17 +199,5 @@ mod benchmarks {
 		);
 	}
 
-	#[benchmark]
-	fn update_broker_bond() {
-		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		#[block]
-		{
-			assert_ok!(Pallet::<T>::update_broker_bond(
-				origin.clone(),
-				(FLIPPERINOS_PER_FLIP * 100).into()
-			));
-		}
-	}
-
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

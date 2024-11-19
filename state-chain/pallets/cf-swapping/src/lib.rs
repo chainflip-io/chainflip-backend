@@ -17,7 +17,7 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
-	ExecutionCondition, IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler,
+	ExecutionCondition, FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler,
 	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
@@ -373,6 +373,8 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// Set the minimum chunk size for DCA swaps. The number of chunks of a DCA swap will be
 	/// reduced to meet this requirement.
 	SetMinimumChunkSize { asset: Asset, size: AssetAmount },
+	/// Set the broker bond.
+	SetBrokerBond { bond: T::Amount },
 }
 
 impl_pallet_safe_mode! {
@@ -693,6 +695,9 @@ pub mod pallet {
 			affiliate_id: T::AccountId,
 			previous_affiliate_id: Option<T::AccountId>,
 		},
+		BrokerBondSet {
+			bond: T::Amount,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -997,6 +1002,10 @@ pub mod pallet {
 						MinimumChunkSize::<T>::set(asset, amount);
 						Self::deposit_event(Event::<T>::MinimumChunkSizeSet { asset, amount });
 					},
+					PalletConfigUpdate::SetBrokerBond { bond } => {
+						BrokerBond::<T>::set(bond);
+						Self::deposit_event(Event::<T>::BrokerBondSet { bond });
+					},
 				}
 			}
 
@@ -1139,11 +1148,16 @@ pub mod pallet {
 				Error::<T>::PrivateChannelExistsForBroker
 			);
 
+			ensure!(
+				T::FundingInfo::total_balance_of(&broker_id) > BrokerBond::<T>::get(),
+				Error::<T>::InsufficientFunds
+			);
+
 			let channel_id = T::ChannelIdAllocator::allocate_private_channel_id()?;
 
 			BrokerPrivateBtcChannels::<T>::insert(broker_id.clone(), channel_id);
 
-			T::Bonder::try_bond(&broker_id, BrokerBond::<T>::get())?;
+			T::Bonder::update_bond(&broker_id, BrokerBond::<T>::get());
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened { broker_id, channel_id });
 
@@ -1159,7 +1173,7 @@ pub mod pallet {
 				return Err(Error::<T>::NoPrivateChannelExistsForBroker.into())
 			};
 
-			T::Bonder::unbond(&broker_id);
+			T::Bonder::update_bond(&broker_id, 0u128.into());
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed { broker_id, channel_id });
 
@@ -1188,15 +1202,6 @@ pub mod pallet {
 				previous_affiliate_id,
 			});
 
-			Ok(())
-		}
-
-		/// Updates the broker's bond to the new amount.
-		#[pallet::call_index(15)]
-		#[pallet::weight(T::WeightInfo::update_broker_bond())]
-		pub fn update_broker_bond(origin: OriginFor<T>, new_bond: T::Amount) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			BrokerBond::<T>::set(new_bond);
 			Ok(())
 		}
 	}

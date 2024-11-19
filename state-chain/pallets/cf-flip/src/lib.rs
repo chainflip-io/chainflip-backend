@@ -143,8 +143,6 @@ pub mod pallet {
 		InsufficientReserves,
 		/// No pending redemption for this ID.
 		NoPendingRedemptionForThisID,
-		/// Account does not exist.
-		AccountDoesNotExist,
 	}
 
 	#[pallet::call]
@@ -447,29 +445,6 @@ impl<T: Config> Bonding for Bonder<T> {
 		Account::<T>::mutate_exists(authority, |maybe_account| {
 			if let Some(account) = maybe_account.as_mut() {
 				account.bond = bond
-			}
-		})
-	}
-
-	fn try_bond(authority: &Self::ValidatorId, bond: Self::Amount) -> DispatchResult {
-		Account::<T>::mutate_exists(authority, |maybe_account| {
-			if let Some(account) = maybe_account.as_mut() {
-				if account.balance >= bond {
-					account.bond = bond;
-					Ok(())
-				} else {
-					Err(Error::<T>::InsufficientLiquidity.into())
-				}
-			} else {
-				Err(Error::<T>::AccountDoesNotExist.into())
-			}
-		})
-	}
-
-	fn unbond(authority: &Self::ValidatorId) {
-		Account::<T>::mutate_exists(authority, |maybe_account| {
-			if let Some(account) = maybe_account.as_mut() {
-				account.bond = 0u128.into()
 			}
 		})
 	}
