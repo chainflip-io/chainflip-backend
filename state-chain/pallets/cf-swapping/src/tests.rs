@@ -1741,11 +1741,12 @@ mod private_channels {
 	#[test]
 	fn register_affiliate() {
 		new_test_ext().execute_with(|| {
-			// Only brokers can register affiliates
-			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			const SHORT_ID_1: AffiliateShortId = AffiliateShortId(0);
+			const SHORT_ID_2: AffiliateShortId = AffiliateShortId(SHORT_ID_1.0 + 1);
 
+			// Only brokers can register affiliates
 			assert_noop!(
-				Swapping::register_affiliate(OriginTrait::signed(ALICE), SHORT_ID, BOB),
+				Swapping::register_affiliate(OriginTrait::signed(ALICE), BOB, Some(SHORT_ID_1)),
 				BadOrigin
 			);
 
@@ -1753,36 +1754,65 @@ mod private_channels {
 			{
 				assert_ok!(Swapping::register_affiliate(
 					OriginTrait::signed(BROKER),
-					SHORT_ID,
 					ALICE,
+					Some(SHORT_ID_1),
 				));
 
 				System::assert_has_event(RuntimeEvent::Swapping(
 					Event::<Test>::AffiliateRegistrationUpdated {
 						broker_id: BROKER,
-						affiliate_short_id: SHORT_ID,
+						affiliate_short_id: SHORT_ID_1,
 						affiliate_id: ALICE,
 						previous_affiliate_id: None,
 					},
 				));
+				assert_eq!(Swapping::get_short_id(&BROKER, &ALICE), Some(SHORT_ID_1));
 			}
 
-			// Overwriting an existing affiliate registration entry:
+			// Auto assigning an affiliate short id
+			{
+				assert_ok!(Swapping::register_affiliate(OriginTrait::signed(BROKER), BOB, None));
+
+				System::assert_has_event(RuntimeEvent::Swapping(
+					Event::<Test>::AffiliateRegistrationUpdated {
+						broker_id: BROKER,
+						affiliate_short_id: SHORT_ID_2,
+						affiliate_id: BOB,
+						previous_affiliate_id: None,
+					},
+				));
+				assert_eq!(Swapping::get_short_id(&BROKER, &BOB), Some(SHORT_ID_2));
+			}
+
+			// Auto assigning an existing affiliate should not assign a new id.
+			{
+				assert_ok!(Swapping::register_affiliate(OriginTrait::signed(BROKER), BOB, None));
+				assert_eq!(Swapping::get_short_id(&BROKER, &BOB), Some(SHORT_ID_2));
+				assert_eq!(
+					AffiliateIdMapping::<Test>::iter_prefix(BROKER).collect::<Vec<_>>().len(),
+					2
+				);
+			}
+
+			// Overwriting an existing affiliate registration entry.
 			{
 				assert_ok!(Swapping::register_affiliate(
 					OriginTrait::signed(BROKER),
-					SHORT_ID,
 					BOB,
+					Some(SHORT_ID_1),
 				));
 
 				System::assert_has_event(RuntimeEvent::Swapping(
 					Event::<Test>::AffiliateRegistrationUpdated {
 						broker_id: BROKER,
-						affiliate_short_id: SHORT_ID,
+						affiliate_short_id: SHORT_ID_1,
 						affiliate_id: BOB,
 						previous_affiliate_id: Some(ALICE),
 					},
 				));
+
+				// A duplicate registration for Bob was created, this is allowed.
+				assert_eq!(Swapping::get_short_id(&BROKER, &BOB), Some(SHORT_ID_2));
 			}
 		});
 	}

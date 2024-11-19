@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
@@ -29,7 +30,6 @@ use jsonrpsee::{
 	PendingSubscriptionSink,
 };
 use serde::{Deserialize, Serialize};
-use sp_core::H256;
 use std::{
 	path::PathBuf,
 	sync::{atomic::AtomicBool, Arc},
@@ -139,9 +139,12 @@ pub trait Rpc {
 	#[method(name = "register_affiliate", aliases = ["broker_registerAffiliate"])]
 	async fn register_affiliate(
 		&self,
-		short_id: AffiliateShortId,
 		affiliate_id: AccountId32,
-	) -> RpcResult<H256>;
+		short_id: Option<AffiliateShortId>,
+	) -> RpcResult<AffiliateShortId>;
+
+	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
+	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
 }
 
 pub struct RpcServerImpl {
@@ -323,10 +326,28 @@ impl RpcServer for RpcServerImpl {
 
 	async fn register_affiliate(
 		&self,
-		short_id: AffiliateShortId,
 		affiliate_id: AccountId32,
-	) -> RpcResult<H256> {
-		Ok(self.api.broker_api().register_affiliate(short_id, affiliate_id).await?)
+		short_id: Option<AffiliateShortId>,
+	) -> RpcResult<AffiliateShortId> {
+		self.api.broker_api().register_affiliate(affiliate_id.clone(), short_id).await?;
+
+		// Check that the affiliate was registered and get its short id
+		let affiliates = self.api.query_api().get_affiliates(None, None).await?;
+		if let Some((assigned_short_id, _)) = affiliates.iter().find(|(_, id)| *id == affiliate_id)
+		{
+			if let Some(given_short_id) = short_id {
+				if given_short_id != *assigned_short_id {
+					return Err(anyhow!("Failed to update affiliate registration").into());
+				}
+			}
+			return Ok(*assigned_short_id).map_err(BrokerApiError::Other);
+		};
+
+		Err(anyhow!("Affiliate registration failed").into())
+	}
+
+	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
+		Ok(self.api.query_api().get_affiliates(None, None).await?)
 	}
 }
 

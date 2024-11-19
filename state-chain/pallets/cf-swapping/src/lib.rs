@@ -524,7 +524,7 @@ pub mod pallet {
 	/// it can be used in place of the full account id in order to save space (e.g. in UTXO encoding
 	/// for BTC)
 	#[pallet::storage]
-	pub(crate) type AffiliateIdMapping<T: Config> = StorageDoubleMap<
+	pub type AffiliateIdMapping<T: Config> = StorageDoubleMap<
 		_,
 		Identity,
 		T::AccountId,
@@ -735,6 +735,8 @@ pub mod pallet {
 		AffiliateNotRegistered,
 		/// Bitcoin vault swaps only support up to 2 affiliates.
 		TooManyAffiliates,
+		/// No empty affiliate short id available.
+		NoEmptyAffiliateShortId,
 	}
 
 	#[pallet::genesis_config]
@@ -1143,17 +1145,41 @@ pub mod pallet {
 		}
 
 		/// Associates `short_id` with `affiliate_id` for a given broker. Overwrites the record
-		/// under `short_id` if already taken by another affiliate.
+		/// under `short_id` if already taken by another affiliate. Leave `short_id` empty to auto
+		/// assign one.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
 			origin: OriginFor<T>,
-			short_id: AffiliateShortId,
 			affiliate_id: T::AccountId,
+			short_id: Option<AffiliateShortId>,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let previous_affiliate_id = AffiliateIdMapping::<T>::take(&broker_id, short_id);
+			let (previous_affiliate_id, short_id) = if let Some(short_id) = short_id {
+				(AffiliateIdMapping::<T>::take(&broker_id, short_id), short_id)
+			} else if Self::get_short_id(&broker_id, &affiliate_id).is_some() {
+				// The affiliate is already registered with the broker
+				return Ok(());
+			} else {
+				// Find the lowest unused short id
+				let mut used_ids: Vec<AffiliateShortId> =
+					AffiliateIdMapping::<T>::iter_prefix(&broker_id)
+						.map(|(short_id, _)| short_id)
+						.collect();
+				used_ids.sort_unstable();
+				let mut lowest_unused_id: AffiliateShortId = 0.into();
+				for id in used_ids {
+					if id != lowest_unused_id {
+						break;
+					}
+					lowest_unused_id = lowest_unused_id
+						.checked_add(1)
+						.ok_or(Error::<T>::NoEmptyAffiliateShortId)?
+						.into();
+				}
+				(None, lowest_unused_id)
+			};
 
 			AffiliateIdMapping::<T>::insert(&broker_id, short_id, &affiliate_id);
 
@@ -2472,6 +2498,7 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 		AffiliateIdMapping::<T>::get(broker_id, affiliate_short_id)
 	}
 
+	/// This function iterates over a storage map. Only for use in rpc methods.
 	fn get_short_id(
 		broker_id: &Self::AccountId,
 		affiliate_id: &Self::AccountId,

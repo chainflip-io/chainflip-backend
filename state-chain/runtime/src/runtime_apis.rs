@@ -9,8 +9,8 @@ use cf_chains::{
 	ChainCrypto, ForeignChainAddress,
 };
 use cf_primitives::{
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
-	DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
+	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
+	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
 	PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
@@ -424,6 +424,7 @@ decl_runtime_apis!(
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
 		fn cf_tainted_transaction_events() -> TaintedTransactionEvents;
+		fn cf_get_affiliates(broker: AccountId32) -> Vec<(AffiliateShortId, AccountId32)>;
 	}
 );
 

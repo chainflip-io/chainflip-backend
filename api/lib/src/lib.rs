@@ -511,12 +511,12 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 
 	async fn register_affiliate(
 		&self,
-		short_id: AffiliateShortId,
 		affiliate_id: AccountId32,
+		short_id: Option<AffiliateShortId>,
 	) -> Result<H256> {
 		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_affiliate {
-			short_id,
 			affiliate_id,
+			short_id,
 		})
 		.await
 	}

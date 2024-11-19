@@ -38,8 +38,7 @@ async function buildAndSendBtcVaultSwap(
   destinationAsset: Asset,
   destinationAddress: string,
   refundAddress: string,
-  affiliateUri1: string | null = null,
-  affiliateUri2: string | null = null,
+  affiliateAddresses: string[],
 ) {
   await using chainflip = await getChainflipApi();
 
@@ -48,13 +47,8 @@ async function buildAndSendBtcVaultSwap(
   testBtcVaultSwap.debugLog(`Btc endpoint is set to`, BTC_ENDPOINT);
 
   const affiliates: Beneficiary[] = [];
-  if (affiliateUri1) {
-    const affiliate1 = createStateChainKeypair(affiliateUri1);
-    affiliates.push({ account: affiliate1.address, bps: commissionBps });
-  }
-  if (affiliateUri2) {
-    const affiliate1 = createStateChainKeypair(affiliateUri2);
-    affiliates.push({ account: affiliate1.address, bps: commissionBps });
+  for (const affiliateAddress of affiliateAddresses) {
+    affiliates.push({ account: affiliateAddress, bps: commissionBps });
   }
 
   const feeBtc = 0.00001;
@@ -141,7 +135,7 @@ async function testVaultSwap(
     destinationAsset,
     destinationAddress,
     refundAddress,
-    affiliateUri,
+    [affiliate.address],
   );
 
   // Complete swap and check balance
@@ -177,24 +171,21 @@ async function openPrivateBtcChannel(brokerUri: string) {
   }
 }
 
-async function registerAffiliate(
-  brokerUri: string,
-  affiliateShortId: number,
-  affiliateUri: string,
-) {
+async function registerAffiliate(brokerUri: string, affiliateUri: string) {
   // TODO: Use chainflip SDK instead so we can support any broker uri
   assert.strictEqual(brokerUri, '//BROKER_1', 'Support for other brokers is not implemented');
 
   const affiliate = createStateChainKeypair(affiliateUri);
-  await brokerApiRpc('broker_register_affiliate', [affiliateShortId, affiliate.address]);
+  return brokerApiRpc('broker_register_affiliate', [affiliate.address]);
 }
 
 async function main() {
   const btcDepositAmount = 0.1;
+  // TODO: Fee collection will work properly when using 'BROKER_1' and 'BROKER_2' because it will be effected by the other tests.
   const brokerUri = '//BROKER_1';
   const affiliateUri = '//BROKER_2';
 
   await openPrivateBtcChannel(brokerUri);
-  await registerAffiliate(brokerUri, 0, affiliateUri);
+  await registerAffiliate(brokerUri, affiliateUri);
   await testVaultSwap(btcDepositAmount, brokerUri, 'Flip', affiliateUri);
 }

@@ -58,8 +58,8 @@ use cf_chains::{
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{
-	AffiliateAndFee, Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
-	NetworkEnvironment, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	AffiliateAndFee, AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId,
+	DcaParameters, EpochIndex, NetworkEnvironment, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter, BalanceApi,
@@ -2154,35 +2154,35 @@ impl_runtime_apis! {
 								pallet_cf_swapping::Error::<Runtime>::NoPrivateChannelExistsForBroker,
 							)?;
 					let params = UtxoEncodedData {
-						output_asset: destination_asset,
-						output_address: destination_address,
-						parameters: SharedCfParameters {
-							retry_duration: retry_duration.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
-							min_output_amount,
-							number_of_chunks: dca_parameters
-								.as_ref()
-								.map(|params| params.number_of_chunks)
-								.unwrap_or(1)
-								.try_into()
-								.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
-							chunk_interval: dca_parameters
-								.as_ref()
-								.map(|params| params.chunk_interval)
-								.unwrap_or(SWAP_DELAY_BLOCKS)
-								.try_into()
-								.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
-							boost_fee: boost_fee.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
-							broker_fee: broker_commission.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
-							affiliates: affiliate_fees.into_iter().map(|beneficiary|
-							{
-								Result::<AffiliateAndFee, DispatchErrorWithMessage>::Ok(AffiliateAndFee{
-									affiliate: Swapping::get_short_id(&broker_id, &beneficiary.account).ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegistered)?,
-									fee: beneficiary.bps.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::AffiliateFeeTooHigh)?
-								})
+							output_asset: destination_asset,
+							output_address: destination_address,
+							parameters: SharedCfParameters {
+								retry_duration: retry_duration.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
+								min_output_amount,
+								number_of_chunks: dca_parameters
+									.as_ref()
+									.map(|params| params.number_of_chunks)
+									.unwrap_or(1)
+									.try_into()
+									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
+								chunk_interval: dca_parameters
+									.as_ref()
+									.map(|params| params.chunk_interval)
+									.unwrap_or(SWAP_DELAY_BLOCKS)
+									.try_into()
+									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
+								boost_fee: boost_fee.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
+								broker_fee: broker_commission.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
+								affiliates: affiliate_fees.into_iter().map(|beneficiary|
+								{
+									Result::<AffiliateAndFee, DispatchErrorWithMessage>::Ok(AffiliateAndFee{
+										affiliate: Swapping::get_short_id(&broker_id, &beneficiary.account).ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegistered)?,
+										fee: beneficiary.bps.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::AffiliateFeeTooHigh)?
+									})
+								},
+								).collect::<Result<Vec<AffiliateAndFee>,_>>()?.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::TooManyAffiliates)?,
 							},
-							).collect::<Result<Vec<AffiliateAndFee>,_>>()?.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::TooManyAffiliates)?,
-						},
-					};
+						};
 
 					let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
 						.expect("We should always have a key for the current epoch.");
@@ -2240,6 +2240,12 @@ impl_runtime_apis! {
 			TaintedTransactionEvents {
 				btc_events
 			}
+		}
+
+		fn cf_get_affiliates(
+			broker: AccountId,
+		) -> Vec<(AffiliateShortId, AccountId)>{
+			pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&broker).collect()
 		}
 	}
 

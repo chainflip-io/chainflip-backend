@@ -14,8 +14,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
-	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
+	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
+	BroadcastId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId,
+	SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -1016,6 +1017,13 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TaintedTransactionEvents>;
+
+	#[method(name = "get_affiliates")]
+	fn cf_get_affiliates(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(AffiliateShortId, state_chain_runtime::AccountId)>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1872,6 +1880,14 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TaintedTransactionEvents> {
 		self.with_runtime_api(at, |api, hash| api.cf_tainted_transaction_events(hash))
+	}
+
+	fn cf_get_affiliates(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(AffiliateShortId, state_chain_runtime::AccountId)>> {
+		self.with_runtime_api(at, |api, hash| api.cf_get_affiliates(hash, broker))
 	}
 }
 
