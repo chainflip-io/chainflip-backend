@@ -1,5 +1,5 @@
 use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN, ScriptBuf};
-use cf_amm::common::{bounded_sqrt_price, sqrt_price_to_price};
+use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
 use cf_chains::{
 	assets::btc::Asset as BtcAsset,
 	btc::{

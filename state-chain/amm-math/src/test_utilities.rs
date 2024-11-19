@@ -1,4 +1,4 @@
-#![cfg(test)]
+#![cfg(feature = "slow-tests")]
 
 use rand::prelude::Distribution;
 use sp_core::U256;

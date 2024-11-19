@@ -1267,6 +1267,7 @@ dependencies = [
 name = "cf-amm"
 version = "0.1.0"
 dependencies = [
+ "cf-amm-math",
  "cf-primitives",
  "parity-scale-codec",
  "rand",
@@ -1275,6 +1276,19 @@ dependencies = [
  "sp-core 34.0.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2+2)",
  "utilities",
+]
+
+[[package]]
+name = "cf-amm-math"
+version = "0.1.0"
+dependencies = [
+ "cf-primitives",
+ "parity-scale-codec",
+ "rand",
+ "scale-info",
+ "serde",
+ "sp-core 34.0.0",
+ "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2+2)",
 ]
 
 [[package]]
@@ -1287,6 +1301,7 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "borsh",
  "bs58 0.5.1",
+ "cf-amm-math",
  "cf-primitives",
  "cf-runtime-utilities",
  "cf-test-utilities",

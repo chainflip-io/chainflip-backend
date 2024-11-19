@@ -33,9 +33,12 @@ use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
 use crate::common::{
-	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, sqrt_price_to_price,
-	tick_at_sqrt_price, Amount, BaseToQuote, PoolPairsMap, Price, QuoteToBase, SetFeesError,
-	SqrtPriceQ64F96, Tick, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS, PRICE_FRACTIONAL_BITS,
+	BaseToQuote, PoolPairsMap, QuoteToBase, SetFeesError, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS,
+};
+use cf_amm_math::{
+	is_tick_valid, mul_div_ceil, mul_div_floor, output_amount_floor, sqrt_price_at_tick,
+	sqrt_price_to_price, tick_at_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick,
+	PRICE_FRACTIONAL_BITS,
 };
 
 // This is the maximum liquidity/amount of an asset that can be sold at a single tick/price. If an
@@ -217,7 +220,7 @@ impl SwapDirection for BaseToQuote {
 	}
 
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
-		crate::common::output_amount_floor(input, price)
+		output_amount_floor(input, price)
 	}
 
 	fn best_priced_fixed_pool(

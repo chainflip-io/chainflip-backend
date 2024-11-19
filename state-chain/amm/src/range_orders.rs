@@ -30,9 +30,11 @@ use scale_info::TypeInfo;
 use sp_core::{U256, U512};
 
 use crate::common::{
+	BaseToQuote, Pairs, PoolPairsMap, QuoteToBase, SetFeesError, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS,
+};
+use cf_amm_math::{
 	is_sqrt_price_valid, is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick,
-	tick_at_sqrt_price, Amount, BaseToQuote, Pairs, PoolPairsMap, QuoteToBase, SetFeesError,
-	SqrtPriceQ64F96, Tick, MAX_LP_FEE, MAX_TICK, MIN_TICK, ONE_IN_HUNDREDTH_PIPS,
+	tick_at_sqrt_price, Amount, SqrtPriceQ64F96, Tick, MAX_TICK, MIN_TICK,
 	SQRT_PRICE_FRACTIONAL_BITS,
 };
 

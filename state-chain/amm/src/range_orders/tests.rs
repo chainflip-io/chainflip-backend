@@ -1,8 +1,9 @@
 use rand::{prelude::Distribution, Rng, SeedableRng};
 
+use crate::common::Pairs;
+use cf_amm_math::test_utilities::rng_u256_inclusive_bound;
 #[cfg(feature = "slow-tests")]
-use crate::common::MIN_SQRT_PRICE;
-use crate::{common::Pairs, test_utilities::rng_u256_inclusive_bound};
+use cf_amm_math::MIN_SQRT_PRICE;
 
 use super::*;
 

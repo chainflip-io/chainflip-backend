@@ -2,7 +2,8 @@ use super::SimpleSubmissionApi;
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
-	common::{Amount, PoolPairsMap, Side, Tick},
+	common::{PoolPairsMap, Side},
+	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{

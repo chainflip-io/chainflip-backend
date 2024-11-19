@@ -8,7 +8,7 @@ use crate::{
 	sol::{
 		commitment_config::CommitmentConfig,
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
-		rpc_client_api::RpcBlockConfig,
+		rpc_client_api::{RpcBlockConfig, TransactionDetails},
 	},
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
@@ -169,7 +169,19 @@ impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
 		slot: <SolanaLiveness as ElectoralSystem>::ElectionProperties,
 	) -> Result<<<SolanaLiveness as ElectoralSystem>::Vote as VoteStorage>::Vote, anyhow::Error> {
 		Ok(SolHash::from_str(
-			&self.client.get_block(slot, RpcBlockConfig::default()).await.blockhash,
+			&self
+				.client
+				.get_block(
+					slot,
+					RpcBlockConfig {
+						transaction_details: Some(TransactionDetails::None),
+						rewards: Some(false),
+						max_supported_transaction_version: Some(0),
+						..Default::default()
+					},
+				)
+				.await
+				.blockhash,
 		)
 		.map_err(|e| anyhow::anyhow!("Failed to convert blockhash String to SolHash: {e}"))?)
 	}

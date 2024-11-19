@@ -1,10 +1,7 @@
-use crate::{
-	common::{
-		mul_div, sqrt_price_at_tick, tick_at_sqrt_price, MAX_SQRT_PRICE, MAX_TICK, MIN_SQRT_PRICE,
-		MIN_TICK,
-	},
-	limit_orders, range_orders,
-	test_utilities::rng_u256_inclusive_bound,
+use crate::{limit_orders, range_orders};
+use cf_amm_math::{
+	mul_div, sqrt_price_at_tick, test_utilities::rng_u256_inclusive_bound, tick_at_sqrt_price,
+	MAX_SQRT_PRICE, MAX_TICK, MIN_SQRT_PRICE, MIN_TICK,
 };
 
 use super::*;

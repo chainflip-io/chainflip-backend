@@ -1,7 +1,8 @@
 use crate::boost_pool_rpc::BoostPoolFeesRpc;
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
-	common::{Amount as AmmAmount, PoolPairsMap, Side, Tick},
+	common::{PoolPairsMap, Side},
+	math::{Amount as AmmAmount, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -764,7 +765,7 @@ pub trait CustomApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		tick_range: Range<cf_amm::common::Tick>,
+		tick_range: Range<cf_amm::math::Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolPairsMap<AmmAmount>>;
 	#[method(name = "pool_orderbook")]
@@ -787,7 +788,7 @@ pub trait CustomApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		tick_range: Range<cf_amm::common::Tick>,
+		tick_range: Range<cf_amm::math::Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<AskBidMap<UnidirectionalPoolDepth>>;
 	#[method(name = "pool_liquidity")]
