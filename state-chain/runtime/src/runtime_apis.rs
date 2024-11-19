@@ -164,6 +164,9 @@ pub struct BrokerInfo {
 }
 
 /// Struct that represents the estimated output of a Swap.
+#[obake::versioned]
+#[obake(version("1.0.0"))]
+#[obake(version("2.0.0"))]
 #[derive(Encode, Decode, TypeInfo)]
 pub struct SimulatedSwapInformation {
 	pub intermediary: Option<AssetAmount>,
@@ -171,7 +174,21 @@ pub struct SimulatedSwapInformation {
 	pub network_fee: AssetAmount,
 	pub ingress_fee: AssetAmount,
 	pub egress_fee: AssetAmount,
+	#[obake(cfg(">=2.0"))]
 	pub broker_fee: AssetAmount,
+}
+
+impl From<SimulatedSwapInformation!["1.0.0"]> for SimulatedSwapInformation {
+	fn from(value: SimulatedSwapInformation!["1.0.0"]) -> Self {
+		Self {
+			intermediary: value.intermediary,
+			output: value.output,
+			network_fee: value.network_fee,
+			ingress_fee: value.ingress_fee,
+			egress_fee: value.egress_fee,
+			broker_fee: Default::default(),
+		}
+	}
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -300,7 +317,7 @@ decl_runtime_apis!(
 			to: Asset,
 			amount: AssetAmount,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
+		) -> Result<SimulatedSwapInformation!["1.0.0"], DispatchErrorWithMessage>;
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
