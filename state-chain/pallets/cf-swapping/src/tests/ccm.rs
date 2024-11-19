@@ -10,15 +10,14 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 	let encoded_output_address = MockAddressConverter::to_encoded_address(output_address.clone());
 	let origin = SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) };
 
-	let ccm_swap_metadata = ccm_deposit_metadata
-		.into_swap_metadata(input_amount, input_asset, output_asset)
-		.unwrap();
-
 	Swapping::init_swap_request(
 		input_asset,
 		input_amount,
 		output_asset,
-		SwapRequestType::Ccm { ccm_swap_metadata: ccm_swap_metadata.clone(), output_address },
+		SwapRequestType::Regular {
+			ccm_deposit_metadata: Some(ccm_deposit_metadata.clone()),
+			output_address,
+		},
 		Default::default(),
 		None,
 		None,
@@ -30,9 +29,10 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 		input_asset,
 		output_asset,
 		input_amount,
-		request_type: SwapRequestTypeEncoded::Ccm {
-			ccm_swap_metadata: ccm_swap_metadata
-				.to_encoded::<<Test as pallet::Config>::AddressConverter>(),
+		request_type: SwapRequestTypeEncoded::Regular {
+			ccm_deposit_metadata: Some(
+				ccm_deposit_metadata.to_encoded::<<Test as pallet::Config>::AddressConverter>(),
+			),
 			output_address: encoded_output_address,
 		},
 		dca_parameters: None,
@@ -84,9 +84,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 		.execute_with(|| {
 			let request_ccm = generate_ccm_channel();
 
-			let ccm_swap_metadata = generate_ccm_deposit()
-				.into_swap_metadata(DEPOSIT_AMOUNT, Asset::Dot, Asset::Eth)
-				.unwrap();
+			let ccm_deposit_metadata = generate_ccm_deposit();
 
 			// Can process CCM via Swap deposit
 			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
@@ -106,8 +104,8 @@ fn can_process_ccms_via_swap_deposit_address() {
 				Asset::Dot,
 				DEPOSIT_AMOUNT,
 				Asset::Eth,
-				SwapRequestType::Ccm {
-					ccm_swap_metadata: ccm_swap_metadata.clone(),
+				SwapRequestType::Regular {
+					ccm_deposit_metadata: Some(ccm_deposit_metadata.clone()),
 					output_address: (*EVM_OUTPUT_ADDRESS).clone(),
 				},
 				Default::default(),

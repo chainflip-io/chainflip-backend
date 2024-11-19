@@ -403,7 +403,6 @@ fn fok_ccm_happy_path() {
 
 	const REQUEST_ID: SwapRequestId = SwapRequestId(1);
 	const PRINCIPAL_SWAP_ID: SwapId = SwapId(1);
-	const GAS_SWAP_ID: SwapId = SwapId(2);
 
 	const EXPECTED_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE;
 
@@ -421,18 +420,12 @@ fn fok_ccm_happy_path() {
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: PRINCIPAL_SWAP_ID, .. }),
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_id: GAS_SWAP_ID,
-					swap_type: SwapType::CcmGas,
-					..
-				}),
 			);
 		})
 		.then_process_blocks_until_block(GAS_BLOCK)
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: GAS_SWAP_ID, .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: REQUEST_ID,
 					..
@@ -462,7 +455,7 @@ fn fok_ccm_refunded() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapScheduled {
 					swap_id: PRINCIPAL_SWAP_ID,
-					swap_type: SwapType::CcmPrincipal,
+					swap_type: SwapType::Swap,
 					input_amount: PRINCIPAL_AMOUNT,
 					..
 				}),
@@ -519,7 +512,7 @@ fn fok_ccm_refunded_no_gas_swap() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapScheduled {
 					swap_id: PRINCIPAL_SWAP_ID,
-					swap_type: SwapType::CcmPrincipal,
+					swap_type: SwapType::Swap,
 					input_amount: PRINCIPAL_AMOUNT,
 					..
 				}),

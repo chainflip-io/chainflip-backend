@@ -10,10 +10,7 @@ use crate::{
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Arbitrum;
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{
-	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint, Word,
-};
+pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -66,7 +63,7 @@ impl Chain for Arbitrum {
 #[codec(mel_bound())]
 pub struct ArbitrumTrackedData {
 	pub base_fee: <Arbitrum as Chain>::ChainAmount,
-	pub gas_limit_multiplier: FixedU64,
+	pub l1_base_fee_estimate: <Arbitrum as Chain>::ChainAmount,
 }
 
 impl Default for ArbitrumTrackedData {
@@ -76,7 +73,7 @@ impl Default for ArbitrumTrackedData {
 
 		ArbitrumTrackedData {
 			base_fee: Default::default(),
-			gas_limit_multiplier: Default::default(),
+			l1_base_fee_estimate: Default::default(),
 		}
 	}
 }
@@ -85,8 +82,48 @@ impl ArbitrumTrackedData {
 	pub fn max_fee_per_gas(
 		&self,
 		base_fee_multiplier: FixedU64,
-	) -> <Ethereum as Chain>::ChainAmount {
+	) -> <Arbitrum as Chain>::ChainAmount {
 		base_fee_multiplier.saturating_mul_int(self.base_fee)
+	}
+
+	pub fn calculate_ccm_gas_limit(
+		&self,
+		is_native_asset: bool,
+		gas_budget: GasAmount,
+		message_length: usize,
+	) -> GasAmount {
+		use crate::arb::fees::*;
+
+		let base_overhead =
+			if is_native_asset { CCM_NATIVE_GAS_OVERHEAD } else { CCM_TOKEN_OVERHEAD };
+
+		// Adding one extra gas per message byte for the extra gas overhead of passing the message
+		// through the Vault. The extra l2 gas per byte should be encapsulated in the user's gas
+		// budget.
+		let l2g = base_overhead.saturating_add(message_length as u128).saturating_add(gas_budget);
+
+		// Estimating gas as described in:
+		// https://docs.arbitrum.io/build-decentralized-apps/how-to-estimate-gas
+		let l1p = self.l1_base_fee_estimate * L1_GAS_PER_BYTES;
+		let p = self.base_fee;
+		// We can't accurately know L1S without engine consensus so we do our best to estimate it.
+		let l1s = CCM_VAULT_BYTES_OVERHEAD +
+			CCM_BUFFER_BYTES_OVERHEAD +
+			CCM_ARBITRUM_BYTES_OVERHEAD +
+			message_length as u128;
+		let l1c = l1p.saturating_mul(l1s);
+
+		let b = l1c.div_ceil(p);
+
+		let gas_limit = l2g.saturating_add(b);
+		gas_limit.min(MAX_GAS_LIMIT)
+	}
+
+	pub fn calculate_transaction_fee(
+		&self,
+		gas_limit: GasAmount,
+	) -> <Arbitrum as crate::Chain>::ChainAmount {
+		self.base_fee.saturating_mul(gas_limit)
 	}
 }
 
@@ -95,6 +132,14 @@ pub mod fees {
 	pub const GAS_COST_PER_FETCH: u128 = 30_000;
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
+	pub const MAX_GAS_LIMIT: u128 = 25_000_000;
+	pub const CCM_NATIVE_GAS_OVERHEAD: u128 = 90_000;
+	pub const CCM_TOKEN_OVERHEAD: u128 = 120_000;
+	// Arbitrum specific ccm gas limit calculation constants
+	pub const L1_GAS_PER_BYTES: u128 = 16;
+	pub const CCM_ARBITRUM_BYTES_OVERHEAD: u128 = 140;
+	pub const CCM_VAULT_BYTES_OVERHEAD: u128 = 356;
+	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 50;
 }
 
 impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
@@ -112,8 +157,7 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 				assets::arb::Asset::ArbUsdc => GAS_COST_PER_FETCH,
 			};
 
-		self.base_fee
-			.saturating_mul(self.gas_limit_multiplier.saturating_mul_int(gas_cost_per_fetch))
+		self.calculate_transaction_fee(gas_cost_per_fetch)
 	}
 
 	fn estimate_egress_fee(
@@ -128,8 +172,21 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 				assets::arb::Asset::ArbUsdc => GAS_COST_PER_TRANSFER_TOKEN,
 			};
 
-		self.base_fee
-			.saturating_mul(self.gas_limit_multiplier.saturating_mul_int(gas_cost_per_transfer))
+		self.calculate_transaction_fee(gas_cost_per_transfer)
+	}
+
+	fn estimate_ccm_fee(
+		&self,
+		asset: <Arbitrum as Chain>::ChainAsset,
+		gas_budget: GasAmount,
+		message_length: usize,
+	) -> Option<<Arbitrum as Chain>::ChainAmount> {
+		let gas_limit = self.calculate_ccm_gas_limit(
+			asset == <Arbitrum as Chain>::GAS_ASSET,
+			gas_budget,
+			message_length,
+		);
+		Some(self.calculate_transaction_fee(gas_limit))
 	}
 }
 
@@ -160,5 +217,74 @@ impl FeeRefundCalculator<Arbitrum> for evm::Transaction {
 			fee_paid.effective_gas_price,
 		)
 		.saturating_mul(fee_paid.gas_used)
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use crate::arb::fees::*;
+
+	#[test]
+	fn calculate_gas_limit() {
+		const GAS_BUDGET: u128 = 80_000u128;
+		const MESSAGE_LENGTH: usize = 1;
+		const L1_BASE_FEE_ESTIMATE: u128 = 26_920_712_879u128;
+
+		let arb_tracked_data = ArbitrumTrackedData {
+			base_fee: 100_000_000u128,
+			l1_base_fee_estimate: L1_BASE_FEE_ESTIMATE,
+		};
+
+		let gas_limit = arb_tracked_data.calculate_ccm_gas_limit(true, GAS_BUDGET, MESSAGE_LENGTH);
+		assert_eq!(gas_limit, 2526102u128);
+
+		let gas_budget_extra = 1_000_000u128;
+		let gas_limit_extra = arb_tracked_data.calculate_ccm_gas_limit(
+			true,
+			GAS_BUDGET + gas_budget_extra,
+			MESSAGE_LENGTH,
+		);
+		assert_eq!(gas_limit + gas_budget_extra, gas_limit_extra);
+
+		let gas_limit_token =
+			arb_tracked_data.calculate_ccm_gas_limit(false, GAS_BUDGET, MESSAGE_LENGTH);
+		assert_eq!(gas_limit_token, gas_limit + CCM_TOKEN_OVERHEAD - CCM_NATIVE_GAS_OVERHEAD);
+		let gas_limit_token_extra = arb_tracked_data.calculate_ccm_gas_limit(
+			false,
+			GAS_BUDGET + gas_budget_extra,
+			MESSAGE_LENGTH,
+		);
+		assert_eq!(gas_limit_token + gas_budget_extra, gas_limit_token_extra);
+	}
+
+	#[test]
+	fn gas_limit_cap() {
+		const GAS_BUDGET: u128 = 80_000u128;
+
+		let arb_tracked_data = ArbitrumTrackedData {
+			base_fee: 100_000_000u128,
+			l1_base_fee_estimate: 26_920_712_879u128,
+		};
+
+		// loop over bool
+		for is_native_asset in [true, false].iter() {
+			let mut gas_limit =
+				arb_tracked_data.calculate_ccm_gas_limit(*is_native_asset, GAS_BUDGET, 1);
+			let gas_limit_diff = MAX_GAS_LIMIT - gas_limit;
+			gas_limit = arb_tracked_data.calculate_ccm_gas_limit(
+				*is_native_asset,
+				GAS_BUDGET + gas_limit_diff,
+				1,
+			);
+			assert_eq!(gas_limit, MAX_GAS_LIMIT);
+
+			gas_limit = arb_tracked_data.calculate_ccm_gas_limit(
+				*is_native_asset,
+				GAS_BUDGET + gas_limit_diff + 1,
+				1,
+			);
+			assert_eq!(gas_limit, MAX_GAS_LIMIT);
+		}
 	}
 }

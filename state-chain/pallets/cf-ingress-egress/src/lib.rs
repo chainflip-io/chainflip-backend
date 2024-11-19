@@ -37,8 +37,8 @@ use cf_chains::{
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
 	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
-	EpochIndex, ForeignChain, PrewitnessedDepositId, SwapRequestId, ThresholdSignatureRequestId,
-	TransactionHash, SECONDS_PER_BLOCK,
+	EpochIndex, ForeignChain, GasAmount, PrewitnessedDepositId, SwapRequestId,
+	ThresholdSignatureRequestId, TransactionHash, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -163,7 +163,7 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
 	pub ccm_additional_data: CcmAdditionalData,
-	pub gas_budget: C::ChainAmount,
+	pub gas_budget: GasAmount,
 }
 
 impl<C: Chain> CrossChainMessage<C> {
@@ -306,6 +306,7 @@ pub mod pallet {
 	pub enum IngressOrEgress {
 		Ingress,
 		Egress,
+		EgressCcm { gas_budget: GasAmount, message_length: usize },
 	}
 
 	pub struct AmountAndFeesWithheld<T: Config<I>, I: 'static> {
@@ -1875,7 +1876,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					asset.into(),
 					amount_after_fees.into(),
 					destination_asset,
-					SwapRequestType::Regular { output_address: destination_address },
+					SwapRequestType::Regular {
+						output_address: destination_address,
+						ccm_deposit_metadata: None,
+					},
 					broker_fees,
 					refund_params,
 					dca_params,
@@ -1896,40 +1900,35 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					source_chain: asset.into(),
 					source_address: None,
 				};
-				match deposit_metadata.clone().into_swap_metadata(
-					amount_after_fees.into(),
-					asset.into(),
-					destination_asset,
-				) {
-					Ok(ccm_swap_metadata) => {
-						let swap_request_id = T::SwapRequestHandler::init_swap_request(
-							asset.into(),
-							amount_after_fees.into(),
-							destination_asset,
-							SwapRequestType::Ccm {
-								ccm_swap_metadata,
-								output_address: destination_address,
-							},
-							broker_fees,
-							refund_params,
-							dca_params,
-							swap_origin,
-						);
-						DepositAction::CcmTransfer { swap_request_id }
-					},
-					Err(reason) => {
-						Self::deposit_event(Event::<T, I>::CcmFailed {
-							reason,
-							destination_address: T::AddressConverter::to_encoded_address(
-								destination_address,
-							),
-							deposit_metadata: deposit_metadata
-								.clone()
-								.to_encoded::<T::AddressConverter>(),
-							origin: swap_origin.clone(),
-						});
-						DepositAction::NoAction
-					},
+
+				let destination_chain: ForeignChain = destination_asset.into();
+				if !destination_chain.ccm_support() {
+					Self::deposit_event(Event::<T, I>::CcmFailed {
+						reason: CcmFailReason::UnsupportedForTargetChain,
+						destination_address: T::AddressConverter::to_encoded_address(
+							destination_address,
+						),
+						deposit_metadata: deposit_metadata
+							.clone()
+							.to_encoded::<T::AddressConverter>(),
+						origin: swap_origin.clone(),
+					});
+					DepositAction::NoAction
+				} else {
+					let swap_request_id = T::SwapRequestHandler::init_swap_request(
+						asset.into(),
+						amount_after_fees.into(),
+						destination_asset,
+						SwapRequestType::Regular {
+							ccm_deposit_metadata: Some(deposit_metadata),
+							output_address: destination_address,
+						},
+						broker_fees,
+						refund_params,
+						dca_params,
+						swap_origin,
+					);
+					DepositAction::CcmTransfer { swap_request_id }
 				}
 			},
 		};
@@ -2165,7 +2164,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let swap_origin =
 			SwapOrigin::Vault { tx_id: tx_id.clone().into_transaction_in_id_for_any_chain() };
 
-		let request_type = if let Some(deposit_metadata) = deposit_metadata {
+		if let Some(deposit_metadata) = deposit_metadata.clone() {
 			let ccm_failed = |reason| {
 				log::warn!("Failed to process CCM. Tx id: {:?}, Reason: {:?}", tx_id, reason);
 
@@ -2187,23 +2186,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				return;
 			};
 
-			match deposit_metadata.clone().into_swap_metadata(
-				deposit_amount.into(),
-				source_asset.into(),
-				destination_asset,
-			) {
-				Ok(ccm_swap_metadata) => SwapRequestType::Ccm {
-					ccm_swap_metadata,
-					output_address: destination_address_internal.clone(),
-				},
-				Err(reason) => {
-					ccm_failed(reason);
-					return;
-				},
-			}
-		} else {
-			SwapRequestType::Regular { output_address: destination_address_internal.clone() }
-		};
+			let destination_chain: ForeignChain = destination_asset.into();
+			if !destination_chain.ccm_support() {
+				ccm_failed(CcmFailReason::UnsupportedForTargetChain);
+				return;
+			};
+		}
 
 		if let Err(err) =
 			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
@@ -2266,7 +2254,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			source_asset.into(),
 			deposit_amount.into(),
 			destination_asset,
-			request_type,
+			SwapRequestType::Regular {
+				ccm_deposit_metadata: deposit_metadata,
+				output_address: destination_address_internal.clone(),
+			},
 			broker_fees,
 			Some(refund_params),
 			dca_params,
@@ -2410,6 +2401,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let fee_estimate = match ingress_or_egress {
 			IngressOrEgress::Ingress => T::ChainTracking::estimate_ingress_fee(asset),
 			IngressOrEgress::Egress => T::ChainTracking::estimate_egress_fee(asset),
+			IngressOrEgress::EgressCcm{gas_budget, message_length} =>
+			T::ChainTracking::estimate_ccm_fee(asset, gas_budget, message_length)
+			.unwrap_or_else(|| {
+				log::warn!("Unable to get the ccm fee estimate for ${gas_budget:?} ${asset:?}. Ignoring ccm egress fees.");
+				<T::TargetChain as Chain>::ChainAmount::zero()
+			})
 		};
 
 		let fees_withheld = if asset == <T::TargetChain as Chain>::GAS_ASSET {
@@ -2484,22 +2481,30 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		destination_address: TargetChainAccount<T, I>,
-		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, TargetChainAmount<T, I>)>,
+		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
 			let egress_id = (<T as Config<I>>::TargetChain::get(), *id_counter);
 
-			match maybe_ccm_with_gas_budget {
-				Some((
-					CcmDepositMetadata {
-						channel_metadata: CcmChannelMetadata { message, ccm_additional_data, .. },
-						source_chain,
-						source_address,
-						..
-					},
-					gas_budget,
-				)) => {
+			match maybe_ccm_deposit_metadata {
+				Some(CcmDepositMetadata {
+					channel_metadata:
+						CcmChannelMetadata { message, gas_budget, ccm_additional_data, .. },
+					source_chain,
+					source_address,
+					..
+				}) => {
+					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
+						Self::withhold_ingress_or_egress_fee(
+							IngressOrEgress::EgressCcm {
+								gas_budget,
+								message_length: message.len(),
+							},
+							asset,
+							amount,
+						);
+
 					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 						egress_id,
 						asset,
@@ -2513,7 +2518,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 					});
 
 					// The ccm gas budget is already in terms of the swap asset.
-					Ok(ScheduledEgressDetails::new(*id_counter, amount, gas_budget))
+					Ok(ScheduledEgressDetails::new(*id_counter, amount_after_fees, fees_withheld))
 				},
 				None => {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =

@@ -443,6 +443,22 @@ impl AdjustedFeeEstimationApi<Solana> for SolanaChainTrackingProvider {
 			tracked_data.estimate_egress_fee(asset)
 		})
 	}
+
+	fn estimate_ccm_fee(
+		asset: <Solana as Chain>::ChainAsset,
+		gas_budget: cf_primitives::GasAmount,
+		message_length: usize,
+	) -> Option<<Solana as Chain>::ChainAmount> {
+		let fee_estimate = Self::with_tracked_data_then_apply_fee_multiplier(|tracked_data| {
+			tracked_data.estimate_ccm_fee(asset, gas_budget, message_length).unwrap_or(0)
+		});
+
+		if fee_estimate == 0 {
+			None
+		} else {
+			Some(fee_estimate)
+		}
+	}
 }
 
 pub struct SolanaIngress;

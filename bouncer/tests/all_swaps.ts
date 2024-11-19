@@ -24,7 +24,7 @@ async function main() {
           sourceAsset,
           destAsset,
           btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
+          ccmSwap ? newCcmMetadata(destAsset) : undefined,
           testAllSwaps.swapContext,
         ),
       );
@@ -34,7 +34,7 @@ async function main() {
           sourceAsset,
           destAsset,
           undefined,
-          ccmSwap ? newCcmMetadata(sourceAsset, destAsset) : undefined,
+          ccmSwap ? newCcmMetadata(destAsset) : undefined,
           testAllSwaps.swapContext,
         ),
       );

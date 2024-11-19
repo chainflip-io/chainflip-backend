@@ -111,18 +111,6 @@ fn get_dca_state(request_id: SwapRequestId) -> DcaState {
 	}
 }
 
-#[track_caller]
-fn get_ccm_gas_state(request_id: SwapRequestId) -> GasSwapState {
-	if let SwapRequestState::UserSwap { ccm: Some(ccm), .. } = SwapRequests::<Test>::get(request_id)
-		.expect("request state does not exist")
-		.state
-	{
-		ccm.gas_swap_state
-	} else {
-		panic!("Not a CCM swap");
-	}
-}
-
 #[test]
 fn dca_happy_path() {
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
@@ -613,10 +601,6 @@ mod ccm_tests {
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
 
-	// NOTE: gas swap is scheduled immediately after the first chunk,
-	// and we apply the default swap delay to them (rather than chunk interval)
-	const GAS_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
-
 	const PRINCIPAL_AMOUNT: AssetAmount = INPUT_AMOUNT - GAS_BUDGET;
 
 	const CHUNK_AMOUNT: AssetAmount = PRINCIPAL_AMOUNT / 2;
@@ -624,8 +608,6 @@ mod ccm_tests {
 	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
 
 	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
-
-	const GAS_SWAP_ID: SwapId = SwapId(3);
 
 	#[track_caller]
 	fn setup_ccm_dca_swap(
@@ -672,59 +654,6 @@ mod ccm_tests {
 				accumulated_output_amount: 0
 			}
 		);
-
-		assert_eq!(
-			get_ccm_gas_state(SWAP_REQUEST_ID),
-			GasSwapState::ToBeScheduled { gas_budget: GAS_BUDGET, other_gas_asset: OUTPUT_ASSET }
-		);
-	}
-
-	#[track_caller]
-	fn assert_first_ccm_chunk_successful() {
-		// Once the first chunk is successfully executed, gas swap should be
-		// scheduled together with the second chunk:
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::Swapping(Event::SwapExecuted {
-				swap_request_id: SWAP_REQUEST_ID,
-				swap_id: SwapId(1),
-				input_amount: CHUNK_AMOUNT_AFTER_FEE,
-				output_amount: CHUNK_OUTPUT,
-				..
-			}),
-			RuntimeEvent::Swapping(Event::SwapScheduled {
-				swap_request_id: SWAP_REQUEST_ID,
-				swap_id: SwapId(2),
-				input_amount: CHUNK_AMOUNT,
-				execute_at: CHUNK_2_BLOCK,
-				swap_type: SwapType::CcmPrincipal,
-				..
-			}),
-			RuntimeEvent::Swapping(Event::SwapScheduled {
-				swap_request_id: SWAP_REQUEST_ID,
-				swap_id: GAS_SWAP_ID,
-				input_amount: GAS_BUDGET,
-				execute_at: GAS_BLOCK,
-				swap_type: SwapType::CcmGas,
-				..
-			}),
-		);
-
-		assert_eq!(
-			get_dca_state(SWAP_REQUEST_ID),
-			DcaState {
-				status: DcaStatus::ChunkScheduled(2.into()),
-				remaining_input_amount: 0,
-				remaining_chunks: 0,
-				chunk_interval: CHUNK_INTERVAL,
-				accumulated_output_amount: CHUNK_OUTPUT
-			}
-		);
-
-		assert_eq!(
-			get_ccm_gas_state(SWAP_REQUEST_ID),
-			GasSwapState::Scheduled { gas_swap_id: GAS_SWAP_ID }
-		);
 	}
 
 	#[test]
@@ -734,10 +663,6 @@ mod ccm_tests {
 				setup_ccm_dca_swap(2, CHUNK_INTERVAL, None);
 			})
 			.then_process_blocks_until_block(CHUNK_1_BLOCK)
-			.then_execute_with(|_| {
-				assert_first_ccm_chunk_successful();
-			})
-			.then_process_blocks_until_block(GAS_BLOCK)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -750,7 +675,7 @@ mod ccm_tests {
 					}) if *output_amount == GAS_BUDGET * DEFAULT_SWAP_RATE,
 				);
 
-				// Gas swap has no effect on the DCA principal state:
+				// CCM swap has no effect on the DCA principal state:
 				assert_eq!(
 					get_dca_state(SWAP_REQUEST_ID),
 					DcaState {
@@ -760,11 +685,6 @@ mod ccm_tests {
 						chunk_interval: CHUNK_INTERVAL,
 						accumulated_output_amount: CHUNK_OUTPUT
 					}
-				);
-
-				assert_eq!(
-					get_ccm_gas_state(SWAP_REQUEST_ID),
-					GasSwapState::OutputReady { gas_budget: GAS_BUDGET * DEFAULT_SWAP_RATE }
 				);
 			})
 			.then_process_blocks_until_block(CHUNK_2_BLOCK)
@@ -850,16 +770,6 @@ mod ccm_tests {
 				);
 			})
 			.then_process_blocks_until_block(CHUNK_1_BLOCK)
-			.then_execute_with(|_| {
-				assert_first_ccm_chunk_successful();
-			})
-			.then_process_blocks_until_block(GAS_BLOCK)
-			.then_execute_with(|_| {
-				assert_event_sequence!(
-					Test,
-					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: GAS_SWAP_ID, .. }),
-				);
-			})
 			.then_execute_at_block(CHUNK_2_BLOCK, |_| {
 				SwapRate::set(DEFAULT_SWAP_RATE as f64 / 2f64);
 			})
@@ -916,14 +826,6 @@ mod ccm_tests {
 						min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE / 2,
 					}),
 				);
-
-				assert_eq!(
-					get_ccm_gas_state(SWAP_REQUEST_ID),
-					GasSwapState::ToBeScheduled {
-						gas_budget: GAS_BUDGET,
-						other_gas_asset: OUTPUT_ASSET
-					}
-				);
 			})
 			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
@@ -941,15 +843,7 @@ mod ccm_tests {
 						swap_id: SwapId(2),
 						input_amount: CHUNK_AMOUNT,
 						execute_at: CHUNK_2_BLOCK,
-						swap_type: SwapType::CcmPrincipal,
-						..
-					}),
-					RuntimeEvent::Swapping(Event::SwapScheduled {
-						swap_request_id: SWAP_REQUEST_ID,
-						swap_id: GAS_SWAP_ID,
-						input_amount: GAS_BUDGET,
-						execute_at: GAS_BLOCK,
-						swap_type: SwapType::CcmGas,
+						swap_type: SwapType::Swap,
 						..
 					}),
 				);
@@ -964,11 +858,6 @@ mod ccm_tests {
 						accumulated_output_amount: CHUNK_OUTPUT
 					}
 				);
-
-				assert_eq!(
-					get_ccm_gas_state(SWAP_REQUEST_ID),
-					GasSwapState::Scheduled { gas_swap_id: GAS_SWAP_ID }
-				);
 			})
 			.then_execute_at_block(CHUNK_2_BLOCK, |_| {
 				SwapRate::set(NEW_SWAP_RATE as f64);
@@ -980,11 +869,6 @@ mod ccm_tests {
 
 				assert_event_sequence!(
 					Test,
-					RuntimeEvent::Swapping(Event::SwapExecuted {
-						swap_request_id: SWAP_REQUEST_ID,
-						swap_id: GAS_SWAP_ID,
-						..
-					}),
 					// Only one chunk is refunded (does not include the first chunk and gas):
 					RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 						swap_request_id: SWAP_REQUEST_ID,
@@ -1030,7 +914,10 @@ fn test_minimum_chunk_size() {
 			Asset::Eth,
 			asset_amount,
 			Asset::Btc,
-			SwapRequestType::Regular { output_address: ForeignChainAddress::Eth([1; 20].into()) },
+			SwapRequestType::Regular {
+				output_address: ForeignChainAddress::Eth([1; 20].into()),
+				ccm_deposit_metadata: None,
+			},
 			vec![].try_into().unwrap(),
 			None,
 			Some(dca_params),

@@ -109,6 +109,7 @@ fn max_swap_amount_can_be_removed() {
 				to,
 				SwapRequestType::Regular {
 					output_address: ForeignChainAddress::Eth([1; 20].into()),
+					ccm_deposit_metadata: None,
 				},
 				Default::default(),
 				None,
@@ -188,7 +189,10 @@ fn can_swap_below_max_amount() {
 			from,
 			amount,
 			to,
-			SwapRequestType::Regular { output_address: ForeignChainAddress::Eth([1; 20].into()) },
+			SwapRequestType::Regular {
+				output_address: ForeignChainAddress::Eth([1; 20].into()),
+				ccm_deposit_metadata: None,
+			},
 			Default::default(),
 			None,
 			None,

@@ -1,7 +1,7 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::{EgressApi, ScheduledEgressDetails};
 use cf_chains::{CcmAdditionalData, CcmDepositMetadata, CcmMessage, Chain};
-use cf_primitives::{AssetAmount, EgressCounter};
+use cf_primitives::{AssetAmount, EgressCounter, GasAmount};
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::{
 	traits::{Saturating, Zero},
@@ -30,7 +30,7 @@ pub enum MockEgressParameter<C: Chain> {
 		destination_address: C::ChainAccount,
 		message: CcmMessage,
 		ccm_additional_data: CcmAdditionalData,
-		gas_budget: C::ChainAmount,
+		gas_budget: GasAmount,
 	},
 }
 
@@ -75,9 +75,9 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		asset: <C as Chain>::ChainAsset,
 		amount: <C as Chain>::ChainAmount,
 		destination_address: <C as Chain>::ChainAccount,
-		maybe_ccm_with_gas_budget: Option<(CcmDepositMetadata, <C as Chain>::ChainAmount)>,
+		maybe_ccm_deposit_metadata: Option<CcmDepositMetadata>,
 	) -> Result<ScheduledEgressDetails<C>, DispatchError> {
-		if amount.is_zero() && maybe_ccm_with_gas_budget.is_none() {
+		if amount.is_zero() && maybe_ccm_deposit_metadata.is_none() {
 			return Err(DispatchError::from("Ignoring zero egress amount."))
 		}
 		if <Self as MockPalletStorage>::get_value(b"EGRESS_FAIL").unwrap_or_default() {
@@ -89,14 +89,14 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 				*storage = Some(vec![]);
 			}
 			storage.as_mut().map(|v| {
-				v.push(match &maybe_ccm_with_gas_budget {
-					Some((message, gas_budget)) => MockEgressParameter::<C>::Ccm {
+				v.push(match &maybe_ccm_deposit_metadata {
+					Some(message) => MockEgressParameter::<C>::Ccm {
 						asset,
 						amount,
 						destination_address,
 						message: message.channel_metadata.message.clone(),
 						ccm_additional_data: message.channel_metadata.ccm_additional_data.clone(),
-						gas_budget: *gas_budget,
+						gas_budget: message.channel_metadata.gas_budget,
 					},
 					None => MockEgressParameter::<C>::Swap {
 						asset,
@@ -110,14 +110,8 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		let len = Self::get_scheduled_egresses().len();
 		Ok(ScheduledEgressDetails {
 			egress_id: (asset.into(), len as EgressCounter),
-			egress_amount: match maybe_ccm_with_gas_budget {
-				Some(..) => amount,
-				None => amount.saturating_sub(egress_fee),
-			},
-			fee_withheld: match maybe_ccm_with_gas_budget {
-				Some((_, gas_budget)) => gas_budget,
-				None => egress_fee,
-			},
+			egress_amount: amount,
+			fee_withheld: egress_fee,
 		})
 	}
 }

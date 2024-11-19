@@ -206,4 +206,16 @@ impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pall
 				.estimate_egress_fee(asset),
 		)
 	}
+
+	fn estimate_ccm_fee(
+		asset: <T::TargetChain as Chain>::ChainAsset,
+		gas_budget: cf_primitives::GasAmount,
+		message_length: usize,
+	) -> Option<<T::TargetChain as Chain>::ChainAmount> {
+		CurrentChainState::<T, I>::get()
+			.expect(NO_CHAIN_STATE)
+			.tracked_data
+			.estimate_ccm_fee(asset, gas_budget, message_length)
+			.map(|ccm_fee| FeeMultiplier::<T, I>::get().saturating_mul_int(ccm_fee))
+	}
 }

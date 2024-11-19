@@ -148,7 +148,15 @@ pub trait EvmCall {
 				.collect::<Vec<_>>(),
 		))
 	}
-	fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+	fn gas_budget(&self) -> Option<GasAmount> {
+		None
+	}
+
+	fn message_length(&self) -> Option<usize> {
+		None
+	}
+
+	fn transfer_asset(&self) -> Option<Address> {
 		None
 	}
 }
@@ -173,8 +181,16 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		self.replay_protection.chain_id
 	}
 
-	pub fn gas_budget(&self) -> Option<<Ethereum as Chain>::ChainAmount> {
+	pub fn gas_budget(&self) -> Option<GasAmount> {
 		self.call.gas_budget()
+	}
+
+	pub fn message_length(&self) -> Option<usize> {
+		self.call.message_length()
+	}
+
+	pub fn transfer_asset(&self) -> Option<Address> {
+		self.call.transfer_asset()
 	}
 
 	pub fn threshold_signature_payload(&self) -> <EvmCrypto as ChainCrypto>::Payload {
