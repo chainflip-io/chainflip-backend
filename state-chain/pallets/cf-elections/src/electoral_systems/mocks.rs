@@ -140,8 +140,6 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 		mut consensus_votes: ConsensusVotes<ES>,
 		expected_consensus: Option<ES::Consensus>,
 	) -> Self {
-		assert!(consensus_votes.num_authorities() > 0, "Cannot have zero authorities.");
-
 		use rand::seq::SliceRandom;
 		consensus_votes.votes.shuffle(&mut rand::thread_rng());
 
@@ -190,6 +188,17 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 	) -> Self {
 		MockStorageAccess::set_consensus_status::<ES>(election_id, new_consensus);
 
+		self
+	}
+
+	pub fn expect_election_properties_only_election(
+		self,
+		expected_properties: ES::ElectionProperties,
+	) -> Self {
+		assert_eq!(
+			MockStorageAccess::election_properties::<ES>(self.only_election_id()),
+			expected_properties
+		);
 		self
 	}
 
