@@ -30,9 +30,9 @@ use cf_chains::{
 	ccm_checker::CcmValidityCheck,
 	AllBatch, AllBatchError, CcmAdditionalData, CcmChannelMetadata, CcmDepositMetadata,
 	CcmFailReason, CcmMessage, Chain, ChainCrypto, ChannelLifecycleHooks, ChannelRefundParameters,
-	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, ExecutexSwapAndCall,
-	FetchAssetParams, ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, SwapOrigin,
-	TransferAssetParams,
+	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
+	ExecutexSwapAndCall, FetchAssetParams, ForeignChainAddress, IntoTransactionInIdForAnyChain,
+	RejectCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -62,7 +62,6 @@ use scale_info::{
 };
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
-	boxed::Box,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	marker::PhantomData,
 	vec,
@@ -139,6 +138,76 @@ pub enum DepositIgnoredReason {
 	NotEnoughToPayFees,
 	TransactionTainted,
 }
+
+enum FullWitnessDepositOutcome {
+	BoostFinalised,
+	DepositActionPerformed,
+}
+
+mod deposit_origin {
+
+	use super::*;
+
+	// TODO: replace SwapOrigin with this?
+	#[derive(Clone)]
+	pub(super) enum DepositOrigin {
+		DepositChannel {
+			deposit_address: EncodedAddress,
+			channel_id: ChannelId,
+			deposit_block_height: u64,
+		},
+		Vault {
+			tx_id: TransactionInIdForAnyChain,
+		},
+	}
+
+	impl DepositOrigin {
+		pub(super) fn deposit_channel<T: Config<I>, I: 'static>(
+			deposit_address: <T::TargetChain as Chain>::ChainAccount,
+			channel_id: ChannelId,
+			deposit_block_height: <T::TargetChain as Chain>::ChainBlockNumber,
+		) -> Self {
+			DepositOrigin::DepositChannel {
+				deposit_address: T::AddressConverter::to_encoded_address(
+					<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
+						deposit_address.clone(),
+					),
+				),
+				channel_id,
+				deposit_block_height: deposit_block_height.into(),
+			}
+		}
+
+		pub(super) fn vault<T: Config<I>, I: 'static>(tx_id: TransactionInIdFor<T, I>) -> Self {
+			DepositOrigin::Vault { tx_id: tx_id.into_transaction_in_id_for_any_chain() }
+		}
+	}
+
+	impl From<DepositOrigin> for DepositOriginType {
+		fn from(origin: DepositOrigin) -> Self {
+			match origin {
+				DepositOrigin::DepositChannel { .. } => DepositOriginType::DepositChannel,
+				DepositOrigin::Vault { .. } => DepositOriginType::Vault,
+			}
+		}
+	}
+
+	impl From<DepositOrigin> for SwapOrigin {
+		fn from(origin: DepositOrigin) -> SwapOrigin {
+			match origin {
+				DepositOrigin::Vault { tx_id } => SwapOrigin::Vault { tx_id },
+				DepositOrigin::DepositChannel {
+					deposit_address,
+					channel_id,
+					deposit_block_height,
+				} =>
+					SwapOrigin::DepositChannel { deposit_address, channel_id, deposit_block_height },
+			}
+		}
+	}
+}
+
+use deposit_origin::DepositOrigin;
 
 /// Holds information about a tainted transaction.
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
@@ -281,6 +350,27 @@ pub mod pallet {
 		pub asset: C::ChainAsset,
 		pub amount: C::ChainAmount,
 		pub deposit_details: C::DepositDetails,
+	}
+
+	#[derive(
+		CloneNoBound, RuntimeDebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo,
+	)]
+	#[scale_info(skip_type_params(T, I))]
+	pub struct VaultDepositWitness<T: Config<I>, I: 'static> {
+		pub input_asset: TargetChainAsset<T, I>,
+		pub deposit_address: TargetChainAccount<T, I>,
+		pub channel_id: ChannelId,
+		pub deposit_amount: <T::TargetChain as Chain>::ChainAmount,
+		pub deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		pub output_asset: Asset,
+		pub destination_address: EncodedAddress,
+		pub deposit_metadata: Option<CcmDepositMetadata>,
+		pub tx_id: TransactionInIdFor<T, I>,
+		pub broker_fee: Beneficiary<T::AccountId>,
+		pub affiliate_fees: Affiliates<AffiliateShortId>,
+		pub refund_params: ChannelRefundParameters,
+		pub dca_params: Option<DcaParameters>,
+		pub boost_fee: BasisPoints,
 	}
 
 	#[derive(CloneNoBound, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -598,6 +688,16 @@ pub mod pallet {
 	pub(crate) type FailedRejections<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
 
+	/// Stores transaction ids that have been boosted but have not yet been finalised.
+	#[pallet::storage]
+	pub(crate) type BoostedVaultTxs<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Identity,
+		TransactionInIdFor<T, I>,
+		BoostStatus<TargetChainAmount<T, I>>,
+		OptionQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -612,6 +712,7 @@ pub mod pallet {
 			ingress_fee: TargetChainAmount<T, I>,
 			action: DepositAction<T::AccountId>,
 			channel_id: ChannelId,
+			origin_type: DepositOriginType,
 		},
 		AssetEgressStatusChanged {
 			asset: TargetChainAsset<T, I>,
@@ -699,6 +800,7 @@ pub mod pallet {
 			// Total fee the user paid for their deposit to be boosted.
 			boost_fee: TargetChainAmount<T, I>,
 			action: DepositAction<T::AccountId>,
+			origin_type: DepositOriginType,
 		},
 		BoostFundsAdded {
 			booster_id: T::AccountId,
@@ -1301,37 +1403,19 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vault_swap_request())]
 		pub fn vault_swap_request(
 			origin: OriginFor<T>,
-			input_asset: TargetChainAsset<T, I>,
-			output_asset: Asset,
-			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
-			destination_address: EncodedAddress,
-			deposit_metadata: Option<CcmDepositMetadata>,
-			tx_id: TransactionInIdFor<T, I>,
-			deposit_details: Box<<T::TargetChain as Chain>::DepositDetails>,
-			broker_fee: Beneficiary<T::AccountId>,
-			affiliate_fees: Affiliates<AffiliateShortId>,
-			refund_params: Box<ChannelRefundParameters>,
-			dca_params: Option<DcaParameters>,
-			boost_fee: BasisPoints,
+			block_height: TargetChainBlockNumber<T, I>,
+			deposits: Vec<VaultDepositWitness<T, I>>,
 		) -> DispatchResult {
 			if T::EnsureWitnessed::ensure_origin(origin.clone()).is_ok() {
-				Self::process_vault_swap_request(
-					input_asset,
-					deposit_amount,
-					output_asset,
-					destination_address,
-					deposit_metadata,
-					tx_id,
-					*deposit_details,
-					broker_fee,
-					affiliate_fees,
-					*refund_params,
-					dca_params,
-					boost_fee,
-				);
+				for deposit in deposits {
+					Self::process_vault_swap_request_full_witness(block_height, deposit);
+				}
 			} else {
 				T::EnsurePrewitnessed::ensure_origin(origin)?;
-				// Pre-witnessed vault swaps are not supported yet.
+
+				for deposit in deposits {
+					Self::process_vault_swap_request_prewitness(block_height, deposit);
+				}
 			}
 
 			Ok(())
@@ -1727,12 +1811,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		for DepositWitness { deposit_address, asset, amount, deposit_details } in deposit_witnesses
 		{
-			if amount < MinimumDeposit::<T, I>::get(asset) {
-				// We do not process/record pre-witnessed deposits for amounts smaller
-				// than MinimumDeposit to match how this is done on finalisation
-				continue;
-			}
-
 			let DepositChannelDetails {
 				deposit_channel,
 				action,
@@ -1743,95 +1821,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} = DepositChannelLookup::<T, I>::get(&deposit_address)
 				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-			if let Some(tx_id) = deposit_details.deposit_id() {
-				if TaintedTransactions::<T, I>::mutate(&owner, &tx_id, |opt| {
-					match opt.as_mut() {
-						// Transaction has been reported, mark it as pre-witnessed.
-						Some(status @ TaintedTransactionStatus::Unseen) => {
-							*status = TaintedTransactionStatus::Prewitnessed;
-							true
-						},
-						// Pre-witnessing twice is unlikely but possible. Either way we don't want
-						// to change the status and we don't want to allow boosting.
-						Some(TaintedTransactionStatus::Prewitnessed) => true,
-						// Transaction has not been reported, mark it as boosted to prevent further
-						// reports.
-						None => false,
+			let origin = DepositOrigin::deposit_channel::<T, I>(
+				deposit_address.clone(),
+				deposit_channel.channel_id,
+				block_height,
+			);
+
+			if let Some(new_boost_status) = Self::process_prewitness_deposit_inner(
+				amount,
+				asset,
+				deposit_details,
+				deposit_address.clone(),
+				None, // source address is unknown
+				action,
+				&owner,
+				boost_fee,
+				boost_status,
+				deposit_channel.channel_id,
+				block_height,
+				origin,
+			) {
+				// Update boost status
+				DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
+					if let Some(details) = details {
+						details.boost_status = new_boost_status;
 					}
-				}) {
-					continue;
-				}
-			}
-
-			let prewitnessed_deposit_id =
-				PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
-					*id = id.saturating_add(1);
-					*id
 				});
-
-			let channel_id = deposit_channel.channel_id;
-
-			// Only boost on non-zero fee and if the channel isn't already boosted:
-			if T::SafeMode::get().boost_deposits_enabled &&
-				boost_fee > 0 &&
-				!matches!(boost_status, BoostStatus::Boosted { .. })
-			{
-				match Self::try_boosting(asset, amount, boost_fee, prewitnessed_deposit_id) {
-					Ok(BoostOutput { used_pools, total_fee: boost_fee_amount }) => {
-						DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
-							if let Some(details) = details {
-								details.boost_status = BoostStatus::Boosted {
-									prewitnessed_deposit_id,
-									pools: used_pools.keys().cloned().collect(),
-									amount,
-								};
-							}
-						});
-
-						let amount_after_boost_fee = amount.saturating_sub(boost_fee_amount);
-
-						// Note that ingress fee is deducted at the time of boosting rather than the
-						// time the deposit is finalised (which allows us to perform the channel
-						// action immediately):
-						let AmountAndFeesWithheld { amount_after_fees, fees_withheld: ingress_fee } =
-							Self::withhold_ingress_or_egress_fee(
-								IngressOrEgress::Ingress,
-								asset,
-								amount_after_boost_fee,
-							);
-
-						let action = Self::perform_channel_action(
-							action,
-							deposit_channel,
-							amount_after_fees,
-							block_height,
-						)?;
-
-						Self::deposit_event(Event::DepositBoosted {
-							deposit_address: deposit_address.clone(),
-							asset,
-							amounts: used_pools,
-							block_height,
-							prewitnessed_deposit_id,
-							channel_id,
-							deposit_details: deposit_details.clone(),
-							ingress_fee,
-							boost_fee: boost_fee_amount,
-							action,
-						});
-					},
-					Err(err) => {
-						Self::deposit_event(Event::InsufficientBoostLiquidity {
-							prewitnessed_deposit_id,
-							asset,
-							amount_attempted: amount,
-							channel_id,
-						});
-						log::debug!(
-							"Deposit (id: {prewitnessed_deposit_id}) of {amount:?} {asset:?} and boost fee {boost_fee} could not be boosted: {err:?}"
-						);
-					},
-				}
 			}
 		}
 		Ok(())
@@ -1839,22 +1854,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn perform_channel_action(
 		action: ChannelAction<T::AccountId>,
-		DepositChannel { asset, address: deposit_address, channel_id, .. }: DepositChannel<
-			T::TargetChain,
-		>,
+		asset: TargetChainAsset<T, I>,
+		source_address: Option<ForeignChainAddress>,
 		amount_after_fees: TargetChainAmount<T, I>,
-		block_height: TargetChainBlockNumber<T, I>,
+		origin: DepositOrigin,
 	) -> Result<DepositAction<T::AccountId>, DispatchError> {
-		let swap_origin = SwapOrigin::DepositChannel {
-			deposit_address: T::AddressConverter::to_encoded_address(
-				<T::TargetChain as Chain>::ChainAccount::into_foreign_chain_address(
-					deposit_address.clone(),
-				),
-			),
-			channel_id,
-			deposit_block_height: block_height.into(),
-		};
-
 		let action = match action {
 			ChannelAction::LiquidityProvision { lp_account, .. } => {
 				T::Balance::try_credit_account(
@@ -1879,7 +1883,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broker_fees,
 					refund_params,
 					dca_params,
-					swap_origin,
+					origin.into(),
 				);
 				DepositAction::Swap { swap_request_id }
 			},
@@ -1894,7 +1898,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let deposit_metadata = CcmDepositMetadata {
 					channel_metadata,
 					source_chain: asset.into(),
-					source_address: None,
+					source_address,
 				};
 				match deposit_metadata.clone().into_swap_metadata(
 					amount_after_fees.into(),
@@ -1913,7 +1917,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							broker_fees,
 							refund_params,
 							dca_params,
-							swap_origin,
+							origin.into(),
 						);
 						DepositAction::CcmTransfer { swap_request_id }
 					},
@@ -1926,7 +1930,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							deposit_metadata: deposit_metadata
 								.clone()
 								.to_encoded::<T::AddressConverter>(),
-							origin: swap_origin.clone(),
+							origin: origin.into(),
 						});
 						DepositAction::NoAction
 					},
@@ -1965,6 +1969,284 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Err(Error::<T, I>::InvalidDepositAddress.into())
 		}
 
+		let origin = DepositOrigin::deposit_channel::<T, I>(
+			deposit_address.clone(),
+			channel_id,
+			block_height,
+		);
+
+		if let Ok(FullWitnessDepositOutcome::BoostFinalised) =
+			Self::process_full_witness_deposit_inner(
+				deposit_address.clone(),
+				asset,
+				deposit_amount,
+				deposit_details,
+				None, // source address is unknown
+				&deposit_channel_details.owner,
+				deposit_channel_details.boost_status,
+				channel_id,
+				deposit_channel_details.action,
+				block_height,
+				origin,
+			) {
+			// This allows the channel to be boosted again:
+			DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
+				if let Some(details) = details {
+					details.boost_status = BoostStatus::NotBoosted;
+				}
+			});
+		}
+
+		Ok(())
+	}
+
+	fn assemble_broker_fees(
+		broker_fee: Beneficiary<T::AccountId>,
+		affiliate_fees: Affiliates<AffiliateShortId>,
+	) -> Beneficiaries<T::AccountId> {
+		let primary_broker = broker_fee.account.clone();
+
+		if T::AccountRoleRegistry::has_account_role(&primary_broker, AccountRole::Broker) {
+			[broker_fee]
+				.into_iter()
+				.chain(affiliate_fees.into_iter().filter_map(
+					|Beneficiary { account: short_affiliate_id, bps }| {
+						if let Some(affiliate_id) = T::AffiliateRegistry::get_account_id(
+							&primary_broker,
+							short_affiliate_id,
+						) {
+							Some(Beneficiary { account: affiliate_id, bps })
+						} else {
+							// In case the entry not found, we ignore the entry, but process the
+							// swap (to avoid having to refund it).
+							Self::deposit_event(Event::<T, I>::UnknownAffiliate {
+								broker_id: primary_broker.clone(),
+								short_affiliate_id,
+							});
+
+							None
+						}
+					},
+				))
+				.collect::<Vec<_>>()
+				.try_into()
+				.expect(
+					"must fit since affiliates are limited to 1 fewer element than beneficiaries",
+				)
+		} else {
+			Self::deposit_event(Event::<T, I>::UnknownBroker { broker_id: primary_broker });
+			Default::default()
+		}
+	}
+
+	fn process_prewitness_deposit_inner(
+		amount: TargetChainAmount<T, I>,
+		asset: TargetChainAsset<T, I>,
+		deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		deposit_address: TargetChainAccount<T, I>,
+		source_address: Option<ForeignChainAddress>,
+		action: ChannelAction<T::AccountId>,
+		broker: &T::AccountId,
+		boost_fee: u16,
+		boost_status: BoostStatus<TargetChainAmount<T, I>>,
+		channel_id: u64,
+		block_height: TargetChainBlockNumber<T, I>,
+		origin: DepositOrigin,
+	) -> Option<BoostStatus<TargetChainAmount<T, I>>> {
+		if amount < MinimumDeposit::<T, I>::get(asset) {
+			// We do not process/record pre-witnessed deposits for amounts smaller
+			// than MinimumDeposit to match how this is done on finalisation
+			return None;
+		}
+
+		if let Some(tx_id) = deposit_details.deposit_id() {
+			if TaintedTransactions::<T, I>::mutate(broker, &tx_id, |opt| {
+				match opt.as_mut() {
+					// Transaction has been reported, mark it as pre-witnessed.
+					Some(status @ TaintedTransactionStatus::Unseen) => {
+						*status = TaintedTransactionStatus::Prewitnessed;
+						true
+					},
+					// Pre-witnessing twice is unlikely but possible. Either way we don't want
+					// to change the status and we don't want to allow boosting.
+					Some(TaintedTransactionStatus::Prewitnessed) => true,
+					// Transaction has not been reported, mark it as boosted to prevent further
+					// reports.
+					None => false,
+				}
+			}) {
+				return None;
+			}
+		}
+
+		let prewitnessed_deposit_id = PrewitnessedDepositIdCounter::<T, I>::mutate(|id| -> u64 {
+			*id = id.saturating_add(1);
+			*id
+		});
+
+		// Only boost on non-zero fee and if the channel isn't already boosted:
+		if T::SafeMode::get().boost_deposits_enabled &&
+			boost_fee > 0 &&
+			!matches!(boost_status, BoostStatus::Boosted { .. })
+		{
+			match Self::try_boosting(asset, amount, boost_fee, prewitnessed_deposit_id) {
+				Ok(BoostOutput { used_pools, total_fee: boost_fee_amount }) => {
+					let amount_after_boost_fee = amount.saturating_sub(boost_fee_amount);
+
+					// Note that ingress fee is deducted at the time of boosting rather than the
+					// time the deposit is finalised (which allows us to perform the channel
+					// action immediately):
+					let AmountAndFeesWithheld { amount_after_fees, fees_withheld: ingress_fee } =
+						Self::conditionally_withhold_ingress_fee(
+							asset,
+							amount_after_boost_fee,
+							&origin,
+						);
+
+					let used_pool_tiers = used_pools.keys().cloned().collect();
+
+					if let Ok(action) = Self::perform_channel_action(
+						action,
+						asset,
+						source_address,
+						amount_after_fees,
+						origin.clone(),
+					) {
+						Self::deposit_event(Event::DepositBoosted {
+							deposit_address,
+							asset,
+							amounts: used_pools,
+							block_height,
+							prewitnessed_deposit_id,
+							channel_id,
+							deposit_details: deposit_details.clone(),
+							ingress_fee,
+							boost_fee: boost_fee_amount,
+							action,
+							origin_type: origin.into(),
+						});
+					} else {
+						// TODO: emit error?
+					}
+
+					return Some(BoostStatus::Boosted {
+						prewitnessed_deposit_id,
+						pools: used_pool_tiers,
+						amount,
+					});
+				},
+				Err(err) => {
+					Self::deposit_event(Event::InsufficientBoostLiquidity {
+						prewitnessed_deposit_id,
+						asset,
+						amount_attempted: amount,
+						channel_id,
+					});
+					log::debug!(
+						"Deposit (id: {prewitnessed_deposit_id}) of {amount:?} {asset:?} and boost fee {boost_fee} could not be boosted: {err:?}"
+					);
+				},
+			}
+		}
+
+		None
+	}
+
+	fn process_vault_swap_request_prewitness(
+		block_height: TargetChainBlockNumber<T, I>,
+		VaultDepositWitness {
+			input_asset: asset,
+			deposit_address,
+			channel_id,
+			deposit_amount: amount,
+			deposit_details,
+			output_asset,
+			destination_address,
+			deposit_metadata,
+			tx_id,
+			broker_fee,
+			affiliate_fees,
+			refund_params,
+			dca_params,
+			boost_fee,
+		}: VaultDepositWitness<T, I>,
+	) {
+		let destination_address_internal =
+			match T::AddressConverter::decode_and_validate_address_for_asset(
+				destination_address.clone(),
+				output_asset,
+			) {
+				Ok(address) => address,
+				Err(err) => {
+					log::warn!("Failed to process vault swap due to invalid destination address. Tx hash: {tx_id:?}. Error: {err:?}");
+					return;
+				},
+			};
+
+		let broker = broker_fee.account.clone();
+
+		let broker_fees = Self::assemble_broker_fees(broker_fee, affiliate_fees);
+
+		let (action, source_address) = if let Some(deposit_metadata) = deposit_metadata {
+			(
+				ChannelAction::CcmTransfer {
+					destination_asset: output_asset,
+					destination_address: destination_address_internal,
+					broker_fees,
+					refund_params: Some(refund_params),
+					dca_params,
+					channel_metadata: deposit_metadata.channel_metadata,
+				},
+				deposit_metadata.source_address,
+			)
+		} else {
+			(
+				ChannelAction::Swap {
+					destination_asset: output_asset,
+					destination_address: destination_address_internal,
+					broker_fees,
+					refund_params: Some(refund_params),
+					dca_params,
+				},
+				None,
+			)
+		};
+
+		let boost_status = BoostedVaultTxs::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
+
+		let origin = DepositOrigin::vault::<T, I>(tx_id.clone());
+
+		if let Some(new_boost_status) = Self::process_prewitness_deposit_inner(
+			amount,
+			asset,
+			deposit_details,
+			deposit_address,
+			source_address,
+			action,
+			&broker,
+			boost_fee,
+			boost_status,
+			channel_id,
+			block_height,
+			origin,
+		) {
+			BoostedVaultTxs::<T, I>::insert(&tx_id, new_boost_status);
+		}
+	}
+
+	fn process_full_witness_deposit_inner(
+		deposit_address: TargetChainAccount<T, I>,
+		asset: TargetChainAsset<T, I>,
+		deposit_amount: TargetChainAmount<T, I>,
+		deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		source_address: Option<ForeignChainAddress>,
+		broker: &T::AccountId,
+		boost_status: BoostStatus<TargetChainAmount<T, I>>,
+		channel_id: u64,
+		action: ChannelAction<T::AccountId>,
+		block_height: TargetChainBlockNumber<T, I>,
+		origin: DepositOrigin,
+	) -> Result<FullWitnessDepositOutcome, ()> {
 		// TODO: only apply this check if the deposit hasn't been boosted
 		// already (in case MinimumDeposit increases after some small deposit
 		// is boosted)?
@@ -1979,16 +2261,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_details,
 				reason: DepositIgnoredReason::BelowMinimumDeposit,
 			});
-			return Ok(())
+			return Err(());
 		}
 
-		let channel_owner = deposit_channel_details.owner.clone();
-
 		if let Some(tx_id) = deposit_details.deposit_id() {
-			if TaintedTransactions::<T, I>::take(&channel_owner, &tx_id).is_some() &&
-				!matches!(deposit_channel_details.boost_status, BoostStatus::Boosted { .. })
+			if TaintedTransactions::<T, I>::take(broker, &tx_id).is_some() &&
+				!matches!(boost_status, BoostStatus::Boosted { .. })
 			{
-				let refund_address = match deposit_channel_details.action.clone() {
+				let refund_address = match action.clone() {
 					ChannelAction::Swap { refund_params, .. } => refund_params
 						.as_ref()
 						.map(|refund_params| refund_params.refund_address.clone()),
@@ -2013,17 +2293,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					deposit_details,
 					reason: DepositIgnoredReason::TransactionTainted,
 				});
-				return Ok(())
+				return Err(());
 			}
 		}
 
-		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
-			asset,
-			deposit_address: deposit_address.clone(),
-			deposit_fetch_id: None,
-			amount: deposit_amount,
-		});
-		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
+		// Vault deposits don't need to be fetched:
+		if !matches!(origin, DepositOrigin::Vault { .. }) {
+			ScheduledEgressFetchOrTransfer::<T, I>::append(
+				FetchOrTransfer::<T::TargetChain>::Fetch {
+					asset,
+					deposit_address: deposit_address.clone(),
+					deposit_fetch_id: None,
+					amount: deposit_amount,
+				},
+			);
+			Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
+		}
 
 		// Add the deposit to the balance.
 		T::DepositHandler::on_deposit_made(deposit_details.clone());
@@ -2032,7 +2317,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// (i.e. awaiting finalisation), *and* the boosted amount matches the amount
 		// in this deposit, finalise the boost by crediting boost pools with the deposit.
 		// Process as non-boosted deposit otherwise:
-		let maybe_boost_to_process = match deposit_channel_details.boost_status {
+		let maybe_boost_to_process = match boost_status {
 			BoostStatus::Boosted { prewitnessed_deposit_id, pools, amount }
 				if amount == deposit_amount =>
 				Some((prewitnessed_deposit_id, pools)),
@@ -2063,30 +2348,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				});
 			}
 
-			// This allows the channel to be boosted again:
-			DepositChannelLookup::<T, I>::mutate(&deposit_address, |details| {
-				if let Some(details) = details {
-					details.boost_status = BoostStatus::NotBoosted;
-				}
-			});
-
 			Self::deposit_event(Event::DepositFinalised {
 				deposit_address,
 				asset,
 				amount: deposit_amount,
 				block_height,
 				deposit_details,
+				// no ingrees fee as it was already charged at the time of boosting
 				ingress_fee: 0u32.into(),
 				action: DepositAction::BoostersCredited { prewitnessed_deposit_id },
 				channel_id,
+				origin_type: origin.into(),
 			});
+
+			Ok(FullWitnessDepositOutcome::BoostFinalised)
 		} else {
 			let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =
-				Self::withhold_ingress_or_egress_fee(
-					IngressOrEgress::Ingress,
-					deposit_channel_details.deposit_channel.asset,
-					deposit_amount,
-				);
+				Self::conditionally_withhold_ingress_fee(asset, deposit_amount, &origin);
 
 			if amount_after_fees.is_zero() {
 				Self::deposit_event(Event::<T, I>::DepositIgnored {
@@ -2096,59 +2374,58 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					deposit_details,
 					reason: DepositIgnoredReason::NotEnoughToPayFees,
 				});
+				Err(())
 			} else {
-				let deposit_action = Self::perform_channel_action(
-					deposit_channel_details.action,
-					deposit_channel_details.deposit_channel,
-					amount_after_fees,
-					block_height,
-				)?;
+				// Processing as a non-boosted deposit:
 
-				Self::deposit_event(Event::DepositFinalised {
-					deposit_address,
+				if let Ok(action) = Self::perform_channel_action(
+					action,
 					asset,
-					amount: deposit_amount,
-					block_height,
-					deposit_details,
-					ingress_fee: fees_withheld,
-					action: deposit_action,
-					channel_id,
-				});
+					source_address,
+					amount_after_fees,
+					origin.clone(),
+				) {
+					// TODO: this needs to include deposit type (vault/channel)
+					Self::deposit_event(Event::DepositFinalised {
+						deposit_address,
+						asset,
+						amount: deposit_amount,
+						block_height,
+						deposit_details,
+						ingress_fee: fees_withheld,
+						action,
+						channel_id,
+						origin_type: origin.into(),
+					});
+					Ok(FullWitnessDepositOutcome::DepositActionPerformed)
+				} else {
+					Err(())
+				}
 			}
 		}
-
-		Ok(())
 	}
 
-	pub fn process_vault_swap_request(
-		source_asset: TargetChainAsset<T, I>,
-		deposit_amount: <T::TargetChain as Chain>::ChainAmount,
-		destination_asset: Asset,
-		destination_address: EncodedAddress,
-		deposit_metadata: Option<CcmDepositMetadata>,
-		tx_id: TransactionInIdFor<T, I>,
-		deposit_details: <T::TargetChain as Chain>::DepositDetails,
-		broker_fee: Beneficiary<T::AccountId>,
-		affiliate_fees: Affiliates<AffiliateShortId>,
-		refund_params: ChannelRefundParameters,
-		dca_params: Option<DcaParameters>,
-		// This is only to be checked in the pre-witnessed version (not implemented yet)
-		_boost_fee: BasisPoints,
+	pub fn process_vault_swap_request_full_witness(
+		block_height: TargetChainBlockNumber<T, I>,
+		VaultDepositWitness {
+			input_asset: source_asset,
+			deposit_address,
+			channel_id,
+			deposit_amount,
+			deposit_details,
+			output_asset: destination_asset,
+			destination_address,
+			deposit_metadata,
+			tx_id,
+			broker_fee,
+			affiliate_fees,
+			refund_params,
+			dca_params,
+			// Boost fee is only relevant for prewitnessing
+			boost_fee: _,
+		}: VaultDepositWitness<T, I>,
 	) {
-		if deposit_amount < MinimumDeposit::<T, I>::get(source_asset) {
-			// If the deposit amount is below the minimum allowed, the deposit is ignored.
-			// TODO: track these funds somewhere, for example add them to the withheld fees.
-			Self::deposit_event(Event::<T, I>::DepositIgnored {
-				deposit_address: None,
-				asset: source_asset,
-				amount: deposit_amount,
-				deposit_details,
-				reason: DepositIgnoredReason::BelowMinimumDeposit,
-			});
-			return;
-		}
-
-		T::DepositHandler::on_deposit_made(deposit_details);
+		let boost_status = BoostedVaultTxs::<T, I>::get(&tx_id).unwrap_or(BoostStatus::NotBoosted);
 
 		let destination_address_internal =
 			match T::AddressConverter::decode_and_validate_address_for_asset(
@@ -2162,116 +2439,96 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			};
 
-		let swap_origin =
-			SwapOrigin::Vault { tx_id: tx_id.clone().into_transaction_in_id_for_any_chain() };
+		let deposit_origin = DepositOrigin::vault::<T, I>(tx_id.clone());
 
-		let request_type = if let Some(deposit_metadata) = deposit_metadata {
-			let ccm_failed = |reason| {
-				log::warn!("Failed to process CCM. Tx id: {:?}, Reason: {:?}", tx_id, reason);
-
-				Self::deposit_event(Event::<T, I>::CcmFailed {
-					reason,
-					destination_address: destination_address.clone(),
-					deposit_metadata: deposit_metadata.clone().to_encoded::<T::AddressConverter>(),
-					origin: swap_origin.clone(),
-				});
-			};
-
+		if let Some(deposit_metadata) = &deposit_metadata {
 			if T::CcmValidityChecker::check_and_decode(
 				&deposit_metadata.channel_metadata,
 				destination_asset,
 			)
 			.is_err()
 			{
-				ccm_failed(CcmFailReason::InvalidMetadata);
+				log::warn!(
+					"Failed to process CCM. Tx id: {:?}, Reason: {:?}",
+					tx_id,
+					CcmFailReason::InvalidMetadata
+				);
+
+				Self::deposit_event(Event::<T, I>::CcmFailed {
+					reason: CcmFailReason::InvalidMetadata,
+					destination_address: destination_address.clone(),
+					deposit_metadata: deposit_metadata.clone().to_encoded::<T::AddressConverter>(),
+					origin: deposit_origin.clone().into(),
+				});
+
 				return;
 			};
-
-			match deposit_metadata.clone().into_swap_metadata(
-				deposit_amount.into(),
-				source_asset.into(),
-				destination_asset,
-			) {
-				Ok(ccm_swap_metadata) => SwapRequestType::Ccm {
-					ccm_swap_metadata,
-					output_address: destination_address_internal.clone(),
-				},
-				Err(reason) => {
-					ccm_failed(reason);
-					return;
-				},
-			}
-		} else {
-			SwapRequestType::Regular { output_address: destination_address_internal.clone() }
-		};
+		}
 
 		if let Err(err) =
 			T::SwapLimitsProvider::validate_refund_params(refund_params.retry_duration)
 		{
-			log::warn!(
-				"Failed to process vault swap due to invalid refund params. Tx id: {tx_id:?}. Error: {err:?}",
-			);
+			log::warn!("Failed to process vault swap due to invalid refund params. Tx id: {tx_id:?}. Error: {err:?}");
 			return;
 		}
 
 		if let Some(params) = &dca_params {
 			if let Err(err) = T::SwapLimitsProvider::validate_dca_params(params) {
-				log::warn!(
-    				"Failed to process vault swap due to invalid dca params. Tx id: {tx_id:?}. Error: {err:?}",
-    			);
+				log::warn!("Failed to process vault swap due to invalid dca params. Tx id: {tx_id:?}. Error: {err:?}");
 				return;
 			}
 		}
 
-		let primary_broker = broker_fee.account.clone();
-
-		let broker_fees =
-			if T::AccountRoleRegistry::has_account_role(&primary_broker, AccountRole::Broker) {
-				[broker_fee]
-				.into_iter()
-				.chain(affiliate_fees.into_iter().filter_map(
-					|Beneficiary { account: short_affiliate_id, bps }| {
-						if let Some(affiliate_id) =
-							T::AffiliateRegistry::get_account_id(&primary_broker, short_affiliate_id)
-						{
-							Some(Beneficiary { account: affiliate_id, bps })
-						} else {
-							// In case the entry not found, we ignore the entry, but process the
-							// swap (to avoid having to refund it).
-							Self::deposit_event(Event::<T, I>::UnknownAffiliate {
-								broker_id: primary_broker.clone(),
-								short_affiliate_id,
-							});
-
-							None
-						}
-					},
-				))
-				.collect::<Vec<_>>()
-				.try_into()
-				.expect("must fit since affiliates are limited to 1 fewer element than beneficiaries")
-			} else {
-				Self::deposit_event(Event::<T, I>::UnknownBroker { broker_id: primary_broker });
-				Default::default()
-			};
+		let broker = broker_fee.account.clone();
+		let broker_fees = Self::assemble_broker_fees(broker_fee, affiliate_fees);
 
 		if let Err(err) = T::SwapLimitsProvider::validate_broker_fees(&broker_fees) {
-			log::warn!(
-				"Failed to process vault swap due to invalid broker fees. Tx id: {tx_id:?}. Error: {err:?}",
- 			);
+			log::warn!("Failed to process vault swap due to invalid broker fees. Tx id: {tx_id:?}. Error: {err:?}");
 			return;
 		}
 
-		T::SwapRequestHandler::init_swap_request(
-			source_asset.into(),
-			deposit_amount.into(),
-			destination_asset,
-			request_type,
-			broker_fees,
-			Some(refund_params),
-			dca_params,
-			swap_origin,
-		);
+		let (action, source_address) = if let Some(deposit_metadata) = deposit_metadata {
+			(
+				ChannelAction::CcmTransfer {
+					destination_asset,
+					destination_address: destination_address_internal,
+					broker_fees,
+					refund_params: Some(refund_params),
+					dca_params,
+					channel_metadata: deposit_metadata.channel_metadata,
+				},
+				deposit_metadata.source_address,
+			)
+		} else {
+			(
+				ChannelAction::Swap {
+					destination_asset,
+					destination_address: destination_address_internal,
+					broker_fees,
+					refund_params: Some(refund_params),
+					dca_params,
+				},
+				None,
+			)
+		};
+
+		if let Ok(FullWitnessDepositOutcome::BoostFinalised) =
+			Self::process_full_witness_deposit_inner(
+				deposit_address.clone(),
+				source_asset,
+				deposit_amount,
+				deposit_details,
+				source_address,
+				&broker,
+				boost_status,
+				channel_id,
+				action,
+				block_height,
+				deposit_origin,
+			) {
+			// This allows the channel to be boosted again:
+			BoostedVaultTxs::<T, I>::remove(&tx_id);
+		}
 	}
 
 	fn expiry_and_recycle_block_height(
@@ -2394,6 +2651,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.iter()
 			.find(|ccm| ccm.broadcast_id == broadcast_id)
 			.cloned()
+	}
+
+	// Withholds ingress fee, but only after checking the origin
+	fn conditionally_withhold_ingress_fee(
+		asset: TargetChainAsset<T, I>,
+		available_amount: TargetChainAmount<T, I>,
+		origin: &DepositOrigin,
+	) -> AmountAndFeesWithheld<T, I> {
+		if matches!(origin, &DepositOrigin::DepositChannel { .. }) {
+			Self::withhold_ingress_or_egress_fee(IngressOrEgress::Ingress, asset, available_amount)
+		} else {
+			// No ingress fee for vault swaps.
+			AmountAndFeesWithheld {
+				amount_after_fees: available_amount,
+				fees_withheld: 0u32.into(),
+			}
+		}
 	}
 
 	/// Withholds the fee for a given amount.

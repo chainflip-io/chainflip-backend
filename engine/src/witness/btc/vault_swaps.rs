@@ -8,7 +8,7 @@ use cf_chains::{
 	},
 	ChannelRefundParameters, ForeignChainAddress,
 };
-use cf_primitives::{AccountId, Beneficiary, DcaParameters};
+use cf_primitives::{AccountId, Beneficiary, ChannelId, DcaParameters};
 use cf_utilities::SliceToArray;
 use codec::Decode;
 use itertools::Itertools;
@@ -77,14 +77,18 @@ fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 	Some(pubkey)
 }
 
-type BtcIngressEgressCall =
+pub(super) type BtcIngressEgressCall =
 	pallet_cf_ingress_egress::Call<state_chain_runtime::Runtime, BitcoinInstance>;
 
-pub fn try_extract_vault_swap_call(
+type VaultDepositWitness =
+	pallet_cf_ingress_egress::VaultDepositWitness<state_chain_runtime::Runtime, BitcoinInstance>;
+
+pub fn try_extract_vault_swap_witness(
 	tx: &VerboseTransaction,
 	vault_address: &DepositAddress,
+	channel_id: ChannelId,
 	broker_id: &AccountId,
-) -> Option<BtcIngressEgressCall> {
+) -> Option<VaultDepositWitness> {
 	// A correctly constructed transaction carrying CF swap parameters must have at least 3 outputs:
 	let [utxo_to_vault, nulldata_utxo, change_utxo, ..] = &tx.vout[..] else {
 		return None;
@@ -130,18 +134,18 @@ pub fn try_extract_vault_swap_call(
 
 	let tx_id: [u8; 32] = tx.txid.to_byte_array();
 
-	Some(BtcIngressEgressCall::vault_swap_request {
+	Some(VaultDepositWitness {
 		input_asset: NATIVE_ASSET,
 		output_asset: data.output_asset,
 		deposit_amount,
 		destination_address: data.output_address,
 		tx_id: H256::from(tx_id),
-		deposit_details: Box::new(Utxo {
+		deposit_details: Utxo {
 			// we require the deposit to be the first UTXO
 			id: UtxoId { tx_id: tx_id.into(), vout: 0 },
 			amount: deposit_amount,
 			deposit_address: vault_address.clone(),
-		}),
+		},
 		deposit_metadata: None, // No ccm for BTC (yet?)
 		broker_fee: Beneficiary {
 			account: broker_id.clone(),
@@ -155,17 +159,19 @@ pub fn try_extract_vault_swap_call(
 			.collect_vec()
 			.try_into()
 			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
-		refund_params: Box::new(ChannelRefundParameters {
+		refund_params: ChannelRefundParameters {
 			retry_duration: data.parameters.retry_duration.into(),
 			refund_address: ForeignChainAddress::Btc(refund_address),
 			min_price,
-		}),
+		},
 		dca_params: Some(DcaParameters {
 			number_of_chunks: data.parameters.number_of_chunks.into(),
 			chunk_interval: data.parameters.chunk_interval.into(),
 		}),
 		// This is only to be checked in the pre-witnessed version
 		boost_fee: data.parameters.boost_fee.into(),
+		channel_id,
+		deposit_address: vault_address.script_pubkey(),
 	})
 }
 
@@ -288,38 +294,42 @@ mod tests {
 			None,
 		);
 
+		const CHANNEL_ID: ChannelId = 7;
+
 		assert_eq!(
-			try_extract_vault_swap_call(&tx, &vault_deposit_address, &BROKER),
-			Some(BtcIngressEgressCall::vault_swap_request {
+			try_extract_vault_swap_witness(&tx, &vault_deposit_address, CHANNEL_ID, &BROKER),
+			Some(VaultDepositWitness {
 				input_asset: NATIVE_ASSET,
 				output_asset: MOCK_SWAP_PARAMS.output_asset,
 				deposit_amount: DEPOSIT_AMOUNT,
 				destination_address: MOCK_SWAP_PARAMS.output_address.clone(),
 				tx_id: tx.txid.to_byte_array().into(),
-				deposit_details: Box::new(Utxo {
+				deposit_details: Utxo {
 					id: UtxoId { tx_id: tx.txid.to_byte_array().into(), vout: 0 },
 					amount: DEPOSIT_AMOUNT,
-					deposit_address: vault_deposit_address,
-				}),
+					deposit_address: vault_deposit_address.clone(),
+				},
 				broker_fee: Beneficiary {
 					account: BROKER,
 					bps: MOCK_SWAP_PARAMS.parameters.broker_fee.into()
 				},
 				affiliate_fees: bounded_vec![MOCK_SWAP_PARAMS.parameters.affiliates[0].into()],
 				deposit_metadata: None,
-				refund_params: Box::new(ChannelRefundParameters {
+				refund_params: ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),
 					refund_address: ForeignChainAddress::Btc(refund_pubkey),
 					min_price: sqrt_price_to_price(bounded_sqrt_price(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
 						DEPOSIT_AMOUNT.into(),
 					)),
-				}),
+				},
 				dca_params: Some(DcaParameters {
 					number_of_chunks: MOCK_SWAP_PARAMS.parameters.number_of_chunks.into(),
 					chunk_interval: MOCK_SWAP_PARAMS.parameters.chunk_interval.into(),
 				}),
 				boost_fee: MOCK_SWAP_PARAMS.parameters.boost_fee.into(),
+				deposit_address: vault_deposit_address.script_pubkey(),
+				channel_id: CHANNEL_ID,
 			})
 		);
 	}

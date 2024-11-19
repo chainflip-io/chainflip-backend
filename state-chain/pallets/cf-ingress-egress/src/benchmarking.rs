@@ -307,22 +307,27 @@ mod benchmarks {
 			},
 		};
 		let call = Call::<T, I>::vault_swap_request {
-			input_asset: BenchmarkValue::benchmark_value(),
-			deposit_amount: 1_000u32.into(),
-			output_asset: Asset::Eth,
-			destination_address: EncodedAddress::benchmark_value(),
-			deposit_metadata: Some(deposit_metadata),
-			tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
-			deposit_details: Box::new(BenchmarkValue::benchmark_value()),
-			broker_fee: cf_primitives::Beneficiary { account: account("broker", 0, 0), bps: 0 },
-			affiliate_fees: Default::default(),
-			refund_params: Box::new(ChannelRefundParameters {
-				retry_duration: Default::default(),
-				refund_address: ForeignChainAddress::Eth(Default::default()),
-				min_price: Default::default(),
-			}),
-			dca_params: None,
-			boost_fee: 0,
+			block_height: 0u32.into(),
+			deposits: vec![VaultDepositWitness {
+				input_asset: BenchmarkValue::benchmark_value(),
+				output_asset: Asset::Eth,
+				deposit_amount: 1_000u32.into(),
+				destination_address: EncodedAddress::benchmark_value(),
+				deposit_metadata: Some(deposit_metadata),
+				tx_id: TransactionInIdFor::<T, I>::benchmark_value(),
+				deposit_details: BenchmarkValue::benchmark_value(),
+				broker_fee: cf_primitives::Beneficiary { account: account("broker", 0, 0), bps: 0 },
+				affiliate_fees: Default::default(),
+				refund_params: ChannelRefundParameters {
+					retry_duration: Default::default(),
+					refund_address: ForeignChainAddress::Eth(Default::default()),
+					min_price: Default::default(),
+				},
+				dca_params: None,
+				boost_fee: 0,
+				channel_id: 0,
+				deposit_address: BenchmarkValue::benchmark_value(),
+			}],
 		};
 
 		#[block]

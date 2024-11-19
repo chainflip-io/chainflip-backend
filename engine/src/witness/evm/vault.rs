@@ -21,16 +21,18 @@ use cf_chains::{
 	evm::DepositDetails,
 	CcmChannelMetadata, CcmDepositMetadata, Chain,
 };
-use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, ChannelId, EpochIndex, ForeignChain};
 use ethers::prelude::*;
 use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
 pub fn call_from_event<
-	C: cf_chains::Chain<ChainAccount = EthereumAddress>,
+	C: cf_chains::Chain<ChainAccount = EthereumAddress, ChainBlockNumber = u64>,
 	CallBuilder: IngressCallBuilder<Chain = C>,
 >(
+	block_height: u64,
+	contract_address: EthereumAddress,
 	event: Event<VaultEvents>,
 	// can be different for different EVM chains
 	native_asset: Asset,
@@ -56,6 +58,10 @@ where
 		})
 	}
 
+	// The deposit address and channel id are always the same (unlike BTC vault swaps):
+	let deposit_address = contract_address;
+	let channel_id = 0;
+
 	Ok(match event.event_parameters {
 		VaultEvents::SwapNativeFilter(SwapNativeFilter {
 			dst_chain,
@@ -71,7 +77,10 @@ where
 			}) = VersionedCfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::vault_swap_request(
+				block_height,
 				native_asset,
+				deposit_address,
+				channel_id,
 				try_into_primitive(amount)?,
 				try_into_primitive(dst_token)?,
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
@@ -95,9 +104,12 @@ where
 			}) = VersionedCfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::vault_swap_request(
+				block_height,
 				*(supported_assets
 					.get(&src_token)
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
+				deposit_address,
+				channel_id,
 				try_into_primitive(amount)?,
 				try_into_primitive(dst_token)?,
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
@@ -122,7 +134,10 @@ where
 			}) = VersionedCcmCfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::vault_swap_request(
+				block_height,
 				native_asset,
+				deposit_address,
+				channel_id,
 				try_into_primitive(amount)?,
 				try_into_primitive(dst_token)?,
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
@@ -163,9 +178,12 @@ where
 			}) = VersionedCcmCfParameters::decode(&mut &cf_parameters[..])?;
 
 			Some(CallBuilder::vault_swap_request(
+				block_height,
 				*(supported_assets
 					.get(&src_token)
 					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
+				deposit_address,
+				channel_id,
 				try_into_primitive(amount)?,
 				try_into_primitive(dst_token)?,
 				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
@@ -224,7 +242,10 @@ pub trait IngressCallBuilder {
 	type Chain: cf_chains::Chain<ChainAccount = EthereumAddress>;
 
 	fn vault_swap_request(
+		block_height: <Self::Chain as cf_chains::Chain>::ChainBlockNumber,
 		source_asset: Asset,
+		deposit_address: <Self::Chain as cf_chains::Chain>::ChainAccount,
+		channel_id: ChannelId,
 		deposit_amount: cf_primitives::AssetAmount,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
@@ -285,6 +306,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				.await?
 				{
 					match call_from_event::<Inner::Chain, CallBuilder>(
+						header.index,
+						contract_address,
 						event,
 						native_asset,
 						source_chain,

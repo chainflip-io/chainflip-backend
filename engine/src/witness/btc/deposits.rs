@@ -6,8 +6,12 @@ use itertools::Itertools;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use state_chain_runtime::BitcoinInstance;
 
-use super::super::common::chunked_chain_source::chunked_by_vault::{
-	builder::ChunkedByVaultBuilder, private_deposit_channels::BrokerPrivateChannels, ChunkedByVault,
+use super::{
+	super::common::chunked_chain_source::chunked_by_vault::{
+		builder::ChunkedByVaultBuilder, private_deposit_channels::BrokerPrivateChannels,
+		ChunkedByVault,
+	},
+	vault_swaps::BtcIngressEgressCall,
 };
 use crate::{
 	btc::rpc::VerboseTransaction,
@@ -71,6 +75,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 						private_channels.clone().into_iter().map(move |(broker_id, channel_id)| {
 							(
 								broker_id,
+								channel_id,
 								DepositAddress::new(
 									key,
 									channel_id.try_into().expect("BTC channel id must fit in u32"),
@@ -80,14 +85,23 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					})
 				};
 
-				for (broker_id, vault_address) in vault_addresses {
+				for (broker_id, channel_id, vault_address) in vault_addresses {
 					for tx in &txs {
-						if let Some(call) = super::vault_swaps::try_extract_vault_swap_call(
+						if let Some(deposit) = super::vault_swaps::try_extract_vault_swap_witness(
 							tx,
 							&vault_address,
+							channel_id,
 							&broker_id,
 						) {
-							process_call(call.into(), epoch.index).await;
+							process_call(
+								BtcIngressEgressCall::vault_swap_request {
+									block_height: header.index,
+									deposits: vec![deposit],
+								}
+								.into(),
+								epoch.index,
+							)
+							.await;
 						}
 					}
 				}

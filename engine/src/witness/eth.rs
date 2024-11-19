@@ -8,10 +8,13 @@ use cf_chains::{
 	evm::{DepositDetails, H256},
 	CcmDepositMetadata, Ethereum,
 };
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset, AssetAmount, EpochIndex};
+use cf_primitives::{
+	chains::assets::eth::Asset as EthAsset, Asset, AssetAmount, ChannelId, EpochIndex,
+};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use itertools::Itertools;
+use pallet_cf_ingress_egress::VaultDepositWitness;
 use sp_core::H160;
 
 use crate::{
@@ -232,7 +235,10 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 	type Chain = Ethereum;
 
 	fn vault_swap_request(
+		block_height: u64,
 		source_asset: Asset,
+		deposit_address: cf_chains::eth::Address,
+		channel_id: ChannelId,
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
@@ -242,24 +248,30 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Call::vault_swap_request {
-				input_asset: source_asset.try_into().expect("invalid asset for chain"),
-				output_asset: destination_asset,
-				deposit_amount,
-				destination_address,
-				deposit_metadata,
-				tx_id,
-				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_id]) }),
-				broker_fee: vault_swap_parameters.broker_fee,
-				affiliate_fees: vault_swap_parameters
-					.affiliate_fees
-					.into_iter()
-					.map(Into::into)
-					.collect_vec()
-					.try_into()
-					.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
-				boost_fee: vault_swap_parameters.boost_fee.into(),
-				dca_params: vault_swap_parameters.dca_params,
-				refund_params: Box::new(vault_swap_parameters.refund_params),
+				block_height,
+				deposits: vec![ VaultDepositWitness {
+					input_asset: source_asset.try_into().expect("invalid asset for chain"),
+					output_asset: destination_asset,
+					deposit_amount,
+					destination_address,
+					deposit_metadata,
+					tx_id,
+					deposit_details: DepositDetails { tx_hashes: Some(vec![tx_id]) },
+					broker_fee: vault_swap_parameters.broker_fee,
+					affiliate_fees: vault_swap_parameters
+						.affiliate_fees
+						.into_iter()
+						.map(Into::into)
+						.collect_vec()
+						.try_into()
+						.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),
+					boost_fee: vault_swap_parameters.boost_fee.into(),
+					dca_params: vault_swap_parameters.dca_params,
+					refund_params: vault_swap_parameters.refund_params,
+					channel_id,
+					deposit_address,
+				}
+				],
 			},
 		)
 	}

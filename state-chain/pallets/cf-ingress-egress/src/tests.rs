@@ -8,7 +8,7 @@ use crate::{
 	DisabledEgressAssets, EgressDustLimit, Event as PalletEvent, FailedForeignChainCall,
 	FailedForeignChainCalls, FetchOrTransfer, MinimumDeposit, Pallet, PalletConfigUpdate,
 	PalletSafeMode, PrewitnessedDepositIdCounter, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer,
+	ScheduledEgressFetchOrTransfer, VaultDepositWitness,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -16,11 +16,12 @@ use cf_chains::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
-	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel,
+	CcmChannelMetadata, CcmFailReason, ChannelRefundParameters, DepositChannel, DepositOriginType,
 	ExecutexSwapAndCall, SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
-	AffiliateShortId, AssetAmount, BasisPoints, Beneficiary, ChannelId, ForeignChain,
+	AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiary, ChannelId, DcaParameters,
+	ForeignChain,
 };
 use cf_test_utilities::{assert_events_eq, assert_has_event, assert_has_matching_event};
 use cf_traits::{
@@ -47,7 +48,7 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_core::{bounded_vec, H160};
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, DispatchResult};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
 const BOB_ETH_ADDRESS: EthereumAddress = H160([101u8; 20]);
@@ -855,6 +856,7 @@ fn deposits_below_minimum_are_rejected() {
 				ingress_fee: 0,
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
 				channel_id,
+				origin_type: DepositOriginType::DepositChannel,
 			},
 		));
 	});
@@ -1790,6 +1792,43 @@ fn do_not_process_more_ccm_swaps_than_allowed_by_limit() {
 	});
 }
 
+fn submit_vault_swap_request(
+	input_asset: Asset,
+	output_asset: Asset,
+	deposit_amount: AssetAmount,
+	deposit_address: H160,
+	destination_address: EncodedAddress,
+	deposit_metadata: Option<CcmDepositMetadata>,
+	tx_id: H256,
+	deposit_details: DepositDetails,
+	broker_fee: Beneficiary<u64>,
+	affiliate_fees: Affiliates<AffiliateShortId>,
+	refund_params: ChannelRefundParameters,
+	dca_params: Option<DcaParameters>,
+	boost_fee: BasisPoints,
+) -> DispatchResult {
+	IngressEgress::vault_swap_request(
+		RuntimeOrigin::root(),
+		0,
+		vec![VaultDepositWitness {
+			input_asset: input_asset.try_into().unwrap(),
+			deposit_address,
+			channel_id: 0,
+			deposit_amount,
+			deposit_details,
+			output_asset,
+			destination_address,
+			deposit_metadata,
+			tx_id,
+			broker_fee,
+			affiliate_fees,
+			refund_params,
+			dca_params,
+			boost_fee,
+		}],
+	)
+}
+
 #[test]
 fn can_request_swap_via_extrinsic() {
 	const INPUT_ASSET: Asset = Asset::Eth;
@@ -1799,20 +1838,20 @@ fn can_request_swap_via_extrinsic() {
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			INPUT_ASSET.try_into().unwrap(),
+		assert_ok!(submit_vault_swap_request(
+			INPUT_ASSET,
 			OUTPUT_ASSET,
 			INPUT_AMOUNT,
+			Default::default(),
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
-			0,
+			0
 		));
 
 		assert_eq!(
@@ -1855,21 +1894,21 @@ fn vault_swaps_support_affiliate_fees() {
 		// have no effect on the test:
 		MockAffiliateRegistry::register_affiliate(BROKER + 1, AFFILIATE_2, AFFILIATE_SHORT_1);
 
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			INPUT_ASSET.try_into().unwrap(),
+		assert_ok!(submit_vault_swap_request(
+			INPUT_ASSET,
 			OUTPUT_ASSET,
 			INPUT_AMOUNT,
+			Default::default(),
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: BROKER, bps: BROKER_FEE },
 			bounded_vec![
 				Beneficiary { account: AFFILIATE_SHORT_1, bps: AFFILIATE_FEE },
 				Beneficiary { account: AFFILIATE_SHORT_2, bps: AFFILIATE_FEE }
 			],
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
 		));
@@ -1913,18 +1952,18 @@ fn charge_no_broker_fees_on_unknown_primary_broker() {
 
 		let output_address = ForeignChainAddress::Eth([1; 20].into());
 
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			INPUT_ASSET.try_into().unwrap(),
+		assert_ok!(submit_vault_swap_request(
+			INPUT_ASSET,
 			OUTPUT_ASSET,
 			INPUT_AMOUNT,
+			Default::default(),
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			None,
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: NOT_A_BROKER, bps: BROKER_FEE },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
 		));
@@ -1959,7 +1998,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 
 	let ccm_deposit_metadata = CcmDepositMetadata {
 		source_chain: ForeignChain::Ethereum,
-		source_address: Some(ForeignChainAddress::Eth([0xcf; 20].into())),
+		source_address: None,
 		channel_metadata: CcmChannelMetadata {
 			message: vec![0x01].try_into().unwrap(),
 			gas_budget: 1_000,
@@ -1970,18 +2009,18 @@ fn can_request_ccm_swap_via_extrinsic() {
 	let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 	new_test_ext().execute_with(|| {
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			INPUT_ASSET.try_into().unwrap(),
+		assert_ok!(submit_vault_swap_request(
+			INPUT_ASSET,
 			OUTPUT_ASSET,
 			10_000,
+			Default::default(),
 			MockAddressConverter::to_encoded_address(output_address.clone()),
 			Some(ccm_deposit_metadata.clone()),
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: BROKER, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
 		));
@@ -2020,41 +2059,41 @@ fn rejects_invalid_swap_by_witnesser() {
 			MockAddressConverter::to_encoded_address(ForeignChainAddress::Btc(script_pubkey));
 
 		// Is valid Bitcoin address, but asset is Dot, so not compatible
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			EthAsset::Eth,
+		assert_ok!(submit_vault_swap_request(
+			Asset::Eth,
 			Asset::Dot,
 			10000,
+			Default::default(),
 			btc_encoded_address,
 			None,
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
-		),);
+		));
 
 		// No swap request created -> the call was ignored
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 
 		// Invalid BTC address:
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			EthAsset::Eth,
+		assert_ok!(submit_vault_swap_request(
+			Asset::Eth,
 			Asset::Btc,
 			10000,
+			Default::default(),
 			EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
 			None,
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
-		),);
+		));
 
 		assert!(MockSwapRequestHandler::<Test>::get_swap_requests().is_empty());
 	});
@@ -2076,18 +2115,18 @@ fn failed_ccm_deposit_can_deposit_event() {
 
 	new_test_ext().execute_with(|| {
 		// CCM is not supported for Dot:
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			EthAsset::Flip,
+		assert_ok!(submit_vault_swap_request(
+			Asset::Flip,
 			Asset::Dot,
 			10_000,
+			Default::default(),
 			EncodedAddress::Dot(Default::default()),
 			Some(ccm_deposit_metadata.clone()),
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
 		));
@@ -2103,18 +2142,18 @@ fn failed_ccm_deposit_can_deposit_event() {
 		System::reset_events();
 
 		// Insufficient deposit amount:
-		assert_ok!(IngressEgress::vault_swap_request(
-			RuntimeOrigin::root(),
-			EthAsset::Flip,
+		assert_ok!(submit_vault_swap_request(
+			Asset::Flip,
 			Asset::Eth,
 			GAS_BUDGET - 1,
+			Default::default(),
 			EncodedAddress::Eth(Default::default()),
 			Some(ccm_deposit_metadata),
 			Default::default(),
-			Box::new(DepositDetails { tx_hashes: None }),
+			DepositDetails { tx_hashes: None },
 			Beneficiary { account: 0, bps: 0 },
 			Default::default(),
-			Box::new(ETH_REFUND_PARAMS),
+			ETH_REFUND_PARAMS,
 			None,
 			0
 		));
