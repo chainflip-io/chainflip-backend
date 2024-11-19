@@ -1517,6 +1517,7 @@ impl_runtime_apis! {
 			to: Asset,
 			amount: AssetAmount,
 			broker_commission: BasisPoints,
+			boost_fee: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage> {
@@ -1591,12 +1592,14 @@ impl_runtime_apis! {
 				}
 			}
 
-			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, from, amount);
+			let boost_fee_taken = Perbill::from_rational(boost_fee as u128, 10_000u128) * amount;
+			let amount_without_boost_fee = amount.saturating_sub(boost_fee_taken);
+			let (swap_input, ingress_fee) = remove_fees(IngressOrEgress::Ingress, from, amount_without_boost_fee);
 
 			// Estimate swap result for a chunk, then extrapolate the result.
 			// If no DCA parameter is given, swap the entire amount with 1 chunk.
 			let number_of_chunks: u128 = dca_parameters.map(|dca|dca.number_of_chunks).unwrap_or(1u32).into();
-			let amount_per_chunk = amount_to_swap / number_of_chunks;
+			let amount_per_chunk = swap_input / number_of_chunks;
 
 			let swap_output_per_chunk = Swapping::try_execute_without_violations(
 				vec![
@@ -1635,7 +1638,7 @@ impl_runtime_apis! {
 				(
 					swap_output_per_chunk[0].network_fee_taken.unwrap_or_default() * number_of_chunks,
 					swap_output_per_chunk[0].broker_fee_taken.unwrap_or_default() * number_of_chunks,
-					swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks),
+					if to == STABLE_ASSET { None } else { swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks) },
 					swap_output_per_chunk[0].final_output.unwrap_or_default() * number_of_chunks,
 				)
 			};
@@ -1644,11 +1647,13 @@ impl_runtime_apis! {
 
 			Ok(SimulatedSwapInformation {
 				intermediary,
+				swap_input,
 				output,
 				network_fee,
 				ingress_fee,
 				egress_fee,
 				broker_fee,
+				boost_fee: boost_fee_taken,
 			})
 		}
 

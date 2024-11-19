@@ -167,11 +167,13 @@ pub struct BrokerInfo {
 #[derive(Encode, Decode, TypeInfo)]
 pub struct SimulatedSwapInformation {
 	pub intermediary: Option<AssetAmount>,
+	pub swap_input: AssetAmount,
 	pub output: AssetAmount,
 	pub network_fee: AssetAmount,
 	pub ingress_fee: AssetAmount,
 	pub egress_fee: AssetAmount,
 	pub broker_fee: AssetAmount,
+	pub boost_fee: AssetAmount,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -306,6 +308,7 @@ decl_runtime_apis!(
 			to: Asset,
 			amount: AssetAmount,
 			broker_commission: BasisPoints,
+			boost_fee: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;

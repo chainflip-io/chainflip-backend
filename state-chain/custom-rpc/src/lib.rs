@@ -416,12 +416,15 @@ pub struct RpcFee {
 pub struct RpcSwapOutputV2 {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<U256>,
+	// Input into the swaps
+	pub swap_input: U256,
 	// Final output of the swap
 	pub output: U256,
 	pub network_fee: RpcFee,
 	pub ingress_fee: RpcFee,
 	pub egress_fee: RpcFee,
 	pub broker_commission: RpcFee,
+	pub boost_fee: RpcFee,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -756,6 +759,7 @@ pub trait CustomApi {
 		to_asset: Asset,
 		amount: U256,
 		broker_commission: BasisPoints,
+		boost_fee: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
@@ -1408,6 +1412,7 @@ where
 			to_asset,
 			amount,
 			Default::default(),
+			Default::default(),
 			None,
 			additional_orders,
 			at,
@@ -1421,6 +1426,7 @@ where
 		to_asset: Asset,
 		amount: U256,
 		broker_commission: BasisPoints,
+		boost_fee: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
@@ -1445,6 +1451,7 @@ where
 							ErrorObject::owned(ErrorCode::InvalidParams.code(), s, None::<()>)
 						})?,
 					broker_commission,
+					boost_fee,
 					dca_parameters,
 					additional_orders.map(|additional_orders| {
 						additional_orders
@@ -1471,6 +1478,7 @@ where
 				)?
 				.map(|simulated_swap_info_v2| RpcSwapOutputV2 {
 					intermediary: simulated_swap_info_v2.intermediary.map(Into::into),
+					swap_input: simulated_swap_info_v2.swap_input.into(),
 					output: simulated_swap_info_v2.output.into(),
 					network_fee: RpcFee {
 						asset: cf_primitives::STABLE_ASSET,
@@ -1487,6 +1495,10 @@ where
 					broker_commission: RpcFee {
 						asset: cf_primitives::STABLE_ASSET,
 						amount: simulated_swap_info_v2.broker_fee.into(),
+					},
+					boost_fee: RpcFee {
+						asset: from_asset,
+						amount: simulated_swap_info_v2.boost_fee.into(),
 					},
 				})?,
 			)
@@ -2334,11 +2346,13 @@ mod test {
 	fn test_swap_output_serialization() {
 		insta::assert_snapshot!(serde_json::to_value(RpcSwapOutputV2 {
 			output: 1_000_000_000_000_000_000u128.into(),
+			swap_input: 1_000_000_000_000u128.into(),
 			intermediary: Some(1_000_000u128.into()),
 			network_fee: RpcFee { asset: Asset::Usdc, amount: 1_000u128.into() },
 			ingress_fee: RpcFee { asset: Asset::Flip, amount: 500u128.into() },
 			egress_fee: RpcFee { asset: Asset::Eth, amount: 1_000_000u128.into() },
 			broker_commission: RpcFee { asset: Asset::Usdc, amount: 100u128.into() },
+			boost_fee: RpcFee { asset: Asset::Flip, amount: 1_250u128.into() },
 		})
 		.unwrap());
 	}
