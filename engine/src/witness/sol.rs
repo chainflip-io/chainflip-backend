@@ -8,7 +8,7 @@ use crate::{
 	sol::{
 		commitment_config::CommitmentConfig,
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
-		rpc_client_api::RpcBlockConfig,
+		rpc_client_api::{RpcBlockConfig, TransactionDetails},
 	},
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
@@ -174,6 +174,8 @@ impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
 				.get_block(
 					slot,
 					RpcBlockConfig {
+						transaction_details: Some(TransactionDetails::None),
+						rewards: Some(false),
 						max_supported_transaction_version: Some(0),
 						..Default::default()
 					},
