@@ -178,7 +178,7 @@ pub struct SimulatedSwapInformation {
 }
 
 impl From<SimulatedSwapInformation!["1.6.0"]> for SimulatedSwapInformation {
-	fn from(value: SimulatedSwapInformation!("1.6.0")) -> Self {
+	fn from(value: SimulatedSwapInformation!["1.6.0"]) -> Self {
 		Self {
 			intermediary: value.intermediary,
 			output: value.output,
