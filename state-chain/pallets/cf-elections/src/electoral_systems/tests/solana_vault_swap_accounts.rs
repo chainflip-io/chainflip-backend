@@ -389,45 +389,40 @@ fn generate_vote_no_consensus() -> ConsensusVotes<MinimalVaultSwapAccounts> {
 fn generate_votes_specific_case(
 	no_of_each_vote: [usize; 4],
 ) -> ConsensusVotes<MinimalVaultSwapAccounts> {
-	let vote_1 = SolanaVaultSwapsVote {
-		new_accounts: BTreeSet::from([
-			(NEW_ACCOUNT_1, ()),
-			(NEW_ACCOUNT_2, ()),
-			(NEW_ACCOUNT_3, ()),
-		]),
-		confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
-	};
-
-	let vote_2 = SolanaVaultSwapsVote {
-		new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, ()), (NEW_ACCOUNT_2, ())]),
-		confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
-	};
-
-	let vote_3 = SolanaVaultSwapsVote {
-		new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, ()), (NEW_ACCOUNT_3, ())]),
-		confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
-	};
-
-	let vote_4 = SolanaVaultSwapsVote {
-		new_accounts: BTreeSet::from([(NEW_ACCOUNT_2, ()), (NEW_ACCOUNT_3, ())]),
-		confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_2]),
-	};
-
+	let votes = [
+		SolanaVaultSwapsVote {
+			new_accounts: BTreeSet::from([
+				(NEW_ACCOUNT_1, ()),
+				(NEW_ACCOUNT_2, ()),
+				(NEW_ACCOUNT_3, ()),
+			]),
+			confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
+		},
+		SolanaVaultSwapsVote {
+			new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, ()), (NEW_ACCOUNT_2, ())]),
+			confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
+		},
+		SolanaVaultSwapsVote {
+			new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, ()), (NEW_ACCOUNT_3, ())]),
+			confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
+		},
+		SolanaVaultSwapsVote {
+			new_accounts: BTreeSet::from([(NEW_ACCOUNT_2, ()), (NEW_ACCOUNT_3, ())]),
+			confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_2]),
+		},
+	];
 	ConsensusVotes {
-		votes: (0..no_of_each_vote[0])
-			.map(|_| ConsensusVote { vote: Some(((), vote_1.clone())), validator_id: () })
-			.chain(
-				(0..no_of_each_vote[1])
-					.map(|_| ConsensusVote { vote: Some(((), vote_2.clone())), validator_id: () }),
-			)
-			.chain(
-				(0..no_of_each_vote[2])
-					.map(|_| ConsensusVote { vote: Some(((), vote_3.clone())), validator_id: () }),
-			)
-			.chain(
-				(0..no_of_each_vote[3])
-					.map(|_| ConsensusVote { vote: Some(((), vote_4.clone())), validator_id: () }),
-			)
+		votes: no_of_each_vote
+			.iter()
+			.enumerate()
+			.flat_map(|(i, &count)| {
+				let vote = votes[i].clone();
+				std::iter::repeat_with(move || ConsensusVote {
+					vote: Some(((), vote.clone())),
+					validator_id: (),
+				})
+				.take(count)
+			})
 			.collect::<Vec<_>>(),
 	}
 }
