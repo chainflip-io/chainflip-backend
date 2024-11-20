@@ -275,7 +275,7 @@ impl<
 	}
 }
 
-pub fn count_votes<T: Ord + Clone>(
+fn count_votes<T: Ord + Clone>(
 	accounts: &BTreeSet<T>,
 	counts_accounts: &mut BTreeMap<T, u32>,
 	count: &u32,
