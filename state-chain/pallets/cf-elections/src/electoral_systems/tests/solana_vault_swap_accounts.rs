@@ -312,6 +312,53 @@ fn on_finalize_nonces_below_threshold() {
 		});
 }
 
+#[test]
+fn on_finalize_invalid_swap() {
+	TestSetup::default()
+		.with_unsynchronised_state(0)
+		.build()
+		.test_on_finalize(
+			&0u32,
+			|_| {
+				assert_eq!(
+					MockHook::close_accounts_called(),
+					0,
+					"Hook should not have been called!"
+				);
+				assert_eq!(MockHook::init_swap_called(), 0, "Hook should not have been called!");
+				assert_eq!(
+					MockHook::get_number_of_available_sol_nonce_accounts_called(),
+					0,
+					"Hook should not have been called!"
+				);
+			},
+			vec![
+				Check::<MinimalVaultSwapAccounts>::only_one_election(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_not_called(),
+			],
+		)
+		// we have a new account but it is an invalid swap
+		.force_consensus_update(ConsensusStatus::Gained {
+			most_recent: None,
+			new: SolanaVaultSwapsVote {
+				new_accounts: BTreeSet::from([(0, None)]),
+				confirm_closed_accounts: BTreeSet::new(),
+			},
+		})
+		.test_on_finalize(
+			&MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS,
+			|_| {},
+			vec![
+				Check::<MinimalVaultSwapAccounts>::only_one_election(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_once(),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_once(),
+			],
+		);
+}
+
 pub const NEW_ACCOUNT_1: u64 = 1u64;
 pub const NEW_ACCOUNT_2: u64 = 2u64;
 pub const NEW_ACCOUNT_3: u64 = 3u64;
