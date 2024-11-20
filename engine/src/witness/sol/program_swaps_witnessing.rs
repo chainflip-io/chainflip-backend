@@ -230,9 +230,7 @@ async fn get_changed_program_swap_accounts(
 	swap_endpoint_data_account_address: SolAddress,
 ) -> Result<(Vec<SolAddress>, Vec<VaultSwapAccountAndSender>, u64), anyhow::Error> {
 	let (_historical_number_event_accounts, open_event_accounts, slot) =
-		get_swap_endpoint_data(sol_rpc, swap_endpoint_data_account_address)
-			.await
-			.expect("Failed to get the event accounts");
+		get_swap_endpoint_data(sol_rpc, swap_endpoint_data_account_address).await?;
 
 	let new_program_swap_accounts: Vec<_> = open_event_accounts
 		.iter()
@@ -280,9 +278,7 @@ async fn get_swap_endpoint_data(
 			if encoding != UiAccountEncoding::Base64 {
 				return Err(anyhow!("Data account encoding is not base64"));
 			}
-			let bytes = base64::engine::general_purpose::STANDARD
-				.decode(base64_string)
-				.expect("Failed to decode base64 string");
+			let bytes = base64::engine::general_purpose::STANDARD.decode(base64_string)?;
 
 			// 8 Discriminator + 16 Historical Number Event Accounts + 4 bytes vector length + data
 			if bytes.len() < ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH + 20 {
