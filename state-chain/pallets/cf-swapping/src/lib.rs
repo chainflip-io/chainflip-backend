@@ -167,7 +167,6 @@ pub struct Swap<T: Config> {
 	refund_params: Option<SwapRefundParameters>,
 }
 
-// 100 FLIP is our default broker bond
 pub struct DefaultBrokerBond<T>(PhantomData<T>);
 impl<T: Config> Get<T::Amount> for DefaultBrokerBond<T> {
 	fn get() -> T::Amount {
