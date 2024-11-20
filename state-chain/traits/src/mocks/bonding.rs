@@ -25,5 +25,6 @@ impl Bonding for MockBonder {
 	fn update_bond(account_id: &Self::ValidatorId, bond: Self::Amount) {
 		let mut authority_bonds = AuthorityBonds::get();
 		authority_bonds.insert(*account_id, bond);
+		AuthorityBonds::set(&authority_bonds);
 	}
 }
