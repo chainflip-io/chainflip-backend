@@ -326,7 +326,10 @@ fn test_consensus() {
 		.expect_consensus(
 			generate_votes_specific_case([80, 80, 0, 0]),
 			Some(SolanaVaultSwapsVote {
-				new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, ()), (NEW_ACCOUNT_2, ())]),
+				new_accounts: BTreeSet::from([
+					(NEW_ACCOUNT_1, Some(())),
+					(NEW_ACCOUNT_2, Some(())),
+				]),
 				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
 			}),
 		);
@@ -337,9 +340,9 @@ fn test_consensus() {
 			generate_votes_specific_case([0, 80, 80, 80]),
 			Some(SolanaVaultSwapsVote {
 				new_accounts: BTreeSet::from([
-					(NEW_ACCOUNT_1, ()),
-					(NEW_ACCOUNT_2, ()),
-					(NEW_ACCOUNT_3, ()),
+					(NEW_ACCOUNT_1, Some(())),
+					(NEW_ACCOUNT_2, Some(())),
+					(NEW_ACCOUNT_3, Some(())),
 				]),
 				confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
 			}),
@@ -350,7 +353,7 @@ fn test_consensus() {
 		.expect_consensus(
 			generate_votes_specific_case([0, 0, 80, 80]),
 			Some(SolanaVaultSwapsVote {
-				new_accounts: BTreeSet::from([(NEW_ACCOUNT_3, ())]),
+				new_accounts: BTreeSet::from([(NEW_ACCOUNT_3, Some(()))]),
 				confirm_closed_accounts: BTreeSet::from([]),
 			}),
 		);
@@ -366,12 +369,12 @@ fn test_consensus() {
 
 fn generate_vote_no_consensus() -> ConsensusVotes<MinimalVaultSwapAccounts> {
 	let vote_1 = SolanaVaultSwapsVote {
-		new_accounts: BTreeSet::from([(1, ()), (2, ())]),
+		new_accounts: BTreeSet::from([(1, Some(())), (2, Some(()))]),
 		confirm_closed_accounts: BTreeSet::new(),
 	};
 
 	let vote_2 = SolanaVaultSwapsVote {
-		new_accounts: BTreeSet::from([(3, ()), (4, ())]),
+		new_accounts: BTreeSet::from([(3, Some(())), (4, Some(()))]),
 		confirm_closed_accounts: BTreeSet::new(),
 	};
 
@@ -392,22 +395,22 @@ fn generate_votes_specific_case(
 	let votes = [
 		SolanaVaultSwapsVote {
 			new_accounts: BTreeSet::from([
-				(NEW_ACCOUNT_1, ()),
-				(NEW_ACCOUNT_2, ()),
-				(NEW_ACCOUNT_3, ()),
+				(NEW_ACCOUNT_1, Some(())),
+				(NEW_ACCOUNT_2, Some(())),
+				(NEW_ACCOUNT_3, Some(())),
 			]),
 			confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
 		},
 		SolanaVaultSwapsVote {
-			new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, ()), (NEW_ACCOUNT_2, ())]),
+			new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, Some(())), (NEW_ACCOUNT_2, Some(()))]),
 			confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
 		},
 		SolanaVaultSwapsVote {
-			new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, ()), (NEW_ACCOUNT_3, ())]),
+			new_accounts: BTreeSet::from([(NEW_ACCOUNT_1, Some(())), (NEW_ACCOUNT_3, Some(()))]),
 			confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1]),
 		},
 		SolanaVaultSwapsVote {
-			new_accounts: BTreeSet::from([(NEW_ACCOUNT_2, ()), (NEW_ACCOUNT_3, ())]),
+			new_accounts: BTreeSet::from([(NEW_ACCOUNT_2, Some(())), (NEW_ACCOUNT_3, Some(()))]),
 			confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_2]),
 		},
 	];
@@ -431,7 +434,7 @@ fn generate_votes_for_account_range(
 	r: std::ops::Range<u64>,
 ) -> SolanaVaultSwapsVote<Account, SwapDetails> {
 	SolanaVaultSwapsVote {
-		new_accounts: r.map(|i| (i, ())).collect::<BTreeSet<_>>(),
+		new_accounts: r.map(|i| (i, Some(()))).collect::<BTreeSet<_>>(),
 		confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
 	}
 }
