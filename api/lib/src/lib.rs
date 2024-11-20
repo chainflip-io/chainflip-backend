@@ -512,13 +512,23 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	async fn register_affiliate(
 		&self,
 		affiliate_id: AccountId32,
-		short_id: Option<AffiliateShortId>,
-	) -> Result<H256> {
-		self.simple_submission_with_dry_run(pallet_cf_swapping::Call::register_affiliate {
-			affiliate_id,
-			short_id,
-		})
-		.await
+		short_id: AffiliateShortId,
+	) -> Result<AffiliateShortId> {
+		let (_, events, ..) =
+			self.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::register_affiliate { affiliate_id, short_id },
+			)
+			.await?
+			.until_in_block()
+			.await?;
+
+		extract_event!(
+			&events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::AffiliateRegistrationUpdated,
+			{ affiliate_short_id, .. },
+			*affiliate_short_id
+		)
 	}
 }
 

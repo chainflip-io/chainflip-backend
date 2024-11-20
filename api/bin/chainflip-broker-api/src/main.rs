@@ -329,21 +329,37 @@ impl RpcServer for RpcServerImpl {
 		affiliate_id: AccountId32,
 		short_id: Option<AffiliateShortId>,
 	) -> RpcResult<AffiliateShortId> {
-		self.api.broker_api().register_affiliate(affiliate_id.clone(), short_id).await?;
+		let short_id = if let Some(short_id) = short_id {
+			short_id
+		} else {
+			let affiliates = self.api.query_api().get_affiliates(None, None).await?;
 
-		// Check that the affiliate was registered and get its short id
-		let affiliates = self.api.query_api().get_affiliates(None, None).await?;
-		if let Some((assigned_short_id, _)) = affiliates.iter().find(|(_, id)| *id == affiliate_id)
-		{
-			if let Some(given_short_id) = short_id {
-				if given_short_id != *assigned_short_id {
-					return Err(anyhow!("Failed to update affiliate registration").into());
-				}
+			// Check if the affiliate is already registered
+			if let Some((existing_short_id, _)) =
+				affiliates.iter().find(|(_, id)| id == &affiliate_id)
+			{
+				return Ok(*existing_short_id);
 			}
-			return Ok(*assigned_short_id).map_err(BrokerApiError::Other);
+
+			// Find the lowest unused short id
+			let mut used_ids: Vec<AffiliateShortId> =
+				affiliates.into_iter().map(|(short_id, _)| short_id).collect();
+			used_ids.sort_unstable();
+			let mut lowest_unused_id: AffiliateShortId = 0.into();
+			for id in used_ids {
+				if id != lowest_unused_id {
+					break;
+				}
+				lowest_unused_id = lowest_unused_id
+					.checked_add(1)
+					.ok_or(anyhow!("No empty affiliate short id's available"))
+					.map_err(BrokerApiError::Other)?
+					.into();
+			}
+			lowest_unused_id
 		};
 
-		Err(anyhow!("Affiliate registration failed").into())
+		Ok(self.api.broker_api().register_affiliate(affiliate_id.clone(), short_id).await?)
 	}
 
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
