@@ -38,7 +38,9 @@ pub trait SolanaVaultSwapAccountsHook<Account, SwapDetails, E> {
 
 pub type SolanaVaultSwapAccountsLastClosedAt<BlockNumber> = BlockNumber;
 
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
+#[derive(
+	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, Default,
+)]
 pub struct SolanaVaultSwapsKnownAccounts<Account: Ord> {
 	pub witnessed_open_accounts: Vec<Account>,
 	pub closure_initiated_accounts: BTreeSet<Account>,

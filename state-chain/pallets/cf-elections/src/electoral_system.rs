@@ -10,6 +10,7 @@ use crate::{
 	CorruptStorageError, ElectionIdentifier,
 };
 
+#[derive(Clone)]
 pub struct ConsensusVote<ES: ElectoralSystem> {
 	// If the validator hasn't voted, they will get a None.
 	pub vote: Option<(VotePropertiesOf<ES>, <ES::Vote as VoteStorage>::Vote)>,
