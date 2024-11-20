@@ -350,11 +350,13 @@ async fn get_program_swap_event_accounts_data(
 							.map_err(|e| anyhow!("Failed to deserialize data: {}", e))
 					},
 					Some(other) => Err(anyhow!(
-						"Expected UiAccountData::Binary(String, UiAccountEncoding::Base64), got {}",
+						"Expected UiAccountData::Binary(_, UiAccountEncoding::Base64), got {}",
 						match other.data {
-							UiAccountData::Binary(_, other) => format!("{:?}", other),
-							UiAccountData::Json(_) => "Json".to_string(),
-							UiAccountData::LegacyBinary(_) => "LegacyBinary".to_string(),
+							UiAccountData::Binary(_, other) =>
+								format!("UiAccountData::Binary(_, {:?})", other),
+							UiAccountData::Json(_) => "UiAccountData::Json(_)".to_string(),
+							UiAccountData::LegacyBinary(_) =>
+								"UiAccountData::LegacyBinary(_)".to_string(),
 						}
 					)),
 					// It could happen that some account is closed between the queries. This
