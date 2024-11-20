@@ -686,10 +686,10 @@ pub trait HistoricalEpoch {
 
 /// Handles the bonding logic
 pub trait Bonding {
-	type ValidatorId;
+	type AccountId;
 	type Amount;
 	/// Update the bond of an authority
-	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
+	fn update_bond(authority: &Self::AccountId, bond: Self::Amount);
 }
 
 /// Something that is able to provide block authorship slots that were missed.

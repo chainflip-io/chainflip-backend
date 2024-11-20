@@ -455,7 +455,7 @@ pub mod pallet {
 		type ChannelIdAllocator: ChannelIdAllocator;
 
 		type Bonder: Bonding<
-			ValidatorId = <Self as frame_system::Config>::AccountId,
+			AccountId = <Self as frame_system::Config>::AccountId,
 			Amount = <Self as Chainflip>::Amount,
 		>;
 	}

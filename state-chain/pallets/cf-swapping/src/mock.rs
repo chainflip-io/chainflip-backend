@@ -8,7 +8,7 @@ use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonder,
+		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonderFor,
 		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
@@ -179,7 +179,7 @@ impl pallet_cf_swapping::Config for Test {
 	type CcmValidityChecker = AlwaysValid;
 	type NetworkFee = NetworkFee;
 	type ChannelIdAllocator = MockChannelIdAllocator;
-	type Bonder = MockBonder;
+	type Bonder = MockBonderFor<Self>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

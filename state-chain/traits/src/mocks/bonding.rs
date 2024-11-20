@@ -1,30 +1,29 @@
-use crate::Bonding;
-use frame_support::parameter_types;
+use super::{MockPallet, MockPalletStorage};
+use crate::{Bonding, Chainflip};
+use codec::{Decode, Encode};
+use core::marker::PhantomData;
 
-use sp_std::collections::btree_map::BTreeMap;
+pub struct MockBonder<Id, Amount>(PhantomData<(Id, Amount)>);
+pub type MockBonderFor<T> =
+	MockBonder<<T as frame_system::Config>::AccountId, <T as Chainflip>::Amount>;
 
-pub type Amount = u128;
-pub type ValidatorId = u64;
-
-parameter_types! {
-	pub storage AuthorityBonds: BTreeMap<ValidatorId, Amount> = Default::default();
+impl<Id, Amount> MockPallet for MockBonder<Id, Amount> {
+	const PREFIX: &'static [u8] = b"mocks//MockBonder";
 }
 
-pub struct MockBonder;
+const BOND: &[u8] = b"BOND";
 
-impl MockBonder {
-	pub fn get_bond(account_id: &ValidatorId) -> Amount {
-		AuthorityBonds::get().get(account_id).copied().unwrap_or(0)
+impl<Id: Encode, Amount: Decode + Default> MockBonder<Id, Amount> {
+	pub fn get_bond(account_id: &Id) -> Amount {
+		Self::get_storage(BOND, account_id).unwrap_or_default()
 	}
 }
 
-impl Bonding for MockBonder {
-	type ValidatorId = ValidatorId;
+impl<Id: Encode, Amount: Encode> Bonding for MockBonder<Id, Amount> {
+	type AccountId = Id;
 	type Amount = Amount;
 
-	fn update_bond(account_id: &Self::ValidatorId, bond: Self::Amount) {
-		let mut authority_bonds = AuthorityBonds::get();
-		authority_bonds.insert(*account_id, bond);
-		AuthorityBonds::set(&authority_bonds);
+	fn update_bond(account_id: &Self::AccountId, bond: Amount) {
+		Self::put_storage(BOND, account_id, bond);
 	}
 }

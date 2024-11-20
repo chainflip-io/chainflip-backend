@@ -6,7 +6,7 @@ use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
 	mocks::{
-		bonding::MockBonder,
+		bonding::MockBonderFor,
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
 		key_rotator::MockKeyRotatorA,
 		reputation_resetter::MockReputationResetter,
@@ -649,7 +649,7 @@ mod bond_expiry {
 
 			// Ensure the new bond is set for each authority
 			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
-				assert_eq!(MockBonder::get_bond(account_id), BOND);
+				assert_eq!(MockBonderFor::<Test>::get_bond(account_id), BOND);
 			});
 
 			const NEXT_BOND: u128 = BOND + 1;
@@ -657,7 +657,7 @@ mod bond_expiry {
 			assert_eq!(ValidatorPallet::bond(), NEXT_BOND);
 
 			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
-				assert_eq!(MockBonder::get_bond(account_id), NEXT_BOND);
+				assert_eq!(MockBonderFor::<Test>::get_bond(account_id), NEXT_BOND);
 			});
 
 			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
@@ -681,16 +681,16 @@ mod bond_expiry {
 			assert_eq!(ValidatorPallet::bond(), 100);
 
 			ValidatorPallet::current_authorities().iter().for_each(|account_id| {
-				assert_eq!(MockBonder::get_bond(account_id), 100);
+				assert_eq!(MockBonderFor::<Test>::get_bond(account_id), 100);
 			});
 
 			ValidatorPallet::transition_to_next_epoch(vec![AUTHORITY_IN_BOTH_EPOCHS, 3], 99);
 			assert_eq!(ValidatorPallet::bond(), 99);
 
 			// Keeps the highest bond of all the epochs it's been active in
-			assert_eq!(MockBonder::get_bond(&AUTHORITY_IN_BOTH_EPOCHS), 100);
+			assert_eq!(MockBonderFor::<Test>::get_bond(&AUTHORITY_IN_BOTH_EPOCHS), 100);
 			// Uses the new bond
-			assert_eq!(MockBonder::get_bond(&3), 99);
+			assert_eq!(MockBonderFor::<Test>::get_bond(&3), 99);
 
 			assert_eq!(EpochHistory::<Test>::active_epochs_for_authority(&1), [initial_epoch + 1]);
 			assert_eq!(EpochHistory::<Test>::active_bond(&1), 100);

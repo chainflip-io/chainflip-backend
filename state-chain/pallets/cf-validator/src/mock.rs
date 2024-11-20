@@ -16,7 +16,7 @@ use frame_support::{construct_runtime, derive_impl};
 use sp_runtime::{impl_opaque_keys, testing::UintAuthorityId, traits::ConvertInto};
 use std::{cell::RefCell, collections::HashMap};
 
-use cf_traits::mocks::bonding::MockBonder;
+use cf_traits::mocks::bonding::MockBonderFor;
 
 pub type Amount = u128;
 pub type ValidatorId = u64;
@@ -133,7 +133,7 @@ impl Config for Test {
 	type RotationBroadcastsPending = MockRotationBroadcastsPending;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type OffenceReporter = MockOffenceReporter;
-	type Bonder = MockBonder;
+	type Bonder = MockBonderFor<Self>;
 	type ReputationResetter = MockReputationResetter<Self>;
 	type KeygenQualification = QualifyAll<ValidatorId>;
 	type SafeMode = MockRuntimeSafeMode;
