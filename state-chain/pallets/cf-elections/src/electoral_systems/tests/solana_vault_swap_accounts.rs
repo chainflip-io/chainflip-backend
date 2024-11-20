@@ -102,6 +102,8 @@ register_checks! {
 	}
 }
 
+pub const TEST_NUMBER_OF_ACCOUNTS: u64 = 15;
+
 #[test]
 fn on_finalize_accounts_limit_reached() {
 	TestSetup::default()
@@ -130,7 +132,7 @@ fn on_finalize_accounts_limit_reached() {
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
-			new: generate_votes_for_account_range(0, 15),
+			new: generate_votes_for_account_range(0..TEST_NUMBER_OF_ACCOUNTS),
 			most_recent: None,
 		})
 		// account closure will be initiated since account limit is reached, even though time limit
@@ -175,7 +177,7 @@ fn on_finalize_time_limit_reached() {
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
-			new: generate_votes_for_account_range(0, 2),
+			new: generate_votes_for_account_range(0..2),
 			most_recent: None,
 		})
 		// account closure will not initiate since we havent reached time or account limit
@@ -190,7 +192,7 @@ fn on_finalize_time_limit_reached() {
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
-			new: generate_votes_for_account_range(2, 4),
+			new: generate_votes_for_account_range(2..4),
 			most_recent: None,
 		})
 		// time limit reached. account closure initiated even though account number limit not
@@ -209,6 +211,7 @@ fn on_finalize_time_limit_reached() {
 
 #[test]
 fn on_finalize_close_accounts_error() {
+	let max_batch_size: u64 = MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES.try_into().unwrap();
 	FAIL_CLOSE_ACCOUNTS.with(|hook_called| hook_called.set(true));
 	TestSetup::default()
 		.with_unsynchronised_state(0)
@@ -237,7 +240,7 @@ fn on_finalize_close_accounts_error() {
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
 			most_recent: None,
-			new: generate_votes_for_account_range(0, 15),
+			new: generate_votes_for_account_range(0..TEST_NUMBER_OF_ACCOUNTS),
 		})
 		.test_on_finalize(
 			&1u32,
@@ -250,10 +253,10 @@ fn on_finalize_close_accounts_error() {
 			],
 		)
 		.expect_election_properties_only_election(SolanaVaultSwapsKnownAccounts {
-			witnessed_open_accounts: (MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES
-				.try_into()
-				.unwrap()..15u64)
-				.chain(0u64..MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES.try_into().unwrap())
+			// if close_accounts errors, the accounts are pushed back into open accounts at the end
+			// of the vector.
+			witnessed_open_accounts: (max_batch_size..TEST_NUMBER_OF_ACCOUNTS)
+				.chain(0u64..max_batch_size)
 				.collect::<Vec<_>>(),
 			closure_initiated_accounts: BTreeSet::new(),
 		});
@@ -291,7 +294,7 @@ fn on_finalize_nonces_below_threshold() {
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
 			most_recent: None,
-			new: generate_votes_for_account_range(0, 15),
+			new: generate_votes_for_account_range(0..TEST_NUMBER_OF_ACCOUNTS),
 		})
 		.test_on_finalize(
 			&1u32,
@@ -304,7 +307,7 @@ fn on_finalize_nonces_below_threshold() {
 			],
 		)
 		.expect_election_properties_only_election(SolanaVaultSwapsKnownAccounts {
-			witnessed_open_accounts: (0..15).collect::<Vec<_>>(),
+			witnessed_open_accounts: (0..TEST_NUMBER_OF_ACCOUNTS).collect::<Vec<_>>(),
 			closure_initiated_accounts: BTreeSet::new(),
 		});
 }
@@ -429,9 +432,11 @@ fn generate_votes_specific_case(
 	}
 }
 
-fn generate_votes_for_account_range(n: u64, m: u64) -> SolanaVaultSwapsVote<Account, SwapDetails> {
+fn generate_votes_for_account_range(
+	r: std::ops::Range<u64>,
+) -> SolanaVaultSwapsVote<Account, SwapDetails> {
 	SolanaVaultSwapsVote {
-		new_accounts: (n..m).map(|i| (i, ())).collect::<BTreeSet<_>>(),
+		new_accounts: r.map(|i| (i, ())).collect::<BTreeSet<_>>(),
 		confirm_closed_accounts: BTreeSet::from([CLOSED_ACCOUNT_1, CLOSED_ACCOUNT_2]),
 	}
 }
