@@ -1,7 +1,7 @@
 import * as anchor from '@coral-xyz/anchor';
 
 import { InternalAsset as Asset, Chains, assetConstants } from '@chainflip/cli';
-import { PublicKey, sendAndConfirmTransaction, Keypair } from '@solana/web3.js';
+import { PublicKey, Keypair } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
   getContractAddress,
@@ -162,9 +162,10 @@ export async function executeSolVaultSwap(
           })
           .signers([whaleKeypair, newEventAccountKeypair])
           .transaction();
-  const txHash = await sendAndConfirmTransaction(connection, tx, [
+  const txHash = await connection.sendAndConfirmTransaction(connection, tx, [
     whaleKeypair,
     newEventAccountKeypair,
+    { commitment: 'processed' },
   ]);
 
   const transactionData = await connection.getTransaction(txHash);
