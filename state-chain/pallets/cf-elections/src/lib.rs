@@ -2159,7 +2159,7 @@ pub mod pallet {
 			let shared_ref_count_keys =
 				SharedDataReferenceCount::<T, I>::iter_keys().collect::<Vec<_>>();
 			for shared_data_key in SharedData::<T, I>::iter_keys() {
-				if shared_ref_count_keys.iter().find(|(h, _)| *h == shared_data_key).is_none() {
+				if !shared_ref_count_keys.iter().any(|(h, _)| *h == shared_data_key) {
 					Err(DispatchError::Other(
 						"All keys in SharedData should have an entry in SharedDataReferenceCount",
 					))?;
