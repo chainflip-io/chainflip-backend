@@ -41,40 +41,40 @@ async function main() {
     }
   }
 
-  Object.values(Assets).forEach((sourceAsset) => {
-    Object.values(Assets)
-      .filter((destAsset) => sourceAsset !== destAsset)
-      .forEach((destAsset) => {
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
+  // Object.values(Assets).forEach((sourceAsset) => {
+  //   Object.values(Assets)
+  //     .filter((destAsset) => sourceAsset !== destAsset)
+  //     .forEach((destAsset) => {
+  //       // Regular swaps
+  //       appendSwap(sourceAsset, destAsset, testSwap);
 
-        const sourceChain = chainFromAsset(sourceAsset);
-        const destChain = chainFromAsset(destAsset);
-        if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
-          // Vault Swaps
-          appendSwap(sourceAsset, destAsset, testVaultSwap);
+  //       const sourceChain = chainFromAsset(sourceAsset);
+  //       const destChain = chainFromAsset(destAsset);
+  //       if (sourceChain === 'Ethereum' || sourceChain === 'Arbitrum') {
+  //         // Vault Swaps
+  //         appendSwap(sourceAsset, destAsset, testVaultSwap);
 
-          if (ccmSupportedChains.includes(destChain)) {
-            // CCM Vault swaps
-            appendSwap(sourceAsset, destAsset, testVaultSwap, true);
-          }
-        }
+  //         if (ccmSupportedChains.includes(destChain)) {
+  //           // CCM Vault swaps
+  //           appendSwap(sourceAsset, destAsset, testVaultSwap, true);
+  //         }
+  //       }
 
-        if (ccmSupportedChains.includes(destChain)) {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, true);
-        }
-      });
-  });
+  //       if (ccmSupportedChains.includes(destChain)) {
+  //         // CCM swaps
+  //         appendSwap(sourceAsset, destAsset, testSwap, true);
+  //       }
+  //     });
+  // });
 
   // Not doing BTC due to encoding complexity in vault_swap. Will be fixed once SDK supports it.
   appendSwap('Sol', 'Eth', testVaultSwap);
-  appendSwap('Sol', 'Usdc', testVaultSwap, true);
-  appendSwap('Sol', 'ArbEth', testVaultSwap);
-  appendSwap('Sol', 'ArbEth', testVaultSwap, true);
-  appendSwap('Sol', 'Dot', testVaultSwap);
-  appendSwap('SolUsdc', 'Eth', testVaultSwap);
-  appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
+  // appendSwap('Sol', 'Usdc', testVaultSwap, true);
+  // appendSwap('Sol', 'ArbEth', testVaultSwap);
+  // appendSwap('Sol', 'ArbEth', testVaultSwap, true);
+  // appendSwap('Sol', 'Dot', testVaultSwap);
+  // appendSwap('SolUsdc', 'Eth', testVaultSwap);
+  // appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
 
   await Promise.all(allSwaps);
 }
