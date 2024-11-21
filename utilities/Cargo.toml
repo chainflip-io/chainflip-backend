@@ -13,7 +13,8 @@ workspace = true
 
 [dependencies]
 jsonrpsee = { workspace = true, features = [
-  "jsonrpsee-types",
+  "client",
+  "server",
 ], optional = true }
 anyhow = { workspace = true, optional = true }
 async-broadcast = { workspace = true, optional = true }
@@ -34,6 +35,7 @@ predicates = { workspace = true, optional = true }
 prometheus = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 scale-info = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 scopeguard = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive", "alloc"] }
 sp-core = { workspace = true, optional = true }
@@ -76,6 +78,7 @@ std = [
   "serde?/std",
   "dep:scale-info",
   "dep:scale-json",
+  "dep:schemars",
   "dep:thiserror",
   "dep:tracing",
   "dep:tracing-subscriber",
