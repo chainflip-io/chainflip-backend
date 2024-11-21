@@ -9,6 +9,7 @@ use cf_chains::{
 };
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{AffiliateShortId, DcaParameters};
+use custom_rpc::CustomApiClient;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use serde::{Deserialize, Serialize};
@@ -168,7 +169,11 @@ impl StateChainApi {
 #[async_trait]
 impl GovernanceApi for StateChainClient {}
 #[async_trait]
-impl BrokerApi for StateChainClient {}
+impl BrokerApi for StateChainClient {
+	fn raw_rpc_client(&self) -> &jsonrpsee::ws_client::WsClient {
+		&self.base_rpc_client.raw_rpc_client
+	}
+}
 #[async_trait]
 impl OperatorApi for StateChainClient {}
 #[async_trait]
@@ -359,6 +364,8 @@ macro_rules! extract_event {
 
 #[async_trait]
 pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static {
+	fn raw_rpc_client(&self) -> &jsonrpsee::ws_client::WsClient;
+
 	async fn request_swap_deposit_address(
 		&self,
 		source_asset: Asset,
@@ -512,11 +519,39 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	async fn register_affiliate(
 		&self,
 		affiliate_id: AccountId32,
-		short_id: AffiliateShortId,
+		short_id: Option<AffiliateShortId>,
 	) -> Result<AffiliateShortId> {
+		let next_id = if let Some(short_id) = short_id {
+			short_id
+		} else {
+			let affiliates =
+				self.raw_rpc_client().cf_get_affiliates(self.account_id(), None).await?;
+
+			// Check if the affiliate is already registered
+			if let Some((existing_short_id, _)) =
+				affiliates.iter().find(|(_, id)| id == &affiliate_id)
+			{
+				return Ok(*existing_short_id);
+			}
+
+			// Find the lowest unused short id
+			let mut used_ids: Vec<AffiliateShortId> =
+				affiliates.into_iter().map(|(short_id, _)| short_id).collect();
+			used_ids.sort_unstable();
+			let lowest_unused = move || {
+				for (index, assigned_id) in (0..=u8::MAX).zip(used_ids) {
+					if AffiliateShortId::from(index) != assigned_id {
+						return Ok(index.into());
+					}
+				}
+				Err(anyhow!("No unused affiliate short IDs available"))
+			};
+			lowest_unused()?
+		};
+
 		let (_, events, ..) =
 			self.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::register_affiliate { affiliate_id, short_id },
+				pallet_cf_swapping::Call::register_affiliate { affiliate_id, short_id: next_id },
 			)
 			.await?
 			.until_in_block()

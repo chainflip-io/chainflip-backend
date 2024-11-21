@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
 	rpc::NumberOrHex,
@@ -329,41 +328,11 @@ impl RpcServer for RpcServerImpl {
 		affiliate_id: AccountId32,
 		short_id: Option<AffiliateShortId>,
 	) -> RpcResult<AffiliateShortId> {
-		let short_id = if let Some(short_id) = short_id {
-			short_id
-		} else {
-			let affiliates = self.api.query_api().get_affiliates(None, None).await?;
-
-			// Check if the affiliate is already registered
-			if let Some((existing_short_id, _)) =
-				affiliates.iter().find(|(_, id)| id == &affiliate_id)
-			{
-				return Ok(*existing_short_id);
-			}
-
-			// Find the lowest unused short id
-			let mut used_ids: Vec<AffiliateShortId> =
-				affiliates.into_iter().map(|(short_id, _)| short_id).collect();
-			used_ids.sort_unstable();
-			let mut lowest_unused_id: AffiliateShortId = 0.into();
-			for id in used_ids {
-				if id != lowest_unused_id {
-					break;
-				}
-				lowest_unused_id = lowest_unused_id
-					.checked_add(1)
-					.ok_or(anyhow!("No empty affiliate short id's available"))
-					.map_err(BrokerApiError::Other)?
-					.into();
-			}
-			lowest_unused_id
-		};
-
 		Ok(self.api.broker_api().register_affiliate(affiliate_id.clone(), short_id).await?)
 	}
 
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
-		Ok(self.api.query_api().get_affiliates(None, None).await?)
+		Ok(self.api.raw_client().get_affiliates().await?)
 	}
 }
 

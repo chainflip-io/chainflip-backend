@@ -237,21 +237,6 @@ impl QueryApi {
 
 		Ok(result)
 	}
-
-	pub async fn get_affiliates(
-		&self,
-		block_hash: Option<state_chain_runtime::Hash>,
-		account_id: Option<state_chain_runtime::AccountId>,
-	) -> Result<Vec<(AffiliateShortId, state_chain_runtime::AccountId)>, anyhow::Error> {
-		let account_id = account_id.unwrap_or_else(|| self.state_chain_client.account_id());
-
-		Ok(self
-			.state_chain_client
-			.base_rpc_client
-			.raw_rpc_client
-			.cf_get_affiliates(account_id, block_hash)
-			.await?)
-	}
 }
 
 // https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/frame/aura/src/lib.rs#L179
