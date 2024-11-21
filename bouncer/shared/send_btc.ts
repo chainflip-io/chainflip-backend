@@ -12,25 +12,33 @@ export const btcClient = new Client({
 });
 
 export async function selectInputs(amount: number) {
-  // List unspent UTXOs
-  const utxos = await btcClient.listUnspent();
+  return btcClientMutex.runExclusive(async () => {
+    // List unspent UTXOs
+    const utxos = await btcClient.listUnspent();
 
-  // Find a UTXO with enough funds
-  const utxo = utxos.find((u) => u.amount >= amount);
-  if (!utxo) throw new Error('Insufficient funds');
-  // TODO: be able to select more than one UTXO
+    // Find a UTXO with enough funds
+    const utxo = utxos.find((u) => u.amount >= amount);
+    if (!utxo) throw new Error('Insufficient funds');
+    // TODO: be able to select more than one UTXO
 
-  const change = utxo.amount - amount;
+    // Lock the selected UTXO to prevent it from being used in another transaction
+    await btcClient.lockUnspent(false, [{ txid: utxo.txid, vout: utxo.vout }]);
 
-  // Prepare the transaction inputs and outputs
-  const inputs = [
-    {
-      txid: utxo.txid,
-      vout: utxo.vout,
-    },
-  ];
+    const change = utxo.amount - amount;
 
-  return { inputs, change };
+    // Prepare the transaction inputs
+    const inputs = [
+      {
+        txid: utxo.txid,
+        vout: utxo.vout,
+      },
+    ];
+
+    return {
+      inputs,
+      change,
+    };
+  });
 }
 
 export async function waitForBtcTransaction(txid: string, confirmations = 1) {
