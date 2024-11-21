@@ -515,6 +515,7 @@ function checkRequestTypeMatches(actual: object | string, expected: SwapRequestT
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function checkTransactionInMatches(actual: any, expected: TransactionOriginId): boolean {
+  console.log('checkingTransactionInMatches', actual, expected);
   if ('DepositChannel' in actual) {
     return (
       expected.type === TransactionOrigin.DepositChannel &&
