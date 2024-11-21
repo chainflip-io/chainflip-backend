@@ -1622,6 +1622,11 @@ pub mod pallet {
 			}
 		}
 
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), DispatchError> {
+			Self::do_try_state()
+		}
+
 		fn integrity_test() {
 			let properties_keys = ElectionProperties::<T, I>::iter_keys()
 				.map(|id| *id.unique_monotonic())
@@ -2125,6 +2130,65 @@ pub mod pallet {
 			} else {
 				Err(Error::<T, I>::UnreferencedSharedData)
 			}
+		}
+	}
+
+	#[cfg(any(test, feature = "try-runtime"))]
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		/// Ensure the correctness of the state of this pallet.
+		///
+		/// These invariants should be valid before or after each state transition of this pallet.
+		///
+		/// # Invariants
+		/// * All keys in `ElectionProperties` and `ElectionState` should match
+		/// * All keys in `SharedData` should have an entry in `SharedDataReferenceCount`
+		/// * `ElectionConsensusHistoryUpToDate` has a corresponding entry in `ElectionProperties`
+		/// * `BitmapComponents` have a corresponding entry in `ElectionProperties`
+		/// * `IndividualComponents` have a corresponding entry in `ElectionProperties`
+		pub fn do_try_state() -> Result<(), DispatchError> {
+			let properties_keys = ElectionProperties::<T, I>::iter_keys()
+				.map(|id| *id.unique_monotonic())
+				.collect::<BTreeSet<_>>();
+
+			if properties_keys != ElectionState::<T, I>::iter_keys().collect::<BTreeSet<_>>() {
+				Err(DispatchError::Other(
+					"All keys in ElectionProperties and ElectionState should match",
+				))?;
+			}
+
+			let shared_ref_count_keys =
+				SharedDataReferenceCount::<T, I>::iter_keys().collect::<Vec<_>>();
+			for shared_data_key in SharedData::<T, I>::iter_keys() {
+				if shared_ref_count_keys.iter().find(|(h, _)| *h == shared_data_key).is_none() {
+					Err(DispatchError::Other(
+						"All keys in SharedData should have an entry in SharedDataReferenceCount",
+					))?;
+				}
+			}
+
+			for election_id in ElectionConsensusHistoryUpToDate::<T, I>::iter_keys() {
+				if !properties_keys.contains(&election_id) {
+					Err(DispatchError::Other(
+						"ElectionConsensusHistoryUpToDate should have a corresponding entry in ElectionProperties"
+					))?;
+				}
+			}
+			for election_id in BitmapComponents::<T, I>::iter_keys() {
+				if !properties_keys.contains(&election_id) {
+					Err(DispatchError::Other(
+						"BitmapComponents should have a corresponding entry in ElectionProperties",
+					))?;
+				}
+			}
+			for (election_id, _) in IndividualComponents::<T, I>::iter_keys() {
+				if !properties_keys.contains(&election_id) {
+					Err(DispatchError::Other(
+						"BitmapComponents should have a corresponding entry in ElectionProperties",
+					))?;
+				}
+			}
+
+			Ok(())
 		}
 	}
 }
