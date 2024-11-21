@@ -6,7 +6,7 @@ import { btcAddressTypes } from '../shared/new_btc_address';
 import { ccmSupportedChains, chainFromAsset, VaultSwapParams } from '../shared/utils';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
-export const testAllSwaps = new ExecutableTest('All-Swaps', main, 3000);
+export const testAllSwaps = new ExecutableTest('All-Swaps', main, 1000);
 
 async function main() {
   const allSwaps: Promise<SwapParams | VaultSwapParams>[] = [];

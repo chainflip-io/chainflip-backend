@@ -522,6 +522,17 @@ function checkTransactionInMatches(actual: any, expected: TransactionOriginId): 
     );
   }
   if ('Vault' in actual) {
+    if ('Solana' in actual.Vault.txId && expected.type === TransactionOrigin.VaultSwapSolana) {
+      console.log(
+        'Waiting for SwapRequested. Expected: ',
+        expected,
+        'Actual: ',
+        actual,
+        'match',
+        actual.Vault.txId.Solana[1].replaceAll(',', '') === expected.addressAndSlot[1].toString() &&
+          actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString(),
+      );
+    }
     return (
       ('Evm' in actual.Vault.txId &&
         expected.type === TransactionOrigin.VaultSwapEvm &&
