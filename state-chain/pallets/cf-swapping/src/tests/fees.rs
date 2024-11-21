@@ -39,7 +39,7 @@ fn swap_output_amounts_correctly_account_for_fees() {
 					Default::default(),
 					None,
 					None,
-					SwapOrigin::Vault { tx_hash: Default::default() },
+					SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
 				);
 
 				Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
@@ -341,7 +341,7 @@ fn input_amount_excludes_network_fee() {
 				bounded_vec![],
 				None,
 				None,
-				SwapOrigin::Vault { tx_hash: Default::default() },
+				SwapOrigin::Vault { tx_id: TransactionInIdForAnyChain::Evm(H256::default()) },
 			);
 		})
 		.then_process_blocks_until(|_| System::block_number() == 3)

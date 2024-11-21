@@ -18,7 +18,8 @@ ExecStart=/usr/bin/chainflip-node \
     --state-pruning=archive \
     --blocks-pruning=archive \
     --unsafe-rpc-external \
-    --sync=full
+    --sync=full \
+    --max-runtime-instances 32
 
 [Install]
 WantedBy=multi-user.target

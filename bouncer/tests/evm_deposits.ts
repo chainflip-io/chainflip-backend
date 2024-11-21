@@ -115,7 +115,7 @@ async function testTxMultipleVaultSwaps(sourceAsset: Asset, destAsset: Asset) {
       if (
         typeof event.data.origin === 'object' &&
         'Vault' in event.data.origin &&
-        event.data.origin.Vault.txHash === receipt.transactionHash
+        event.data.origin.Vault.txId.Evm === receipt.transactionHash
       ) {
         if (++eventCounter > 1) {
           throw new Error('Multiple swap scheduled events detected');

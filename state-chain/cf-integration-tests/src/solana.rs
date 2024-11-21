@@ -512,7 +512,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					deposit_amount: 1_000_000_000_000u64,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
 					deposit_metadata: Some(invalid_ccm),
-					tx_hash: Default::default(),
+					tx_id: Default::default(),
 					deposit_details: Box::new(()),
 					broker_fee: cf_primitives::Beneficiary {
 						account: sp_runtime::AccountId32::new([0; 32]),
@@ -570,7 +570,7 @@ fn solana_ccm_fails_with_invalid_input() {
 					deposit_amount: 1_000_000_000_000u64,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
 					deposit_metadata: Some(ccm),
-					tx_hash: Default::default(),
+					tx_id: Default::default(),
 					deposit_details: Box::new(()),
 					broker_fee: cf_primitives::Beneficiary {
 						account: sp_runtime::AccountId32::new([0; 32]),
@@ -798,7 +798,7 @@ fn solana_ccm_execution_error_can_trigger_fallback() {
 					deposit_amount: 1_000_000_000_000u64,
 					destination_address: EncodedAddress::Sol([1u8; 32]),
 					deposit_metadata: Some(ccm),
-					tx_hash: Default::default(),
+					tx_id: Default::default(),
 					deposit_details: Box::new(()),
 					broker_fee: cf_primitives::Beneficiary {
 						account: sp_runtime::AccountId32::new([0; 32]),

@@ -1,6 +1,7 @@
 use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
 use cf_amm::{
-	common::{Amount, PoolPairsMap, Side, Tick},
+	common::{PoolPairsMap, Side},
+	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -163,6 +164,9 @@ pub struct BrokerInfo {
 }
 
 /// Struct that represents the estimated output of a Swap.
+#[obake::versioned]
+#[obake(version("1.0.0"))]
+#[obake(version("2.0.0"))]
 #[derive(Encode, Decode, TypeInfo)]
 pub struct SimulatedSwapInformation {
 	pub intermediary: Option<AssetAmount>,
@@ -170,7 +174,21 @@ pub struct SimulatedSwapInformation {
 	pub network_fee: AssetAmount,
 	pub ingress_fee: AssetAmount,
 	pub egress_fee: AssetAmount,
+	#[obake(cfg(">=2.0"))]
 	pub broker_fee: AssetAmount,
+}
+
+impl From<SimulatedSwapInformation!["1.0.0"]> for SimulatedSwapInformation {
+	fn from(value: SimulatedSwapInformation!["1.0.0"]) -> Self {
+		Self {
+			intermediary: value.intermediary,
+			output: value.output,
+			network_fee: value.network_fee,
+			ingress_fee: value.ingress_fee,
+			egress_fee: value.egress_fee,
+			broker_fee: Default::default(),
+		}
+	}
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]
@@ -299,7 +317,7 @@ decl_runtime_apis!(
 			to: Asset,
 			amount: AssetAmount,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
-		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
+		) -> Result<SimulatedSwapInformation!["1.0.0"], DispatchErrorWithMessage>;
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
@@ -315,7 +333,7 @@ decl_runtime_apis!(
 		fn cf_pool_depth(
 			base_asset: Asset,
 			quote_asset: Asset,
-			tick_range: Range<cf_amm::common::Tick>,
+			tick_range: Range<cf_amm::math::Tick>,
 		) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchErrorWithMessage>;
 		fn cf_pool_liquidity(
 			base_asset: Asset,
@@ -324,7 +342,7 @@ decl_runtime_apis!(
 		fn cf_required_asset_ratio_for_range_order(
 			base_asset: Asset,
 			quote_asset: Asset,
-			tick_range: Range<cf_amm::common::Tick>,
+			tick_range: Range<cf_amm::math::Tick>,
 		) -> Result<PoolPairsMap<Amount>, DispatchErrorWithMessage>;
 		fn cf_pool_orderbook(
 			base_asset: Asset,

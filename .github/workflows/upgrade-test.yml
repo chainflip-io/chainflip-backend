@@ -255,6 +255,12 @@ jobs:
         run: |
           cat /tmp/chainflip/chainflip-lp-api.*log
 
+      - name: Print chainflip-deposit-monitor logs 🔬
+        if: always()
+        continue-on-error: true
+        run: |
+          cat /tmp/chainflip/chainflip-deposit-monitor.*log
+
       - name: Print localnet init debug logs 🕵️‍♂️
         if: always()
         continue-on-error: true

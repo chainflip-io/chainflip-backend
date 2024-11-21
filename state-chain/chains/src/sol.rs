@@ -59,6 +59,9 @@ pub struct SolanaTransactionData {
 	pub serialized_transaction: Vec<u8>,
 }
 
+/// A Solana transaction in id is a tuple of the AccountAddress and the slot number.
+pub type SolanaTransactionInId = (SolAddress, u64);
+
 impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
@@ -96,7 +99,7 @@ impl ChainCrypto for SolanaCrypto {
 	type AggKey = SolAddress;
 	type Payload = SolMessage;
 	type ThresholdSignature = SolSignature;
-	type TransactionInId = SolHash;
+	type TransactionInId = SolanaTransactionInId;
 	type TransactionOutId = Self::ThresholdSignature;
 
 	type GovKey = SolAddress;

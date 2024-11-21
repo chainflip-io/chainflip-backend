@@ -384,7 +384,7 @@ where
 pub mod pallet {
 	use core::cmp::max;
 
-	use cf_amm::common::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
+	use cf_amm::math::{output_amount_ceil, sqrt_price_to_price, SqrtPriceQ64F96};
 	use cf_chains::{address::EncodedAddress, AnyChain, Chain};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
@@ -996,6 +996,8 @@ pub mod pallet {
 				Error::<T>::EarnedFeesNotWithdrawn,
 			);
 
+			let _ = AffiliateIdMapping::<T>::clear_prefix(&account_id, u32::MAX, None);
+
 			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
 
 			Ok(())
@@ -1216,7 +1218,7 @@ pub mod pallet {
 							// amount via pool price.
 							Some(
 								output_amount_ceil(
-									cf_amm::common::Amount::from(swap.input_amount()),
+									cf_amm::math::Amount::from(swap.input_amount()),
 									sqrt_price_to_price(pool_sell_price?),
 								)
 								.saturated_into(),
@@ -2506,11 +2508,7 @@ pub(crate) mod utilities {
 	) -> SwapRefundParameters {
 		SwapRefundParameters {
 			refund_block: execute_at_block.saturating_add(params.retry_duration),
-			min_output: u128::try_from(cf_amm::common::output_amount_ceil(
-				input_amount.into(),
-				params.min_price,
-			))
-			.unwrap_or(u128::MAX),
+			min_output: params.min_output_amount(input_amount),
 		}
 	}
 

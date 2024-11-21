@@ -1,7 +1,8 @@
 use crate::boost_pool_rpc::BoostPoolFeesRpc;
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
-	common::{Amount as AmmAmount, PoolPairsMap, Side, Tick},
+	common::{PoolPairsMap, Side},
+	math::{Amount as AmmAmount, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -36,7 +37,7 @@ use pallet_cf_pools::{
 use pallet_cf_swapping::SwapLegInfo;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use serde::{Deserialize, Serialize};
-use sp_api::{ApiError, CallApiAt};
+use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedInto},
@@ -55,10 +56,10 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		TaintedTransactionEvents, ValidatorInfo, VaultSwapDetails,
+		SimulatedSwapInformation, TaintedTransactionEvents, ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
-	Hash, NetworkFee, SolanaInstance,
+	Block, Hash, NetworkFee, SolanaInstance,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -422,6 +423,26 @@ pub struct RpcSwapOutputV2 {
 	pub egress_fee: RpcFee,
 	pub broker_commission: RpcFee,
 }
+fn into_rpc_swap_output(
+	simulated_swap_info: SimulatedSwapInformation,
+	from_asset: Asset,
+	to_asset: Asset,
+) -> RpcSwapOutputV2 {
+	RpcSwapOutputV2 {
+		intermediary: simulated_swap_info.intermediary.map(Into::into),
+		output: simulated_swap_info.output.into(),
+		network_fee: RpcFee {
+			asset: cf_primitives::STABLE_ASSET,
+			amount: simulated_swap_info.network_fee.into(),
+		},
+		ingress_fee: RpcFee { asset: from_asset, amount: simulated_swap_info.ingress_fee.into() },
+		egress_fee: RpcFee { asset: to_asset, amount: simulated_swap_info.egress_fee.into() },
+		broker_commission: RpcFee {
+			asset: cf_primitives::STABLE_ASSET,
+			amount: simulated_swap_info.broker_fee.into(),
+		},
+	}
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum SwapRateV2AdditionalOrder {
@@ -764,7 +785,7 @@ pub trait CustomApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		tick_range: Range<cf_amm::common::Tick>,
+		tick_range: Range<cf_amm::math::Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<PoolPairsMap<AmmAmount>>;
 	#[method(name = "pool_orderbook")]
@@ -787,7 +808,7 @@ pub trait CustomApi {
 		&self,
 		base_asset: Asset,
 		quote_asset: Asset,
-		tick_range: Range<cf_amm::common::Tick>,
+		tick_range: Range<cf_amm::math::Tick>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<AskBidMap<UnidirectionalPoolDepth>>;
 	#[method(name = "pool_liquidity")]
@@ -1424,71 +1445,66 @@ where
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
+		let amount = amount
+			.try_into()
+			.map_err(|_| "Swap input amount too large.")
+			.and_then(|amount: u128| {
+				if amount == 0 {
+					Err("Swap input amount cannot be zero.")
+				} else {
+					Ok(amount)
+				}
+			})
+			.map_err(|s| ErrorObject::owned(ErrorCode::InvalidParams.code(), s, None::<()>))?;
+		let additional_orders = additional_orders.map(|additional_orders| {
+			additional_orders
+				.into_iter()
+				.map(|additional_order| match additional_order {
+					SwapRateV2AdditionalOrder::LimitOrder {
+						base_asset,
+						quote_asset,
+						side,
+						tick,
+						sell_amount,
+					} =>
+						state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
+							base_asset,
+							quote_asset,
+							side,
+							tick,
+							sell_amount: sell_amount.unique_saturated_into(),
+						},
+				})
+				.collect()
+		});
 		self.with_runtime_api(at, |api, hash| {
-			Ok::<_, CfApiError>(
-				api.cf_pool_simulate_swap(
+			if api.api_version::<dyn CustomRuntimeApi<Block>>(hash).unwrap().unwrap() < 2 {
+				let old_result = api.cf_pool_simulate_swap_before_version_2(
 					hash,
 					from_asset,
 					to_asset,
-					amount
-						.try_into()
-						.map_err(|_| "Swap input amount too large.")
-						.and_then(|amount: u128| {
-							if amount == 0 {
-								Err("Swap input amount cannot be zero.")
-							} else {
-								Ok(amount)
-							}
-						})
-						.map_err(|s| {
-							ErrorObject::owned(ErrorCode::InvalidParams.code(), s, None::<()>)
-						})?,
-					broker_commission,
-					dca_parameters,
-					additional_orders.map(|additional_orders| {
-						additional_orders
-							.into_iter()
-							.map(|additional_order| {
-								match additional_order {
-									SwapRateV2AdditionalOrder::LimitOrder {
-										base_asset,
-										quote_asset,
-										side,
-										tick,
-										sell_amount,
-									} => state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
-										base_asset,
-										quote_asset,
-										side,
-										tick,
-										sell_amount: sell_amount.unique_saturated_into(),
-									}
-								}
-							})
-							.collect()
-					}),
-				)?
-				.map(|simulated_swap_info_v2| RpcSwapOutputV2 {
-					intermediary: simulated_swap_info_v2.intermediary.map(Into::into),
-					output: simulated_swap_info_v2.output.into(),
-					network_fee: RpcFee {
-						asset: cf_primitives::STABLE_ASSET,
-						amount: simulated_swap_info_v2.network_fee.into(),
-					},
-					ingress_fee: RpcFee {
-						asset: from_asset,
-						amount: simulated_swap_info_v2.ingress_fee.into(),
-					},
-					egress_fee: RpcFee {
-						asset: to_asset,
-						amount: simulated_swap_info_v2.egress_fee.into(),
-					},
-					broker_commission: RpcFee {
-						asset: cf_primitives::STABLE_ASSET,
-						amount: simulated_swap_info_v2.broker_fee.into(),
-					},
-				})?,
-			)
+					amount,
+					additional_orders,
+				)?;
+				Ok(old_result.map(|old_version| {
+					into_rpc_swap_output(old_version.into(), from_asset, to_asset)
+				})?)
+			} else {
+				Ok::<_, CfApiError>(
+					api.cf_pool_simulate_swap(
+						hash,
+						from_asset,
+						to_asset,
+						amount,
+						broker_commission,
+						dca_parameters,
+						additional_orders,
+					)?
+					.map(|simulated_swap_info_v2| {
+						into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
+					})?,
+				)
+			}
 		})
 	}
 

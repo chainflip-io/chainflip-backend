@@ -2,10 +2,13 @@ mod chain_tracking;
 
 use std::{collections::HashMap, sync::Arc};
 
-use cf_chains::{address::EncodedAddress, evm::DepositDetails, Arbitrum, CcmDepositMetadata};
+use cf_chains::{
+	address::EncodedAddress,
+	evm::{DepositDetails, H256},
+	Arbitrum, CcmDepositMetadata,
+};
 use cf_primitives::{
 	chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount, Beneficiary, EpochIndex,
-	TransactionHash,
 };
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
@@ -187,7 +190,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
 		deposit_metadata: Option<CcmDepositMetadata>,
-		tx_hash: TransactionHash,
+		tx_id: H256,
 		vault_swap_parameters: VaultSwapParameters,
 	) -> state_chain_runtime::RuntimeCall {
 		state_chain_runtime::RuntimeCall::ArbitrumIngressEgress(
@@ -197,8 +200,8 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 				deposit_amount,
 				destination_address,
 				deposit_metadata,
-				tx_hash,
-				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_hash.into()]) }),
+				tx_id,
+				deposit_details: Box::new(DepositDetails { tx_hashes: Some(vec![tx_id]) }),
 				broker_fee: vault_swap_parameters.broker_fee,
 				affiliate_fees: vault_swap_parameters
 					.affiliate_fees
