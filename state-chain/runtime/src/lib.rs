@@ -2157,7 +2157,8 @@ impl_runtime_apis! {
 							output_asset: destination_asset,
 							output_address: destination_address,
 							parameters: SharedCfParameters {
-								retry_duration: retry_duration.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
+								retry_duration: retry_duration.try_into()
+									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
 								min_output_amount,
 								number_of_chunks: dca_parameters
 									.as_ref()
@@ -2174,13 +2175,18 @@ impl_runtime_apis! {
 								boost_fee: boost_fee.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
 								broker_fee: broker_commission.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
 								affiliates: affiliate_fees.into_iter().map(|beneficiary|
-								{
-									Result::<AffiliateAndFee, DispatchErrorWithMessage>::Ok(AffiliateAndFee{
-										affiliate: Swapping::get_short_id(&broker_id, &beneficiary.account).ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegistered)?,
-										fee: beneficiary.bps.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::AffiliateFeeTooHigh)?
-									})
-								},
-								).collect::<Result<Vec<AffiliateAndFee>,_>>()?.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::TooManyAffiliates)?,
+										Result::<AffiliateAndFee, DispatchErrorWithMessage>::Ok(
+											AffiliateAndFee {
+												affiliate: Swapping::get_short_id(&broker_id, &beneficiary.account)
+													.ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegistered)?,
+												fee: beneficiary.bps.try_into()
+													.map_err(|_| pallet_cf_swapping::Error::<Runtime>::AffiliateFeeTooHigh)?
+											}
+										)
+									)
+									.collect::<Result<Vec<AffiliateAndFee>,_>>()?
+									.try_into()
+									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::TooManyAffiliates)?,
 							},
 						};
 
