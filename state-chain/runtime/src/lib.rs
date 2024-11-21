@@ -58,13 +58,13 @@ use cf_chains::{
 	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
 };
 use cf_primitives::{
-	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,
-	NetworkEnvironment, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	AffiliateAndFee, AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId,
+	DcaParameters, EpochIndex, NetworkEnvironment, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_traits::{
-	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
-	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, NoLimit, SwapLimits,
-	SwapLimitsProvider,
+	AdjustedFeeEstimationApi, AffiliateRegistry, AssetConverter, BalanceApi,
+	DummyEgressSuccessWitnesser, DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider,
+	NoLimit, SwapLimits, SwapLimitsProvider,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -2129,10 +2129,6 @@ impl_runtime_apis! {
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
 			// Validate params
-			if broker_commission != 0 || !affiliate_fees.is_empty() {
-				return Err(
-					pallet_cf_swapping::Error::<Runtime>::VaultSwapBrokerFeesNotSupported.into());
-			}
 			pallet_cf_swapping::Pallet::<Runtime>::validate_refund_params(retry_duration)?;
 			if let Some(params) = dca_parameters.as_ref() {
 				pallet_cf_swapping::Pallet::<Runtime>::validate_dca_params(params)?;
@@ -2152,32 +2148,47 @@ impl_runtime_apis! {
 				ForeignChain::Bitcoin => {
 					use cf_chains::btc::deposit_address::DepositAddress;
 
-					let private_channel_id = pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
-						.ok_or(pallet_cf_swapping::Error::<Runtime>::NoPrivateChannelExistsForBroker)?;
+					let private_channel_id =
+						pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
+							.ok_or(
+								pallet_cf_swapping::Error::<Runtime>::NoPrivateChannelExistsForBroker,
+							)?;
 					let params = UtxoEncodedData {
-						output_asset: destination_asset,
-						output_address: destination_address,
-						parameters: SharedCfParameters {
-							retry_duration: retry_duration.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
-							min_output_amount,
-							number_of_chunks: dca_parameters
-								.as_ref()
-								.map(|params| params.number_of_chunks)
-								.unwrap_or(1)
-								.try_into()
-								.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
-							chunk_interval: dca_parameters
-								.as_ref()
-								.map(|params| params.chunk_interval)
-								.unwrap_or(SWAP_DELAY_BLOCKS)
-								.try_into()
-								.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
-							boost_fee: boost_fee.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
-							broker_fee: broker_commission.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
-							// TODO: lookup affiliate mapping to convert affiliate ids and use them here
-							affiliates: Default::default(),
-						},
-					};
+							output_asset: destination_asset,
+							output_address: destination_address,
+							parameters: SharedCfParameters {
+								retry_duration: retry_duration.try_into()
+									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::SwapRequestDurationTooLong)?,
+								min_output_amount,
+								number_of_chunks: dca_parameters
+									.as_ref()
+									.map(|params| params.number_of_chunks)
+									.unwrap_or(1)
+									.try_into()
+									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
+								chunk_interval: dca_parameters
+									.as_ref()
+									.map(|params| params.chunk_interval)
+									.unwrap_or(SWAP_DELAY_BLOCKS)
+									.try_into()
+									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::InvalidDcaParameters)?,
+								boost_fee: boost_fee.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BoostFeeTooHigh)?,
+								broker_fee: broker_commission.try_into().map_err(|_| pallet_cf_swapping::Error::<Runtime>::BrokerFeeTooHigh)?,
+								affiliates: affiliate_fees.into_iter().map(|beneficiary|
+										Result::<AffiliateAndFee, DispatchErrorWithMessage>::Ok(
+											AffiliateAndFee {
+												affiliate: Swapping::get_short_id(&broker_id, &beneficiary.account)
+													.ok_or(pallet_cf_swapping::Error::<Runtime>::AffiliateNotRegistered)?,
+												fee: beneficiary.bps.try_into()
+													.map_err(|_| pallet_cf_swapping::Error::<Runtime>::AffiliateFeeTooHigh)?
+											}
+										)
+									)
+									.collect::<Result<Vec<AffiliateAndFee>,_>>()?
+									.try_into()
+									.map_err(|_| pallet_cf_swapping::Error::<Runtime>::TooManyAffiliates)?,
+							},
+						};
 
 					let EpochKey { key, .. } = BitcoinThresholdSigner::active_epoch_key()
 						.expect("We should always have a key for the current epoch.");
@@ -2185,8 +2196,12 @@ impl_runtime_apis! {
 						key.current,
 						private_channel_id.try_into().map_err(
 							// TODO: Ensure this can't happen.
-							|_| DispatchErrorWithMessage::Other("Private channel id out of bounds.".into())
-						)?
+							|_| {
+								DispatchErrorWithMessage::Other(
+									"Private channel id out of bounds.".into(),
+								)
+							},
+						)?,
 					)
 					.script_pubkey()
 					.to_address(&Environment::network_environment().into());
@@ -2196,8 +2211,7 @@ impl_runtime_apis! {
 						deposit_address,
 					})
 				},
-				_ => Err(
-					pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),
+				_ => Err(pallet_cf_swapping::Error::<Runtime>::UnsupportedSourceAsset.into()),
 			}
 		}
 
@@ -2232,6 +2246,12 @@ impl_runtime_apis! {
 			TaintedTransactionEvents {
 				btc_events
 			}
+		}
+
+		fn cf_get_affiliates(
+			broker: AccountId,
+		) -> Vec<(AffiliateShortId, AccountId)>{
+			pallet_cf_swapping::AffiliateIdMapping::<Runtime>::iter_prefix(&broker).collect()
 		}
 	}
 

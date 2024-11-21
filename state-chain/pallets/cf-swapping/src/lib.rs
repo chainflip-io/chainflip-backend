@@ -524,7 +524,7 @@ pub mod pallet {
 	/// it can be used in place of the full account id in order to save space (e.g. in UTXO encoding
 	/// for BTC)
 	#[pallet::storage]
-	pub(crate) type AffiliateIdMapping<T: Config> = StorageDoubleMap<
+	pub type AffiliateIdMapping<T: Config> = StorageDoubleMap<
 		_,
 		Identity,
 		T::AccountId,
@@ -721,8 +721,6 @@ pub mod pallet {
 		InvalidRefundAddress,
 		/// The given boost fee is too large to fit in a u8.
 		BoostFeeTooHigh,
-		/// Broker/Affiliate fees are not yet supported for vault swaps
-		VaultSwapBrokerFeesNotSupported,
 		/// The broker fee is too large to fit in a u8.
 		BrokerFeeTooHigh,
 		/// Unsupported source asset for vault swap
@@ -731,6 +729,14 @@ pub mod pallet {
 		PrivateChannelExistsForBroker,
 		/// The Broker does not have an open private channel.
 		NoPrivateChannelExistsForBroker,
+		/// The affiliate fee is too large to fit in a u8.
+		AffiliateFeeTooHigh,
+		/// The affiliate id is not registered with the broker.
+		AffiliateNotRegistered,
+		/// Bitcoin vault swaps only support up to 2 affiliates.
+		TooManyAffiliates,
+		/// No empty affiliate short id available.
+		NoEmptyAffiliateShortId,
 	}
 
 	#[pallet::genesis_config]
@@ -1144,8 +1150,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::register_affiliate())]
 		pub fn register_affiliate(
 			origin: OriginFor<T>,
-			short_id: AffiliateShortId,
 			affiliate_id: T::AccountId,
+			short_id: AffiliateShortId,
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
@@ -2461,11 +2467,22 @@ impl<T: Config> ExecutionCondition for NoPendingSwaps<T> {
 impl<T: Config> AffiliateRegistry for Pallet<T> {
 	type AccountId = T::AccountId;
 
-	fn lookup(
+	fn get_account_id(
 		broker_id: &Self::AccountId,
 		affiliate_short_id: AffiliateShortId,
 	) -> Option<Self::AccountId> {
 		AffiliateIdMapping::<T>::get(broker_id, affiliate_short_id)
+	}
+
+	/// This function iterates over a storage map. Only for use in rpc methods.
+	/// This function iterates over a storage map. Only for use in rpc methods.
+	fn get_short_id(
+		broker_id: &Self::AccountId,
+		affiliate_id: &Self::AccountId,
+	) -> Option<AffiliateShortId> {
+		AffiliateIdMapping::<T>::iter_prefix(broker_id)
+			.find(|(_, id)| id == affiliate_id)
+			.map(|(short_id, _)| short_id)
 	}
 }
 

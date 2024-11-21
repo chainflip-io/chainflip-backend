@@ -2232,7 +2232,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.chain(affiliate_fees.into_iter().filter_map(
 					|Beneficiary { account: short_affiliate_id, bps }| {
 						if let Some(affiliate_id) =
-							T::AffiliateRegistry::lookup(&primary_broker, short_affiliate_id)
+							T::AffiliateRegistry::get_account_id(&primary_broker, short_affiliate_id)
 						{
 							Some(Beneficiary { account: affiliate_id, bps })
 						} else {

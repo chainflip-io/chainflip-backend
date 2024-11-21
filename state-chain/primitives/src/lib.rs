@@ -396,10 +396,16 @@ pub struct Beneficiary<Id> {
 	pub bps: BasisPoints,
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, Copy, PartialEq, Debug)]
 pub struct AffiliateAndFee {
-	pub affiliate: u8,
+	pub affiliate: AffiliateShortId,
 	pub fee: u8,
+}
+
+impl From<AffiliateAndFee> for Beneficiary<AffiliateShortId> {
+	fn from(AffiliateAndFee { affiliate, fee }: AffiliateAndFee) -> Self {
+		Beneficiary { account: affiliate, bps: fee.into() }
+	}
 }
 
 #[derive(

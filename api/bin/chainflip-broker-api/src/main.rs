@@ -10,8 +10,8 @@ use chainflip_api::{
 		state_chain_runtime::runtime_apis::{
 			ChainAccounts, TaintedTransactionEvents, VaultSwapDetails,
 		},
-		AccountRole, Affiliates, Asset, BasisPoints, BlockNumber, CcmChannelMetadata,
-		DcaParameters,
+		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber,
+		CcmChannelMetadata, DcaParameters,
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, ChannelId, DepositMonitorApi,
@@ -134,6 +134,16 @@ pub trait Rpc {
 
 	#[method(name = "close_private_btc_channel", aliases = ["broker_closePrivateBtcChannel"])]
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId>;
+
+	#[method(name = "register_affiliate", aliases = ["broker_registerAffiliate"])]
+	async fn register_affiliate(
+		&self,
+		affiliate_id: AccountId32,
+		short_id: Option<AffiliateShortId>,
+	) -> RpcResult<AffiliateShortId>;
+
+	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
+	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
 }
 
 pub struct RpcServerImpl {
@@ -311,6 +321,18 @@ impl RpcServer for RpcServerImpl {
 
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
 		Ok(self.api.broker_api().close_private_btc_channel().await?)
+	}
+
+	async fn register_affiliate(
+		&self,
+		affiliate_id: AccountId32,
+		short_id: Option<AffiliateShortId>,
+	) -> RpcResult<AffiliateShortId> {
+		Ok(self.api.broker_api().register_affiliate(affiliate_id.clone(), short_id).await?)
+	}
+
+	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
+		Ok(self.api.raw_client().get_affiliates().await?)
 	}
 }
 

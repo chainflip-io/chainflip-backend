@@ -183,8 +183,8 @@ mod benchmarks {
 		{
 			assert_ok!(Pallet::<T>::register_affiliate(
 				caller.clone(),
+				affiliate_id.clone(),
 				IDX.into(),
-				affiliate_id.clone()
 			));
 		}
 
