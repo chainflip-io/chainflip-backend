@@ -165,10 +165,10 @@ export async function executeSolVaultSwap(
   const txHash = await connection.sendAndConfirmTransaction(connection, tx, [
     whaleKeypair,
     newEventAccountKeypair,
-    { commitment: 'processed' },
+    { commitment: 'confirmed' },
   ]);
 
-  const transactionData = await connection.getTransaction(txHash);
+  const transactionData = await connection.getTransaction(txHash, { commitment: 'confirmed' });
   if (transactionData === null) {
     throw new Error('TransactionData is empty');
   }
