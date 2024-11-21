@@ -1293,8 +1293,8 @@ type PalletMigrations = (
 );
 
 type MigrationsForV1_8 = VersionedMigration<
-	1,
 	2,
+	3,
 	migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
 	pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
 	DbWeight,
