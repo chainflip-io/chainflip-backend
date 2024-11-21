@@ -2150,42 +2150,47 @@ pub mod pallet {
 				.map(|id| *id.unique_monotonic())
 				.collect::<BTreeSet<_>>();
 
-			if properties_keys != ElectionState::<T, I>::iter_keys().collect::<BTreeSet<_>>() {
-				Err(DispatchError::Other(
+			ensure!(
+				properties_keys == ElectionState::<T, I>::iter_keys().collect::<BTreeSet<_>>(),
+				DispatchError::Other(
 					"All keys in ElectionProperties and ElectionState should match",
-				))?;
-			}
+				)
+			);
 
 			let shared_ref_count_keys =
 				SharedDataReferenceCount::<T, I>::iter_keys().collect::<Vec<_>>();
 			for shared_data_key in SharedData::<T, I>::iter_keys() {
-				if !shared_ref_count_keys.iter().any(|(h, _)| *h == shared_data_key) {
-					Err(DispatchError::Other(
+				ensure!(
+					shared_ref_count_keys.iter().any(|(h, _)| *h == shared_data_key),
+					DispatchError::Other(
 						"All keys in SharedData should have an entry in SharedDataReferenceCount",
-					))?;
-				}
+					)
+				)
 			}
 
 			for election_id in ElectionConsensusHistoryUpToDate::<T, I>::iter_keys() {
-				if !properties_keys.contains(&election_id) {
-					Err(DispatchError::Other(
+				ensure!(
+					properties_keys.contains(&election_id),
+					DispatchError::Other(
 						"ElectionConsensusHistoryUpToDate should have a corresponding entry in ElectionProperties"
-					))?;
-				}
+					)
+				)
 			}
 			for election_id in BitmapComponents::<T, I>::iter_keys() {
-				if !properties_keys.contains(&election_id) {
-					Err(DispatchError::Other(
-						"BitmapComponents should have a corresponding entry in ElectionProperties",
-					))?;
-				}
+				ensure!(
+					properties_keys.contains(&election_id),
+					DispatchError::Other(
+						"BitmapComponents should have a corresponding entry in ElectionProperties"
+					)
+				)
 			}
 			for (election_id, _) in IndividualComponents::<T, I>::iter_keys() {
-				if !properties_keys.contains(&election_id) {
-					Err(DispatchError::Other(
-						"BitmapComponents should have a corresponding entry in ElectionProperties",
-					))?;
-				}
+				ensure!(
+					properties_keys.contains(&election_id),
+					DispatchError::Other(
+						"IndividualComponents should have a corresponding entry in ElectionProperties",
+					)
+				)
 			}
 
 			Ok(())

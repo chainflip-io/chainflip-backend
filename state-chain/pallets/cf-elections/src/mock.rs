@@ -103,7 +103,7 @@ pub fn election_test_ext(test_setup: TestSetup) -> TestRunner<TestContext> {
 			MockEpochInfo::next_epoch(test_setup.all_authorities());
 
 			Pallet::<Test, _>::do_try_state()
-				.expect("All try-state variants must hold after a test");
+				.expect("All try-state variants must hold");
 
 			test_setup
 		})
