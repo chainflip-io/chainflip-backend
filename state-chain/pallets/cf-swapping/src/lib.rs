@@ -2475,6 +2475,7 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 	}
 
 	/// This function iterates over a storage map. Only for use in rpc methods.
+	/// This function iterates over a storage map. Only for use in rpc methods.
 	fn get_short_id(
 		broker_id: &Self::AccountId,
 		affiliate_id: &Self::AccountId,
