@@ -1280,6 +1280,7 @@ where
 		cf_boost_pools_depth() -> Vec<BoostPoolDepth>,
 		cf_pool_price(from_asset: Asset, to_asset: Asset) -> Option<PoolPriceV1>,
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
+		cf_get_affiliates(broker: state_chain_runtime::AccountId) -> Vec<(AffiliateShortId, state_chain_runtime::AccountId)>,
 	}
 
 	pass_through_and_flatten! {
@@ -1880,14 +1881,6 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TaintedTransactionEvents> {
 		self.with_runtime_api(at, |api, hash| api.cf_tainted_transaction_events(hash))
-	}
-
-	fn cf_get_affiliates(
-		&self,
-		broker: state_chain_runtime::AccountId,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(AffiliateShortId, state_chain_runtime::AccountId)>> {
-		self.with_runtime_api(at, |api, hash| api.cf_get_affiliates(hash, broker))
 	}
 }
 
