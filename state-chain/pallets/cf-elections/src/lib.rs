@@ -124,7 +124,7 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 pub use pallet::UniqueMonotonicIdentifier;
 
@@ -492,7 +492,7 @@ pub mod pallet {
 
 	/// Stores persistent state the electoral system needs.
 	#[pallet::storage]
-	pub(crate) type ElectoralUnsynchronisedState<T: Config<I>, I: 'static = ()> = StorageValue<
+	pub type ElectoralUnsynchronisedState<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
 		<T::ElectoralSystemRunner as ElectoralSystemRunner>::ElectoralUnsynchronisedState,
 		OptionQuery,

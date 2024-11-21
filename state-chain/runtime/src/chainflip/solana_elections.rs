@@ -84,7 +84,7 @@ pub fn initial_state(
 			(),
 			(),
 			(),
-			0,
+			0u32,
 		),
 		unsynchronised_settings: (
 			(),
