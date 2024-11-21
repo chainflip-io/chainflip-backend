@@ -522,6 +522,15 @@ function checkTransactionInMatches(actual: any, expected: TransactionOriginId): 
     );
   }
   if ('Vault' in actual) {
+    console.log(
+      'checkTransactionInMatches Vault',
+      'Solana' in actual.Vault.txId,
+      expected.type === TransactionOrigin.VaultSwapSolana,
+      'actual',
+      actual,
+      'expected',
+      expected,
+    );
     if ('Solana' in actual.Vault.txId && expected.type === TransactionOrigin.VaultSwapSolana) {
       console.log(
         'Waiting for SwapRequested. Expected: ',
@@ -552,6 +561,7 @@ export async function observeSwapRequested(
   id: TransactionOriginId,
   swapRequestType: SwapRequestType,
 ) {
+  console.log('observeSwapRequested for', sourceAsset, destAsset, swapRequestType);
   // need to await this to prevent the chainflip api from being disposed prematurely
   return observeEvent('swapping:SwapRequested', {
     test: (event) => {
