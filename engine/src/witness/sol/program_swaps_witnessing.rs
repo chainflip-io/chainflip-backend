@@ -217,10 +217,6 @@ pub async fn get_program_swaps(
 		.await;
 
 	Ok((new_swaps, closed_accounts))
-
-	// TODO: When submitting data we could technically submit the slot when the SwapEvent was
-	// queried for the new opened accounts. However, it's just easier to submit the slot when the
-	// SwapEndpointDataAccount was queried for both closed accounts and new opened accounts.
 }
 
 async fn get_changed_program_swap_accounts(

@@ -6,6 +6,7 @@ import {
   observeBalanceIncrease,
   observeSwapRequested,
   SwapRequestType,
+  TransactionOrigin,
 } from '../shared/utils';
 import { send } from '../shared/send';
 import { observeEvent, observeEvents } from '../shared/utils/substrate';
@@ -65,7 +66,7 @@ async function testDCASwap(
     swapRequestedHandle = observeSwapRequested(
       inputAsset,
       destAsset,
-      depositChannelId,
+      { type: TransactionOrigin.DepositChannel, channelId: depositChannelId },
       SwapRequestType.Regular,
     );
 
@@ -73,7 +74,7 @@ async function testDCASwap(
     await send(inputAsset, swapRequest.depositAddress, amount.toString());
     testDCASwaps.log(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
-    const { txHash } = await executeVaultSwap(
+    const { transactionId } = await executeVaultSwap(
       inputAsset,
       destAsset,
       destAddress,
@@ -84,13 +85,13 @@ async function testDCASwap(
       dcaParams,
     );
 
-    testDCASwaps.log(`Vault swap executed, tx hash: ${txHash}`);
+    testDCASwaps.log(`Vault swap executed, tx id: ${transactionId}`);
 
     // Look after Swap Requested of data.origin.Vault.tx_hash
     swapRequestedHandle = observeSwapRequested(
       inputAsset,
       destAsset,
-      txHash,
+      transactionId,
       SwapRequestType.Regular,
     );
   }

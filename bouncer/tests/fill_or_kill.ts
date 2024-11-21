@@ -8,6 +8,7 @@ import {
   observeBalanceIncrease,
   observeSwapRequested,
   SwapRequestType,
+  TransactionOrigin,
 } from '../shared/utils';
 import { executeVaultSwap, requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
@@ -59,12 +60,10 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
       refundParameters,
     );
     const depositAddress = swapRequest.depositAddress;
-    const depositChannelId = swapRequest.channelId;
-
     swapRequestedHandle = observeSwapRequested(
       inputAsset,
       destAsset,
-      depositChannelId,
+      { type: TransactionOrigin.DepositChannel, channelId: swapRequest.channelId },
       SwapRequestType.Regular,
     );
 
@@ -84,7 +83,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
         Math.random() < 0.5 ? ccmMetadata.ccmAdditionalData : undefined;
     }
 
-    const { txHash } = await executeVaultSwap(
+    const { transactionId } = await executeVaultSwap(
       inputAsset,
       destAsset,
       destAddress,
@@ -97,7 +96,7 @@ async function testMinPriceRefund(inputAsset: Asset, amount: number, swapViaVaul
     swapRequestedHandle = observeSwapRequested(
       inputAsset,
       destAsset,
-      txHash,
+      transactionId,
       SwapRequestType.Regular,
     );
   }

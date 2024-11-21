@@ -14,6 +14,7 @@ import {
   sleep,
   SwapRequestType,
   SwapType,
+  TransactionOrigin,
 } from '../shared/utils';
 import { requestNewSwap } from '../shared/perform_swap';
 import { send } from '../shared/send';
@@ -151,7 +152,7 @@ async function trackGasLimitSwap(
   const swapRequestedHandle = observeSwapRequested(
     sourceAsset,
     destAsset,
-    channelId,
+    { type: TransactionOrigin.DepositChannel, channelId },
     SwapRequestType.Ccm,
   );
   await send(sourceAsset, depositAddress);

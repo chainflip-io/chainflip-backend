@@ -167,8 +167,11 @@ export async function executeSolVaultSwap(
     newEventAccountKeypair,
   ]);
 
-  console.log('tx', txHash);
-  return txHash;
+  const transactionData = await connection.getTransaction(txHash);
+  if (transactionData === null) {
+    throw new Error('TransactionData is empty');
+  }
+  return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountKeypair.publicKey };
 }
 
 export async function checkSolEventAccountsClosure(

@@ -16,6 +16,7 @@ import {
   assetContractId,
   observeSwapRequested,
   SwapRequestType,
+  TransactionOrigin,
 } from '../shared/utils';
 import { signAndSendTxEvm } from '../shared/send_evm';
 import { getCFTesterAbi } from '../shared/contract_interfaces';
@@ -152,7 +153,7 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
     const swapRequestedHandle = observeSwapRequested(
       sourceAsset,
       destAsset,
-      swapParams.channelId,
+      { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
       SwapRequestType.Regular,
     );
 
@@ -166,7 +167,7 @@ async function testDoubleDeposit(sourceAsset: Asset, destAsset: Asset) {
     const swapRequestedHandle = observeSwapRequested(
       sourceAsset,
       destAsset,
-      swapParams.channelId,
+      { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
       SwapRequestType.Regular,
     );
 

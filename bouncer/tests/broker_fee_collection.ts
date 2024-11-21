@@ -15,6 +15,7 @@ import {
   amountToFineAmountBigInt,
   SwapRequestType,
   observeSwapRequested,
+  TransactionOrigin,
 } from '../shared/utils';
 import { getBalance } from '../shared/get_balance';
 import { getChainflipApi, observeEvent } from '../shared/utils/substrate';
@@ -120,7 +121,7 @@ async function testBrokerFees(inputAsset: Asset, seed?: string): Promise<void> {
   const swapRequestedHandle = observeSwapRequested(
     inputAsset,
     destAsset,
-    channelId,
+    { type: TransactionOrigin.DepositChannel, channelId },
     SwapRequestType.Regular,
   );
 

@@ -19,6 +19,8 @@ import {
   getSolWhaleKeyPair,
   decodeSolAddress,
   VaultSwapParams,
+  TransactionOriginId,
+  TransactionOrigin,
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
@@ -136,7 +138,7 @@ export async function doPerformSwap(
   const swapRequestedHandle = observeSwapRequested(
     sourceAsset,
     destAsset,
-    channelId,
+    { type: TransactionOrigin.DepositChannel, channelId },
     messageMetadata ? SwapRequestType.Ccm : SwapRequestType.Regular,
   );
 
@@ -252,7 +254,7 @@ export async function executeVaultSwap(
   dcaParams?: DcaParams,
 ) {
   let sourceAddress: string;
-  let txHash: string;
+  let transactionId: TransactionOriginId;
 
   const srcChain = chainFromAsset(sourceAsset);
 
@@ -276,7 +278,7 @@ export async function executeVaultSwap(
       dcaParams,
       wallet,
     );
-    txHash = receipt.hash;
+    transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash: receipt.hash };
     sourceAddress = wallet.address.toLowerCase();
   } else {
     // Temporary until we implement the Solana encoding in the SDK/BrokerApi
@@ -285,11 +287,20 @@ export async function executeVaultSwap(
         'BoostFeeBps, FillOrKillParams and DcaParams are not supported for Solana vault swaps for now',
       );
     }
-    txHash = await executeSolVaultSwap(sourceAsset, destAsset, destAddress, messageMetadata);
+    const { slot, accountAddress } = await executeSolVaultSwap(
+      sourceAsset,
+      destAsset,
+      destAddress,
+      messageMetadata,
+    );
+    transactionId = {
+      type: TransactionOrigin.VaultSwapSolana,
+      addressAndSlot: [decodeSolAddress(accountAddress.toBase58()), slot],
+    };
     sourceAddress = decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58());
   }
 
-  return { txHash, sourceAddress };
+  return { transactionId, sourceAddress };
 }
 
 export async function performVaultSwap(
@@ -316,7 +327,7 @@ export async function performVaultSwap(
   }
 
   try {
-    const { txHash, sourceAddress } = await executeVaultSwap(
+    const { transactionId, sourceAddress } = await executeVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
@@ -326,7 +337,16 @@ export async function performVaultSwap(
       fillOrKillParams,
       dcaParams,
     );
-    swapContext?.updateStatus(swapTag, SwapStatus.VaultContractExecuted);
+    swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapInitiated);
+
+    await observeSwapRequested(
+      sourceAsset,
+      destAsset,
+      transactionId,
+      messageMetadata ? SwapRequestType.Ccm : SwapRequestType.Regular,
+    );
+
+    swapContext?.updateStatus(swapTag, SwapStatus.VaultSwapScheduled);
 
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
@@ -344,7 +364,7 @@ export async function performVaultSwap(
       sourceAsset,
       destAsset,
       destAddress,
-      txHash,
+      transactionId,
     };
   } catch (err) {
     console.error('err:', err);
