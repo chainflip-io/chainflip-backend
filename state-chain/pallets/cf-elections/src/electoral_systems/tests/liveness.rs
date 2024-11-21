@@ -1,9 +1,10 @@
 use sp_std::collections::btree_set::BTreeSet;
 
-use super::{mocks::*, register_checks};
+use super::mocks::*;
 use crate::{
 	electoral_system::{ConsensusVote, ConsensusVotes},
 	electoral_systems::liveness::*,
+	register_checks,
 };
 
 pub type ChainBlockHash = u64;
@@ -37,18 +38,8 @@ register_checks! {
 		only_one_election(_pre, post) {
 			assert_eq!(post.election_identifiers.len(), 1, "Only one election should exist.");
 		},
-		hook_called_once(_pre, _post) {
-			assert_eq!(HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()), 1, "Hook should have been called once so far!");
-		},
-		hook_called_twice(_pre, _post) {
-			assert_eq!(HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()), 2, "Hook should have been called twice so far!");
-		},
-		hook_not_called(_pre, _post) {
-			assert_eq!(
-				HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()),
-				0,
-				"Hook should not have been called!"
-			);
+		hook_called_n_times(_pre, _post, n: u8) {
+			assert_eq!(HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()), n, "Hook should have been called n so far!");
 		},
 	}
 }
@@ -134,7 +125,7 @@ fn on_finalize() {
 			|_| assert_eq!(MockHook::called(), 0, "Hook should not have been called!"),
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
-				Check::<SimpleLiveness>::hook_not_called(),
+				Check::<SimpleLiveness>::hook_called_n_times(0),
 			],
 		)
 		.expect_consensus(
@@ -147,7 +138,7 @@ fn on_finalize() {
 			|_| {},
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
-				Check::<SimpleLiveness>::hook_not_called(),
+				Check::<SimpleLiveness>::hook_called_n_times(0),
 			],
 		)
 		.test_on_finalize(
@@ -155,7 +146,7 @@ fn on_finalize() {
 			|_| {},
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
-				Check::<SimpleLiveness>::hook_called_once(),
+				Check::<SimpleLiveness>::hook_called_n_times(1),
 			],
 		)
 		.test_on_finalize(
@@ -165,7 +156,7 @@ fn on_finalize() {
 			|_| {},
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
-				Check::<SimpleLiveness>::hook_called_once(),
+				Check::<SimpleLiveness>::hook_called_n_times(1),
 			],
 		)
 		// there have been no votes, so still only called once
@@ -176,7 +167,7 @@ fn on_finalize() {
 			|_| {},
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
-				Check::<SimpleLiveness>::hook_called_once(),
+				Check::<SimpleLiveness>::hook_called_n_times(1),
 			],
 		)
 		.expect_consensus(
@@ -189,7 +180,7 @@ fn on_finalize() {
 			|_| {},
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
-				Check::<SimpleLiveness>::hook_called_twice(),
+				Check::<SimpleLiveness>::hook_called_n_times(2),
 			],
 		);
 }
