@@ -151,7 +151,7 @@ pub fn try_extract_vault_swap_call(
 			.parameters
 			.affiliates
 			.into_iter()
-			.map(|entry| Beneficiary { account: entry.affiliate, bps: entry.fee.into() })
+			.map(Into::into)
 			.collect_vec()
 			.try_into()
 			.expect("runtime supports at least as many affiliates as we allow in UTXO encoding"),
@@ -305,10 +305,7 @@ mod tests {
 					account: BROKER,
 					bps: MOCK_SWAP_PARAMS.parameters.broker_fee.into()
 				},
-				affiliate_fees: bounded_vec![Beneficiary {
-					account: MOCK_SWAP_PARAMS.parameters.affiliates[0].affiliate,
-					bps: MOCK_SWAP_PARAMS.parameters.affiliates[0].fee.into(),
-				}],
+				affiliate_fees: bounded_vec![MOCK_SWAP_PARAMS.parameters.affiliates[0].into()],
 				deposit_metadata: None,
 				refund_params: Box::new(ChannelRefundParameters {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),
