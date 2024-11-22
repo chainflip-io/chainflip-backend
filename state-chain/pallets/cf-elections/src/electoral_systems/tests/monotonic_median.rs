@@ -54,6 +54,10 @@ register_checks! {
 				"Hook should not have been called!"
 			);
 		},
+		pre_and_post_unsynchronised_state(pre, post, expected_pre_post: (u64, u64)) {
+			assert_eq!(pre.unsynchronised_state, expected_pre_post.0);
+			assert_eq!(post.unsynchronised_state, expected_pre_post.1);
+		},
 	}
 }
 
@@ -107,10 +111,7 @@ fn finalize_election_with_incremented_state() {
 		vec![
 			Check::monotonically_increasing_state(),
 			Check::<MonotonicMedianTest>::hook_called(),
-			Check::new(move |pre, post| {
-				assert_eq!(pre.unsynchronised_state, initial_state);
-				assert_eq!(post.unsynchronised_state, new_unsynchronised_state);
-			}),
+			Check::pre_and_post_unsynchronised_state((initial_state, new_unsynchronised_state)),
 			Check::last_election_deleted(),
 			Check::election_id_incremented(),
 		],
@@ -146,10 +147,7 @@ fn finalize_election_state_can_not_decrease() {
 					Check::monotonically_increasing_state(),
 					// The hook should not be called if the state is not updated.
 					Check::<MonotonicMedianTest>::hook_not_called(),
-					Check::new(|pre, post| {
-						assert_eq!(pre.unsynchronised_state, INTITIAL_STATE);
-						assert_eq!(post.unsynchronised_state, INTITIAL_STATE);
-					}),
+					Check::pre_and_post_unsynchronised_state((INTITIAL_STATE, INTITIAL_STATE)),
 					Check::last_election_deleted(),
 					Check::election_id_incremented(),
 				],

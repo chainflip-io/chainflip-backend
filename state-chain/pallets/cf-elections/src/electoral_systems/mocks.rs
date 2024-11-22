@@ -202,7 +202,7 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 		self,
 		on_finalize_context: &ES::OnFinalizeContext,
 		pre_finalize_checks: impl FnOnce(&ElectoralSystemState<ES>),
-		post_finalize_checks: impl IntoIterator<Item = Check<ES>>,
+		post_finalize_checks: impl IntoIterator<Item = Box<dyn Checkable<ES>>>,
 	) -> Self {
 		let pre_finalize = ElectoralSystemState::<ES>::load_state();
 		// TODO: Move 'hook' static local checks into ElectoralSystemState so we can remove this.
@@ -222,6 +222,77 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 	}
 }
 
+type CheckFnParam<ES, Param> =
+	Box<dyn Fn(&ElectoralSystemState<ES>, &ElectoralSystemState<ES>, Param)>;
+
+pub struct CheckParam<ES: ElectoralSystem, Param> {
+	check_fn: CheckFnParam<ES, Param>,
+}
+
+impl<ES: ElectoralSystem, Param> CheckParam<ES, Param> {
+	pub fn new(
+		check_fn: impl Fn(&ElectoralSystemState<ES>, &ElectoralSystemState<ES>, Param) + 'static,
+	) -> Self {
+		Self { check_fn: Box::new(check_fn) }
+	}
+
+	pub fn check(
+		&self,
+		pre_finalize: &ElectoralSystemState<ES>,
+		post_finalize: &ElectoralSystemState<ES>,
+		param: Param,
+	) {
+		(self.check_fn)(pre_finalize, post_finalize, param)
+	}
+}
+
+pub struct SingleCheck<ES: ElectoralSystem, Param> {
+	param: Param,
+	check_fn: CheckFnParam<ES, Param>,
+}
+
+impl<ES: ElectoralSystem, Param: Clone> SingleCheck<ES, Param> {
+	pub fn new(
+		param: Param,
+		check_fn: impl Fn(&ElectoralSystemState<ES>, &ElectoralSystemState<ES>, Param) + 'static,
+	) -> Self {
+		Self { param, check_fn: Box::new(check_fn) }
+	}
+}
+
+impl<ES: ElectoralSystem, Param: Clone> Checkable<ES> for SingleCheck<ES, Param> {
+	fn check(&self, pre: &ElectoralSystemState<ES>, post: &ElectoralSystemState<ES>) {
+		let param = self.param.clone();
+		(self.check_fn)(pre, post, param)
+	}
+}
+
+pub trait Checkable<ES: ElectoralSystem> {
+	fn check(&self, pre: &ElectoralSystemState<ES>, post: &ElectoralSystemState<ES>);
+}
+
+pub struct Check<ES: ElectoralSystem> {
+	_phantom: std::marker::PhantomData<ES>,
+}
+
+#[macro_export]
+macro_rules! single_check_new {
+	($arg_pre:ident, $arg_post:ident, $check_body:block, $param:ident) => {
+		$crate::electoral_systems::mocks::SingleCheck::new(
+			$param,
+			#[track_caller]
+			|$arg_pre, $arg_post, $param| $check_body,
+		)
+	};
+	($arg_pre:ident, $arg_post:ident, $check_body:block) => {
+		$crate::electoral_systems::mocks::SingleCheck::new(
+			(),
+			#[track_caller]
+			|$arg_pre, $arg_post, ()| $check_body,
+		)
+	};
+}
+
 /// Allows registering checks for an electoral system. Once registered, the checks can be used
 /// through the `Check` struct.
 ///
@@ -233,6 +304,13 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 ///         monotonically_increasing_state(pre_finalize, post_finalize) {
 ///             assert!(
 ///                 post_finalize.unsynchronised_state().unwrap() >= pre_finalize.unsynchronised_state().unwrap(),
+///                 "Expected state to increase post-finalization."
+///             );
+///         },
+///         // You can provide parameters to test against, optionally, like so:
+///         check_with_parameter(pre_finalize, post_finalize, param: u32) {
+///             assert_eq!(
+///                 post_finalize.unsynchronised_state().unwrap(), param,
 ///                 "Expected state to increase post-finalization."
 ///             );
 ///         },
@@ -256,53 +334,52 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 ///     },
 /// }
 /// ```
+
 #[macro_export]
 macro_rules! register_checks {
-	(
-		$system:ident {
-			$(
-				$check_name:ident($arg_1:ident, $arg_2:ident) $check_body:block
-			),+ $(,)*
-		}
-	) => {
-		impl Check<$system>{
-			$(
-				pub fn $check_name() -> Self {
-					Self::new(#[track_caller] |$arg_1, $arg_2| $check_body)
+    (
+        $system:ident {
+            $(
+                $check_name:ident($arg_1:ident, $arg_2:ident $(, $param:ident : $param_type:ty)? ) $check_body:block
+            ),* $(,)?
+        }
+    ) => {
+        impl Check<$system> {
+            $(
+                pub fn $check_name($($param: $param_type)?) -> Box<dyn $crate::electoral_systems::mocks::Checkable<$system> + 'static> {
+					Box::new($crate::single_check_new!($arg_1, $arg_2, $check_body $(, $param)? ))
 				}
-			)+
-		}
-	};
+            )*
+        }
+    };
 	(
 		$(
 			#[extra_constraints: $( $t:ty : $tc:path ),+]#
 		)?
 		$(
-			$check_name:ident($arg_1:ident, $arg_2:ident) $check_body:block
+			$check_name:ident($arg_1:ident, $arg_2:ident $(, $param:ident : $param_type:ty)? ) $check_body:block
 		),+ $(,)*
 	) => {
 		impl<ES: ElectoralSystem> Check<ES>
 			$( where $( $t: $tc ),+ )?
 		{
 			$(
-				pub fn $check_name() -> Self {
-					Self::new(#[track_caller] |$arg_1, $arg_2| $check_body)
+				pub fn $check_name($($param: $param_type)?) -> Box<dyn $crate::electoral_systems::mocks::Checkable<ES> + 'static> {
+					Box::new($crate::single_check_new!($arg_1, $arg_2, $check_body $(, $param)? ))
 				}
 			)+
 		}
 	};
 }
 
-// Simple examples with register_check:
+// Simple examples with register_checks:
 register_checks! {
 	assert_unchanged(pre_finalize, post_finalize) {
 		assert_eq!(pre_finalize, post_finalize);
 	},
 	last_election_deleted(pre_finalize, post_finalize) {
 		let last_election_id = pre_finalize.election_identifiers.last().expect("Expected an election before finalization");
-		assert!(
-			!post_finalize.election_identifiers.contains(last_election_id),
-			"Last election should have been deleted.",
+		assert!(!post_finalize.election_identifiers.contains(last_election_id), "Last election should have been deleted.",
 		);
 	},
 	election_id_incremented(pre_finalize, post_finalize) {
@@ -342,28 +419,5 @@ impl<ES: ElectoralSystem> ElectoralSystemState<ES> {
 			election_identifiers: MockStorageAccess::election_identifiers::<ES>(),
 			next_umi: MockStorageAccess::next_umi(),
 		}
-	}
-}
-
-type CheckFn<ES> = Box<dyn Fn(&ElectoralSystemState<ES>, &ElectoralSystemState<ES>)>;
-
-/// Checks that can be applied post-finalization.
-pub struct Check<ES: ElectoralSystem> {
-	check_fn: CheckFn<ES>,
-}
-
-impl<ES: ElectoralSystem> Check<ES> {
-	pub fn new(
-		check_fn: impl Fn(&ElectoralSystemState<ES>, &ElectoralSystemState<ES>) + 'static,
-	) -> Self {
-		Self { check_fn: Box::new(check_fn) }
-	}
-
-	pub fn check(
-		&self,
-		pre_finalize: &ElectoralSystemState<ES>,
-		post_finalize: &ElectoralSystemState<ES>,
-	) {
-		(self.check_fn)(pre_finalize, post_finalize)
 	}
 }
