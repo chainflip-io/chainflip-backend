@@ -515,43 +515,35 @@ function checkRequestTypeMatches(actual: object | string, expected: SwapRequestT
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function checkTransactionInMatches(actual: any, expected: TransactionOriginId): boolean {
-  console.log('checkingTransactionInMatches', actual, expected);
   if ('DepositChannel' in actual) {
+    console.log('Found DepositChannel SwapRequest event');
     return (
       expected.type === TransactionOrigin.DepositChannel &&
       Number(actual.DepositChannel.channelId.replaceAll(',', '')) === expected.channelId
     );
   }
   if ('Vault' in actual) {
-    console.log(
-      'checkTransactionInMatches Vault',
-      'Solana' in actual.Vault.txId,
-      expected.type === TransactionOrigin.VaultSwapSolana,
-      'actual',
-      actual,
-      'expected',
-      expected,
-    );
-    if ('Solana' in actual.Vault.txId && expected.type === TransactionOrigin.VaultSwapSolana) {
-      console.log(
-        'Waiting for SwapRequested. Expected: ',
-        expected,
-        'Actual: ',
-        actual,
-        'match',
-        actual.Vault.txId.Solana[1].replaceAll(',', '') === expected.addressAndSlot[1].toString() &&
-          actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString(),
-      );
-    }
-    return (
+    const match =
       ('Evm' in actual.Vault.txId &&
         expected.type === TransactionOrigin.VaultSwapEvm &&
         actual.Vault.txId.Evm === expected.txHash) ||
       ('Solana' in actual.Vault.txId &&
         expected.type === TransactionOrigin.VaultSwapSolana &&
         actual.Vault.txId.Solana[1].replaceAll(',', '') === expected.addressAndSlot[1].toString() &&
-        actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString())
+        actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString());
+    console.log(
+      'Found SwapRequested. Expecting Solana:',
+      expected.type === TransactionOrigin.VaultSwapSolana,
+      'Is event Solana:',
+      'Solana' in actual.Vault.txId,
+      'Expected: ',
+      expected,
+      'Actual: ',
+      actual,
+      'match',
+      match,
     );
+    return match;
   }
   throw new Error(`Unsupported transaction origin type ${actual}`);
 }
