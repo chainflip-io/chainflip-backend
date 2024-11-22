@@ -4,6 +4,7 @@ import { SwapParams } from '../shared/perform_swap';
 import { newCcmMetadata, testSwap, testVaultSwap } from '../shared/swapping';
 import { btcAddressTypes } from '../shared/new_btc_address';
 import { ccmSupportedChains, chainFromAsset, VaultSwapParams } from '../shared/utils';
+import { getChainflipApi } from '../shared/utils/substrate';
 
 /* eslint-disable @typescript-eslint/no-use-before-define */
 export const testAllSwaps = new ExecutableTest('All-Swaps', main, 1000);
@@ -67,16 +68,22 @@ async function main() {
   //     });
   // });
 
-  // Not doing BTC due to encoding complexity in vault_swap. Will be fixed once SDK supports it.
+  await using chainflip = await getChainflipApi();
+  const electoralSettings = (
+    await chainflip.query.solanaElections.electoralSettings(null)
+  ).toJSON()! as string;
+  console.log('electoralSettings', electoralSettings);
+
+  // // Not doing BTC due to encoding complexity in vault_swap. Will be fixed once SDK supports it.
   appendSwap('Sol', 'Eth', testVaultSwap);
-  // appendSwap('Sol', 'Usdc', testVaultSwap, true);
-  // appendSwap('Sol', 'ArbEth', testVaultSwap);
-  // appendSwap('Sol', 'ArbEth', testVaultSwap, true);
-  // appendSwap('Sol', 'Dot', testVaultSwap);
-  // appendSwap('SolUsdc', 'Eth', testVaultSwap);
-  // appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
+  // // appendSwap('Sol', 'Usdc', testVaultSwap, true);
+  // // appendSwap('Sol', 'ArbEth', testVaultSwap);
+  // // appendSwap('Sol', 'ArbEth', testVaultSwap, true);
+  // // appendSwap('Sol', 'Dot', testVaultSwap);
+  // // appendSwap('SolUsdc', 'Eth', testVaultSwap);
+  // // appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
 
-  appendSwap('Eth', 'ArbEth', testVaultSwap, true);
+  appendSwap('ArbEth', 'Eth', testVaultSwap, true);
 
-  await Promise.all(allSwaps);
+  // await Promise.all(allSwaps);
 }
