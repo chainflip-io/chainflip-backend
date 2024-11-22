@@ -11,12 +11,12 @@ use chainflip_api::{
 			ChainAccounts, TaintedTransactionEvents, VaultSwapDetails,
 		},
 		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber,
-		CcmChannelMetadata, DcaParameters,
+		CcmChannelMetadata, DcaParameters, RefundParameters,
 	},
 	settings::StateChain,
 	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, ChannelId, DepositMonitorApi,
-	OperatorApi, RefundParameters, SignedExtrinsicApi, StateChainApi, SwapDepositAddress,
-	TransactionInId, WithdrawFeesDetail,
+	OperatorApi, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId,
+	WithdrawFeesDetail,
 };
 use clap::Parser;
 use custom_rpc::CustomApiClient;
@@ -92,7 +92,7 @@ pub trait Rpc {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParameters>,
+		refund_parameters: Option<RefundParameters<AddressString>>,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress>;
 
@@ -182,7 +182,7 @@ impl RpcServer for RpcServerImpl {
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParameters>,
+		refund_parameters: Option<RefundParameters<AddressString>>,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress> {
 		Ok(self
