@@ -1149,7 +1149,7 @@ pub mod pallet {
 			);
 
 			ensure!(
-				T::FundingInfo::total_balance_of(&broker_id) > BrokerBond::<T>::get(),
+				T::FundingInfo::total_balance_of(&broker_id) >= BrokerBond::<T>::get(),
 				Error::<T>::InsufficientFunds
 			);
 
