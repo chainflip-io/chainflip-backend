@@ -85,5 +85,5 @@ async function main() {
 
   appendSwap('ArbEth', 'Eth', testVaultSwap, true);
 
-  // await Promise.all(allSwaps);
+  await Promise.all(allSwaps);
 }
