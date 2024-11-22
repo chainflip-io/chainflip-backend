@@ -162,11 +162,12 @@ export async function executeSolVaultSwap(
           })
           .signers([whaleKeypair, newEventAccountKeypair])
           .transaction();
-  const txHash = await sendAndConfirmTransaction(connection, tx, [
-    whaleKeypair,
-    newEventAccountKeypair,
+  const txHash = await sendAndConfirmTransaction(
+    connection,
+    tx,
+    [whaleKeypair, newEventAccountKeypair],
     { commitment: 'confirmed' },
-  ]);
+  );
 
   const transactionData = await connection.getTransaction(txHash, { commitment: 'confirmed' });
   if (transactionData === null) {
