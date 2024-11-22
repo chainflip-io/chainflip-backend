@@ -38,7 +38,7 @@ function tryRuntimeCommand(runtimePath: string, blockHash: 'latest' | string, ne
     `try-runtime \
         --runtime ${runtimePath} on-runtime-upgrade \
         --disable-spec-version-check \
-        --checks pre-and-post ${blockParam} \
+        --checks all ${blockParam} \
         --uri ${networkUrl}`,
     `try-runtime-${blockHash}`,
     'runtime::executive=debug',
