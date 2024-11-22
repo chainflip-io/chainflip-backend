@@ -567,6 +567,7 @@ export async function observeSwapRequested(
   return observeEvent('swapping:SwapRequested', {
     test: (event) => {
       const data = event.data;
+      console.log('Found event', data);
 
       if (typeof data.origin === 'object') {
         const channelMatches = checkTransactionInMatches(data.origin, id);

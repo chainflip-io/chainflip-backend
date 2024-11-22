@@ -76,5 +76,7 @@ async function main() {
   // appendSwap('SolUsdc', 'Eth', testVaultSwap);
   // appendSwap('SolUsdc', 'Flip', testVaultSwap, true);
 
+  appendSwap('Eth', 'ArbEth', testVaultSwap, true);
+
   await Promise.all(allSwaps);
 }
