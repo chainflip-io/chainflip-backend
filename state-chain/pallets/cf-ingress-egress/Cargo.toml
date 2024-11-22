@@ -18,6 +18,7 @@ cf-chains = { workspace = true }
 cf-primitives = { workspace = true }
 cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true, features = ["derive"] }
+generic-typeinfo-derive = { path = '../../generic-typeinfo-derive'}
 
 log = { workspace = true }
 strum = { workspace = true }
