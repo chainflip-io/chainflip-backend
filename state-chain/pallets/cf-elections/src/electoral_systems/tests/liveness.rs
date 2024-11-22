@@ -39,7 +39,7 @@ register_checks! {
 			assert_eq!(post.election_identifiers.len(), 1, "Only one election should exist.");
 		},
 		hook_called_n_times(_pre, _post, n: u8) {
-			assert_eq!(HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()), n, "Hook should have been called n so far!");
+			assert_eq!(HOOK_CALLED_COUNT.with(|hook_called| hook_called.get()), n, "Hook should have been called {n} times so far!");
 		},
 	}
 }
