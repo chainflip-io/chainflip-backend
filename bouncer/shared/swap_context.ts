@@ -52,7 +52,7 @@ export class SwapContext {
       }
       case SwapStatus.SwapScheduled: {
         assert(
-          currentStatus === SwapStatus.VaultSwapInitiated || currentStatus === SwapStatus.Funded,
+          currentStatus === SwapStatus.Funded,
           `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
         );
         break;
