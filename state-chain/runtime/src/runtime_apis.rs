@@ -38,10 +38,12 @@ use sp_std::{
 type VanityName = Vec<u8>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 #[serde(tag = "chain")]
 pub enum VaultSwapDetails<BtcAddress> {
 	Bitcoin {
 		#[serde(with = "sp_core::bytes")]
+		#[cfg_attr(feature = "std", schemars(schema_with = "cf_utilities::json_schema::hex_vec"))]
 		nulldata_payload: Vec<u8>,
 		deposit_address: BtcAddress,
 		/// Payload expiry time, expressed as timestamp since the UNIX_EPOCH in milliseconds

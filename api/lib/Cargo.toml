@@ -12,7 +12,7 @@ async-trait = { workspace = true }
 bs58 = { workspace = true, default-features = true }
 ed25519-dalek = { workspace = true }
 futures = { workspace = true }
-hex = { workspace = true, default-features = true}
+hex = { workspace = true, default-features = true }
 hmac-sha512 = { workspace = true }
 libsecp256k1 = { workspace = true, default-features = true }
 rand = { workspace = true, default-features = true }
@@ -24,6 +24,7 @@ zeroize = { workspace = true }
 libp2p-identity = { workspace = true, features = ["ed25519", "peerid"] }
 lazy_static = { workspace = true }
 jsonrpsee = { workspace = true, features = ["full"] }
+schemars = { workspace = true }
 
 # Local
 chainflip-engine = { workspace = true }

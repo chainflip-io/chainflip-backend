@@ -455,6 +455,7 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 pub struct AddressString(String);
 
 #[cfg(feature = "std")]

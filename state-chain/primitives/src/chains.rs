@@ -31,6 +31,7 @@ macro_rules! chains {
 
 		#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
 		#[derive(Serialize, Deserialize)]
+		#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 		#[repr(u32)]
 		pub enum ForeignChain {
 			$(

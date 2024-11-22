@@ -98,6 +98,8 @@ sp-version = { workspace = true }
 frame-system-rpc-runtime-api = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 
+schemars = { workspace = true, optional = true }
+
 cf-test-utilities = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -204,6 +206,7 @@ std = [
   "sp-transaction-pool/std",
   "sp-version/std",
   "dep:cf-test-utilities",
+  "dep:schemars",
   "dep:substrate-wasm-builder",
   "frame-metadata-hash-extension/std",
 ]

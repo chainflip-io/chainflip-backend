@@ -62,6 +62,7 @@ arrayref = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 
 # Substrate packages
 ss58-registry = { workspace = true, optional = true }
@@ -104,6 +105,7 @@ std = [
   "sp-core/full_crypto",
   "sp-io/std",
   "dep:ss58-registry",
+  "dep:schemars",
   "dep:thiserror",
   "dep:anyhow",
   "strum/std",

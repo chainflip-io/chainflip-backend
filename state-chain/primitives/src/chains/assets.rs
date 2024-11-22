@@ -165,13 +165,14 @@ macro_rules! assets {
 				use serde::{Serialize, Deserialize};
 
 				#[derive(Serialize, Deserialize)]
+				#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 				#[serde(untagged)]
 				#[serde(
 					expecting = r#"Expected a valid asset specifier. Assets should be specified as upper-case strings, e.g. `"ETH"`, and can be optionally distinguished by chain, e.g. `{ chain: "Ethereum", asset: "ETH" }."#
 				)]
-				enum SerdeAssetOptionalExplicitChain {
-					Implicit(serde_utils::SerdeImplicitChainAsset),
-					Explicit(serde_utils::SerdeExplicitChainAsset),
+				pub enum SerdeAssetOptionalExplicitChain {
+					Implicit(serde_utils::ImplicitChainAsset),
+					Explicit(serde_utils::ExplicitChainAsset),
 				}
 
 				impl Serialize for super::Asset {
@@ -192,47 +193,47 @@ macro_rules! assets {
 						})
 					}
 				}
+				#[cfg(feature = "std")]
+				impl schemars::JsonSchema for super::Asset {
+					fn schema_name() -> sp_std::borrow::Cow<'static, str> {
+						sp_std::borrow::Cow::from("Asset")
+					}
+					fn json_schema(gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+						// While we tolerate legacy encoding, we don't want to encourage it, so we omit it from the schema.
+						serde_utils::ExplicitChainAsset::json_schema(gen)
+					}
+
+				}
 
 				mod serde_utils {
 					use serde::{Serialize, Deserialize};
 					use super::super::super::any;
 
-					$(
-						mod $chain_member_and_module {
-							use serde::{Serialize, Deserialize};
-
-							#[derive(Serialize, Deserialize)]
-							pub enum SerdeChain {
-								#[serde(rename = $chain_json)]
-								$chain_variant
-							}
-						}
-					)+
-
 					#[derive(Serialize, Deserialize)]
-					#[serde(untagged)]
-					pub(super) enum SerdeExplicitChainAsset {
+					#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
+					#[serde(tag = "chain")]
+					pub enum ExplicitChainAsset {
 						$(
-							$chain_variant{ chain: $chain_member_and_module::SerdeChain, asset: super::super::super::$chain_member_and_module::Asset }
+							$chain_variant { asset: super::super::super::$chain_member_and_module::Asset }
 						),+
 					}
-					impl From<any::Asset> for SerdeExplicitChainAsset {
+					impl From<any::Asset> for ExplicitChainAsset {
 						fn from(value: any::Asset) -> Self {
 							match value {
 								$(
 									$(
-										any::Asset::$asset_variant => Self::$chain_variant { chain: $chain_member_and_module::SerdeChain::$chain_variant, asset: super::super::super::$chain_member_and_module::Asset::$asset_variant },
+										any::Asset::$asset_variant => Self::$chain_variant { asset: super::super::super::$chain_member_and_module::Asset::$asset_variant },
 									)+
 								)+
 							}
 						}
 					}
-					impl From<SerdeExplicitChainAsset> for any::Asset {
-						fn from(value: SerdeExplicitChainAsset) -> any::Asset {
+					impl From<ExplicitChainAsset> for any::Asset {
+						fn from(value: ExplicitChainAsset) -> any::Asset {
 							match value {
 								$(
 									$(
-										SerdeExplicitChainAsset::$chain_variant { chain: _, asset: super::super::super::$chain_member_and_module::Asset::$asset_variant } => Self::$asset_variant,
+										ExplicitChainAsset::$chain_variant { asset: super::super::super::$chain_member_and_module::Asset::$asset_variant } => Self::$asset_variant,
 									)+
 								)+
 							}
@@ -240,8 +241,12 @@ macro_rules! assets {
 					}
 
 					#[derive(Serialize, Deserialize)]
+					#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 					#[repr(u32)]
-					pub(super) enum SerdeImplicitChainAsset {
+					/// # Legacy asset encoding.
+					///
+					/// This only exists for backward compatibility. Prefer *explicit* chain encoding.
+					pub enum ImplicitChainAsset {
 						$(
 							$(
 								$(
@@ -253,7 +258,7 @@ macro_rules! assets {
 							)+
 						)+
 					}
-					impl TryFrom<any::Asset> for SerdeImplicitChainAsset {
+					impl TryFrom<any::Asset> for ImplicitChainAsset {
 						type Error = ();
 
 
@@ -271,14 +276,14 @@ macro_rules! assets {
 							}
 						}
 					}
-					impl From<SerdeImplicitChainAsset> for any::Asset {
+					impl From<ImplicitChainAsset> for any::Asset {
 						#[allow(unused_variables)]
-						fn from(value: SerdeImplicitChainAsset) -> Self {
+						fn from(value: ImplicitChainAsset) -> Self {
 							match value {
 								$(
 									$(
 										$(
-											SerdeImplicitChainAsset::$asset_variant => { let $asset_legacy_encoding = (); Self::$asset_variant },
+											ImplicitChainAsset::$asset_variant => { let $asset_legacy_encoding = (); Self::$asset_variant },
 										)?
 									)+
 								)+
@@ -489,6 +494,22 @@ macro_rules! assets {
 						$asset_variant,
 					)+
 				}
+				#[cfg(feature = "std")]
+				impl schemars::JsonSchema for Asset {
+					fn schema_name() -> sp_std::borrow::Cow<'static, str> {
+						sp_std::borrow::Cow::from(concat!(stringify!($chain_member_and_module), "::Asset"))
+					}
+					fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+						schemars::json_schema!({
+							"type": "string",
+							"enum": [
+								$(
+									$asset_json,
+								)+
+							]
+						})
+					}
+				}
 				impl From<Asset> for any::Asset {
 					fn from(asset: Asset) -> Self {
 						match asset {
@@ -528,6 +549,7 @@ macro_rules! assets {
 				}
 
 				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
+				#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 				pub struct AssetMap<T> {
 					$(
 						#[serde(rename = $asset_json)]

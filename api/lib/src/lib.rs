@@ -4,14 +4,17 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::{address::AddressString, RefundParametersRpc};
 use cf_chains::{
-	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParameters,
-	ChannelRefundParametersEncoded, ForeignChain,
+	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto,
+	ChannelRefundParameters as RefundParameters, ForeignChain,
 };
-pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
+pub use cf_primitives::{
+	AccountRole, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary, ChannelId, SemVer,
+};
 use cf_primitives::{AffiliateShortId, DcaParameters};
 use custom_rpc::CustomApiClient;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -28,6 +31,7 @@ pub mod primitives {
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
 		CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
+		ChannelRefundParameters as RefundParameters,
 	};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
@@ -309,21 +313,25 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct SwapDepositAddress {
 	pub address: AddressString,
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
+	#[schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")]
 	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<RefundParametersRpc>,
+	pub refund_parameters: Option<RefundParameters<AddressString>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct WithdrawFeesDetail {
+	#[schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")]
 	pub tx_hash: H256,
 	pub egress_id: (ForeignChain, u64),
+	#[schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")]
 	pub egress_amount: U256,
+	#[schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")]
 	pub egress_fee: U256,
 	pub destination_address: AddressString,
 }
@@ -373,7 +381,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParametersRpc>,
+		refund_parameters: Option<RefundParameters<AddressString>>,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
 		let destination_address = destination_address
@@ -390,8 +398,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees: affiliate_fees.unwrap_or_default(),
 					refund_parameters: refund_parameters
-						.map(|rpc_params: ChannelRefundParameters<AddressString>| {
-							Ok::<_, anyhow::Error>(ChannelRefundParametersEncoded {
+						.map(|rpc_params| {
+							Ok::<_, anyhow::Error>(RefundParameters {
 								retry_duration: rpc_params.retry_duration,
 								refund_address: rpc_params
 									.refund_address
