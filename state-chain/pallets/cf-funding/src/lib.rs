@@ -243,6 +243,9 @@ pub mod pallet {
 		/// When requesting a redemption, you must not have an amount below the minimum.
 		BelowMinimumFunding,
 
+		/// When requesting a redemption, all restricted balances must be above the minimum.
+		RestrictedBalanceBelowMinimumFunding,
+
 		/// There are not enough unrestricted funds to process the redemption.
 		InsufficientUnrestrictedFunds,
 
@@ -350,6 +353,13 @@ pub mod pallet {
 			);
 
 			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
+
+			// ensure that all restricted balances are above MinimumFunding, to avoid
+			// situations where it is not possible to redeem max
+			ensure!(
+				restricted_balances.values().all(|v| *v >= MinimumFunding::<T>::get()),
+				Error::<T>::RestrictedBalanceBelowMinimumFunding
+			);
 
 			// Ignore executor binding restrictions for withdrawals of restricted funds.
 			if !restricted_balances.contains_key(&address) {

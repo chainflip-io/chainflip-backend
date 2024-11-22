@@ -1320,6 +1320,32 @@ mod test_restricted_balances {
 			assert_eq!(Flip::balance(&ALICE), 0);
 		});
 	}
+	
+	#[test]
+	fn cannot_redeem_if_any_restricted_balance_is_lower_than_minimum() {
+		new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS: EthereumAddress = H160([0x01; 20]);
+		const AMOUNT_BELOW_MIN: u128 = MIN_FUNDING - 1;
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT_BELOW_MIN,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Max,
+				ETH_DUMMY_ADDR,
+				Default::default()
+			),
+			Error::<Test>::RestrictedBalanceBelowMinimumFunding
+		);
+		});
+	}
 }
 
 #[test]
