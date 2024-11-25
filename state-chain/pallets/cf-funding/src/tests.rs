@@ -527,9 +527,11 @@ fn redemption_expiry_removes_redemption() {
 		);
 
 		// Success, can request redemption again since the last one expired.
+		// Note that restricted balance is REDEMPTION_TAX less after refund, so adjust the
+		// TO_REDEEM accordingly to make sure restricted balance is above minimum
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
-			TO_REDEEM.into(),
+			(TO_REDEEM - REDEMPTION_TAX).into(),
 			RESTRICTED_ADDRESS,
 			Default::default()
 		));
@@ -600,8 +602,8 @@ fn restore_restricted_balance_when_redemption_expires() {
 	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT));
 	// Redeem a little less than the restricted balance.
 	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT - 1));
-	// Redeem signficantly less than the restricted balance.
-	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT - REDEMPTION_TAX * 2));
+	// Redeem significantly less than the restricted balance. Make sure rest is above minimum
+	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT - REDEMPTION_TAX * 3));
 }
 
 #[test]
