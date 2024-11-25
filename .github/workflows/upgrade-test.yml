@@ -173,18 +173,6 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           touch ./localnet/.setup_complete
-          # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana programs version. Remove after 1.8 is released.
-          sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[0-9.]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
-          sed -i 's|A1wWyYH6T4JZzXYruSWUpLU7kkpdY9maudB3x7rHNNP7|8T217weMrePR8VqqiY1J6VQKn5GfDXDwTPuYekPffNTo|g' state-chain/node/src/chain_spec/testnet.rs
-          sed -i 's|F9VLxNFCawVXfFmXNR7FrmzKQwX2S2XNxzDbH7odXRWe|Hvg5WgDgdhcex1TsJW8PiPqcxUizLitoEmXcCShmXVWJ|g' state-chain/node/src/chain_spec/testnet.rs
-          sed -i 's|G3DdyM6td7FBow79k8YH7TPNPcyLDNT45KZHb4Yoe8cp|8vM4M9MWoYZE7YDGhpUhoetabY8dwaz4AcDR9hbCHd7u|g' state-chain/node/src/chain_spec/testnet.rs
-          sed -i 's|4Nr4Af3JFTd5LcnM57S4BQmpp9ui2YUvcHkqWA2J3DTR|3fWpjCEzbHNU8qQD8YqoE5PfFahHNp4nwVVgJzxwTZya|g' state-chain/node/src/chain_spec/testnet.rs
-          sed -i 's|BPb9ZAEDR91zxgXxFRuC9hrvpDW7oeJWLcvzPTxX5H8H|96CDysvpx87Cd4TnxsMajFA9cKwFid1tMUFWnQWnifpJ|g' state-chain/node/src/chain_spec/testnet.rs
-          sed -i 's|8VrLY1NVmRTAB1qP4DXyokdjKB9WrySTyaqHsEy3HAFw|BjY7LRovNVwGEh5BGcfK4bZcjVan4YzuyFqcBwraG9Bj|g' state-chain/node/src/chain_spec/testnet.rs
-          sed -i 's|2cVt69yHAGFCKAnt2j3n9o9J2d4iWn2mtcgXg4H8fHRG|Hb35byiENfrMFwznb5TUxdAWN52dV81tWYWT3N99VRWr|g' state-chain/node/src/chain_spec/testnet.rs
-          sed -i 's|EEcKK35PVEKqLGk7Nq6uHcpJXTHbFuwjkQHqqvvmUtta|4TbbvCow8yHxnzdMT22gUt3JvHwAF8dbscBCLRezmpCY|g' state-chain/node/src/chain_spec/testnet.rs
-          sed -i 's|FDwdT8bEqUHA4e8KVbDncMgQXJwbfpgyvYK9ZTtxjS5F|FooctpZoHqoSjDE983JTJRyovN5Py6PZiiubd53gLFMv|g' state-chain/node/src/chain_spec/testnet.rs
-          sed -i 's|Hgr7AdqH4nQiau7raNF2ShTZqUfnE3D5AMX2nwYzHuJT|HCNp5KwKadPNiPs3nY1DtVcDfFkuUE2uUBsBueZbnkWc|g' state-chain/node/src/chain_spec/testnet.rs
           ./localnet/manage.sh
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
@@ -222,6 +210,8 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
+          # TODO: This is a temporary fix to not run Solana Vault swaps because the old image doesn't match the latest Swap Endpoint
+          sed -i "s|appendSwap('Sol*|// appendSwap('Sol|g" bouncer/tests/all_swaps.ts
           ./tests/all_concurrent_tests.ts
 
       - name: Print chainflip-engine logs 🚗
