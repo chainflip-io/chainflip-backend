@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, vec::Vec};
 
 use crate::{
 	electoral_system::{
@@ -21,6 +21,8 @@ pub struct TestSetup<ES: ElectoralSystem> {
 	electoral_settings: ES::ElectoralSettings,
 	initial_election_state:
 		Option<(ES::ElectionIdentifierExtra, ES::ElectionProperties, ES::ElectionState)>,
+	initial_state_map:
+		Vec<(ES::ElectoralUnsynchronisedStateMapKey, ES::ElectoralUnsynchronisedStateMapValue)>,
 }
 
 impl<ES: ElectoralSystem> Default for TestSetup<ES>
@@ -35,6 +37,7 @@ where
 			unsynchronised_settings: Default::default(),
 			electoral_settings: Default::default(),
 			initial_election_state: None,
+			initial_state_map: Default::default(),
 		}
 	}
 }
@@ -55,6 +58,17 @@ where
 		unsynchronised_state: ES::ElectoralUnsynchronisedState,
 	) -> Self {
 		Self { unsynchronised_state, ..self }
+	}
+
+	#[allow(dead_code)]
+	pub fn with_initial_state_map(
+		self,
+		initial_state_map: Vec<(
+			ES::ElectoralUnsynchronisedStateMapKey,
+			ES::ElectoralUnsynchronisedStateMapValue,
+		)>,
+	) -> Self {
+		Self { initial_state_map, ..self }
 	}
 
 	#[allow(dead_code)]
@@ -100,6 +114,9 @@ where
 
 		MockStorageAccess::set_unsynchronised_state::<ES>(setup.unsynchronised_state.clone());
 		MockStorageAccess::set_unsynchronised_settings::<ES>(setup.unsynchronised_settings.clone());
+		for (key, value) in &setup.initial_state_map {
+			MockStorageAccess::set_unsynchronised_state_map::<ES>(key.clone(), Some(value.clone()));
+		}
 
 		let election = MockAccess::<ES>::new_election(
 			election_identifier_extra,
@@ -231,6 +248,10 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 		for check in post_finalize_checks {
 			check.check(&pre_finalize, &post_finalize);
 		}
+		self
+	}
+	pub fn then(self, f: impl FnOnce()) -> Self {
+		f();
 		self
 	}
 }

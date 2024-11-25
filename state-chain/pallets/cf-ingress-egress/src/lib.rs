@@ -762,6 +762,11 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			short_affiliate_id: AffiliateShortId,
 		},
+		DepositChannelReverted {
+			channel: TargetChainAccount<T, I>,
+			asset: TargetChainAsset<T, I>,
+			amount: TargetChainAmount<T, I>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -1373,7 +1378,9 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 			});
 	}
 
-	fn on_ingress_reverted(_channel: Self::Account, _asset: Self::Asset, _amount: Self::Amount) {}
+	fn on_ingress_reverted(channel: Self::Account, asset: Self::Asset, amount: Self::Amount) {
+		Self::deposit_event(Event::<T, I>::DepositChannelReverted { channel, asset, amount });
+	}
 
 	fn on_channel_closed(channel: Self::Account) {
 		Self::recycle_channel(&mut Weight::zero(), channel);

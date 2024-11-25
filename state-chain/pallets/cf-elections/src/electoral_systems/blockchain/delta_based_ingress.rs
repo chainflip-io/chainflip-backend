@@ -242,7 +242,7 @@ where
 							Sink::on_ingress_reverted(
 								account.clone(),
 								details.asset,
-								ingress_total.amount - previous_amount,
+								previous_amount - ingress_total.amount,
 							);
 						},
 						Ordering::Equal => (),
