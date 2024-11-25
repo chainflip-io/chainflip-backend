@@ -212,7 +212,7 @@ jobs:
           pnpm install --frozen-lockfile
           # TODO: This is a temporary fix to not run Solana Vault swaps because the old image doesn't match the
           # latest Swap Endpoint. This can be removed after 1.8 release.
-          sed -i "s|appendSwap('Sol*|// appendSwap('Sol|g" bouncer/tests/all_swaps.ts
+          sed -i "s|appendSwap('Sol*|// appendSwap('Sol|g" ./tests/all_swaps.ts
           ./tests/all_concurrent_tests.ts
 
       - name: Print chainflip-engine logs 🚗
