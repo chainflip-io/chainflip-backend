@@ -37,8 +37,8 @@ pub struct QueryApi {
 }
 
 impl QueryApi {
-	pub async fn connect<'a>(
-		scope: &task_scope::Scope<'a, anyhow::Error>,
+	pub async fn connect(
+		scope: &task_scope::Scope<'_, anyhow::Error>,
 		state_chain_settings: &settings::StateChain,
 	) -> Result<QueryApi> {
 		log::debug!("Connecting to state chain at: {}", state_chain_settings.ws_endpoint);

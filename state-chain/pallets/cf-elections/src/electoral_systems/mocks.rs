@@ -225,26 +225,6 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 type CheckFnParam<ES, Param> =
 	Box<dyn Fn(&ElectoralSystemState<ES>, &ElectoralSystemState<ES>, Param)>;
 
-pub struct CheckParam<ES: ElectoralSystem, Param> {
-	check_fn: CheckFnParam<ES, Param>,
-}
-
-impl<ES: ElectoralSystem, Param> CheckParam<ES, Param> {
-	pub fn new(
-		check_fn: impl Fn(&ElectoralSystemState<ES>, &ElectoralSystemState<ES>, Param) + 'static,
-	) -> Self {
-		Self { check_fn: Box::new(check_fn) }
-	}
-
-	pub fn check(
-		&self,
-		pre_finalize: &ElectoralSystemState<ES>,
-		post_finalize: &ElectoralSystemState<ES>,
-		param: Param,
-	) {
-		(self.check_fn)(pre_finalize, post_finalize, param)
-	}
-}
 
 pub struct SingleCheck<ES: ElectoralSystem, Param> {
 	param: Param,
@@ -334,7 +314,6 @@ macro_rules! single_check_new {
 ///     },
 /// }
 /// ```
-
 #[macro_export]
 macro_rules! register_checks {
     (

@@ -65,8 +65,8 @@ pub struct EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo> {
 	epoch_update_receiver:
 		spmc::Receiver<(EpochIndex, state_chain_runtime::Hash, EpochUpdate<Info, HistoricInfo>)>,
 }
-impl<'a, 'env, StateChainClient, Info: Clone, HistoricInfo: Clone> Clone
-	for EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
+impl<StateChainClient, Info: Clone, HistoricInfo: Clone> Clone
+	for EpochSourceBuilder<'_, '_, StateChainClient, Info, HistoricInfo>
 {
 	fn clone(&self) -> Self {
 		Self {
