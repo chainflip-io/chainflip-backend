@@ -225,7 +225,6 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 type CheckFnParam<ES, Param> =
 	Box<dyn Fn(&ElectoralSystemState<ES>, &ElectoralSystemState<ES>, Param)>;
 
-
 pub struct SingleCheck<ES: ElectoralSystem, Param> {
 	param: Param,
 	check_fn: CheckFnParam<ES, Param>,
