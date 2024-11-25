@@ -23,6 +23,7 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v1.18.17
+  SOLANA_PROGRAMS_VERSION: v1.0.0-swap-endpoint
   NODE_COUNT: "1-node"
 
 permissions:
