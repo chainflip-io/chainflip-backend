@@ -34,20 +34,20 @@ async function runAllConcurrentTests() {
 
   // Tests that work with any number of nodes and can be run concurrently
   const tests = [
-    // swapLessThanED.run(),
+    swapLessThanED.run(),
     testAllSwaps.run(),
-    // testEvmDeposits.run(),
-    // testFundRedeem.run('redeem'),
-    // testMultipleMembersGovernance.run(),
-    // testLpApi.run(),
-    // testBrokerFeeCollection.run(),
-    // testBoostingSwap.run(),
-    // testFillOrKill.run(),
-    // testDCASwaps.run(),
-    // testCancelOrdersBatch.run(),
-    // depositChannelCreation.run(),
-    // testBtcVaultSwap.run(),
-    // testBrokerLevelScreening.run(),
+    testEvmDeposits.run(),
+    testFundRedeem.run('redeem'),
+    testMultipleMembersGovernance.run(),
+    testLpApi.run(),
+    testBrokerFeeCollection.run(),
+    testBoostingSwap.run(),
+    testFillOrKill.run(),
+    testDCASwaps.run(),
+    testCancelOrdersBatch.run(),
+    depositChannelCreation.run(),
+    testBtcVaultSwap.run(),
+    testBrokerLevelScreening.run(),
   ];
 
   // Tests that only work if there is more than one node

@@ -516,34 +516,21 @@ function checkRequestTypeMatches(actual: object | string, expected: SwapRequestT
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function checkTransactionInMatches(actual: any, expected: TransactionOriginId): boolean {
   if ('DepositChannel' in actual) {
-    console.log('Found DepositChannel SwapRequest event');
     return (
       expected.type === TransactionOrigin.DepositChannel &&
       Number(actual.DepositChannel.channelId.replaceAll(',', '')) === expected.channelId
     );
   }
   if ('Vault' in actual) {
-    const match =
+    return (
       ('Evm' in actual.Vault.txId &&
         expected.type === TransactionOrigin.VaultSwapEvm &&
         actual.Vault.txId.Evm === expected.txHash) ||
       ('Solana' in actual.Vault.txId &&
         expected.type === TransactionOrigin.VaultSwapSolana &&
         actual.Vault.txId.Solana[1].replaceAll(',', '') === expected.addressAndSlot[1].toString() &&
-        actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString());
-    console.log(
-      'Found SwapRequested. Expecting Solana:',
-      expected.type === TransactionOrigin.VaultSwapSolana,
-      'Is event Solana:',
-      'Solana' in actual.Vault.txId,
-      'Expected: ',
-      expected,
-      'Actual: ',
-      actual,
-      'match',
-      match,
+        actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString())
     );
-    return match;
   }
   throw new Error(`Unsupported transaction origin type ${actual}`);
 }
@@ -554,12 +541,10 @@ export async function observeSwapRequested(
   id: TransactionOriginId,
   swapRequestType: SwapRequestType,
 ) {
-  console.log('observeSwapRequested for', sourceAsset, destAsset, swapRequestType);
   // need to await this to prevent the chainflip api from being disposed prematurely
   return observeEvent('swapping:SwapRequested', {
     test: (event) => {
       const data = event.data;
-      console.log('Found event', data);
 
       if (typeof data.origin === 'object') {
         const channelMatches = checkTransactionInMatches(data.origin, id);

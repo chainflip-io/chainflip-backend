@@ -171,7 +171,7 @@ export async function executeSolVaultSwap(
 
   const transactionData = await connection.getTransaction(txHash, { commitment: 'confirmed' });
   if (transactionData === null) {
-    throw new Error('TransactionData is empty');
+    throw new Error('Solana TransactionData is empty');
   }
   return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountKeypair.publicKey };
 }
