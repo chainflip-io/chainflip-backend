@@ -12,32 +12,63 @@ export const btcClient = new Client({
 });
 
 export async function selectInputs(amount: number) {
+  // List unspent UTXOs
+  const utxos = await btcClient.listUnspent();
+
+  // Find a UTXO with enough funds
+  const utxo = utxos.find((u) => u.amount >= amount);
+  if (!utxo) throw new Error('Insufficient funds');
+  // TODO: be able to select more than one UTXO
+
+  const change = utxo.amount - amount;
+
+  // Prepare the transaction inputs
+  const inputs = [
+    {
+      txid: utxo.txid,
+      vout: utxo.vout,
+    },
+  ];
+
+  return {
+    inputs,
+    change,
+  };
+}
+
+export async function sendVaultTransaction(
+  nulldataUtxo: string,
+  amountBtc: number,
+  depositAddress: string,
+  refundAddress: string,
+) {
   return btcClientMutex.runExclusive(async () => {
-    // List unspent UTXOs
-    const utxos = await btcClient.listUnspent();
+    const feeBtc = 0.00001;
+    const { inputs, change } = await selectInputs(Number(amountBtc) + feeBtc);
 
-    // Find a UTXO with enough funds
-    const utxo = utxos.find((u) => u.amount >= amount);
-    if (!utxo) throw new Error('Insufficient funds');
-    // TODO: be able to select more than one UTXO
+    // The `createRawTransaction` function will add the op codes, so we have to remove them here.
+    const nullDataWithoutOpCodes = nulldataUtxo.replace('0x', '').substring(4);
 
-    // Lock the selected UTXO to prevent it from being used in another transaction
-    await btcClient.lockUnspent(false, [{ txid: utxo.txid, vout: utxo.vout }]);
-
-    const change = utxo.amount - amount;
-
-    // Prepare the transaction inputs
-    const inputs = [
+    const outputs = [
       {
-        txid: utxo.txid,
-        vout: utxo.vout,
+        [depositAddress]: amountBtc,
+      },
+      {
+        data: nullDataWithoutOpCodes,
+      },
+      {
+        [refundAddress]: change,
       },
     ];
 
-    return {
-      inputs,
-      change,
-    };
+    const rawTx = await btcClient.createRawTransaction(inputs, outputs, 0, false);
+    const signedTx = await btcClient.signRawTransactionWithWallet(rawTx);
+    const txid = await btcClient.sendRawTransaction(signedTx.hex);
+
+    if (!txid) {
+      throw new Error('Broadcast failed');
+    }
+    return txid as string;
   });
 }
 
