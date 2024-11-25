@@ -1118,8 +1118,13 @@ pub trait ChannelIdAllocator {
 pub trait AffiliateRegistry {
 	type AccountId;
 
-	fn lookup(
+	fn get_account_id(
 		broker_id: &Self::AccountId,
 		affiliate_idx: AffiliateShortId,
 	) -> Option<Self::AccountId>;
+
+	fn get_short_id(
+		broker_id: &Self::AccountId,
+		affiliate_id: &Self::AccountId,
+	) -> Option<AffiliateShortId>;
 }

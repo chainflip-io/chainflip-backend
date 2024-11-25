@@ -56,7 +56,7 @@ export async function submitBrokerWithdrawal(
 
 const feeAsset = Assets.Usdc;
 
-async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> {
+export async function getEarnedBrokerFees(brokerKeypair: KeyringPair): Promise<bigint> {
   await using chainflip = await getChainflipApi();
   // NOTE: All broker fees are collected in USDC now:
   const feeStr = (

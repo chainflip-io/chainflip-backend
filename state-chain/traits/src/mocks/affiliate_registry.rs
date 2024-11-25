@@ -28,10 +28,22 @@ impl MockAffiliateRegistry {
 impl AffiliateRegistry for MockAffiliateRegistry {
 	type AccountId = u64;
 
-	fn lookup(
+	fn get_account_id(
 		broker_id: &Self::AccountId,
 		affiliate_short_id: AffiliateShortId,
 	) -> Option<Self::AccountId> {
 		AffiliateMapping::get().get(&(*broker_id, affiliate_short_id)).copied()
+	}
+
+	fn get_short_id(
+		broker_id: &Self::AccountId,
+		affiliate_id: &Self::AccountId,
+	) -> Option<AffiliateShortId> {
+		for ((broker, short_id), affiliate) in AffiliateMapping::get().iter() {
+			if broker_id == broker && affiliate_id == affiliate {
+				return Some(*short_id);
+			}
+		}
+		None
 	}
 }

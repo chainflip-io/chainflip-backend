@@ -1741,20 +1741,21 @@ mod private_channels {
 	#[test]
 	fn register_affiliate() {
 		new_test_ext().execute_with(|| {
-			// Only brokers can register affiliates
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
 
+			// Only brokers can register affiliates
 			assert_noop!(
-				Swapping::register_affiliate(OriginTrait::signed(ALICE), SHORT_ID, BOB),
+				Swapping::register_affiliate(OriginTrait::signed(ALICE), BOB, SHORT_ID),
 				BadOrigin
 			);
+			assert_eq!(Swapping::get_short_id(&BROKER, &BOB), None);
 
 			// Registering an affiliate for the first time (no existing records)
 			{
 				assert_ok!(Swapping::register_affiliate(
 					OriginTrait::signed(BROKER),
-					SHORT_ID,
 					ALICE,
+					SHORT_ID,
 				));
 
 				System::assert_has_event(RuntimeEvent::Swapping(
@@ -1765,14 +1766,15 @@ mod private_channels {
 						previous_affiliate_id: None,
 					},
 				));
+				assert_eq!(Swapping::get_short_id(&BROKER, &ALICE), Some(SHORT_ID));
 			}
 
-			// Overwriting an existing affiliate registration entry:
+			// Overwriting an existing affiliate registration entry.
 			{
 				assert_ok!(Swapping::register_affiliate(
 					OriginTrait::signed(BROKER),
-					SHORT_ID,
 					BOB,
+					SHORT_ID,
 				));
 
 				System::assert_has_event(RuntimeEvent::Swapping(
@@ -1783,6 +1785,8 @@ mod private_channels {
 						previous_affiliate_id: Some(ALICE),
 					},
 				));
+				assert_eq!(Swapping::get_short_id(&BROKER, &BOB), Some(SHORT_ID));
+				assert_eq!(Swapping::get_short_id(&BROKER, &ALICE), None);
 			}
 		});
 	}

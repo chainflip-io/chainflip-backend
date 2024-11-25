@@ -1152,10 +1152,10 @@ export async function checkAvailabilityAllSolanaNonces() {
   }
 }
 
-export function createStateChainKeypair(lpUri: string) {
+export function createStateChainKeypair(uri: string) {
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
-  return keyring.createFromUri(lpUri);
+  return keyring.createFromUri(uri);
 }
 
 /// Takes the user friendly price of an "asset per asset" and converts it to the internal price format.

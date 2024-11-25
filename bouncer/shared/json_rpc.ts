@@ -32,3 +32,14 @@ export async function jsonRpc(
     return data.result;
   }
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function lpApiRpc(method: string, params: any[]): Promise<any> {
+  // The port for the lp api is defined in `chainflip-lp-api.service`
+  return jsonRpc(method, params, 'http://127.0.0.1:10589');
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function brokerApiRpc(method: string, params: any[]): Promise<any> {
+  return jsonRpc(method, params, 'http://127.0.0.1:10997');
+}

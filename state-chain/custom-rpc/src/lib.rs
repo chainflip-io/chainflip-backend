@@ -14,8 +14,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
-	DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId, SwapRequestId,
+	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
+	BroadcastId, DcaParameters, EpochIndex, ForeignChain, NetworkEnvironment, SemVer, SwapId,
+	SwapRequestId,
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
@@ -1016,6 +1017,13 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TaintedTransactionEvents>;
+
+	#[method(name = "get_affiliates")]
+	fn cf_get_affiliates(
+		&self,
+		broker: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(AffiliateShortId, state_chain_runtime::AccountId)>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1272,6 +1280,7 @@ where
 		cf_boost_pools_depth() -> Vec<BoostPoolDepth>,
 		cf_pool_price(from_asset: Asset, to_asset: Asset) -> Option<PoolPriceV1>,
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
+		cf_get_affiliates(broker: state_chain_runtime::AccountId) -> Vec<(AffiliateShortId, state_chain_runtime::AccountId)>,
 	}
 
 	pass_through_and_flatten! {

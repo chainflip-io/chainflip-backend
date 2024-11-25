@@ -8,9 +8,7 @@ use cf_chains::{
 	evm::{DepositDetails, H256},
 	CcmDepositMetadata, Ethereum,
 };
-use cf_primitives::{
-	chains::assets::eth::Asset as EthAsset, Asset, AssetAmount, Beneficiary, EpochIndex,
-};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset, AssetAmount, EpochIndex};
 use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 use itertools::Itertools;
@@ -255,7 +253,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 				affiliate_fees: vault_swap_parameters
 					.affiliate_fees
 					.into_iter()
-					.map(|entry| Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
+					.map(Into::into)
 					.collect_vec()
 					.try_into()
 					.expect("runtime supports at least as many affiliates as we allow in cf_parameters encoding"),

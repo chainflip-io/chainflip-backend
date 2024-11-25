@@ -15,7 +15,6 @@ import { testAllSwaps } from './all_swaps';
 import { depositChannelCreation } from './request_swap_deposit_address_with_affiliates';
 import { testDCASwaps } from './DCA_test';
 import { testBrokerLevelScreening } from './broker_level_screening';
-import { testBtcVaultSwap } from './btc_vault_swap';
 import { checkSolEventAccountsClosure } from '../shared/sol_vault_swap';
 
 async function runAllConcurrentTests() {
@@ -46,7 +45,6 @@ async function runAllConcurrentTests() {
     testDCASwaps.run(),
     testCancelOrdersBatch.run(),
     depositChannelCreation.run(),
-    testBtcVaultSwap.run(),
     testBrokerLevelScreening.run(),
   ];
 

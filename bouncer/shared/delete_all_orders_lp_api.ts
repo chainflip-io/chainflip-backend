@@ -1,4 +1,4 @@
-import { lpApiRpc } from '../tests/lp_api_test';
+import { lpApiRpc } from './json_rpc';
 import { createStateChainKeypair } from './utils';
 import { getChainflipApi } from './utils/substrate';
 
