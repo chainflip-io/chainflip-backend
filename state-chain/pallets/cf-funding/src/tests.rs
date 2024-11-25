@@ -1161,6 +1161,24 @@ mod test_restricted_balances {
 		),
 	];
 	test_restricted_balances![
+		restricted_balances_can_only_be_zero_or_above_minimum_after_redeeming,
+		NO_BOND,
+		// Succeed, with restricted balance1 = 0
+		(RedemptionAmount::Exact(RESTRICTED_BALANCE_1), RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		// Succeed, with restricted balance1 = MIN_FUNDING
+		(
+			RedemptionAmount::Exact(RESTRICTED_BALANCE_1 - MIN_FUNDING - REDEMPTION_TAX),
+			RESTRICTED_ADDRESS_1,
+			None::<Error<Test>>
+		),
+		// Fails, because restricted balance1 would have been < MIN_FUNDING
+		(
+			RedemptionAmount::Exact(RESTRICTED_BALANCE_1 - MIN_FUNDING - REDEMPTION_TAX + 1),
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::RestrictedBalanceBelowMinimumFunding)
+		),
+	];
+	test_restricted_balances![
 		higher_than_restricted_amount_1_can_only_be_redeemed_to_restricted_address_2,
 		NO_BOND,
 		(

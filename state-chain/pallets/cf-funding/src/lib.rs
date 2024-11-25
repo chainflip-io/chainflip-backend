@@ -354,13 +354,6 @@ pub mod pallet {
 
 			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
 
-			// ensure that all restricted balances are above MinimumFunding, to avoid
-			// situations where it is not possible to redeem max
-			ensure!(
-				restricted_balances.values().all(|v| *v >= MinimumFunding::<T>::get()),
-				Error::<T>::RestrictedBalanceBelowMinimumFunding
-			);
-
 			// Ignore executor binding restrictions for withdrawals of restricted funds.
 			if !restricted_balances.contains_key(&address) {
 				if let Some(bound_executor) = BoundExecutorAddress::<T>::get(&account_id) {
@@ -417,6 +410,13 @@ pub mod pallet {
 				// Use the full debit amount here - fees are paid by restricted funds by default.
 				total_restricted_balance = *restricted_balance;
 				restricted_balance.saturating_reduce(debit_amount);
+				// ensure that the remaining restricted balance is zero or above MinimumFunding
+				ensure!(
+					restricted_balance.is_zero() ||
+						*restricted_balance >= MinimumFunding::<T>::get(),
+					Error::<T>::RestrictedBalanceBelowMinimumFunding
+				);
+
 				if restricted_balance.is_zero() {
 					restricted_balances.remove(&address);
 				}
