@@ -11,29 +11,26 @@ export const btcClient = new Client({
   wallet: 'whale',
 });
 
-export async function selectInputs(amount: number) {
-  // List unspent UTXOs
-  const utxos = await btcClient.listUnspent();
+export async function fundAndSendTransaction(
+  outputs: object[],
+  changeAddress: string,
+  feeRate?: number,
+): Promise<string> {
+  return btcClientMutex.runExclusive(async () => {
+    const rawTx = await btcClient.createRawTransaction([], outputs);
+    const fundedTx = (await btcClient.fundRawTransaction(rawTx, {
+      changeAddress,
+      feeRate: feeRate ?? 0.00001,
+    })) as { hex: string };
+    const signedTx = await btcClient.signRawTransactionWithWallet(fundedTx.hex);
+    const txId = (await btcClient.sendRawTransaction(signedTx.hex)) as string | undefined;
 
-  // Find a UTXO with enough funds
-  const utxo = utxos.find((u) => u.amount >= amount);
-  if (!utxo) throw new Error('Insufficient funds');
-  // TODO: be able to select more than one UTXO
+    if (!txId) {
+      throw new Error('Broadcast failed');
+    }
 
-  const change = utxo.amount - amount;
-
-  // Prepare the transaction inputs
-  const inputs = [
-    {
-      txid: utxo.txid,
-      vout: utxo.vout,
-    },
-  ];
-
-  return {
-    inputs,
-    change,
-  };
+    return txId;
+  });
 }
 
 export async function sendVaultTransaction(
@@ -41,35 +38,19 @@ export async function sendVaultTransaction(
   amountBtc: number,
   depositAddress: string,
   refundAddress: string,
-) {
-  return btcClientMutex.runExclusive(async () => {
-    const feeBtc = 0.00001;
-    const { inputs, change } = await selectInputs(Number(amountBtc) + feeBtc);
-
-    // The `createRawTransaction` function will add the op codes, so we have to remove them here.
-    const nullDataWithoutOpCodes = nulldataUtxo.replace('0x', '').substring(4);
-
-    const outputs = [
+): Promise<string> {
+  return fundAndSendTransaction(
+    [
       {
         [depositAddress]: amountBtc,
       },
       {
-        data: nullDataWithoutOpCodes,
+        // The `createRawTransaction` function will add the op codes, so we have to remove them here.
+        data: nulldataUtxo.replace('0x', '').substring(4),
       },
-      {
-        [refundAddress]: change,
-      },
-    ];
-
-    const rawTx = await btcClient.createRawTransaction(inputs, outputs, 0, false);
-    const signedTx = await btcClient.signRawTransactionWithWallet(rawTx);
-    const txid = await btcClient.sendRawTransaction(signedTx.hex);
-
-    if (!txid) {
-      throw new Error('Broadcast failed');
-    }
-    return txid as string;
-  });
+    ],
+    refundAddress,
+  );
 }
 
 export async function waitForBtcTransaction(txid: string, confirmations = 1) {
