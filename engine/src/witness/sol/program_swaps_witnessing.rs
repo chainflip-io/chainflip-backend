@@ -188,7 +188,7 @@ pub async fn get_program_swaps(
 							broker_fee,
 							affiliate_fees: affiliate_fees
 								.into_iter()
-								.map(|entry| cf_primitives::Beneficiary { account: entry.affiliate.into(), bps: entry.fee.into() })
+								.map(|entry| cf_primitives::Beneficiary { account: entry.affiliate, bps: entry.fee.into() })
 								.collect_vec()
 								.try_into()
 								.map_err(|_| {
