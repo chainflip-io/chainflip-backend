@@ -1,32 +1,26 @@
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
-	rpc::NumberOrHex,
 	task_scope::{task_scope, Scope},
-	try_parse_number_or_hex,
 };
 use chainflip_api::{
 	self,
 	primitives::{
-		state_chain_runtime::runtime_apis::{
-			ChainAccounts, TaintedTransactionEvents, VaultSwapDetails,
-		},
-		AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, BlockNumber,
-		CcmChannelMetadata, DcaParameters, RefundParameters,
+		state_chain_runtime::runtime_apis::{ChainAccounts, TaintedTransactionEvents},
+		AffiliateShortId,
 	},
 	settings::StateChain,
-	AccountId32, AddressString, BlockUpdate, BrokerApi, ChainApi, ChannelId, DepositMonitorApi,
-	OperatorApi, SignedExtrinsicApi, StateChainApi, SwapDepositAddress, TransactionInId,
-	WithdrawFeesDetail,
+	AccountId32, BaseRpcApi, BlockUpdate, BrokerApi, ChainApi, ChainflipApi, ChannelId,
+	CustomApiClient, DepositMonitorApi, StateChainApi, TransactionInId,
 };
 use clap::Parser;
-use custom_rpc::CustomApiClient;
 use futures::{FutureExt, StreamExt};
-use jsonrpsee::{
-	core::{async_trait, ClientError, SubscriptionResult},
+use jsonrpsee::core::ClientError;
+use jsonrpsee_flatten::{
+	core::{async_trait, SubscriptionResult},
 	proc_macros::rpc,
 	server::ServerBuilder,
 	types::{ErrorCode, ErrorObject, ErrorObjectOwned},
-	PendingSubscriptionSink,
+	PendingSubscriptionSink, SubscriptionMessage,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -35,14 +29,21 @@ use std::{
 };
 use tracing::log;
 
+mod api;
+use api::*;
+
 #[derive(thiserror::Error, Debug)]
 pub enum BrokerApiError {
 	#[error(transparent)]
 	ErrorObject(#[from] ErrorObjectOwned),
 	#[error(transparent)]
-	ClientError(#[from] jsonrpsee::core::ClientError),
+	ClientError(#[from] ClientError),
 	#[error(transparent)]
-	Other(#[from] anyhow::Error),
+	Anyhow(#[from] anyhow::Error),
+	#[error(transparent)]
+	Never(#[from] api::Never),
+	#[error("The Broker Api does not have a State Chain connection configured.")]
+	NoConnection,
 }
 
 type RpcResult<T> = Result<T, BrokerApiError>;
@@ -52,7 +53,7 @@ impl From<BrokerApiError> for ErrorObjectOwned {
 		match error {
 			BrokerApiError::ErrorObject(error) => error,
 			BrokerApiError::ClientError(error) => match error {
-				ClientError::Call(obj) => obj,
+				ClientError::Call(obj) => ErrorObject::owned(obj.code(), obj.message(), obj.data()),
 				internal => {
 					log::error!("Internal rpc client error: {internal:?}");
 					ErrorObject::owned(
@@ -62,9 +63,9 @@ impl From<BrokerApiError> for ErrorObjectOwned {
 					)
 				},
 			},
-			BrokerApiError::Other(error) => jsonrpsee::types::error::ErrorObjectOwned::owned(
+			other => ErrorObjectOwned::owned(
 				ErrorCode::ServerError(0xcf).code(),
-				error.to_string(),
+				other.to_string(),
 				None::<()>,
 			),
 		}
@@ -79,44 +80,47 @@ pub enum GetOpenDepositChannelsQuery {
 
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
-	#[method(name = "register_account", aliases = ["broker_registerAccount"])]
-	async fn register_account(&self) -> RpcResult<String>;
+	#[method(
+		name = "register_account",
+		aliases = ["broker_registerAccount"],
+		param_kind = map
+	)]
+	async fn register_account(
+		&self,
+		#[argument(flatten)] request: EndpointRequest<register_account::Endpoint>,
+	) -> RpcResult<EndpointResponse<register_account::Endpoint>>;
 
-	#[method(name = "request_swap_deposit_address", aliases = ["broker_requestSwapDepositAddress"])]
+	#[method(
+		name = "request_swap_deposit_address",
+		aliases = ["broker_requestSwapDepositAddress"],
+		param_kind = map
+	)]
 	async fn request_swap_deposit_address(
 		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParameters<AddressString>>,
-		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<SwapDepositAddress>;
+		#[argument(flatten)] request: EndpointRequest<request_swap_deposit_address::Endpoint>,
+	) -> RpcResult<EndpointResponse<request_swap_deposit_address::Endpoint>>;
 
-	#[method(name = "withdraw_fees", aliases = ["broker_withdrawFees"])]
+	#[method(
+		name = "withdraw_fees",
+		aliases = ["broker_withdrawFees"],
+		param_kind = map
+	)]
 	async fn withdraw_fees(
 		&self,
-		asset: Asset,
-		destination_address: AddressString,
-	) -> RpcResult<WithdrawFeesDetail>;
+		#[argument(flatten)] request: EndpointRequest<withdraw_fees::Endpoint>,
+	) -> RpcResult<EndpointResponse<withdraw_fees::Endpoint>>;
 
-	#[method(name = "request_swap_parameter_encoding", aliases = ["broker_requestSwapParameterEncoding"])]
+	#[method(
+		name = "request_swap_parameter_encoding",
+		aliases = ["broker_requestSwapParameterEncoding"],
+		param_kind = map
+	)]
 	async fn request_swap_parameter_encoding(
 		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		min_output_amount: NumberOrHex,
-		retry_duration: BlockNumber,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
-		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<VaultSwapDetails<AddressString>>;
+		#[argument(flatten)] request: EndpointRequest<request_swap_parameter_encoding::Endpoint>,
+	) -> RpcResult<EndpointResponse<request_swap_parameter_encoding::Endpoint>>;
 
+	// Not migrated to json_schema yet
 	#[method(name = "mark_transaction_as_tainted", aliases = ["broker_markTransactionAsTainted"])]
 	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> RpcResult<()>;
 
@@ -144,109 +148,59 @@ pub trait Rpc {
 
 	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>>;
-}
 
-pub struct RpcServerImpl {
-	api: StateChainApi,
-}
-
-impl RpcServerImpl {
-	pub async fn new(
-		scope: &Scope<'_, anyhow::Error>,
-		BrokerOptions { ws_endpoint, signing_key_file, .. }: BrokerOptions,
-	) -> Result<Self, anyhow::Error> {
-		Ok(Self {
-			api: StateChainApi::connect(scope, StateChain { ws_endpoint, signing_key_file })
-				.await?,
-		})
-	}
+	#[method(name = "schema", param_kind = map)]
+	async fn schema(
+		&self,
+		#[argument(flatten)] request: EndpointRequest<schema::Endpoint>,
+	) -> RpcResult<EndpointResponse<schema::Endpoint>>;
 }
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn register_account(&self) -> RpcResult<String> {
-		Ok(self
-			.api
-			.operator_api()
-			.register_account_role(AccountRole::Broker)
-			.await
-			.map(|tx_hash| format!("{tx_hash:#x}"))?)
+	async fn register_account(
+		&self,
+		request: EndpointRequest<register_account::Endpoint>,
+	) -> RpcResult<EndpointResponse<register_account::Endpoint>> {
+		Ok(api::respond::<_, api::register_account::Endpoint>(self.chainflip_api()?, request)
+			.await?)
 	}
 
 	async fn request_swap_deposit_address(
 		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		channel_metadata: Option<CcmChannelMetadata>,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParameters<AddressString>>,
-		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<SwapDepositAddress> {
-		Ok(self
-			.api
-			.broker_api()
-			.request_swap_deposit_address(
-				source_asset,
-				destination_asset,
-				destination_address,
-				broker_commission,
-				channel_metadata,
-				boost_fee,
-				affiliate_fees,
-				refund_parameters,
-				dca_parameters,
-			)
-			.await?)
+		request: EndpointRequest<request_swap_deposit_address::Endpoint>,
+	) -> RpcResult<EndpointResponse<request_swap_deposit_address::Endpoint>> {
+		Ok(api::respond::<_, request_swap_deposit_address::Endpoint>(
+			self.chainflip_api()?,
+			request,
+		)
+		.await?)
 	}
 
 	async fn withdraw_fees(
 		&self,
-		asset: Asset,
-		destination_address: AddressString,
-	) -> RpcResult<WithdrawFeesDetail> {
-		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
+		request: EndpointRequest<withdraw_fees::Endpoint>,
+	) -> RpcResult<EndpointResponse<withdraw_fees::Endpoint>> {
+		Ok(api::respond::<_, withdraw_fees::Endpoint>(self.chainflip_api()?, request).await?)
 	}
 
 	async fn request_swap_parameter_encoding(
 		&self,
-		source_asset: Asset,
-		destination_asset: Asset,
-		destination_address: AddressString,
-		broker_commission: BasisPoints,
-		min_output_amount: NumberOrHex,
-		retry_duration: BlockNumber,
-		boost_fee: Option<BasisPoints>,
-		affiliate_fees: Option<Affiliates<AccountId32>>,
-		dca_parameters: Option<DcaParameters>,
-	) -> RpcResult<VaultSwapDetails<AddressString>> {
-		Ok(self
-			.api
-			.raw_client()
-			.cf_get_vault_swap_details(
-				self.api.state_chain_client.account_id(),
-				source_asset,
-				destination_asset,
-				destination_address,
-				broker_commission,
-				try_parse_number_or_hex(min_output_amount)?,
-				retry_duration,
-				boost_fee,
-				affiliate_fees,
-				dca_parameters,
-				None,
-			)
-			.await?)
+		request: EndpointRequest<request_swap_parameter_encoding::Endpoint>,
+	) -> RpcResult<EndpointResponse<request_swap_parameter_encoding::Endpoint>> {
+		Ok(api::respond::<_, request_swap_parameter_encoding::Endpoint>(
+			self.chainflip_api()?,
+			request,
+		)
+		.await?)
 	}
 
 	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> RpcResult<()> {
-		self.api
+		self.chainflip_api()?
 			.deposit_monitor_api()
 			.mark_transaction_as_tainted(tx_id)
 			.await
-			.map_err(BrokerApiError::Other)?;
+			.map_err(BrokerApiError::Anyhow)?;
 		Ok(())
 	}
 
@@ -256,13 +210,12 @@ impl RpcServer for RpcServerImpl {
 	) -> RpcResult<ChainAccounts> {
 		let account_id = match query {
 			GetOpenDepositChannelsQuery::All => None,
-			GetOpenDepositChannelsQuery::Mine => Some(self.api.state_chain_client.account_id()),
+			GetOpenDepositChannelsQuery::Mine => Some(self.chainflip_api()?.account_id()),
 		};
 
-		self.api
-			.state_chain_client
-			.base_rpc_client
-			.raw_rpc_client
+		self.chainflip_api()?
+			.base_rpc_api()
+			.raw_rpc_client()
 			.cf_get_open_deposit_channels(account_id, None)
 			.await
 			.map_err(BrokerApiError::ClientError)
@@ -272,17 +225,19 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		pending_sink: PendingSubscriptionSink,
 	) -> SubscriptionResult {
-		let state_chain_client = self.api.state_chain_client.clone();
+		let (base_api, chain_api) = {
+			let chainflip_api = self.chainflip_api()?;
+			(chainflip_api.base_rpc_api(), chainflip_api.chain_api())
+		};
 		let sink = pending_sink.accept().await.map_err(|e| e.to_string())?;
 		tokio::spawn(async move {
 			// Note we construct the subscription here rather than relying on the custom-rpc
 			// subscription. This is because we want to use finalized blocks.
 			// TODO: allow custom rpc subscriptions to use finalized blocks.
-			let mut finalized_block_stream = state_chain_client.finalized_block_stream().await;
+			let mut finalized_block_stream = chain_api.finalized_block_stream().await;
 			while let Some(block) = finalized_block_stream.next().await {
-				match state_chain_client
-					.base_rpc_client
-					.raw_rpc_client
+				match base_api
+					.raw_rpc_client()
 					.cf_get_tainted_transaction_events(Some(block.hash))
 					.await
 				{
@@ -301,7 +256,14 @@ impl RpcServer for RpcServerImpl {
 						};
 
 						if sink
-							.send(sc_rpc::utils::to_sub_message(&sink, &block_update))
+							.send(
+								SubscriptionMessage::new(
+									sink.method_name(),
+									sink.subscription_id(),
+									&block_update,
+								)
+								.expect("Serializing BlockUpdate cannot fail."),
+							)
 							.await
 							.is_err()
 						{
@@ -316,11 +278,11 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId> {
-		Ok(self.api.broker_api().open_private_btc_channel().await?)
+		Ok(self.chainflip_api()?.broker_api().open_private_btc_channel().await?)
 	}
 
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
-		Ok(self.api.broker_api().close_private_btc_channel().await?)
+		Ok(self.chainflip_api()?.broker_api().close_private_btc_channel().await?)
 	}
 
 	async fn register_affiliate(
@@ -328,29 +290,64 @@ impl RpcServer for RpcServerImpl {
 		affiliate_id: AccountId32,
 		short_id: Option<AffiliateShortId>,
 	) -> RpcResult<AffiliateShortId> {
-		Ok(self.api.broker_api().register_affiliate(affiliate_id.clone(), short_id).await?)
+		Ok(self
+			.chainflip_api()?
+			.broker_api()
+			.register_affiliate(affiliate_id.clone(), short_id)
+			.await?)
 	}
 
 	async fn get_affiliates(&self) -> RpcResult<Vec<(AffiliateShortId, AccountId32)>> {
-		Ok(self.api.raw_client().get_affiliates().await?)
+		let api = self.chainflip_api()?;
+		Ok(api
+			.base_rpc_api()
+			.raw_rpc_client()
+			.cf_get_affiliates(api.account_id(), None)
+			.await?)
+	}
+
+	async fn schema(
+		&self,
+		request: EndpointRequest<schema::Endpoint>,
+	) -> RpcResult<EndpointResponse<schema::Endpoint>> {
+		Ok(schema::Responder.respond(request).await?)
 	}
 }
 
-#[derive(Parser, Debug, Clone, Default)]
-#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
-pub struct BrokerOptions {
-	#[clap(
-		long = "port",
-		default_value = "80",
-		help = "The port number on which the broker will listen for connections. Use 0 to assign a random port."
-	)]
-	pub port: u16,
-	#[clap(
-		long = "max_connections",
-		default_value = "100",
-		help = "The maximum number of concurrent websocket connections to accept."
-	)]
-	pub max_connections: u32,
+struct RpcServerImpl {
+	api: Option<StateChainApi>,
+}
+
+impl RpcServerImpl {
+	pub async fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		BrokerOptions { connection, .. }: BrokerOptions,
+	) -> Result<Self, anyhow::Error> {
+		Ok(Self {
+			api: if let Some(ConnectionOptions { ws_endpoint, signing_key_file }) = connection {
+				Some(
+					StateChainApi::connect(scope, StateChain { ws_endpoint, signing_key_file })
+						.await?,
+				)
+			} else {
+				None
+			},
+		})
+	}
+
+	pub fn chainflip_api(&self) -> RpcResult<impl ChainflipApi> {
+		self.api.as_ref().ok_or(BrokerApiError::NoConnection).cloned()
+	}
+}
+
+#[derive(Parser, Debug, Clone, Copy)]
+
+enum SubCommand {
+	Schema,
+}
+
+#[derive(clap::Args, Debug, Clone, Default)]
+struct ConnectionOptions {
 	#[clap(
 		long = "state_chain.ws_endpoint",
 		default_value = "ws://localhost:9944",
@@ -363,8 +360,29 @@ pub struct BrokerOptions {
 		help = "A path to a file that contains the broker's secret key for signing extrinsics."
 	)]
 	pub signing_key_file: PathBuf,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
+#[clap(version = env!("SUBSTRATE_CLI_IMPL_VERSION"))]
+struct BrokerOptions {
+	#[clap(
+		long = "port",
+		default_value = "80",
+		help = "The port number on which the broker will listen for connections. Use 0 to assign a random port."
+	)]
+	pub port: u16,
+	#[clap(
+		long = "max_connections",
+		default_value = "100",
+		help = "The maximum number of concurrent websocket connections to accept."
+	)]
+	pub max_connections: u32,
+	#[clap(flatten)]
+	pub connection: Option<ConnectionOptions>,
 	#[clap(flatten)]
 	pub health_check: HealthCheckOptions,
+	#[clap(subcommand)]
+	pub subcommand: Option<SubCommand>,
 }
 
 #[tokio::main]
@@ -387,21 +405,27 @@ async fn main() -> anyhow::Result<()> {
 			)
 			.await?;
 
-			let server = ServerBuilder::default()
-				.max_connections(opts.max_connections)
-				.build(format!("0.0.0.0:{}", opts.port))
-				.await?;
-			let server_addr = server.local_addr()?;
-			let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc());
+			if let Some(SubCommand::Schema) = opts.subcommand {
+				let schemas = schema::Responder.respond(Default::default()).await?;
+				println!("{}", serde_json::to_string(&schemas)?);
+				Ok(())
+			} else {
+				let server = ServerBuilder::default()
+					.max_connections(opts.max_connections)
+					.build(format!("0.0.0.0:{}", opts.port))
+					.await?;
+				let server_addr = server.local_addr()?;
+				let server = server.start(RpcServerImpl::new(scope, opts).await?.into_rpc());
 
-			log::info!("🎙 Server is listening on {server_addr}.");
+				log::info!("🎙 Server is listening on {server_addr}.");
 
-			// notify healthcheck completed
-			has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
+				// notify healthcheck completed
+				has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
 
-			server.stopped().await;
+				server.stopped().await;
 
-			Ok(())
+				Ok(())
+			}
 		}
 		.boxed()
 	})
