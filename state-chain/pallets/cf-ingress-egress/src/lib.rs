@@ -167,7 +167,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(16);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(17);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -2041,7 +2041,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						.map(|refund_params| refund_params.refund_address.clone()),
 					ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
 				};
-\
+
 				ScheduledTxForReject::<T, I>::append(TransactionRejectionDetails {
 					refund_address,
 					amount: deposit_amount,
