@@ -80,7 +80,7 @@ pub enum BoostStatus<ChainAmount> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
-pub enum TaintedTransactionStatus {
+pub enum TransactionPrewitnessedStatus {
 	/// Transaction was prewitnessed but not boosted due to being reported.
 	Prewitnessed,
 	/// Transaction has been reported but was not prewitnessed.
@@ -132,13 +132,13 @@ pub enum DepositIgnoredReason {
 	/// The deposit was ignored because the amount provided was not high enough to pay for the fees
 	/// required to process the requisite transactions.
 	NotEnoughToPayFees,
-	TransactionTainted,
+	TransactionRejectedByBroker,
 }
 
-/// Holds information about a tainted transaction.
+/// Holds information about a transaction that is marked for rejection.
 #[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, CloneNoBound)]
 #[scale_info(skip_type_params(T, I))]
-pub struct TaintedTransactionDetails<T: Config<I>, I: 'static> {
+pub struct TransactionRejectionDetails<T: Config<I>, I: 'static> {
 	pub refund_address: Option<ForeignChainAddress>,
 	pub asset: TargetChainAsset<T, I>,
 	pub amount: TargetChainAmount<T, I>,
@@ -561,15 +561,16 @@ pub mod pallet {
 
 	/// Stores the reporter and the tx_id against the BlockNumber when the report expires.
 	#[pallet::storage]
-	pub(crate) type TaintedTransactions<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
-		_,
-		Identity,
-		T::AccountId,
-		Blake2_128Concat,
-		TransactionInIdFor<T, I>,
-		TaintedTransactionStatus,
-		OptionQuery,
-	>;
+	pub(crate) type TransactionsMarkedForRejection<T: Config<I>, I: 'static = ()> =
+		StorageDoubleMap<
+			_,
+			Identity,
+			T::AccountId,
+			Blake2_128Concat,
+			TransactionInIdFor<T, I>,
+			TransactionPrewitnessedStatus,
+			OptionQuery,
+		>;
 
 	/// Stores the block number when the report expires to gather with the reporter and the tx_id.
 	#[pallet::storage]
@@ -581,15 +582,15 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Stores the details of the tainted transactions that are scheduled for rejecting.
+	/// Stores the details of transactions that are scheduled for rejecting.
 	#[pallet::storage]
 	pub(crate) type ScheduledTxForReject<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
+		StorageValue<_, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
 
-	/// Stores the details of the tainted transactions that failed to be rejected.
+	/// Stores the details of transactions that failed to be rejected.
 	#[pallet::storage]
 	pub(crate) type FailedRejections<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<TaintedTransactionDetails<T, I>>, ValueQuery>;
+		StorageValue<_, Vec<TransactionRejectionDetails<T, I>>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -727,12 +728,12 @@ pub mod pallet {
 			deposit_metadata: CcmDepositMetadataEncoded,
 			origin: SwapOrigin,
 		},
-		TaintedTransactionReportReceived {
+		TransactionRejectionRequestReceived {
 			account_id: T::AccountId,
 			tx_id: TransactionInIdFor<T, I>,
 			expires_at: BlockNumberFor<T>,
 		},
-		TaintedTransactionReportExpired {
+		TransactionRejectionRequestExpired {
 			account_id: T::AccountId,
 			tx_id: TransactionInIdFor<T, I>,
 		},
@@ -740,11 +741,11 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 			egress_details: ScheduledEgressDetails<T::TargetChain>,
 		},
-		TaintedTransactionRejected {
+		TransactionRejectedByBroker {
 			broadcast_id: BroadcastId,
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
-		FailedToRejectTaintedTransaction {
+		TransactionRejectionFailed {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
 		},
 	}
@@ -844,25 +845,30 @@ pub mod pallet {
 			}
 
 			// A report gets cleaned up after approx 1 hour and needs to be re-reported by the
-			// broker if necessary. This is needed as some kind of garbage collection mechanism
-			// for tainted deposits.
+			// broker if necessary. This is needed as some kind of garbage collection mechanism.
 			for (account_id, tx_id) in ReportExpiresAt::<T, I>::take(now) {
-				let _ = TaintedTransactions::<T, I>::try_mutate(&account_id, &tx_id, |status| {
-					match status.take() {
-						Some(TaintedTransactionStatus::Unseen) => {
-							Self::deposit_event(Event::<T, I>::TaintedTransactionReportExpired {
-								account_id: account_id.clone(),
-								tx_id: tx_id.clone(),
-							});
-							Ok(())
-						},
-						_ => {
-							// Don't apply the mutation. We expect the pre-witnessed
-							// transaction to eventually be fully witnessed.
-							Err(())
-						},
-					}
-				});
+				let _ = TransactionsMarkedForRejection::<T, I>::try_mutate(
+					&account_id,
+					&tx_id,
+					|status| {
+						match status.take() {
+							Some(TransactionPrewitnessedStatus::Unseen) => {
+								Self::deposit_event(
+									Event::<T, I>::TransactionRejectionRequestExpired {
+										account_id: account_id.clone(),
+										tx_id: tx_id.clone(),
+									},
+								);
+								Ok(())
+							},
+							_ => {
+								// Don't apply the mutation. We expect the pre-witnessed
+								// transaction to eventually be fully witnessed.
+								Err(())
+							},
+						}
+					},
+				);
 			}
 
 			used_weight
@@ -949,19 +955,19 @@ pub mod pallet {
 						) {
 						let (broadcast_id, _) =
 							T::Broadcaster::threshold_sign_and_broadcast(api_call);
-						Self::deposit_event(Event::<T, I>::TaintedTransactionRejected {
+						Self::deposit_event(Event::<T, I>::TransactionRejectedByBroker {
 							broadcast_id,
 							tx_id: tx.deposit_details,
 						});
 					} else {
 						FailedRejections::<T, I>::append(tx.clone());
-						Self::deposit_event(Event::<T, I>::FailedToRejectTaintedTransaction {
+						Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
 							tx_id: tx.deposit_details,
 						});
 					}
 				} else {
 					FailedRejections::<T, I>::append(tx.clone());
-					Self::deposit_event(Event::<T, I>::FailedToRejectTaintedTransaction {
+					Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
 						tx_id: tx.deposit_details,
 					});
 				}
@@ -1364,14 +1370,14 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(12)]
-		#[pallet::weight(T::WeightInfo::mark_transaction_as_tainted())]
-		pub fn mark_transaction_as_tainted(
+		#[pallet::weight(T::WeightInfo::mark_transaction_for_rejection())]
+		pub fn mark_transaction_for_rejection(
 			origin: OriginFor<T>,
 			tx_id: TransactionInIdFor<T, I>,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(T::AllowTransactionReports::get(), Error::<T, I>::UnsupportedChain);
-			Self::mark_transaction_as_tainted_inner(account_id, tx_id)?;
+			Self::mark_transaction_for_rejection_inner(account_id, tx_id)?;
 			Ok(())
 		}
 	}
@@ -1413,12 +1419,12 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	fn mark_transaction_as_tainted_inner(
+	fn mark_transaction_for_rejection_inner(
 		account_id: T::AccountId,
 		tx_id: TransactionInIdFor<T, I>,
 	) -> DispatchResult {
-		TaintedTransactions::<T, I>::try_mutate(&account_id, &tx_id, |opt| {
-			const UNSEEN: TaintedTransactionStatus = TaintedTransactionStatus::Unseen;
+		TransactionsMarkedForRejection::<T, I>::try_mutate(&account_id, &tx_id, |opt| {
+			const UNSEEN: TransactionPrewitnessedStatus = TransactionPrewitnessedStatus::Unseen;
 			ensure!(
 				opt.replace(UNSEEN).unwrap_or_default() == UNSEEN,
 				Error::<T, I>::TransactionAlreadyPrewitnessed
@@ -1428,7 +1434,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let expires_at = <frame_system::Pallet<T>>::block_number()
 			.saturating_add(BlockNumberFor::<T>::from(TAINTED_TX_EXPIRATION_BLOCKS));
 		ReportExpiresAt::<T, I>::append(expires_at, (&account_id, &tx_id));
-		Self::deposit_event(Event::<T, I>::TaintedTransactionReportReceived {
+		Self::deposit_event(Event::<T, I>::TransactionRejectionRequestReceived {
 			account_id,
 			tx_id,
 			expires_at,
@@ -1782,16 +1788,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
 			if let Some(tx_id) = deposit_details.deposit_id() {
-				if TaintedTransactions::<T, I>::mutate(&owner, &tx_id, |opt| {
+				if TransactionsMarkedForRejection::<T, I>::mutate(&owner, &tx_id, |opt| {
 					match opt.as_mut() {
 						// Transaction has been reported, mark it as pre-witnessed.
-						Some(status @ TaintedTransactionStatus::Unseen) => {
-							*status = TaintedTransactionStatus::Prewitnessed;
+						Some(status @ TransactionPrewitnessedStatus::Unseen) => {
+							*status = TransactionPrewitnessedStatus::Prewitnessed;
 							true
 						},
 						// Pre-witnessing twice is unlikely but possible. Either way we don't want
 						// to change the status and we don't want to allow boosting.
-						Some(TaintedTransactionStatus::Prewitnessed) => true,
+						Some(TransactionPrewitnessedStatus::Prewitnessed) => true,
 						// Transaction has not been reported, mark it as boosted to prevent further
 						// reports.
 						None => false,
@@ -2023,7 +2029,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let channel_owner = deposit_channel_details.owner.clone();
 
 		if let Some(tx_id) = deposit_details.deposit_id() {
-			if TaintedTransactions::<T, I>::take(&channel_owner, &tx_id).is_some() &&
+			if TransactionsMarkedForRejection::<T, I>::take(&channel_owner, &tx_id).is_some() &&
 				!matches!(deposit_channel_details.boost_status, BoostStatus::Boosted { .. })
 			{
 				let refund_address = match deposit_channel_details.action.clone() {
@@ -2035,21 +2041,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						.map(|refund_params| refund_params.refund_address.clone()),
 					ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
 				};
-
-				let tainted_transaction_details = TaintedTransactionDetails {
+\
+				ScheduledTxForReject::<T, I>::append(TransactionRejectionDetails {
 					refund_address,
 					amount: deposit_amount,
 					asset,
 					deposit_details: deposit_details.clone(),
-				};
-				ScheduledTxForReject::<T, I>::append(tainted_transaction_details);
+				});
 
 				Self::deposit_event(Event::<T, I>::DepositIgnored {
 					deposit_address,
 					asset,
 					amount: deposit_amount,
 					deposit_details,
-					reason: DepositIgnoredReason::TransactionTainted,
+					reason: DepositIgnoredReason::TransactionRejectedByBroker,
 				});
 				return Ok(())
 			}

@@ -54,16 +54,16 @@ async function newAssetAddress(asset: InternalAsset, seed = null): Promise<strin
 }
 
 /**
- * Submits a transaction as tainted to the extrinsic on the state chain.
+ * Mark a transaction for rejection.
  *
- * @param txId - The txId to submit as tainted as byte array in the order it is on the Bitcoin chain - which
- * is reverse of how it's normally displayed in block explorers.
+ * @param txId - The txId as a byte array in 'unreversed' order - which
+ * is reverse of how it's normally displayed in bitcoin block explorers.
  */
-async function submitTxAsTainted(txId: number[]) {
+async function markTxForRejection(txId: number[]) {
   await using chainflip = await getChainflipApi();
   return brokerMutex.runExclusive(async () =>
     chainflip.tx.bitcoinIngressEgress
-      .markTransactionAsTainted(txId)
+      .markTransactionForRejection(txId)
       .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
   );
 }
@@ -94,8 +94,8 @@ function pauseBtcBlockProduction(pause: boolean): boolean {
  * @param amount - The deposit amount.
  * @param doBoost - Whether to boost the deposit.
  * @param refundAddress - The address to refund to.
- * @param stopBlockProductionFor - The number of blocks to stop block production for. We need this to ensure that the tainted tx is on chain before the deposit is witnessed/prewitnessed.
- * @param waitBeforeReport - The number of milliseconds to wait before reporting the tx as tainted.
+ * @param stopBlockProductionFor - The number of blocks to stop block production for. We need this to ensure that the marked tx is on chain before the deposit is witnessed/prewitnessed.
+ * @param waitBeforeReport - The number of milliseconds to wait before reporting the tx.
  * @returns - The the channel id of the deposit channel.
  */
 async function brokerLevelScreeningTestScenario(
@@ -129,8 +129,8 @@ async function brokerLevelScreeningTestScenario(
   await sleep(waitBeforeReport);
   // Note: The bitcoin core js lib returns the txId in reverse order.
   // On chain we expect the txId to be in the correct order (like the Bitcoin internal representation).
-  // Because of this we need to reverse the txId before submitting it as tainted.
-  await submitTxAsTainted(hexStringToBytesArray(txId).reverse());
+  // Because of this we need to reverse the txId before marking it for rejection.
+  await markTxForRejection(hexStringToBytesArray(txId).reverse());
   await sleep(stopBlockProductionFor);
   if (stopBlockProductionFor > 0) {
     pauseBtcBlockProduction(false);
@@ -142,9 +142,9 @@ async function brokerLevelScreeningTestScenario(
 //
 // In this tests we are interested in the following scenarios:
 //
-// 1. No boost and early tx report -> Tainted tx is reported early and the swap is refunded.
-// 2. Boost and early tx report -> Tainted tx is reported early and the swap is refunded.
-// 3. Boost and late tx report -> Tainted tx is reported late and the swap is not refunded.
+// 1. No boost and early tx report -> tx is reported early and the swap is refunded.
+// 2. Boost and early tx report -> tx is reported early and the swap is refunded.
+// 3. Boost and late tx report -> tx is reported late and the swap is not refunded.
 async function main() {
   const MILLI_SECS_PER_BLOCK = 6000;
   const BLOCKS_TO_WAIT = 2;
@@ -160,12 +160,12 @@ async function main() {
     MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT,
   );
 
-  await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
+  await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
 
-  testBrokerLevelScreening.log(`Tainted transaction was rejected and refunded 👍.`);
+  testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
 
   // 2. -- Test boost and early tx report --
   testBrokerLevelScreening.log(
@@ -179,15 +179,15 @@ async function main() {
     btcRefundAddress,
     MILLI_SECS_PER_BLOCK * BLOCKS_TO_WAIT,
   );
-  await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
+  await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
 
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
-  testBrokerLevelScreening.log(`Tainted transaction was rejected and refunded 👍.`);
+  testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
 
   // 3. -- Test boost and late tx report --
-  // Note: We expect the swap to be executed and not refunded because the tainted tx was reported too late.
+  // Note: We expect the swap to be executed and not refunded because the tx was reported too late.
   testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
   btcRefundAddress = await newAssetAddress('Btc');
 
@@ -203,5 +203,5 @@ async function main() {
     test: (event) => event.data.channelId === channelId,
   }).event;
 
-  testBrokerLevelScreening.log(`Swap was executed and tainted transaction was not refunded 👍.`);
+  testBrokerLevelScreening.log(`Swap was executed and transaction was not refunded 👍.`);
 }
