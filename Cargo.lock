@@ -1599,7 +1599,7 @@ dependencies = [
  "futures",
  "hex",
  "hmac-sha512",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
  "libp2p-identity",
  "libsecp256k1",
@@ -1634,15 +1634,17 @@ name = "chainflip-broker-api"
 version = "1.8.0"
 dependencies = [
  "anyhow",
- "cf-chains",
  "chainflip-api",
  "clap",
- "custom-rpc",
  "futures",
  "hex",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
  "sc-rpc",
+ "schemars",
  "serde",
+ "serde_json",
+ "serde_with",
  "sp-core 34.0.0",
  "sp-rpc",
  "substrate-build-script-utils",
@@ -1714,7 +1716,7 @@ dependencies = [
  "http 1.1.0",
  "httparse",
  "itertools 0.13.0",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_format",
  "lazy_static",
  "mockall 0.13.1",
@@ -1794,7 +1796,7 @@ dependencies = [
  "futures",
  "hex",
  "insta",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "mockall 0.13.1",
  "pallet-cf-broadcast",
@@ -1826,7 +1828,7 @@ dependencies = [
  "frame-system",
  "futures",
  "hex",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "pallet-cf-pools",
  "sc-rpc",
  "serde",
@@ -1856,7 +1858,7 @@ dependencies = [
  "futures",
  "hex",
  "hex-literal",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",
@@ -2567,7 +2569,7 @@ dependencies = [
  "futures",
  "hex",
  "insta",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
@@ -5709,14 +5711,31 @@ version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62b089779ad7f80768693755a031cc14a7766aba707cbe886674e3f79e9b7e47"
 dependencies = [
- "jsonrpsee-client-transport 0.23.2",
- "jsonrpsee-core 0.23.2",
- "jsonrpsee-http-client 0.23.2",
- "jsonrpsee-proc-macros",
- "jsonrpsee-server",
- "jsonrpsee-types 0.23.2",
- "jsonrpsee-wasm-client",
- "jsonrpsee-ws-client",
+ "jsonrpsee-client-transport 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-core 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-http-client 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-proc-macros 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-server 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-types 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-wasm-client 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-ws-client 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee"
+version = "0.23.2"
+source = "git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2#8ebc31390487fd89937abe06ac046d6d311a70f9"
+dependencies = [
+ "jsonrpsee-client-transport 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-core 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-http-client 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-proc-macros 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-server 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-types 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-wasm-client 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-ws-client 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
  "tokio",
  "tracing",
 ]
@@ -5753,7 +5772,31 @@ dependencies = [
  "futures-util",
  "gloo-net",
  "http 1.1.0",
- "jsonrpsee-core 0.23.2",
+ "jsonrpsee-core 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pin-project",
+ "rustls 0.23.18",
+ "rustls-pki-types",
+ "rustls-platform-verifier",
+ "soketto 0.8.0",
+ "thiserror",
+ "tokio",
+ "tokio-rustls 0.26.0",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "jsonrpsee-client-transport"
+version = "0.23.2"
+source = "git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2#8ebc31390487fd89937abe06ac046d6d311a70f9"
+dependencies = [
+ "base64 0.22.1",
+ "futures-channel",
+ "futures-util",
+ "gloo-net",
+ "http 1.1.0",
+ "jsonrpsee-core 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
  "pin-project",
  "rustls 0.23.18",
  "rustls-pki-types",
@@ -5805,7 +5848,35 @@ dependencies = [
  "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
- "jsonrpsee-types 0.23.2",
+ "jsonrpsee-types 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.12.3",
+ "pin-project",
+ "rand",
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "jsonrpsee-core"
+version = "0.23.2"
+source = "git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2#8ebc31390487fd89937abe06ac046d6d311a70f9"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "beef",
+ "bytes",
+ "futures-timer",
+ "futures-util",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "jsonrpsee-types 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
  "parking_lot 0.12.3",
  "pin-project",
  "rand",
@@ -5851,8 +5922,32 @@ dependencies = [
  "hyper 1.5.1",
  "hyper-rustls 0.27.3",
  "hyper-util",
- "jsonrpsee-core 0.23.2",
- "jsonrpsee-types 0.23.2",
+ "jsonrpsee-core 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-types 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustls 0.23.18",
+ "rustls-platform-verifier",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "jsonrpsee-http-client"
+version = "0.23.2"
+source = "git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2#8ebc31390487fd89937abe06ac046d6d311a70f9"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "http-body 1.0.1",
+ "hyper 1.5.1",
+ "hyper-rustls 0.27.3",
+ "hyper-util",
+ "jsonrpsee-core 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-types 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
  "rustls 0.23.18",
  "rustls-platform-verifier",
  "serde",
@@ -5878,6 +5973,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-proc-macros"
+version = "0.23.2"
+source = "git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2#8ebc31390487fd89937abe06ac046d6d311a70f9"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro-crate 3.2.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.89",
+]
+
+[[package]]
 name = "jsonrpsee-server"
 version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5890,8 +5997,35 @@ dependencies = [
  "http-body-util",
  "hyper 1.5.1",
  "hyper-util",
- "jsonrpsee-core 0.23.2",
- "jsonrpsee-types 0.23.2",
+ "jsonrpsee-core 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-types 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pin-project",
+ "route-recognizer",
+ "serde",
+ "serde_json",
+ "soketto 0.8.0",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-server"
+version = "0.23.2"
+source = "git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2#8ebc31390487fd89937abe06ac046d6d311a70f9"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.5.1",
+ "hyper-util",
+ "jsonrpsee-core 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-types 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
  "pin-project",
  "route-recognizer",
  "serde",
@@ -5932,14 +6066,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-types"
+version = "0.23.2"
+source = "git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2#8ebc31390487fd89937abe06ac046d6d311a70f9"
+dependencies = [
+ "beef",
+ "http 1.1.0",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "jsonrpsee-wasm-client"
 version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4727ac037f834c6f04c0912cada7532dbddb54e92fbc64e33d6cb8c24af313c9"
 dependencies = [
- "jsonrpsee-client-transport 0.23.2",
- "jsonrpsee-core 0.23.2",
- "jsonrpsee-types 0.23.2",
+ "jsonrpsee-client-transport 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-core 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-types 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "jsonrpsee-wasm-client"
+version = "0.23.2"
+source = "git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2#8ebc31390487fd89937abe06ac046d6d311a70f9"
+dependencies = [
+ "jsonrpsee-client-transport 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-core 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-types 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
 ]
 
 [[package]]
@@ -5949,9 +6105,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c28759775f5cb2f1ea9667672d3fe2b0e701d1f4b7b67954e60afe7fd058b5e"
 dependencies = [
  "http 1.1.0",
- "jsonrpsee-client-transport 0.23.2",
- "jsonrpsee-core 0.23.2",
- "jsonrpsee-types 0.23.2",
+ "jsonrpsee-client-transport 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-core 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonrpsee-types 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "url",
+]
+
+[[package]]
+name = "jsonrpsee-ws-client"
+version = "0.23.2"
+source = "git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2#8ebc31390487fd89937abe06ac046d6d311a70f9"
+dependencies = [
+ "http 1.1.0",
+ "jsonrpsee-client-transport 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-core 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
+ "jsonrpsee-types 0.23.2 (git+https://github.com/chainflip-io/jsonrpsee?branch=chainflip%2Fobject-flatten-0.23.2)",
  "url",
 ]
 
@@ -8419,7 +8587,7 @@ name = "pallet-transaction-payment-rpc"
 version = "40.0.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2#d4792faaa7ab3fbb9798dcc629564d182853690e"
 dependencies = [
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
  "sp-api",
@@ -9665,7 +9833,7 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "finito",
  "futures",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json",
  "thiserror",
  "tokio",
@@ -10571,7 +10739,7 @@ source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-sub
 dependencies = [
  "finality-grandpa",
  "futures",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "parity-scale-codec",
  "sc-client-api",
@@ -10963,7 +11131,7 @@ version = "39.0.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2#d4792faaa7ab3fbb9798dcc629564d182853690e"
 dependencies = [
  "futures",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.3",
@@ -10994,7 +11162,7 @@ name = "sc-rpc-api"
 version = "0.43.0"
 source = "git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B2#d4792faaa7ab3fbb9798dcc629564d182853690e"
 dependencies = [
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-scale-codec",
  "sc-chain-spec",
  "sc-mixnet",
@@ -11021,7 +11189,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.5.1",
  "ip_network",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "serde",
  "serde_json",
@@ -11040,7 +11208,7 @@ dependencies = [
  "futures",
  "futures-util",
  "hex",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.3",
@@ -11073,7 +11241,7 @@ dependencies = [
  "exit-future",
  "futures",
  "futures-timer",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.3",
@@ -13517,7 +13685,7 @@ dependencies = [
  "docify",
  "frame-system-rpc-runtime-api",
  "futures",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "parity-scale-codec",
  "sc-rpc-api",
@@ -14756,7 +14924,7 @@ dependencies = [
  "futures-util",
  "hex",
  "itertools 0.13.0",
- "jsonrpsee 0.23.2",
+ "jsonrpsee 0.23.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_format",
  "lazy_static",
  "log",

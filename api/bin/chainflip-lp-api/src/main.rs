@@ -18,8 +18,8 @@ use chainflip_api::{
 		AccountRole, Asset, ForeignChain, Hash, RedemptionAmount,
 	},
 	settings::StateChain,
-	AccountId32, AddressString, BlockUpdate, ChainApi, EthereumAddress, OperatorApi,
-	SignedExtrinsicApi, StateChainApi, WaitFor,
+	AccountId32, AddressString, BaseRpcApi, BlockUpdate, ChainApi, ChainflipApi, EthereumAddress,
+	OperatorApi, SignedExtrinsicApi, StateChainApi, WaitFor,
 };
 use clap::Parser;
 use custom_rpc::{order_fills::OrderFills, CustomApiClient};
@@ -505,7 +505,7 @@ impl RpcServer for RpcServerImpl {
 
 	async fn subscribe_order_fills(&self, pending_sink: PendingSubscriptionSink) {
 		// pipe results from custom-rpc subscription
-		match self.api.raw_client().cf_subscribe_lp_order_fills().await {
+		match self.api.base_rpc_api().raw_rpc_client().cf_subscribe_lp_order_fills().await {
 			Ok(subscription) => {
 				let stream = stream::unfold(subscription, move |mut sub| async move {
 					match sub.next().await {
@@ -527,7 +527,8 @@ impl RpcServer for RpcServerImpl {
 
 	async fn order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>> {
 		self.api
-			.raw_client()
+			.base_rpc_api()
+			.raw_rpc_client()
 			.cf_lp_get_order_fills(at)
 			.await
 			.map_err(LpApiError::ClientError)

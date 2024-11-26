@@ -11,7 +11,6 @@ pub use cf_primitives::{
 	AccountRole, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary, ChannelId, SemVer,
 };
 use cf_primitives::{AffiliateShortId, DcaParameters};
-use custom_rpc::CustomApiClient;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
 use schemars::JsonSchema;
@@ -31,7 +30,7 @@ pub mod primitives {
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
 		CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
-		ChannelRefundParameters as RefundParameters,
+		ChannelRefundParameters as RefundParameters, VaultSwapExtraParameters,
 	};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
@@ -45,6 +44,7 @@ pub use chainflip_engine::{
 		BlockInfo,
 	},
 };
+pub use custom_rpc::CustomApiClient;
 
 pub mod lp;
 pub mod queries;
@@ -110,6 +110,7 @@ pub async fn request_block(
 		.ok_or_else(|| anyhow!("unknown block hash"))
 }
 
+#[derive(Clone)]
 pub struct StateChainApi {
 	pub state_chain_client: Arc<StateChainClient>,
 }
@@ -132,41 +133,60 @@ impl StateChainApi {
 
 		Ok(Self { state_chain_client })
 	}
+}
 
-	pub fn operator_api(&self) -> Arc<impl OperatorApi> {
+pub trait ChainflipApi: Send + Sync + 'static {
+	fn account_id(&self) -> AccountId32;
+	fn operator_api(&self) -> Arc<impl OperatorApi>;
+	fn governance_api(&self) -> Arc<impl GovernanceApi>;
+	fn validator_api(&self) -> Arc<impl ValidatorApi>;
+	fn broker_api(&self) -> Arc<impl BrokerApi>;
+	fn lp_api(&self) -> Arc<impl lp::LpApi>;
+	fn deposit_monitor_api(&self) -> Arc<impl DepositMonitorApi>;
+	fn chain_api(&self) -> Arc<impl ChainApi + Send + Sync + 'static>;
+	fn query_api(&self) -> queries::QueryApi;
+	fn base_rpc_api(&self) -> Arc<impl BaseRpcApi + StorageApi + Send + Sync + 'static>;
+}
+
+impl ChainflipApi for StateChainApi {
+	fn account_id(&self) -> AccountId32 {
+		self.state_chain_client.account_id()
+	}
+
+	fn operator_api(&self) -> Arc<impl OperatorApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn governance_api(&self) -> Arc<impl GovernanceApi> {
+	fn governance_api(&self) -> Arc<impl GovernanceApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn validator_api(&self) -> Arc<impl ValidatorApi> {
+	fn validator_api(&self) -> Arc<impl ValidatorApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn broker_api(&self) -> Arc<impl BrokerApi> {
+	fn broker_api(&self) -> Arc<impl BrokerApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn lp_api(&self) -> Arc<impl lp::LpApi> {
+	fn lp_api(&self) -> Arc<impl lp::LpApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn deposit_monitor_api(&self) -> Arc<impl DepositMonitorApi> {
+	fn deposit_monitor_api(&self) -> Arc<impl DepositMonitorApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn query_api(&self) -> queries::QueryApi {
+	fn chain_api(&self) -> Arc<impl ChainApi + Send + Sync + 'static> {
+		self.state_chain_client.clone()
+	}
+
+	fn query_api(&self) -> queries::QueryApi {
 		queries::QueryApi { state_chain_client: self.state_chain_client.clone() }
 	}
 
-	pub fn base_rpc_api(&self) -> Arc<impl BaseRpcApi + Send + Sync + 'static> {
+	fn base_rpc_api(&self) -> Arc<impl BaseRpcApi + StorageApi + Send + Sync + 'static> {
 		self.state_chain_client.base_rpc_client.clone()
-	}
-
-	pub fn raw_client(&self) -> &jsonrpsee::ws_client::WsClient {
-		&self.state_chain_client.base_rpc_client.raw_rpc_client
 	}
 }
 
@@ -206,7 +226,9 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 }
 
 #[async_trait]
-pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
+pub trait OperatorApi:
+	SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi + Sized + Send + Sync + 'static
+{
 	async fn request_redemption(
 		&self,
 		amount: primitives::RedemptionAmount,

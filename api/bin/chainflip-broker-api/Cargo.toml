@@ -23,15 +23,16 @@ workspace = true
 
 [dependencies]
 chainflip-api = { workspace = true }
-cf-chains = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
-custom-rpc = { workspace = true }
 
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 futures = { workspace = true }
 hex = { workspace = true, default-features = true }
-jsonrpsee = { workspace = true, features = ["full"] }
+jsonrpsee = { workspace = true }
+jsonrpsee-flatten = { package = "jsonrpsee", git = "https://github.com/chainflip-io/jsonrpsee", features = [
+    "full",
+], branch = "chainflip/object-flatten-0.23.2" }
 serde = { workspace = true, default-features = true, features = ["derive"] }
 sp-core = { workspace = true, default-features = true }
 sp-rpc = { workspace = true, default-features = true }
@@ -40,6 +41,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+serde_json = { workspace = true }
+serde_with = "3.11.0"
+schemars = { version = "1.0.0-alpha.15" }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }

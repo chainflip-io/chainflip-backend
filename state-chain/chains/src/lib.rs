@@ -967,6 +967,7 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 #[derive(
 	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
 )]
+#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 pub struct EvmVaultSwapExtraParameters<Address, Amount> {
 	pub input_amount: Amount,
 	pub refund_parameters: ChannelRefundParameters<Address>,
@@ -998,6 +999,7 @@ impl<Address: Clone, Amount> EvmVaultSwapExtraParameters<Address, Amount> {
 #[derive(
 	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
 )]
+#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 #[serde(tag = "chain")]
 pub enum VaultSwapExtraParameters<Address, Amount> {
 	Bitcoin {
