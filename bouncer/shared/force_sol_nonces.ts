@@ -1,10 +1,7 @@
 #!/usr/bin/env -S pnpm tsx
 
 import { PublicKey } from '@solana/web3.js';
-import {
-  decodeSolAddress,
-  runWithTimeoutAndExit,
-} from '../shared/utils';
+import { decodeSolAddress, runWithTimeoutAndExit } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main() {

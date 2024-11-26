@@ -182,6 +182,7 @@ jobs:
           cd bouncer
           pnpm install --frozen-lockfile
           ./shared/force_sol_nonces.ts
+          git reset --hard
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
@@ -192,8 +193,6 @@ jobs:
           cd bouncer
           pnpm install --frozen-lockfile
           ./run.sh
-          # TODO: Temporary to discard the fixes above
-          git reset --hard
 
       - name: Upgrade network 🚀
         if: inputs.run-job
