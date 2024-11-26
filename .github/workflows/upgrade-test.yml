@@ -173,7 +173,15 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           touch ./localnet/.setup_complete
+          # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana programs version. Remove after 1.8 is released.
+          sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[0-9.]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
           ./localnet/manage.sh
+          # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana programs version. Remove after 1.8 is released.
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./shared/force_sol_nonces.ts
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
@@ -210,9 +218,6 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          # TODO: This is a temporary fix to not run Solana Vault swaps because the old image doesn't match the
-          # latest Swap Endpoint. This can be removed after 1.8 release.
-          sed -i "s|appendSwap('Sol*|// appendSwap('Sol|g" ./tests/all_swaps.ts
           ./tests/all_concurrent_tests.ts
 
       - name: Print chainflip-engine logs 🚗
