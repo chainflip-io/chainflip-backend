@@ -1,7 +1,7 @@
 import * as anchor from '@coral-xyz/anchor';
 
 import { InternalAsset as Asset, Chains, assetConstants } from '@chainflip/cli';
-import { PublicKey, sendAndConfirmTransaction, Keypair } from '@solana/web3.js';
+import { PublicKey, Keypair, sendAndConfirmTransaction } from '@solana/web3.js';
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
   getContractAddress,
@@ -24,6 +24,10 @@ import { getSolanaSwapEndpointIdl, getSolanaVaultIdl } from './contract_interfac
 // @ts-expect-error workaround because of anchor issue
 const { BN } = anchor.default;
 
+// Using AnchorProvider runs into issues so instead we store the wallet in id.json and then
+// set the ANCHOR_WALLET env. Depending on how the SDK is implemented we can remove this.
+process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
+
 const createdEventAccounts: PublicKey[] = [];
 
 // Temporary before the SDK implements this.
@@ -41,10 +45,6 @@ export async function executeSolVaultSwap(
     getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
   );
   const whaleKeypair = getSolWhaleKeyPair();
-
-  // Using AnchorProvider runs into issues so instead we store the wallet in id.json and then
-  // set the ANCHOR_WALLET env. Depending on how the SDK is implemented we can remove this.
-  process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
 
   const connection = getSolConnection();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,13 +162,18 @@ export async function executeSolVaultSwap(
           })
           .signers([whaleKeypair, newEventAccountKeypair])
           .transaction();
-  const txHash = await sendAndConfirmTransaction(connection, tx, [
-    whaleKeypair,
-    newEventAccountKeypair,
-  ]);
+  const txHash = await sendAndConfirmTransaction(
+    connection,
+    tx,
+    [whaleKeypair, newEventAccountKeypair],
+    { commitment: 'confirmed' },
+  );
 
-  console.log('tx', txHash);
-  return txHash;
+  const transactionData = await connection.getTransaction(txHash, { commitment: 'confirmed' });
+  if (transactionData === null) {
+    throw new Error('Solana TransactionData is empty');
+  }
+  return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountKeypair.publicKey };
 }
 
 export async function checkSolEventAccountsClosure(

@@ -54,7 +54,7 @@ export type VaultSwapParams = {
   sourceAsset: Asset;
   destAsset: Asset;
   destAddress: string;
-  txHash: string;
+  transactionId: TransactionOriginId;
 };
 
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
@@ -495,18 +495,50 @@ export enum SwapRequestType {
   IngressEgressFee = 'IngressEgressFee',
 }
 
+export enum TransactionOrigin {
+  DepositChannel = 'DepositChannel',
+  VaultSwapEvm = 'VaultSwapEvm',
+  VaultSwapSolana = 'VaultSwapSolana',
+}
+
+export type TransactionOriginId =
+  | { type: TransactionOrigin.DepositChannel; channelId: number }
+  | { type: TransactionOrigin.VaultSwapEvm; txHash: string }
+  | { type: TransactionOrigin.VaultSwapSolana; addressAndSlot: [string, number] };
+
 function checkRequestTypeMatches(actual: object | string, expected: SwapRequestType) {
   if (typeof actual === 'object') {
     return expected in actual;
   }
-
   return expected === actual;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function checkTransactionInMatches(actual: any, expected: TransactionOriginId): boolean {
+  if ('DepositChannel' in actual) {
+    return (
+      expected.type === TransactionOrigin.DepositChannel &&
+      Number(actual.DepositChannel.channelId.replaceAll(',', '')) === expected.channelId
+    );
+  }
+  if ('Vault' in actual) {
+    return (
+      ('Evm' in actual.Vault.txId &&
+        expected.type === TransactionOrigin.VaultSwapEvm &&
+        actual.Vault.txId.Evm === expected.txHash) ||
+      ('Solana' in actual.Vault.txId &&
+        expected.type === TransactionOrigin.VaultSwapSolana &&
+        actual.Vault.txId.Solana[1].replaceAll(',', '') === expected.addressAndSlot[1].toString() &&
+        actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString())
+    );
+  }
+  throw new Error(`Unsupported transaction origin type ${actual}`);
 }
 
 export async function observeSwapRequested(
   sourceAsset: Asset,
   destAsset: Asset,
-  id: number | string,
+  id: TransactionOriginId,
   swapRequestType: SwapRequestType,
 ) {
   // need to await this to prevent the chainflip api from being disposed prematurely
@@ -515,11 +547,7 @@ export async function observeSwapRequested(
       const data = event.data;
 
       if (typeof data.origin === 'object') {
-        const channelMatches =
-          (typeof id === 'number' &&
-            'DepositChannel' in data.origin &&
-            Number(data.origin.DepositChannel.channelId.replaceAll(',', '')) === id) ||
-          (typeof id === 'string' && 'Vault' in data.origin && data.origin.Vault.txId.Evm === id);
+        const channelMatches = checkTransactionInMatches(data.origin, id);
         const sourceAssetMatches = sourceAsset === (data.inputAsset as Asset);
         const destAssetMatches = destAsset === (data.outputAsset as Asset);
         const requestTypeMatches = checkRequestTypeMatches(data.requestType, swapRequestType);

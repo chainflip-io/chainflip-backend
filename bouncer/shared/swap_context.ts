@@ -3,7 +3,8 @@ import assert from 'assert';
 export enum SwapStatus {
   Initiated,
   Funded,
-  VaultContractExecuted,
+  VaultSwapInitiated,
+  VaultSwapScheduled,
   SwapScheduled,
   Success,
   Failure,
@@ -35,16 +36,23 @@ export class SwapContext {
         );
         break;
       }
-      case SwapStatus.VaultContractExecuted: {
+      case SwapStatus.VaultSwapInitiated: {
         assert(
           currentStatus === SwapStatus.Initiated,
           `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
         );
         break;
       }
+      case SwapStatus.VaultSwapScheduled: {
+        assert(
+          currentStatus === SwapStatus.VaultSwapInitiated,
+          `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
+        );
+        break;
+      }
       case SwapStatus.SwapScheduled: {
         assert(
-          currentStatus === SwapStatus.VaultContractExecuted || currentStatus === SwapStatus.Funded,
+          currentStatus === SwapStatus.Funded,
           `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
         );
         break;
@@ -52,7 +60,7 @@ export class SwapContext {
       case SwapStatus.Success: {
         assert(
           currentStatus === SwapStatus.SwapScheduled ||
-            currentStatus === SwapStatus.VaultContractExecuted,
+            currentStatus === SwapStatus.VaultSwapScheduled,
           `Unexpected status transition for ${tag}. Transitioning from ${currentStatus} to ${status}`,
         );
         break;

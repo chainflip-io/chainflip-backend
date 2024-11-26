@@ -520,7 +520,6 @@ pub struct SolanaVaultSwapDetails {
 	pub deposit_amount: SolAmount,
 	pub destination_address: EncodedAddress,
 	pub deposit_metadata: Option<CcmDepositMetadata>,
-	// TODO: swap_account and creation_slot will be pulled into TransactionInId type (PRO-1760)
 	pub swap_account: SolAddress,
 	pub creation_slot: u64,
 	pub broker_fee: Beneficiary<AccountId>,
@@ -566,7 +565,7 @@ impl
 			swap_details.to,
 			swap_details.destination_address,
 			swap_details.deposit_metadata,
-			Default::default(), // TODO txHash PRO-1760
+			(swap_details.swap_account, swap_details.creation_slot),
 			(),
 			swap_details.broker_fee,
 			swap_details.affiliate_fees,
