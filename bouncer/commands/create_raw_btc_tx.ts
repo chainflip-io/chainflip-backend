@@ -15,6 +15,7 @@ const createRawTransaction = async (toAddress: string, amountInBtc: number | str
     const fundedTx = (await btcClient.fundRawTransaction(rawTx, {
       changeAddress: await btcClient.getNewAddress(),
       feeRate: 0.00001,
+      lockUnspents: true,
     })) as { hex: string };
 
     // Sign the raw transaction

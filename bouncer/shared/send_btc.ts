@@ -21,6 +21,8 @@ export async function fundAndSendTransaction(
     const fundedTx = (await btcClient.fundRawTransaction(rawTx, {
       changeAddress,
       feeRate: feeRate ?? 0.00001,
+      lockUnspents: true,
+      changePosition: 2,
     })) as { hex: string };
     const signedTx = await btcClient.signRawTransactionWithWallet(fundedTx.hex);
     const txId = (await btcClient.sendRawTransaction(signedTx.hex)) as string | undefined;
