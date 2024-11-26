@@ -102,16 +102,17 @@ fn main() {
 
 	let out_dir = std::env::var("OUT_DIR").unwrap();
 
-	let build_dir = std::path::Path::new(&out_dir)
+	let lib_dir = std::path::Path::new(&out_dir)
 		.parent()
 		.unwrap()
 		.parent()
 		.unwrap()
 		.parent()
-		.unwrap(); // target/debug or target/release
+		.unwrap() // target/debug or target/release
+		.join("deps");
 
 	download_old_dylib(
-		build_dir,
+		&lib_dir,
 		match env::var("IS_MAINNET") {
 			Ok(val) => val.to_lowercase() == "true",
 			Err(_) => false, // Default to false
@@ -119,9 +120,9 @@ fn main() {
 	)
 	.unwrap();
 
-	let build_dir_str = build_dir.to_str().unwrap();
+	let lib_dir_str = lib_dir.to_str().unwrap();
 
-	println!("cargo:rustc-link-search=native={build_dir_str}");
+	println!("cargo:rustc-link-search=native={lib_dir_str}");
 
 	let old_version_suffix = OLD_VERSION.replace('.', "_");
 	let new_version_suffix = NEW_VERSION.replace('.', "_");
@@ -131,12 +132,12 @@ fn main() {
 
 	if env::var("TARGET").unwrap().contains("apple") {
 		// === For local testing on Mac ===
-		// The new dylib is in the same directory as the binary.
-		println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path");
+		// The new dylib is in the ./deps subfolder.
+		println!("cargo:rustc-link-arg=-Wl,-rpath,@executable_path/deps");
 	} else {
 		// === For local testing on Linux ===
-		// The new dylib is in the same directory as the binary.
-		println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
+		// The new dylib is in the ./deps subfolder.
+		println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/deps");
 
 		// === For releasing ===
 		// This path is where we store the libraries in the docker image, and as part of the apt
