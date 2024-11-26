@@ -236,29 +236,29 @@ pub struct ChainAccounts {
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub enum TaintedTransactionEvent<TxId> {
-	TaintedTransactionReportReceived {
+pub enum TransactionScreeningEvent<TxId> {
+	TransactionRejectionRequestReceived {
 		account_id: <Runtime as frame_system::Config>::AccountId,
 		tx_id: TxId,
 	},
 
-	TaintedTransactionReportExpired {
+	TransactionRejectionRequestExpired {
 		account_id: <Runtime as frame_system::Config>::AccountId,
 		tx_id: TxId,
 	},
 
-	TaintedTransactionRejected {
+	TransactionRejectedByBroker {
 		refund_broadcast_id: BroadcastId,
 		tx_id: TxId,
 	},
 }
 
-type TaintedTransactionEventFor<C> =
-	TaintedTransactionEvent<<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId>;
+type BrokerRejectionEventFor<C> =
+	TransactionScreeningEvent<<<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId>;
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
-pub struct TaintedTransactionEvents {
-	pub btc_events: Vec<TaintedTransactionEventFor<cf_chains::Bitcoin>>,
+pub struct TransactionScreeningEvents {
+	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
 }
 
 // READ THIS BEFORE UPDATING THIS TRAIT:
@@ -423,7 +423,7 @@ decl_runtime_apis!(
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage>;
 		fn cf_get_open_deposit_channels(account_id: Option<AccountId32>) -> ChainAccounts;
-		fn cf_tainted_transaction_events() -> TaintedTransactionEvents;
+		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_get_affiliates(broker: AccountId32) -> Vec<(AffiliateShortId, AccountId32)>;
 	}
 );

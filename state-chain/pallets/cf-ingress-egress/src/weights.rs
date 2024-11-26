@@ -44,7 +44,7 @@ pub trait WeightInfo {
 	fn deposit_boosted() -> Weight;
 	fn boost_finalised() -> Weight;
 	fn create_boost_pools() -> Weight;
-	fn mark_transaction_as_tainted() -> Weight;
+	fn mark_transaction_for_rejection() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -287,9 +287,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-
-	/// TODO: This needs to get generated during the reals benchmarking.
-	fn mark_transaction_as_tainted() -> Weight {
+	/// Storage: `EthereumIngressEgress::TransactionsMarkedForRejection` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::TransactionsMarkedForRejection` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::ReportExpiresAt` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::ReportExpiresAt` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn mark_transaction_for_rejection() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
@@ -537,9 +539,11 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(1_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
-
-	/// TODO: This needs to get generated during the reals benchmarking.
-	fn mark_transaction_as_tainted() -> Weight {
+	/// Storage: `EthereumIngressEgress::TransactionsMarkedForRejection` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::TransactionsMarkedForRejection` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::ReportExpiresAt` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::ReportExpiresAt` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn mark_transaction_for_rejection() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`

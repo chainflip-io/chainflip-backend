@@ -594,12 +594,12 @@ pub enum TransactionInId {
 pub trait DepositMonitorApi:
 	SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'static
 {
-	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> Result<H256> {
+	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> Result<H256> {
 		match tx_id {
 			TransactionInId::Bitcoin(tx_id) =>
 				self.simple_submission_with_dry_run(
 					state_chain_runtime::RuntimeCall::BitcoinIngressEgress(
-						pallet_cf_ingress_egress::Call::mark_transaction_as_tainted { tx_id },
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
 					),
 				)
 				.await,
