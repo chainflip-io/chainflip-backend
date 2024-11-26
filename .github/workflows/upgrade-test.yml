@@ -182,7 +182,6 @@ jobs:
       - name: Nonce workaround
         if: inputs.run-job
         run: |
-          git reset --hard
           git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer
