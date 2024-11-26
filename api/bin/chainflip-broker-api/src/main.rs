@@ -5,7 +5,7 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	primitives::{
-		state_chain_runtime::runtime_apis::{ChainAccounts, TaintedTransactionEvents},
+		state_chain_runtime::runtime_apis::{ChainAccounts, TransactionScreeningEvents},
 		AccountRole, Affiliates, Asset, BasisPoints, CcmChannelMetadata, DcaParameters,
 	},
 	settings::StateChain,
@@ -98,8 +98,8 @@ pub trait Rpc {
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail>;
 
-	#[method(name = "mark_transaction_as_tainted", aliases = ["broker_markTransactionAsTainted"])]
-	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> RpcResult<()>;
+	#[method(name = "mark_transaction_for_rejection", aliases = ["broker_MarkTransactionForRejection"])]
+	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()>;
 
 	#[method(name = "get_open_deposit_channels", aliases = ["broker_getOpenDepositChannels"])]
 	async fn get_open_deposit_channels(
@@ -107,8 +107,8 @@ pub trait Rpc {
 		query: GetOpenDepositChannelsQuery,
 	) -> RpcResult<ChainAccounts>;
 
-	#[subscription(name = "subscribe_tainted_transaction_events", item = BlockUpdate<TaintedTransactionEvents>)]
-	async fn subscribe_tainted_transaction_events(&self) -> SubscriptionResult;
+	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
+	async fn subscribe_transaction_screening_events(&self) -> SubscriptionResult;
 }
 
 pub struct RpcServerImpl {
@@ -175,10 +175,10 @@ impl RpcServer for RpcServerImpl {
 		Ok(self.api.broker_api().withdraw_fees(asset, destination_address).await?)
 	}
 
-	async fn mark_transaction_as_tainted(&self, tx_id: TransactionInId) -> RpcResult<()> {
+	async fn mark_transaction_for_rejection(&self, tx_id: TransactionInId) -> RpcResult<()> {
 		self.api
 			.deposit_monitor_api()
-			.mark_transaction_as_tainted(tx_id)
+			.mark_transaction_for_rejection(tx_id)
 			.await
 			.map_err(BrokerApiError::Other)?;
 		Ok(())
@@ -202,7 +202,7 @@ impl RpcServer for RpcServerImpl {
 			.map_err(BrokerApiError::ClientError)
 	}
 
-	async fn subscribe_tainted_transaction_events(
+	async fn subscribe_transaction_screening_events(
 		&self,
 		pending_sink: PendingSubscriptionSink,
 	) -> SubscriptionResult {
@@ -217,7 +217,7 @@ impl RpcServer for RpcServerImpl {
 				match state_chain_client
 					.base_rpc_client
 					.raw_rpc_client
-					.cf_get_tainted_transaction_events(Some(block.hash))
+					.cf_get_transaction_screening_events(Some(block.hash))
 					.await
 				{
 					Ok(events) => {
