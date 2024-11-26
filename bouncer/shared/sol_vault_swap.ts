@@ -24,6 +24,10 @@ import { getSolanaSwapEndpointIdl, getSolanaVaultIdl } from './contract_interfac
 // @ts-expect-error workaround because of anchor issue
 const { BN } = anchor.default;
 
+// Using AnchorProvider runs into issues so instead we store the wallet in id.json and then
+// set the ANCHOR_WALLET env. Depending on how the SDK is implemented we can remove this.
+process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
+
 const createdEventAccounts: PublicKey[] = [];
 
 // Temporary before the SDK implements this.
@@ -41,10 +45,6 @@ export async function executeSolVaultSwap(
     getContractAddress('Solana', 'SWAP_ENDPOINT_DATA_ACCOUNT'),
   );
   const whaleKeypair = getSolWhaleKeyPair();
-
-  // Using AnchorProvider runs into issues so instead we store the wallet in id.json and then
-  // set the ANCHOR_WALLET env. Depending on how the SDK is implemented we can remove this.
-  process.env.ANCHOR_WALLET = 'shared/solana_keypair.json';
 
   const connection = getSolConnection();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
