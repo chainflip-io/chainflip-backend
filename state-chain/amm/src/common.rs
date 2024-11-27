@@ -290,6 +290,7 @@ pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
 
 #[cfg(all(test, feature = "slow-tests"))]
 mod test {
+	#[cfg(feature = "slow-tests")]
 	use super::*;
 	use cf_amm_math::test_utilities::rng_u256_inclusive_bound;
 	use rand::SeedableRng;

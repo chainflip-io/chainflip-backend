@@ -250,9 +250,16 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 		}
 		self
 	}
+
+	/// For running some code that mutates the stats of current Electoral System storage.
 	pub fn then(self, f: impl FnOnce()) -> Self {
 		f();
 		self
+	}
+
+	/// Returns the latest list of Election identifiers
+	pub fn identifiers() -> Vec<ElectionIdentifierOf<ES>> {
+		MockStorageAccess::election_identifiers::<ES>()
 	}
 }
 

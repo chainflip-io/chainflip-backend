@@ -378,8 +378,7 @@ impl MockStorageAccess {
 		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
 			let state_map_ref = old_state_map.borrow();
 			state_map_ref
-				.get(&key.encode())
-				.expect("Key should exist")
+				.get(&key.encode())?
 				.clone()
 				.map(|v| ES::ElectoralUnsynchronisedStateMapValue::decode(&mut &v[..]).unwrap())
 		})

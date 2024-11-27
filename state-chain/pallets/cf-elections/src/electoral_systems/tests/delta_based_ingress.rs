@@ -5,12 +5,12 @@ use crate::{
 use cf_primitives::Asset;
 use cf_traits::IngressSink;
 use codec::{Decode, Encode};
+use frame_support::assert_ok;
 use sp_std::collections::btree_map::BTreeMap;
 use std::cell::RefCell;
 
 thread_local! {
 	pub static AMOUNT_INGRESSED: RefCell<Vec<(AccountId, Asset, Amount)>> = const { RefCell::new(vec![]) };
-	pub static AMOUNT_REVERTED: RefCell<Vec<(AccountId, Asset, Amount)>> = const { RefCell::new(vec![]) };
 	pub static CHANNELS_CLOSED: RefCell<Vec<AccountId>> = const { RefCell::new(vec![]) };
 }
 
@@ -39,13 +39,6 @@ impl IngressSink for MockIngressSink {
 		});
 	}
 
-	fn on_ingress_reverted(channel: Self::Account, asset: Self::Asset, amount: Self::Amount) {
-		AMOUNT_REVERTED.with(|cell| {
-			let mut reverts = cell.borrow_mut();
-			reverts.push((channel, asset, amount))
-		});
-	}
-
 	fn on_channel_closed(channel: Self::Account) {
 		CHANNELS_CLOSED.with(|cell| {
 			let mut closed = cell.borrow_mut();
@@ -70,6 +63,10 @@ struct DepositChannels(Vec<DepositChannel>);
 impl DepositChannels {
 	pub fn new(inner: Vec<DepositChannel>) -> Self {
 		Self(inner)
+	}
+
+	pub fn into_inner(self) -> Vec<DepositChannel> {
+		self.0
 	}
 
 	pub fn to_state(&self) -> BTreeMap<AccountId, ChannelTotalIngressedFor<MockIngressSink>> {
@@ -132,6 +129,15 @@ impl DepositChannels {
 			})
 			.collect::<BTreeMap<_, _>>()
 	}
+
+	pub fn combine(self, other: Self) -> Self {
+		Self(
+			[self.into_inner(), other.into_inner()]
+				.into_iter()
+				.flatten()
+				.collect::<Vec<_>>(),
+		)
+	}
 }
 
 fn to_raw_state_map<K: Encode, V: Encode, M: IntoIterator<Item = (K, V)>>(
@@ -179,25 +185,6 @@ fn channel_state_ingressed() -> DepositChannels {
 	])
 }
 
-fn channel_state_reverted() -> DepositChannels {
-	DepositChannels::new(vec![
-		DepositChannel {
-			account: 1u32,
-			asset: Asset::Sol,
-			total_ingressed: 500u64,
-			block_number: 900u64,
-			close_block: 1_000u64,
-		},
-		DepositChannel {
-			account: 2u32,
-			asset: Asset::SolUsdc,
-			total_ingressed: 1_000u64,
-			block_number: 900u64,
-			close_block: 2_000u64,
-		},
-	])
-}
-
 fn channel_state_final() -> DepositChannels {
 	DepositChannels::new(vec![
 		DepositChannel {
@@ -236,6 +223,44 @@ fn channel_state_closed() -> DepositChannels {
 	])
 }
 
+fn channel_state_recycled_same_asset() -> DepositChannels {
+	DepositChannels::new(vec![
+		DepositChannel {
+			account: 1u32,
+			asset: Asset::Sol,
+			total_ingressed: 8_000u64,
+			block_number: 4_000u64,
+			close_block: 4_000u64,
+		},
+		DepositChannel {
+			account: 2u32,
+			asset: Asset::SolUsdc,
+			total_ingressed: 10_000u64,
+			block_number: 4_000u64,
+			close_block: 4_000u64,
+		},
+	])
+}
+
+fn channel_state_recycled_different_asset() -> DepositChannels {
+	DepositChannels::new(vec![
+		DepositChannel {
+			account: 1u32,
+			asset: Asset::SolUsdc,
+			total_ingressed: 4_000u64,
+			block_number: 5_000u64,
+			close_block: 5_000u64,
+		},
+		DepositChannel {
+			account: 2u32,
+			asset: Asset::Sol,
+			total_ingressed: 5_000u64,
+			block_number: 5_000u64,
+			close_block: 5_000u64,
+		},
+	])
+}
+
 fn with_setup(initial_elections: Option<DepositChannels>) -> TestSetup<SimpleDeltaBasedIngress> {
 	let initial_elections = initial_elections.unwrap_or(initial_channel_state());
 	TestSetup::<_>::default()
@@ -249,31 +274,37 @@ fn with_setup(initial_elections: Option<DepositChannels>) -> TestSetup<SimpleDel
 
 register_checks! {
 	SimpleDeltaBasedIngress {
-		started_at_default_state(pre_finalize, _post) {
+		started_at_state(pre_finalize, _post, state: DepositChannels) {
 			assert_eq!(
 				pre_finalize.unsynchronised_state_map,
-				to_raw_state_map(initial_channel_state().to_state_map()),
-				"Expected initial state incorrect pre-finalization."
+				to_raw_state_map(state.to_state_map()),
+				"Expected state map incorrect before finalization."
 			);
 		},
-		ended_at_ingressed_state(_pre, post_finalize) {
+		ended_at_state(_pre, post_finalize, state: DepositChannels) {
 			assert_eq!(
 				post_finalize.unsynchronised_state_map,
-				to_raw_state_map(channel_state_ingressed().to_state_map()),
-				"Expected ingressed state incorrect after finalization."
+				to_raw_state_map(state.to_state_map()),
+				"Expected state map incorrect after finalization."
 			);
 		},
-		deposit_channel_states_final(pre_finalize, post_finalize) {
-			assert_eq!(
-				pre_finalize.unsynchronised_state_map,
-				to_raw_state_map(channel_state_ingressed().to_state_map()),
-				"Expected ingressed state incorrect pre-finalization."
-			);
-			assert_eq!(
-				post_finalize.unsynchronised_state_map,
-				to_raw_state_map(channel_state_final().to_state_map()),
-				"Expected final state incorrect after finalization."
-			);
+		ingressed(_pre, _post, expected_ingressed: Vec<(AccountId, Asset, Amount)>) {
+			AMOUNT_INGRESSED.with(|ingresses| {
+				assert_eq!(
+					ingresses.clone().into_inner(),
+					expected_ingressed,
+					"Amount ingressed incorrect."
+				);
+			});
+		},
+		channel_closed(_pre, _post, expected_closed_channels: Vec<AccountId>) {
+			CHANNELS_CLOSED.with(|channels| {
+				assert_eq!(
+					channels.clone().into_inner(),
+					expected_closed_channels,
+					"Channels closed incorrect."
+				);
+			});
 		},
 	}
 }
@@ -282,11 +313,6 @@ register_checks! {
 fn trigger_ingress_on_consensus() {
 	with_setup(None)
 		.build_with_initial_election()
-		.then(|| {
-			AMOUNT_INGRESSED.with(|ingresses| {
-				assert_eq!(ingresses.clone().into_inner().len(), 0);
-			});
-		})
 		.force_consensus_update(ConsensusStatus::Gained {
 			most_recent: None,
 			new: channel_state_ingressed().to_state(),
@@ -294,16 +320,33 @@ fn trigger_ingress_on_consensus() {
 		.test_on_finalize(
 			&900,
 			|_| (),
-			vec![Check::started_at_default_state(), Check::ended_at_ingressed_state()],
+			vec![
+				Check::started_at_state(initial_channel_state()),
+				Check::ended_at_state(channel_state_ingressed()),
+				Check::ingressed(vec![
+					(1u32, Asset::Sol, 1_000u64),
+					(2u32, Asset::SolUsdc, 2_000u64),
+				]),
+			],
 		)
-		.then(|| {
-			AMOUNT_INGRESSED.with(|ingresses| {
-				assert_eq!(
-					ingresses.clone().into_inner(),
-					vec![(1u32, Asset::Sol, 1_000u64), (2u32, Asset::SolUsdc, 2_000u64)]
-				);
-			});
-		});
+		.force_consensus_update(ConsensusStatus::Gained {
+			most_recent: None,
+			new: channel_state_final().to_state(),
+		})
+		.test_on_finalize(
+			&950,
+			|_| (),
+			vec![
+				Check::started_at_state(channel_state_ingressed()),
+				Check::ended_at_state(channel_state_final()),
+				Check::ingressed(vec![
+					(1u32, Asset::Sol, 1_000u64),
+					(2u32, Asset::SolUsdc, 2_000u64),
+					(1u32, Asset::Sol, 1_000u64),
+					(2u32, Asset::SolUsdc, 2_000u64),
+				]),
+			],
+		);
 }
 
 #[test]
@@ -315,45 +358,25 @@ fn only_trigger_ingress_on_witnessed_blocks() {
 			new: channel_state_ingressed().to_state(),
 		})
 		.test_on_finalize(&699, |_| (), vec![Check::assert_unchanged()])
-		.test_on_finalize(&799, |_| (), vec![Check::started_at_default_state()])
-		.then(|| {
-			AMOUNT_INGRESSED.with(|ingresses| {
-				assert_eq!(ingresses.clone().into_inner(), vec![(1u32, Asset::Sol, 1_000u64)]);
-			});
-		})
-		.test_on_finalize(&800, |_| (), vec![Check::ended_at_ingressed_state()])
-		.then(|| {
-			AMOUNT_INGRESSED.with(|ingresses| {
-				assert_eq!(
-					ingresses.clone().into_inner(),
-					vec![(1u32, Asset::Sol, 1_000u64), (2u32, Asset::SolUsdc, 2_000u64)]
-				);
-			});
-		});
-}
-
-#[test]
-fn can_trigger_revert_logic() {
-	with_setup(None)
-		.build_with_initial_election()
-		.force_consensus_update(ConsensusStatus::Gained {
-			most_recent: None,
-			new: channel_state_ingressed().to_state(),
-		})
-		.test_on_finalize(&800, |_| (), vec![Check::ended_at_ingressed_state()])
-		.force_consensus_update(ConsensusStatus::Gained {
-			most_recent: None,
-			new: channel_state_reverted().to_state(),
-		})
-		.test_on_finalize(&900, |_| (), vec![])
-		.then(|| {
-			AMOUNT_REVERTED.with(|reverts| {
-				assert_eq!(
-					reverts.clone().into_inner(),
-					vec![(1u32, Asset::Sol, 500u64), (2u32, Asset::SolUsdc, 1_000u64)]
-				);
-			});
-		});
+		.test_on_finalize(
+			&799,
+			|_| (),
+			vec![
+				Check::started_at_state(initial_channel_state()),
+				Check::ingressed(vec![(1u32, Asset::Sol, 1_000u64)]),
+			],
+		)
+		.test_on_finalize(
+			&800,
+			|_| (),
+			vec![
+				Check::ended_at_state(channel_state_ingressed()),
+				Check::ingressed(vec![
+					(1u32, Asset::Sol, 1_000u64),
+					(2u32, Asset::SolUsdc, 2_000u64),
+				]),
+			],
+		);
 }
 
 #[test]
@@ -364,20 +387,109 @@ fn can_close_channels() {
 			most_recent: None,
 			new: channel_state_closed().to_state(),
 		})
-		.test_on_finalize(&1000, |_| (), vec![])
+		.test_on_finalize(&1000, |_| (), vec![Check::channel_closed(vec![1u32])])
+		.force_consensus_update(ConsensusStatus::Gained {
+			most_recent: None,
+			new: channel_state_closed().to_state(),
+		})
+		.test_on_finalize(&2000, |_| (), vec![Check::channel_closed(vec![1u32, 2u32])]);
+}
+
+#[test]
+fn test_deposit_channel_recycling() {
+	with_setup(None)
+		.build()
 		.then(|| {
-			CHANNELS_CLOSED.with(|closed| {
-				assert_eq!(closed.clone().into_inner(), vec![1u32]);
-			});
+			for deposit_channel in initial_channel_state().into_inner() {
+				assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
+					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
+					deposit_channel.account,
+					deposit_channel.asset,
+					deposit_channel.close_block
+				));
+			}
 		})
 		.force_consensus_update(ConsensusStatus::Gained {
 			most_recent: None,
 			new: channel_state_closed().to_state(),
 		})
-		.test_on_finalize(&2000, |_| (), vec![])
+		.test_on_finalize(
+			&2000,
+			|_| (),
+			vec![
+				Check::ended_at_state(channel_state_closed()),
+				Check::ingressed(vec![
+					(1u32, Asset::Sol, 2_000u64),
+					(2u32, Asset::SolUsdc, 4_000u64),
+				]),
+				Check::channel_closed(vec![1u32, 2u32]),
+			],
+		)
 		.then(|| {
-			CHANNELS_CLOSED.with(|closed| {
-				assert_eq!(closed.clone().into_inner(), vec![1u32, 2u32]);
-			});
-		});
+			// Channels are recycled using the same asset. Only the difference in total amount is
+			// counted as ingressed
+			for deposit_channel in channel_state_recycled_same_asset().into_inner() {
+				assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
+					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
+					deposit_channel.account,
+					deposit_channel.asset,
+					deposit_channel.close_block
+				));
+			}
+		})
+		.force_consensus_update(ConsensusStatus::Gained {
+			most_recent: None,
+			new: channel_state_recycled_same_asset().to_state(),
+		})
+		.test_on_finalize(
+			&4000,
+			|_| (),
+			vec![
+				Check::ended_at_state(channel_state_recycled_same_asset()),
+				Check::ingressed(vec![
+					(1u32, Asset::Sol, 2_000u64),
+					(2u32, Asset::SolUsdc, 4_000u64),
+					// On recycled channels, only the diff amount is counted as ingress
+					(1u32, Asset::Sol, 6_000u64),
+					(2u32, Asset::SolUsdc, 6_000u64),
+				]),
+				Check::channel_closed(vec![1u32, 2u32, 1u32, 2u32]),
+			],
+		)
+		.then(|| {
+			// Channels are recycled using the same asset. Only the difference in total amount is
+			// counted as ingressed
+			for deposit_channel in channel_state_recycled_different_asset().into_inner() {
+				assert_ok!(DeltaBasedIngress::open_channel::<MockAccess<SimpleDeltaBasedIngress>>(
+					TestContext::<SimpleDeltaBasedIngress>::identifiers(),
+					deposit_channel.account,
+					deposit_channel.asset,
+					deposit_channel.close_block
+				));
+			}
+		})
+		.force_consensus_update(ConsensusStatus::Gained {
+			most_recent: None,
+			new: channel_state_recycled_different_asset().to_state(),
+		})
+		.test_on_finalize(
+			&5000,
+			|_| (),
+			vec![
+				Check::ended_at_state(
+					channel_state_recycled_different_asset()
+						.combine(channel_state_recycled_same_asset()),
+				),
+				Check::ingressed(vec![
+					(1u32, Asset::Sol, 2_000u64),
+					(2u32, Asset::SolUsdc, 4_000u64),
+					(1u32, Asset::Sol, 6_000u64),
+					(2u32, Asset::SolUsdc, 6_000u64),
+					// Total amount ingressed are accumulated per `(Account, Asset)` pair
+					(1u32, Asset::SolUsdc, 4_000u64),
+					(2u32, Asset::Sol, 5_000u64),
+				]),
+				Check::channel_closed(vec![1u32, 2u32, 1u32, 2u32, 1u32, 2u32]),
+			],
+		);
 }
