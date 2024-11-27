@@ -68,7 +68,7 @@ use cf_traits::{
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
-use frame_support::{derive_impl, instances::*};
+use frame_support::{derive_impl, instances::*, migrations::VersionedMigration};
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
@@ -1293,7 +1293,13 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-type MigrationsForV1_8 = ();
+type MigrationsForV1_8 = VersionedMigration<
+	2,
+	3,
+	migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
+	pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+	DbWeight,
+>;
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]

@@ -29,9 +29,9 @@ use frame_support::{
 use pallet_cf_elections::{
 	electoral_systems::{
 		blockchain::delta_based_ingress::ChannelTotalIngressedFor,
-		composite::tuple_6_impls::CompositeElectionIdentifierExtra,
+		composite::tuple_7_impls::CompositeElectionIdentifierExtra,
 	},
-	vote_storage::{composite::tuple_6_impls::CompositeVote, AuthorityVote},
+	vote_storage::{composite::tuple_7_impls::CompositeVote, AuthorityVote},
 	CompositeAuthorityVoteOf, CompositeElectionIdentifierOf, MAXIMUM_VOTES_PER_EXTRINSIC,
 };
 use pallet_cf_ingress_egress::{DepositWitness, FetchOrTransfer};

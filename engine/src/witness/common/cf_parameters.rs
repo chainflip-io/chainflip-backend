@@ -37,12 +37,7 @@ mod tests {
 	const MAX_CF_PARAM_LENGTH: u32 =
 		MAX_CCM_ADDITIONAL_DATA_LENGTH + MAX_VAULT_SWAP_PARAMETERS_LENGTH;
 
-	const REFERENCE_EXPECTED_ENCODED: &[u8] = &[
-		0, 1, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-		3, 3, 4, 0, 0,
-	];
+	const REFERENCE_EXPECTED_ENCODED_HEX: &str = "0001000000000202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000303030303030303030303030303030303030303030303030303030303030303040000";
 
 	#[test]
 	fn test_cf_parameters_max_length() {
@@ -75,8 +70,9 @@ mod tests {
 		};
 
 		let mut encoded = VersionedCfParameters::V0(cf_parameters).encode();
-
-		assert_eq!(encoded, REFERENCE_EXPECTED_ENCODED);
+		let expected_encoded: Vec<u8> =
+			hex::decode(REFERENCE_EXPECTED_ENCODED_HEX).expect("Decoding hex string failed");
+		assert_eq!(encoded, expected_encoded);
 
 		let ccm_cf_parameters = CfParameters {
 			ccm_additional_data: CcmAdditionalData::default(),
@@ -86,8 +82,8 @@ mod tests {
 		encoded = VersionedCcmCfParameters::V0(ccm_cf_parameters).encode();
 
 		// Extra byte for the empty ccm metadata
-		let expected_encoded = [vec![0], Vec::from(REFERENCE_EXPECTED_ENCODED)].concat();
+		let expected_encoded_with_metadata = [vec![0], expected_encoded.clone()].concat();
 
-		assert_eq!(encoded, expected_encoded);
+		assert_eq!(encoded, expected_encoded_with_metadata);
 	}
 }

@@ -1,6 +1,7 @@
 mod egress_witnessing;
 mod fee_tracking;
 mod nonce_witnessing;
+mod program_swaps_witnessing;
 mod sol_deposits;
 
 use crate::{
@@ -16,24 +17,31 @@ use crate::{
 	},
 };
 use anyhow::Result;
-use cf_chains::{sol::SolHash, Chain};
+use cf_chains::{
+	sol::{api::VaultSwapAccountAndSender, SolHash},
+	Chain,
+};
 use futures::FutureExt;
-use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
+use pallet_cf_elections::{
+	electoral_system::ElectoralSystem,
+	electoral_systems::solana_vault_swap_accounts::SolanaVaultSwapsVote, vote_storage::VoteStorage,
+};
 use state_chain_runtime::{
 	chainflip::solana_elections::{
 		SolanaBlockHeightTracking, SolanaEgressWitnessing, SolanaElectoralSystemRunner,
 		SolanaFeeTracking, SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking,
-		TransactionSuccessDetails,
+		SolanaVaultSwapTracking, TransactionSuccessDetails,
 	},
 	SolanaInstance,
 };
 
-use cf_utilities::{
-	metrics::CHAIN_TRACKING,
-	task_scope::{self, Scope},
-};
+use cf_utilities::{metrics::CHAIN_TRACKING, task_scope, task_scope::Scope};
 use pallet_cf_elections::vote_storage::change::MonotonicChangeVote;
-use std::{str::FromStr, sync::Arc};
+use std::{
+	collections::{BTreeSet, HashSet},
+	str::FromStr,
+	sync::Arc,
+};
 
 #[derive(Clone)]
 struct SolanaBlockHeightTrackingVoter {
@@ -187,6 +195,40 @@ impl VoterApi<SolanaLiveness> for SolanaLivenessVoter {
 	}
 }
 
+#[derive(Clone)]
+struct SolanaVaultSwapsVoter {
+	client: SolRetryRpcClient,
+}
+
+#[async_trait::async_trait]
+impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
+	async fn vote(
+		&self,
+		settings: <SolanaVaultSwapTracking as ElectoralSystem>::ElectoralSettings,
+		properties: <SolanaVaultSwapTracking as ElectoralSystem>::ElectionProperties,
+	) -> Result<
+		<<SolanaVaultSwapTracking as ElectoralSystem>::Vote as VoteStorage>::Vote,
+		anyhow::Error,
+	> {
+		program_swaps_witnessing::get_program_swaps(
+			&self.client,
+			settings.swap_endpoint_data_account_address,
+			properties
+				.witnessed_open_accounts
+				.into_iter()
+				.map(|VaultSwapAccountAndSender { vault_swap_account, .. }| vault_swap_account)
+				.collect::<HashSet<_>>(),
+			properties.closure_initiated_accounts,
+			settings.usdc_token_mint_pubkey,
+		)
+		.await
+		.map(|(new_accounts, confirm_closed_accounts)| SolanaVaultSwapsVote {
+			new_accounts: new_accounts.into_iter().collect::<BTreeSet<_>>(),
+			confirm_closed_accounts: confirm_closed_accounts.into_iter().collect::<BTreeSet<_>>(),
+		})
+	}
+}
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	client: SolRetryRpcClient,
@@ -213,7 +255,8 @@ where
 						SolanaIngressTrackingVoter { client: client.clone() },
 						SolanaNonceTrackingVoter { client: client.clone() },
 						SolanaEgressWitnessingVoter { client: client.clone() },
-						SolanaLivenessVoter { client },
+						SolanaLivenessVoter { client: client.clone() },
+						SolanaVaultSwapsVoter { client },
 					)),
 				)
 				.continuously_vote()

@@ -117,13 +117,17 @@ where
 	// We may want to test initialisation of elections within on finalise, so *don't* want to
 	// initialise an election in the utilities.
 	pub fn build(self) -> TestContext<ES> {
+		let setup = self.clone();
+
 		// We need to clear the storage at every build so if there are multiple test contexts used
 		// within a single test they do not conflict.
 		MockStorageAccess::clear_storage();
 
-		MockStorageAccess::set_electoral_settings::<ES>(self.electoral_settings.clone());
+		MockStorageAccess::set_electoral_settings::<ES>(setup.electoral_settings.clone());
+		MockStorageAccess::set_unsynchronised_state::<ES>(setup.unsynchronised_state.clone());
+		MockStorageAccess::set_unsynchronised_settings::<ES>(setup.unsynchronised_settings.clone());
 
-		TestContext { setup: self.clone() }
+		TestContext { setup }
 	}
 }
 
@@ -136,8 +140,6 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 		mut consensus_votes: ConsensusVotes<ES>,
 		expected_consensus: Option<ES::Consensus>,
 	) -> Self {
-		assert!(consensus_votes.num_authorities() > 0, "Cannot have zero authorities.");
-
 		use rand::seq::SliceRandom;
 		consensus_votes.votes.shuffle(&mut rand::thread_rng());
 
@@ -186,6 +188,17 @@ impl<ES: ElectoralSystem> TestContext<ES> {
 	) -> Self {
 		MockStorageAccess::set_consensus_status::<ES>(election_id, new_consensus);
 
+		self
+	}
+
+	pub fn expect_election_properties_only_election(
+		self,
+		expected_properties: ES::ElectionProperties,
+	) -> Self {
+		assert_eq!(
+			MockStorageAccess::election_properties::<ES>(self.only_election_id()),
+			expected_properties
+		);
 		self
 	}
 

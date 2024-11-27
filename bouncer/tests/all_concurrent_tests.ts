@@ -15,6 +15,7 @@ import { testAllSwaps } from './all_swaps';
 import { depositChannelCreation } from './request_swap_deposit_address_with_affiliates';
 import { testDCASwaps } from './DCA_test';
 import { testBrokerLevelScreening } from './broker_level_screening';
+import { checkSolEventAccountsClosure } from '../shared/sol_vault_swap';
 
 async function runAllConcurrentTests() {
   // Specify the number of nodes via providing an argument to this script.
@@ -57,6 +58,8 @@ async function runAllConcurrentTests() {
   await Promise.all(tests);
 
   await Promise.all([broadcastAborted.stop(), feeDeficitRefused.stop()]);
+
+  await checkSolEventAccountsClosure();
 
   await checkAvailabilityAllSolanaNonces();
 }

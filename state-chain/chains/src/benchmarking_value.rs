@@ -4,6 +4,10 @@ use cf_primitives::{
 	Asset,
 };
 #[cfg(feature = "runtime-benchmarks")]
+use cf_primitives::{
+	AffiliateShortId, Beneficiary, DcaParameters, ForeignChain, ShortId, MAX_AFFILIATES,
+};
+#[cfg(feature = "runtime-benchmarks")]
 use core::str::FromStr;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -235,9 +239,92 @@ impl BenchmarkValue for Utxo {
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for U256 {
+	fn benchmark_value() -> Self {
+		Self([1u64; 4])
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for DcaParameters {
+	fn benchmark_value() -> Self {
+		Self {
+			number_of_chunks: BenchmarkValue::benchmark_value(),
+			chunk_interval: BenchmarkValue::benchmark_value(),
+		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<Id: BenchmarkValue> BenchmarkValue for Beneficiary<Id> {
+	fn benchmark_value() -> Self {
+		Self { account: BenchmarkValue::benchmark_value(), bps: BenchmarkValue::benchmark_value() }
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for Beneficiary<sp_runtime::AccountId32> {
+	fn benchmark_value() -> Self {
+		Self {
+			account: sp_runtime::AccountId32::new([1u8; 32]),
+			bps: BenchmarkValue::benchmark_value(),
+		}
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue
+	for sp_runtime::BoundedVec<Beneficiary<ShortId>, sp_core::ConstU32<{ MAX_AFFILIATES + 1 }>>
+{
+	fn benchmark_value() -> Self {
+		sp_runtime::BoundedVec::try_from(vec![BenchmarkValue::benchmark_value()]).unwrap()
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for AffiliateShortId {
+	fn benchmark_value() -> Self {
+		cf_primitives::AffiliateShortId(BenchmarkValue::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue
+	for frame_support::BoundedVec<Beneficiary<AffiliateShortId>, sp_core::ConstU32<MAX_AFFILIATES>>
+{
+	fn benchmark_value() -> Self {
+		sp_runtime::BoundedVec::try_from(vec![BenchmarkValue::benchmark_value()]).unwrap()
+	}
+}
+
+#[macro_export]
+macro_rules! impl_bounded_vec_benchmark_value {
+	($element:ty, $n:literal) => {
+		#[cfg(feature = "runtime-benchmarks")]
+		impl BenchmarkValue for sp_runtime::BoundedVec<$element, sp_core::ConstU32<{ $n }>> {
+			fn benchmark_value() -> Self {
+				sp_runtime::BoundedVec::try_from(vec![BenchmarkValue::benchmark_value()]).unwrap()
+			}
+		}
+	};
+}
+
+impl_bounded_vec_benchmark_value!(u8, 10000);
+impl_bounded_vec_benchmark_value!(u8, 1000);
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for ForeignChain {
+	fn benchmark_value() -> Self {
+		Self::Ethereum
+	}
+}
+
 impl_default_benchmark_value!(());
-impl_default_benchmark_value!(u32);
 impl_default_benchmark_value!(u64);
+impl_default_benchmark_value!(u32);
+impl_default_benchmark_value!(u16);
+impl_default_benchmark_value!(u8);
 
 #[macro_export]
 macro_rules! impl_tuple_benchmark_value {
@@ -258,3 +345,4 @@ impl_tuple_benchmark_value!(A, B, C);
 impl_tuple_benchmark_value!(A, B, C, D);
 impl_tuple_benchmark_value!(A, B, C, D, EE);
 impl_tuple_benchmark_value!(A, B, C, D, EE, F);
+impl_tuple_benchmark_value!(A, B, C, D, EE, F, GG);

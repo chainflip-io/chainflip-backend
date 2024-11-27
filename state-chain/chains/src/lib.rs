@@ -7,6 +7,7 @@ use crate::{
 	sol::SolanaCrypto,
 };
 use core::{fmt::Display, iter::Step};
+use sol::api::VaultSwapAccountAndSender;
 use sp_std::marker::PhantomData;
 
 use crate::{
@@ -495,6 +496,12 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 	) -> Self;
 }
 
+pub trait CloseSolanaVaultSwapAccounts: ApiCall<<Solana as Chain>::ChainCrypto> {
+	fn new_unsigned(
+		accounts: Vec<VaultSwapAccountAndSender>,
+	) -> Result<Self, SolanaTransactionBuildingError>;
+}
+
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
 pub enum AllBatchError {
 	/// Empty transaction - the call is not required.
@@ -693,7 +700,18 @@ mod bounded_hex {
 
 /// Deposit channel Metadata for Cross-Chain-Message.
 #[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize, MaxEncodedLen,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	MaxEncodedLen,
+	PartialOrd,
+	Ord,
 )]
 pub struct CcmChannelMetadata {
 	/// Call data used after the message is egressed.
@@ -708,6 +726,17 @@ pub struct CcmChannelMetadata {
 		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
 	)]
 	pub ccm_additional_data: CcmAdditionalData,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for CcmChannelMetadata {
+	fn benchmark_value() -> Self {
+		Self {
+			message: BenchmarkValue::benchmark_value(),
+			gas_budget: BenchmarkValue::benchmark_value(),
+			ccm_additional_data: BenchmarkValue::benchmark_value(),
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -725,11 +754,24 @@ pub enum CcmFailReason {
 	InvalidMetadata,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
+)]
 pub struct CcmDepositMetadataGeneric<Address> {
 	pub channel_metadata: CcmChannelMetadata,
 	pub source_chain: ForeignChain,
 	pub source_address: Option<Address>,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<Address: BenchmarkValue> BenchmarkValue for CcmDepositMetadataGeneric<Address> {
+	fn benchmark_value() -> Self {
+		Self {
+			channel_metadata: BenchmarkValue::benchmark_value(),
+			source_chain: BenchmarkValue::benchmark_value(),
+			source_address: Some(BenchmarkValue::benchmark_value()),
+		}
+	}
 }
 
 impl<Address> CcmDepositMetadataGeneric<Address> {
@@ -859,12 +901,34 @@ pub struct SwapRefundParameters {
 }
 
 #[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Serialize, Deserialize,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 pub struct ChannelRefundParametersGeneric<A> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
 	pub min_price: Price,
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<A: BenchmarkValue> BenchmarkValue for ChannelRefundParametersGeneric<A> {
+	fn benchmark_value() -> Self {
+		Self {
+			retry_duration: BenchmarkValue::benchmark_value(),
+			refund_address: BenchmarkValue::benchmark_value(),
+			min_price: BenchmarkValue::benchmark_value(),
+		}
+	}
 }
 
 pub type ChannelRefundParameters = ChannelRefundParametersGeneric<ForeignChainAddress>;

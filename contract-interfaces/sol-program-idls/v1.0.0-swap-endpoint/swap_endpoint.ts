@@ -535,6 +535,10 @@ export type SwapEndpoint = {
         "kind": "struct",
         "fields": [
           {
+            "name": "creationSlot",
+            "type": "u64"
+          },
+          {
             "name": "sender",
             "type": "pubkey"
           },
