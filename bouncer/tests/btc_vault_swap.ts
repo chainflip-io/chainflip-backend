@@ -1,11 +1,10 @@
 import assert from 'assert';
 import { ExecutableTest } from '../shared/executable_test';
-import { BTC_ENDPOINT, selectInputs, waitForBtcTransaction, btcClient } from '../shared/send_btc';
+import { BTC_ENDPOINT, waitForBtcTransaction, sendVaultTransaction } from '../shared/send_btc';
 import {
   amountToFineAmount,
   Asset,
   assetDecimals,
-  btcClientMutex,
   createStateChainKeypair,
   newAddress,
   observeBalanceIncrease,
@@ -51,9 +50,6 @@ async function buildAndSendBtcVaultSwap(
     affiliates.push({ account: affiliateAddress, bps: commissionBps });
   }
 
-  const feeBtc = 0.00001;
-  const { inputs, change } = await selectInputs(Number(depositAmountBtc) + feeBtc);
-
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_get_vault_swap_details`,
     broker.address,
@@ -71,32 +67,15 @@ async function buildAndSendBtcVaultSwap(
   testBtcVaultSwap.debugLog('nulldata_utxo:', vaultSwapDetails.nulldata_utxo);
   testBtcVaultSwap.debugLog('deposit_address:', vaultSwapDetails.deposit_address);
 
-  // The `createRawTransaction` function will add the op codes, so we have to remove them here.
-  const nullDataWithoutOpCodes = vaultSwapDetails.nulldata_utxo.replace('0x', '').substring(4);
-
-  const outputs = [
-    {
-      [vaultSwapDetails.deposit_address]: depositAmountBtc,
-    },
-    {
-      data: nullDataWithoutOpCodes,
-    },
-    {
-      [refundAddress]: change,
-    },
-  ];
-
-  const rawTx = await btcClient.createRawTransaction(inputs, outputs, 0, false);
-  const signedTx = await btcClient.signRawTransactionWithWallet(rawTx);
-  const txid = await btcClientMutex.runExclusive(async () =>
-    btcClient.sendRawTransaction(signedTx.hex),
+  const txid = await sendVaultTransaction(
+    vaultSwapDetails.nulldata_utxo,
+    depositAmountBtc,
+    vaultSwapDetails.deposit_address,
+    refundAddress,
   );
-  if (!txid) {
-    throw new Error('Broadcast failed');
-  }
   testBtcVaultSwap.log('Broadcast successful, txid:', txid);
 
-  await waitForBtcTransaction(txid as string);
+  await waitForBtcTransaction(txid);
   testBtcVaultSwap.debugLog('Transaction confirmed');
 }
 

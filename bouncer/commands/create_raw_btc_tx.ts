@@ -2,26 +2,24 @@
 // Constructs a very simple Raw BTC transaction. Can be used for manual testing a raw broadcast for example.
 // Usage: ./commands/create_raw_btc_tx.ts <bitcoin_address> <btc_amount>
 
-import { BTC_ENDPOINT, btcClient, selectInputs } from '../shared/send_btc';
+import { BTC_ENDPOINT, btcClient } from '../shared/send_btc';
 
 console.log(`Btc endpoint is set to '${BTC_ENDPOINT}'`);
 
 const createRawTransaction = async (toAddress: string, amountInBtc: number | string) => {
   try {
-    // Inputs and outputs
-    const feeInBtc = 0.00001;
-    const { inputs, change } = await selectInputs(Number(amountInBtc) + feeInBtc);
-    const changeAddress = await btcClient.getNewAddress();
-    const outputs = {
-      [toAddress]: amountInBtc,
-      [changeAddress]: change,
-    };
-
     // Create the raw transaction
-    const rawTx = await btcClient.createRawTransaction(inputs, outputs);
+    const rawTx = await btcClient.createRawTransaction([], {
+      [toAddress]: amountInBtc,
+    });
+    const fundedTx = (await btcClient.fundRawTransaction(rawTx, {
+      changeAddress: await btcClient.getNewAddress(),
+      feeRate: 0.00001,
+      lockUnspents: true,
+    })) as { hex: string };
 
     // Sign the raw transaction
-    const signedTx = await btcClient.signRawTransactionWithWallet(rawTx);
+    const signedTx = await btcClient.signRawTransactionWithWallet(fundedTx);
 
     // Here's your raw signed transaction
     console.log('Raw signed transaction:', signedTx.hex);

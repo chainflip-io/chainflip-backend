@@ -11,26 +11,48 @@ export const btcClient = new Client({
   wallet: 'whale',
 });
 
-export async function selectInputs(amount: number) {
-  // List unspent UTXOs
-  const utxos = await btcClient.listUnspent();
+export async function fundAndSendTransaction(
+  outputs: object[],
+  changeAddress: string,
+  feeRate?: number,
+): Promise<string> {
+  return btcClientMutex.runExclusive(async () => {
+    const rawTx = await btcClient.createRawTransaction([], outputs);
+    const fundedTx = (await btcClient.fundRawTransaction(rawTx, {
+      changeAddress,
+      feeRate: feeRate ?? 0.00001,
+      lockUnspents: true,
+      changePosition: 2,
+    })) as { hex: string };
+    const signedTx = await btcClient.signRawTransactionWithWallet(fundedTx.hex);
+    const txId = (await btcClient.sendRawTransaction(signedTx.hex)) as string | undefined;
 
-  // Find a UTXO with enough funds
-  const utxo = utxos.find((u) => u.amount >= amount);
-  if (!utxo) throw new Error('Insufficient funds');
-  // TODO: be able to select more than one UTXO
+    if (!txId) {
+      throw new Error('Broadcast failed');
+    }
 
-  const change = utxo.amount - amount;
+    return txId;
+  });
+}
 
-  // Prepare the transaction inputs and outputs
-  const inputs = [
-    {
-      txid: utxo.txid,
-      vout: utxo.vout,
-    },
-  ];
-
-  return { inputs, change };
+export async function sendVaultTransaction(
+  nulldataUtxo: string,
+  amountBtc: number,
+  depositAddress: string,
+  refundAddress: string,
+): Promise<string> {
+  return fundAndSendTransaction(
+    [
+      {
+        [depositAddress]: amountBtc,
+      },
+      {
+        // The `createRawTransaction` function will add the op codes, so we have to remove them here.
+        data: nulldataUtxo.replace('0x', '').substring(4),
+      },
+    ],
+    refundAddress,
+  );
 }
 
 export async function waitForBtcTransaction(txid: string, confirmations = 1) {

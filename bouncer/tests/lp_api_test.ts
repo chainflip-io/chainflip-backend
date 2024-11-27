@@ -397,27 +397,27 @@ async function main() {
   const registerLiquidityRefundAddress = new ExecutableTest(
     'LP-API::Register-Liquidity-Refund-Address',
     testRegisterLiquidityRefundAddress,
-    500,
+    30,
   );
   const LiquidityDeposit = new ExecutableTest(
     'LP-API::Liquidity-Deposit',
     testLiquidityDeposit,
-    500,
+    60,
   );
-  const WithdrawAsset = new ExecutableTest('LP-API::Withdraw-Asset', testWithdrawAsset, 500);
+  const WithdrawAsset = new ExecutableTest('LP-API::Withdraw-Asset', testWithdrawAsset, 60);
   const RegisterWithExistingLpAccount = new ExecutableTest(
     'LP-API::testRegisterWithExistingLpAccount',
     testRegisterWithExistingLpAccount,
-    500,
+    15,
   );
-  const RangeOrder = new ExecutableTest('LP-API::Range-Order', testRangeOrder, 500);
-  const LimitOrder = new ExecutableTest('LP-API::Limit-Order', testLimitOrder, 500);
+  const RangeOrder = new ExecutableTest('LP-API::Range-Order', testRangeOrder, 60);
+  const LimitOrder = new ExecutableTest('LP-API::Limit-Order', testLimitOrder, 120);
   const GetOpenSwapChannels = new ExecutableTest(
     'LP-API::Get-Open-Swap-Channels',
     testGetOpenSwapChannels,
-    500,
+    15,
   );
-  const TransferAsset = new ExecutableTest('LP-API::TransferAsset', testTransferAsset, 500);
+  const TransferAsset = new ExecutableTest('LP-API::TransferAsset', testTransferAsset, 30);
 
   // Provide the amount of liquidity needed for the tests
   await provideLiquidityAndTestAssetBalances();
