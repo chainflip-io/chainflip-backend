@@ -156,7 +156,7 @@ fn on_finalize_time_limit_reached() {
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
 				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(0),
 				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(0),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(1),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(0),
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
