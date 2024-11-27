@@ -292,7 +292,7 @@ impl ChainCrypto for BitcoinCrypto {
 					PreviousOrCurrent::Previous => agg_key.previous.as_ref(),
 					PreviousOrCurrent::Current => Some(&agg_key.current),
 				}
-				.map_or(false, |key| verify_single_threshold_signature(key, payload, signature))
+				.is_some_and(|key| verify_single_threshold_signature(key, payload, signature))
 			})
 	}
 

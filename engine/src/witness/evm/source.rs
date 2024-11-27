@@ -93,8 +93,7 @@ where
 										data: raw_evm_header.logs_bloom,
 									})
 								}) {
-								if state.evm_header_sequence.back().map_or(
-									false,
+								if state.evm_header_sequence.back().is_some_and(
 									|previous_evm_header| {
 										Some(previous_evm_header.hash) != evm_header.parent_hash
 									},

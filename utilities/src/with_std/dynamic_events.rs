@@ -56,7 +56,7 @@ impl Deref for DynamicEvent {
 impl DynamicEventRecord {
 	/// Wrap a JSON value that represents a substrate EventRecord.
 	pub fn new(json: JsonValue) -> Option<Self> {
-		if json.as_object().map_or(false, |obj| {
+		if json.as_object().is_some_and(|obj| {
 			obj.contains_key("event") && obj.contains_key("phase") && obj.contains_key("topics")
 		}) {
 			Some(Self(json))

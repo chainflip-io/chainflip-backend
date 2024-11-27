@@ -8,19 +8,19 @@ struct MutexStateAndPoisonFlag<T> {
 pub struct MutexGuard<'a, T> {
 	guard: tokio::sync::MutexGuard<'a, MutexStateAndPoisonFlag<T>>,
 }
-impl<'a, T> Deref for MutexGuard<'a, T> {
+impl<T> Deref for MutexGuard<'_, T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
 		&self.guard.deref().state
 	}
 }
-impl<'a, T> DerefMut for MutexGuard<'a, T> {
+impl<T> DerefMut for MutexGuard<'_, T> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.guard.deref_mut().state
 	}
 }
-impl<'a, T> Drop for MutexGuard<'a, T> {
+impl<T> Drop for MutexGuard<'_, T> {
 	fn drop(&mut self) {
 		let guarded = self.guard.deref_mut();
 		if !guarded.poisoned && std::thread::panicking() {

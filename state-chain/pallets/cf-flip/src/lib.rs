@@ -438,10 +438,10 @@ impl<T: Config> FeePayment for Pallet<T> {
 pub struct Bonder<T>(PhantomData<T>);
 
 impl<T: Config> Bonding for Bonder<T> {
-	type ValidatorId = T::AccountId;
+	type AccountId = T::AccountId;
 	type Amount = T::Balance;
 
-	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount) {
+	fn update_bond(authority: &Self::AccountId, bond: Self::Amount) {
 		Account::<T>::mutate_exists(authority, |maybe_account| {
 			if let Some(account) = maybe_account.as_mut() {
 				account.bond = bond

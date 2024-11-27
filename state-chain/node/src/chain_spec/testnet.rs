@@ -166,19 +166,19 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 		(
 			get_account_id_from_seed::<sr25519::Public>("BROKER_1"),
 			AccountRole::Broker,
-			100 * FLIPPERINOS_PER_FLIP,
+			200 * FLIPPERINOS_PER_FLIP,
 			Some(b"Chainflip Testnet Broker 1".to_vec()),
 		),
 		(
 			get_account_id_from_seed::<sr25519::Public>("BROKER_2"),
 			AccountRole::Broker,
-			100 * FLIPPERINOS_PER_FLIP,
+			200 * FLIPPERINOS_PER_FLIP,
 			Some(b"Chainflip Testnet Broker 2".to_vec()),
 		),
 		(
 			get_account_id_from_seed::<sr25519::Public>("BROKER_FEE_TEST"),
 			AccountRole::Broker,
-			100 * FLIPPERINOS_PER_FLIP,
+			200 * FLIPPERINOS_PER_FLIP,
 			Some(b"Chainflip Testnet Broker for broker_fee_collection_test".to_vec()),
 		),
 	]

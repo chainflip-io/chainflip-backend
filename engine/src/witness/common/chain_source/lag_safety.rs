@@ -80,7 +80,7 @@ where
 							if let Some(header) = chain_stream.next() => {
 								let header_index = header.index;
 								assert!(<InnerSource::Chain as Chain>::is_block_witness_root(header_index));
-								if unsafe_cache.back().map_or(false, |last_header| Some(&last_header.hash) != header.parent_hash.as_ref()) {
+								if unsafe_cache.back().is_some_and(|last_header| Some(&last_header.hash) != header.parent_hash.as_ref()) {
 									unsafe_cache.clear();
 								}
 								unsafe_cache.push_back(header);

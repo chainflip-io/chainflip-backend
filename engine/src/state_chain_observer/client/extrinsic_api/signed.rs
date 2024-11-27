@@ -169,11 +169,10 @@ pub struct SignedExtrinsicClient {
 
 impl SignedExtrinsicClient {
 	pub async fn new<
-		'a,
 		BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
 		BlockStream: StreamApi<FINALIZED> + Clone,
 	>(
-		scope: &Scope<'a, anyhow::Error>,
+		scope: &Scope<'_, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 		account_nonce: Nonce,
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,

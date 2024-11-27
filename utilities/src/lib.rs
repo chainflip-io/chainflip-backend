@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(const_option)]
 #![feature(step_trait)]
 #![cfg_attr(any(feature = "test-utils", test), feature(closure_track_caller))]
 #![feature(async_fn_track_caller)]
@@ -175,7 +174,7 @@ fn test_collect_array_dropping() {
 			Self { instance_count }
 		}
 	}
-	impl<'a> Drop for InstanceCounter<'a> {
+	impl Drop for InstanceCounter<'_> {
 		fn drop(&mut self) {
 			self.instance_count.fetch_sub(1, Ordering::Relaxed);
 		}
@@ -256,6 +255,7 @@ where
 	struct IteratorRef<'a, T, It: Iterator<Item = T>> {
 		it: &'a mut It,
 	}
+	#[allow(clippy::needless_lifetimes)]
 	impl<'a, T, It: Iterator<Item = T>> Iterator for IteratorRef<'a, T, It> {
 		type Item = T;
 

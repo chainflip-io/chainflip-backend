@@ -22,3 +22,6 @@ sp-runtime = { workspace = true, default-features = true }
 scale-info = { workspace = true, default-features = true, features = [
     "derive",
 ] }
+
+[features]
+std = []

@@ -934,6 +934,8 @@ mod idl {
 				.find(|instr| instr.name == name)
 				.expect("instruction not found")
 		}
+
+		#[allow(dead_code)]
 		pub fn account(&self, name: &str) -> &IdlAccount {
 			self.accounts
 				.iter()

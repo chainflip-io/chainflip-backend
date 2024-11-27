@@ -5,7 +5,7 @@ pub struct NextOrPending<'a, St: ?Sized> {
 	#[pin]
 	stream: &'a mut St,
 }
-impl<'a, St: Stream + ?Sized + Unpin> Future for NextOrPending<'a, St> {
+impl<St: Stream + ?Sized + Unpin> Future for NextOrPending<'_, St> {
 	type Output = <St as Stream>::Item;
 
 	fn poll(

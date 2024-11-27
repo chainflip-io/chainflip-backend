@@ -1,5 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(feature = "std", feature(option_get_or_insert_default))]
 
 mod async_result;
 mod liquidity;
@@ -59,6 +58,7 @@ pub trait Chainflip: frame_system::Config {
 		+ FixedPointOperand
 		+ MaybeSerializeDeserialize
 		+ Bounded
+		+ From<u128>
 		+ Sum<Self::Amount>;
 
 	/// An identity for a node
@@ -685,10 +685,10 @@ pub trait HistoricalEpoch {
 
 /// Handles the bonding logic
 pub trait Bonding {
-	type ValidatorId;
+	type AccountId;
 	type Amount;
 	/// Update the bond of an authority
-	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
+	fn update_bond(authority: &Self::AccountId, bond: Self::Amount);
 }
 
 /// Something that is able to provide block authorship slots that were missed.

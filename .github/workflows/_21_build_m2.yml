@@ -49,6 +49,12 @@ jobs:
         run: |
           ls -la ./target/${{ inputs.binary-subdir }}
 
+      # We flatten the structure so upload-artifact uploads a flattened structure
+      - name: Prepare binaries for upload
+        run: |
+          mkdir -p ./target/${{ inputs.binary-subdir }}
+          cp ./target/${{ inputs.binary-subdir }}/deps/libchainflip_engine_v*.so ./target/${{ inputs.binary-subdir }}/ || true
+
       - name: Upload binary artifacts
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:

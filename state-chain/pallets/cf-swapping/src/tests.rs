@@ -28,6 +28,7 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
+		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 	},
 	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode,
@@ -1257,6 +1258,8 @@ fn broker_deregistration_checks_private_channels() {
 		)
 		.expect("BROKER was registered in test setup.");
 
+		MockFundingInfo::<Test>::credit_funds(&BROKER, FLIPPERINOS_PER_FLIP * 200);
+
 		// Create a private broker channel
 		assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
 
@@ -1663,6 +1666,8 @@ mod private_channels {
 			// Only brokers can open private channels
 			assert_noop!(Swapping::open_private_btc_channel(OriginTrait::signed(ALICE)), BadOrigin);
 
+			MockFundingInfo::<Test>::credit_funds(&BROKER, FLIPPERINOS_PER_FLIP * 200);
+
 			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), None);
 
 			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
@@ -1692,6 +1697,8 @@ mod private_channels {
 				)
 				.unwrap();
 
+				MockFundingInfo::<Test>::credit_funds(&BROKER_2, FLIPPERINOS_PER_FLIP * 200);
+
 				assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER_2)));
 
 				assert_eq!(
@@ -1717,6 +1724,8 @@ mod private_channels {
 				Swapping::close_private_btc_channel(OriginTrait::signed(BROKER)),
 				Error::<Test>::NoPrivateChannelExistsForBroker
 			);
+
+			MockFundingInfo::<Test>::credit_funds(&BROKER, FLIPPERINOS_PER_FLIP * 200);
 
 			assert_ok!(Swapping::open_private_btc_channel(OriginTrait::signed(BROKER)));
 			assert_eq!(BrokerPrivateBtcChannels::<Test>::get(BROKER), Some(CHANNEL_ID));
@@ -1788,6 +1797,13 @@ mod private_channels {
 				assert_eq!(Swapping::get_short_id(&BROKER, &BOB), Some(SHORT_ID));
 				assert_eq!(Swapping::get_short_id(&BROKER, &ALICE), None);
 			}
+		});
+	}
+
+	#[test]
+	fn default_broker_bond() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(BrokerBond::<Test>::get(), FLIPPERINOS_PER_FLIP * 100);
 		});
 	}
 }

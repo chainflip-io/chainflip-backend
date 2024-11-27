@@ -111,8 +111,8 @@ pub struct StateChainApi {
 }
 
 impl StateChainApi {
-	pub async fn connect<'a>(
-		scope: &Scope<'a, anyhow::Error>,
+	pub async fn connect(
+		scope: &Scope<'_, anyhow::Error>,
 		state_chain_settings: settings::StateChain,
 	) -> Result<Self, anyhow::Error> {
 		let (.., state_chain_client) = StateChainClient::connect_with_account(

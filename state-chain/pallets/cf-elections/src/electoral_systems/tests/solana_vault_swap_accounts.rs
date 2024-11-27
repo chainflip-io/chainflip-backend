@@ -87,9 +87,6 @@ register_checks! {
 		close_accounts_hook_called_once(_pre, _post) {
 			assert_eq!(CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),	1, "Hook not called expected number of times");
 		},
-		close_accounts_hook_called_twice(_pre, _post) {
-			assert_eq!(CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),	2, "Hook not called expected number of times");
-		},
 		get_sol_nonces_hook_not_called(_pre, _post) {
 			assert_eq!(GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()), 0, "Hook should not have been called!");
 		},

@@ -18,7 +18,7 @@ use crate::{
 	eth::{EthSigning, Point},
 };
 
-/// ==========================
+// ==========================
 // Generate invalid keygen data with the given number of elements in its inner and outer
 // collection(s)
 

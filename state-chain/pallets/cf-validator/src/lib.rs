@@ -150,7 +150,7 @@ pub mod pallet {
 		>;
 
 		/// Updates the bond of an authority.
-		type Bonder: Bonding<ValidatorId = ValidatorIdOf<Self>, Amount = Self::Amount>;
+		type Bonder: Bonding<AccountId = ValidatorIdOf<Self>, Amount = Self::Amount>;
 
 		/// This is used to reset the validator's reputation
 		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;

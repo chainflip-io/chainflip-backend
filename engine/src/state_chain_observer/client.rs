@@ -122,8 +122,8 @@ pub struct StateChainClient<
 }
 
 impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
-	pub async fn connect_with_account<'a>(
-		scope: &Scope<'a, anyhow::Error>,
+	pub async fn connect_with_account(
+		scope: &Scope<'_, anyhow::Error>,
 		ws_endpoint: &str,
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
@@ -146,8 +146,8 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 }
 
 impl StateChainClient<()> {
-	pub async fn connect_without_account<'a>(
-		scope: &Scope<'a, anyhow::Error>,
+	pub async fn connect_without_account(
+		scope: &Scope<'_, anyhow::Error>,
 		ws_endpoint: &str,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
@@ -158,8 +158,8 @@ impl StateChainClient<()> {
 impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	StateChainClient<extrinsic_api::signed::SignedExtrinsicClient, BaseRpcClient>
 {
-	pub async fn new_with_account<'a>(
-		scope: &Scope<'a, anyhow::Error>,
+	pub async fn new_with_account(
+		scope: &Scope<'_, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
@@ -189,8 +189,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	StateChainClient<(), BaseRpcClient>
 {
-	pub async fn new_without_account<'a>(
-		scope: &Scope<'a, anyhow::Error>,
+	pub async fn new_without_account(
+		scope: &Scope<'_, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 	) -> Result<(impl StreamApi<FINALIZED> + Clone, impl StreamApi<UNFINALIZED> + Clone, Arc<Self>)>
 	{
@@ -423,10 +423,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 	StateChainClient<SignedExtrinsicClient, BaseRpcClient>
 {
 	async fn new<
-		'a,
 		SignedExtrinsicClientBuilder: SignedExtrinsicClientBuilderTrait<Client = SignedExtrinsicClient>,
 	>(
-		scope: &Scope<'a, anyhow::Error>,
+		scope: &Scope<'_, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 		mut signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
 		start_from: Option<state_chain_runtime::BlockNumber>,

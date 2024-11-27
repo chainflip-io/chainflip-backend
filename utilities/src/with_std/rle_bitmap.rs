@@ -46,7 +46,7 @@ impl<T: Ord + Copy + Step + Bounded> RleBitmap<T> {
 
 		if option_exclusive_end != Some(inclusive_start) {
 			let does_start_value_match = option_exclusive_start
-				.map_or(false, |option_exclusive_start| self.get(&option_exclusive_start) == value);
+				.is_some_and(|option_exclusive_start| self.get(&option_exclusive_start) == value);
 			let does_end_value_match = option_exclusive_end
 				.map_or(true, |exclusive_end| self.get(&exclusive_end) == value);
 
