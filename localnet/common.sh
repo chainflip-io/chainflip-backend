@@ -3,7 +3,7 @@ export WORKFLOW=build-localnet
 export GENESIS_NODES=("bashful" "doc" "dopey")
 export REQUIRED_BINARIES="engine-runner chainflip-node chainflip-broker-api chainflip-lp-api"
 export INIT_CONTAINERS="eth-init solana-init"
-export CORE_CONTAINERS="bitcoin geth polkadot redis"
+export CORE_CONTAINERS="bitcoin geth polkadot1 polkadot2 assethub redis"
 export DEPOSIT_MONITOR_CONTAINER="deposit-monitor"
 export ARB_CONTAINERS="sequencer staker-unsafe poster"
 export SOLANA_BASE_PATH="/tmp/solana"
@@ -98,7 +98,7 @@ build-localnet() {
   check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 >>$DEBUG_OUTPUT_DESTINATION
   wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' >>$DEBUG_OUTPUT_DESTINATION
 
-  echo "🚦 Waiting for polkadot node to start"
+  echo "🚦 Waiting for polkadot nodes to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9947') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
 
@@ -251,8 +251,14 @@ logs() {
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f $CHAINFLIP_BASE_PATH/*/chainflip-*.log
     fi
-    if [[ $SERVICE == "polkadot" ]]; then
-      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot
+    if [[ $SERVICE == "polkadot1" ]]; then
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot1
+    fi
+    if [[ $SERVICE == "polkadot2" ]]; then
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow polkadot2
+    fi
+    if [[ $SERVICE == "assethub" ]]; then
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow assethub
     fi
     if [[ $SERVICE == "geth" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow geth
