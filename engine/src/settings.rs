@@ -167,6 +167,18 @@ impl Sol {
 	}
 }
 
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct Hub {
+	#[serde(flatten)]
+	pub nodes: NodeContainer<WsHttpEndpoints>,
+}
+
+impl Hub {
+	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+		self.nodes.validate()
+	}
+}
+
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Signing {
 	#[serde(deserialize_with = "deser_path")]
@@ -183,6 +195,7 @@ pub struct Settings {
 	pub btc: Btc,
 	pub arb: Evm,
 	pub sol: Sol,
+	pub hub: Hub,
 
 	pub health_check: Option<HealthCheck>,
 	pub prometheus: Option<Prometheus>,
@@ -269,6 +282,19 @@ pub struct SolOptions {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
+pub struct HubOptions {
+	#[clap(long = "hub.rpc.ws_endpoint")]
+	pub hub_ws_endpoint: Option<String>,
+	#[clap(long = "hub.rpc.http_endpoint")]
+	pub hub_http_endpoint: Option<String>,
+
+	#[clap(long = "hub.backup_rpc.ws_endpoint")]
+	pub hub_backup_ws_endpoint: Option<String>,
+	#[clap(long = "hub.backup_rpc.http_endpoint")]
+	pub hub_backup_http_endpoint: Option<String>,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
 pub struct P2POptions {
 	#[clap(long = "p2p.node_key_file")]
 	node_key_file: Option<PathBuf>,
@@ -308,6 +334,9 @@ pub struct CommandLineOptions {
 	#[clap(flatten)]
 	pub sol_opts: SolOptions,
 
+	#[clap(flatten)]
+	pub hub_opts: HubOptions,
+
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
 	pub health_check_hostname: Option<String>,
@@ -346,6 +375,7 @@ impl Default for CommandLineOptions {
 			btc_opts: BtcOptions::default(),
 			arb_opts: ArbOptions::default(),
 			sol_opts: SolOptions::default(),
+			hub_opts: HubOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
 			prometheus_hostname: None,
@@ -532,6 +562,8 @@ impl CfSettings for Settings {
 
 		self.sol.validate_settings()?;
 
+		self.hub.validate_settings()?;
+
 		self.state_chain.validate_settings()?;
 
 		is_valid_db_path(&self.signing.db_file).map_err(|e| ConfigError::Message(e.to_string()))?;
@@ -630,6 +662,8 @@ impl Source for CommandLineOptions {
 		self.arb_opts.insert_all(&mut map);
 
 		self.sol_opts.insert_all(&mut map);
+
+		self.hub_opts.insert_all(&mut map);
 
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
@@ -792,6 +826,20 @@ impl SolOptions {
 	}
 }
 
+impl HubOptions {
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "hub.rpc.ws_endpoint", &self.hub_ws_endpoint);
+		insert_command_line_option(map, "hub.rpc.http_endpoint", &self.hub_http_endpoint);
+
+		insert_command_line_option(map, "hub.backup_rpc.ws_endpoint", &self.hub_backup_ws_endpoint);
+		insert_command_line_option(
+			map,
+			"hub.backup_rpc.http_endpoint",
+			&self.hub_backup_http_endpoint,
+		);
+	}
+}
+
 impl Settings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
@@ -859,7 +907,8 @@ pub mod tests {
 		BTC_BACKUP_HTTP_ENDPOINT, BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT,
 		BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_BACKUP_HTTP_ENDPOINT, DOT_BACKUP_WS_ENDPOINT,
 		DOT_HTTP_ENDPOINT, DOT_WS_ENDPOINT, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
-		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, NODE_P2P_IP_ADDRESS, SOL_BACKUP_HTTP_ENDPOINT,
+		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, HUB_BACKUP_HTTP_ENDPOINT, HUB_BACKUP_WS_ENDPOINT,
+		HUB_HTTP_ENDPOINT, HUB_WS_ENDPOINT, NODE_P2P_IP_ADDRESS, SOL_BACKUP_HTTP_ENDPOINT,
 		SOL_HTTP_ENDPOINT,
 	};
 
@@ -915,6 +964,13 @@ pub mod tests {
 		DOT_BACKUP_HTTP_ENDPOINT =>
 		"https://second.my_fake_polkadot_rpc:443/<secret_key>",
 
+		HUB_WS_ENDPOINT => "wss://my_fake_assethub_rpc:443/<secret_key>",
+		HUB_HTTP_ENDPOINT => "https://my_fake_assethub_rpc:443/<secret_key>",
+		HUB_BACKUP_WS_ENDPOINT =>
+		"wss://second.my_fake_assethub_rpc:443/<secret_key>",
+		HUB_BACKUP_HTTP_ENDPOINT =>
+		"https://second.my_fake_assethub_rpc:443/<secret_key>",
+
 		ARB_HTTP_ENDPOINT => "http://localhost:8547",
 		ARB_WS_ENDPOINT => "ws://localhost:8548",
 		ARB_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8547",
@@ -949,6 +1005,10 @@ pub mod tests {
 			"wss://my_fake_polkadot_rpc:443/<secret_key>"
 		);
 		assert_eq!(
+			settings.hub.nodes.primary.ws_endpoint.as_ref(),
+			"wss://my_fake_assethub_rpc:443/<secret_key>"
+		);
+		assert_eq!(
 			settings.eth.nodes.backup.unwrap().http_endpoint.as_ref(),
 			"http://second.localhost:8545"
 		);
@@ -963,6 +1023,10 @@ pub mod tests {
 		assert_eq!(
 			settings.sol.nodes.backup.unwrap().http_endpoint.as_ref(),
 			"http://second.localhost:8899"
+		);
+		assert_eq!(
+			settings.hub.nodes.backup.unwrap().ws_endpoint.as_ref(),
+			"wss://second.my_fake_assethub_rpc:443/<secret_key>"
 		);
 	}
 
@@ -1060,6 +1124,13 @@ pub mod tests {
 			sol_opts: SolOptions {
 				sol_http_endpoint: Some("http://sol-endpoint:4321".to_owned()),
 				sol_backup_http_endpoint: Some("http://second.sol-endpoint:4321".to_owned()),
+			},
+			hub_opts: HubOptions {
+				hub_ws_endpoint: Some("ws://endpoint:4321".to_owned()),
+				hub_http_endpoint: Some("http://endpoint:4321".to_owned()),
+
+				hub_backup_ws_endpoint: Some("ws://second.endpoint:4321".to_owned()),
+				hub_backup_http_endpoint: Some("http://second.endpoint:4321".to_owned()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
@@ -1177,6 +1248,25 @@ pub mod tests {
 		assert_eq!(
 			opts.arb_opts.arb_http_endpoint.unwrap(),
 			settings.arb.nodes.primary.http_endpoint.as_ref()
+		);
+
+		assert_eq!(
+			opts.hub_opts.hub_ws_endpoint.unwrap(),
+			settings.hub.nodes.primary.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.hub_opts.hub_http_endpoint.unwrap(),
+			settings.hub.nodes.primary.http_endpoint.as_ref()
+		);
+
+		let hub_backup_node = settings.hub.nodes.backup.unwrap();
+		assert_eq!(
+			opts.hub_opts.hub_backup_ws_endpoint.unwrap(),
+			hub_backup_node.ws_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.hub_opts.hub_backup_http_endpoint.unwrap(),
+			hub_backup_node.http_endpoint.as_ref()
 		);
 
 		assert_eq!(
