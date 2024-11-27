@@ -7,8 +7,9 @@ use chainflip_api::{
 	AccountId32, AddressString, Beneficiary, BrokerApi, ChainflipApi, SwapDepositAddress,
 };
 use jsonrpsee::core::async_trait;
+use jsonrpsee_flatten::types::ArrayParam;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]
@@ -64,5 +65,59 @@ impl<T: ChainflipApi> api::Responder<Endpoint> for T {
 				dca_parameters,
 			)
 			.await?)
+	}
+}
+
+impl<A: Clone + Serialize + DeserializeOwned> ArrayParam for Request<A> {
+	type ArrayTuple = (
+		Asset,
+		Asset,
+		AddressString,
+		BasisPoints,
+		Option<CcmChannelMetadata>,
+		Option<BasisPoints>,
+		Option<Affiliates<AccountId32>>,
+		Option<RefundParameters<A>>,
+		Option<DcaParameters>,
+	);
+
+	fn into_array_tuple(self) -> Self::ArrayTuple {
+		(
+			self.source_asset,
+			self.destination_asset,
+			self.destination_address,
+			self.broker_commission,
+			self.channel_metadata,
+			self.boost_fee,
+			self.affiliate_fees,
+			self.refund_parameters,
+			self.dca_parameters,
+		)
+	}
+
+	fn from_array_tuple(
+		(
+			source_asset,
+			destination_asset,
+			destination_address,
+			broker_commission,
+			channel_metadata,
+			boost_fee,
+			affiliate_fees,
+			refund_parameters,
+			dca_parameters,
+		): Self::ArrayTuple,
+	) -> Self {
+		Request {
+			source_asset,
+			destination_asset,
+			destination_address,
+			broker_commission,
+			channel_metadata,
+			boost_fee,
+			affiliate_fees,
+			refund_parameters,
+			dca_parameters,
+		}
 	}
 }

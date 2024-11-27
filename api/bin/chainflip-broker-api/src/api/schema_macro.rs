@@ -15,6 +15,13 @@ macro_rules! impl_schema_endpoint {
 				)+
 			}
 
+			#[derive(Debug, Default, PartialEq, Eq, Clone, JsonSchema, Serialize, Deserialize)]
+			pub struct SchemaRequest {
+				#[serde(skip_serializing_if = "Vec::is_empty")]
+				#[serde(default)]
+				methods: Vec<Method>,
+			}
+
 			impl core::fmt::Display for Method {
 				fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 					write!(f, "{}", match self {
@@ -59,7 +66,7 @@ macro_rules! impl_schema_endpoint {
 			}
 
 			impl api::Endpoint for Endpoint {
-				type Request = Vec<Method>;
+				type Request = SchemaRequest;
 				type Response = Response;
 				type Error = Never;
 			}
@@ -88,14 +95,14 @@ macro_rules! impl_schema_endpoint {
 						.for_deserialize()
 						.into_generator();
 
-					let methods = if request.is_empty() {
+					let methods = if request.methods.is_empty() {
 						vec![
 							$(
 								Method::$endpoint,
 							)+
 						].into_iter()
 					} else {
-						request.into_iter()
+						request.methods.into_iter()
 					}
 					.map(|method| {
 						match method {
@@ -119,6 +126,18 @@ macro_rules! impl_schema_endpoint {
 							response: de_generator.take_definitions(),
 						}
 					})
+				}
+			}
+
+			impl jsonrpsee_flatten::types::ArrayParam for SchemaRequest {
+				type ArrayTuple = (Vec<Method>,);
+
+				fn into_array_tuple(self) -> Self::ArrayTuple {
+					(self.methods.clone(),)
+				}
+
+				fn from_array_tuple((methods,): Self::ArrayTuple) -> Self {
+					Self { methods }
 				}
 			}
 		}

@@ -113,7 +113,8 @@ pub trait Rpc {
 	#[method(
 		name = "request_swap_parameter_encoding",
 		aliases = ["broker_requestSwapParameterEncoding"],
-		param_kind = map
+		param_kind = map,
+		deny_array
 	)]
 	async fn request_swap_parameter_encoding(
 		&self,
