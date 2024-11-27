@@ -3,11 +3,16 @@ use crate::{
 	api::{async_trait, request_swap_deposit_address},
 };
 use chainflip_api::{
-	primitives::{state_chain_runtime::runtime_apis::VaultSwapDetails, AssetAmount},
-	AddressString, BaseRpcApi, ChainflipApi, CustomApiClient,
+	primitives::{
+		state_chain_runtime::runtime_apis::VaultSwapDetails, AssetAmount, CcmChannelMetadata,
+		DcaParameters, RefundParameters,
+	},
+	AccountId32, AddressString, Affiliates, Asset, BaseRpcApi, BasisPoints, ChainflipApi,
+	CustomApiClient,
 };
+use jsonrpsee_flatten::types::ArrayParam;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub struct Endpoint;
 
@@ -71,5 +76,65 @@ impl<T: ChainflipApi> api::Responder<Endpoint> for T {
 				None,
 			)
 			.await?)
+	}
+}
+
+impl<A: Clone + Serialize + DeserializeOwned> ArrayParam for Request<A> {
+	type ArrayTuple = (
+		AssetAmount,
+		Asset,
+		Asset,
+		AddressString,
+		BasisPoints,
+		Option<CcmChannelMetadata>,
+		Option<BasisPoints>,
+		Option<Affiliates<AccountId32>>,
+		Option<RefundParameters<A>>,
+		Option<DcaParameters>,
+	);
+
+	fn into_array_tuple(self) -> <Self as ArrayParam>::ArrayTuple {
+		(
+			self.input_amount,
+			self.inner.source_asset,
+			self.inner.destination_asset,
+			self.inner.destination_address,
+			self.inner.broker_commission,
+			self.inner.channel_metadata,
+			self.inner.boost_fee,
+			self.inner.affiliate_fees,
+			self.inner.refund_parameters,
+			self.inner.dca_parameters,
+		)
+	}
+
+	fn from_array_tuple(
+		(
+			input_amount,
+			source_asset,
+			destination_asset,
+			destination_address,
+			broker_commission,
+			channel_metadata,
+			boost_fee,
+			affiliate_fees,
+			refund_parameters,
+			dca_parameters,
+		): <Self as ArrayParam>::ArrayTuple,
+	) -> Self {
+		Request {
+			input_amount,
+			inner: request_swap_deposit_address::Request {
+				source_asset,
+				destination_asset,
+				destination_address,
+				broker_commission,
+				channel_metadata,
+				boost_fee,
+				affiliate_fees,
+				refund_parameters,
+				dca_parameters,
+			},
+		}
 	}
 }
