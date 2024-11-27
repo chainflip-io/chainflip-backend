@@ -146,6 +146,11 @@ mod tests {
 			// Sol
 			"--sol.rpc.http_endpoint=http://localhost:8899".to_string(),
 			"--sol.backup_rpc.http_endpoint=http://localhost:8899".to_string(),
+			// Hub
+			"--hub.rpc.ws_endpoint=ws://localhost:8545".to_string(),
+			"--hub.backup_rpc.ws_endpoint=ws://localhost:8546".to_string(),
+			"--hub.rpc.http_endpoint=http://localhost:8545".to_string(),
+			"--hub.backup_rpc.http_endpoint=http://localhost:8546".to_string(),
 			// p2p
 			format!("--p2p.node_key_file={some_file}"),
 			"--p2p.ip_address=0.1.2.3".to_string(),

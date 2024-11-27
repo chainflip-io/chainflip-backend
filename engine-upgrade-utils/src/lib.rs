@@ -19,7 +19,7 @@ pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 // Sometimes we need to remove arguments that are valid for the new version but not for the old
 // version.
 pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
-	args
+	args.into_iter().filter(|arg| !arg.starts_with("--hub.")).collect()
 }
 
 pub use std::ffi::c_char;
