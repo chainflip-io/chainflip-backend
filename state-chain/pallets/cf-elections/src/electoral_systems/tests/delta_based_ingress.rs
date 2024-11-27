@@ -140,14 +140,6 @@ impl DepositChannels {
 	}
 }
 
-fn to_raw_state_map<K: Encode, V: Encode, M: IntoIterator<Item = (K, V)>>(
-	state_map: M,
-) -> BTreeMap<Vec<u8>, Option<Vec<u8>>> {
-	BTreeMap::from_iter(
-		state_map.into_iter().map(|(key, value)| (key.encode(), Some(value.encode()))),
-	)
-}
-
 fn initial_channel_state() -> DepositChannels {
 	DepositChannels::new(vec![
 		DepositChannel {
@@ -277,14 +269,14 @@ register_checks! {
 		started_at_state(pre_finalize, _post, state: DepositChannels) {
 			assert_eq!(
 				pre_finalize.unsynchronised_state_map,
-				to_raw_state_map(state.to_state_map()),
+				state.to_state_map(),
 				"Expected state map incorrect before finalization."
 			);
 		},
 		ended_at_state(_pre, post_finalize, state: DepositChannels) {
 			assert_eq!(
 				post_finalize.unsynchronised_state_map,
-				to_raw_state_map(state.to_state_map()),
+				state.to_state_map(),
 				"Expected state map incorrect after finalization."
 			);
 		},

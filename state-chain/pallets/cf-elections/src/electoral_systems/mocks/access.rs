@@ -6,7 +6,7 @@ use crate::{
 	CorruptStorageError, ElectionIdentifier, UniqueMonotonicIdentifier,
 };
 use codec::{Decode, Encode};
-use core::cell::RefCell;
+use core::{cell::RefCell, cmp::Ord};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use std::collections::BTreeMap;
 
@@ -86,7 +86,7 @@ thread_local! {
 	pub static ELECTION_SETTINGS: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
 	pub static ELECTORAL_UNSYNCHRONISED_SETTINGS: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 	pub static ELECTORAL_UNSYNCHRONISED_STATE: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
-	pub static ELECTORAL_UNSYNCHRONISED_STATE_MAP: RefCell<BTreeMap<Vec<u8>, Option<Vec<u8>>>> = const { RefCell::new(BTreeMap::new()) };
+	pub static ELECTORAL_UNSYNCHRONISED_STATE_MAP: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
 	pub static CONSENSUS_STATUS: RefCell<BTreeMap<Vec<u8>, Vec<u8>>> = const { RefCell::new(BTreeMap::new()) };
 	pub static NEXT_ELECTION_ID: RefCell<UniqueMonotonicIdentifier> = const { RefCell::new(UniqueMonotonicIdentifier::from_u64(0)) };
 }
@@ -154,7 +154,7 @@ impl<ES: ElectoralSystem> ElectoralReadAccess for MockAccess<ES> {
 		Option<<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue>,
 		CorruptStorageError,
 	> {
-		Ok(MockStorageAccess::unsynchronised_state_map::<ES>(key))
+		Ok(MockStorageAccess::unsynchronised_state_map_state::<ES>(key))
 	}
 }
 
@@ -185,7 +185,7 @@ impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
 			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
 		>,
 	) {
-		MockStorageAccess::set_unsynchronised_state_map::<ES>(key, value);
+		MockStorageAccess::set_unsynchronised_state_map_state::<ES>(key, value);
 	}
 }
 
@@ -372,32 +372,43 @@ impl MockStorageAccess {
 			ES::ElectoralUnsynchronisedState::decode(&mut &state_ref[..]).unwrap()
 		})
 	}
-	pub fn unsynchronised_state_map<ES: ElectoralSystem>(
+	pub fn unsynchronised_state_map_state<ES: ElectoralSystem>(
 		key: &ES::ElectoralUnsynchronisedStateMapKey,
 	) -> Option<ES::ElectoralUnsynchronisedStateMapValue> {
 		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
 			let state_map_ref = old_state_map.borrow();
-			state_map_ref
-				.get(&key.encode())?
-				.clone()
-				.map(|v| ES::ElectoralUnsynchronisedStateMapValue::decode(&mut &v[..]).unwrap())
+			let value = state_map_ref.get(&key.encode()).cloned();
+
+			value.map(|v| ES::ElectoralUnsynchronisedStateMapValue::decode(&mut &v[..]).unwrap())
 		})
 	}
 
-	pub fn raw_unsynchronised_state_map() -> BTreeMap<Vec<u8>, Option<Vec<u8>>> {
+	pub fn unsynchronised_state_map<ES: ElectoralSystem>(
+	) -> BTreeMap<ES::ElectoralUnsynchronisedStateMapKey, ES::ElectoralUnsynchronisedStateMapValue>
+	where
+		ES::ElectoralUnsynchronisedStateMapKey: Ord,
+	{
 		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
 			let state_map_ref = old_state_map.borrow();
-			state_map_ref.clone()
+			BTreeMap::from_iter(state_map_ref.clone().into_iter().map(|(key, value)| {
+				(
+					ES::ElectoralUnsynchronisedStateMapKey::decode(&mut &key[..]).unwrap(),
+					ES::ElectoralUnsynchronisedStateMapValue::decode(&mut &value[..]).unwrap(),
+				)
+			}))
 		})
 	}
 
-	pub fn set_unsynchronised_state_map<ES: ElectoralSystem>(
+	pub fn set_unsynchronised_state_map_state<ES: ElectoralSystem>(
 		key: ES::ElectoralUnsynchronisedStateMapKey,
 		value: Option<ES::ElectoralUnsynchronisedStateMapValue>,
 	) {
 		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
 			let mut state_map_ref = old_state_map.borrow_mut();
-			state_map_ref.insert(key.encode(), value.map(|v| v.encode()));
+			match value {
+				Some(v) => state_map_ref.insert(key.encode(), v.encode()),
+				None => state_map_ref.remove(&key.encode()),
+			};
 		});
 	}
 

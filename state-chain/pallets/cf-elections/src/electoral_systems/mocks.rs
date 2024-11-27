@@ -30,6 +30,7 @@ where
 	ES::ElectoralUnsynchronisedState: Default,
 	ES::ElectoralUnsynchronisedSettings: Default,
 	ES::ElectoralSettings: Default,
+	ES::ElectoralUnsynchronisedStateMapKey: Ord,
 {
 	fn default() -> Self {
 		Self {
@@ -52,6 +53,7 @@ where
 	ES::ElectionIdentifierExtra: Default,
 	ES::ElectionProperties: Default,
 	ES::ElectionState: Default,
+	ES::ElectoralUnsynchronisedStateMapKey: Ord,
 {
 	pub fn with_unsynchronised_state(
 		self,
@@ -115,7 +117,10 @@ where
 		MockStorageAccess::set_unsynchronised_state::<ES>(setup.unsynchronised_state.clone());
 		MockStorageAccess::set_unsynchronised_settings::<ES>(setup.unsynchronised_settings.clone());
 		for (key, value) in &setup.initial_state_map {
-			MockStorageAccess::set_unsynchronised_state_map::<ES>(key.clone(), Some(value.clone()));
+			MockStorageAccess::set_unsynchronised_state_map_state::<ES>(
+				key.clone(),
+				Some(value.clone()),
+			);
 		}
 
 		let election = MockAccess::<ES>::new_election(
@@ -148,7 +153,10 @@ where
 	}
 }
 
-impl<ES: ElectoralSystem> TestContext<ES> {
+impl<ES: ElectoralSystem> TestContext<ES>
+where
+	ES::ElectoralUnsynchronisedStateMapKey: Ord,
+{
 	/// Based on some authority count and votes, evaluate the consensus and the final state.
 	#[allow(clippy::type_complexity)]
 	#[track_caller]
@@ -423,18 +431,22 @@ register_checks! {
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]
 pub struct ElectoralSystemState<ES: ElectoralSystem> {
 	pub unsynchronised_state: ES::ElectoralUnsynchronisedState,
-	pub unsynchronised_state_map: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+	pub unsynchronised_state_map:
+		BTreeMap<ES::ElectoralUnsynchronisedStateMapKey, ES::ElectoralUnsynchronisedStateMapValue>,
 	pub unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
 	pub election_identifiers: Vec<ElectionIdentifierOf<ES>>,
 	pub next_umi: UniqueMonotonicIdentifier,
 }
 
-impl<ES: ElectoralSystem> ElectoralSystemState<ES> {
+impl<ES: ElectoralSystem> ElectoralSystemState<ES>
+where
+	ES::ElectoralUnsynchronisedStateMapKey: Ord,
+{
 	pub fn load_state() -> Self {
 		Self {
 			unsynchronised_settings: MockStorageAccess::unsynchronised_settings::<ES>(),
 			unsynchronised_state: MockStorageAccess::unsynchronised_state::<ES>(),
-			unsynchronised_state_map: MockStorageAccess::raw_unsynchronised_state_map(),
+			unsynchronised_state_map: MockStorageAccess::unsynchronised_state_map::<ES>(),
 			election_identifiers: MockStorageAccess::election_identifiers::<ES>(),
 			next_umi: MockStorageAccess::next_umi(),
 		}
