@@ -133,5 +133,7 @@ async function main() {
     testMinPriceRefund(Assets.Flip, 500, true),
     testMinPriceRefund(Assets.Eth, 1, true),
     testMinPriceRefund(Assets.ArbEth, 5, true),
+    testMinPriceRefund(Assets.Sol, 10),
+    testMinPriceRefund(Assets.SolUsdc, 1000, true),
   ]);
 }

@@ -135,5 +135,10 @@ async function testDCASwap(
 }
 
 export async function main() {
-  await Promise.all([testDCASwap(Assets.Eth, 1, 2), testDCASwap(Assets.ArbEth, 1, 2, true)]);
+  await Promise.all([
+    testDCASwap(Assets.Eth, 1, 2),
+    testDCASwap(Assets.ArbEth, 1, 2, true),
+    testDCASwap(Assets.Sol, 10, 2, true),
+    testDCASwap(Assets.SolUsdc, 1000, 2),
+  ]);
 }
