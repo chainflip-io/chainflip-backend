@@ -11,12 +11,13 @@ use cf_chains::{
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, Beneficiaries, Beneficiary, BlockNumber,
 	ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
-	BASIS_POINTS_PER_MILLION, MAX_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
+	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, ChannelIdAllocator, DepositApi,
-	ExecutionCondition, IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler,
+	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChannelIdAllocator, DepositApi,
+	ExecutionCondition, FundingInfo, IngressEgressFeeApi, SwapLimitsProvider, SwapRequestHandler,
 	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
@@ -164,6 +165,13 @@ pub struct Swap<T: Config> {
 	input_amount: AssetAmount,
 	fees: Vec<FeeType<T>>,
 	refund_params: Option<SwapRefundParameters>,
+}
+
+pub struct DefaultBrokerBond<T>(PhantomData<T>);
+impl<T: Config> Get<T::Amount> for DefaultBrokerBond<T> {
+	fn get() -> T::Amount {
+		T::Amount::from(FLIPPERINOS_PER_FLIP * 100)
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -364,6 +372,9 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// Set the minimum chunk size for DCA swaps. The number of chunks of a DCA swap will be
 	/// reduced to meet this requirement.
 	SetMinimumChunkSize { asset: Asset, size: AssetAmount },
+	/// Set the broker bond. This is the amount of FLIP that must be bonded to open a private
+	/// broker channel. The funds are getting freed when the channel is closed.
+	SetBrokerBond { bond: T::Amount },
 }
 
 impl_pallet_safe_mode! {
@@ -395,7 +406,6 @@ pub mod pallet {
 	use sp_runtime::SaturatedConversion;
 
 	use super::*;
-
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
@@ -443,6 +453,11 @@ pub mod pallet {
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type ChannelIdAllocator: ChannelIdAllocator;
+
+		type Bonder: Bonding<
+			AccountId = <Self as frame_system::Config>::AccountId,
+			Amount = <Self as Chainflip>::Amount,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -533,6 +548,10 @@ pub mod pallet {
 		T::AccountId,
 		OptionQuery,
 	>;
+
+	/// The bond for a broker to open a private channel.
+	#[pallet::storage]
+	pub type BrokerBond<T: Config> = StorageValue<_, T::Amount, ValueQuery, DefaultBrokerBond<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -676,6 +695,9 @@ pub mod pallet {
 			affiliate_id: T::AccountId,
 			previous_affiliate_id: Option<T::AccountId>,
 		},
+		BrokerBondSet {
+			bond: T::Amount,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -737,6 +759,8 @@ pub mod pallet {
 		TooManyAffiliates,
 		/// No empty affiliate short id available.
 		NoEmptyAffiliateShortId,
+		/// The Bonder does not have enough Funds to cover the bond.
+		InsufficientFunds,
 	}
 
 	#[pallet::genesis_config]
@@ -978,6 +1002,10 @@ pub mod pallet {
 						MinimumChunkSize::<T>::set(asset, amount);
 						Self::deposit_event(Event::<T>::MinimumChunkSizeSet { asset, amount });
 					},
+					PalletConfigUpdate::SetBrokerBond { bond } => {
+						BrokerBond::<T>::set(bond);
+						Self::deposit_event(Event::<T>::BrokerBondSet { bond });
+					},
 				}
 			}
 
@@ -1120,10 +1148,16 @@ pub mod pallet {
 				Error::<T>::PrivateChannelExistsForBroker
 			);
 
-			// TODO: burn fee for opening a channel?
+			ensure!(
+				T::FundingInfo::total_balance_of(&broker_id) >= BrokerBond::<T>::get(),
+				Error::<T>::InsufficientFunds
+			);
+
 			let channel_id = T::ChannelIdAllocator::allocate_private_channel_id()?;
 
 			BrokerPrivateBtcChannels::<T>::insert(broker_id.clone(), channel_id);
+
+			T::Bonder::update_bond(&broker_id, BrokerBond::<T>::get());
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelOpened { broker_id, channel_id });
 
@@ -1138,6 +1172,8 @@ pub mod pallet {
 			let Some(channel_id) = BrokerPrivateBtcChannels::<T>::take(&broker_id) else {
 				return Err(Error::<T>::NoPrivateChannelExistsForBroker.into())
 			};
+
+			T::Bonder::update_bond(&broker_id, 0u128.into());
 
 			Self::deposit_event(Event::<T>::PrivateBrokerChannelClosed { broker_id, channel_id });
 

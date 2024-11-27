@@ -308,6 +308,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type NetworkFee = NetworkFee;
 	type BalanceApi = AssetBalances;
 	type ChannelIdAllocator = BitcoinIngressEgress;
+	type Bonder = Bonder<Runtime>;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {

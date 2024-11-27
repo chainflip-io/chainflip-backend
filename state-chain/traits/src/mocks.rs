@@ -11,6 +11,7 @@ pub mod asset_converter;
 pub mod asset_withholding;
 pub mod balance_api;
 pub mod block_height_provider;
+pub mod bonding;
 pub mod broadcaster;
 pub mod ceremony_id_provider;
 pub mod cfe_interface_mock;

@@ -209,7 +209,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
-
 }
 
 // For backwards compatibility and tests
@@ -378,5 +377,4 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
-
 }

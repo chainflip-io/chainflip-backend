@@ -16,6 +16,8 @@ use frame_support::{construct_runtime, derive_impl};
 use sp_runtime::{impl_opaque_keys, testing::UintAuthorityId, traits::ConvertInto};
 use std::{cell::RefCell, collections::HashMap};
 
+use cf_traits::mocks::bonding::MockBonderFor;
+
 pub type Amount = u128;
 pub type ValidatorId = u64;
 
@@ -112,25 +114,6 @@ thread_local! {
 	pub static AUTHORITY_BONDS: RefCell<HashMap<ValidatorId, Amount>> = RefCell::new(HashMap::default());
 }
 
-pub struct MockBonder;
-
-impl MockBonder {
-	pub fn get_bond(account_id: &ValidatorId) -> Amount {
-		AUTHORITY_BONDS.with(|cell| cell.borrow().get(account_id).copied().unwrap_or(0))
-	}
-}
-
-impl Bonding for MockBonder {
-	type ValidatorId = ValidatorId;
-	type Amount = Amount;
-
-	fn update_bond(account_id: &Self::ValidatorId, bond: Self::Amount) {
-		AUTHORITY_BONDS.with(|cell| {
-			cell.borrow_mut().insert(*account_id, bond);
-		})
-	}
-}
-
 pub type MockOffenceReporter =
 	cf_traits::mocks::offence_reporting::MockOffenceReporter<ValidatorId, PalletOffence>;
 
@@ -150,7 +133,7 @@ impl Config for Test {
 	type RotationBroadcastsPending = MockRotationBroadcastsPending;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type OffenceReporter = MockOffenceReporter;
-	type Bonder = MockBonder;
+	type Bonder = MockBonderFor<Self>;
 	type ReputationResetter = MockReputationResetter<Self>;
 	type KeygenQualification = QualifyAll<ValidatorId>;
 	type SafeMode = MockRuntimeSafeMode;
