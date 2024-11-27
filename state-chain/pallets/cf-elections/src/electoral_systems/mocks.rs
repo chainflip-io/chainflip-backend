@@ -269,18 +269,18 @@ pub struct Check<ES: ElectoralSystem> {
 
 #[macro_export]
 macro_rules! single_check_new {
-	($arg_pre:ident, $arg_post:ident, $check_body:block, $param:ident) => {
+	($state_type:ty, $arg_pre:ident, $arg_post:ident, $check_body:block, $param:ident) => {
 		$crate::electoral_systems::mocks::SingleCheck::new(
 			$param,
 			#[track_caller]
-			|$arg_pre, $arg_post, $param| $check_body,
+			|$arg_pre: $state_type, $arg_post: $state_type, $param| $check_body,
 		)
 	};
-	($arg_pre:ident, $arg_post:ident, $check_body:block) => {
+	($state_type:ty, $arg_pre:ident, $arg_post:ident, $check_body:block) => {
 		$crate::electoral_systems::mocks::SingleCheck::new(
 			(),
 			#[track_caller]
-			|$arg_pre, $arg_post, ()| $check_body,
+			|$arg_pre: $state_type, $arg_post: $state_type, ()| $check_body,
 		)
 	};
 }
@@ -338,7 +338,7 @@ macro_rules! register_checks {
         impl Check<$system> {
             $(
                 pub fn $check_name($($param: $param_type)?) -> Box<dyn $crate::electoral_systems::mocks::Checkable<$system> + 'static> {
-					Box::new($crate::single_check_new!($arg_1, $arg_2, $check_body $(, $param)? ))
+					Box::new($crate::single_check_new!(&$crate::electoral_systems::mocks::ElectoralSystemState<$system>, $arg_1, $arg_2, $check_body $(, $param)? ))
 				}
             )*
         }
@@ -356,7 +356,7 @@ macro_rules! register_checks {
 		{
 			$(
 				pub fn $check_name($($param: $param_type)?) -> Box<dyn $crate::electoral_systems::mocks::Checkable<ES> + 'static> {
-					Box::new($crate::single_check_new!($arg_1, $arg_2, $check_body $(, $param)? ))
+					Box::new($crate::single_check_new!(&$crate::electoral_systems::mocks::ElectoralSystemState<ES>, $arg_1, $arg_2, $check_body $(, $param)? ))
 				}
 			)+
 		}
