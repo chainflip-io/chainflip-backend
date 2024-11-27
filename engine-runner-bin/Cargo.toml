@@ -28,13 +28,13 @@ assets = [
         "usr/lib/chainflip-engine/libchainflip_engine_v1_8_0.so",
         "755",
     ],
-    # The old version gets put into target/release by the package github actions workflow.
+    # The old version gets put into target/release/deps by the package github actions workflow.
     # It downloads the correct version from the releases page.
     [
-        "target/release/libchainflip_engine_v1_7_1.so",
+        "target/release/libchainflip_engine_v1_7_2.so",
         # This is the path where the engine dylib is searched for on linux.
         # As set in the build.rs file.
-        "usr/lib/chainflip-engine/libchainflip_engine_v1_7_1.so",
+        "usr/lib/chainflip-engine/libchainflip_engine_v1_7_2.so",
         "755",
     ],
 ]

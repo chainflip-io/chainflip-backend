@@ -38,8 +38,8 @@ pub struct HealthCheck {
 const INITIALISING: &str = "INITIALISING";
 const RUNNING: &str = "RUNNING";
 
-pub async fn start_if_configured<'a, 'env>(
-	scope: &'a task_scope::Scope<'env, anyhow::Error>,
+pub async fn start_if_configured<'a>(
+	scope: &'a task_scope::Scope<'_, anyhow::Error>,
 	opts: &'a HealthCheckOptions,
 	has_completed_initialising: Arc<std::sync::atomic::AtomicBool>,
 ) -> Result<(), anyhow::Error> {

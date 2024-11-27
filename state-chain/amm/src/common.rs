@@ -288,17 +288,12 @@ pub(super) fn nth_root_of_integer_as_fixed_point(x: U256, n: u32) -> U256 {
 	root
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "slow-tests"))]
 mod test {
 	use super::*;
-
-	#[cfg(feature = "slow-tests")]
+	use cf_amm_math::test_utilities::rng_u256_inclusive_bound;
 	use rand::SeedableRng;
 
-	#[cfg(feature = "slow-tests")]
-	use cf_amm_math::test_utilities::rng_u256_inclusive_bound;
-
-	#[cfg(feature = "slow-tests")]
 	#[test]
 	fn test_increase_sqrt_price() {
 		fn inner<SD: SwapDirection>() {
@@ -330,7 +325,6 @@ mod test {
 		inner::<QuoteToBase>();
 	}
 
-	#[cfg(feature = "slow-tests")]
 	#[test]
 	fn test_fixed_point_to_power_as_fixed_point() {
 		for n in 0..9u32 {
@@ -356,7 +350,6 @@ mod test {
 		);
 	}
 
-	#[cfg(feature = "slow-tests")]
 	#[test]
 	fn test_nth_root_of_integer_as_fixed_point() {
 		fn fixed_point_to_float(x: U256) -> f64 {

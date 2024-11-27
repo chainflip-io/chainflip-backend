@@ -379,7 +379,7 @@ where
 {
 	struct PathVisitor;
 
-	impl<'de> de::Visitor<'de> for PathVisitor {
+	impl de::Visitor<'_> for PathVisitor {
 		type Value = PathBuf;
 
 		fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
