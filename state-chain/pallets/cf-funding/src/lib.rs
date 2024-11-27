@@ -243,6 +243,9 @@ pub mod pallet {
 		/// When requesting a redemption, you must not have an amount below the minimum.
 		BelowMinimumFunding,
 
+		/// When requesting a redemption, all restricted balances must be above the minimum.
+		RestrictedBalanceBelowMinimumFunding,
+
 		/// There are not enough unrestricted funds to process the redemption.
 		InsufficientUnrestrictedFunds,
 
@@ -407,6 +410,13 @@ pub mod pallet {
 				// Use the full debit amount here - fees are paid by restricted funds by default.
 				total_restricted_balance = *restricted_balance;
 				restricted_balance.saturating_reduce(debit_amount);
+				// ensure that the remaining restricted balance is zero or above MinimumFunding
+				ensure!(
+					restricted_balance.is_zero() ||
+						*restricted_balance >= MinimumFunding::<T>::get(),
+					Error::<T>::RestrictedBalanceBelowMinimumFunding
+				);
+
 				if restricted_balance.is_zero() {
 					restricted_balances.remove(&address);
 				}

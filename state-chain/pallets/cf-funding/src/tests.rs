@@ -527,9 +527,11 @@ fn redemption_expiry_removes_redemption() {
 		);
 
 		// Success, can request redemption again since the last one expired.
+		// Note that restricted balance is REDEMPTION_TAX less after refund, so adjust the
+		// TO_REDEEM accordingly to make sure restricted balance is above minimum
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
-			TO_REDEEM.into(),
+			(TO_REDEEM - REDEMPTION_TAX).into(),
 			RESTRICTED_ADDRESS,
 			Default::default()
 		));
@@ -600,8 +602,8 @@ fn restore_restricted_balance_when_redemption_expires() {
 	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT));
 	// Redeem a little less than the restricted balance.
 	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT - 1));
-	// Redeem signficantly less than the restricted balance.
-	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT - REDEMPTION_TAX * 2));
+	// Redeem significantly less than the restricted balance. Make sure rest is above minimum
+	do_test(RedemptionAmount::Exact(RESTRICTED_AMOUNT - REDEMPTION_TAX * 3));
 }
 
 #[test]
@@ -1158,6 +1160,24 @@ mod test_restricted_balances {
 			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1),
 			RESTRICTED_ADDRESS_2,
 			None::<Error<Test>>
+		),
+	];
+	test_restricted_balances![
+		restricted_balances_can_only_be_zero_or_above_minimum_after_redeeming,
+		NO_BOND,
+		// Succeed, with restricted balance1 = 0
+		(RedemptionAmount::Exact(RESTRICTED_BALANCE_1), RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		// Succeed, with restricted balance1 = MIN_FUNDING
+		(
+			RedemptionAmount::Exact(RESTRICTED_BALANCE_1 - MIN_FUNDING - REDEMPTION_TAX),
+			RESTRICTED_ADDRESS_1,
+			None::<Error<Test>>
+		),
+		// Fails, because restricted balance1 would have been < MIN_FUNDING
+		(
+			RedemptionAmount::Exact(RESTRICTED_BALANCE_1 - MIN_FUNDING - REDEMPTION_TAX + 1),
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::RestrictedBalanceBelowMinimumFunding)
 		),
 	];
 	test_restricted_balances![
