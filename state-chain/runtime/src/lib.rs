@@ -1520,9 +1520,9 @@ impl_runtime_apis! {
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
 		fn cf_pool_simulate_swap(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
+			input_asset: Asset,
+			output_asset: Asset,
+			input_amount: AssetAmount,
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
 			additional_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
@@ -1598,7 +1598,7 @@ impl_runtime_apis! {
 				}
 			}
 
-			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, from, amount);
+			let (amount_to_swap, ingress_fee) = remove_fees(IngressOrEgress::Ingress, input_asset, input_amount);
 
 			// Estimate swap result for a chunk, then extrapolate the result.
 			// If no DCA parameter is given, swap the entire amount with 1 chunk.
@@ -1610,8 +1610,8 @@ impl_runtime_apis! {
 					Swap::new(
 						Default::default(),
 						Default::default(),
-						from,
-						to,
+						input_asset,
+						output_asset,
 						amount_per_chunk,
 						None,
 						vec![
@@ -1642,12 +1642,13 @@ impl_runtime_apis! {
 				(
 					swap_output_per_chunk[0].network_fee_taken.unwrap_or_default() * number_of_chunks,
 					swap_output_per_chunk[0].broker_fee_taken.unwrap_or_default() * number_of_chunks,
-					swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks),
+					swap_output_per_chunk[0].stable_amount.map(|amount| amount * number_of_chunks)
+						.filter(|_| ![input_asset, output_asset].contains(&STABLE_ASSET)),
 					swap_output_per_chunk[0].final_output.unwrap_or_default() * number_of_chunks,
 				)
 			};
 
-			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, to, output);
+			let (output, egress_fee) = remove_fees(IngressOrEgress::Egress, output_asset, output);
 
 			Ok(SimulatedSwapInformation {
 				intermediary,
