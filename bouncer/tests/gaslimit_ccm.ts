@@ -160,6 +160,7 @@ async function testGasLimitSwapToSolana(
   gasBudget?: number,
   testTag?: string,
 ) {
+  const connection = getSolConnection();
   const destChain = chainFromAsset(destAsset);
 
   if (destChain !== 'Solana') {
@@ -177,8 +178,6 @@ async function testGasLimitSwapToSolana(
   if (computePrice === 0) {
     throw new Error('Compute price should not be 0');
   }
-
-  const connection = getSolConnection();
 
   testGasLimitCcmSwaps.log(`${tag} Expecting successful CCM broadcast.`);
 
@@ -216,12 +215,16 @@ const MAX_TEST_GAS_CONSUMPTION: Record<string, number> = {
   Arbitrum: 6000000,
 };
 
-async function testGasLimitSwapToEvm(sourceAsset: Asset, destAsset: Asset, gasToConsume?: number) {
+async function testGasLimitSwapToEvm(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  gasToConsume?: number,
+  expectAbort = false,
+) {
   const destChain = chainFromAsset(destAsset);
 
   // When passing the gasToConsume we are testing the abort scenario
-  const testTag = gasToConsume === undefined ? '' : `InsufficientGas`;
-  const expectAbort = true;
+  const testTag = expectAbort ? `InsufficientGas` : '';
 
   if (destChain !== 'Arbitrum' && destChain !== 'Ethereum') {
     throw new Error(`Destination chain ${destChain} is not Ethereum nor Arbitrum`);
@@ -238,6 +241,7 @@ async function testGasLimitSwapToEvm(sourceAsset: Asset, destAsset: Asset, gasTo
     undefined, // Using default minimum gas budget
   );
 
+  // Only add if we are not expecting an abort (gas consumption abort broadcast testing)
   if (!expectAbort) {
     ccmMetadata.gasBudget += gasConsumption;
   }
@@ -363,6 +367,7 @@ async function testEvmInsufficientGas(sourceAsset: Asset, destAsset: Asset) {
     sourceAsset,
     destAsset,
     getRandomGasConsumption(chainFromAsset(destAsset)),
+    true,
   );
 }
 
