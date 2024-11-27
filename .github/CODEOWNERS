@@ -25,7 +25,18 @@
 /engine/state_chain_observer/client/ @kylezs
 /engine/src/witness/ @kylezs
 /engine/src/witness.rs @kylezs
-/engine/src/eth/ @kylezs
+/engine/src/evm/ @kylezs
 /engine/src/btc/ @kylezs
 /engine/src/dot/ @kylezs
 /engine/src/retrier.rs @kylezs
+
+/contract-interfaces/ @albert-llimos
+/foreign-chains/ @albert-llimos
+/engine/src/witness/sol/ @albert-llimos
+/engine/src/witness/evm/ @albert-llimos
+/engine/src/witness/eth/ @albert-llimos
+/engine/src/witness/arb/ @albert-llimos
+/engine/src/sol/ @albert-llimos
+/engine/src/evm/ @albert-llimos
+/bouncer/tests/gaslimit_ccm.ts @albert-llimos
+/bouncer/shared/sol_vault_swap.ts @albert-llimos
