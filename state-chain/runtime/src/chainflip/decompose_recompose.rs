@@ -36,10 +36,10 @@ impl WitnessDataExtraction for RuntimeCall {
 				let fee_info = mem::take(&mut new_chain_state.tracked_data.median_tip);
 				Some(fee_info.encode())
 			},
-			// In Arbitrum the amount of gas for calls keep changing accross time. In order to get
-			// that value (gas multiplier) we need to use a call to the NodeInterface which
-			// simulates a transaction to get that value. However, that estimation can't be done at
-			// a particular block but rather when the node receives the RPC call.
+			// In Arbitrum the gas calculations are complext and we need  to use a call to the
+			// NodeInterface which simulates a transaction to get that value. However, that
+			// estimation can't be done at a particular block but rather when the node receives
+			// the RPC call.
 			RuntimeCall::ArbitrumChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				ArbitrumInstance,
@@ -97,7 +97,7 @@ impl WitnessDataExtraction for RuntimeCall {
 			>::update_chain_state {
 				new_chain_state,
 			}) =>
-				if let Some(tracked_data) = arb_select_median_base_and_multiplier(data) {
+				if let Some(tracked_data) = arb_select_median_base_fees(data) {
 					new_chain_state.tracked_data = tracked_data;
 				},
 			_ => {
@@ -119,7 +119,7 @@ fn select_median_btc_info(data: Vec<BitcoinFeeInfo>) -> Option<BitcoinFeeInfo> {
 		.map(BitcoinFeeInfo::new)
 }
 
-fn arb_select_median_base_and_multiplier(data: &mut [Vec<u8>]) -> Option<ArbitrumTrackedData> {
+fn arb_select_median_base_fees(data: &mut [Vec<u8>]) -> Option<ArbitrumTrackedData> {
 	let decode_all_results: Result<Vec<_>, _> = data
 		.iter_mut()
 		.map(|entry| ArbitrumTrackedData::decode(&mut entry.as_slice()))
@@ -374,12 +374,12 @@ mod tests {
 	}
 
 	#[test]
-	fn arb_select_median_base_and_multiplier_empty_votes() {
-		assert!(arb_select_median_base_and_multiplier(&mut []).is_none());
+	fn arb_select_median_base_fees_empty_votes() {
+		assert!(arb_select_median_base_fees(&mut []).is_none());
 	}
 
 	#[test]
-	fn arb_select_median_base_and_multiplier_test() {
+	fn arb_select_median_base_fees_test() {
 		let mut votes = [(1, 1), (9999, 1000), (7, 1002), (7, 4000), (3, 0)]
 			.into_iter()
 			.map(|(base_fee, l1_base_fee_estimate)| ArbitrumTrackedData {
@@ -389,8 +389,8 @@ mod tests {
 			.map(|data| data.encode())
 			.collect::<Vec<_>>();
 
-		let actual = arb_select_median_base_and_multiplier(&mut votes).unwrap();
-		let expected = ArbitrumTrackedData { base_fee: 7, l1_base_fee_estimate: 1u128 };
+		let actual = arb_select_median_base_fees(&mut votes).unwrap();
+		let expected = ArbitrumTrackedData { base_fee: 7, l1_base_fee_estimate: 1000u128 };
 
 		assert_eq!(actual, expected);
 	}
