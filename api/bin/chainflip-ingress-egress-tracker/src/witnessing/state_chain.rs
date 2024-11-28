@@ -3,10 +3,7 @@ use crate::{
 	utils::{get_broadcast_id, hex_encode_bytes},
 };
 use cf_chains::{
-	address::ToHumanreadableAddress,
-	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
-	evm::{SchnorrVerificationComponents, H256},
-	AnyChain, Arbitrum, Bitcoin, Chain, Ethereum, Polkadot,
+	address::ToHumanreadableAddress, dot::{PolkadotExtrinsicIndex, PolkadotTransactionId}, evm::{SchnorrVerificationComponents, H256}, AnyChain, Arbitrum, Assethub, Bitcoin, Chain, Ethereum, Polkadot
 };
 use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
@@ -56,6 +53,7 @@ enum TransactionId {
 	Ethereum { signature: SchnorrVerificationComponents },
 	Polkadot { signature: DotSignature },
 	Arbitrum { signature: SchnorrVerificationComponents },
+	Assethub { signature: DotSignature },
 }
 
 #[derive(Serialize)]
@@ -65,6 +63,7 @@ enum DepositDetails {
 	Ethereum { tx_hashes: Vec<H256> },
 	Polkadot { extrinsic_index: PolkadotExtrinsicIndex },
 	Arbitrum { tx_hashes: Vec<H256> },
+	Assethub { extrinsic_index: PolkadotExtrinsicIndex },
 }
 
 #[derive(Serialize)]
@@ -95,6 +94,7 @@ impl WitnessInformation {
 				TransactionId::Ethereum { .. } => ForeignChain::Ethereum,
 				TransactionId::Polkadot { .. } => ForeignChain::Polkadot,
 				TransactionId::Arbitrum { .. } => ForeignChain::Arbitrum,
+				TransactionId::Assethub { .. } => ForeignChain::Assethub,
 			},
 		}
 	}
@@ -183,6 +183,21 @@ impl From<DepositInfo<Arbitrum>> for WitnessInformation {
 	}
 }
 
+impl From<DepositInfo<Assethub>> for WitnessInformation {
+	fn from((value, height, _): DepositInfo<Assethub>) -> Self {
+		Self::Deposit {
+			deposit_chain_block_height: height as u64,
+			deposit_address: hex_encode_bytes(value.deposit_address.aliased_ref()),
+			amount: value.amount.into(),
+			asset: value.asset.into(),
+			deposit_details: Some(DepositDetails::Assethub {
+				extrinsic_index: value.deposit_details,
+			}),
+		}
+	}
+}
+
+
 async fn save_deposit_witnesses<S: Store, C: Chain>(
 	store: &mut S,
 	deposit_witnesses: Vec<DepositWitness<C>>,
@@ -245,6 +260,12 @@ where
 			deposit_witnesses: _,
 			block_height: _,
 		}) => todo!(),
+		AssethubIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses,
+			block_height,
+		}) =>
+			save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network)
+				.await?,
 		EthereumBroadcaster(BroadcastCall::transaction_succeeded {
 			tx_out_id,
 			transaction_ref,
@@ -328,12 +349,34 @@ where
 			transaction_ref: _,
 			..
 		}) => todo!(),
+		AssethubBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
+			let broadcast_id =
+				get_broadcast_id::<Assethub, StateChainClient>(state_chain_client, &tx_out_id)
+					.await;
+
+			if let Some(broadcast_id) = broadcast_id {
+				store
+					.save_singleton(&WitnessInformation::Broadcast {
+						broadcast_id,
+						tx_out_id: TransactionId::Polkadot {
+							signature: DotSignature(*tx_out_id.aliased_ref()),
+						},
+						tx_ref: TransactionRef::Polkadot { transaction_id: transaction_ref },
+					})
+					.await?;
+			}
+		},
 
 		EthereumIngressEgress(_) |
 		BitcoinIngressEgress(_) |
 		PolkadotIngressEgress(_) |
 		ArbitrumIngressEgress(_) |
 		SolanaIngressEgress(_) |
+		AssethubIngressEgress(_) |
 		System(_) |
 		Timestamp(_) |
 		Environment(_) |
@@ -353,11 +396,13 @@ where
 		PolkadotChainTracking(_) |
 		ArbitrumChainTracking(_) |
 		SolanaChainTracking(_) |
+		AssethubChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
 		ArbitrumVault(_) |
 		SolanaVault(_) |
+		AssethubVault(_) |
 		EvmThresholdSigner(_) |
 		PolkadotThresholdSigner(_) |
 		BitcoinThresholdSigner(_) |
@@ -367,6 +412,7 @@ where
 		BitcoinBroadcaster(_) |
 		ArbitrumBroadcaster(_) |
 		SolanaBroadcaster(_) |
+		AssethubBroadcaster(_) |
 		Swapping(_) |
 		LiquidityProvider(_) |
 		LiquidityPools(_) |

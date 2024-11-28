@@ -8,10 +8,10 @@ use cf_chains::dot::{
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
-use state_chain_runtime::PolkadotInstance;
+use state_chain_runtime::AssethubInstance;
 use subxt::{
 	backend::legacy::rpc_methods::Bytes,
-	config::PolkadotConfig,
+	config::AssethubConfig,
 	events::{EventDetails, Phase, StaticEvent},
 	utils::AccountId32,
 };
@@ -179,7 +179,6 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 	}
 }
 
-/*
 pub async fn start<StateChainClient, ProcessCall, ProcessingFut>(
 	scope: &Scope<'_, anyhow::Error>,
 	dot_client: DotRetryRpcClient,
@@ -256,7 +255,6 @@ where
 
 	Ok(())
 }
- */
 
 fn transaction_fee_paids(
 	indices: &BTreeSet<PolkadotExtrinsicIndex>,
