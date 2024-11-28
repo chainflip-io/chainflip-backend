@@ -252,7 +252,7 @@ impl Default for PolkadotTrackedData {
 /// See https://wiki.polkadot.network/docs/learn-transaction-fees
 ///
 /// Fee constants here already include the Multiplier.
-mod fee_constants {
+pub mod fee_constants {
 	// See https://wiki.polkadot.network/docs/learn-DOT.
 	pub const MICRO_DOT: u128 = 10_000;
 	pub const MILLI_DOT: u128 = 1_000 * MICRO_DOT;
@@ -913,7 +913,7 @@ pub struct PolkadotCheckMortality(pub Era);
 
 /// Temporarily copied from https://github.com/chainflip-io/polkadot-sdk/blob/8dbe4ee80734bba6644c7e5f879a363ce7c0a19f/substrate/frame/metadata-hash-extension/src/lib.rs
 /// TODO: import it from polkadot-sdk once we update to a more recent version.
-mod polkadot_sdk_types {
+pub mod polkadot_sdk_types {
 	use super::*;
 
 	/// The mode of [`CheckMetadataHash`].

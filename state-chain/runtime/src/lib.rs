@@ -37,8 +37,8 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 pub use cf_chains::instances::{
-	ArbitrumInstance, BitcoinInstance, EthereumInstance, EvmInstance, PolkadotInstance,
-	SolanaInstance,
+	ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, EvmInstance,
+	PolkadotInstance, SolanaInstance,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -55,7 +55,8 @@ use cf_chains::{
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	evm::EvmCrypto,
 	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana, TransactionBuilder,
+	Arbitrum, Assethub, Bitcoin, DefaultRetryPolicy, ForeignChain, Polkadot, Solana,
+	TransactionBuilder,
 };
 use cf_primitives::{
 	Affiliates, BasisPoints, Beneficiary, BroadcastId, DcaParameters, EpochIndex,

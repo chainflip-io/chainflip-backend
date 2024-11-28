@@ -4,7 +4,7 @@ use crate::{
 	evm::EvmCrypto,
 	none::{NoneChain, NoneChainCrypto},
 	sol::SolanaCrypto,
-	AnyChain, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana,
+	AnyChain, Arbitrum, Assethub, Bitcoin, Ethereum, Polkadot, Solana,
 };
 use frame_support::instances::*;
 
@@ -121,6 +121,7 @@ decl_instance_aliases!(
 	EvmCrypto => EvmInstance, Instance16,
 	Solana => SolanaInstance, Instance5,
 	SolanaCrypto => SolanaCryptoInstance, Instance5,
+	Assethub => AssethubInstance, Instance6,
 	NoneChain => NoneChainInstance, (),
 	NoneChainCrypto => NoneChainCryptoInstance, (),
 	AnyChain => AnyChainInstance, (),
@@ -129,7 +130,7 @@ decl_instance_aliases!(
 impl_instance_alias_traits!(
 	EvmCrypto => { Ethereum, Arbitrum },
 	BitcoinCrypto => { Bitcoin },
-	PolkadotCrypto => { Polkadot },
+	PolkadotCrypto => { Polkadot, Assethub },
 	SolanaCrypto => { Solana },
 	NoneChainCrypto => { NoneChain, AnyChain },
 );
