@@ -1293,13 +1293,22 @@ type PalletMigrations = (
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 );
 
-type MigrationsForV1_8 = VersionedMigration<
-	2,
-	3,
-	migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
-	pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
-	DbWeight,
->;
+type MigrationsForV1_8 = (
+	VersionedMigration<
+		2,
+		3,
+		migrations::solana_vault_swaps_migration::SolanaVaultSwapsMigration,
+		pallet_cf_elections::Pallet<Runtime, SolanaInstance>,
+		DbWeight,
+	>,
+	VersionedMigration<
+		3,
+		4,
+		migrations::arbitrum_chain_tracking_migration::ArbitrumChainTrackingMigration,
+		pallet_cf_chain_tracking::Pallet<Runtime, ArbitrumInstance>,
+		DbWeight,
+	>,
+);
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
