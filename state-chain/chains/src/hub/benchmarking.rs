@@ -4,14 +4,9 @@ use crate::benchmarking_value::BenchmarkValue;
 
 use super::{
 	api::{rotate_vault_proxy, AssethubApi},
-	dot::PolkadotReplayProtection,
+	dot::{PolkadotReplayProtection, RuntimeVersion},
+	AssethubTrackedData,
 };
-
-const SIGNATURE: [u8; 64] = [1u8; 64];
-const ACCOUNT_ID_1: [u8; 32] = [2u8; 32];
-const ACCOUNT_ID_2: [u8; 32] = [3u8; 32];
-const NONCE: u32 = 5;
-const ENCODED_EXTRINSIC: [u8; 100] = [3u8; 100];
 
 impl<E> BenchmarkValue for AssethubApi<E> {
 	fn benchmark_value() -> Self {
@@ -25,5 +20,14 @@ impl<E> BenchmarkValue for AssethubApi<E> {
 			Default::default(),
 			Default::default(),
 		))
+	}
+}
+
+impl BenchmarkValue for AssethubTrackedData {
+	fn benchmark_value() -> Self {
+		AssethubTrackedData {
+			median_tip: 2,
+			runtime_version: RuntimeVersion { spec_version: 17, transaction_version: 16 },
+		}
 	}
 }

@@ -767,7 +767,7 @@ assets!(
 		assets: [
 			Asset {
 				variant: HubDot,
-				member: hub,
+				member: dot,
 				string: "DOT" (aliases: ["Dot", "dot"]),
 				json: "DOT",
 				gas: true,

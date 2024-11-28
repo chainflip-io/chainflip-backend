@@ -114,7 +114,7 @@ macro_rules! impl_instance_alias_traits {
 decl_instance_aliases!(
 	Ethereum => EthereumInstance, Instance1,
 	Polkadot => PolkadotInstance, Instance2,
-	PolkadotCrypto => PolkadotCryptoInstance, Instance2,
+	PolkadotCrypto => PolkadotCryptoInstance, Instance15,
 	Bitcoin => BitcoinInstance, Instance3,
 	BitcoinCrypto => BitcoinCryptoInstance, Instance3,
 	Arbitrum => ArbitrumInstance, Instance4,

@@ -6,13 +6,13 @@ pub mod benchmarking;
 #[cfg(feature = "std")]
 pub use crate::dot::serializable_address::*;
 use dot::{
-	fee_constants, polkadot_sdk_types, EncodedPolkadotPayload, PolkadotAccountId,
-	PolkadotAccountIdLookup, PolkadotBalance, PolkadotCallHash, PolkadotChannelId,
-	PolkadotChannelState, PolkadotChargeTransactionPayment, PolkadotCheckMortality,
-	PolkadotCheckNonce, PolkadotExtrinsicIndex, PolkadotIndex, PolkadotPayload, PolkadotProxyType,
-	PolkadotPublicKey, PolkadotReplayProtection, PolkadotSignature, PolkadotSignedExtra,
-	PolkadotTrackedData, PolkadotTransactionData, PolkadotTransactionId,
-	PolkadotUncheckedExtrinsic, ResetProxyAccountNonce,
+	fee_constants, polkadot_sdk_types, EncodedPolkadotPayload, GenericUncheckedExtrinsic,
+	PolkadotAccountId, PolkadotAccountIdLookup, PolkadotBalance, PolkadotCallHash,
+	PolkadotChannelId, PolkadotChannelState, PolkadotChargeTransactionPayment,
+	PolkadotCheckMortality, PolkadotCheckNonce, PolkadotExtrinsicIndex, PolkadotIndex,
+	PolkadotProxyType, PolkadotPublicKey, PolkadotReplayProtection, PolkadotSignature,
+	PolkadotSignedExtra, PolkadotTransactionData, PolkadotTransactionId, ResetProxyAccountNonce,
+	RuntimeVersion,
 };
 
 pub use cf_primitives::chains::Assethub;
@@ -20,6 +20,7 @@ use cf_primitives::PolkadotBlockNumber;
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::generic::Era;
 use scale_info::TypeInfo;
+use sp_runtime::generic::SignedPayload;
 
 impl Chain for Assethub {
 	const NAME: &'static str = "Assethub";
@@ -30,7 +31,7 @@ impl Chain for Assethub {
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
 	type TransactionFee = Self::ChainAmount;
-	type TrackedData = PolkadotTrackedData;
+	type TrackedData = AssethubTrackedData;
 	type ChainAsset = assets::hub::Asset;
 	type ChainAssetMap<
 		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
@@ -45,6 +46,11 @@ impl Chain for Assethub {
 	type ReplayProtectionParams = ResetProxyAccountNonce;
 	type ReplayProtection = PolkadotReplayProtection;
 }
+
+/// The payload being signed in transactions.
+pub type AssethubPayload = SignedPayload<AssethubRuntimeCall, PolkadotSignedExtra>;
+
+type AssethubUncheckedExtrinsic = GenericUncheckedExtrinsic<AssethubRuntimeCall>;
 
 /// The builder for creating and signing assethub extrinsics, and creating signature payload
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
@@ -87,9 +93,9 @@ impl AssethubExtrinsicBuilder {
 		&self,
 		spec_version: u32,
 		transaction_version: u32,
-	) -> PolkadotPayload {
+	) -> <<Assethub as Chain>::ChainCrypto as ChainCrypto>::Payload {
 		EncodedPolkadotPayload(
-			PolkadotPayload::from_raw(
+			AssethubPayload::from_raw(
 				self.extrinsic_call.clone(),
 				self.extra(),
 				(
@@ -117,9 +123,9 @@ impl AssethubExtrinsicBuilder {
 		self.signer_and_signature.replace((signer, signature));
 	}
 
-	pub fn get_signed_unchecked_extrinsic(&self) -> Option<PolkadotUncheckedExtrinsic> {
+	pub fn get_signed_unchecked_extrinsic(&self) -> Option<AssethubUncheckedExtrinsic> {
 		self.signer_and_signature.as_ref().map(|(signer, signature)| {
-			PolkadotUncheckedExtrinsic::new_signed(
+			AssethubUncheckedExtrinsic::new_signed(
 				self.extrinsic_call.clone(),
 				*signer,
 				signature.clone(),
@@ -138,7 +144,24 @@ impl AssethubExtrinsicBuilder {
 	}
 }
 
-impl FeeEstimationApi<Assethub> for PolkadotTrackedData {
+#[derive(
+	Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Serialize, Deserialize,
+)]
+pub struct AssethubTrackedData {
+	pub median_tip: PolkadotBalance,
+	pub runtime_version: RuntimeVersion,
+}
+
+impl Default for AssethubTrackedData {
+	#[track_caller]
+	fn default() -> Self {
+		frame_support::print("You should not use the default chain tracking, as it's meaningless.");
+
+		AssethubTrackedData { median_tip: Default::default(), runtime_version: Default::default() }
+	}
+}
+
+impl FeeEstimationApi<Assethub> for AssethubTrackedData {
 	fn estimate_ingress_fee(
 		&self,
 		_asset: <Assethub as Chain>::ChainAsset,

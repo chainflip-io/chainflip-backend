@@ -79,7 +79,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Btc(_) => ForeignChain::Bitcoin,
 			ForeignChainAddress::Arb(_) => ForeignChain::Arbitrum,
 			ForeignChainAddress::Sol(_) => ForeignChain::Solana,
-			ForeignChainAddress::Hub(_) => ForeignChain::AssetHub,
+			ForeignChainAddress::Hub(_) => ForeignChain::Assethub,
 		}
 	}
 	pub fn to_source_address(self) -> Vec<u8> {

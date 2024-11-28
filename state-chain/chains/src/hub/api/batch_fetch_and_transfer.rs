@@ -81,26 +81,26 @@ mod test_batch_fetch {
 		let keypair_proxy = PolkadotPair::from_seed(&RAW_SEED_2);
 
 		let dummy_fetch_params: Vec<FetchAssetParams<Assethub>> = vec![
-			FetchAssetParams::<Assethub> { deposit_fetch_id: 1, asset: assets::hub::Asset::Dot },
-			FetchAssetParams::<Assethub> { deposit_fetch_id: 2, asset: assets::hub::Asset::Dot },
-			FetchAssetParams::<Assethub> { deposit_fetch_id: 3, asset: assets::hub::Asset::Dot },
+			FetchAssetParams::<Assethub> { deposit_fetch_id: 1, asset: assets::hub::Asset::HubDot },
+			FetchAssetParams::<Assethub> { deposit_fetch_id: 2, asset: assets::hub::Asset::HubDot },
+			FetchAssetParams::<Assethub> { deposit_fetch_id: 3, asset: assets::hub::Asset::HubDot },
 		];
 
 		let dummy_transfer_params: Vec<TransferAssetParams<Assethub>> = vec![
 			TransferAssetParams::<Assethub> {
 				to: PolkadotAccountId::from_aliased([7u8; 32]),
 				amount: 4,
-				asset: assets::hub::Asset::Dot,
+				asset: assets::hub::Asset::HubDot,
 			},
 			TransferAssetParams::<Assethub> {
 				to: PolkadotAccountId::from_aliased([8u8; 32]),
 				amount: 5,
-				asset: assets::hub::Asset::Dot,
+				asset: assets::hub::Asset::HubDot,
 			},
 			TransferAssetParams::<Assethub> {
 				to: PolkadotAccountId::from_aliased([9u8; 32]),
 				amount: 6,
-				asset: assets::hub::Asset::Dot,
+				asset: assets::hub::Asset::HubDot,
 			},
 		];
 

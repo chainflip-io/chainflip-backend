@@ -103,7 +103,7 @@ impl PolkadotPair {
 	feature = "std",
 	serde(try_from = "SubstrateNetworkAddress", into = "SubstrateNetworkAddress")
 )]
-pub struct PolkadotAccountId([u8; 32]);
+pub struct PolkadotAccountId(pub [u8; 32]);
 
 impl TryFrom<Vec<u8>> for PolkadotAccountId {
 	type Error = ();
@@ -156,17 +156,17 @@ pub type PolkadotChannelId = u64;
 pub type PolkadotTransactionVersion = u32;
 
 #[derive(Debug, Clone, Encode, Decode, TypeInfo)]
-pub struct PolkadotUncheckedExtrinsic(
+pub struct GenericUncheckedExtrinsic<Call>(
 	UncheckedExtrinsic<
 		MultiAddress<PolkadotAccountId, ()>,
-		PolkadotRuntimeCall,
+		Call,
 		MultiSignature,
 		PolkadotSignedExtra,
 	>,
 );
-impl PolkadotUncheckedExtrinsic {
+impl<Call: Decode> GenericUncheckedExtrinsic<Call> {
 	pub fn new_signed(
-		function: PolkadotRuntimeCall,
+		function: Call,
 		signed: PolkadotAccountId,
 		signature: PolkadotSignature,
 		extra: PolkadotSignedExtra,
@@ -193,6 +193,8 @@ impl PolkadotUncheckedExtrinsic {
 		})
 	}
 }
+
+type PolkadotUncheckedExtrinsic = GenericUncheckedExtrinsic<PolkadotRuntimeCall>;
 
 /// The payload being signed in transactions.
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
@@ -903,7 +905,7 @@ pub enum ProxyCall {
 	},
 }
 #[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
-pub struct PolkadotChargeTransactionPayment(#[codec(compact)] PolkadotBalance);
+pub struct PolkadotChargeTransactionPayment(#[codec(compact)] pub PolkadotBalance);
 
 #[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotCheckNonce(#[codec(compact)] pub PolkadotIndex);

@@ -1,10 +1,5 @@
 use cf_chains::{
-	arb::ArbitrumTrackedData,
-	btc::{BitcoinFeeInfo, BitcoinTrackedData},
-	dot::{PolkadotTrackedData, RuntimeVersion},
-	eth::EthereumTrackedData,
-	sol::{sol_tx_core::sol_test_values, SolTrackedData},
-	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
+	arb::ArbitrumTrackedData, btc::{BitcoinFeeInfo, BitcoinTrackedData}, dot::{PolkadotTrackedData, RuntimeVersion}, eth::EthereumTrackedData, hub::AssethubTrackedData, sol::{sol_tx_core::sol_test_values, SolTrackedData}, Arbitrum, Assethub, Bitcoin, ChainState, Ethereum, Polkadot, Solana
 };
 use chainflip_node::{
 	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
@@ -19,15 +14,7 @@ use state_chain_runtime::{
 	chainflip::{
 		solana_elections::{SolanaFeeUnsynchronisedSettings, SolanaIngressSettings},
 		Offence,
-	},
-	constants::common::*,
-	opaque::SessionKeys,
-	test_runner::*,
-	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, BitcoinChainTrackingConfig,
-	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumVaultConfig,
-	EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig,
-	PolkadotChainTrackingConfig, ReputationConfig, SessionConfig, SolanaChainTrackingConfig,
-	SolanaElectionsConfig, ValidatorConfig,
+	}, constants::common::*, opaque::SessionKeys, test_runner::*, AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, AssethubChainTrackingConfig, BitcoinChainTrackingConfig, EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig, GovernanceConfig, PolkadotChainTrackingConfig, ReputationConfig, SessionConfig, SolanaChainTrackingConfig, SolanaElectionsConfig, ValidatorConfig
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
@@ -246,6 +233,18 @@ impl ExtBuilder {
 					},
 				},
 			},
+			assethub_chain_tracking: AssethubChainTrackingConfig {
+				init_chain_state: ChainState::<Assethub> {
+					block_height: 0,
+					tracked_data: AssethubTrackedData {
+						median_tip: 0,
+						runtime_version: RuntimeVersion {
+							spec_version: 17,
+							transaction_version: 17,
+						},
+					},
+				},
+			},
 			bitcoin_chain_tracking: BitcoinChainTrackingConfig {
 				init_chain_state: ChainState::<Bitcoin> {
 					block_height: 0,
@@ -288,6 +287,7 @@ impl ExtBuilder {
 			solana_threshold_signer: Default::default(),
 			bitcoin_vault: Default::default(),
 			polkadot_vault: Default::default(),
+			assethub_vault: Default::default(),
 			arbitrum_vault: Default::default(),
 			solana_vault: Default::default(),
 			swapping: Default::default(),
@@ -295,6 +295,7 @@ impl ExtBuilder {
 			transaction_payment: Default::default(),
 			bitcoin_ingress_egress: Default::default(),
 			polkadot_ingress_egress: Default::default(),
+			assethub_ingress_egress: Default::default(),
 			ethereum_ingress_egress: Default::default(),
 			arbitrum_ingress_egress: Default::default(),
 			solana_ingress_egress: Default::default(),
@@ -336,6 +337,9 @@ impl ExtBuilder {
 			},
 			polkadot_broadcaster: state_chain_runtime::PolkadotBroadcasterConfig {
 				broadcast_timeout: 4 * BLOCKS_PER_MINUTE_POLKADOT,
+			},
+			assethub_broadcaster: state_chain_runtime::AssethubBroadcasterConfig {
+				broadcast_timeout: 4 * BLOCKS_PER_MINUTE_ASSETHUB,
 			},
 			bitcoin_broadcaster: state_chain_runtime::BitcoinBroadcasterConfig {
 				broadcast_timeout: 9, // = 90 minutes
