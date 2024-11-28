@@ -3,7 +3,10 @@ use crate::{
 	utils::{get_broadcast_id, hex_encode_bytes},
 };
 use cf_chains::{
-	address::ToHumanreadableAddress, dot::{PolkadotExtrinsicIndex, PolkadotTransactionId}, evm::{SchnorrVerificationComponents, H256}, AnyChain, Arbitrum, Assethub, Bitcoin, Chain, Ethereum, Polkadot
+	address::ToHumanreadableAddress,
+	dot::{PolkadotExtrinsicIndex, PolkadotTransactionId},
+	evm::{SchnorrVerificationComponents, H256},
+	AnyChain, Arbitrum, Assethub, Bitcoin, Chain, Ethereum, Polkadot,
 };
 use cf_primitives::{BroadcastId, ForeignChain, NetworkEnvironment};
 use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
@@ -44,6 +47,7 @@ enum TransactionRef {
 	Ethereum { hash: H256 },
 	Polkadot { transaction_id: PolkadotTransactionId },
 	Arbitrum { hash: H256 },
+	Assethub { transaction_id: PolkadotTransactionId },
 }
 
 #[derive(Serialize)]
@@ -196,7 +200,6 @@ impl From<DepositInfo<Assethub>> for WitnessInformation {
 		}
 	}
 }
-
 
 async fn save_deposit_witnesses<S: Store, C: Chain>(
 	store: &mut S,
@@ -362,10 +365,10 @@ where
 				store
 					.save_singleton(&WitnessInformation::Broadcast {
 						broadcast_id,
-						tx_out_id: TransactionId::Polkadot {
+						tx_out_id: TransactionId::Assethub {
 							signature: DotSignature(*tx_out_id.aliased_ref()),
 						},
-						tx_ref: TransactionRef::Polkadot { transaction_id: transaction_ref },
+						tx_ref: TransactionRef::Assethub { transaction_id: transaction_ref },
 					})
 					.await?;
 			}
@@ -417,7 +420,6 @@ where
 		LiquidityProvider(_) |
 		LiquidityPools(_) |
 		SolanaElections(_) => {},
-		_ => todo!(), // Assethub implementation
 	};
 
 	Ok(())

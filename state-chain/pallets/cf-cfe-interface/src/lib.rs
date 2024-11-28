@@ -142,8 +142,8 @@ impl<T: Config> CfeBroadcastRequest<T, Solana> for Pallet<T> {
 }
 
 impl<T: Config> CfeBroadcastRequest<T, Assethub> for Pallet<T> {
-	fn tx_broadcast_request(_req: TxBroadcastRequest<T, Assethub>) {
-		//CfeEvents::<T>::append(CfeEvent::<T>::HubTxBroadcastRequest(req))
+	fn tx_broadcast_request(req: TxBroadcastRequest<T, Assethub>) {
+		CfeEvents::<T>::append(CfeEvent::<T>::HubTxBroadcastRequest(req))
 	}
 }
 
