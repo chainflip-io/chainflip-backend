@@ -42,7 +42,7 @@ use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
 use sp_std::iter;
 
-const GAS_BUDGET: AssetAmount = 1_000u128;
+const GAS_BUDGET: AssetAmount = 100_000u128;
 const INPUT_AMOUNT: AssetAmount = 40_000;
 const SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(1);
 const INIT_BLOCK: u64 = 1;
@@ -624,7 +624,6 @@ fn process_all_into_stable_swaps_first() {
 #[test]
 fn can_handle_ccm_with_zero_swap_outputs() {
 	const PRINCIPAL_SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const GAS_SWAP_BLOCK: u64 = PRINCIPAL_SWAP_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	const PRINCIPAL_AMOUNT: AssetAmount = 9000;
 
@@ -638,7 +637,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 
 			Swapping::init_swap_request(
 				INPUT_ASSET,
-				PRINCIPAL_AMOUNT + GAS_BUDGET,
+				PRINCIPAL_AMOUNT,
 				OUTPUT_ASSET,
 				SwapRequestType::Regular {
 					ccm_deposit_metadata: Some(ccm.clone()),
@@ -672,23 +671,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				}),
 			);
 		})
-		.then_process_blocks_until_block(GAS_SWAP_BLOCK)
 		.then_execute_with(|_| {
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					swap_request_id: SwapRequestId(1),
-					swap_id: SwapId(2),
-					network_fee: 0,
-					broker_fee: 0,
-					input_amount: GAS_BUDGET,
-					input_asset: Asset::Usdc,
-					output_asset: Asset::Eth,
-					output_amount: ZERO_AMOUNT,
-					intermediate_amount: None,
-				}),
-			);
-
 			// CCM are processed and egressed even if principal output is zero.
 			assert_eq!(MockEgressHandler::<AnyChain>::get_scheduled_egresses().len(), 1);
 			assert_swaps_queue_is_empty();
