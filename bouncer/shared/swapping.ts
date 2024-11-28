@@ -154,8 +154,16 @@ export function newCcmMetadata(
 ): CcmDepositMetadata {
   const message = ccmMessage ?? newCcmMessage(destAsset);
   const ccmAdditionalData = cfParamsArray ?? newCcmAdditionalData(destAsset, message);
-
   const destChain = chainFromAsset(destAsset);
+
+  if (gasBudget !== undefined) {
+    return {
+      message,
+      gasBudget: gasBudget.toString(),
+      ccmAdditionalData,
+    };
+  }
+
   let userLogicGasBudget;
   if (destChain === 'Arbitrum' || destChain === 'Ethereum') {
     userLogicGasBudget = (
@@ -170,7 +178,7 @@ export function newCcmMetadata(
 
   return {
     message,
-    gasBudget: gasBudget?.toString() ?? userLogicGasBudget,
+    gasBudget: userLogicGasBudget,
     ccmAdditionalData,
   };
 }

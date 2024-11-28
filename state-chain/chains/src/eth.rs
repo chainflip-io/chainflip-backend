@@ -88,14 +88,14 @@ impl EthereumTrackedData {
 		message_length: usize,
 	) -> GasAmount {
 		use crate::eth::fees::*;
-		// Adding one extra gas per message byte for the extra gas overhead of passing the message
-		// through the Vault. The extra gas per byte should be encapsulated in the user's gas
-		// budget.
+		// Adding one extra gas unit per message's length (byte) for the extra gas overhead of
+		// passing the message through the Vault. The extra l2 gas per message's calldata byte
+		// should be included in the user's gas budget.
 		(gas_budget
 			.saturating_add(if is_native_asset {
-				CCM_NATIVE_GAS_OVERHEAD
+				CCM_VAULT_NATIVE_GAS_OVERHEAD
 			} else {
-				CCM_TOKEN_OVERHEAD
+				CCM_VAULT_TOKEN_GAS_OVERHEAD
 			})
 			.saturating_add(message_length as u128))
 		.min(MAX_GAS_LIMIT)
@@ -115,8 +115,8 @@ pub mod fees {
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 	pub const MAX_GAS_LIMIT: u128 = 10_000_000;
-	pub const CCM_NATIVE_GAS_OVERHEAD: u128 = 90_000;
-	pub const CCM_TOKEN_OVERHEAD: u128 = 120_000;
+	pub const CCM_VAULT_NATIVE_GAS_OVERHEAD: u128 = 90_000;
+	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 120_000;
 }
 
 impl FeeEstimationApi<Ethereum> for EthereumTrackedData {
