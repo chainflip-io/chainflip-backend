@@ -27,8 +27,8 @@ use state_chain_runtime::{
 		BLOCKS_PER_MINUTE_SOLANA,
 	},
 	opaque::SessionKeys,
-	AccountId, BlockNumber, FlipBalance, SetSizeParameters, Signature, SolanaElectionsConfig,
-	WASM_BINARY,
+	AccountId, BitcoinElectionsConfig, BlockNumber, FlipBalance, SetSizeParameters, Signature,
+	SolanaElectionsConfig, WASM_BINARY,
 };
 
 use cf_utilities::clean_hex_address;
@@ -849,6 +849,9 @@ fn testnet_genesis(
 			..Default::default()
 		},
 		solana_elections,
+
+		// TODO: Set correct initial state
+		bitcoin_elections: BitcoinElectionsConfig { option_initial_state: None },
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.
