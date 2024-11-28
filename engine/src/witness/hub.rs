@@ -11,7 +11,7 @@ use futures_core::Future;
 use state_chain_runtime::AssethubInstance;
 use subxt::{
 	backend::legacy::rpc_methods::Bytes,
-	config::AssethubConfig,
+	config::PolkadotConfig,
 	events::{EventDetails, Phase, StaticEvent},
 	utils::AccountId32,
 };
@@ -43,9 +43,9 @@ use super::common::{
 
 // To generate the metadata file, use the subxt-cli tool (`cargo install subxt-cli`):
 // subxt metadata --pallets Proxy,Balances,TransactionPayment,System --url
-// wss://polkadot-rpc.dwellir.com:443 > metadata.polkadot.scale
-#[subxt::subxt(runtime_metadata_path = "metadata.polkadot.scale")]
-pub mod polkadot {}
+// wss://asset-hub-polkadot-rpc.dwellir.com:443 > metadata.assethub.scale
+#[subxt::subxt(runtime_metadata_path = "metadata.assethub.scale")]
+pub mod assethub {}
 
 #[derive(Debug, Clone)]
 pub enum EventWrapper {
@@ -55,7 +55,7 @@ pub enum EventWrapper {
 	ExtrinsicSuccess,
 }
 
-use polkadot::{
+use assethub::{
 	balances::events::Transfer, proxy::events::ProxyAdded, system::events::ExtrinsicSuccess,
 	transaction_payment::events::TransactionFeePaid,
 };
@@ -153,7 +153,7 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 							"Witnessing transaction_succeeded. signature: {signature:?}"
 						);
 						process_call(
-							pallet_cf_broadcast::Call::<_, PolkadotInstance>::transaction_succeeded {
+							pallet_cf_broadcast::Call::<_, AssethubInstance>::transaction_succeeded {
 								tx_out_id: signature,
 								signer_id: epoch.info.0,
 								tx_fee,
@@ -213,7 +213,7 @@ where
 		.filter_map(
 			|state_chain_client, _epoch_index, hash, _info| async move {
 				state_chain_client
-					.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(
+					.storage_value::<pallet_cf_environment::AssethubVaultAccountId<state_chain_runtime::Runtime>>(
 						hash,
 					)
 					.await
@@ -223,7 +223,7 @@ where
 		)
 		.await;
 
-	let vaults = epoch_source.vaults::<cf_chains::Polkadot>().await;
+	let vaults = epoch_source.vaults::<cf_chains::Assethub>().await;
 
 	// Full witnessing
 	HubFinalisedSource::new(dot_client.clone())

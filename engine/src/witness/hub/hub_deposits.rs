@@ -1,7 +1,7 @@
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
-use state_chain_runtime::PolkadotInstance;
+use state_chain_runtime::AssethubInstance;
 
 use super::super::common::chunked_chain_source::chunked_by_vault::{
 	builder::ChunkedByVaultBuilder, ChunkedByVault,
@@ -14,9 +14,9 @@ use crate::witness::{
 	hub::EventWrapper,
 };
 use cf_chains::{
-	assets::dot::Asset,
+	assets::hub::Asset,
 	dot::{PolkadotAccountId, PolkadotHash},
-	Polkadot,
+	Assethub,
 };
 use subxt::events::Phase;
 
@@ -29,7 +29,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			Index = PolkadotBlockNumber,
 			Hash = PolkadotHash,
 			Data = Vec<(Phase, EventWrapper)>,
-			Chain = Polkadot,
+			Chain = Assethub,
 			ExtraInfo = PolkadotAccountId,
 			ExtraHistoricInfo = (),
 		>,
@@ -39,7 +39,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			Index = PolkadotBlockNumber,
 			Hash = PolkadotHash,
 			Data = (Vec<(Phase, EventWrapper)>, Addresses<Inner>),
-			Chain = Polkadot,
+			Chain = Assethub,
 			ExtraInfo = PolkadotAccountId,
 			ExtraHistoricInfo = (),
 		>,
@@ -64,7 +64,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 				if !deposit_witnesses.is_empty() {
 					process_call(
-						pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::process_deposits {
+						pallet_cf_ingress_egress::Call::<_, AssethubInstance>::process_deposits {
 							deposit_witnesses,
 							block_height: header.index,
 						}
@@ -81,12 +81,12 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 }
 
 fn address_and_details_to_addresses(
-	address_and_details: Vec<DepositChannelDetails<state_chain_runtime::Runtime, PolkadotInstance>>,
+	address_and_details: Vec<DepositChannelDetails<state_chain_runtime::Runtime, AssethubInstance>>,
 ) -> Vec<PolkadotAccountId> {
 	address_and_details
 		.into_iter()
 		.map(|deposit_channel_details| {
-			assert_eq!(deposit_channel_details.deposit_channel.asset, Asset::Dot);
+			assert_eq!(deposit_channel_details.deposit_channel.asset, Asset::HubDot);
 			deposit_channel_details.deposit_channel.address
 		})
 		.collect()
@@ -97,7 +97,7 @@ fn address_and_details_to_addresses(
 fn deposit_witnesses(
 	monitored_addresses: Vec<PolkadotAccountId>,
 	events: &Vec<(Phase, EventWrapper)>,
-) -> Vec<DepositWitness<Polkadot>> {
+) -> Vec<DepositWitness<Assethub>> {
 	let mut deposit_witnesses = vec![];
 	for (phase, wrapped_event) in events {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
@@ -106,7 +106,7 @@ fn deposit_witnesses(
 				if monitored_addresses.contains(&deposit_address) {
 					deposit_witnesses.push(DepositWitness {
 						deposit_address,
-						asset: Asset::Dot,
+						asset: Asset::HubDot,
 						amount: *amount,
 						deposit_details: *extrinsic_index,
 					});
@@ -212,19 +212,19 @@ mod test {
 			vec![
 				DepositWitness {
 					deposit_address: transfer_1_deposit_address,
-					asset: Asset::Dot,
+					asset: Asset::HubDot,
 					amount: TRANSFER_1_AMOUNT,
 					deposit_details: TRANSFER_1_INDEX
 				},
 				DepositWitness {
 					deposit_address: transfer_2_deposit_address,
-					asset: Asset::Dot,
+					asset: Asset::HubDot,
 					amount: TRANSFER_2_AMOUNT,
 					deposit_details: TRANSFER_2_INDEX
 				},
 				DepositWitness {
 					deposit_address: transfer_2_deposit_address,
-					asset: Asset::Dot,
+					asset: Asset::HubDot,
 					amount: TRANSFER_TO_SELF_AMOUNT,
 					deposit_details: TRANSFER_TO_SELF_INDEX
 				}

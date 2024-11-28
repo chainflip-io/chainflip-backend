@@ -134,17 +134,17 @@ where
 
 	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
 
-	// let start_hub = super::hub::start(
-	// 	scope,
-	// 	hub_client,
-	// 	witness_call.clone(),
-	// 	state_chain_client,
-	// 	state_chain_stream,
-	// 	epoch_source,
-	// 	db,
-	// );
+	let start_hub = super::hub::start(
+		scope,
+		hub_client,
+		witness_call.clone(),
+		state_chain_client,
+		state_chain_stream,
+		epoch_source,
+		db,
+	);
 
-	futures_util::try_join!(start_eth, start_btc, start_dot, start_arb, start_sol)?;
+	futures_util::try_join!(start_eth, start_btc, start_dot, start_arb, start_sol, start_hub)?;
 
 	Ok(())
 }

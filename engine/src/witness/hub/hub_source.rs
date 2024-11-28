@@ -62,7 +62,7 @@ macro_rules! polkadot_source {
 					// We don't want to spam retries if the node returns a stream that's empty
 					// immediately.
 					tracing::warn!(
-						"Timeout getting next header from Polkadot {} stream. Restarting stream...",
+						"Timeout getting next header from Assethub {} stream. Restarting stream...",
 						stringify!($func)
 					);
 					tokio::time::sleep(RESTART_STREAM_DELAY).await;
@@ -126,7 +126,7 @@ impl<
 			+ 'static,
 	> ExternalChainSource for HubUnfinalisedSource<C>
 {
-	type Chain = cf_chains::Polkadot;
+	type Chain = cf_chains::Assethub;
 }
 
 pub struct HubFinalisedSource<C> {
@@ -176,5 +176,5 @@ impl<
 			+ 'static,
 	> ExternalChainSource for HubFinalisedSource<C>
 {
-	type Chain = cf_chains::Polkadot;
+	type Chain = cf_chains::Assethub;
 }
