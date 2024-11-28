@@ -10,8 +10,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment,
-	PrewitnessedDepositId, SemVer,
+	BroadcastId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, GasAmount,
+	NetworkEnvironment, PrewitnessedDepositId, SemVer,
 };
 use cf_traits::SwapLimits;
 use codec::{Decode, Encode};
@@ -163,6 +163,12 @@ pub struct BrokerInfo {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 }
 
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
+pub struct CcmData {
+	pub gas_budget: GasAmount,
+	pub message_length: u32,
+}
+
 /// Struct that represents the estimated output of a Swap.
 #[obake::versioned]
 #[obake(version("1.0.0"))]
@@ -277,7 +283,7 @@ pub struct TaintedTransactionEvents {
 //  - Handle the dummy method gracefully in the custom rpc implementation using
 //    runtime_api().api_version().
 decl_runtime_apis!(
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -318,12 +324,22 @@ decl_runtime_apis!(
 			amount: AssetAmount,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation!["1.0.0"], DispatchErrorWithMessage>;
+		#[changed_in(3)]
 		fn cf_pool_simulate_swap(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
 			broker_commission: BasisPoints,
 			dca_parameters: Option<DcaParameters>,
+			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
+		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
+		fn cf_pool_simulate_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			broker_commission: BasisPoints,
+			dca_parameters: Option<DcaParameters>,
+			ccm_data: Option<CcmData>,
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
 		fn cf_pool_info(

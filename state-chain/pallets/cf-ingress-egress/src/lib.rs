@@ -2505,7 +2505,6 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 							amount,
 						);
 
-					// The ccm gas budget is already in terms of the swap asset.
 					let egress_details =
 						ScheduledEgressDetails::new(*id_counter, amount_after_fees, fees_withheld);
 
