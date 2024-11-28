@@ -1,14 +1,8 @@
-use crate::api;
+use super::{ApiWrapper, Empty};
 use chainflip_api::{AccountRole, ChainflipApi, OperatorApi};
-use jsonrpsee::core::async_trait;
-use jsonrpsee_flatten::types::ArrayParam;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
-
-/// This request takes no input.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
-pub struct Empty;
 
 #[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]
 #[schemars(description = "Account registration success.")]
@@ -27,27 +21,17 @@ impl From<H256> for RegistrationSuccess {
 
 pub struct Endpoint;
 
-impl api::Endpoint for Endpoint {
+impl api_json_schema::Endpoint for Endpoint {
 	type Request = Empty;
 	type Response = RegistrationSuccess;
 	type Error = anyhow::Error;
 }
 
-#[async_trait]
-impl<T: ChainflipApi> api::Responder<Endpoint> for T {
-	async fn respond(&self, _: api::EndpointRequest<Endpoint>) -> api::EndpointResult<Endpoint> {
+impl<T: ChainflipApi> api_json_schema::Responder<Endpoint> for ApiWrapper<T> {
+	async fn respond(
+		&self,
+		_: api_json_schema::EndpointRequest<Endpoint>,
+	) -> api_json_schema::EndpointResult<Endpoint> {
 		Ok(self.operator_api().register_account_role(AccountRole::Broker).await?.into())
-	}
-}
-
-impl ArrayParam for Empty {
-	type ArrayTuple = ((),);
-
-	fn into_array_tuple(self) -> Self::ArrayTuple {
-		((),)
-	}
-
-	fn from_array_tuple(((),): Self::ArrayTuple) -> Self {
-		Empty
 	}
 }

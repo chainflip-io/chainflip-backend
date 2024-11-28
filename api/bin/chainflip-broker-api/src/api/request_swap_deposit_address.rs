@@ -1,4 +1,4 @@
-use crate::api;
+use api_json_schema;
 use chainflip_api::{
 	self,
 	primitives::{
@@ -6,10 +6,11 @@ use chainflip_api::{
 	},
 	AccountId32, AddressString, Beneficiary, BrokerApi, ChainflipApi, SwapDepositAddress,
 };
-use jsonrpsee::core::async_trait;
 use jsonrpsee_flatten::types::ArrayParam;
 use schemars::JsonSchema;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+use super::ApiWrapper;
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]
@@ -29,14 +30,13 @@ pub struct Request<A> {
 
 pub struct Endpoint;
 
-impl api::Endpoint for Endpoint {
+impl api_json_schema::Endpoint for Endpoint {
 	type Request = Request<AddressString>;
 	type Response = SwapDepositAddress;
 	type Error = anyhow::Error;
 }
 
-#[async_trait]
-impl<T: ChainflipApi> api::Responder<Endpoint> for T {
+impl<T: ChainflipApi> api_json_schema::Responder<Endpoint> for ApiWrapper<T> {
 	async fn respond(
 		&self,
 		Request {
@@ -49,10 +49,9 @@ impl<T: ChainflipApi> api::Responder<Endpoint> for T {
 			affiliate_fees,
 			refund_parameters,
 			dca_parameters,
-		}: api::EndpointRequest<Endpoint>,
-	) -> api::EndpointResult<Endpoint> {
-		Ok(self
-			.broker_api()
+		}: api_json_schema::EndpointRequest<Endpoint>,
+	) -> api_json_schema::EndpointResult<Endpoint> {
+		self.broker_api()
 			.request_swap_deposit_address(
 				source_asset,
 				destination_asset,
@@ -64,7 +63,7 @@ impl<T: ChainflipApi> api::Responder<Endpoint> for T {
 				refund_parameters,
 				dca_parameters,
 			)
-			.await?)
+			.await
 	}
 }
 

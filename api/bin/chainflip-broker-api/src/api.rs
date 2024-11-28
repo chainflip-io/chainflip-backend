@@ -1,55 +1,45 @@
-pub use jsonrpsee_flatten::core::async_trait;
-use schemars::{JsonSchema, Schema};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::fmt::{Debug, Display};
-
-mod schema_macro;
+use jsonrpsee_flatten::types::ArrayParam;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use std::{fmt::Debug, ops::Deref};
 
 pub mod register_account;
 pub mod request_swap_deposit_address;
 pub mod request_swap_parameter_encoding;
 pub mod withdraw_fees;
 
-crate::impl_schema_endpoint! {
+api_json_schema::impl_schema_endpoint! {
 	request_swap_deposit_address: RequestSwapDepositAddress,
 	register_account: RegisterAccount,
 	request_swap_parameter_encoding: RequestSwapParameterEncoding,
 	withdraw_fees: WithdrawFees,
 }
 
-// TODO: move the rest of this and the schema endpoint macro into a shared crate so it can be used
-// by lp api etc.
-
-/// An endpoint is a request-response pair that can be implemented by a [Responder].
-pub trait Endpoint {
-	type Request: JsonSchema + Serialize + DeserializeOwned;
-	type Response: JsonSchema + Serialize + DeserializeOwned;
-	type Error: Debug + Display;
+// This wrapper is needed to satisify rust's foreign type implementation restritions when implement
+// the `Responder` trait.
+pub struct ApiWrapper<T> {
+	pub api: T,
 }
 
-/// An API extension trait for defining how an endpoint should respond to a request.
-#[async_trait]
-pub trait Responder<E: Endpoint> {
-	async fn respond(&self, request: E::Request) -> EndpointResult<E>;
+impl<T> Deref for ApiWrapper<T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.api
+	}
 }
 
-pub async fn respond<T: Responder<E>, E: Endpoint>(
-	responder: T,
-	request: E::Request,
-) -> EndpointResult<E> {
-	responder.respond(request).await
-}
+/// The empty type.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+pub struct Empty;
+impl ArrayParam for Empty {
+	type ArrayTuple = ((),);
 
-pub type EndpointRequest<E> = <E as Endpoint>::Request;
-pub type EndpointResponse<E> = <E as Endpoint>::Response;
-pub type EndpointError<E> = <E as Endpoint>::Error;
-pub type EndpointResult<E> = Result<EndpointResponse<E>, EndpointError<E>>;
+	fn into_array_tuple(self) -> Self::ArrayTuple {
+		((),)
+	}
 
-#[derive(Debug)]
-pub enum Never {}
-impl std::error::Error for Never {}
-impl std::fmt::Display for Never {
-	fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		unreachable!()
+	fn from_array_tuple(((),): Self::ArrayTuple) -> Self {
+		Empty
 	}
 }

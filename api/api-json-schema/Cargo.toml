@@ -1,0 +1,13 @@
+[package]
+name = "api-json-schema"
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+version = "0.1.0"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+schemars = { workspace = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_with = { workspace = true }

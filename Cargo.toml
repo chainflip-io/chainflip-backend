@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+  "api/api-json-schema",
   "api/bin/chainflip-broker-api",
   "api/bin/chainflip-cli",
   "api/bin/chainflip-ingress-egress-tracker",
@@ -271,6 +272,7 @@ state-chain-runtime = { path = "state-chain/runtime", default-features = false }
 # Chainflip Engine + Api
 cf-engine-dylib = { path = "engine-dylib" }
 chainflip-api = { path = "api/lib" }
+api-json-schema = { path = "api/api-json-schema" }
 chainflip-engine = { path = "engine" }
 engine-proc-macros = { path = "engine-proc-macros" }
 

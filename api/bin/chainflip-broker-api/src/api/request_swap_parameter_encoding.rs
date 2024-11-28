@@ -1,7 +1,4 @@
-use crate::{
-	api,
-	api::{async_trait, request_swap_deposit_address},
-};
+use crate::api::request_swap_deposit_address;
 use chainflip_api::{
 	primitives::{
 		state_chain_runtime::runtime_apis::VaultSwapDetails, AssetAmount, CcmChannelMetadata,
@@ -14,6 +11,8 @@ use jsonrpsee_flatten::types::ArrayParam;
 use schemars::JsonSchema;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
+use super::ApiWrapper;
+
 pub struct Endpoint;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -23,14 +22,13 @@ pub struct Request<A> {
 	pub inner: request_swap_deposit_address::Request<A>,
 }
 
-impl crate::api::Endpoint for Endpoint {
+impl api_json_schema::Endpoint for Endpoint {
 	type Request = Request<()>;
 	type Response = VaultSwapDetails<AddressString>;
 	type Error = anyhow::Error;
 }
 
-#[async_trait]
-impl<T: ChainflipApi> api::Responder<Endpoint> for T {
+impl<T: ChainflipApi> api_json_schema::Responder<Endpoint> for ApiWrapper<T> {
 	async fn respond(
 		&self,
 		Request {
@@ -47,8 +45,8 @@ impl<T: ChainflipApi> api::Responder<Endpoint> for T {
 					refund_parameters,
 					dca_parameters,
 				},
-		}: api::EndpointRequest<Endpoint>,
-	) -> api::EndpointResult<Endpoint> {
+		}: api_json_schema::EndpointRequest<Endpoint>,
+	) -> api_json_schema::EndpointResult<Endpoint> {
 		// TODO: Use refund params including address in the runtime rpc. Make refund address
 		// mandatory.
 		let min_output_amount = refund_parameters
