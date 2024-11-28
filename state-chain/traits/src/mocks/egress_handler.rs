@@ -110,7 +110,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		let len = Self::get_scheduled_egresses().len();
 		Ok(ScheduledEgressDetails {
 			egress_id: (asset.into(), len as EgressCounter),
-			egress_amount: amount,
+			egress_amount: amount.saturating_sub(egress_fee),
 			fee_withheld: egress_fee,
 		})
 	}
