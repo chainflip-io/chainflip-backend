@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+  "api/api-json-schema",
   "api/bin/chainflip-broker-api",
   "api/bin/chainflip-cli",
   "api/bin/chainflip-ingress-egress-tracker",
@@ -129,6 +130,7 @@ regex = { version = "1.10.2" }
 reqwest = { version = "0.11.4" }
 rlp = { version = "0.5.2", default-features = false }
 rocksdb = { version = "0.21.0" }
+schemars = { version = "1.0.0-alpha.15" }
 serde_bytes = { version = "0.11.14", default-features = false }
 serde_path_to_error = "*"
 serde_with = { version = "3.11.0", default-features = false }
@@ -270,6 +272,7 @@ state-chain-runtime = { path = "state-chain/runtime", default-features = false }
 # Chainflip Engine + Api
 cf-engine-dylib = { path = "engine-dylib" }
 chainflip-api = { path = "api/lib" }
+api-json-schema = { path = "api/api-json-schema" }
 chainflip-engine = { path = "engine" }
 engine-proc-macros = { path = "engine-proc-macros" }
 

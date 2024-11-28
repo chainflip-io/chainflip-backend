@@ -1,11 +1,12 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Copy, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum NumberOrHex {
 	Number(u64),
-	Hex(U256),
+	Hex(#[schemars(schema_with = "super::json_schema::hex_array::<32>")] U256),
 }
 
 impl Default for NumberOrHex {

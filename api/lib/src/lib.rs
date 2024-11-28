@@ -4,14 +4,16 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 pub use cf_chains::address::AddressString;
 use cf_chains::{
-	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto, ChannelRefundParametersEncoded,
-	ChannelRefundParametersGeneric, ForeignChain,
+	evm::to_evm_address, CcmChannelMetadata, Chain, ChainCrypto,
+	ChannelRefundParametersGeneric as RefundParameters, ForeignChain,
 };
-pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
+pub use cf_primitives::{
+	AccountRole, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary, ChannelId, SemVer,
+};
 use cf_primitives::{AffiliateShortId, DcaParameters};
-use custom_rpc::CustomApiClient;
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
 use pallet_cf_governance::ExecutionMode;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -28,6 +30,7 @@ pub mod primitives {
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
 		CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
+		ChannelRefundParametersGeneric as RefundParameters,
 	};
 }
 pub use cf_chains::eth::Address as EthereumAddress;
@@ -41,6 +44,7 @@ pub use chainflip_engine::{
 		BlockInfo,
 	},
 };
+pub use custom_rpc::CustomApiClient;
 
 pub mod lp;
 pub mod queries;
@@ -106,6 +110,7 @@ pub async fn request_block(
 		.ok_or_else(|| anyhow!("unknown block hash"))
 }
 
+#[derive(Clone)]
 pub struct StateChainApi {
 	pub state_chain_client: Arc<StateChainClient>,
 }
@@ -128,41 +133,60 @@ impl StateChainApi {
 
 		Ok(Self { state_chain_client })
 	}
+}
 
-	pub fn operator_api(&self) -> Arc<impl OperatorApi> {
+pub trait ChainflipApi: Send + Sync + 'static {
+	fn account_id(&self) -> AccountId32;
+	fn operator_api(&self) -> Arc<impl OperatorApi>;
+	fn governance_api(&self) -> Arc<impl GovernanceApi>;
+	fn validator_api(&self) -> Arc<impl ValidatorApi>;
+	fn broker_api(&self) -> Arc<impl BrokerApi>;
+	fn lp_api(&self) -> Arc<impl lp::LpApi>;
+	fn deposit_monitor_api(&self) -> Arc<impl DepositMonitorApi>;
+	fn chain_api(&self) -> Arc<impl ChainApi + Send + Sync + 'static>;
+	fn query_api(&self) -> queries::QueryApi;
+	fn base_rpc_api(&self) -> Arc<impl BaseRpcApi + StorageApi + Send + Sync + 'static>;
+}
+
+impl ChainflipApi for StateChainApi {
+	fn account_id(&self) -> AccountId32 {
+		self.state_chain_client.account_id()
+	}
+
+	fn operator_api(&self) -> Arc<impl OperatorApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn governance_api(&self) -> Arc<impl GovernanceApi> {
+	fn governance_api(&self) -> Arc<impl GovernanceApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn validator_api(&self) -> Arc<impl ValidatorApi> {
+	fn validator_api(&self) -> Arc<impl ValidatorApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn broker_api(&self) -> Arc<impl BrokerApi> {
+	fn broker_api(&self) -> Arc<impl BrokerApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn lp_api(&self) -> Arc<impl lp::LpApi> {
+	fn lp_api(&self) -> Arc<impl lp::LpApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn deposit_monitor_api(&self) -> Arc<impl DepositMonitorApi> {
+	fn deposit_monitor_api(&self) -> Arc<impl DepositMonitorApi> {
 		self.state_chain_client.clone()
 	}
 
-	pub fn query_api(&self) -> queries::QueryApi {
+	fn chain_api(&self) -> Arc<impl ChainApi + Send + Sync + 'static> {
+		self.state_chain_client.clone()
+	}
+
+	fn query_api(&self) -> queries::QueryApi {
 		queries::QueryApi { state_chain_client: self.state_chain_client.clone() }
 	}
 
-	pub fn base_rpc_api(&self) -> Arc<impl BaseRpcApi + Send + Sync + 'static> {
+	fn base_rpc_api(&self) -> Arc<impl BaseRpcApi + StorageApi + Send + Sync + 'static> {
 		self.state_chain_client.base_rpc_client.clone()
-	}
-
-	pub fn raw_client(&self) -> &jsonrpsee::ws_client::WsClient {
-		&self.state_chain_client.base_rpc_client.raw_rpc_client
 	}
 }
 
@@ -202,7 +226,9 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 }
 
 #[async_trait]
-pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
+pub trait OperatorApi:
+	SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi + Sized + Send + Sync + 'static
+{
 	async fn request_redemption(
 		&self,
 		amount: primitives::RedemptionAmount,
@@ -309,23 +335,25 @@ pub trait GovernanceApi: SignedExtrinsicApi {
 	}
 }
 
-pub type RefundParameters = ChannelRefundParametersGeneric<AddressString>;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct SwapDepositAddress {
 	pub address: AddressString,
 	pub issued_block: state_chain_runtime::BlockNumber,
 	pub channel_id: ChannelId,
 	pub source_chain_expiry_block: NumberOrHex,
+	#[schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")]
 	pub channel_opening_fee: U256,
-	pub refund_parameters: Option<RefundParameters>,
+	pub refund_parameters: Option<RefundParameters<AddressString>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct WithdrawFeesDetail {
+	#[schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")]
 	pub tx_hash: H256,
 	pub egress_id: (ForeignChain, u64),
+	#[schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")]
 	pub egress_amount: U256,
+	#[schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")]
 	pub egress_fee: U256,
 	pub destination_address: AddressString,
 }
@@ -375,7 +403,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		channel_metadata: Option<CcmChannelMetadata>,
 		boost_fee: Option<BasisPoints>,
 		affiliate_fees: Option<Affiliates<AccountId32>>,
-		refund_parameters: Option<RefundParameters>,
+		refund_parameters: Option<RefundParameters<AddressString>>,
 		dca_parameters: Option<DcaParameters>,
 	) -> Result<SwapDepositAddress> {
 		let destination_address = destination_address
@@ -392,8 +420,8 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 					boost_fee: boost_fee.unwrap_or_default(),
 					affiliate_fees: affiliate_fees.unwrap_or_default(),
 					refund_parameters: refund_parameters
-						.map(|rpc_params: ChannelRefundParametersGeneric<AddressString>| {
-							Ok::<_, anyhow::Error>(ChannelRefundParametersEncoded {
+						.map(|rpc_params| {
+							Ok::<_, anyhow::Error>(RefundParameters {
 								retry_duration: rpc_params.retry_duration,
 								refund_address: rpc_params
 									.refund_address

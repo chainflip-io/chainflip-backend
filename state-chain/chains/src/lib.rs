@@ -713,17 +713,32 @@ mod bounded_hex {
 	PartialOrd,
 	Ord,
 )]
+#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 pub struct CcmChannelMetadata {
 	/// Call data used after the message is egressed.
 	#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
+	#[cfg_attr(
+		feature = "std",
+		schemars(schema_with = "cf_utilities::json_schema::hex_array::<MAX_CCM_MSG_LENGTH>")
+	)]
 	pub message: CcmMessage,
 	/// User funds designated to be used for gas.
 	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::number_or_hex"))]
+	#[cfg_attr(
+		feature = "std",
+		schemars(schema_with = "cf_utilities::json_schema::number_or_hex")
+	)]
 	pub gas_budget: AssetAmount,
 	/// Additional parameters for the cross chain message.
 	#[cfg_attr(
 		feature = "std",
 		serde(with = "bounded_hex", default, skip_serializing_if = "Vec::is_empty")
+	)]
+	#[cfg_attr(
+		feature = "std",
+		schemars(
+			schema_with = "cf_utilities::json_schema::hex_array::<MAX_CCM_ADDITIONAL_DATA_LENGTH>"
+		)
 	)]
 	pub ccm_additional_data: CcmAdditionalData,
 }
@@ -914,9 +929,14 @@ pub struct SwapRefundParameters {
 	PartialOrd,
 	Ord,
 )]
+#[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 pub struct ChannelRefundParametersGeneric<A> {
 	pub retry_duration: cf_primitives::BlockNumber,
 	pub refund_address: A,
+	#[cfg_attr(
+		feature = "std",
+		schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")
+	)]
 	pub min_price: Price,
 }
 
