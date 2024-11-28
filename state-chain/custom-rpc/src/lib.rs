@@ -20,6 +20,7 @@ use cf_primitives::{
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
+use futures::{stream::StreamExt, FutureExt, Stream};
 use jsonrpsee::{
 	core::async_trait,
 	proc_macros::rpc,
@@ -1618,6 +1619,7 @@ where
 		to_asset: Asset,
 	) {
 		self.new_subscription(
+			false, /* only_finalized */
 			true,  /* only_on_changes */
 			false, /* end_on_error */
 			pending_sink,
@@ -1635,6 +1637,7 @@ where
 		quote_asset: Asset,
 	) {
 		self.new_subscription(
+			false, /* only_finalized */
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			pending_sink,
@@ -1669,6 +1672,7 @@ where
 		};
 
 		self.new_subscription(
+			false, /* only_finalized */
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			pending_sink,
@@ -1715,6 +1719,7 @@ where
 		side: Side,
 	) {
 		self.new_subscription(
+			false, /* only_finalized */
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			pending_sink,
@@ -1757,6 +1762,7 @@ where
 
 	async fn cf_subscribe_lp_order_fills(&self, sink: PendingSubscriptionSink) {
 		self.new_subscription_with_state(
+			false, /* only_finalized */
 			false, /* only_on_changes */
 			true,  /* end_on_error */
 			sink,
@@ -1900,12 +1906,14 @@ where
 		F: Fn(&C, state_chain_runtime::Hash) -> Result<T, CfApiError> + Send + Clone + 'static,
 	>(
 		&self,
+		only_finalized: bool,
 		only_on_changes: bool,
 		end_on_error: bool,
 		sink: PendingSubscriptionSink,
 		f: F,
 	) {
 		self.new_subscription_with_state(
+			only_finalized,
 			only_on_changes,
 			end_on_error,
 			sink,
@@ -1914,10 +1922,6 @@ where
 		.await
 	}
 
-	/// The subscription will return the first value immediately and then either return new values
-	/// only when it changes, or every new block. Note in both cases this can skip blocks. Also this
-	/// subscription can either filter out, or end the stream if the provided async closure returns
-	/// an error.
 	async fn new_subscription_with_state<
 		T: Serialize + Send + Clone + Eq + 'static,
 		// State to carry forward between calls to the closure.
@@ -1928,16 +1932,65 @@ where
 			+ 'static,
 	>(
 		&self,
+		only_finalized: bool,
 		only_on_changes: bool,
 		end_on_error: bool,
 		pending_sink: PendingSubscriptionSink,
 		f: F,
 	) {
-		use futures::{stream::StreamExt, FutureExt};
-
 		let info = self.client.info();
+		if only_finalized {
+			self.new_subscription_with_state_stream(
+				only_on_changes,
+				end_on_error,
+				pending_sink,
+				f,
+				info.finalized_hash,
+				info.finalized_number,
+				self.client.finality_notification_stream().map(|n| (n.hash, n.header)),
+			)
+			.await
+		} else {
+			self.new_subscription_with_state_stream(
+				only_on_changes,
+				end_on_error,
+				pending_sink,
+				f,
+				info.best_hash,
+				info.best_number,
+				self.client
+					.import_notification_stream()
+					.filter(|n| futures::future::ready(n.is_new_best))
+					.map(|n| (n.hash, n.header)),
+			)
+			.await
+		}
+	}
 
-		let (initial_item, initial_state) = match f(&self.client, info.best_hash, None) {
+	/// The subscription will return the first value immediately and then either return new values
+	/// only when it changes, or every new block. Note in both cases this can skip blocks. Also this
+	/// subscription can either filter out, or end the stream if the provided async closure returns
+	/// an error.
+	async fn new_subscription_with_state_stream<
+		T: Serialize + Send + Clone + Eq + 'static,
+		// State to carry forward between calls to the closure.
+		S: 'static + Clone + Send,
+		F: Fn(&C, state_chain_runtime::Hash, Option<&S>) -> Result<(T, S), CfApiError>
+			+ Send
+			+ Clone
+			+ 'static,
+		N: Stream<Item = (B::Hash, B::Header)> + StreamExt + Send + Unpin + 'static,
+	>(
+		&self,
+		only_on_changes: bool,
+		end_on_error: bool,
+		pending_sink: PendingSubscriptionSink,
+		f: F,
+		block_hash: B::Hash,
+		block_number: BlockNumber,
+		stream: N,
+	) {
+		let (initial_item, initial_state) = match f(&self.client, block_hash, None) {
 			Ok(initial) => initial,
 			Err(e) => {
 				log::warn!(target: "cf-rpc", "Error in subscription initialization: {:?}", e);
@@ -1947,47 +2000,40 @@ where
 		};
 
 		let stream = futures::stream::iter(std::iter::once(Ok(BlockUpdate {
-			block_hash: info.best_hash,
-			block_number: info.best_number,
+			block_hash,
+			block_number,
 			data: initial_item.clone(),
 		})))
-		.chain(
-			self.client
-				.import_notification_stream()
-				.filter(|n| futures::future::ready(n.is_new_best))
-				.filter_map({
-					let client = self.client.clone();
+		.chain(stream.filter_map({
+			let client = self.client.clone();
 
-					let mut previous_item = initial_item;
-					let mut previous_state = initial_state;
+			let mut previous_item = initial_item;
+			let mut previous_state = initial_state;
 
-					move |n| {
-						futures::future::ready(match f(&client, n.hash, Some(&previous_state)) {
-							Ok((new_item, new_state))
-								if !only_on_changes || new_item != previous_item =>
-							{
-								previous_item = new_item.clone();
-								previous_state = new_state;
-								Some(Ok(BlockUpdate {
-									block_hash: n.hash,
-									block_number: *n.header.number(),
-									data: new_item,
-								}))
-							},
-							Err(error) => {
-								log::warn!("Subscription Error: {error}.");
-								if end_on_error {
-									log::warn!("Closing Subscription.");
-									Some(Err(ErrorObjectOwned::from(error)))
-								} else {
-									None
-								}
-							},
-							_ => None,
-						})
-					}
-				}),
-		)
+			move |(hash, header)| {
+				futures::future::ready(match f(&client, hash, Some(&previous_state)) {
+					Ok((new_item, new_state)) if !only_on_changes || new_item != previous_item => {
+						previous_item = new_item.clone();
+						previous_state = new_state;
+						Some(Ok(BlockUpdate {
+							block_hash: hash,
+							block_number: *header.number(),
+							data: new_item,
+						}))
+					},
+					Err(error) => {
+						log::warn!("Subscription Error: {error}.");
+						if end_on_error {
+							log::warn!("Closing Subscription.");
+							Some(Err(ErrorObjectOwned::from(error)))
+						} else {
+							None
+						}
+					},
+					_ => None,
+				})
+			}
+		}))
 		.take_while(|item| futures::future::ready(item.is_ok()))
 		.map(Result::unwrap);
 
