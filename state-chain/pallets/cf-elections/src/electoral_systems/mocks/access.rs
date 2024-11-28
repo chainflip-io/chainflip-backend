@@ -291,7 +291,6 @@ impl MockStorageAccess {
 		identifier: ElectionIdentifierOf<ES>,
 		state: ES::ElectionState,
 	) {
-		println!("Setting election state for identifier: {:?}", identifier);
 		ELECTION_STATE.with(|old_state| {
 			let mut state_ref = old_state.borrow_mut();
 			state_ref.insert(identifier.encode(), state.encode());
@@ -390,6 +389,7 @@ impl MockStorageAccess {
 		key: ES::ElectoralUnsynchronisedStateMapKey,
 		value: Option<ES::ElectoralUnsynchronisedStateMapValue>,
 	) {
+		println!("Setting unsynced state map for key: {:?}", key);
 		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
 			let mut state_map_ref = old_state_map.borrow_mut();
 			state_map_ref.insert(key.encode(), value.map(|v| v.encode()));

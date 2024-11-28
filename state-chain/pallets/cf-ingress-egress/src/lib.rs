@@ -275,7 +275,9 @@ pub mod pallet {
 	pub type TransactionInIdFor<T, I> =
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	#[derive(
+		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Ord, PartialOrd,
+	)]
 	pub struct DepositWitness<C: Chain> {
 		pub deposit_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
@@ -1630,7 +1632,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn process_deposit_witnesses(
+	pub fn process_deposit_witnesses(
 		deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
 		block_height: TargetChainBlockNumber<T, I>,
 	) -> DispatchResult {
