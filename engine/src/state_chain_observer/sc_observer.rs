@@ -594,8 +594,31 @@ where
                                             });
                                         }
                                     }
-                                }}
-                            }
+                                    CfeEvent::HubTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
+                                        if nominee == account_id {
+                                            let hub_rpc = hub_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                match hub_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic).await {
+                                                    Ok(tx_hash) => info!("Assethub TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        error!("Error on Assethub TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            RuntimeCall::AssethubBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_failed {
+                                                                    broadcast_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
+                                                }
+                                                Ok(())
+                                            });
+                                        }
+                                    }
+                                }
+                            }}
                         }
                         Err(error) => {
                             error!("Failed to decode events at block {}. {error}", current_block.number);
