@@ -117,10 +117,7 @@ where
 		MockStorageAccess::set_unsynchronised_state::<ES>(setup.unsynchronised_state.clone());
 		MockStorageAccess::set_unsynchronised_settings::<ES>(setup.unsynchronised_settings.clone());
 		for (key, value) in &setup.initial_state_map {
-			MockStorageAccess::set_unsynchronised_state_map_state::<ES>(
-				key.clone(),
-				Some(value.clone()),
-			);
+			MockStorageAccess::set_unsynchronised_state_map::<ES>(key.clone(), Some(value.clone()));
 		}
 
 		let election = MockAccess::<ES>::new_election(
@@ -446,7 +443,7 @@ where
 		Self {
 			unsynchronised_settings: MockStorageAccess::unsynchronised_settings::<ES>(),
 			unsynchronised_state: MockStorageAccess::unsynchronised_state::<ES>(),
-			unsynchronised_state_map: MockStorageAccess::unsynchronised_state_map::<ES>(),
+			unsynchronised_state_map: MockStorageAccess::unsynchronised_state_map_all::<ES>(),
 			election_identifiers: MockStorageAccess::election_identifiers::<ES>(),
 			next_umi: MockStorageAccess::next_umi(),
 		}

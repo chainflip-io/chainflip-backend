@@ -154,7 +154,7 @@ impl<ES: ElectoralSystem> ElectoralReadAccess for MockAccess<ES> {
 		Option<<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue>,
 		CorruptStorageError,
 	> {
-		Ok(MockStorageAccess::unsynchronised_state_map_state::<ES>(key))
+		Ok(MockStorageAccess::unsynchronised_state_map::<ES>(key))
 	}
 }
 
@@ -185,7 +185,7 @@ impl<ES: ElectoralSystem> ElectoralWriteAccess for MockAccess<ES> {
 			<Self::ElectoralSystem as ElectoralSystem>::ElectoralUnsynchronisedStateMapValue,
 		>,
 	) {
-		MockStorageAccess::set_unsynchronised_state_map_state::<ES>(key, value);
+		MockStorageAccess::set_unsynchronised_state_map::<ES>(key, value);
 	}
 }
 
@@ -372,7 +372,7 @@ impl MockStorageAccess {
 			ES::ElectoralUnsynchronisedState::decode(&mut &state_ref[..]).unwrap()
 		})
 	}
-	pub fn unsynchronised_state_map_state<ES: ElectoralSystem>(
+	pub fn unsynchronised_state_map<ES: ElectoralSystem>(
 		key: &ES::ElectoralUnsynchronisedStateMapKey,
 	) -> Option<ES::ElectoralUnsynchronisedStateMapValue> {
 		ELECTORAL_UNSYNCHRONISED_STATE_MAP.with(|old_state_map| {
@@ -383,7 +383,7 @@ impl MockStorageAccess {
 		})
 	}
 
-	pub fn unsynchronised_state_map<ES: ElectoralSystem>(
+	pub fn unsynchronised_state_map_all<ES: ElectoralSystem>(
 	) -> BTreeMap<ES::ElectoralUnsynchronisedStateMapKey, ES::ElectoralUnsynchronisedStateMapValue>
 	where
 		ES::ElectoralUnsynchronisedStateMapKey: Ord,
@@ -399,7 +399,7 @@ impl MockStorageAccess {
 		})
 	}
 
-	pub fn set_unsynchronised_state_map_state<ES: ElectoralSystem>(
+	pub fn set_unsynchronised_state_map<ES: ElectoralSystem>(
 		key: ES::ElectoralUnsynchronisedStateMapKey,
 		value: Option<ES::ElectoralUnsynchronisedStateMapValue>,
 	) {
