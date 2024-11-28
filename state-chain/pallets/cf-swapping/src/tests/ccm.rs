@@ -1,6 +1,5 @@
-const GAS_ASSET: Asset = Asset::Eth;
-
 use super::*;
+use cf_primitives::GasAmount;
 use sp_core::H256;
 
 #[track_caller]
@@ -45,7 +44,7 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 pub(super) fn assert_ccm_egressed(
 	asset: Asset,
 	principal_amount: AssetAmount,
-	gas_budget: AssetAmount,
+	gas_budget: GasAmount,
 ) {
 	assert_has_matching_event!(
 		Test,
@@ -76,7 +75,6 @@ pub(super) fn assert_ccm_egressed(
 #[test]
 fn can_process_ccms_via_swap_deposit_address() {
 	const PRINCIPAL_SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const GAS_SWAP_BLOCK: u64 = PRINCIPAL_SWAP_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	const DEPOSIT_AMOUNT: AssetAmount = 10_000;
 
@@ -122,7 +120,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 					1.into(),
 					Asset::Dot,
 					Asset::Eth,
-					DEPOSIT_AMOUNT - GAS_BUDGET,
+					DEPOSIT_AMOUNT,
 					None,
 					[FeeType::NetworkFee],
 				),]
@@ -130,32 +128,11 @@ fn can_process_ccms_via_swap_deposit_address() {
 		})
 		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
 		.then_execute_with(|_| {
-			// Gas swap should only be scheduled after principal is executed
-			assert_eq!(
-				SwapQueue::<Test>::get(GAS_SWAP_BLOCK),
-				vec![Swap::new(
-					2.into(),
-					1.into(),
-					Asset::Dot,
-					Asset::Eth,
-					GAS_BUDGET,
-					None,
-					[FeeType::NetworkFee],
-				),]
-			);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
-			);
-		})
-		.then_process_blocks_until_block(GAS_SWAP_BLOCK)
-		.then_execute_with(|_| {
 			// CCM is scheduled for egress
 			assert_ccm_egressed(
 				Asset::Eth,
-				(DEPOSIT_AMOUNT - GAS_BUDGET) * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
-				GAS_BUDGET * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
+				DEPOSIT_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
+				GAS_BUDGET,
 			);
 
 			assert_has_matching_event!(
@@ -246,61 +223,6 @@ fn ccm_principal_swap_only() {
 				PRINCIPAL_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
 				GAS_BUDGET,
 			);
-
-			assert_eq!(CollectedRejectedFunds::<Test>::get(INPUT_ASSET), 0);
-			assert_eq!(CollectedRejectedFunds::<Test>::get(OUTPUT_ASSET), 0);
-		});
-}
-
-#[test]
-fn ccm_gas_swap_only() {
-	const GAS_SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-
-	const INPUT_ASSET: Asset = Asset::Flip;
-	const OUTPUT_ASSET: Asset = Asset::Usdc;
-	new_test_ext()
-		.execute_with(|| {
-			// Ccm with principal asset = 0
-			init_ccm_swap_request(INPUT_ASSET, OUTPUT_ASSET, GAS_BUDGET);
-
-			assert!(SwapRequests::<Test>::get(SWAP_REQUEST_ID).is_some());
-
-			// Gas swap should be immediately scheduled
-			assert_eq!(
-				SwapQueue::<Test>::get(GAS_SWAP_BLOCK),
-				vec![Swap::new(
-					1.into(),
-					SWAP_REQUEST_ID,
-					INPUT_ASSET,
-					GAS_ASSET,
-					GAS_BUDGET,
-					None,
-					[FeeType::NetworkFee]
-				),]
-			);
-		})
-		.then_process_blocks_until_block(GAS_SWAP_BLOCK)
-		.then_execute_with(|_| {
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
-			);
-
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SWAP_REQUEST_ID,
-					..
-				}),
-			);
-
-			assert_ccm_egressed(
-				OUTPUT_ASSET,
-				0,
-				GAS_BUDGET * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
-			);
-
-			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
 			assert_eq!(CollectedRejectedFunds::<Test>::get(INPUT_ASSET), 0);
 			assert_eq!(CollectedRejectedFunds::<Test>::get(OUTPUT_ASSET), 0);
