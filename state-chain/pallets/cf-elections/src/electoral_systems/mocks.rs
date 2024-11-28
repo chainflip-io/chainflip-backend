@@ -432,6 +432,7 @@ pub struct ElectoralSystemState<ES: ElectoralSystem> {
 		BTreeMap<ES::ElectoralUnsynchronisedStateMapKey, ES::ElectoralUnsynchronisedStateMapValue>,
 	pub unsynchronised_settings: ES::ElectoralUnsynchronisedSettings,
 	pub election_identifiers: Vec<ElectionIdentifierOf<ES>>,
+	pub election_state: BTreeMap<UniqueMonotonicIdentifier, ES::ElectionState>,
 	pub next_umi: UniqueMonotonicIdentifier,
 }
 
@@ -445,6 +446,7 @@ where
 			unsynchronised_state: MockStorageAccess::unsynchronised_state::<ES>(),
 			unsynchronised_state_map: MockStorageAccess::unsynchronised_state_map_all::<ES>(),
 			election_identifiers: MockStorageAccess::election_identifiers::<ES>(),
+			election_state: MockStorageAccess::election_state_all::<ES>(),
 			next_umi: MockStorageAccess::next_umi(),
 		}
 	}

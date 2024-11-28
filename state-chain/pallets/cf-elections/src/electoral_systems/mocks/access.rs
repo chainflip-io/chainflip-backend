@@ -314,6 +314,23 @@ impl MockStorageAccess {
 		})
 	}
 
+	pub fn election_state_all<ES: ElectoralSystem>(
+	) -> BTreeMap<UniqueMonotonicIdentifier, ES::ElectionState> {
+		ELECTION_STATE.with(|old_state| {
+			let state_ref = old_state.borrow();
+			state_ref
+				.clone()
+				.into_iter()
+				.map(|(k, v)| {
+					(
+						UniqueMonotonicIdentifier::decode(&mut &k[..]).unwrap(),
+						ES::ElectionState::decode(&mut &v[..]).unwrap(),
+					)
+				})
+				.collect::<BTreeMap<_, _>>()
+		})
+	}
+
 	pub fn set_election_properties<ES: ElectoralSystem>(
 		identifier: ElectionIdentifierOf<ES>,
 		properties: Option<ES::ElectionProperties>,
