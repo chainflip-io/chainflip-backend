@@ -10,7 +10,7 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	eth::Address as EthereumAddress,
 	sol::SolAddress,
-	Chain,
+	Chain, MAX_CCM_MSG_LENGTH,
 };
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
@@ -54,7 +54,7 @@ use state_chain_runtime::{
 		PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo, SolanaNonces,
 	},
 	runtime_apis::{
-		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, ChainAccounts,
+		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
 		SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo, VaultSwapDetails,
@@ -241,6 +241,18 @@ impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo
 		}
 	}
 }
+
+// #[derive(Serialize, Deserialize, Clone)]
+// pub struct RpcCcmData {
+// 	gas_budget: u128,
+// 	message_length: u32,
+// }
+
+// impl From<CcmData> for RpcCcmData {
+// 	fn from(ccm_data: CcmData) -> Self {
+// 		Self { gas_budget: ccm_data.gas_budget, message_length: ccm_data.message_length }
+// 	}
+// }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone)]
@@ -778,6 +790,18 @@ pub trait CustomApi {
 		amount: U256,
 		broker_commission: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutputV2>;
+	#[method(name = "swap_rate_v4")]
+	fn cf_pool_swap_rate_v4(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: U256,
+		broker_commission: BasisPoints,
+		dca_parameters: Option<DcaParameters>,
+		ccm_data: Option<CcmData>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2>;
@@ -1454,6 +1478,31 @@ where
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutputV2> {
+		self.cf_pool_swap_rate_v4(
+			from_asset,
+			to_asset,
+			amount,
+			broker_commission,
+			dca_parameters,
+			None,
+			additional_orders,
+			at,
+		)
+		.map(Into::into)
+	}
+
+	fn cf_pool_swap_rate_v4(
+		&self,
+		from_asset: Asset,
+		to_asset: Asset,
+		amount: U256,
+		broker_commission: BasisPoints,
+		dca_parameters: Option<DcaParameters>,
+		// CCM message size should be a u32 < MAX_CCM_MSG_LENGTH
+		ccm_data: Option<CcmData>,
+		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcSwapOutputV2> {
 		let amount = amount
 			.try_into()
 			.map_err(|_| "Swap input amount too large.")
@@ -1465,6 +1514,17 @@ where
 				}
 			})
 			.map_err(|s| ErrorObject::owned(ErrorCode::InvalidParams.code(), s, None::<()>))?;
+
+		if let Some(CcmData { message_length, .. }) = ccm_data {
+			if message_length > MAX_CCM_MSG_LENGTH {
+				return Err(CfApiError::ErrorObject(ErrorObject::owned(
+					ErrorCode::InvalidParams.code(),
+					"CCM message size too large.",
+					None::<()>,
+				)));
+			}
+		}
+
 		let additional_orders = additional_orders.map(|additional_orders| {
 			additional_orders
 				.into_iter()
@@ -1487,20 +1547,23 @@ where
 				.collect()
 		});
 		self.with_runtime_api(at, |api, hash| {
-			if api.api_version::<dyn CustomRuntimeApi<Block>>(hash).unwrap().unwrap() < 2 {
-				let old_result = api.cf_pool_simulate_swap_before_version_2(
-					hash,
-					from_asset,
-					to_asset,
-					amount,
-					additional_orders,
-				)?;
-				Ok(old_result.map(|old_version| {
-					into_rpc_swap_output(old_version.into(), from_asset, to_asset)
-				})?)
-			} else {
-				Ok::<_, CfApiError>(
-					api.cf_pool_simulate_swap(
+			let api_version =
+				api.api_version::<dyn CustomRuntimeApi<Block>>(hash).unwrap().unwrap();
+			match api_version {
+				0..=1 => {
+					let old_result = api.cf_pool_simulate_swap_before_version_2(
+						hash,
+						from_asset,
+						to_asset,
+						amount,
+						additional_orders,
+					)?;
+					Ok(old_result.map(|old_version| {
+						into_rpc_swap_output(old_version.into(), from_asset, to_asset)
+					})?)
+				},
+				2 => Ok::<_, CfApiError>(
+					api.cf_pool_simulate_swap_before_version_3(
 						hash,
 						from_asset,
 						to_asset,
@@ -1512,7 +1575,22 @@ where
 					.map(|simulated_swap_info_v2| {
 						into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
 					})?,
-				)
+				),
+				_ => Ok::<_, CfApiError>(
+					api.cf_pool_simulate_swap(
+						hash,
+						from_asset,
+						to_asset,
+						amount,
+						broker_commission,
+						dca_parameters,
+						ccm_data,
+						additional_orders,
+					)?
+					.map(|simulated_swap_info_v2| {
+						into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
+					})?,
+				),
 			}
 		})
 	}
