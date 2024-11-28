@@ -194,7 +194,7 @@ impl<Call: Decode> GenericUncheckedExtrinsic<Call> {
 	}
 }
 
-type PolkadotUncheckedExtrinsic = GenericUncheckedExtrinsic<PolkadotRuntimeCall>;
+pub type PolkadotUncheckedExtrinsic = GenericUncheckedExtrinsic<PolkadotRuntimeCall>;
 
 /// The payload being signed in transactions.
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;

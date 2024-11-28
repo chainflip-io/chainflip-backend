@@ -371,6 +371,7 @@ where
 		LiquidityProvider(_) |
 		LiquidityPools(_) |
 		SolanaElections(_) => {},
+		_ => todo!(), // Assethub implementation
 	};
 
 	Ok(())
