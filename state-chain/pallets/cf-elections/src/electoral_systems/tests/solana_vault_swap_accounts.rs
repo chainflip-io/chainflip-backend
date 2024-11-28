@@ -69,32 +69,14 @@ register_checks! {
 		only_one_election(_pre, post) {
 			assert_eq!(post.election_identifiers.len(), 1, "Only one election should exist.");
 		},
-		initiate_vault_swap_hook_not_called(_pre, _post) {
-			assert_eq!(INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.get()), 0, "Hook should have been called once so far!");
+		initiate_vault_swap_hook_called_n_times(_pre, _post, n: u8) {
+			assert_eq!(INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.get()), n, "Initiate vault swap hook should have been called {} times!", n);
 		},
-		initiate_vault_swap_hook_called_twice(_pre, _post) {
-			assert_eq!(INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.get()), 2, "Hook not called expected number of times");
+		close_accounts_hook_called_n_times(_pre, _post, n: u8) {
+			assert_eq!(CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()), n, "Close accounts hook should have been called {} times!", n);
 		},
-		initiate_vault_swap_hook_called_four_times(_pre,_post) {
-			assert_eq!(INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.get()), 4, "Hook not called expected number of times");
-		},
-		initiate_vault_swap_hook_called_15_times(_pre, _post) {
-			assert_eq!(INITIATE_VAULT_SWAP_CALLED.with(|hook_called| hook_called.get()), 15, "Hook not called expected number of times");
-		},
-		close_accounts_hook_not_called(_pre, _post) {
-			assert_eq!(CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),	0, "Hook should not have been called!");
-		},
-		close_accounts_hook_called_once(_pre, _post) {
-			assert_eq!(CLOSE_ACCOUNTS_CALLED.with(|hook_called| hook_called.get()),	1, "Hook not called expected number of times");
-		},
-		get_sol_nonces_hook_not_called(_pre, _post) {
-			assert_eq!(GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()), 0, "Hook should not have been called!");
-		},
-		get_sol_nonces_hook_called_once(_pre, _post) {
-			assert_eq!(GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()), 1, "Hook not called expected number of times");
-		},
-		get_sol_nonces_hook_called_twice(_pre, _post) {
-			assert_eq!(GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()), 2, "Hook not called expected number of times");
+		get_sol_nonces_hook_called_n_times(_pre, _post, n: u8) {
+			assert_eq!(GET_NUMBER_OF_SOL_NONCES_CALLED.with(|hook_called| hook_called.get()), n, "Get number of sol nonces hook should have been called {} times!", n);
 		},
 	}
 }
@@ -123,9 +105,9 @@ fn on_finalize_accounts_limit_reached() {
 			},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(0),
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
@@ -139,15 +121,19 @@ fn on_finalize_accounts_limit_reached() {
 			|_| {},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_15_times(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_once(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_once(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(
+					TEST_NUMBER_OF_ACCOUNTS as u8,
+				),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(1),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(1),
 			],
 		);
 }
 
 #[test]
 fn on_finalize_time_limit_reached() {
+	const NUMBER_OF_ACCOUNTS_INIT: u64 = 2;
+	const NUMBER_OF_ACCOUNTS_END: u64 = 4;
 	TestSetup::default()
 		.with_unsynchronised_state(0)
 		.build()
@@ -168,13 +154,13 @@ fn on_finalize_time_limit_reached() {
 			},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(0),
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
-			new: generate_votes_for_account_range(0..2),
+			new: generate_votes_for_account_range(0..NUMBER_OF_ACCOUNTS_INIT),
 			most_recent: None,
 		})
 		// account closure will not initiate since we havent reached time or account limit
@@ -183,13 +169,15 @@ fn on_finalize_time_limit_reached() {
 			|_| {},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_twice(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_once(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(
+					NUMBER_OF_ACCOUNTS_INIT as u8,
+				),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(1),
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
-			new: generate_votes_for_account_range(2..4),
+			new: generate_votes_for_account_range(NUMBER_OF_ACCOUNTS_INIT..NUMBER_OF_ACCOUNTS_END),
 			most_recent: None,
 		})
 		// time limit reached. account closure initiated even though account number limit not
@@ -199,9 +187,11 @@ fn on_finalize_time_limit_reached() {
 			|_| {},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_four_times(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_once(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_twice(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(
+					NUMBER_OF_ACCOUNTS_END as u8,
+				),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(1),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(2),
 			],
 		);
 }
@@ -230,9 +220,9 @@ fn on_finalize_close_accounts_error() {
 			},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(0),
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
@@ -244,9 +234,11 @@ fn on_finalize_close_accounts_error() {
 			|_| {},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_15_times(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_once(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_once(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(
+					TEST_NUMBER_OF_ACCOUNTS as u8,
+				),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(1),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(1),
 			],
 		)
 		.expect_election_properties_only_election(SolanaVaultSwapsKnownAccounts {
@@ -284,9 +276,9 @@ fn on_finalize_nonces_below_threshold() {
 			},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(0),
 			],
 		)
 		.force_consensus_update(ConsensusStatus::Gained {
@@ -298,9 +290,11 @@ fn on_finalize_nonces_below_threshold() {
 			|_| {},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_15_times(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_once(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(
+					TEST_NUMBER_OF_ACCOUNTS as u8,
+				),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(1),
 			],
 		)
 		.expect_election_properties_only_election(SolanaVaultSwapsKnownAccounts {
@@ -331,9 +325,9 @@ fn on_finalize_invalid_swap() {
 			},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_not_called(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(0),
 			],
 		)
 		// we have a new account but it is an invalid swap
@@ -349,9 +343,9 @@ fn on_finalize_invalid_swap() {
 			|_| {},
 			vec![
 				Check::<MinimalVaultSwapAccounts>::only_one_election(),
-				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_not_called(),
-				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_once(),
-				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_once(),
+				Check::<MinimalVaultSwapAccounts>::initiate_vault_swap_hook_called_n_times(0),
+				Check::<MinimalVaultSwapAccounts>::close_accounts_hook_called_n_times(1),
+				Check::<MinimalVaultSwapAccounts>::get_sol_nonces_hook_called_n_times(1),
 			],
 		);
 }
