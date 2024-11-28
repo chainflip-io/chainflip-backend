@@ -4,8 +4,8 @@
 mod tests;
 
 use cf_chains::{
-	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto, Arbitrum, Bitcoin,
-	Chain, ChainCrypto, Ethereum, Polkadot, Solana,
+	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto, Arbitrum, // Assethub,
+	Bitcoin, Chain, ChainCrypto, Ethereum, Polkadot, Solana,
 };
 use cf_primitives::{BroadcastId, CeremonyId, Ed25519PublicKey, EpochIndex, Ipv6Addr, Port};
 
@@ -70,4 +70,5 @@ pub enum CfeEvent<ValidatorId> {
 	SolThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, SolanaCrypto>),
 	SolKeygenRequest(KeygenRequest<ValidatorId>),
 	SolTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Solana>),
+	//HubTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Assethub>),
 }

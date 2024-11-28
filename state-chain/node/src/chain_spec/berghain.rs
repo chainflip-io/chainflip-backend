@@ -24,6 +24,7 @@ pub const ETHEREUM_EXPIRY_BLOCKS: u32 = 24 * 3600 / 14;
 pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 24 * 3600 * 10 / 4;
+pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 24 * 3600 / 12;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("826180541412D574cf1336d22c0C0a287822678A"),
@@ -50,6 +51,11 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 9431, transaction_version: 24 },
+	hub_genesis_hash: H256(hex_literal::hex!(
+		"68d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f" // Assethub mainnet
+	)),
+	hub_vault_account_id: None,
+	hub_runtime_version: RuntimeVersion { spec_version: 1003004, transaction_version: 15 },
 	sol_genesis_hash: Some(SolHash(bs58_array("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"))),
 	sol_vault_program: SolAddress(bs58_array("AusZPVXPoUM8QJJ2SL4KwvRGCQ22cDg6Y4rg7EvFrxi7")),
 	sol_vault_program_data_account: SolAddress(bs58_array(

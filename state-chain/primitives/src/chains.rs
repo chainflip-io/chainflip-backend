@@ -92,7 +92,8 @@ chains! {
 	Polkadot = 2,
 	Bitcoin = 3,
 	Arbitrum = 4,
-	Solana = 5
+	Solana = 5,
+	Assethub = 6
 }
 
 /// Can be any Chain.
@@ -119,6 +120,7 @@ impl ForeignChain {
 			ForeignChain::Bitcoin => assets::any::Asset::Btc,
 			ForeignChain::Arbitrum => assets::any::Asset::ArbEth,
 			ForeignChain::Solana => assets::any::Asset::Sol,
+			ForeignChain::Assethub => assets::any::Asset::HubDot,
 		}
 	}
 	pub const fn ccm_support(self) -> bool {
@@ -128,6 +130,7 @@ impl ForeignChain {
 			ForeignChain::Bitcoin => false,
 			ForeignChain::Arbitrum => true,
 			ForeignChain::Solana => true,
+			ForeignChain::Assethub => false,
 		}
 	}
 }
@@ -139,6 +142,7 @@ fn chain_as_u32() {
 	assert_eq!(ForeignChain::Bitcoin as u32, 3);
 	assert_eq!(ForeignChain::Arbitrum as u32, 4);
 	assert_eq!(ForeignChain::Solana as u32, 5);
+	assert_eq!(ForeignChain::Assethub as u32, 6);
 }
 
 #[test]
@@ -148,7 +152,8 @@ fn chain_id_to_chain() {
 	assert_eq!(ForeignChain::try_from(3), Ok(ForeignChain::Bitcoin));
 	assert_eq!(ForeignChain::try_from(4), Ok(ForeignChain::Arbitrum));
 	assert_eq!(ForeignChain::try_from(5), Ok(ForeignChain::Solana));
-	assert!(ForeignChain::try_from(6).is_err());
+	assert_eq!(ForeignChain::try_from(6), Ok(ForeignChain::Assethub));
+	assert!(ForeignChain::try_from(7).is_err());
 }
 
 #[test]
@@ -158,6 +163,7 @@ fn test_chains() {
 	assert_eq!(Bitcoin.as_ref(), &ForeignChain::Bitcoin);
 	assert_eq!(Arbitrum.as_ref(), &ForeignChain::Arbitrum);
 	assert_eq!(Solana.as_ref(), &ForeignChain::Solana);
+	assert_eq!(Assethub.as_ref(), &ForeignChain::Assethub);
 }
 
 #[test]
@@ -167,6 +173,7 @@ fn test_get_chain_identifier() {
 	assert_eq!(Bitcoin::get(), ForeignChain::Bitcoin);
 	assert_eq!(Arbitrum::get(), ForeignChain::Arbitrum);
 	assert_eq!(Solana::get(), ForeignChain::Solana);
+	assert_eq!(Assethub::get(), ForeignChain::Assethub);
 }
 
 #[test]
@@ -190,5 +197,9 @@ fn test_chain_to_and_from_str() {
 	assert_eq!(
 		ForeignChain::from_str(ForeignChain::Solana.to_string().as_str()).unwrap(),
 		ForeignChain::Solana
+	);
+	assert_eq!(
+		ForeignChain::from_str(ForeignChain::Assethub.to_string().as_str()).unwrap(),
+		ForeignChain::Assethub
 	);
 }

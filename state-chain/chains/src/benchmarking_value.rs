@@ -1,6 +1,6 @@
 #[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
-	chains::assets::{any::AssetMap, arb, btc, dot, eth, sol},
+	chains::assets::{any::AssetMap, arb, btc, dot, eth, hub, sol},
 	Asset,
 };
 #[cfg(feature = "runtime-benchmarks")]
@@ -89,6 +89,13 @@ impl BenchmarkValue for btc::Asset {
 impl BenchmarkValue for sol::Asset {
 	fn benchmark_value() -> Self {
 		sol::Asset::Sol
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for hub::Asset {
+	fn benchmark_value() -> Self {
+		hub::Asset::HubDot
 	}
 }
 
@@ -215,6 +222,13 @@ impl<T: BenchmarkValue> BenchmarkValue for arb::AssetMap<T> {
 
 #[cfg(feature = "runtime-benchmarks")]
 impl<T: BenchmarkValue> BenchmarkValue for sol::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for hub::AssetMap<T> {
 	fn benchmark_value() -> Self {
 		Self::from_fn(|_| T::benchmark_value())
 	}
