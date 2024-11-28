@@ -794,6 +794,11 @@ fn testnet_genesis(
 			chain_initialized: false,
 		},
 
+		assethub_vault: state_chain_runtime::AssethubVaultConfig {
+			deployment_block: None,
+			chain_initialized: false,
+		},
+
 		evm_threshold_signer: state_chain_runtime::EvmThresholdSignerConfig {
 			key: Some(cf_chains::evm::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
@@ -909,7 +914,6 @@ fn testnet_genesis(
 		swapping: Default::default(),
 		bitcoin_vault: Default::default(),
 		polkadot_vault: Default::default(),
-		assethub_vault: Default::default(),
 		system: Default::default(),
 		transaction_payment: Default::default(),
 
