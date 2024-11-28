@@ -81,12 +81,10 @@ where
 		Self { unsynchronised_settings, ..self }
 	}
 
-	#[allow(dead_code)]
 	pub fn with_electoral_settings(self, electoral_settings: ES::ElectoralSettings) -> Self {
 		Self { electoral_settings, ..self }
 	}
 
-	#[allow(dead_code)]
 	pub fn with_initial_election_state(
 		self,
 		extra: ES::ElectionIdentifierExtra,
@@ -183,6 +181,47 @@ where
 				ConsensusStatus::None
 			},
 		)
+	}
+
+	// TODO: factor out with above.
+	// Note: it's important that these expectations are executed in order, as some tests rely on
+	// testing that the order several elections are processed does not matter.
+	pub fn expect_consensus_multi(
+		self,
+		votes_and_expectations: Vec<(ConsensusVotes<ES>, Option<ES::Consensus>)>,
+	) -> Self {
+		let mut active_election_ids = self.all_election_ids().into_iter();
+
+		let mut next_self = self.clone();
+
+		for (mut consensus_votes, expected_consensus) in votes_and_expectations {
+			assert!(consensus_votes.num_authorities() > 0, "Cannot have zero authorities.");
+
+			use rand::seq::SliceRandom;
+			consensus_votes.votes.shuffle(&mut rand::thread_rng());
+
+			let current_election_id = &active_election_ids
+				.next()
+				.expect("More expected elections than active.")
+				.clone();
+
+			let new_consensus = MockAccess::<ES>::election(*current_election_id)
+				.check_consensus(None, consensus_votes)
+				.unwrap();
+
+			// Should assert on some condition about the consensus.
+			assert_eq!(new_consensus.clone(), expected_consensus);
+
+			next_self = next_self.inner_force_consensus_update(
+				*current_election_id,
+				if let Some(consensus) = new_consensus {
+					ConsensusStatus::Gained { most_recent: None, new: consensus }
+				} else {
+					ConsensusStatus::None
+				},
+			);
+		}
+		self
 	}
 
 	pub fn only_election_id(&self) -> ElectionIdentifierOf<ES> {
