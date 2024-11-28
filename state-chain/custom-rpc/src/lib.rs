@@ -242,18 +242,6 @@ impl From<&LiquidityProviderBoostPoolInfo> for RpcLiquidityProviderBoostPoolInfo
 	}
 }
 
-// #[derive(Serialize, Deserialize, Clone)]
-// pub struct RpcCcmData {
-// 	gas_budget: u128,
-// 	message_length: u32,
-// }
-
-// impl From<CcmData> for RpcCcmData {
-// 	fn from(ccm_data: CcmData) -> Self {
-// 		Self { gas_budget: ccm_data.gas_budget, message_length: ccm_data.message_length }
-// 	}
-// }
-
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "role", rename_all = "snake_case")]
@@ -1498,7 +1486,6 @@ where
 		amount: U256,
 		broker_commission: BasisPoints,
 		dca_parameters: Option<DcaParameters>,
-		// CCM message size should be a u32 < MAX_CCM_MSG_LENGTH
 		ccm_data: Option<CcmData>,
 		additional_orders: Option<Vec<SwapRateV2AdditionalOrder>>,
 		at: Option<state_chain_runtime::Hash>,
