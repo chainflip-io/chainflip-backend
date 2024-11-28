@@ -89,7 +89,7 @@ async function getChainFees(chain: Chain) {
   return { baseFee, priorityFee };
 }
 
-async function trackCcmSwap(
+async function executeAndTrackCcmSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   messageMetadata: CcmDepositMetadata,
@@ -108,7 +108,6 @@ async function trackCcmSwap(
     `GasLimit${testTag || ''}`,
   );
 
-  // Do the swap
   const { depositAddress, channelId } = await requestNewSwap(
     sourceAsset,
     destAsset,
@@ -169,7 +168,12 @@ async function testGasLimitSwapToSolana(
 
   const ccmMetadata = newCcmMetadata(destAsset, undefined, gasBudget);
 
-  const { tag, destAddress } = await trackCcmSwap(sourceAsset, destAsset, ccmMetadata, testTag);
+  const { tag, destAddress } = await executeAndTrackCcmSwap(
+    sourceAsset,
+    destAsset,
+    ccmMetadata,
+    testTag,
+  );
 
   testGasLimitCcmSwaps.log(`${tag} Finished tracking events`);
 
@@ -207,24 +211,23 @@ async function testGasLimitSwapToSolana(
   testGasLimitCcmSwaps.log(`${tag} Fee deficit recorded!`);
 }
 
-const usedNumbers = new Set<number>();
+// Using unique gas consumption amount since the CCM message is used as unique identifier
+// when observing the CCM event on the destination chain.
+const usedGasConsumptionAmount = new Set<number>();
 // Minimum and maximum gas consumption values to be in a useful range for testing.
-const MIN_TEST_GAS_CONSUMPTION: Record<string, number> = { Ethereum: 100000, Arbitrum: 1000000 };
-const MAX_TEST_GAS_CONSUMPTION: Record<string, number> = {
-  Ethereum: 4000000,
-  Arbitrum: 6000000,
+const RANGE_TEST_GAS_CONSUMPTION: Record<string, { min: number; max: number }> = {
+  Ethereum: { min: 50000, max: 1000000 },
+  Arbitrum: { min: 500000, max: 4000000 },
 };
 
 async function testGasLimitSwapToEvm(
   sourceAsset: Asset,
   destAsset: Asset,
   gasToConsume?: number,
-  expectAbort = false,
+  gasBudgetTopUp?: number,
 ) {
   const destChain = chainFromAsset(destAsset);
-
-  // When passing the gasToConsume we are testing the abort scenario
-  const testTag = expectAbort ? `InsufficientGas` : '';
+  const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
 
   if (destChain !== 'Arbitrum' && destChain !== 'Ethereum') {
     throw new Error(`Destination chain ${destChain} is not Ethereum nor Arbitrum`);
@@ -233,20 +236,17 @@ async function testGasLimitSwapToEvm(
   // Increase the gas consumption to make sure all the messages are unique
   const gasConsumption = gasToConsume ?? TEST_GAS_CONSUMPTION[destChain.toString()]++;
 
-  const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
-
   const ccmMetadata = newCcmMetadata(
     destAsset,
     web3.eth.abi.encodeParameters(['string', 'uint256'], ['GasTest', gasConsumption]),
-    undefined, // Using default minimum gas budget
+    undefined, // Get the default minimum gas budget
   );
 
-  // Only add if we are not expecting an abort (gas consumption abort broadcast testing)
-  if (!expectAbort) {
-    ccmMetadata.gasBudget += gasConsumption;
-  }
+  ccmMetadata.gasBudget = (Number(ccmMetadata.gasBudget) + (gasBudgetTopUp ?? 0)).toString();
+  const expectAbort = ccmMetadata.gasBudget < gasConsumption.toString();
+  const testTag = expectAbort ? `InsufficientGas` : '';
 
-  const { tag, destAddress, broadcastId, txPayload } = await trackCcmSwap(
+  const { tag, destAddress, broadcastId, txPayload } = await executeAndTrackCcmSwap(
     sourceAsset,
     destAsset,
     ccmMetadata,
@@ -353,13 +353,14 @@ async function testGasLimitSwapToEvm(
 }
 
 async function testEvmInsufficientGas(sourceAsset: Asset, destAsset: Asset) {
-  function getRandomGasConsumption(chain: Chain): number {
-    const range = MAX_TEST_GAS_CONSUMPTION[chain] - MIN_TEST_GAS_CONSUMPTION[chain] + 1;
-    let randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION[chain];
-    while (usedNumbers.has(randomInt)) {
-      randomInt = Math.floor(Math.random() * range) + MIN_TEST_GAS_CONSUMPTION[chain];
+  function getRandomGasConsumption(chain: string): number {
+    const { min, max } = RANGE_TEST_GAS_CONSUMPTION[chain];
+    const range = max - min + 1;
+    let randomInt = Math.floor(Math.random() * range) + min;
+    while (usedGasConsumptionAmount.has(randomInt)) {
+      randomInt = Math.floor(Math.random() * range) + min;
     }
-    usedNumbers.add(randomInt);
+    usedGasConsumptionAmount.add(randomInt);
     return randomInt;
   }
 
@@ -367,7 +368,6 @@ async function testEvmInsufficientGas(sourceAsset: Asset, destAsset: Asset) {
     sourceAsset,
     destAsset,
     getRandomGasConsumption(chainFromAsset(destAsset)),
-    true,
   );
 }
 
@@ -419,7 +419,7 @@ export async function main() {
     await sleep(500);
   }
 
-  const insificentGasTestEvm = [
+  const insufficientGasTestEvm = [
     testEvmInsufficientGas('Dot', 'Flip'),
     testEvmInsufficientGas('Eth', 'Usdc'),
     testEvmInsufficientGas('Eth', 'Usdt'),
@@ -454,7 +454,7 @@ export async function main() {
     testGasLimitSwapToSolana('Eth', 'SolUsdc'),
   ];
 
-  await Promise.all([...gasLimitSwapsSufBudget, ...insificentGasTestEvm]);
+  await Promise.all([...gasLimitSwapsSufBudget, ...insufficientGasTestEvm]);
 
   spam = false;
   await spammingEth;
