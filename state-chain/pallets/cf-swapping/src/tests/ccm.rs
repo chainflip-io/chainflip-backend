@@ -41,11 +41,7 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 }
 
 #[track_caller]
-pub(super) fn assert_ccm_egressed(
-	asset: Asset,
-	principal_amount: AssetAmount,
-	gas_budget: GasAmount,
-) {
+pub(super) fn assert_ccm_egressed(asset: Asset, swap_amount: AssetAmount, gas_budget: GasAmount) {
 	assert_has_matching_event!(
 		Test,
 		RuntimeEvent::Swapping(Event::<Test>::SwapEgressScheduled {
@@ -63,7 +59,7 @@ pub(super) fn assert_ccm_egressed(
 		ccm_egress,
 		MockEgressParameter::Ccm {
 			asset,
-			amount: principal_amount,
+			amount: swap_amount,
 			destination_address: (*EVM_OUTPUT_ADDRESS).clone(),
 			message: vec![0x01].try_into().unwrap(),
 			ccm_additional_data: vec![].try_into().unwrap(),
@@ -137,46 +133,15 @@ fn can_process_ccms_via_swap_deposit_address() {
 
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 			);
 		});
 }
 
 #[test]
-fn ccm_no_swap() {
-	const PRINCIPAL_AMOUNT: AssetAmount = 10_000;
-	const SWAP_AMOUNT: AssetAmount = PRINCIPAL_AMOUNT + GAS_BUDGET;
-
-	// Both input and output assets are Eth, so no swap is needed:
-	const INPUT_ASSET: Asset = Asset::Eth;
-	const OUTPUT_ASSET: Asset = Asset::Eth;
-	new_test_ext().execute_with(|| {
-		init_ccm_swap_request(INPUT_ASSET, OUTPUT_ASSET, SWAP_AMOUNT);
-
-		// No need to store the request in this case:
-		assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
-
-		// CCM should be immediately egressed:
-		assert_ccm_egressed(OUTPUT_ASSET, PRINCIPAL_AMOUNT, GAS_BUDGET);
-
-		assert_has_matching_event!(
-			Test,
-			RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-				swap_request_id: SWAP_REQUEST_ID,
-				..
-			}),
-		);
-
-		assert_eq!(CollectedRejectedFunds::<Test>::get(INPUT_ASSET), 0);
-		assert_eq!(CollectedRejectedFunds::<Test>::get(OUTPUT_ASSET), 0);
-	});
-}
-
-#[test]
 fn ccm_principal_swap_only() {
 	const PRINCIPAL_SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const PRINCIPAL_AMOUNT: AssetAmount = 10_000;
-	const SWAP_AMOUNT: AssetAmount = PRINCIPAL_AMOUNT + GAS_BUDGET;
+	const SWAP_AMOUNT: AssetAmount = 10_000;
 
 	// Gas asset is Eth, so no gas swap is necessary
 	const INPUT_ASSET: Asset = Asset::Eth;
@@ -195,7 +160,7 @@ fn ccm_principal_swap_only() {
 					SWAP_REQUEST_ID,
 					INPUT_ASSET,
 					OUTPUT_ASSET,
-					PRINCIPAL_AMOUNT,
+					SWAP_AMOUNT,
 					None,
 					[FeeType::NetworkFee],
 				),]
@@ -220,7 +185,7 @@ fn ccm_principal_swap_only() {
 
 			assert_ccm_egressed(
 				OUTPUT_ASSET,
-				PRINCIPAL_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
+				SWAP_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
 				GAS_BUDGET,
 			);
 
