@@ -86,6 +86,8 @@ macro_rules! generate_vote_storage_tuple_impls {
                                 })
                             },
                         )*
+                        // For when we have a composite of 1
+                        #[allow(unreachable_patterns)]
                         _ => Err(CorruptStorageError::new()),
                     }
                 }
@@ -109,6 +111,8 @@ macro_rules! generate_vote_storage_tuple_impls {
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeSharedData::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),
+                                            // For when we have a composite of 1
+                                            #[allow(unreachable_patterns)]
                                             _ => Err(CorruptStorageError::new())
                                         }
                                     },
@@ -135,6 +139,8 @@ macro_rules! generate_vote_storage_tuple_impls {
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeSharedData::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),
+                                            // For when we have a composite of 1
+                                            #[allow(unreachable_patterns)]
                                             _ => Err(CorruptStorageError::new()),
                                         }
                                     },
@@ -161,6 +167,8 @@ macro_rules! generate_vote_storage_tuple_impls {
                                         match get_shared_data(shared_data_hash)? {
                                             Some(CompositeSharedData::$t(shared_data)) => Ok(Some(shared_data)),
                                             None => Ok(None),
+                                            // For when we have a composite of 1
+                                            #[allow(unreachable_patterns)]
                                             _ => Err(CorruptStorageError::new()),
                                         }
                                     },
@@ -179,6 +187,8 @@ macro_rules! generate_vote_storage_tuple_impls {
                             individual_component: None,
                             bitmap_component: None,
                         } => Ok(None),
+                        // For when we have a composite of 1
+                        #[allow(unreachable_patterns)]
                         _ => Err(CorruptStorageError::new()),
                     }
                 }
@@ -274,4 +284,5 @@ macro_rules! generate_vote_storage_tuple_impls {
     }
 }
 
+generate_vote_storage_tuple_impls!(tuple_1_impls: (A));
 generate_vote_storage_tuple_impls!(tuple_7_impls: (A, B, C, D, EE, FF, GG));

@@ -1020,6 +1020,12 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 }
 
+impl pallet_cf_elections::Config<Instance3> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::bitcoin_elections::BitcoinElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+}
+
 #[frame_support::runtime]
 mod runtime {
 	#[runtime::runtime]
@@ -1135,6 +1141,9 @@ mod runtime {
 
 	#[runtime::pallet_index(47)]
 	pub type AssetBalances = pallet_cf_asset_balances;
+
+	#[runtime::pallet_index(48)]
+	pub type BitcoinElections = pallet_cf_elections<Instance3>;
 }
 
 /// The address format for describing accounts.
