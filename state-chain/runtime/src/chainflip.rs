@@ -5,8 +5,8 @@ pub mod boost_api;
 pub mod cons_key_rotator;
 pub mod decompose_recompose;
 pub mod epoch_transition;
-pub mod evm_vault_activator;
 mod missed_authorship_slots;
+pub mod multi_vault_activator;
 mod offences;
 pub mod pending_rotation_broadcasts;
 mod signer_nomination;
@@ -14,12 +14,12 @@ pub mod solana_elections;
 
 use crate::{
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
-	ArbitrumIngressEgress, Authorship, BitcoinChainTracking, BitcoinIngressEgress,
-	BitcoinThresholdSigner, BlockNumber, Emissions, Environment, EthereumBroadcaster,
-	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
-	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	SolanaBroadcaster, SolanaChainTrackingProvider, SolanaIngressEgress, SolanaThresholdSigner,
-	System, Validator, YEAR,
+	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
+	Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber,
+	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
+	Flip, FlipBalance, Hash, PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress,
+	PolkadotThresholdSigner, Runtime, RuntimeCall, SolanaBroadcaster, SolanaChainTrackingProvider,
+	SolanaIngressEgress, SolanaThresholdSigner, System, Validator, YEAR,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -47,6 +47,7 @@ use cf_chains::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
 		EvmCrypto, Transaction,
 	},
+	hub::api::AssethubApi,
 	sol::{
 		api::{
 			AllNonceAccounts, ApiEnvironment, ComputePrice, CurrentAggKey, DurableNonce,
@@ -54,10 +55,10 @@ use cf_chains::{
 		},
 		SolAddress, SolAmount, SolApiEnvironment, SolanaCrypto, SolanaTransactionData,
 	},
-	AnyChain, ApiCall, Arbitrum, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainCrypto,
-	ChainEnvironment, ChainState, ChannelRefundParameters, ForeignChain, ReplayProtectionProvider,
-	RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, Solana,
-	TransactionBuilder,
+	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadata, CcmDepositMetadata, Chain,
+	ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParameters, ForeignChain,
+	ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
+	Solana, TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, BasisPoints, Beneficiaries, ChannelId, DcaParameters,
@@ -305,6 +306,32 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 	}
 }
 
+impl TransactionBuilder<Assethub, AssethubApi<HubEnvironment>> for DotTransactionBuilder {
+	fn build_transaction(
+		signed_call: &AssethubApi<HubEnvironment>,
+	) -> <Assethub as Chain>::Transaction {
+		PolkadotTransactionData { encoded_extrinsic: signed_call.chain_encoded() }
+	}
+
+	fn refresh_unsigned_data(_unsigned_tx: &mut <Assethub as Chain>::Transaction) {
+		// TODO: For now this is a noop until we actually have dot chain tracking
+	}
+
+	fn requires_signature_refresh(
+		call: &AssethubApi<HubEnvironment>,
+		payload: &<<Assethub as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		_maybe_current_onchain_key: Option<<PolkadotCrypto as ChainCrypto>::AggKey>,
+	) -> RequiresSignatureRefresh<PolkadotCrypto, AssethubApi<HubEnvironment>> {
+		// Current key and signature are irrelevant. The only thing that can invalidate a polkadot
+		// transaction is if the payload changes due to a runtime version update.
+		if &call.threshold_signature_payload() != payload {
+			RequiresSignatureRefresh::True(None)
+		} else {
+			RequiresSignatureRefresh::False
+		}
+	}
+}
+
 pub struct BtcTransactionBuilder;
 impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionBuilder {
 	fn build_transaction(
@@ -524,6 +551,38 @@ impl ChainEnvironment<cf_chains::dot::api::VaultAccount, PolkadotAccountId> for 
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct HubEnvironment;
+
+impl ReplayProtectionProvider<Assethub> for HubEnvironment {
+	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
+	// proxy_account
+	fn replay_protection(reset_nonce: ResetProxyAccountNonce) -> PolkadotReplayProtection {
+		PolkadotReplayProtection {
+			genesis_hash: Environment::assethub_genesis_hash(),
+			// It should not be possible to get None here, since we never send
+			// any transactions unless we have a vault account and associated
+			// proxy.
+			signer: <PolkadotThresholdSigner as KeyProvider<PolkadotCrypto>>::active_epoch_key()
+				.map(|epoch_key| epoch_key.key)
+				.defensive_unwrap_or_default(),
+			nonce: Environment::next_assethub_proxy_account_nonce(reset_nonce),
+		}
+	}
+}
+
+impl Get<RuntimeVersion> for HubEnvironment {
+	fn get() -> RuntimeVersion {
+		AssethubChainTracking::chain_state().unwrap().tracked_data.runtime_version
+	}
+}
+
+impl ChainEnvironment<cf_chains::hub::api::VaultAccount, PolkadotAccountId> for HubEnvironment {
+	fn lookup(_: cf_chains::hub::api::VaultAccount) -> Option<PolkadotAccountId> {
+		Environment::assethub_vault_account()
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BtcEnvironment;
 
 impl ReplayProtectionProvider<Bitcoin> for BtcEnvironment {
@@ -632,6 +691,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Arbitrum => Err(()),
 			ForeignChain::Solana =>
 				Self::broadcast_gov_key::<Solana, SolanaBroadcaster>(maybe_old_key, new_key),
+			ForeignChain::Assethub =>
+				Self::broadcast_gov_key::<Assethub, AssethubBroadcaster>(maybe_old_key, new_key),
 		}
 	}
 
@@ -645,6 +706,8 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 			ForeignChain::Arbitrum => false,
 			ForeignChain::Solana =>
 				Self::is_govkey_compatible::<<Solana as Chain>::ChainCrypto>(key),
+			ForeignChain::Assethub =>
+				Self::is_govkey_compatible::<<Assethub as Chain>::ChainCrypto>(key),
 		}
 	}
 }
@@ -752,7 +815,8 @@ impl_deposit_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
 	(Arbitrum, ArbitrumIngressEgress),
-	(Solana, SolanaIngressEgress)
+	(Solana, SolanaIngressEgress),
+	(Assethub, AssethubIngressEgress)
 );
 
 impl_egress_api_for_anychain!(
@@ -761,7 +825,8 @@ impl_egress_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
 	(Arbitrum, ArbitrumIngressEgress),
-	(Solana, SolanaIngressEgress)
+	(Solana, SolanaIngressEgress),
+	(Assethub, AssethubIngressEgress)
 );
 
 pub struct DepositHandler;
@@ -774,6 +839,7 @@ impl OnDeposit<Bitcoin> for DepositHandler {
 }
 impl OnDeposit<Arbitrum> for DepositHandler {}
 impl OnDeposit<Solana> for DepositHandler {}
+impl OnDeposit<Assethub> for DepositHandler {}
 
 pub struct ChainAddressConverter;
 
@@ -840,6 +906,9 @@ impl OnBroadcastReady<Arbitrum> for BroadcastReadyProvider {
 }
 impl OnBroadcastReady<Solana> for BroadcastReadyProvider {
 	type ApiCall = SolanaApi<SolEnvironment>;
+}
+impl OnBroadcastReady<Assethub> for BroadcastReadyProvider {
+	type ApiCall = AssethubApi<HubEnvironment>;
 }
 
 pub struct BitcoinFeeGetter;
@@ -932,7 +1001,8 @@ impl_ingress_egress_fee_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
 	(Arbitrum, ArbitrumIngressEgress),
-	(Solana, SolanaIngressEgress)
+	(Solana, SolanaIngressEgress),
+	(Assethub, AssethubIngressEgress)
 );
 
 pub struct SolanaLimit;

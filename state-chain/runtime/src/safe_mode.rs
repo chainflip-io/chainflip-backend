@@ -19,19 +19,21 @@ impl_runtime_safe_mode! {
 	asset_balances: pallet_cf_asset_balances::PalletSafeMode,
 	threshold_signature_evm: pallet_cf_threshold_signature::PalletSafeMode<Instance16>,
 	threshold_signature_bitcoin: pallet_cf_threshold_signature::PalletSafeMode<Instance3>,
-	threshold_signature_polkadot: pallet_cf_threshold_signature::PalletSafeMode<Instance2>,
+	threshold_signature_polkadot: pallet_cf_threshold_signature::PalletSafeMode<Instance15>,
 	threshold_signature_solana: pallet_cf_threshold_signature::PalletSafeMode<Instance5>,
 	broadcast_ethereum: pallet_cf_broadcast::PalletSafeMode<Instance1>,
 	broadcast_bitcoin: pallet_cf_broadcast::PalletSafeMode<Instance3>,
 	broadcast_polkadot: pallet_cf_broadcast::PalletSafeMode<Instance2>,
 	broadcast_arbitrum: pallet_cf_broadcast::PalletSafeMode<Instance4>,
 	broadcast_solana: pallet_cf_broadcast::PalletSafeMode<Instance5>,
+	broadcast_assethub: pallet_cf_broadcast::PalletSafeMode<Instance6>,
 	witnesser: pallet_cf_witnesser::PalletSafeMode<WitnesserCallPermission>,
 	ingress_egress_ethereum: pallet_cf_ingress_egress::PalletSafeMode<Instance1>,
 	ingress_egress_bitcoin: pallet_cf_ingress_egress::PalletSafeMode<Instance3>,
 	ingress_egress_polkadot: pallet_cf_ingress_egress::PalletSafeMode<Instance2>,
 	ingress_egress_arbitrum: pallet_cf_ingress_egress::PalletSafeMode<Instance4>,
 	ingress_egress_solana: pallet_cf_ingress_egress::PalletSafeMode<Instance5>,
+	ingress_egress_assethub: pallet_cf_ingress_egress::PalletSafeMode<Instance6>,
 }
 
 /// Contains permissions for different Runtime calls.
@@ -84,6 +86,12 @@ pub struct WitnesserCallPermission {
 	// Solana pallets
 	pub solana_broadcast: bool,
 	pub solana_vault: bool,
+
+	// Assethub pallets
+	pub assethub_broadcast: bool,
+	pub assethub_chain_tracking: bool,
+	pub assethub_ingress_egress: bool,
+	pub assethub_vault: bool,
 }
 
 impl WitnesserCallPermission {
@@ -110,6 +118,10 @@ impl WitnesserCallPermission {
 			arbitrum_vault: true,
 			solana_broadcast: true,
 			solana_vault: true,
+			assethub_broadcast: true,
+			assethub_chain_tracking: true,
+			assethub_ingress_egress: true,
+			assethub_vault: true,
 		}
 	}
 }
@@ -143,6 +155,11 @@ impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 
 			RuntimeCall::SolanaBroadcaster(..) => self.solana_broadcast,
 			RuntimeCall::SolanaVault(..) => self.solana_vault,
+
+			RuntimeCall::AssethubBroadcaster(..) => self.assethub_broadcast,
+			RuntimeCall::AssethubChainTracking(..) => self.assethub_chain_tracking,
+			RuntimeCall::AssethubIngressEgress(..) => self.assethub_ingress_egress,
+			RuntimeCall::AssethubVault(..) => self.assethub_vault,
 
 			_ => {
 				cf_runtime_utilities::log_or_panic!(

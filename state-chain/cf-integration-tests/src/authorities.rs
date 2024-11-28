@@ -14,9 +14,7 @@ use cf_traits::{AsyncResult, EpochInfo, KeyRotationStatusOuter, KeyRotator};
 use pallet_cf_environment::{PolkadotVaultAccountId, SafeModeUpdate};
 use pallet_cf_validator::{CurrentRotationPhase, RotationPhase};
 use state_chain_runtime::{
-	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip, PolkadotInstance,
-	PolkadotThresholdSigner, Runtime, RuntimeOrigin, SolanaInstance, SolanaThresholdSigner, System,
-	Validator,
+	BitcoinThresholdSigner, Environment, EvmInstance, EvmThresholdSigner, Flip, PolkadotCryptoInstance, PolkadotInstance, PolkadotThresholdSigner, Runtime, RuntimeOrigin, SolanaInstance, SolanaThresholdSigner, System, Validator
 };
 
 // Helper function that creates a network, funds backup nodes, and have them join the auction.
@@ -464,7 +462,7 @@ fn authority_rotation_can_recover_after_key_handover_fails() {
 						EvmThresholdSigner::ceremony_id_counter(),
 						Err(BTreeSet::default()),
 					),
-					pallet_cf_threshold_signature::Error::<Runtime, PolkadotInstance>::InvalidRotationStatus
+					pallet_cf_threshold_signature::Error::<Runtime, PolkadotCryptoInstance>::InvalidRotationStatus
 				);
 				assert_err!(
 					SolanaThresholdSigner::report_key_handover_outcome(

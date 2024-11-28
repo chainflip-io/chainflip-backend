@@ -1,11 +1,5 @@
 use cf_chains::{
-	arb::ArbitrumTrackedData,
-	assets::btc,
-	btc::{BitcoinFeeInfo, BitcoinTrackedData, BITCOIN_DUST_LIMIT},
-	dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion},
-	eth::EthereumTrackedData,
-	sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, SolTrackedData},
-	Arbitrum, Bitcoin, ChainState, Ethereum, Polkadot,
+	arb::ArbitrumTrackedData, assets::btc, btc::{BitcoinFeeInfo, BitcoinTrackedData, BITCOIN_DUST_LIMIT}, dot::{PolkadotAccountId, PolkadotHash, PolkadotTrackedData, RuntimeVersion}, eth::EthereumTrackedData, hub::AssethubTrackedData, sol::{api::DurableNonceAndAccount, SolAddress, SolApiEnvironment, SolHash, SolTrackedData}, Arbitrum, Assethub, Bitcoin, ChainState, Ethereum, Polkadot
 };
 use cf_primitives::{
 	chains::Solana, AccountRole, AuthorityCount, NetworkEnvironment,
@@ -23,8 +17,7 @@ use sp_core::{
 use state_chain_runtime::{
 	chainflip::{solana_elections, Offence},
 	constants::common::{
-		BLOCKS_PER_MINUTE_ARBITRUM, BLOCKS_PER_MINUTE_ETHEREUM, BLOCKS_PER_MINUTE_POLKADOT,
-		BLOCKS_PER_MINUTE_SOLANA,
+		BLOCKS_PER_MINUTE_ARBITRUM, BLOCKS_PER_MINUTE_ASSETHUB, BLOCKS_PER_MINUTE_ETHEREUM, BLOCKS_PER_MINUTE_POLKADOT, BLOCKS_PER_MINUTE_SOLANA
 	},
 	opaque::SessionKeys,
 	AccountId, BlockNumber, FlipBalance, SetSizeParameters, Signature, SolanaElectionsConfig,
@@ -101,6 +94,9 @@ pub struct StateChainEnvironment {
 	dot_genesis_hash: PolkadotHash,
 	dot_vault_account_id: Option<PolkadotAccountId>,
 	dot_runtime_version: RuntimeVersion,
+	hub_genesis_hash: PolkadotHash,
+	hub_vault_account_id: Option<PolkadotAccountId>,
+	hub_runtime_version: RuntimeVersion,
 	// Solana related
 	sol_genesis_hash: Option<SolHash>,
 	sol_vault_program: SolAddress,
@@ -183,6 +179,23 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.dot_runtime_version.transaction_version,
 	};
 
+	let hub_genesis_hash = match env::var("HUB_GENESIS_HASH") {
+		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
+		Err(_) => defaults.hub_genesis_hash,
+	};
+	let hub_vault_account_id = match env::var("HUB_VAULT_ACCOUNT_ID") {
+		Ok(s) => Some(PolkadotAccountId::from_aliased(hex_decode::<32>(&s).unwrap())),
+		Err(_) => defaults.hub_vault_account_id,
+	};
+	let hub_spec_version: u32 = match env::var("HUB_SPEC_VERSION") {
+		Ok(s) => s.parse().unwrap(),
+		Err(_) => defaults.hub_runtime_version.spec_version,
+	};
+	let hub_transaction_version: u32 = match env::var("HUB_TRANSACTION_VERSION") {
+		Ok(s) => s.parse().unwrap(),
+		Err(_) => defaults.hub_runtime_version.transaction_version,
+	};
+
 	let sol_genesis_hash = match env::var("SOL_GENESIS_HASH") {
 		Ok(s) => Some(SolHash::from_str(&s).unwrap()),
 		Err(_) => defaults.sol_genesis_hash,
@@ -216,6 +229,12 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		dot_runtime_version: RuntimeVersion {
 			spec_version: dot_spec_version,
 			transaction_version: dot_transaction_version,
+		},
+		hub_genesis_hash,
+		hub_vault_account_id,
+		hub_runtime_version: RuntimeVersion {
+			spec_version: hub_spec_version,
+			transaction_version: hub_transaction_version,
 		},
 		sol_genesis_hash,
 		sol_vault_program,
@@ -286,6 +305,9 @@ pub fn inner_cf_development_config(
 		dot_genesis_hash,
 		dot_vault_account_id,
 		dot_runtime_version,
+		hub_genesis_hash,
+		hub_vault_account_id,
+		hub_runtime_version,
 		sol_genesis_hash,
 		sol_vault_program,
 		sol_vault_program_data_account,
@@ -325,6 +347,8 @@ pub fn inner_cf_development_config(
 				arbitrum_chain_id,
 				polkadot_genesis_hash: dot_genesis_hash,
 				polkadot_vault_account_id: dot_vault_account_id,
+				assethub_genesis_hash: hub_genesis_hash,
+				assethub_vault_account_id: hub_vault_account_id,
 				sol_genesis_hash,
 				sol_api_env: SolApiEnvironment {
 					vault_program: sol_vault_program,
@@ -358,12 +382,14 @@ pub fn inner_cf_development_config(
 			devnet::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 			devnet::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 			dot_runtime_version,
+			hub_runtime_version,
 			// Bitcoin block times on localnets are much faster, so we account for that here.
 			devnet::BITCOIN_EXPIRY_BLOCKS,
 			devnet::ETHEREUM_EXPIRY_BLOCKS,
 			devnet::ARBITRUM_EXPIRY_BLOCKS,
 			devnet::POLKADOT_EXPIRY_BLOCKS,
 			devnet::SOLANA_EXPIRY_BLOCKS,
+			devnet::ASSETHUB_EXPIRY_BLOCKS,
 			devnet::BITCOIN_SAFETY_MARGIN,
 			devnet::ETHEREUM_SAFETY_MARGIN,
 			devnet::ARBITRUM_SAFETY_MARGIN,
@@ -416,6 +442,9 @@ macro_rules! network_spec {
 					dot_genesis_hash,
 					dot_vault_account_id,
 					dot_runtime_version,
+					hub_genesis_hash,
+					hub_vault_account_id,
+					hub_runtime_version,
 					sol_genesis_hash,
 					sol_vault_program,
 					sol_vault_program_data_account,
@@ -485,6 +514,8 @@ macro_rules! network_spec {
 							arbitrum_chain_id,
 							polkadot_genesis_hash: dot_genesis_hash,
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
+							assethub_genesis_hash: hub_genesis_hash,
+							assethub_vault_account_id: hub_vault_account_id.clone(),
 							sol_genesis_hash,
 							sol_durable_nonces_and_accounts: sol_durable_nonces_and_accounts
 								.to_vec(),
@@ -520,11 +551,13 @@ macro_rules! network_spec {
 						KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 						THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 						dot_runtime_version,
+						hub_runtime_version,
 						BITCOIN_EXPIRY_BLOCKS,
 						ETHEREUM_EXPIRY_BLOCKS,
 						ARBITRUM_EXPIRY_BLOCKS,
 						POLKADOT_EXPIRY_BLOCKS,
 						SOLANA_EXPIRY_BLOCKS,
+						ASSETHUB_EXPIRY_BLOCKS,
 						BITCOIN_SAFETY_MARGIN,
 						ETHEREUM_SAFETY_MARGIN,
 						ARBITRUM_SAFETY_MARGIN,
@@ -578,11 +611,13 @@ fn testnet_genesis(
 	keygen_ceremony_timeout_blocks: BlockNumber,
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
 	dot_runtime_version: RuntimeVersion,
+	hub_runtime_version: RuntimeVersion,
 	bitcoin_deposit_channel_lifetime: u32,
 	ethereum_deposit_channel_lifetime: u32,
 	arbitrum_deposit_channel_lifetime: u32,
 	polkadot_deposit_channel_lifetime: u32,
 	solana_deposit_channel_lifetime: u32,
+	assethub_deposit_channel_lifetime: u32,
 	bitcoin_safety_margin: u64,
 	ethereum_safety_margin: u64,
 	arbitrum_safety_margin: u64,
@@ -821,6 +856,15 @@ fn testnet_genesis(
 				tracked_data: SolTrackedData { priority_fee: 100_000 },
 			},
 		},
+		assethub_chain_tracking: state_chain_runtime::AssethubChainTrackingConfig {
+			init_chain_state: ChainState::<Assethub> {
+				block_height: 0,
+				tracked_data: AssethubTrackedData {
+					median_tip: 0,
+					runtime_version: hub_runtime_version,
+				},
+			},
+		},
 		// Channel lifetimes are set to ~2 hours at average block times.
 		bitcoin_ingress_egress: state_chain_runtime::BitcoinIngressEgressConfig {
 			deposit_channel_lifetime: bitcoin_deposit_channel_lifetime.into(),
@@ -846,6 +890,10 @@ fn testnet_genesis(
 			witness_safety_margin: Some(solana_safety_margin),
 			..Default::default()
 		},
+		assethub_ingress_egress: state_chain_runtime::AssethubIngressEgressConfig {
+			deposit_channel_lifetime: assethub_deposit_channel_lifetime,
+			..Default::default()
+		},
 		solana_elections,
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
@@ -853,6 +901,7 @@ fn testnet_genesis(
 		swapping: Default::default(),
 		bitcoin_vault: Default::default(),
 		polkadot_vault: Default::default(),
+		assethub_vault: Default::default(),
 		system: Default::default(),
 		transaction_payment: Default::default(),
 
@@ -875,6 +924,10 @@ fn testnet_genesis(
 		// instance 5
 		solana_broadcaster: state_chain_runtime::SolanaBroadcasterConfig {
 			broadcast_timeout: 4 * BLOCKS_PER_MINUTE_SOLANA,
+		},
+		// instance6
+		assethub_broadcaster: state_chain_runtime::AssethubBroadcasterConfig {
+			broadcast_timeout: 4 * BLOCKS_PER_MINUTE_ASSETHUB,
 		},
 	})
 	.expect("Genesis config is JSON-compatible.")

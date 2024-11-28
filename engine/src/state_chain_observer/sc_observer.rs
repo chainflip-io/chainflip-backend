@@ -14,7 +14,7 @@ type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
 
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, EvmInstance, PolkadotInstance, Runtime, RuntimeCall, SolanaInstance,
+	AccountId, BitcoinInstance, EvmInstance, PolkadotCryptoInstance, Runtime, RuntimeCall, SolanaInstance
 };
 use std::{
 	collections::BTreeSet,
@@ -329,7 +329,7 @@ where
                                     }
                                     CfeEvent::DotThresholdSignatureRequest(req) => {
 
-                                        handle_signing_request::<_, _, _, PolkadotInstance>(
+                                        handle_signing_request::<_, _, _, PolkadotCryptoInstance>(
                                             scope,
                                             &dot_multisig_client,
                                             state_chain_client.clone(),
@@ -394,7 +394,7 @@ where
                                         ).await;
                                     }
                                     CfeEvent::DotKeygenRequest(req) => {
-                                        handle_keygen_request::<_, _, _, PolkadotInstance>(
+                                        handle_keygen_request::<_, _, _, PolkadotCryptoInstance>(
                                             scope,
                                             &dot_multisig_client,
                                             state_chain_client.clone(),
@@ -681,7 +681,7 @@ where
 			state_chain_client
 				.storage_value::<pallet_cf_threshold_signature::CeremonyIdCounter<
 					state_chain_runtime::Runtime,
-					state_chain_runtime::PolkadotInstance,
+					state_chain_runtime::PolkadotCryptoInstance,
 				>>(block_hash)
 				.await
 				.context("Failed to get Polkadot CeremonyIdCounter from SC")?

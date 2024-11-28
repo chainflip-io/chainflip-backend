@@ -4,7 +4,7 @@ use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
 	dot::{api::CreatePolkadotVault, PolkadotCrypto},
-	eth, ApiCall, Arbitrum, Bitcoin, Chain, ChainCrypto, Polkadot, Solana,
+	eth, ApiCall, Arbitrum, Assethub, Bitcoin, Chain, ChainCrypto, Polkadot, Solana,
 };
 use cf_primitives::SemVer;
 use cf_traits::{
@@ -82,6 +82,15 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 	}
 }
 
+pub struct MockAssethubVaultKeyWitnessedHandler;
+impl VaultKeyWitnessedHandler<Assethub> for MockAssethubVaultKeyWitnessedHandler {
+	fn on_first_key_activated(
+		_block_number: <Assethub as Chain>::ChainBlockNumber,
+	) -> frame_support::pallet_prelude::DispatchResult {
+		unimplemented!()
+	}
+}
+
 pub struct MockBitcoinVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 	fn on_first_key_activated(
@@ -135,6 +144,7 @@ impl pallet_cf_environment::Config for Test {
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
 	type SolanaVaultKeyWitnessedHandler = MockSolanaVaultKeyWitnessedHandler;
+	type AssethubVaultKeyWitnessedHandler = MockAssethubVaultKeyWitnessedHandler;
 	type SolanaNonceWatch = ();
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type BitcoinKeyProvider = MockBitcoinKeyProvider;
@@ -175,6 +185,8 @@ cf_test_utilities::impl_test_helpers! {
 			eth_usdt_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
+			assethub_genesis_hash: H256([0u8; 32]),
+			assethub_vault_account_id: None,
 			sol_genesis_hash: None,
 			..Default::default()
 		},
