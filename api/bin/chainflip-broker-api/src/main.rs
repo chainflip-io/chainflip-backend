@@ -31,6 +31,7 @@ use tracing::log;
 
 mod api;
 use api::*;
+use api_json_schema::*;
 
 #[derive(thiserror::Error, Debug)]
 pub enum BrokerApiError {
@@ -41,7 +42,7 @@ pub enum BrokerApiError {
 	#[error(transparent)]
 	Anyhow(#[from] anyhow::Error),
 	#[error(transparent)]
-	Never(#[from] api::Never),
+	Never(#[from] api_json_schema::Never),
 	#[error("The Broker Api does not have a State Chain connection configured.")]
 	NoConnection,
 }
@@ -163,15 +164,18 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		request: EndpointRequest<register_account::Endpoint>,
 	) -> RpcResult<EndpointResponse<register_account::Endpoint>> {
-		Ok(api::respond::<_, api::register_account::Endpoint>(self.chainflip_api()?, request)
-			.await?)
+		Ok(api_json_schema::respond::<_, api::register_account::Endpoint>(
+			self.chainflip_api()?,
+			request,
+		)
+		.await?)
 	}
 
 	async fn request_swap_deposit_address(
 		&self,
 		request: EndpointRequest<request_swap_deposit_address::Endpoint>,
 	) -> RpcResult<EndpointResponse<request_swap_deposit_address::Endpoint>> {
-		Ok(api::respond::<_, request_swap_deposit_address::Endpoint>(
+		Ok(api_json_schema::respond::<_, request_swap_deposit_address::Endpoint>(
 			self.chainflip_api()?,
 			request,
 		)
@@ -182,14 +186,15 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		request: EndpointRequest<withdraw_fees::Endpoint>,
 	) -> RpcResult<EndpointResponse<withdraw_fees::Endpoint>> {
-		Ok(api::respond::<_, withdraw_fees::Endpoint>(self.chainflip_api()?, request).await?)
+		Ok(api_json_schema::respond::<_, withdraw_fees::Endpoint>(self.chainflip_api()?, request)
+			.await?)
 	}
 
 	async fn request_swap_parameter_encoding(
 		&self,
 		request: EndpointRequest<request_swap_parameter_encoding::Endpoint>,
 	) -> RpcResult<EndpointResponse<request_swap_parameter_encoding::Endpoint>> {
-		Ok(api::respond::<_, request_swap_parameter_encoding::Endpoint>(
+		Ok(api_json_schema::respond::<_, request_swap_parameter_encoding::Endpoint>(
 			self.chainflip_api()?,
 			request,
 		)
@@ -318,8 +323,8 @@ impl RpcServerImpl {
 		})
 	}
 
-	pub fn chainflip_api(&self) -> RpcResult<impl ChainflipApi> {
-		self.api.as_ref().ok_or(BrokerApiError::NoConnection).cloned()
+	pub fn chainflip_api(&self) -> RpcResult<ApiWrapper<impl ChainflipApi>> {
+		Ok(ApiWrapper { api: self.api.as_ref().ok_or(BrokerApiError::NoConnection).cloned()? })
 	}
 }
 

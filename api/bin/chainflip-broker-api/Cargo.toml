@@ -23,6 +23,7 @@ workspace = true
 
 [dependencies]
 chainflip-api = { workspace = true }
+api-json-schema = { workspace = true }
 cf-utilities = { workspace = true, default-features = true }
 
 anyhow = { workspace = true }
@@ -42,8 +43,8 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 serde_json = { workspace = true }
-serde_with = "3.11.0"
-schemars = { version = "1.0.0-alpha.15" }
+serde_with = { workspace = true }
+schemars = { workspace = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }

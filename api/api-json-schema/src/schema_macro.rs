@@ -1,13 +1,20 @@
+pub mod __macro_imports {
+	pub use schemars::{generate::SchemaSettings, JsonSchema, Schema, SchemaGenerator};
+	pub use serde::{Deserialize, Serialize};
+	pub use serde_with::{DeserializeFromStr, SerializeDisplay};
+}
+
 #[macro_export]
 macro_rules! impl_schema_endpoint {
 	($( $mod:ident: $endpoint:ident ),+ $(,)? ) => {
 		pub mod schema {
-			use $crate::api::{self, *};
+			use $crate::schema_macro::__macro_imports::*;
+			use super::*;
 
 			pub struct Endpoint;
 			pub struct Responder;
 
-			#[derive(Debug, PartialEq, Eq, Clone, JsonSchema, serde_with::SerializeDisplay, serde_with::DeserializeFromStr)]
+			#[derive(Debug, PartialEq, Eq, Clone, JsonSchema, SerializeDisplay, DeserializeFromStr)]
 			#[serde(rename_all = "snake_case")]
 			pub enum Method {
 				$(
@@ -65,20 +72,17 @@ macro_rules! impl_schema_endpoint {
 				pub response: serde_json::Map<String, serde_json::Value>,
 			}
 
-			impl api::Endpoint for Endpoint {
+			impl $crate::Endpoint for Endpoint {
 				type Request = SchemaRequest;
 				type Response = Response;
-				type Error = Never;
+				type Error = $crate::Never;
 			}
 
-			#[async_trait]
-			impl api::Responder<Endpoint> for Responder {
+			impl $crate::Responder<Endpoint> for Responder {
 				async fn respond(
 					&self,
-					request: api::EndpointRequest<Endpoint>
-				) -> api::EndpointResult<Endpoint> {
-					use schemars::generate::SchemaSettings;
-
+					request: $crate::EndpointRequest<Endpoint>
+				) -> $crate::EndpointResult<Endpoint> {
 					// Assume that callers want to know how to serialize a request and deserialize a response.
 					let mut ser_generator = SchemaSettings::default()
 						.with(|settings| {
@@ -110,9 +114,9 @@ macro_rules! impl_schema_endpoint {
 								Method::$endpoint => EndpointSchema {
 									method,
 									request: ser_generator
-										.subschema_for::<api::EndpointRequest<api::$mod::Endpoint>>(),
+										.subschema_for::<$crate::EndpointRequest<$mod::Endpoint>>(),
 									response: de_generator
-										.subschema_for::<api::EndpointResponse<api::$mod::Endpoint>>(),
+										.subschema_for::<$crate::EndpointResponse<$mod::Endpoint>>(),
 								},
 							)+
 						}
