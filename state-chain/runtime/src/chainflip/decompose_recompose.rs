@@ -181,7 +181,12 @@ mod tests {
 	use super::*;
 	use crate::{RuntimeOrigin, Validator, Witnesser};
 	use cf_chains::{
-		btc::{BitcoinFeeInfo, BitcoinTrackedData}, dot::PolkadotTrackedData, eth::EthereumTrackedData, hub::AssethubTrackedData, instances::AssethubInstance, Bitcoin, Chain, ChainState, Ethereum, Polkadot, Assethub
+		btc::{BitcoinFeeInfo, BitcoinTrackedData},
+		dot::PolkadotTrackedData,
+		eth::EthereumTrackedData,
+		hub::AssethubTrackedData,
+		instances::AssethubInstance,
+		Assethub, Bitcoin, Chain, ChainState, Ethereum, Polkadot,
 	};
 	use cf_primitives::{AccountRole, ForeignChain};
 	use cf_traits::EpochInfo;
