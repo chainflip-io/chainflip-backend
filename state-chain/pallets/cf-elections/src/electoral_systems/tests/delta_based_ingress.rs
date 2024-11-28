@@ -221,6 +221,9 @@ register_checks! {
 		ended_at_state(_pre, post, election_state: BTreeMap<AccountId, ChannelTotalIngressedFor<MockIngressSink>>) {
 			assert_eq!(*post.election_state.get(post.election_identifiers[0].unique_monotonic()).unwrap(), election_state, "Expected election state incorrect.");
 		},
+		ended_at_empty_state(_pre, post) {
+			assert_eq!(post.election_state.len(), 0, "Expected State to be empty, but it's not.");
+		},
 		ingressed(_pre, _post, expected_ingressed: Vec<(AccountId, Asset, Amount)>) {
 			AMOUNT_INGRESSED.with(|ingresses| {
 				assert_eq!(
@@ -295,12 +298,17 @@ fn only_trigger_ingress_on_witnessed_blocks() {
 			most_recent: None,
 			new: to_state(channel_state_ingressed()),
 		})
-		.test_on_finalize(&(ingress_block[0] - 1), |_| (), vec![Check::assert_unchanged()])
+		.test_on_finalize(
+			&(ingress_block[0] - 1),
+			|_| (),
+			vec![Check::ended_at_state(to_state(channel_state_ingressed()))],
+		)
 		.test_on_finalize(
 			&(ingress_block[1] - 1),
 			|_| (),
 			vec![
 				Check::started_at_state_map_state(initial_channel_state()),
+				Check::ended_at_state(to_state(channel_state_ingressed())),
 				Check::ingressed(vec![(1u32, Asset::Sol, 1_000u64)]),
 			],
 		)
@@ -313,6 +321,7 @@ fn only_trigger_ingress_on_witnessed_blocks() {
 					(1u32, Asset::Sol, 1_000u64),
 					(2u32, Asset::SolUsdc, 2_000u64),
 				]),
+				Check::ended_at_state(to_state(channel_state_ingressed())),
 			],
 		);
 }
@@ -707,7 +716,7 @@ fn pending_ingresses_update_with_consensus() {
 		account: 1u32,
 		asset: Asset::Sol,
 		total_ingressed: 2_500u64,
-		block_number: 600u64,
+		block_number: 1_000u64,
 		close_block: 1_000u64,
 	};
 	with_default_setup()
@@ -789,7 +798,8 @@ fn pending_ingresses_update_with_consensus() {
 			|_| (),
 			vec![
 				Check::ingressed(vec![(1u32, Asset::Sol, 1_000u64), (1u32, Asset::Sol, 1_500u64)]),
-				Check::ended_at_state(Default::default()),
+				Check::channel_closed(vec![1u32]),
+				Check::ended_at_empty_state(),
 			],
 		);
 }
