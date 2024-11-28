@@ -2505,10 +2505,14 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 							amount,
 						);
 
+					// The ccm gas budget is already in terms of the swap asset.
+					let egress_details =
+						ScheduledEgressDetails::new(*id_counter, amount_after_fees, fees_withheld);
+
 					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 						egress_id,
 						asset,
-						amount,
+						amount: amount_after_fees,
 						destination_address: destination_address.clone(),
 						message,
 						ccm_additional_data,
@@ -2517,8 +2521,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 						gas_budget,
 					});
 
-					// The ccm gas budget is already in terms of the swap asset.
-					Ok(ScheduledEgressDetails::new(*id_counter, amount_after_fees, fees_withheld))
+					Ok(egress_details)
 				},
 				None => {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =

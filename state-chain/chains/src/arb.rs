@@ -86,6 +86,8 @@ impl ArbitrumTrackedData {
 		base_fee_multiplier.saturating_mul_int(self.base_fee)
 	}
 
+	// Estimating gas as described in Arbitrum's docs:
+	// https://docs.arbitrum.io/build-decentralized-apps/how-to-estimate-gas
 	pub fn calculate_ccm_gas_limit(
 		&self,
 		is_native_asset: bool,
@@ -94,18 +96,21 @@ impl ArbitrumTrackedData {
 	) -> GasAmount {
 		use crate::arb::fees::*;
 
-		let base_overhead =
-			if is_native_asset { CCM_NATIVE_GAS_OVERHEAD } else { CCM_TOKEN_OVERHEAD };
+		let vault_gas_overhead = if is_native_asset {
+			CCM_VAULT_NATIVE_GAS_OVERHEAD
+		} else {
+			CCM_VAULT_TOKEN_GAS_OVERHEAD
+		};
 
-		// Adding one extra gas per message byte for the extra gas overhead of passing the message
-		// through the Vault. The extra l2 gas per byte should be encapsulated in the user's gas
-		// budget.
-		let l2g = base_overhead.saturating_add(message_length as u128).saturating_add(gas_budget);
-
-		// Estimating gas as described in:
-		// https://docs.arbitrum.io/build-decentralized-apps/how-to-estimate-gas
+		// Adding one extra gas unit per message's length (byte) for the extra gas overhead of
+		// passing the message through the Vault. The extra l2 gas per message's calldata byte
+		// should be included in the user's gas budget.
+		let l2g = vault_gas_overhead
+			.saturating_add(message_length as u128)
+			.saturating_add(gas_budget);
 		let l1p = self.l1_base_fee_estimate * L1_GAS_PER_BYTES;
 		let p = self.base_fee;
+
 		// We can't accurately know L1S without engine consensus so we do our best to estimate it.
 		let l1s = CCM_VAULT_BYTES_OVERHEAD +
 			CCM_BUFFER_BYTES_OVERHEAD +
@@ -133,13 +138,13 @@ pub mod fees {
 	pub const GAS_COST_PER_TRANSFER_NATIVE: u128 = 20_000;
 	pub const GAS_COST_PER_TRANSFER_TOKEN: u128 = 40_000;
 	pub const MAX_GAS_LIMIT: u128 = 25_000_000;
-	pub const CCM_NATIVE_GAS_OVERHEAD: u128 = 90_000;
-	pub const CCM_TOKEN_OVERHEAD: u128 = 120_000;
+	pub const CCM_VAULT_NATIVE_GAS_OVERHEAD: u128 = 90_000;
+	pub const CCM_VAULT_TOKEN_GAS_OVERHEAD: u128 = 120_000;
 	// Arbitrum specific ccm gas limit calculation constants
-	pub const L1_GAS_PER_BYTES: u128 = 16;
 	pub const CCM_ARBITRUM_BYTES_OVERHEAD: u128 = 140;
 	pub const CCM_VAULT_BYTES_OVERHEAD: u128 = 356;
 	pub const CCM_BUFFER_BYTES_OVERHEAD: u128 = 50;
+	pub const L1_GAS_PER_BYTES: u128 = 16;
 }
 
 impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
@@ -249,7 +254,10 @@ mod test {
 
 		let gas_limit_token =
 			arb_tracked_data.calculate_ccm_gas_limit(false, GAS_BUDGET, MESSAGE_LENGTH);
-		assert_eq!(gas_limit_token, gas_limit + CCM_TOKEN_OVERHEAD - CCM_NATIVE_GAS_OVERHEAD);
+		assert_eq!(
+			gas_limit_token,
+			gas_limit + CCM_VAULT_TOKEN_GAS_OVERHEAD - CCM_VAULT_NATIVE_GAS_OVERHEAD
+		);
 		let gas_limit_token_extra = arb_tracked_data.calculate_ccm_gas_limit(
 			false,
 			GAS_BUDGET + gas_budget_extra,
