@@ -36,7 +36,7 @@ mod test {
 	use super::*;
 	use crate::Runtime;
 	use cf_chains::dot::PolkadotAccountId;
-use cf_primitives::chains::assets::dot;
+	use cf_primitives::chains::assets::dot;
 	use frame_support::sp_runtime::app_crypto::Ss58Codec;
 	use pallet_cf_environment::PolkadotVaultAccountId;
 

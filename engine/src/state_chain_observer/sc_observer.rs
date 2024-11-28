@@ -14,7 +14,8 @@ type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
 
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, EvmInstance, PolkadotCryptoInstance, Runtime, RuntimeCall, SolanaInstance
+	AccountId, BitcoinInstance, EvmInstance, PolkadotCryptoInstance, Runtime, RuntimeCall,
+	SolanaInstance,
 };
 use std::{
 	collections::BTreeSet,
