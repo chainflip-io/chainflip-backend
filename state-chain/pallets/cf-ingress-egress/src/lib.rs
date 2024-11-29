@@ -2489,6 +2489,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(*id)
 		})
 	}
+
+	// TODO: Write test
+	pub fn active_deposit_channels_at(
+		block_height: TargetChainBlockNumber<T, I>,
+	) -> Vec<DepositChannel<T::TargetChain>> {
+		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(block_height));
+		DepositChannelLookup::<T, I>::iter_values()
+			.filter_map(|details| {
+				if details.opened_at <= block_height && block_height <= details.expires_at {
+					Some(details.deposit_channel)
+				} else {
+					None
+				}
+			})
+			.collect()
+	}
 }
 
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {

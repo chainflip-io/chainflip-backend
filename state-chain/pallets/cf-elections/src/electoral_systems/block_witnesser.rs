@@ -15,7 +15,6 @@ use frame_support::{
 	sp_runtime::Saturating,
 	Parameter,
 };
-use log::info;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
@@ -182,17 +181,9 @@ impl<
 			mut unprocessed_data,
 		} = ElectoralAccess::unsynchronised_state()?;
 
-		info!("Last received: {:?}", last_block_received);
-		info!("current_chain_block_number: {:?}", *current_chain_block_number);
-
-		println!("Running for current chain block number: {:?}", *current_chain_block_number);
-
-		// no two elections should have the same state
 		let (last_block_election_emitted_for, open_elections) = if *current_chain_block_number <
 			last_block_received
 		{
-			info!("Starting new elction because current less than last received");
-
 			// All ongoing elections are now invalid, we will recreate the elections, once the block
 			// height witnesser passes throught those block heights again, so the engines will
 			// revote.
@@ -214,32 +205,19 @@ impl<
 			// against the state in the process_block_data hook to ensure we don't double
 			// dispatch.
 
-			// We need to use the channels that were created at the old block height - this can only
-			// be realistic up to a certain point - this should be fine? as they'll stay open until
-			// we close them. As long as the reorg isn't absurdly long. We should be able to
-			// assert on this as a clear assumption.
 			(*current_chain_block_number, 1)
 		} else {
 			// ==== No reorg case ====
 
 			// We could have multiple elections going, for different block/ranges.
 			for election_identifier in election_identifiers {
-				println!("checking election: {:?}", election_identifier);
 				let election_access = ElectoralAccess::election_mut(election_identifier);
 				if let Some(block_data) = election_access.check_consensus()?.has_consensus() {
 					let (root_block_number, _extra_properties) = election_access.properties()?;
 
-					println!("Consensus here for root block number: {:?}", root_block_number);
-
 					election_access.delete();
 
 					open_elections = open_elections.saturating_sub(1);
-
-					println!(
-						"PUshing block data: {:?} for block: {}",
-						block_data,
-						root_block_number.start()
-					);
 
 					unprocessed_data.push((*root_block_number.start(), block_data));
 				}
@@ -247,21 +225,16 @@ impl<
 
 			// If we haven't done any new elections, since the last run, there's not really any
 			// reason to run this again, so we could probably optimise this.
-			println!("passing in unprocessed data: {:?}", unprocessed_data);
 
 			unprocessed_data = BlockDataProcessor::process_block_data(
 				*current_chain_block_number,
 				unprocessed_data,
 			);
 
-			println!("Got back unprocessed data: {:?}", unprocessed_data);
-
 			debug_assert!(
 				<Chain as cf_chains::Chain>::is_block_witness_root(last_block_election_emitted_for),
 				"We only store this if it passes the original block witness root check"
 			);
-
-			println!("Open elections: {:?}", open_elections);
 
 			let settings = ElectoralAccess::unsynchronised_settings()?;
 
@@ -285,8 +258,6 @@ impl<
 			(last_block_election_emitted_for, open_elections)
 		};
 
-		println!("Setting unprocessed data to: {:?}", unprocessed_data);
-
 		ElectoralAccess::set_unsynchronised_state(BlockWitnesserState {
 			last_block_received: *current_chain_block_number,
 			open_elections,
@@ -307,7 +278,6 @@ impl<
 		let num_active_votes = active_votes.len() as u32;
 		let success_threshold = success_threshold_from_share_count(num_authorities);
 		Ok(if num_active_votes >= success_threshold {
-			println!("Checking consensus, active votes above threshold");
 			let mut hash_to_block_data = BTreeMap::<SharedDataHash, BlockData>::new();
 
 			let mut counts = BTreeMap::<SharedDataHash, u32>::new();

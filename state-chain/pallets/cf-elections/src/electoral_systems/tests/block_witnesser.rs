@@ -23,7 +23,6 @@ use crate::{
 	electoral_systems::block_witnesser::*,
 };
 use cf_chains::{mocks::MockEthereum, Chain};
-use codec::Encode;
 use sp_std::collections::btree_set::BTreeSet;
 
 thread_local! {
@@ -343,14 +342,14 @@ fn reorg_clears_on_going_elections_and_continues() {
 		INIT_LAST_BLOCK_RECEIVED + MAX_CONCURRENT_ELECTIONS as u64;
 	const REORG_LENGTH: ChainBlockNumber = 3;
 
-	let all_votes = (INIT_LAST_BLOCK_RECEIVED + 1..=NEXT_BLOCK_NUMBER as u64)
+	let all_votes = (INIT_LAST_BLOCK_RECEIVED + 1..=NEXT_BLOCK_NUMBER)
 		.map(|_| create_votes_expectation(vec![5, 6, 7]))
 		.collect::<Vec<_>>();
 
 	// We have already emitted an election for `INIT_LAST_BLOCK_RECEIVED` (see TestSetup below), so
 	// we add 1.
-	let expected_unprocessed_data = (INIT_LAST_BLOCK_RECEIVED + 1..=NEXT_BLOCK_NUMBER as u64)
-		.map(|i| (i as u64, vec![5, 6, 7]))
+	let expected_unprocessed_data = (INIT_LAST_BLOCK_RECEIVED + 1..=NEXT_BLOCK_NUMBER)
+		.map(|i| (i, vec![5, 6, 7]))
 		.collect::<Vec<_>>();
 
 	let mut block_after_reorg_block_unprocessed_data = expected_unprocessed_data.clone();
