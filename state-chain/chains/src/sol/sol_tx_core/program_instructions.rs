@@ -774,7 +774,37 @@ pub mod swap_endpoints {
 					agg_key: { signer: true, writable: true },
 					swap_endpoint_data_account: { signer: false, writable: true },
 				]
-			}
+			},
+			x_swap_native => XSwapNative {
+				args: [
+					swap_native_params: SwapNativeParams,
+				],
+				account_metas: [
+					data_account: { signer: false, writable: false },
+					agg_key: { signer: false, writable: true },
+					from: { signer: true, writable: true },
+					event_data_account: { signer: true, writable: true },
+					swap_endpoint_data_account: { signer: false, writable: true },
+					system_program: { signer: false, writable: false },
+				]
+			},
+			x_swap_token => XSwapToken {
+				args: [
+					swap_token_params: SwapTokenParams,
+				],
+				account_metas: [
+					data_account: { signer: false, writable: false },
+					token_vault_associated_token_account: { signer: false, writable: true },
+					from: { signer: true, writable: true },
+					from_token_account: { signer: false, writable: true },
+					event_data_account: { signer: true, writable: true },
+					swap_endpoint_data_account: { signer: false, writable: true },
+					token_supported_account: { signer: false, writable: false },
+					token_program: { signer: false, writable: false },
+					mint: { signer: false, writable: false },
+					system_program: { signer: false, writable: false },
+				]
+			},
 		},
 		types: [
 			CcmParams {
@@ -796,6 +826,23 @@ pub mod swap_endpoints {
 				historical_number_event_accounts: u128,
 				open_event_accounts: Vec<Pubkey>,
 			},
+			SwapNativeParams {
+				amount: u64,
+				dst_chain: u32,
+				dst_address: Vec<u8>,
+				dst_token: u32,
+				ccm_parameters: Option<CcmParams>,
+				cf_parameters: Vec<u8>,
+			},
+			SwapTokenParams {
+				amount: u64,
+				dst_chain: u32,
+				dst_address: Vec<u8>,
+				dst_token: u32,
+				ccm_parameters: Option<CcmParams>,
+				cf_parameters: Vec<u8>,
+				decimals: u8,
+			},
 		],
 		accounts: [
 			{
@@ -813,6 +860,9 @@ pub mod swap_endpoints {
 		types::SwapEvent::discriminator();
 	pub const SWAP_ENDPOINT_DATA_ACCOUNT_DISCRIMINATOR: [u8; ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH] =
 		types::SwapEndpointDataAccount::discriminator();
+
+	pub type SwapNativeParams = types::SwapNativeParams;
+	pub type SwapTokenParams = types::SwapTokenParams;
 }
 
 #[cfg(test)]
@@ -849,6 +899,8 @@ mod idl {
 		Defined { name: String },
 		Option(Box<IdlFieldType>),
 		Vec(Box<IdlFieldType>),
+		SwapNativeParams,
+		SwapTokenParams,
 	}
 
 	impl std::fmt::Display for IdlFieldType {
@@ -865,6 +917,8 @@ mod idl {
 				IdlFieldType::Defined { name } => write!(f, "{}", name),
 				IdlFieldType::Option(ty) => write!(f, "Option<{}>", ty),
 				IdlFieldType::Vec(ty) => write!(f, "Vec<{}>", ty),
+				IdlFieldType::SwapNativeParams => write!(f, "SwapNativeParams"),
+				IdlFieldType::SwapTokenParams => write!(f, "SwapTokenParams"),
 			}
 		}
 	}
