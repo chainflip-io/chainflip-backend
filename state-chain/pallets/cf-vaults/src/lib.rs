@@ -6,8 +6,8 @@ use cf_chains::{Chain, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::EpochIndex;
 use cf_runtime_utilities::EnumVariant;
 use cf_traits::{
-	AsyncResult, Broadcaster, CfeMultisigRequest, Chainflip, CurrentEpochIndex, GetBlockHeight,
-	SafeMode, SetSafeMode, VaultKeyWitnessedHandler,
+	AsyncResult, Broadcaster, CfeMultisigRequest, Chainflip, CurrentEpochIndex,
+	EpochTransitionHandler, GetBlockHeight, SafeMode, SetSafeMode, VaultKeyWitnessedHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -254,6 +254,16 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		Self::activate_new_key_for_chain(block_number);
 
 		Ok(())
+	}
+}
+
+impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
+	fn on_expired_epoch(expired_epoch: EpochIndex) {
+		for epoch in
+			VaultStartBlockNumbers::<T, I>::iter_keys().filter(|epoch| *epoch <= expired_epoch)
+		{
+			VaultStartBlockNumbers::<T, I>::remove(epoch);
+		}
 	}
 }
 
