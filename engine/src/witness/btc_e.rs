@@ -1,6 +1,5 @@
 //! For BTC Elections
 
-use bitcoin::witness;
 use cf_chains::witness_period::BlockWitnessRange;
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
@@ -47,8 +46,11 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
 		for block in BlockWitnessRange::<u64>::into_range_inclusive(witness_range) {
 			// TODO: these queries should not be infinite
-			let block_hash = self.client.block_hash(block).await;
-			let block = self.client.block(block_hash).await;
+			// let block_hash = self.client.block_hash(block).await;
+
+			let latest_hash = self.client.best_block_header().await.hash;
+
+			let block = self.client.block(latest_hash).await;
 			txs.extend(block.txdata);
 		}
 

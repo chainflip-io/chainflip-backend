@@ -10,7 +10,10 @@ use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
 		block_witnesser::{BlockElectionPropertiesGenerator, BlockWitnesser, ProcessBlockData},
-		composite::{tuple_1_impls::Hooks, CompositeRunner},
+		composite::{
+			tuple_1_impls::{DerivedElectoralAccess, Hooks},
+			CompositeRunner,
+		},
 	},
 	CorruptStorageError, ElectionIdentifier, RunnerStorageAccess,
 };
@@ -113,7 +116,14 @@ impl Hooks<BitcoinDepositChannelWitnessing> for BitcoinElectionHooks {
 			"BitcoinElectionHooks::on_finalize: {:?}",
 			deposit_channel_witnessing_identifiers
 		);
-		todo!()
+		// Block number to be provided by block height tracker
+		BitcoinDepositChannelWitnessing::on_finalize::<
+			DerivedElectoralAccess<
+				_,
+				BitcoinDepositChannelWitnessing,
+				RunnerStorageAccess<Runtime, BitcoinInstance>,
+			>,
+		>(deposit_channel_witnessing_identifiers, &0)
 	}
 }
 
