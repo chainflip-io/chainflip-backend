@@ -259,9 +259,9 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 
 impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
 	fn on_expired_epoch(expired_epoch: EpochIndex) {
-		let epochs_to_cull =
-			VaultStartBlockNumbers::<T, I>::iter_keys().filter(|epoch| *epoch <= expired_epoch);
-		for epoch in epochs_to_cull {
+		for epoch in
+			VaultStartBlockNumbers::<T, I>::iter_keys().filter(|epoch| *epoch <= expired_epoch)
+		{
 			VaultStartBlockNumbers::<T, I>::remove(epoch);
 		}
 	}
