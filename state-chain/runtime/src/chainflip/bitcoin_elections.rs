@@ -15,7 +15,7 @@ use pallet_cf_elections::{
 	CorruptStorageError, ElectionIdentifier, RunnerStorageAccess,
 };
 
-use pallet_cf_ingress_egress::DepositWitness;
+use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use scale_info::TypeInfo;
 
 use sp_std::vec::Vec;
@@ -36,7 +36,7 @@ pub struct OpenChannelDetails<ChainBlockNumber> {
 pub type BitcoinDepositChannelWitnessing = BlockWitnesser<
 	Bitcoin,
 	Vec<DepositWitness<Bitcoin>>,
-	Vec<DepositChannel<Bitcoin>>,
+	Vec<DepositChannelDetails<Runtime, BitcoinInstance>>,
 	<Runtime as Chainflip>::ValidatorId,
 	BitcoinDepositChannelWitessingProcessor,
 	BitcoinDepositChannelWitnessingGenerator,
@@ -44,12 +44,15 @@ pub type BitcoinDepositChannelWitnessing = BlockWitnesser<
 
 pub struct BitcoinDepositChannelWitnessingGenerator;
 
-impl BlockElectionPropertiesGenerator<btc::BlockNumber, Vec<DepositChannel<Bitcoin>>>
-	for BitcoinDepositChannelWitnessingGenerator
+impl
+	BlockElectionPropertiesGenerator<
+		btc::BlockNumber,
+		Vec<DepositChannelDetails<Runtime, BitcoinInstance>>,
+	> for BitcoinDepositChannelWitnessingGenerator
 {
 	fn generate_election_properties(
 		block_witness_root: btc::BlockNumber,
-	) -> Vec<DepositChannel<Bitcoin>> {
+	) -> Vec<DepositChannelDetails<Runtime, BitcoinInstance>> {
 		// TODO: Channel expiry
 		BitcoinIngressEgress::active_deposit_channels_at(block_witness_root)
 	}

@@ -2815,12 +2815,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	// TODO: Write test
 	pub fn active_deposit_channels_at(
 		block_height: TargetChainBlockNumber<T, I>,
-	) -> Vec<DepositChannel<T::TargetChain>> {
+	) -> Vec<DepositChannelDetails<T, I>> {
 		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(block_height));
 		DepositChannelLookup::<T, I>::iter_values()
 			.filter_map(|details| {
 				if details.opened_at <= block_height && block_height <= details.expires_at {
-					Some(details.deposit_channel)
+					// TODO: Filter not filter_map
+					Some(details)
 				} else {
 					None
 				}

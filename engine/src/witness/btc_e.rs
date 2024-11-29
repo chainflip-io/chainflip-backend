@@ -1,5 +1,7 @@
 //! For BTC Elections
 
+use bitcoin::witness;
+use cf_chains::witness_period::BlockWitnessRange;
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
 use pallet_cf_elections::{electoral_system::ElectoralSystem, vote_storage::VoteStorage};
@@ -9,11 +11,13 @@ use state_chain_runtime::{
 };
 
 use crate::{
+	btc::retry_rpc::BtcRetryRpcApi,
 	elections::voter_api::{CompositeVoter, VoterApi},
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
+	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
 };
 use anyhow::Result;
 
@@ -31,13 +35,26 @@ impl VoterApi<BitcoinDepositChannelWitnessing> for BitcoinDepositChannelWitnessi
 	async fn vote(
 		&self,
 		_settings: <BitcoinDepositChannelWitnessing as ElectoralSystem>::ElectoralSettings,
-		properties: <BitcoinDepositChannelWitnessing as ElectoralSystem>::ElectionProperties,
+		deposit_addresses: <BitcoinDepositChannelWitnessing as ElectoralSystem>::ElectionProperties,
 	) -> Result<
 		<<BitcoinDepositChannelWitnessing as ElectoralSystem>::Vote as VoteStorage>::Vote,
 		anyhow::Error,
 	> {
-		tracing::info!("Deposit channel witnessing properties: {:?}", properties);
-		Err(anyhow::anyhow!("Not implemented"))
+		let (witness_range, deposit_addresses) = deposit_addresses;
+		tracing::info!("Deposit channel witnessing properties: {:?}", deposit_addresses);
+
+		let mut txs = vec![];
+		// we only ever expect this to be one for bitcoin, but for completeness, we loop.
+		for block in BlockWitnessRange::<u64>::into_range_inclusive(witness_range) {
+			// TODO: these queries should not be infinite
+			let block_hash = self.client.block_hash(block).await;
+			let block = self.client.block(block_hash).await;
+			txs.extend(block.txdata);
+		}
+
+		let deposit_addresses = map_script_addresses(deposit_addresses);
+
+		Ok(deposit_witnesses(&txs, &deposit_addresses))
 	}
 }
 
