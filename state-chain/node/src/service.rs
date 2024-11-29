@@ -243,6 +243,7 @@ pub fn new_full<
 
 	let rpc_builder = {
 		let client = client.clone();
+		let backend = backend.clone();
 		let pool = transaction_pool.clone();
 		let executor = Arc::new(task_manager.spawn_handle());
 		let chain_spec = config.chain_spec.cloned_box();
@@ -288,6 +289,7 @@ pub fn new_full<
 				// Implement custom RPC extensions
 				module.merge(CustomApiServer::into_rpc(CustomRpc {
 					client: client.clone(),
+					backend: backend.clone(),
 					_phantom: PhantomData,
 					executor: executor.clone(),
 				}))?;
@@ -295,6 +297,7 @@ pub fn new_full<
 				// Implement custom RPC extensions
 				module.merge(MonitoringApiServer::into_rpc(CustomRpc {
 					client: client.clone(),
+					backend: backend.clone(),
 					_phantom: PhantomData,
 					executor: executor.clone(),
 				}))?;
