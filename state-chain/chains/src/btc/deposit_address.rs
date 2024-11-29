@@ -1,10 +1,24 @@
 use crate::ChannelLifecycleHooks;
 
+use serde_big_array::BigArray;
+
 use super::*;
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	serde::Serialize,
+	serde::Deserialize,
+)]
 pub struct TapscriptPath {
 	pub salt: u32,
+	#[serde(with = "BigArray")]
 	pub tweaked_pubkey_bytes: [u8; 33],
 	pub tapleaf_hash: [u8; 32],
 	pub unlock_script: BitcoinScript,
@@ -21,7 +35,18 @@ impl TapscriptPath {
 	}
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	serde::Serialize,
+	serde::Deserialize,
+)]
 pub struct DepositAddress {
 	pub pubkey_x: [u8; 32],
 	pub script_path: Option<TapscriptPath>,
