@@ -1,5 +1,5 @@
 use crate::*;
-use frame_support::{pallet_prelude::Weight, traits::OnRuntimeUpgrade};
+use frame_support::{pallet_prelude::Weight, traits::UncheckedOnRuntimeUpgrade};
 
 #[cfg(feature = "try-runtime")]
 use codec::{Decode, Encode};
@@ -16,7 +16,7 @@ pub mod old {
 pub struct BlocksPerEpochMigration<T: Config>(sp_std::marker::PhantomData<T>);
 
 // Rename BlocksPerEpoch -> EpochDuration
-impl<T: Config> OnRuntimeUpgrade for BlocksPerEpochMigration<T> {
+impl<T: Config> UncheckedOnRuntimeUpgrade for BlocksPerEpochMigration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		Ok(old::BlocksPerEpoch::<T>::get().encode())
