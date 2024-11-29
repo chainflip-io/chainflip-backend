@@ -1,5 +1,5 @@
 mod chain_tracking;
-mod deposits;
+pub mod deposits;
 pub mod source;
 pub mod vault_swaps;
 
