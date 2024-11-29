@@ -1,3 +1,4 @@
+pub mod block_witnesser;
 pub mod blockchain;
 pub mod composite;
 pub mod egress_success;

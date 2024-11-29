@@ -146,11 +146,15 @@ macro_rules! generate_electoral_system_tuple_impls {
                                     Ok((
                                         match properties {
                                             CompositeVoteProperties::$electoral_system(properties) => properties,
+                                            // For when we have a composite of 1
+                                            #[allow(unreachable_patterns)]
                                             _ => return Err(CorruptStorageError::new()),
                                         },
                                         match vote {
                                             AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
                                             AuthorityVote::Vote(CompositeVote::$electoral_system(vote)) => AuthorityVote::Vote(vote),
+                                            // For when we have a composite of 1
+                                            #[allow(unreachable_patterns)]
                                             _ => return Err(CorruptStorageError::new()),
                                         },
                                     ))
@@ -191,6 +195,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                                 )
                             },
                         )*
+                        // For when we have a composite of 1
+                        #[allow(unreachable_patterns)]
                         _ => true,
                     }
                 }
@@ -211,11 +217,15 @@ macro_rules! generate_electoral_system_tuple_impls {
                                     Ok((
                                         match previous_properties {
                                             CompositeVoteProperties::$electoral_system(previous_properties) => previous_properties,
+                                            // For when we have a composite of 1
+                                            #[allow(unreachable_patterns)]
                                             _ => return Err(CorruptStorageError::new()),
                                         },
                                         match previous_vote {
                                             AuthorityVote::PartialVote(CompositePartialVote::$electoral_system(partial_vote)) => AuthorityVote::PartialVote(partial_vote),
                                             AuthorityVote::Vote(CompositeVote::$electoral_system(vote)) => AuthorityVote::Vote(vote),
+                                            // For when we have a composite of 1
+                                            #[allow(unreachable_patterns)]
                                             _ => return Err(CorruptStorageError::new()),
                                         },
                                     ))
@@ -223,6 +233,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                                 partial_vote,
                             ).map(CompositeVoteProperties::$electoral_system)
                         },)*
+                        // For when we have a composite of 1
+                        #[allow(unreachable_patterns)]
                         _ => Err(CorruptStorageError::new()),
                     }
                 }
@@ -249,6 +261,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                                 previous_consensus.map(|previous_consensus| {
                                     match previous_consensus {
                                         CompositeConsensus::$electoral_system(previous_consensus) => Ok(previous_consensus),
+                                        // For when we have a composite of 1
+                                        #[allow(unreachable_patterns)]
                                         _ => Err(CorruptStorageError::new()),
                                     }
                                 }).transpose()?,
@@ -263,6 +277,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                                                     vote: Some((properties, vote)),
                                                     validator_id
                                                 }),
+                                                // For when we have a composite of 1
+                                                #[allow(unreachable_patterns)]
                                                 _ => Err(CorruptStorageError::new()),
                                             }
                                         } else {
@@ -318,6 +334,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                     CompositeElectionProperties::$current(properties) => {
                         Ok(properties)
                     },
+                    // For when we have a composite of 1
+                    #[allow(unreachable_patterns)]
                     _ => Err(CorruptStorageError::new())
                 }
             }
@@ -326,6 +344,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                     CompositeElectionState::$current(state) => {
                         Ok(state)
                     },
+                    // For when we have a composite of 1
+                    #[allow(unreachable_patterns)]
                     _ => Err(CorruptStorageError::new())
                 }
             }
@@ -367,6 +387,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                     consensus_status.try_map(|consensus| {
                         match consensus {
                             CompositeConsensus::$current(consensus) => Ok(consensus),
+                            // For when we have a composite of 1
+                            #[allow(unreachable_patterns)]
                             _ => Err(CorruptStorageError::new()),
                         }
                     })
@@ -399,6 +421,8 @@ macro_rules! generate_electoral_system_tuple_impls {
                 match StorageAccess::unsynchronised_state_map(&CompositeElectoralUnsynchronisedStateMapKey::$current(key.clone())) {
                     Some(CompositeElectoralUnsynchronisedStateMapValue::$current(value)) => Ok(Some(value)),
                     None => Ok(None),
+                    // For when we have a composite of 1
+                    #[allow(unreachable_patterns)]
                     _ => Err(CorruptStorageError::new()),
                 }
             }
@@ -459,4 +483,5 @@ macro_rules! generate_electoral_system_tuple_impls {
     };
 }
 
+generate_electoral_system_tuple_impls!(tuple_1_impls: ((A, A0)));
 generate_electoral_system_tuple_impls!(tuple_7_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0), (FF, F0), (GG, G0)));
