@@ -17,6 +17,7 @@ pub trait Responder<E: Endpoint> {
 	async fn respond(&self, request: E::Request) -> EndpointResult<E>;
 }
 
+/// Convenience function for responding to an endpoint request.
 pub async fn respond<T: Responder<E>, E: Endpoint>(
 	responder: T,
 	request: E::Request,

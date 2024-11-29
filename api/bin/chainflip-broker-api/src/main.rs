@@ -30,7 +30,7 @@ use std::{
 use tracing::log;
 
 mod api;
-use api::*;
+use api::{schema::SchemaApi, *};
 use api_json_schema::*;
 
 #[derive(thiserror::Error, Debug)]
@@ -298,7 +298,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		request: EndpointRequest<schema::Endpoint>,
 	) -> RpcResult<EndpointResponse<schema::Endpoint>> {
-		Ok(schema::Responder.respond(request).await?)
+		Ok(api_json_schema::respond(SchemaApi, request).await?)
 	}
 }
 
@@ -394,7 +394,7 @@ async fn main() -> anyhow::Result<()> {
 			.await?;
 
 			if let Some(SubCommand::Schema) = opts.subcommand {
-				let schemas = schema::Responder.respond(Default::default()).await?;
+				let schemas = api_json_schema::respond(SchemaApi, Default::default()).await?;
 				println!("{}", serde_json::to_string(&schemas)?);
 				Ok(())
 			} else {

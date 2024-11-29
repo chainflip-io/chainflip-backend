@@ -4,36 +4,195 @@ pub mod __macro_imports {
 	pub use serde_with::{DeserializeFromStr, SerializeDisplay};
 }
 
+/// Implements a schema generator for the specified endpoints.
+///
+/// An 'endpoint' is the definition of a request/response pair for a specific API call.
+///
+/// Use this macro to bootstrap the structure for generating an API that supports JSON Schema.
+///
+/// This macro will generate a `schema` module the defines a Schema endpoint for returning the JSON
+/// Schema for each of the defined endpoints (the `Schema` endpoint can be included in this).
+///
+/// The `ApiWrapper` struct is also generated, which is used to wrap the API that is being exposed.
+/// Wrapping is necessary to allow implementation of the Responder trait on foreign API types.
+///
+/// To implement a new endpoint:
+///
+/// 1. Define a module for the endpoint.
+/// 2. Define the request and response types for the endpoint.
+/// 3. Implement the `Endpoint` trait for the endpoint.
+/// 4. Implement the `Responder` trait for the `ApiWrapper` struct.
+/// 5. Implement the `ArrayParam` trait for the request type. This trait is available from the
+///    `jsonrpsee_flatten` crate and needs to be included in the Cargo.toml of the Api
+///    implementation.
+/// 6. Add the endpoint to the `impl_schema_endpoint!` macro.
+///
+/// # Example
+///
+/// ```ignore
+/// // Create a module for each endpoint.
+/// mod my_endpoint {
+///     //////
+///     // Define (or import) the request and response types.
+///     // These types should derive or implement Debug, Clone, Serialize, Deserialize, and JsonSchema.
+///     //////
+///     #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+///     pub struct MyRequest {
+///         a: String,
+///         b: bool,
+///     }
+///
+///     //////
+///     // Even for simple types, prefer to use a named struct and add the necessary traits and documentation.
+///     //////
+///
+///     /// My simple response type.
+///     ///
+///     /// This is a simple response type that just contains an integer representing blah blah.
+///     #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+///     pub struct MyResponse(i32);
+///
+///     //////
+///     // The request must implement the `ArrayParam`` trait.
+///     // The jsonrpsee_flatten crate is a fork of jsonrpsee, defined in our workspace Cargo.toml.
+///     // It defines a conversion from a flattened tuple representation to a named struct and back.
+///     //////
+///
+///     impl jsonrpsee_flatten::types::ArrayParam for MyRequest {
+///         type ArrayTuple = (String,bool);
+///
+///         fn into_array_tuple(self) -> Self::ArrayTuple {
+///            (self.a, self.b)
+///         }
+///         fn from_array_tuple((a,b): Self::ArrayTuple) -> Self {
+///             Self { a, b }
+///         }
+///     }
+///
+///     //////
+///     // Define a struct that implements the Endpoint trait.
+///     //////
+///
+///     pub struct Endpoint;
+///     impl api_json_schema::Endpoint for Endpoint {
+///         type Request = MyRequest;
+///         type Response = MyResponse;
+///         type Error = anyhow::Error;
+///     }
+///
+///     //////
+///     // Implement the responder for the API wrapper.
+///     //////
+///
+///     impl<T: SomeApi> api_json_schema::Responder<Endpoint> for ApiWrapper<T> {
+///         async fn respond(
+///            &self,
+///            MyRequest { a, b }: MyRequest,
+///         ) -> api_json_schema::EndpointResult<Endpoint> {
+///            Ok(a.len() as i32)
+///         }
+///     }
+/// }
+///
+/// //////
+/// // Include the endpoint in the schema.
+/// //////
+///
+/// api_json_schema::impl_schema_endpoint! {
+///    prefix: my_api,
+///    MyEndpoint: my_endpoint::Endpoint,
+///    // The generated `Schema` endpoint can be included in the list of documented endpoints.
+///    Schema: schema::Endpoint,
+/// }
+///
+/// //////
+/// // The generated `ApiWrapper` struct can be used to wrap the API that is being exposed.
+/// //////
+///
+/// async fn print_schema() {
+///     use serde_json;
+///
+///     // Default request is empty, meaning all methods are included.
+///     let request = schema::SchemaRequest::default();
+///     let schema = api_json_schema::respond::<_, schema::Endpoint>(
+///         SchemaApi,
+///         Default::default(),
+///     ).await;
+///     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+/// }
+///
+/// async fn process_my_request(request: MyRequest) -> MyResponse {
+///     api_json_schema::respond::<_, my_endpoint::Endpoint>(
+///         ApiWrapper { api: SomeApi::new() },
+///         request,
+///     ).await
+/// }
+/// ```
 #[macro_export]
 macro_rules! impl_schema_endpoint {
-	($( $mod:ident: $endpoint:ident ),+ $(,)? ) => {
+	(
+		prefix: $prefix:literal,
+		$(
+			$method_name:ident: $endpoint:ty
+		),+ $(,)?
+	) => {
+		pub struct ApiWrapper<T> {
+			/// For accessing the wrapped API.
+			pub api: T,
+		}
+
+		impl<T> core::ops::Deref for ApiWrapper<T> {
+			type Target = T;
+
+			fn deref(&self) -> &Self::Target {
+				&self.api
+			}
+		}
+
 		pub mod schema {
 			use $crate::schema_macro::__macro_imports::*;
 			use super::*;
 
 			pub struct Endpoint;
-			pub struct Responder;
 
 			#[derive(Debug, PartialEq, Eq, Clone, JsonSchema, SerializeDisplay, DeserializeFromStr)]
 			#[serde(rename_all = "snake_case")]
 			pub enum Method {
 				$(
-					$endpoint,
+					$method_name,
 				)+
 			}
 
-			#[derive(Debug, Default, PartialEq, Eq, Clone, JsonSchema, Serialize, Deserialize)]
+			impl Method {
+				const fn all() -> &'static [Self] {
+					&[
+						$(
+							Method::$method_name,
+						)+
+					]
+				}
+			}
+
+			#[derive(Debug, PartialEq, Eq, Clone, JsonSchema, Serialize, Deserialize)]
 			pub struct SchemaRequest {
 				#[serde(skip_serializing_if = "Vec::is_empty")]
 				#[serde(default)]
 				methods: Vec<Method>,
 			}
 
+			impl Default for SchemaRequest {
+				fn default() -> Self {
+					Self {
+						methods: Method::all().to_vec(),
+					}
+				}
+			}
+
 			impl core::fmt::Display for Method {
 				fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 					write!(f, "{}", match self {
 						$(
-							Method::$endpoint => concat!("broker_", stringify!($endpoint)),
+							Method::$method_name => concat!($prefix, stringify!($method_name)),
 						)+
 					})
 				}
@@ -45,7 +204,7 @@ macro_rules! impl_schema_endpoint {
 				fn from_str(s: &str) -> Result<Self, Self::Err> {
 					match s {
 						$(
-							concat!("broker_", stringify!($endpoint)) => Ok(Method::$endpoint),
+							concat!($prefix, stringify!($method_name)) => Ok(Method::$method_name),
 						)+
 						_ => Err(format!("Unknown method: {}", s)),
 					}
@@ -55,8 +214,6 @@ macro_rules! impl_schema_endpoint {
 			#[derive(Debug, PartialEq, Clone, JsonSchema, Serialize, Deserialize)]
 			pub struct Response {
 				pub methods: Vec<EndpointSchema>,
-				#[serde(rename = "$defs")]
-				pub defs: SchemaDefs,
 			}
 
 			#[derive(Debug, PartialEq, Clone, JsonSchema, Serialize, Deserialize)]
@@ -78,7 +235,9 @@ macro_rules! impl_schema_endpoint {
 				type Error = $crate::Never;
 			}
 
-			impl $crate::Responder<Endpoint> for Responder {
+			pub struct SchemaApi;
+
+			impl $crate::Responder<Endpoint> for SchemaApi {
 				async fn respond(
 					&self,
 					request: $crate::EndpointRequest<Endpoint>
@@ -86,49 +245,38 @@ macro_rules! impl_schema_endpoint {
 					// Assume that callers want to know how to serialize a request and deserialize a response.
 					let mut ser_generator = SchemaSettings::default()
 						.with(|settings| {
-							settings.definitions_path = String::from("#/$defs/request");
 							settings.option_add_null_type = false;
+							settings.inline_subschemas = true;
 						})
 						.for_serialize()
 						.into_generator();
 					let mut de_generator = SchemaSettings::default()
 						.with(|settings| {
-							settings.definitions_path = String::from("#/$defs/response");
 							settings.option_add_null_type = false;
+							settings.inline_subschemas = true;
 						})
 						.for_deserialize()
 						.into_generator();
 
-					let methods = if request.methods.is_empty() {
-						vec![
-							$(
-								Method::$endpoint,
-							)+
-						].into_iter()
-					} else {
-						request.methods.into_iter()
-					}
-					.map(|method| {
-						match method {
-							$(
-								Method::$endpoint => EndpointSchema {
-									method,
-									request: ser_generator
-										.subschema_for::<$crate::EndpointRequest<$mod::Endpoint>>(),
-									response: de_generator
-										.subschema_for::<$crate::EndpointResponse<$mod::Endpoint>>(),
-								},
-							)+
-						}
-					})
-					.collect::<Vec<_>>();
+					let methods = request.methods
+						.into_iter()
+						.map(|method| {
+							match method {
+								$(
+									Method::$method_name => EndpointSchema {
+										method,
+										request: ser_generator
+											.subschema_for::<$crate::EndpointRequest<$endpoint>>(),
+										response: de_generator
+											.subschema_for::<$crate::EndpointResponse<$endpoint>>(),
+									},
+								)+
+							}
+						})
+						.collect::<Vec<_>>();
 
 					Ok(Response {
 						methods,
-						defs: SchemaDefs {
-							request: ser_generator.take_definitions(),
-							response: de_generator.take_definitions(),
-						}
 					})
 				}
 			}
