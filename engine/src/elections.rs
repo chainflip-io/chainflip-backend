@@ -107,8 +107,9 @@ where
 		}
 
 		let mut unfinalized_block_stream = self.state_chain_client.unfinalized_block_stream().await;
+		// TEMP: Half block time to hack BTC voting.
 		const BLOCK_TIME: std::time::Duration =
-			std::time::Duration::from_millis(MILLISECONDS_PER_BLOCK);
+			std::time::Duration::from_millis(MILLISECONDS_PER_BLOCK / 2);
 		let mut submit_interval = tokio::time::interval(BLOCK_TIME);
 		let mut pending_submissions = BTreeMap::<
 			CompositeElectionIdentifierOf<<state_chain_runtime::Runtime as pallet_cf_elections::Config<Instance>>::ElectoralSystemRunner>,
