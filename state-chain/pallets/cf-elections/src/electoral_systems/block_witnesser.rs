@@ -18,10 +18,7 @@ use frame_support::{
 use log::info;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	vec::Vec,
-};
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 // Rather than push processing outside, we could provide an evaluation function that is called
 // to determine whether to process or not. This keeps things encapsulated a little better.
@@ -57,12 +54,13 @@ pub struct BlockWitnesser<Chain, BlockData, Properties, ValidatorId, OnConsensus
 }
 
 pub trait ProcessBlockData<ChainBlockNumber, BlockData> {
-	// Returns the unprocessed state to write back to the ES. To clear the state, we return an
-	// explicit None from this function.
-	fn process_block_data<It: IntoIterator<Item = (ChainBlockNumber, BlockData)>>(
+	/// Process the block data and return the unprocessed data. It's possible to have received data
+	/// for the same block twice, in the case of a reorg. It is up to the implementor of this trait
+	/// to handle this case.
+	fn process_block_data(
 		chain_block_number: ChainBlockNumber,
-		block_data: It,
-	) -> impl Iterator<Item = (ChainBlockNumber, BlockData)>;
+		block_data: Vec<(ChainBlockNumber, BlockData)>,
+	) -> Vec<(ChainBlockNumber, BlockData)>;
 }
 
 /// Allows external/runtime/implementation to return the properties that the election should use.
@@ -187,6 +185,8 @@ impl<
 		info!("Last received: {:?}", last_block_received);
 		info!("current_chain_block_number: {:?}", *current_chain_block_number);
 
+		println!("Running for current chain block number: {:?}", *current_chain_block_number);
+
 		// no two elections should have the same state
 		let (last_block_election_emitted_for, open_elections) = if *current_chain_block_number <
 			last_block_received
@@ -224,13 +224,22 @@ impl<
 
 			// We could have multiple elections going, for different block/ranges.
 			for election_identifier in election_identifiers {
+				println!("checking election: {:?}", election_identifier);
 				let election_access = ElectoralAccess::election_mut(election_identifier);
 				if let Some(block_data) = election_access.check_consensus()?.has_consensus() {
 					let (root_block_number, _extra_properties) = election_access.properties()?;
 
+					println!("Consensus here for root block number: {:?}", root_block_number);
+
 					election_access.delete();
 
 					open_elections = open_elections.saturating_sub(1);
+
+					println!(
+						"PUshing block data: {:?} for block: {}",
+						block_data,
+						root_block_number.start()
+					);
 
 					unprocessed_data.push((*root_block_number.start(), block_data));
 				}
@@ -238,21 +247,23 @@ impl<
 
 			// If we haven't done any new elections, since the last run, there's not really any
 			// reason to run this again, so we could probably optimise this.
+			println!("passing in unprocessed data: {:?}", unprocessed_data);
 
 			unprocessed_data = BlockDataProcessor::process_block_data(
 				*current_chain_block_number,
 				unprocessed_data,
-			)
-			.collect();
+			);
+
+			println!("Got back unprocessed data: {:?}", unprocessed_data);
 
 			debug_assert!(
 				<Chain as cf_chains::Chain>::is_block_witness_root(last_block_election_emitted_for),
 				"We only store this if it passes the original block witness root check"
 			);
 
-			let settings = ElectoralAccess::unsynchronised_settings()?;
+			println!("Open elections: {:?}", open_elections);
 
-			// println!("max concurrent elections: {:?}", settings.max_concurrent_elections);
+			let settings = ElectoralAccess::unsynchronised_settings()?;
 
 			for range_root in (last_block_election_emitted_for
 				.saturating_add(Chain::WITNESS_PERIOD)..=
@@ -274,6 +285,8 @@ impl<
 			(last_block_election_emitted_for, open_elections)
 		};
 
+		println!("Setting unprocessed data to: {:?}", unprocessed_data);
+
 		ElectoralAccess::set_unsynchronised_state(BlockWitnesserState {
 			last_block_received: *current_chain_block_number,
 			open_elections,
@@ -294,6 +307,7 @@ impl<
 		let num_active_votes = active_votes.len() as u32;
 		let success_threshold = success_threshold_from_share_count(num_authorities);
 		Ok(if num_active_votes >= success_threshold {
+			println!("Checking consensus, active votes above threshold");
 			let mut hash_to_block_data = BTreeMap::<SharedDataHash, BlockData>::new();
 
 			let mut counts = BTreeMap::<SharedDataHash, u32>::new();

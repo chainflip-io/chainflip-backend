@@ -72,23 +72,24 @@ pub struct BitcoinDepositChannelWitessingProcessor;
 impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 	for BitcoinDepositChannelWitessingProcessor
 {
-	fn process_block_data<
-		It: IntoIterator<Item = (btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)>,
-	>(
+	fn process_block_data(
 		_current_block: btc::BlockNumber,
-		witnesses: It,
-	) -> impl Iterator<Item = (btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)> {
-		witnesses.into_iter().map(|(block_number, deposits)| {
-			log::info!(
-				"Processing block number: {}, got {} deposits",
-				block_number,
-				deposits.len()
-			);
-			// Check if the block number is the current block number
-			// If it is, then we can process the deposits
-			// If it is not, then we can store the deposits for later processing
-			(block_number, deposits)
-		})
+		witnesses: Vec<(btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)>,
+	) -> Vec<(btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)> {
+		witnesses
+			.into_iter()
+			.map(|(block_number, deposits)| {
+				log::info!(
+					"Processing block number: {}, got {} deposits",
+					block_number,
+					deposits.len()
+				);
+				// Check if the block number is the current block number
+				// If it is, then we can process the deposits
+				// If it is not, then we can store the deposits for later processing
+				(block_number, deposits)
+			})
+			.collect()
 
 		// when is it safe to expire a channel? when the block number is beyond their expiry? but
 		// what if we're at block 40 it expires at block 39 and then we reorg back to block 36. It
