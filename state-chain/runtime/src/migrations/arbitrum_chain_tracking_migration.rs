@@ -59,17 +59,18 @@ impl UncheckedOnRuntimeUpgrade for ArbitrumChainTrackingMigration {
 
 		// Perform the state translation from the old to the new format
 		assert_ok!(
-			pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::translate(
-				|old_state: Option<old::ChainState>| -> Option<ChainState<Arbitrum>> {
-					old_state.map(|old| ChainState {
-						block_height: old.block_height,
-						tracked_data: ArbitrumTrackedData {
-							base_fee: old.tracked_data.base_fee,
-							l1_base_fee_estimate: 1_u128,
-						},
-					})
-				}
-			)
+			pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::translate::<
+				old::ChainState,
+				_,
+			>(|maybe_old_state| {
+				let (block_height, base_fee) = maybe_old_state
+					.map(|state| (state.block_height, state.tracked_data.base_fee))
+					.unwrap_or((Default::default(), Default::default()));
+				Some(ChainState {
+					block_height,
+					tracked_data: ArbitrumTrackedData { base_fee, l1_base_fee_estimate: 1_u128 },
+				})
+			})
 		);
 
 		Weight::zero()
