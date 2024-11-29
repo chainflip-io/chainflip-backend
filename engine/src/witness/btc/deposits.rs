@@ -114,7 +114,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	}
 }
 
-fn deposit_witnesses(
+pub fn deposit_witnesses(
 	txs: &[VerboseTransaction],
 	deposit_addresses: &HashMap<Vec<u8>, DepositAddress>,
 ) -> Vec<DepositWitness<Bitcoin>> {
@@ -153,7 +153,7 @@ fn deposit_witnesses(
 		.collect()
 }
 
-fn map_script_addresses(
+pub fn map_script_addresses(
 	deposit_channels: Vec<DepositChannelDetails<state_chain_runtime::Runtime, BitcoinInstance>>,
 ) -> HashMap<Vec<u8>, DepositAddress> {
 	deposit_channels
