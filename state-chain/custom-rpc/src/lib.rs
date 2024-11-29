@@ -57,7 +57,7 @@ use state_chain_runtime::{
 		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, ChainAccounts,
 		CustomRuntimeApi, DispatchErrorWithMessage, ElectoralRuntimeApi, FailingWitnessValidators,
 		LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, RuntimeApiPenalty,
-		SimulatedSwapInformation, TaintedTransactionEvents, ValidatorInfo, VaultSwapDetails,
+		SimulatedSwapInformation, TransactionScreeningEvents, ValidatorInfo, VaultSwapDetails,
 	},
 	safe_mode::RuntimeSafeMode,
 	Block, Hash, NetworkFee, SolanaInstance,
@@ -1012,11 +1012,11 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ChainAccounts>;
 
-	#[method(name = "get_tainted_transaction_events")]
-	fn cf_get_tainted_transaction_events(
+	#[method(name = "get_transaction_screening_events")]
+	fn cf_get_transaction_screening_events(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<TaintedTransactionEvents>;
+	) -> RpcResult<TransactionScreeningEvents>;
 
 	#[method(name = "get_affiliates")]
 	fn cf_get_affiliates(
@@ -1876,11 +1876,11 @@ where
 		})
 	}
 
-	fn cf_get_tainted_transaction_events(
+	fn cf_get_transaction_screening_events(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<TaintedTransactionEvents> {
-		self.with_runtime_api(at, |api, hash| api.cf_tainted_transaction_events(hash))
+	) -> RpcResult<TransactionScreeningEvents> {
+		self.with_runtime_api(at, |api, hash| api.cf_transaction_screening_events(hash))
 	}
 }
 

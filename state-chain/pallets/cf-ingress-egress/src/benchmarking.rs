@@ -505,22 +505,22 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn mark_transaction_as_tainted() {
+	fn mark_transaction_for_rejection() {
 		let caller =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
 		let tx_id: TransactionInIdFor<T, I> = TransactionInIdFor::<T, I>::benchmark_value();
 
 		#[block]
 		{
-			assert_ok!(Pallet::<T, I>::mark_transaction_as_tainted_inner(
+			assert_ok!(Pallet::<T, I>::mark_transaction_for_rejection_inner(
 				caller.clone(),
 				tx_id.clone(),
 			));
 		}
 
 		assert!(
-			TaintedTransactions::<T, I>::get(caller, tx_id).is_some(),
-			"No tainted transactions found"
+			TransactionsMarkedForRejection::<T, I>::get(caller, tx_id).is_some(),
+			"No marked transactions found"
 		);
 	}
 
@@ -569,7 +569,7 @@ mod benchmarks {
 			_vault_swap_request::<Test, ()>(true);
 		});
 		new_test_ext().execute_with(|| {
-			_mark_transaction_as_tainted::<Test, ()>(true);
+			_mark_transaction_for_rejection::<Test, ()>(true);
 		});
 	}
 }

@@ -31,7 +31,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Solana CCM fallback ([#5316](https://github.com/chainflip-io/chainflip-backend/issues/5316))
 - Submit a slot number alongside nonce ([#5297](https://github.com/chainflip-io/chainflip-backend/issues/5297))
 - Structured error return types for rpcs ([#5346](https://github.com/chainflip-io/chainflip-backend/issues/5346))
-- Tainted transaction reporting ([#5310](https://github.com/chainflip-io/chainflip-backend/issues/5310))
+- Transaction screening ([#5310](https://github.com/chainflip-io/chainflip-backend/issues/5310))
 - Engine-runner verifies gpg signature of old dylib when downloaded ([#5339](https://github.com/chainflip-io/chainflip-backend/issues/5339))
 - Add sol chain tracking metric ([#5366](https://github.com/chainflip-io/chainflip-backend/issues/5366))
 - Update custom_rpc, runtime_api and broker api for broker level screening ([#5341](https://github.com/chainflip-io/chainflip-backend/issues/5341))

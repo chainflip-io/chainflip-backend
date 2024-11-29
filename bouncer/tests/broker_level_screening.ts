@@ -54,18 +54,18 @@ async function newAssetAddress(asset: InternalAsset, seed = null): Promise<strin
 }
 
 /**
- * Submits a transaction as tainted to the extrinsic on the state chain.
+ * Mark a transaction for rejection.
  *
- * @param txId - The txId to submit as tainted, in its typical representation in bitcoin explorers,
+ * @param txId - The txId to submit, in its typical representation in bitcoin explorers,
  * i.e., reverse of its memory representation.
  */
-async function submitTxAsTainted(txId: string) {
+async function markTxForRejection(txId: string) {
   // The engine uses the memory representation everywhere, so we convert the txId here.
   const memoryRepresentationTxId = hexStringToBytesArray(txId).reverse();
   await using chainflip = await getChainflipApi();
   return brokerMutex.runExclusive(async () =>
     chainflip.tx.bitcoinIngressEgress
-      .markTransactionAsTainted(memoryRepresentationTxId)
+      .markTransactionForRejection(memoryRepresentationTxId)
       .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip)),
   );
 }
@@ -182,9 +182,9 @@ async function brokerLevelScreeningTestScenario(
 //
 // In this tests we are interested in the following scenarios:
 //
-// 1. No boost and early tx report -> Tainted tx is reported early and the swap is refunded.
-// 2. Boost and early tx report -> Tainted tx is reported early and the swap is refunded.
-// 3. Boost and late tx report -> Tainted tx is reported late and the swap is not refunded.
+// 1. No boost and early tx report -> tx is reported early and the swap is refunded.
+// 2. Boost and early tx report -> tx is reported early and the swap is refunded.
+// 3. Boost and late tx report -> tx is reported late and the swap is not refunded.
 async function main() {
   const MILLI_SECS_PER_BLOCK = 6000;
 
@@ -200,12 +200,12 @@ async function main() {
     setTxRiskScore(txId, 9.0),
   );
 
-  await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
+  await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
 
-  testBrokerLevelScreening.log(`Tainted transaction was rejected and refunded 👍.`);
+  testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
 
   // 2. -- Test boost and early tx report --
   testBrokerLevelScreening.log(
@@ -216,15 +216,15 @@ async function main() {
   await brokerLevelScreeningTestScenario('0.2', true, btcRefundAddress, async (txId) =>
     setTxRiskScore(txId, 9.0),
   );
-  await observeEvent('bitcoinIngressEgress:TaintedTransactionRejected').event;
+  await observeEvent('bitcoinIngressEgress:TransactionRejectedByBroker').event;
 
   if (!(await observeBtcAddressBalanceChange(btcRefundAddress))) {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
-  testBrokerLevelScreening.log(`Tainted transaction was rejected and refunded 👍.`);
+  testBrokerLevelScreening.log(`Marked transaction was rejected and refunded 👍.`);
 
   // 3. -- Test boost and late tx report --
-  // Note: We expect the swap to be executed and not refunded because the tainted tx was reported too late.
+  // Note: We expect the swap to be executed and not refunded because the tx was reported too late.
   testBrokerLevelScreening.log('Testing broker level screening with boost and a late tx report...');
   btcRefundAddress = await newAssetAddress('Btc');
 
@@ -237,7 +237,7 @@ async function main() {
     // the transaction is refunded because the extrinsic is submitted too late.
     async (txId) => {
       await sleep(MILLI_SECS_PER_BLOCK * 2);
-      await submitTxAsTainted(txId);
+      await markTxForRejection(txId);
     },
   );
 
@@ -245,7 +245,7 @@ async function main() {
     test: (event) => event.data.channelId === channelId,
   }).event;
 
-  testBrokerLevelScreening.log(`Swap was executed and tainted transaction was not refunded 👍.`);
+  testBrokerLevelScreening.log(`Swap was executed and transaction was not refunded 👍.`);
 
   // 4. -- Restore mockmode --
   await setMockmode(previousMockmode);
