@@ -28,7 +28,7 @@ use jsonrpsee::{
 		error::{ErrorObject, ErrorObjectOwned},
 		ErrorCode,
 	},
-	PendingSubscriptionSink,
+	PendingSubscriptionSink, RpcModule,
 };
 use order_fills::OrderFills;
 use pallet_cf_governance::GovCallHash;
@@ -37,7 +37,11 @@ use pallet_cf_pools::{
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::SwapLegInfo;
-use sc_client_api::{BlockchainEvents, HeaderBackend};
+use sc_client_api::{
+	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
+	HeaderBackend, StorageProvider,
+};
+use sc_rpc_spec_v2::chain_head::{api::ChainHeadApiServer, ChainHead, ChainHeadConfig};
 use serde::{Deserialize, Serialize};
 use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
@@ -1028,13 +1032,14 @@ pub trait CustomApi {
 }
 
 /// An RPC extension for the state chain node.
-pub struct CustomRpc<C, B> {
+pub struct CustomRpc<C, B, BE> {
 	pub client: Arc<C>,
+	pub backend: Arc<BE>,
 	pub executor: Arc<dyn sp_core::traits::SpawnNamed>,
 	pub _phantom: PhantomData<B>,
 }
 
-impl<C, B> CustomRpc<C, B>
+impl<C, B, BE> CustomRpc<C, B, BE>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash>,
 	C: Send + Sync + 'static + HeaderBackend<B>,
@@ -1044,7 +1049,7 @@ where
 	}
 }
 
-impl<C, B> CustomRpc<C, B>
+impl<C, B, BE> CustomRpc<C, B, BE>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash>,
 	C: Send + Sync + 'static + HeaderBackend<B> + sp_api::ProvideRuntimeApi<B>,
@@ -1221,16 +1226,22 @@ where
 }
 
 #[async_trait]
-impl<C, B> CustomApiServer for CustomRpc<C, B>
+impl<C, B, BE> CustomApiServer for CustomRpc<C, B, BE>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	B::Header: Unpin,
+	BE: Backend<B> + Send + Sync + 'static,
 	C: sp_api::ProvideRuntimeApi<B>
 		+ Send
 		+ Sync
 		+ 'static
+		+ BlockBackend<B>
+		+ ExecutorProvider<B>
 		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
 		+ BlockchainEvents<B>
-		+ CallApiAt<B>,
+		+ CallApiAt<B>
+		+ StorageProvider<B, BE>,
 	C::Api: CustomRuntimeApi<B> + ElectoralRuntimeApi<B, SolanaInstance>,
 {
 	pass_through! {
@@ -1890,17 +1901,34 @@ where
 	}
 }
 
-impl<C, B> CustomRpc<C, B>
+impl<C, B, BE> CustomRpc<C, B, BE>
 where
 	B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+	B::Header: Unpin,
+	BE: Send + Sync + 'static + Backend<B>,
 	C: sp_api::ProvideRuntimeApi<B>
 		+ Send
 		+ Sync
 		+ 'static
+		+ BlockBackend<B>
+		+ ExecutorProvider<B>
 		+ HeaderBackend<B>
-		+ BlockchainEvents<B>,
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ BlockchainEvents<B>
+		+ CallApiAt<B>
+		+ StorageProvider<B, BE>,
 	C::Api: CustomRuntimeApi<B>,
 {
+	fn chain_head_api(&self) -> RpcModule<ChainHead<BE, B, C>> {
+		ChainHead::new(
+			self.client.clone(),
+			self.backend.clone(),
+			self.executor.clone(),
+			ChainHeadConfig::default(),
+		)
+		.into_rpc()
+	}
+
 	async fn new_subscription<
 		T: Serialize + Send + Clone + Eq + 'static,
 		F: Fn(&C, state_chain_runtime::Hash) -> Result<T, CfApiError> + Send + Clone + 'static,
@@ -1939,6 +1967,12 @@ where
 		f: F,
 	) {
 		let info = self.client.info();
+		let _sub = self
+			.chain_head_api()
+			.subscribe_unbounded("chainHead_v1_follow", [false])
+			.await
+			.unwrap();
+
 		if only_finalized {
 			self.new_subscription_with_state_stream(
 				only_on_changes,
