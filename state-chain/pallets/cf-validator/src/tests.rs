@@ -1283,7 +1283,10 @@ fn validator_deregistration_after_expired_epoch() {
 		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
 		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
 
-		ValidatorPallet::expire_epochs_up_to(ValidatorPallet::current_epoch() - 1);
+		ValidatorPallet::expire_epochs_up_to(
+			ValidatorPallet::current_epoch() - 1,
+			Weight::from_all(u64::MAX),
+		);
 
 		// Now you can deregister
 		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(
@@ -1540,7 +1543,7 @@ fn should_expire_all_previous_epochs() {
 			vec![first_epoch, second_epoch, third_epoch]
 		);
 
-		ValidatorPallet::expire_epochs_up_to(second_epoch);
+		ValidatorPallet::expire_epochs_up_to(second_epoch, Weight::from_all(u64::MAX));
 
 		assert_eq!(HistoricalActiveEpochs::<Test>::get(ID), vec![third_epoch]);
 	});

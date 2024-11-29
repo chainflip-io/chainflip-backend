@@ -174,7 +174,7 @@ pub mod pallet {
 	#[pallet::getter(fn current_epoch_started_at)]
 	pub type CurrentEpochStartedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
-	/// The amount of blocks in an epoch.
+	/// The duration of an epoch in blocks.
 	#[pallet::storage]
 	#[pallet::getter(fn epoch_duration)]
 	pub type EpochDuration<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
@@ -378,11 +378,6 @@ pub mod pallet {
 			log::trace!(target: "cf-validator", "on_initialize: {:?}",CurrentRotationPhase::<T>::get());
 			let mut weight = Weight::zero();
 
-			// Check expiry of epoch and store last expired.
-			if let Some(epoch_to_expire) = EpochExpiries::<T>::take(block_number) {
-				Self::expire_epochs_up_to(epoch_to_expire);
-			}
-
 			weight.saturating_accrue(Self::punish_missed_authorship_slots());
 
 			// Progress the authority rotation if necessary.
@@ -493,6 +488,15 @@ pub mod pallet {
 				_ => Weight::from_parts(0, 0),
 			});
 			weight
+		}
+
+		fn on_idle(block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			// Check expiry of epoch and store last expired.
+			if let Some(epoch_to_expire) = EpochExpiries::<T>::take(block_number) {
+				Self::expire_epochs_up_to(epoch_to_expire, remaining_weight)
+			} else {
+				remaining_weight
+			}
 		}
 	}
 
@@ -1012,10 +1016,8 @@ impl<T: Config> Pallet<T> {
 		T::EpochTransitionHandler::on_new_epoch(new_epoch);
 	}
 
-	fn expire_epoch(epoch: EpochIndex) -> Weight {
-		let mut num_expired_authorities = 0;
+	fn expire_epoch(epoch: EpochIndex) {
 		for authority in EpochHistory::<T>::epoch_authorities(epoch).iter() {
-			num_expired_authorities += 1;
 			EpochHistory::<T>::deactivate_epoch(authority, epoch);
 			if EpochHistory::<T>::number_of_active_epochs_for_authority(authority) == 0 {
 				T::ReputationResetter::reset_reputation(authority);
@@ -1029,20 +1031,28 @@ impl<T: Config> Pallet<T> {
 			AuthorityIndex::<T>::remove(epoch, validator);
 		}
 		HistoricalBonds::<T>::remove(epoch);
-
-		T::ValidatorWeightInfo::expire_epoch(num_expired_authorities)
 	}
 
-	fn expire_epochs_up_to(latest_epoch_to_expire: EpochIndex) -> Weight {
-		let mut weight = Weight::zero();
+	fn expire_epochs_up_to(
+		latest_epoch_to_expire: EpochIndex,
+		mut remaining_weight: Weight,
+	) -> Weight {
+		// use frame_support::storage::StorageDecodeLength;
+
 		LastExpiredEpoch::<T>::mutate(|last_expired_epoch| {
 			let first_unexpired_epoch = *last_expired_epoch + 1;
 			for epoch in first_unexpired_epoch..=latest_epoch_to_expire {
-				weight.saturating_accrue(Self::expire_epoch(epoch));
+				let required_weight = T::ValidatorWeightInfo::expire_epoch(
+					HistoricalAuthorities::<T>::decode_len(epoch).unwrap_or_default() as u32,
+				);
+				if remaining_weight.all_gte(required_weight) {
+					remaining_weight.saturating_reduce(required_weight);
+					Self::expire_epoch(epoch);
+					*last_expired_epoch = epoch;
+				}
 			}
-			*last_expired_epoch = latest_epoch_to_expire;
 		});
-		weight
+		remaining_weight
 	}
 
 	/// Does all state updates related to the *new* epoch. Is also called at genesis to initialise

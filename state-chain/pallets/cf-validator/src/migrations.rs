@@ -1,8 +1,16 @@
 use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
+
 mod rename_blocks_per_epoch;
 
 pub type PalletMigration<T> = (
-	VersionedMigration<Pallet<T>, rename_blocks_per_epoch::BlocksPerEpochMigration<T>, 4, 5>,
-	PlaceholderMigration<Pallet<T>, 5>,
+	VersionedMigration<
+		4,
+		5,
+		rename_blocks_per_epoch::BlocksPerEpochMigration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<5, Pallet<T>>,
 );
