@@ -77,7 +77,7 @@ impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 	>(
 		_current_block: btc::BlockNumber,
 		witnesses: It,
-	) -> impl Iterator<Item = (btc::BlockNumber, Option<Vec<DepositWitness<Bitcoin>>>)> {
+	) -> impl Iterator<Item = (btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)> {
 		witnesses.into_iter().map(|(block_number, deposits)| {
 			log::info!(
 				"Processing block number: {}, got {} deposits",
@@ -87,7 +87,7 @@ impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 			// Check if the block number is the current block number
 			// If it is, then we can process the deposits
 			// If it is not, then we can store the deposits for later processing
-			(block_number, Some(deposits))
+			(block_number, deposits)
 		})
 
 		// when is it safe to expire a channel? when the block number is beyond their expiry? but

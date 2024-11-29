@@ -32,7 +32,7 @@ thread_local! {
 	pub static PROCESS_BLOCK_DATA_HOOK_CALLED: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
 	// the actual block data that process_block_data was called with.
 	pub static PROCESS_BLOCK_DATA_CALLED_WITH: std::cell::RefCell<Vec<(ChainBlockNumber, BlockData)>> = const { std::cell::RefCell::new(vec![]) };
-	pub static PROCESS_BLOCK_DATA_TO_RETURN: std::cell::RefCell<Vec<(ChainBlockNumber, Option<BlockData>)>> = const { std::cell::RefCell::new(vec![]) };
+	pub static PROCESS_BLOCK_DATA_TO_RETURN: std::cell::RefCell<Vec<(ChainBlockNumber, BlockData)>> = const { std::cell::RefCell::new(vec![]) };
 }
 
 pub type ChainBlockNumber = <MockEthereum as Chain>::ChainBlockNumber;
@@ -62,7 +62,7 @@ struct MockBlockProcessor<ChainBlockNumber, BlockData> {
 }
 
 impl MockBlockProcessor<ChainBlockNumber, BlockData> {
-	pub fn set_block_data_to_return(block_data: Vec<(ChainBlockNumber, Option<BlockData>)>) {
+	pub fn set_block_data_to_return(block_data: Vec<(ChainBlockNumber, BlockData)>) {
 		PROCESS_BLOCK_DATA_TO_RETURN
 			.with(|block_data_to_return| *block_data_to_return.borrow_mut() = block_data);
 	}
@@ -77,7 +77,7 @@ impl ProcessBlockData<ChainBlockNumber, BlockData>
 		// hooks. e.g. to determine a safety margin.
 		_chain_block_number: ChainBlockNumber,
 		block_data: BlockDataIter,
-	) -> impl Iterator<Item = (ChainBlockNumber, Option<BlockData>)> {
+	) -> impl Iterator<Item = (ChainBlockNumber, BlockData)> {
 		let block_data_vec = block_data.into_iter().collect::<Vec<_>>();
 		// We can only return a subset of the block data.
 		PROCESS_BLOCK_DATA_CALLED_WITH
@@ -402,7 +402,7 @@ fn partially_processed_block_data_processed_next_on_finalize() {
 			// We process one of the items, so we return only 2 of 3.
 			MockBlockProcessor::set_block_data_to_return(vec![(
 				INIT_LAST_BLOCK_RECEIVED + 1,
-				Some(first_block_data_after_processing.clone()),
+				first_block_data_after_processing.clone(),
 			)]);
 		})
 		.test_on_finalize(

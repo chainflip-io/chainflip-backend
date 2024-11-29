@@ -60,6 +60,7 @@ use scale_info::{
 	build::{Fields, Variants},
 	Path, Type,
 };
+use serde::{Deserialize, Serialize};
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
 	boxed::Box,
@@ -276,7 +277,18 @@ pub mod pallet {
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
 	#[derive(
-		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Ord, PartialOrd,
+		Clone,
+		RuntimeDebug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Ord,
+		PartialOrd,
+		Serialize,
+		Deserialize,
 	)]
 	pub struct DepositWitness<C: Chain> {
 		pub deposit_address: C::ChainAccount,

@@ -62,7 +62,7 @@ pub trait ProcessBlockData<ChainBlockNumber, BlockData> {
 	fn process_block_data<It: IntoIterator<Item = (ChainBlockNumber, BlockData)>>(
 		chain_block_number: ChainBlockNumber,
 		block_data: It,
-	) -> impl Iterator<Item = (ChainBlockNumber, Option<BlockData>)>;
+	) -> impl Iterator<Item = (ChainBlockNumber, BlockData)>;
 }
 
 /// Allows external/runtime/implementation to return the properties that the election should use.
@@ -88,7 +88,7 @@ pub struct BlockWitnesserSettings {
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Default,
 )]
-pub struct BlockWitnesserState<ChainBlockNumber: Ord + Default> {
+pub struct BlockWitnesserState<ChainBlockNumber: Ord + Default, BlockData> {
 	// The last block where we know that we have processed everything from....
 	// what about a reorg??????
 	pub last_block_election_emitted_for: ChainBlockNumber,
@@ -101,14 +101,14 @@ pub struct BlockWitnesserState<ChainBlockNumber: Ord + Default> {
 	// NOTE: It is possible for block data to arrive and then be partially processed. In this case,
 	// the block will still be here until there is no more block data for this block root to
 	// process.
-	pub unprocessed_block_roots: BTreeSet<ChainBlockNumber>,
+	pub unprocessed_data: Vec<(ChainBlockNumber, BlockData)>,
 
 	pub open_elections: ElectionCount,
 }
 
 impl<
 		Chain: cf_chains::Chain,
-		BlockData: Member + Parameter + Eq,
+		BlockData: Member + Parameter + Eq + MaybeSerializeDeserialize,
 		Properties: Parameter + Member,
 		ValidatorId: Member + Parameter + Ord + MaybeSerializeDeserialize,
 		BlockDataProcessor: ProcessBlockData<<Chain as cf_chains::Chain>::ChainBlockNumber, BlockData> + 'static,
@@ -129,12 +129,12 @@ impl<
 	type ValidatorId = ValidatorId;
 	// Store the last processed block number, number of, and the number of open elections.
 	type ElectoralUnsynchronisedState =
-		BlockWitnesserState<<Chain as cf_chains::Chain>::ChainBlockNumber>;
+		BlockWitnesserState<<Chain as cf_chains::Chain>::ChainBlockNumber, BlockData>;
 
 	// We store all the unprocessed block data here, including the most recently added block data,
 	// so it can be used in the OnBlockConsensus
-	type ElectoralUnsynchronisedStateMapKey = <Chain as cf_chains::Chain>::ChainBlockNumber;
-	type ElectoralUnsynchronisedStateMapValue = BlockData;
+	type ElectoralUnsynchronisedStateMapKey = ();
+	type ElectoralUnsynchronisedStateMapValue = ();
 
 	type ElectoralUnsynchronisedSettings = BlockWitnesserSettings;
 	type ElectoralSettings = ();
@@ -181,7 +181,7 @@ impl<
 			mut last_block_election_emitted_for,
 			last_block_received,
 			mut open_elections,
-			mut unprocessed_block_roots,
+			mut unprocessed_data,
 		} = ElectoralAccess::unsynchronised_state()?;
 
 		info!("Last received: {:?}", last_block_received);
@@ -192,23 +192,10 @@ impl<
 			last_block_received
 		{
 			info!("Starting new elction because current less than last received");
-			// There has been a reorg, we need to reprocess everything.
-			// But what about things we've already processed? How do we know if we've already
-			// processed, we could double witness.
-			// Current we include the block number in the hashed data, which means the hash would be
-			// different if we witnessed the same tx in a different block. This would result in
-			// double witnessing, but we use safety to protect against this.
 
-			// We need to clear the states, and we assume the chain tracking will provide with the
-			// subsequent block numbers.
-			(*current_chain_block_number..=last_block_election_emitted_for).for_each(
-				|block_number| {
-					ElectoralAccess::set_unsynchronised_state_map(block_number, None);
-				},
-			);
-
-			// All ongoing elections are now invalid, we will recreate the elections so engines can
-			// recast votes.
+			// All ongoing elections are now invalid, we will recreate the elections, once the block
+			// height witnesser passes throught those block heights again, so the engines will
+			// revote.
 			election_identifiers.into_iter().for_each(|election_identifier| {
 				ElectoralAccess::election_mut(election_identifier).delete();
 			});
@@ -221,6 +208,11 @@ impl<
 				),
 				(),
 			)?;
+
+			// NB: We do not clear any of the unprocessed data here. This is because we need to
+			// prevent double dispatches. By keeping the state, if we have a reorg we can check
+			// against the state in the process_block_data hook to ensure we don't double
+			// dispatch.
 
 			// We need to use the channels that were created at the old block height - this can only
 			// be realistic up to a certain point - this should be fine? as they'll stay open until
@@ -240,48 +232,18 @@ impl<
 
 					open_elections = open_elections.saturating_sub(1);
 
-					ElectoralAccess::set_unsynchronised_state_map(
-						*root_block_number.start(),
-						Some(block_data),
-					);
-					unprocessed_block_roots.insert(*root_block_number.start());
+					unprocessed_data.push((*root_block_number.start(), block_data));
 				}
 			}
 
 			// If we haven't done any new elections, since the last run, there's not really any
 			// reason to run this again, so we could probably optimise this.
 
-			let unprocessed_state = unprocessed_block_roots
-				.clone()
-				.into_iter()
-				.step_by(Into::<u64>::into(Chain::WITNESS_PERIOD) as usize)
-				// Note: We don't implement iter on the underlying trait here, because this would be
-				// iterating over the storage of *all* electoral systems, and then we'd have to
-				// filter it out. This wouldn't be very efficient, so we shortcut this by
-				// storing the blocks we still need to process here and then iterating over them.
-				.map(|block_number| {
-					ElectoralAccess::unsynchronised_state_map(&block_number)
-						.map(|r| (block_number, r))
-				})
-				.collect::<Result<Vec<_>, _>>()?
-				.into_iter()
-				.filter_map(|(block_number, block_data)| {
-					block_data.map(|block_data| (block_number, block_data))
-				});
-
-			let remaining_states = BlockDataProcessor::process_block_data(
+			unprocessed_data = BlockDataProcessor::process_block_data(
 				*current_chain_block_number,
-				unprocessed_state,
-			);
-
-			// Write back any state remaining for use in future runs.
-			remaining_states.for_each(|(block_number, block_data)| {
-				if block_data.is_none() {
-					unprocessed_block_roots.remove(&block_number);
-				}
-				info!("Setting unsynced state for: {:?}", block_number);
-				ElectoralAccess::set_unsynchronised_state_map(block_number, block_data);
-			});
+				unprocessed_data,
+			)
+			.collect();
 
 			debug_assert!(
 				<Chain as cf_chains::Chain>::is_block_witness_root(last_block_election_emitted_for),
@@ -316,7 +278,7 @@ impl<
 			last_block_received: *current_chain_block_number,
 			open_elections,
 			last_block_election_emitted_for,
-			unprocessed_block_roots,
+			unprocessed_data,
 		})?;
 
 		Ok(())
