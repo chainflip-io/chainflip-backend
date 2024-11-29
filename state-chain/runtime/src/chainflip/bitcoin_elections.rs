@@ -1,7 +1,7 @@
-use crate::Runtime;
-use cf_chains::{btc, Bitcoin};
+use crate::{BitcoinIngressEgress, Runtime};
+use cf_chains::{btc, Bitcoin, DepositChannel};
 use cf_traits::Chainflip;
-use pallet_cf_ingress_egress::DepositChannelDetails;
+use log::info;
 
 use cf_chains::instances::BitcoinInstance;
 
@@ -18,7 +18,7 @@ use pallet_cf_elections::{
 use pallet_cf_ingress_egress::DepositWitness;
 use scale_info::TypeInfo;
 
-use sp_std::{vec, vec::Vec};
+use sp_std::vec::Vec;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	(BitcoinDepositChannelWitnessing,),
@@ -33,10 +33,10 @@ pub struct OpenChannelDetails<ChainBlockNumber> {
 	pub close_block: ChainBlockNumber,
 }
 
-type BitcoinDepositChannelWitnessing = BlockWitnesser<
+pub type BitcoinDepositChannelWitnessing = BlockWitnesser<
 	Bitcoin,
 	Vec<DepositWitness<Bitcoin>>,
-	Vec<DepositChannelDetails<Runtime, BitcoinInstance>>,
+	Vec<DepositChannel<Bitcoin>>,
 	<Runtime as Chainflip>::ValidatorId,
 	BitcoinDepositChannelWitessingProcessor,
 	BitcoinDepositChannelWitnessingGenerator,
@@ -44,26 +44,14 @@ type BitcoinDepositChannelWitnessing = BlockWitnesser<
 
 pub struct BitcoinDepositChannelWitnessingGenerator;
 
-impl
-	BlockElectionPropertiesGenerator<
-		btc::BlockNumber,
-		Vec<DepositChannelDetails<Runtime, BitcoinInstance>>,
-	> for BitcoinDepositChannelWitnessingGenerator
+impl BlockElectionPropertiesGenerator<btc::BlockNumber, Vec<DepositChannel<Bitcoin>>>
+	for BitcoinDepositChannelWitnessingGenerator
 {
 	fn generate_election_properties(
 		block_witness_root: btc::BlockNumber,
-	) -> Vec<DepositChannelDetails<Runtime, BitcoinInstance>> {
-		// Get addresses for this block, and any that have expired after this block.
-
-		// then generate election with addresses for this block
-		// then trigger exipry for any addresses that have expired after this block
-
-		// The fetching of valid addresses can be done inside the ingress-egress pallet where they
-		// are stored. maybe the expiry too.
-		// let deposit_channels_for_block = BTreeMap::new();
-		log::info!("Generating election for block number: {}", block_witness_root);
-
-		vec![]
+	) -> Vec<DepositChannel<Bitcoin>> {
+		// TODO: Channel expiry
+		BitcoinIngressEgress::active_deposit_channels_at(block_witness_root)
 	}
 }
 
@@ -72,23 +60,28 @@ pub struct BitcoinDepositChannelWitessingProcessor;
 impl ProcessBlockData<btc::BlockNumber, Vec<DepositWitness<Bitcoin>>>
 	for BitcoinDepositChannelWitessingProcessor
 {
-	fn process_block_data<
-		It: IntoIterator<Item = (btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)>,
-	>(
-		_current_block: btc::BlockNumber,
-		witnesses: It,
-	) -> impl Iterator<Item = (btc::BlockNumber, Option<Vec<DepositWitness<Bitcoin>>>)> {
-		witnesses.into_iter().map(|(block_number, deposits)| {
-			log::info!(
-				"Processing block number: {}, got {} deposits",
-				block_number,
-				deposits.len()
-			);
-			// Check if the block number is the current block number
-			// If it is, then we can process the deposits
-			// If it is not, then we can store the deposits for later processing
-			(block_number, Some(deposits))
-		})
+	fn process_block_data(
+		current_block: btc::BlockNumber,
+		witnesses: Vec<(btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)>,
+	) -> Vec<(btc::BlockNumber, Vec<DepositWitness<Bitcoin>>)> {
+		let witnesses = witnesses
+			.into_iter()
+			.map(|(block_number, deposits)| {
+				log::info!(
+					"Processing block number: {}, got {} deposits",
+					block_number,
+					deposits.len()
+				);
+				// Check if the block number is the current block number
+				// If it is, then we can process the deposits
+				// If it is not, then we can store the deposits for later processing
+				(block_number, deposits)
+			})
+			.collect::<Vec<_>>();
+
+		info!("Processing block number: {}, got {} deposits", current_block, witnesses.len());
+
+		witnesses
 
 		// when is it safe to expire a channel? when the block number is beyond their expiry? but
 		// what if we're at block 40 it expires at block 39 and then we reorg back to block 36. It

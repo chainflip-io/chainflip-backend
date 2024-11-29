@@ -60,6 +60,7 @@ use scale_info::{
 	build::{Fields, Variants},
 	Path, Type,
 };
+use serde::{Deserialize, Serialize};
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::{
 	boxed::Box,
@@ -276,7 +277,18 @@ pub mod pallet {
 		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
 	#[derive(
-		Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Ord, PartialOrd,
+		Clone,
+		RuntimeDebug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		Ord,
+		PartialOrd,
+		Serialize,
+		Deserialize,
 	)]
 	pub struct DepositWitness<C: Chain> {
 		pub deposit_address: C::ChainAccount,
@@ -2476,6 +2488,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
 			Ok(*id)
 		})
+	}
+
+	// TODO: Write test
+	pub fn active_deposit_channels_at(
+		block_height: TargetChainBlockNumber<T, I>,
+	) -> Vec<DepositChannel<T::TargetChain>> {
+		debug_assert!(<T::TargetChain as Chain>::is_block_witness_root(block_height));
+		DepositChannelLookup::<T, I>::iter_values()
+			.filter_map(|details| {
+				if details.opened_at <= block_height && block_height <= details.expires_at {
+					Some(details.deposit_channel)
+				} else {
+					None
+				}
+			})
+			.collect()
 	}
 }
 
