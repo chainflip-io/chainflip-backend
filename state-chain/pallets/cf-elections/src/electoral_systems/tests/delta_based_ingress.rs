@@ -698,18 +698,18 @@ fn pending_ingresses_update_with_consensus() {
 		block_number: 500u64,
 		close_block: 1_000u64,
 	};
-	let deposit_channel_pending_updated_block = DepositChannel {
-		account: 1u32,
-		asset: Asset::Sol,
-		total_ingressed: 1_000u64,
-		block_number: 499u64,
-		close_block: 1_000u64,
-	};
 	let deposit_channel_pending_updated_amount = DepositChannel {
 		account: 1u32,
 		asset: Asset::Sol,
 		total_ingressed: 999u64,
 		block_number: 500u64,
+		close_block: 1_000u64,
+	};
+	let deposit_channel_pending_updated_block = DepositChannel {
+		account: 1u32,
+		asset: Asset::Sol,
+		total_ingressed: 1_000u64,
+		block_number: 499u64,
 		close_block: 1_000u64,
 	};
 	let deposit_channel_pending_consensus = DepositChannel {
