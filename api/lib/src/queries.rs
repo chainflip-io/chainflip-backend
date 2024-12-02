@@ -83,14 +83,14 @@ impl QueryApi {
 		Ok(channels
 			.into_iter()
 			.filter_map(|(_, DepositChannelDetails { action, deposit_channel, .. })| match action {
-				pallet_cf_ingress_egress::ChannelAction::Swap { destination_asset, .. } |
-				pallet_cf_ingress_egress::ChannelAction::CcmTransfer {
-					destination_asset, ..
-				} => Some(SwapChannelInfo {
-					deposit_address: deposit_channel.address.to_humanreadable(network_environment),
-					source_asset: deposit_channel.asset.into(),
-					destination_asset,
-				}),
+				pallet_cf_ingress_egress::ChannelAction::Swap { destination_asset, .. } =>
+					Some(SwapChannelInfo {
+						deposit_address: deposit_channel
+							.address
+							.to_humanreadable(network_environment),
+						source_asset: deposit_channel.asset.into(),
+						destination_asset,
+					}),
 				_ => None,
 			})
 			.collect::<Vec<_>>())

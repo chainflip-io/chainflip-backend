@@ -1924,14 +1924,12 @@ impl_runtime_apis! {
 					let channel_asset: Asset = details.deposit_channel.asset.into();
 
 					match details.action {
-						ChannelAction::Swap { destination_asset, .. }
-							if destination_asset == to && channel_asset == from =>
+						ChannelAction::Swap { destination_asset, channel_metadata, .. }
+							// Ingoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
+							if destination_asset == to && channel_asset == from && channel_metadata.is_none() =>
 						{
 							filtered_swaps.push(deposit.amount.into());
 						},
-						ChannelAction::CcmTransfer { .. } => {
-							// Ingoring: ccm swaps aren't supported for BTC (which is the only chain where pre-witnessing is enabled)
-						}
 						_ => {
 							// ignore other deposit actions
 						}

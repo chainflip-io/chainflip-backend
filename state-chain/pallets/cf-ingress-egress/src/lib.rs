@@ -321,20 +321,13 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			broker_fees: Beneficiaries<AccountId>,
+			channel_metadata: Option<CcmChannelMetadata>,
 			refund_params: Option<ChannelRefundParameters>,
 			dca_params: Option<DcaParameters>,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
 			refund_address: Option<ForeignChainAddress>,
-		},
-		CcmTransfer {
-			destination_asset: Asset,
-			destination_address: ForeignChainAddress,
-			broker_fees: Beneficiaries<AccountId>,
-			channel_metadata: CcmChannelMetadata,
-			refund_params: Option<ChannelRefundParameters>,
-			dca_params: Option<DcaParameters>,
 		},
 	}
 
@@ -344,7 +337,6 @@ pub mod pallet {
 	pub enum DepositAction<AccountId> {
 		Swap { swap_request_id: SwapRequestId },
 		LiquidityProvision { lp_account: AccountId },
-		CcmTransfer { swap_request_id: SwapRequestId },
 		NoAction,
 		BoostersCredited { prewitnessed_deposit_id: PrewitnessedDepositId },
 	}
@@ -1870,28 +1862,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				DepositAction::LiquidityProvision { lp_account }
 			},
 			ChannelAction::Swap {
-				destination_address,
-				destination_asset,
-				broker_fees,
-				refund_params,
-				dca_params,
-			} => {
-				let swap_request_id = T::SwapRequestHandler::init_swap_request(
-					asset.into(),
-					amount_after_fees.into(),
-					destination_asset,
-					SwapRequestType::Regular {
-						output_address: destination_address,
-						ccm_deposit_metadata: None,
-					},
-					broker_fees,
-					refund_params,
-					dca_params,
-					swap_origin,
-				);
-				DepositAction::Swap { swap_request_id }
-			},
-			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
 				broker_fees,
@@ -1899,41 +1869,40 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				refund_params,
 				dca_params,
 			} => {
-				let deposit_metadata = CcmDepositMetadata {
-					channel_metadata,
+				let deposit_metadata = channel_metadata.map(|metadata| CcmDepositMetadata {
+					channel_metadata: metadata,
 					source_chain: asset.into(),
 					source_address: None,
-				};
+				});
 
 				let destination_chain: ForeignChain = destination_asset.into();
-				if !destination_chain.ccm_support() {
-					Self::deposit_event(Event::<T, I>::CcmFailed {
-						reason: CcmFailReason::UnsupportedForTargetChain,
-						destination_address: T::AddressConverter::to_encoded_address(
-							destination_address,
-						),
-						deposit_metadata: deposit_metadata
-							.clone()
-							.to_encoded::<T::AddressConverter>(),
-						origin: swap_origin.clone(),
-					});
-					DepositAction::NoAction
-				} else {
-					let swap_request_id = T::SwapRequestHandler::init_swap_request(
-						asset.into(),
-						amount_after_fees.into(),
-						destination_asset,
-						SwapRequestType::Regular {
-							ccm_deposit_metadata: Some(deposit_metadata),
-							output_address: destination_address,
-						},
-						broker_fees,
-						refund_params,
-						dca_params,
-						swap_origin,
-					);
-					DepositAction::CcmTransfer { swap_request_id }
+				if let Some(metadata) = deposit_metadata.clone() {
+					if !destination_chain.ccm_support() {
+						Self::deposit_event(Event::<T, I>::CcmFailed {
+							reason: CcmFailReason::UnsupportedForTargetChain,
+							destination_address: T::AddressConverter::to_encoded_address(
+								destination_address,
+							),
+							deposit_metadata: metadata.to_encoded::<T::AddressConverter>(),
+							origin: swap_origin.clone(),
+						});
+						return Ok(DepositAction::NoAction);
+					}
 				}
+				let swap_request_id = T::SwapRequestHandler::init_swap_request(
+					asset.into(),
+					amount_after_fees.into(),
+					destination_asset,
+					SwapRequestType::Regular {
+						ccm_deposit_metadata: deposit_metadata,
+						output_address: destination_address,
+					},
+					broker_fees,
+					refund_params,
+					dca_params,
+					swap_origin,
+				);
+				DepositAction::Swap { swap_request_id }
 			},
 		};
 
@@ -1993,9 +1962,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			{
 				let refund_address = match deposit_channel_details.action.clone() {
 					ChannelAction::Swap { refund_params, .. } => refund_params
-						.as_ref()
-						.map(|refund_params| refund_params.refund_address.clone()),
-					ChannelAction::CcmTransfer { refund_params, .. } => refund_params
 						.as_ref()
 						.map(|refund_params| refund_params.refund_address.clone()),
 					ChannelAction::LiquidityProvision { refund_address, .. } => refund_address,
@@ -2629,22 +2595,13 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		let (channel_id, deposit_address, expiry_height, channel_opening_fee) = Self::open_channel(
 			&broker_id,
 			source_asset,
-			match channel_metadata {
-				Some(channel_metadata) => ChannelAction::CcmTransfer {
-					destination_asset,
-					destination_address,
-					broker_fees,
-					channel_metadata,
-					refund_params,
-					dca_params,
-				},
-				None => ChannelAction::Swap {
-					destination_asset,
-					destination_address,
-					broker_fees,
-					refund_params,
-					dca_params,
-				},
+			ChannelAction::Swap {
+				destination_asset,
+				destination_address,
+				broker_fees,
+				channel_metadata,
+				refund_params,
+				dca_params,
 			},
 			boost_fee,
 		)?;
