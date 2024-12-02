@@ -93,7 +93,7 @@ async function testTxMultipleVaultSwaps(sourceAsset: Asset, destAsset: Asset) {
   const txData = cfTesterContract.methods
     .multipleContractSwap(
       chainContractId(chainFromAsset(destAsset)),
-      destAsset === 'Dot' ? decodeDotAddressForContract(destAddress) : destAddress,
+      (destAsset === 'Dot' || destAddress == 'Hub') ? decodeDotAddressForContract(destAddress) : destAddress,
       assetContractId(destAsset),
       getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
       amount,

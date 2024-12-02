@@ -9,7 +9,6 @@ import {
   isWithinOnePercent,
   chainFromAsset,
   decodeSolAddress,
-  chainContractId,
   assetDecimals,
   createStateChainKeypair,
 } from '../shared/utils';
@@ -17,7 +16,7 @@ import { send } from '../shared/send';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 
 export async function depositLiquidity(
-  ccy: Asset,
+  ccy: Asset | 'HubDot',
   amount: number,
   waitForFinalization = false,
   lpKey?: string,
@@ -32,12 +31,12 @@ export async function depositLiquidity(
     (
       await chainflip.query.liquidityProvider.liquidityRefundAddress(
         lp.address,
-        chainContractId(chainFromAsset(ccy)),
+        chainFromAsset(ccy),
       )
     ).toJSON() === null
   ) {
     let refundAddress = await newAddress(ccy, 'LP_1');
-    refundAddress = chain === 'Dot' ? decodeDotAddressForContract(refundAddress) : refundAddress;
+    refundAddress = (chain === 'Dot' || chain === 'Hub') ? decodeDotAddressForContract(refundAddress) : refundAddress;
     refundAddress = chain === 'Sol' ? decodeSolAddress(refundAddress) : refundAddress;
 
     console.log('Registering Liquidity Refund Address for ' + ccy + ': ' + refundAddress);

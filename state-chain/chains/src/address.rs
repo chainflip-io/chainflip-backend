@@ -26,6 +26,7 @@ pub enum AddressDerivationError {
 	BitcoinChannelIdTooLarge,
 	MissingSolanaApiEnvironment,
 	SolanaDerivationError(sol::AddressDerivationError),
+	MissingAssethubVault,
 }
 
 impl From<sol::AddressDerivationError> for AddressDerivationError {
@@ -165,7 +166,7 @@ impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
 		match address {
-			ForeignChainAddress::Dot(addr) => Ok(addr),
+			ForeignChainAddress::Dot(addr) | ForeignChainAddress::Hub(addr) => Ok(addr),
 			_ => Err(AddressError::InvalidAddress),
 		}
 	}
@@ -287,7 +288,7 @@ pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		),
 		ForeignChainAddress::Arb(address) => EncodedAddress::Arb(address.0),
 		ForeignChainAddress::Sol(address) => EncodedAddress::Sol(address.into()),
-		ForeignChainAddress::Hub(address) => EncodedAddress::Dot(*address.aliased_ref()),
+		ForeignChainAddress::Hub(address) => EncodedAddress::Hub(*address.aliased_ref()),
 	}
 }
 

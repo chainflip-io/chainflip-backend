@@ -97,7 +97,7 @@ async function newSwapCommand() {
       ? {
           retryDurationBlocks: args.refundDuration,
           refundAddress:
-            args.sourceAsset === 'Dot'
+            args.sourceAsset === 'Dot' || args.sourceAsset === 'HubDot'
               ? decodeDotAddressForContract(args.refundAddress)
               : args.refundAddress,
           minPriceX128: assetPriceToInternalAssetPrice(

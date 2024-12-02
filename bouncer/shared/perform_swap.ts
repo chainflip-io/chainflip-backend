@@ -19,10 +19,10 @@ import { CcmDepositMetadata } from '../shared/new_swap';
 import { SwapContext, SwapStatus } from './swap_context';
 import { getChainflipApi, observeEvent } from './utils/substrate';
 
-function encodeDestinationAddress(address: string, destAsset: Asset): string {
+function encodeDestinationAddress(address: string, destAsset: Asset | 'HubDot'): string {
   let destAddress = address;
 
-  if (destAddress && destAsset === 'Dot') {
+  if (destAddress && (destAsset === 'Dot' || destAsset === 'HubDot')) {
     destAddress = encodeAddress(destAddress);
   } else if (shortChainFromAsset(destAsset) === 'Sol') {
     destAddress = getEncodedSolAddress(destAddress);
@@ -32,16 +32,16 @@ function encodeDestinationAddress(address: string, destAsset: Asset): string {
 }
 
 export type SwapParams = {
-  sourceAsset: Asset;
-  destAsset: Asset;
+  sourceAsset: Asset | 'HubDot';
+  destAsset: Asset | 'HubDot';
   depositAddress: string;
   destAddress: string;
   channelId: number;
 };
 
 export async function requestNewSwap(
-  sourceAsset: Asset,
-  destAsset: Asset,
+  sourceAsset: Asset | 'HubDot',
+  destAsset: Asset | 'HubDot',
   destAddress: string,
   tag = '',
   messageMetadata?: CcmDepositMetadata,
@@ -172,8 +172,8 @@ export async function doPerformSwap(
 }
 
 export async function performSwap(
-  sourceAsset: Asset,
-  destAsset: Asset,
+  sourceAsset: Asset | 'HubDot',
+  destAsset: Asset | 'HubDot',
   destAddress: string,
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
@@ -213,8 +213,8 @@ export async function performSwap(
 
 // function to create a swap and track it until we detect the corresponding broadcast success
 export async function performAndTrackSwap(
-  sourceAsset: Asset,
-  destAsset: Asset,
+  sourceAsset: Asset | 'HubDot',
+  destAsset: Asset | 'HubDot',
   destAddress: string,
   amount?: string,
   tag?: string,
