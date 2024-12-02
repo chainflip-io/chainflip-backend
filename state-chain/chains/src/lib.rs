@@ -904,12 +904,16 @@ pub struct SwapRefundParameters {
 )]
 #[cfg_attr(feature = "std", derive(schemars::JsonSchema))]
 pub struct ChannelRefundParameters<A> {
+	/// How long to keep retrying each swap chunk before cancelling and refunding. Measured in
+	/// 6-second block numbers.
 	pub retry_duration: cf_primitives::BlockNumber,
+	/// Where to send any deposited funds that fail to execute at the desired minimum price.
 	pub refund_address: A,
 	#[cfg_attr(
 		feature = "std",
 		schemars(schema_with = "cf_utilities::json_schema::hex_array::<32>")
 	)]
+	/// The minimum price the user is willing to accept in order to sell their assets.
 	pub min_price: Price,
 }
 

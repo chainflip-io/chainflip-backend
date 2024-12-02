@@ -14,17 +14,27 @@ use super::{ApiWrapper, MockApi};
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, JsonSchema, Serialize, Deserialize)]
+/// A Request to open a swap deposit channel.
 pub struct Request<A> {
+	/// The asset that the user wants to send.
 	pub source_asset: Asset,
+	/// The asset that the users wants to receive.
 	pub destination_asset: Asset,
+	/// The address that the swap output should be sent to.
 	pub destination_address: AddressString,
+	/// Broker commission to be charged, measured in basis points. Each basis point is 0.01%.
 	pub broker_commission: BasisPoints,
+	/// Optional CCM channel metadata.
 	pub channel_metadata: Option<CcmChannelMetadata>,
+	/// Optional Boost fee, measured in basis points.
 	pub boost_fee: Option<BasisPoints>,
 	#[schemars(with = "Vec<Beneficiary<cf_utilities::json_schema::AccountId32>>")]
 	#[schemars(range(min = 0, max = 2))]
+	/// Optional Affiliate fees.
 	pub affiliate_fees: Option<Affiliates<AccountId32>>,
+	/// Optional Refund Parameters.
 	pub refund_parameters: Option<RefundParameters<A>>,
+	/// Optional DCA Parameters.
 	pub dca_parameters: Option<DcaParameters>,
 }
 
