@@ -20,7 +20,7 @@ use cf_primitives::{
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
-use futures::{stream::StreamExt, FutureExt, Stream};
+use futures::{stream, stream::StreamExt, FutureExt};
 use jsonrpsee::{
 	core::async_trait,
 	proc_macros::rpc,
@@ -28,7 +28,7 @@ use jsonrpsee::{
 		error::{ErrorObject, ErrorObjectOwned},
 		ErrorCode,
 	},
-	PendingSubscriptionSink, RpcModule,
+	PendingSubscriptionSink, RpcModule, Subscription,
 };
 use order_fills::OrderFills;
 use pallet_cf_governance::GovCallHash;
@@ -41,7 +41,9 @@ use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
 };
-use sc_rpc_spec_v2::chain_head::{api::ChainHeadApiServer, ChainHead, ChainHeadConfig};
+use sc_rpc_spec_v2::chain_head::{
+	api::ChainHeadApiServer, ChainHead, ChainHeadConfig, FollowEvent,
+};
 use serde::{Deserialize, Serialize};
 use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
@@ -1950,6 +1952,10 @@ where
 		.await
 	}
 
+	/// The subscription will return the first value immediately and then either return new values
+	/// only when it changes, or every new block. Note in both cases this can skip blocks. Also this
+	/// subscription can either filter out, or end the stream if the provided async closure returns
+	/// an error.
 	async fn new_subscription_with_state<
 		T: Serialize + Send + Clone + Eq + 'static,
 		// State to carry forward between calls to the closure.
@@ -1966,64 +1972,52 @@ where
 		pending_sink: PendingSubscriptionSink,
 		f: F,
 	) {
+		// subscribe to the chain head
+		let Ok(subscription) =
+			self.chain_head_api().subscribe_unbounded("chainHead_v1_follow", [false]).await
+		else {
+			pending_sink
+				.reject(CfApiError::from(internal_error("chainHead_v1_follow subscription failed")))
+				.await;
+			return;
+		};
+
+		// depending on only_finalized param, construct the blocks stream from the subscription
+		let seed_state = (only_finalized, subscription);
+		let blocks_stream = Box::pin(stream::unfold(seed_state, |mut state| async move {
+			while let Ok(event) = get_next_chain_head_event(&mut state.1).await {
+				if state.0 {
+					// only interested in initialized and finalized events
+					match event {
+						FollowEvent::Initialized(mut ev_initialized) => {
+							// Initialized event guarantees that finalized_block_hashes is of
+							// at least one element, ordered by increasing block number
+							let hash = ev_initialized.finalized_block_hashes.pop().unwrap();
+							return Some((hash, state))
+						},
+						FollowEvent::Finalized(mut ev_finalized) => {
+							let hash = ev_finalized.finalized_block_hashes.pop().unwrap();
+							return Some((hash, state))
+						},
+						_ => continue,
+					}
+				} else {
+					// only interested in bestBlockChanged events
+					match event {
+						FollowEvent::BestBlockChanged(ev_best_block) =>
+							return Some((ev_best_block.best_block_hash, state)),
+						_ => continue,
+					}
+				}
+			}
+			None
+		}));
+
+		// create the initial item and state
 		let info = self.client.info();
-		let _sub = self
-			.chain_head_api()
-			.subscribe_unbounded("chainHead_v1_follow", [false])
-			.await
-			.unwrap();
+		let block_hash = if only_finalized { info.finalized_hash } else { info.best_hash };
+		let block_number = if only_finalized { info.finalized_number } else { info.best_number };
 
-		if only_finalized {
-			self.new_subscription_with_state_stream(
-				only_on_changes,
-				end_on_error,
-				pending_sink,
-				f,
-				info.finalized_hash,
-				info.finalized_number,
-				self.client.finality_notification_stream().map(|n| (n.hash, n.header)),
-			)
-			.await
-		} else {
-			self.new_subscription_with_state_stream(
-				only_on_changes,
-				end_on_error,
-				pending_sink,
-				f,
-				info.best_hash,
-				info.best_number,
-				self.client
-					.import_notification_stream()
-					.filter(|n| futures::future::ready(n.is_new_best))
-					.map(|n| (n.hash, n.header)),
-			)
-			.await
-		}
-	}
-
-	/// The subscription will return the first value immediately and then either return new values
-	/// only when it changes, or every new block. Note in both cases this can skip blocks. Also this
-	/// subscription can either filter out, or end the stream if the provided async closure returns
-	/// an error.
-	async fn new_subscription_with_state_stream<
-		T: Serialize + Send + Clone + Eq + 'static,
-		// State to carry forward between calls to the closure.
-		S: 'static + Clone + Send,
-		F: Fn(&C, state_chain_runtime::Hash, Option<&S>) -> Result<(T, S), CfApiError>
-			+ Send
-			+ Clone
-			+ 'static,
-		N: Stream<Item = (B::Hash, B::Header)> + StreamExt + Send + Unpin + 'static,
-	>(
-		&self,
-		only_on_changes: bool,
-		end_on_error: bool,
-		pending_sink: PendingSubscriptionSink,
-		f: F,
-		block_hash: B::Hash,
-		block_number: BlockNumber,
-		stream: N,
-	) {
 		let (initial_item, initial_state) = match f(&self.client, block_hash, None) {
 			Ok(initial) => initial,
 			Err(e) => {
@@ -2038,22 +2032,32 @@ where
 			block_number,
 			data: initial_item.clone(),
 		})))
-		.chain(stream.filter_map({
+		.chain(blocks_stream.filter_map({
 			let client = self.client.clone();
 
 			let mut previous_item = initial_item;
 			let mut previous_state = initial_state;
 
-			move |(hash, header)| {
+			move |hash| {
 				futures::future::ready(match f(&client, hash, Some(&previous_state)) {
 					Ok((new_item, new_state)) if !only_on_changes || new_item != previous_item => {
 						previous_item = new_item.clone();
 						previous_state = new_state;
-						Some(Ok(BlockUpdate {
-							block_hash: hash,
-							block_number: *header.number(),
-							data: new_item,
-						}))
+
+						if let Ok(Some(header)) = client.header(hash) {
+							Some(Ok(BlockUpdate {
+								block_hash: hash,
+								block_number: *header.number(),
+								data: new_item,
+							}))
+						} else if end_on_error {
+							Some(Err(internal_error(format!(
+								"Cannot fetch block header for block {:?}",
+								hash
+							))))
+						} else {
+							None
+						}
 					},
 					Err(error) => {
 						log::warn!("Subscription Error: {error}.");
@@ -2094,6 +2098,18 @@ where
 		let results_for_each_asset: RpcResult<Vec<_>> = Asset::all().map(f).collect();
 
 		results_for_each_asset.map(|inner| inner.into_iter().flatten().collect())
+	}
+}
+
+async fn get_next_chain_head_event(
+	sub: &mut Subscription,
+) -> Result<FollowEvent<Hash>, CfApiError> {
+	match sub.next().await {
+		Some(result) => match result {
+			Ok((event, _subs_id)) => Ok(event),
+			Err(e) => Err(CfApiError::from(internal_error(format!("ChainHead event error {e}")))),
+		},
+		None => Err(CfApiError::from(internal_error("ChainHead deserialization error"))),
 	}
 }
 
