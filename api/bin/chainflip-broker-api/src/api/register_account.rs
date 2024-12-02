@@ -1,4 +1,4 @@
-use super::{ApiWrapper, Empty};
+use super::{ApiWrapper, Empty, MockApi};
 use chainflip_api::{AccountRole, ChainflipApi, OperatorApi};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -33,5 +33,14 @@ impl<T: ChainflipApi> api_json_schema::Responder<Endpoint> for ApiWrapper<T> {
 		_: api_json_schema::EndpointRequest<Endpoint>,
 	) -> api_json_schema::EndpointResult<Endpoint> {
 		Ok(self.operator_api().register_account_role(AccountRole::Broker).await?.into())
+	}
+}
+
+impl api_json_schema::Responder<Endpoint> for MockApi {
+	async fn respond(
+		&self,
+		_: api_json_schema::EndpointRequest<Endpoint>,
+	) -> api_json_schema::EndpointResult<Endpoint> {
+		Ok(RegistrationSuccess { transaction_hash: H256::random() })
 	}
 }
